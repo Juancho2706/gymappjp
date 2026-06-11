@@ -3,6 +3,14 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { PlanBuilder } from '../../_components/PlanBuilder'
 import { getClientNutritionPlan, getClientAdherence } from '../../_data/nutrition-coach.queries'
+import {
+  getCoachPdfBrand,
+  getExchangeEquivalencesForGroups,
+  getExchangeGroups,
+  getHasExchangesModule,
+  getPlanExchangeBundle,
+} from '../../_data/exchange.queries'
+import type { ExchangeBuilderData } from '../../_components/PlanBuilder/types'
 import { mapClientPlanRowToInitialData } from '../../_data/plan-builder-mappers'
 import { AdherenceStrip } from '@/app/c/[coach_slug]/nutrition/_components/AdherenceStrip'
 import { getClientNutritionPlanPageAuthData, getCoachDisplayName } from './_data/client-plan-page.queries'
@@ -23,6 +31,38 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
 
   const plan = await getClientNutritionPlan(clientId, user.id, orgId ?? null, activeTeamId ?? null)
   const initialData = plan ? mapClientPlanRowToInitialData(plan) : null
+
+  // Módulo nutrition_exchanges (gating server-side espejo; assertModule en actions es el techo).
+  const scope = { orgId: orgId ?? null, activeTeamId: activeTeamId ?? null }
+  const hasExchanges = await getHasExchangesModule(user.id, scope)
+  let exchange: ExchangeBuilderData | null = null
+  if (hasExchanges) {
+    const [groups, bundle, pdfBrand] = await Promise.all([
+      getExchangeGroups(user.id, scope),
+      plan?.id
+        ? getPlanExchangeBundle(plan.id as string)
+        : Promise.resolve({
+            planMode: 'grams' as const,
+            targetsByMealId: {},
+            variants: [],
+            variantByMealId: {},
+          }),
+      getCoachPdfBrand(user.id, scope),
+    ])
+    const equivalences = await getExchangeEquivalencesForGroups(groups.map((g) => g.id))
+    exchange = {
+      planId: (plan?.id as string | undefined) ?? null,
+      planMode: bundle.planMode,
+      groups,
+      targetsByMealId: bundle.targetsByMealId,
+      variants: bundle.variants,
+      variantByMealId: bundle.variantByMealId,
+      equivalences,
+      brand: pdfBrand.brand,
+      brandLogoUrl: pdfBrand.logoUrl,
+      clientName: client.full_name,
+    }
+  }
 
   // E (awareness): badge solo en el pool y solo si el último editor fue OTRO coach.
   let lastEditor: { name: string; at: string | null } | null = null
@@ -74,6 +114,7 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
             clientId={clientId}
             initialData={initialData}
             clientProfile={intake ? { weight_kg: intake.weight_kg, height_cm: intake.height_cm } : null}
+            exchange={exchange}
           />
         </div>
         {adherence.length > 0 && planMealsStrip.length > 0 && (

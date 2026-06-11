@@ -29,6 +29,7 @@ export default async function WorkoutExecutionPage({ params }: Props) {
             exerciseMaxes={data.exerciseMaxes}
             activeWeekVariant={data.activeWeekVariant}
             areas={data.areas}
+            cardio={data.cardio}
         />
     )
 }

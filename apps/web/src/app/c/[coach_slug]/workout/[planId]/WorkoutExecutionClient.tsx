@@ -24,7 +24,11 @@ import {
     type WorkoutSectionKey,
 } from '@/lib/workout-block-grouping'
 import { executionAreaGroupsFor } from '@/lib/workout-areas'
-import type { WorkoutArea } from '@/domain/workout/types'
+import type { IntervalConfig, WorkoutArea, ExerciseType as WorkoutKind } from '@/domain/workout/types'
+import { effectiveExerciseType, compactDistance, compactDuration } from '@/lib/workout-exercise-type'
+import { isTimeableInterval } from '@/lib/workout-interval'
+import { formatPace } from '@/domain/cardio/pace'
+import type { ClientCardioView } from './_data/workout-execution.queries'
 
 interface ExerciseType {
     id: string
@@ -33,6 +37,7 @@ interface ExerciseType {
     video_url: string | null
     gif_url: string | null
     instructions: string[] | null
+    exercise_type?: string | null
 }
 
 interface BlockType {
@@ -51,6 +56,20 @@ interface BlockType {
     progression_type: 'weight' | 'reps' | null
     progression_value: number | null
     is_override: boolean
+    // Prescripción polimórfica (null en planes legacy — AC3)
+    exercise_type_override?: string | null
+    side_mode?: string | null
+    reps_value?: number | null
+    reps_unit?: string | null
+    load_value?: number | null
+    load_unit?: string | null
+    distance_value?: number | null
+    distance_unit?: string | null
+    duration_sec?: number | null
+    target_pace_sec_per_km?: number | null
+    hr_zone?: number | null
+    instructions?: string | null
+    interval_config?: IntervalConfig | null
     exercises: ExerciseType | ExerciseType[]
 }
 
@@ -83,6 +102,10 @@ interface Props {
         reps_done: number | null
         rpe: number | null
         rir?: number | null
+        actual_duration_sec?: number | null
+        actual_distance_m?: number | null
+        actual_hold_sec?: number | null
+        actual_avg_hr?: number | null
     }>
     previousHistory?: Record<string, { weight_kg: number | null, reps_done: number | null, date: string }[]>
     coachSlug: string
@@ -90,6 +113,8 @@ interface Props {
     activeWeekVariant?: 'A' | 'B' | null
     /** Areas (no clasicas) referenciadas por el plan, resueltas server-side; vacio en planes viejos */
     areas?: WorkoutArea[]
+    /** Módulo cardio: zonas personalizadas del alumno (chips "Z4 · 150–168 bpm"); OFF ⇒ solo "Z4" */
+    cardio?: ClientCardioView
 }
 
 function ManualTimerButton({ defaultTime }: { defaultTime: string | null }) {
@@ -102,6 +127,162 @@ function ManualTimerButton({ defaultTime }: { defaultTime: string | null }) {
             <Timer className="w-3.5 h-3.5" />
             Descanso ({defaultTime || '90s'})
         </button>
+    )
+}
+
+const SIDE_LABEL: Record<string, string> = {
+    per_side: 'Por lado',
+    alternating: 'Alternado',
+}
+
+/** Cards de objetivo por tipo (cardio/movilidad/roller) — los strength quedan intactos (AC3). */
+function TypedTargetGrid({ block, kind, cardio }: { block: BlockType; kind: WorkoutKind; cardio?: ClientCardioView }) {
+    const cards: { label: string; value: string; highlight?: boolean }[] = []
+
+    if (kind === 'cardio') {
+        if (block.interval_config) {
+            const work = block.interval_config.work.distance_m != null
+                ? compactDistance(block.interval_config.work.distance_m, 'm')
+                : block.interval_config.work.duration_sec != null
+                    ? compactDuration(block.interval_config.work.duration_sec)
+                    : '—'
+            const rec = block.interval_config.recovery?.duration_sec
+            cards.push({
+                label: 'Intervalos',
+                value: `${block.interval_config.repeats}× ${work}${rec ? ` / r${rec}s` : ''}`,
+            })
+        }
+        if ((block.duration_sec ?? 0) > 0) cards.push({ label: 'Duración', value: compactDuration(block.duration_sec as number) })
+        if ((block.distance_value ?? 0) > 0) cards.push({ label: 'Distancia', value: compactDistance(block.distance_value as number, block.distance_unit) })
+        if (block.target_pace_sec_per_km != null) cards.push({ label: 'Pace objetivo', value: `${formatPace(block.target_pace_sec_per_km)} /km` })
+        if (block.hr_zone != null) {
+            const range = cardio?.enabled ? cardio.zones?.find((z) => z.zone === block.hr_zone) ?? null : null
+            cards.push({
+                label: 'Zona FC',
+                value: range ? `Z${block.hr_zone} · ${range.minBpm}–${range.maxBpm} bpm` : `Z${block.hr_zone}`,
+                highlight: true,
+            })
+        }
+        if (block.sets > 1) cards.push({ label: 'Rondas', value: `${block.sets}` })
+    }
+
+    if (kind === 'mobility') {
+        if ((block.duration_sec ?? 0) > 0) cards.push({ label: 'Hold', value: `${block.duration_sec}s` })
+        cards.push({ label: 'Series', value: `${block.sets}` })
+        if (block.reps_unit === 'breaths' && (block.reps_value ?? 0) > 0) {
+            cards.push({ label: 'Respiraciones', value: `${block.reps_value}` })
+        }
+    }
+
+    if (kind === 'roller') {
+        if (block.reps_unit === 'passes' && (block.reps_value ?? 0) > 0) {
+            cards.push({ label: 'Pasadas', value: `${block.reps_value}` })
+        } else if ((block.duration_sec ?? 0) > 0) {
+            cards.push({ label: 'Duración', value: `${block.duration_sec}s` })
+        }
+    }
+
+    if (block.side_mode && SIDE_LABEL[block.side_mode]) cards.push({ label: 'Lado', value: SIDE_LABEL[block.side_mode] })
+    if (block.load_value != null && block.load_value > 0) {
+        cards.push({ label: 'Carga', value: `${block.load_value} ${block.load_unit ?? 'kg'}` })
+    }
+    if (block.rest_time) cards.push({ label: 'Descanso', value: block.rest_time })
+
+    if (!cards.length) {
+        cards.push({ label: 'Objetivo', value: block.reps || '—' })
+    }
+
+    return (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            {cards.map((card) => (
+                <div
+                    key={card.label}
+                    className={cn('rounded-lg border p-2 text-center', card.highlight && 'border-primary/40 bg-primary/5')}
+                >
+                    <p className="text-[10px] uppercase text-muted-foreground">{card.label}</p>
+                    <p className={cn('font-semibold', card.highlight && 'text-primary')}>{card.value}</p>
+                </div>
+            ))}
+        </div>
+    )
+}
+
+/** Botón de timer según el tipo del bloque: intervalos / hold / cronómetro (AC5). */
+function TypedBlockTimerButton({ block, kind }: { block: BlockType; kind: WorkoutKind }) {
+    const { startHold, startInterval, startStopwatch } = useWorkoutTimer()
+
+    if (kind === 'cardio') {
+        if (block.interval_config && isTimeableInterval(block.interval_config)) {
+            const config = block.interval_config
+            return (
+                <button
+                    onClick={() => startInterval(config, block.sets || 1)}
+                    className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/30 text-xs font-bold transition-all hover:bg-primary/20 active:scale-95"
+                >
+                    <Timer className="w-3.5 h-3.5" />
+                    Iniciar intervalos
+                </button>
+            )
+        }
+        return (
+            <button
+                onClick={() => startStopwatch()}
+                className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/30 text-xs font-bold transition-all hover:bg-primary/20 active:scale-95"
+            >
+                <Timer className="w-3.5 h-3.5" />
+                Cronómetro
+            </button>
+        )
+    }
+
+    if ((kind === 'mobility' || kind === 'roller') && (block.duration_sec ?? 0) > 0) {
+        const seconds = block.duration_sec as number
+        const label = kind === 'mobility'
+            ? `Timer de hold (${seconds}s)`
+            : `Timer (${seconds}s)`
+        return (
+            <button
+                onClick={() => startHold(seconds, kind === 'mobility' ? 'Hold' : 'Roller')}
+                className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/30 text-xs font-bold transition-all hover:bg-primary/20 active:scale-95"
+            >
+                <Timer className="w-3.5 h-3.5" />
+                {label}
+            </button>
+        )
+    }
+
+    return null
+}
+
+/** Encabezados de la tabla de registro por tipo (la de strength queda intacta). */
+function TypedLogHeader({ kind }: { kind: WorkoutKind }) {
+    if (kind === 'cardio') {
+        return (
+            <div className="grid grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50">
+                <div className="w-4 text-center">Set</div>
+                <div className="text-center">Min</div>
+                <div className="text-center">Metros</div>
+                <div className="text-center">FC</div>
+                <div className="w-8"></div>
+            </div>
+        )
+    }
+    if (kind === 'roller') {
+        return (
+            <div className="grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50">
+                <div className="w-4 text-center">Set</div>
+                <div className="text-center">Seg</div>
+                <div className="text-center">Pasadas</div>
+                <div className="w-8"></div>
+            </div>
+        )
+    }
+    return (
+        <div className="grid grid-cols-[auto_5rem_auto] md:grid-cols-[auto_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50">
+            <div className="w-4 text-center">Set</div>
+            <div className="text-center">Seg de hold</div>
+            <div className="w-8"></div>
+        </div>
     )
 }
 
@@ -163,6 +344,7 @@ export function WorkoutExecutionClient({
     exerciseMaxes = {},
     activeWeekVariant = null,
     areas = [],
+    cardio,
 }: Props) {
     const router = useRouter()
     const base = useBasePath(`/c/${coachSlug}`)
@@ -411,6 +593,9 @@ export function WorkoutExecutionClient({
                                                     if (!exercise) return null
                                                     const blockLogs = sessionLogs.filter((log) => log.block_id === block.id)
                                                     const complete = isBlockCompleted(block)
+                                                    // Tipo efectivo (specs/movida-entrenamiento): strength ⇒ render
+                                                    // EXACTAMENTE el de siempre; cardio/movilidad/roller ⇒ variantes.
+                                                    const effType = effectiveExerciseType(block, exercise)
                                                     return (
                                                         <Fragment key={block.id}>
                                                             {blockIndex > 0 && group.type === 'superset' && (
@@ -465,6 +650,7 @@ export function WorkoutExecutionClient({
                                                                     </span>
                                                                 </div>
                                                             </div>
+                                                            {effType === 'strength' ? (
                                                             <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                                                                 <div className="rounded-lg border p-2 text-center">
                                                                     <p className="text-[10px] uppercase text-muted-foreground">Series x reps</p>
@@ -475,13 +661,27 @@ export function WorkoutExecutionClient({
                                                                 {block.tempo && <div className="rounded-lg border p-2 text-center"><p className="text-[10px] uppercase text-muted-foreground">Tempo</p><p className="font-semibold">{block.tempo}</p></div>}
                                                                 {block.rir && <div className="rounded-lg border p-2 text-center"><p className="text-[10px] uppercase text-muted-foreground">RIR</p><p className="font-semibold">{block.rir}</p></div>}
                                                             </div>
+                                                            ) : (
+                                                                <>
+                                                                    <TypedTargetGrid block={block} kind={effType} cardio={cardio} />
+                                                                    <div className="flex justify-end">
+                                                                        <TypedBlockTimerButton block={block} kind={effType} />
+                                                                    </div>
+                                                                </>
+                                                            )}
+                                                            {effType !== 'strength' && block.instructions && (
+                                                                <div className="rounded-lg border border-primary/25 bg-primary/[0.06] p-2 text-sm">
+                                                                    <p className="font-semibold text-primary">Instrucciones</p>
+                                                                    <p className="text-foreground/85">{block.instructions}</p>
+                                                                </div>
+                                                            )}
                                                             {block.notes && (
                                                                 <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-sm">
                                                                     <p className="font-semibold text-amber-700 dark:text-amber-300">Nota del coach</p>
                                                                     <p className="text-amber-900/80 dark:text-amber-200/90">{block.notes}</p>
                                                                 </div>
                                                             )}
-                                                            {previousHistory[exercise.id] && previousHistory[exercise.id].length > 0 && (
+                                                            {effType === 'strength' && previousHistory[exercise.id] && previousHistory[exercise.id].length > 0 && (
                                                                 <div className="rounded-lg border border-primary/30 bg-primary/5 p-2">
                                                                     <p className="text-[10px] font-semibold uppercase tracking-wider text-primary mb-1">
                                                                         Sesión anterior ·{' '}
@@ -497,12 +697,16 @@ export function WorkoutExecutionClient({
                                                                 </div>
                                                             )}
                                                             <div className="rounded-xl border border-border p-2">
+                                                                {effType === 'strength' ? (
                                                                 <div className="grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50">
                                                                     <div className="w-4 text-center">Set</div>
                                                                     <div className="text-center">Kg</div>
                                                                     <div className="text-center">Reps</div>
                                                                     <div className="w-8"></div>
                                                                 </div>
+                                                                ) : (
+                                                                    <TypedLogHeader kind={effType} />
+                                                                )}
                                                                 <div className="space-y-1 pt-2">
                                                                     {Array.from({ length: block.sets }).map((_, i) => {
                                                                         const setNumber = i + 1
@@ -515,6 +719,7 @@ export function WorkoutExecutionClient({
                                                                                 restTimeStr={block.rest_time}
                                                                                 existingLog={log}
                                                                                 autoTimerEnabled={autoTimerEnabled}
+                                                                                mode={effType}
                                                                                 onLogged={handleLogged}
                                                                             />
                                                                         )

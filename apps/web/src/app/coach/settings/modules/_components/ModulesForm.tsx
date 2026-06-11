@@ -10,7 +10,7 @@ import { saveModulesAction } from '../_actions/modules.actions'
 
 const MODULES: { key: ModuleKey; label: string; desc: string }[] = [
     { key: 'cardio', label: 'Cardio / Resistencia', desc: 'Prescripción de cardio por tiempo, ritmo y distancia + zonas de frecuencia cardíaca (estilo TrainingPeaks).' },
-    { key: 'movement_assessment', label: 'Evaluación de movimiento', desc: 'Screening de movimiento de ingreso (tipo FMS) con semáforo y evolución.' },
+    { key: 'movement_assessment', label: 'Evaluación de movimiento', desc: 'Screening de movimiento de ingreso con semáforo de prioridad y evolución.' },
     { key: 'body_composition', label: 'Composición corporal', desc: 'Antropometría ISAK (5 componentes) + bioimpedancia, en pestañas separadas.' },
     { key: 'nutrition_exchanges', label: 'Nutrición por intercambios', desc: 'Planes por porciones/intercambios + PDF de pauta con tu marca.' },
 ]

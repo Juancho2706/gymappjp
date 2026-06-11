@@ -13,7 +13,7 @@ export const getActiveNutritionPlan = cache(async (userId: string) => {
     .from('nutrition_plans')
     .select(
       `
-      id, client_id, coach_id, name, daily_calories, protein_g, carbs_g, fats_g, instructions, is_active,
+      id, client_id, coach_id, name, daily_calories, protein_g, carbs_g, fats_g, instructions, is_active, plan_mode,
       nutrition_meals (
         id, name, description, order_index, plan_id, day_of_week,
         food_items (

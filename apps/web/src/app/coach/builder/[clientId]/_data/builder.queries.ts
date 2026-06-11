@@ -2,8 +2,10 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/database.types'
 import type { WorkoutArea } from '@/domain/workout/types'
+import type { BuilderCardioContext } from '../types'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { listAvailableWorkoutAreas } from '@/services/workout/workout-areas.service'
+import { getClientZonesForContext } from '@/services/cardio-zones.service'
 
 type Client = Pick<Tables<'clients'>, 'id' | 'full_name' | 'email'>
 type Exercise = Tables<'exercises'>
@@ -18,7 +20,7 @@ function applyOrgScope<T extends { eq: (column: string, value: string) => T; is:
 export const getBuilderData = cache(async (clientId: string, programId?: string) => {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { user: null, client: null, exercises: [] as Exercise[], initialProgram: null, areas: [] as WorkoutArea[] }
+    if (!user) return { user: null, client: null, exercises: [] as Exercise[], initialProgram: null, areas: [] as WorkoutArea[], cardio: { enabled: false, zones: null } as BuilderCardioContext }
 
     const workspace = await resolvePreferredWorkspace(supabase, user.id)
     const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
@@ -40,11 +42,19 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
 
     // Fase 2C / F7: scope exercises to the active workspace — standalone shows system + own,
     // enterprise shows system + the org catalog (RLS enforces the boundary either way).
+    // Team (Plan 2 entrenamiento, AC11 — mustFix anti-fantasma): asignable = system + catálogo
+    // del team, SIN ejercicios personales. Un ejercicio coach_id = user.id en un plan del pool
+    // no es legible ni por los otros miembros ni por los alumnos del pool
+    // (exercises_client_coach_select exige clients.coach_id = exercises.coach_id) ⇒ bloque
+    // fantasma en la ejecución. Para usar uno personal: "Copiar al team" (copy-on-use, diferido).
+    // El predicado system exige team_id NULL (espejo de la policy exercises_select_visible).
     const exercisesFilter = orgId
-        ? `and(coach_id.is.null,org_id.is.null),org_id.eq.${orgId}`
-        : `and(coach_id.is.null,org_id.is.null),and(coach_id.eq.${user.id},org_id.is.null)`
+        ? `and(coach_id.is.null,org_id.is.null,team_id.is.null),org_id.eq.${orgId}`
+        : activeTeamId
+            ? `and(coach_id.is.null,org_id.is.null,team_id.is.null),team_id.eq.${activeTeamId}`
+            : `and(coach_id.is.null,org_id.is.null,team_id.is.null),and(coach_id.eq.${user.id},org_id.is.null,team_id.is.null)`
 
-    const [clientResult, exercisesResult, areas] = await Promise.all([
+    const [clientResult, exercisesResult, areas, cardio] = await Promise.all([
         clientQuery.maybeSingle(),
         supabase
             .from('exercises')
@@ -58,6 +68,13 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
             coachId: orgId ? null : user.id,
             teamId: activeTeamId,
         }),
+        // Modulo cardio (gated por el contexto del RECURSO — el alumno): zonas para chips
+        // del builder. Enterprise fuera de alcance v1 (modulo no habilitado ahi).
+        orgId
+            ? Promise.resolve<BuilderCardioContext>({ enabled: false, zones: null })
+            : getClientZonesForContext(supabase, clientId)
+                .then((r): BuilderCardioContext => ({ enabled: r.enabled, zones: r.zones?.zones ?? null }))
+                .catch((): BuilderCardioContext => ({ enabled: false, zones: null })),
     ])
 
     let initialProgram = null
@@ -70,7 +87,7 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
                     *,
                     workout_blocks (
                         *,
-                        exercises ( name, muscle_group, gif_url, video_url )
+                        exercises ( name, muscle_group, gif_url, video_url, exercise_type )
                     )
                 )
             `)
@@ -112,5 +129,6 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
         initialProgram,
         lastEditor,
         areas,
+        cardio,
     }
 })

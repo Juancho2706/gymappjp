@@ -10,12 +10,14 @@ import {
   ClientPlanSchema,
   CustomFoodSchema,
 } from '@/lib/nutrition-schemas'
+import { ExchangesClientPlanSchema } from '@eva/schemas/nutrition-exchanges'
 import { fetchClientPlanSnapshotPayload } from '@/lib/nutrition-plan-snapshot'
 import {
   nutritionPlanCycleUpsertSchema,
   type NutritionPlanCycleUpsertInput,
 } from '@/lib/nutrition-plan-cycle-schema'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { reconcileMealsById } from '@/services/nutrition-exchanges/meal-reconcile'
 
 // ─── Tipos públicos (usados por componentes del builder) ───────────────────────
 
@@ -39,6 +41,12 @@ export type CoachTemplateMealFoodItem = {
 }
 
 export type CoachTemplateMealJson = {
+  /**
+   * Id de DB de la comida (SOLO lo envía el builder en modo exchanges — R1):
+   * permite matchear por ID para que `meal_exchange_targets` y `day_variant_id`
+   * viajen con su comida al reordenar/borrar. Modo gramos/plantillas: omitido.
+   */
+  id?: string
   name: string
   notes?: string | null
   order_index: number
@@ -72,6 +80,12 @@ export type CoachClientPlanUpsertPayload = {
   fats_g: number
   instructions?: string | null
   meals: CoachTemplateMealJson[]
+  /**
+   * Módulo nutrition_exchanges: si el plan YA está en modo 'exchanges' (verificado en DB,
+   * payload client-controlled), la validación permite comidas sin alimentos (se prescriben
+   * por porciones). Modo gramos sigue byte-identical (AC1). NO escribe plan_mode.
+   */
+  plan_mode?: 'grams' | 'exchanges'
 }
 
 export type CoachCustomFoodInput = {
@@ -231,7 +245,18 @@ export async function upsertClientNutritionPlanJson(
   if (!scope.ok) return { success: false, error: scope.error }
   const { supabase, orgId, activeTeamId } = scope
 
-  const parsed = ClientPlanSchema.safeParse(data)
+  // Modo exchanges VERIFICADO en DB ⇒ schema relajado (comidas sin alimentos permitidas).
+  let allowEmptyMeals = false
+  if (data.plan_mode === 'exchanges' && data.id) {
+    const { data: probe } = await supabase
+      .from('nutrition_plans')
+      .select('id, plan_mode')
+      .eq('id', data.id)
+      .maybeSingle()
+    allowEmptyMeals = probe?.plan_mode === 'exchanges'
+  }
+
+  const parsed = (allowEmptyMeals ? ExchangesClientPlanSchema : ClientPlanSchema).safeParse(data)
   if (!parsed.success) {
     return { success: false, error: zodErrorMessage(parsed.error.issues) }
   }
@@ -313,25 +338,29 @@ export async function upsertClientNutritionPlanJson(
         .eq('plan_id', currentPlanId)
         .order('order_index', { ascending: true })
 
-      const existingByIndex = new Map<number, string>(
-        (existingMeals ?? []).map((m) => [m.order_index as number, m.id as string])
-      )
-      const newIndices = new Set(sorted.map((m) => m.order_index))
+      if (allowEmptyMeals) {
+        // ── Modo exchanges (R1): matchear por ID de comida, NUNCA por posición ──
+        // `meal_exchange_targets` y `nutrition_meals.day_variant_id` están pegados al
+        // ROW ID: el match legacy por order_index re-asignaba filas por posición y, tras
+        // reordenar/borrar + guardar, la prescripción de porciones quedaba barajada
+        // entre comidas (corrupción silenciosa en DB y en la app del alumno). El builder
+        // envía el id de DB de cada comida persistida; la reconciliación es pura y
+        // unit-tested (services/nutrition-exchanges/meal-reconcile.ts).
+        const recon = reconcileMealsById(
+          (existingMeals ?? []).map((m) => m.id as string),
+          sorted.map((m) => ({
+            dbId: 'id' in m && typeof m.id === 'string' ? m.id : null,
+            item: m,
+          }))
+        )
 
-      // Delete only meals whose position no longer exists in the new set
-      const toDelete = (existingMeals ?? [])
-        .filter((m) => !newIndices.has(m.order_index as number))
-        .map((m) => m.id as string)
+        if (recon.toDelete.length) {
+          await supabase.from('food_items').delete().in('meal_id', recon.toDelete)
+          await supabase.from('nutrition_meals').delete().in('id', recon.toDelete)
+        }
 
-      if (toDelete.length) {
-        await supabase.from('food_items').delete().in('meal_id', toDelete)
-        await supabase.from('nutrition_meals').delete().in('id', toDelete)
-      }
-
-      for (const meal of sorted) {
-        const existingId = existingByIndex.get(meal.order_index)
-        if (existingId) {
-          // UPDATE in-place: keep meal ID → nutrition_meal_logs survive
+        for (const { existingId, item: meal } of recon.toUpdate) {
+          // UPDATE in-place por ID: targets/variante/meal_logs viajan con SU comida.
           await supabase
             .from('nutrition_meals')
             .update({
@@ -353,7 +382,9 @@ export async function upsertClientNutritionPlanJson(
               }))
             )
           }
-        } else {
+        }
+
+        for (const meal of recon.toInsert) {
           const { data: newMeal, error: mealError } = await supabase
             .from('nutrition_meals')
             .insert({
@@ -376,6 +407,74 @@ export async function upsertClientNutritionPlanJson(
                 swap_options: fi.swap_options ?? [],
               }))
             )
+          }
+        }
+      } else {
+        // ── Modo gramos: matching por posición byte-identical (AC1) ──
+        const existingByIndex = new Map<number, string>(
+          (existingMeals ?? []).map((m) => [m.order_index as number, m.id as string])
+        )
+        const newIndices = new Set(sorted.map((m) => m.order_index))
+
+        // Delete only meals whose position no longer exists in the new set
+        const toDelete = (existingMeals ?? [])
+          .filter((m) => !newIndices.has(m.order_index as number))
+          .map((m) => m.id as string)
+
+        if (toDelete.length) {
+          await supabase.from('food_items').delete().in('meal_id', toDelete)
+          await supabase.from('nutrition_meals').delete().in('id', toDelete)
+        }
+
+        for (const meal of sorted) {
+          const existingId = existingByIndex.get(meal.order_index)
+          if (existingId) {
+            // UPDATE in-place: keep meal ID → nutrition_meal_logs survive
+            await supabase
+              .from('nutrition_meals')
+              .update({
+                name: meal.name,
+                description: meal.notes ?? '',
+                order_index: meal.order_index,
+                day_of_week: meal.day_of_week ?? null,
+              })
+              .eq('id', existingId)
+            await supabase.from('food_items').delete().eq('meal_id', existingId)
+            if (meal.foodItems.length > 0) {
+              await supabase.from('food_items').insert(
+                meal.foodItems.map((fi) => ({
+                  meal_id: existingId,
+                  food_id: fi.food_id,
+                  quantity: fi.quantity,
+                  unit: fi.unit,
+                  swap_options: fi.swap_options ?? [],
+                }))
+              )
+            }
+          } else {
+            const { data: newMeal, error: mealError } = await supabase
+              .from('nutrition_meals')
+              .insert({
+                plan_id: currentPlanId!,
+                name: meal.name,
+                description: meal.notes ?? '',
+                order_index: meal.order_index,
+                day_of_week: meal.day_of_week ?? null,
+              })
+              .select('id')
+              .single()
+            if (mealError) throw mealError
+            if (meal.foodItems.length > 0) {
+              await supabase.from('food_items').insert(
+                meal.foodItems.map((fi) => ({
+                  meal_id: newMeal.id,
+                  food_id: fi.food_id,
+                  quantity: fi.quantity,
+                  unit: fi.unit,
+                  swap_options: fi.swap_options ?? [],
+                }))
+              )
+            }
           }
         }
       }

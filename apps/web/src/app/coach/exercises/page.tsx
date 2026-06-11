@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation'
 import { ExerciseCatalogClient } from './ExerciseCatalogClient'
 import { getCoach } from '@/lib/coach/get-coach'
 import { getCoachOrgContext } from '@/lib/coach-context'
+import { createClient } from '@/lib/supabase/server'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { getExerciseCatalog } from './_data/exercises.queries'
 import type { Metadata } from 'next'
 
@@ -11,12 +13,19 @@ export default async function CoachExercisesPage() {
     const coach = await getCoach()
     if (!coach) redirect('/login')
 
-    const ctx = await getCoachOrgContext()
-    const orgId = ctx?.orgId ?? null
-    // Enterprise coach (role='coach' within org) cannot create exercises
-    const canCreateExercises = !ctx?.isOrgUser || ctx.isOrgAdmin
+    // Workspace ACTIVO (AC6/AC11): en contexto team el catálogo es el del POOL (system + team)
+    // y cualquier miembro activo puede crear — espejo de resolveExerciseOwner en las actions.
+    const supabase = await createClient()
+    const [ctx, workspace] = await Promise.all([
+        getCoachOrgContext(),
+        resolvePreferredWorkspace(supabase, coach.id),
+    ])
+    const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
+    const orgId = activeTeamId ? null : ctx?.orgId ?? null
+    // Enterprise coach (role='coach' within org) cannot create exercises; team member can.
+    const canCreateExercises = activeTeamId ? true : (!ctx?.isOrgUser || ctx.isOrgAdmin)
 
-    const { globalExercises, customExercises, byMuscle } = await getExerciseCatalog(coach.id, orgId)
+    const { globalExercises, customExercises, byMuscle } = await getExerciseCatalog(coach.id, orgId, activeTeamId)
 
     return (
         <div className="p-4 md:p-8 max-w-6xl mx-auto animate-fade-in">

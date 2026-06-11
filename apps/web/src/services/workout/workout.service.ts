@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import type { Json } from '@/lib/database.types'
 import { WorkoutProgramSchema, type WorkoutBlockInput, type WorkoutDayInput, type WorkoutProgramInput } from '@eva/schemas'
 import { LIBRARY_PROGRAM_LIST_SELECT } from '@/lib/supabase/queries/workout-programs-library'
 import type { ProgramListModel } from '@/app/coach/workout-programs/libraryStats'
@@ -99,6 +100,32 @@ function scopedSectionTemplateIdFor(
 ): string {
     const safe = explicit && allowedIds.has(explicit) ? explicit : null
     return sectionTemplateIdFor(section, safe)
+}
+
+/**
+ * Columnas polimórficas de workout_blocks (specs/movida-entrenamiento, M2).
+ * Acepta tanto el payload Zod del builder como filas crudas de DB (duplicate/assign/sync):
+ * los nombres de campo coinciden 1:1. Bloques legacy ⇒ todo null (byte-identical, AC3).
+ */
+function polymorphicBlockColumns(block: Record<string, unknown>) {
+    return {
+        is_unilateral: (block.is_unilateral ?? null) as boolean | null,
+        side_mode: (block.side_mode ?? null) as string | null,
+        reps_value: (block.reps_value ?? null) as number | null,
+        reps_unit: (block.reps_unit ?? null) as string | null,
+        load_type: (block.load_type ?? null) as string | null,
+        load_value: (block.load_value ?? null) as number | null,
+        load_unit: (block.load_unit ?? null) as string | null,
+        distance_value: (block.distance_value ?? null) as number | null,
+        distance_unit: (block.distance_unit ?? null) as string | null,
+        duration_sec: (block.duration_sec ?? null) as number | null,
+        target_pace_sec_per_km: (block.target_pace_sec_per_km ?? null) as number | null,
+        hr_zone: (block.hr_zone ?? null) as number | null,
+        instructions: (block.instructions ?? null) as string | null,
+        exercise_type_override: (block.exercise_type_override ?? null) as string | null,
+        interval_config: (block.interval_config ?? null) as Json,
+        extra_targets: (block.extra_targets ?? null) as Json,
+    }
 }
 
 /**
@@ -439,6 +466,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
                 section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
                 section_template_id: scopedSectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id, allowedAreaIds),
                 is_override: block.is_override ?? false,
+                ...polymorphicBlockColumns(block as Record<string, unknown>),
             }))
 
             const { error: blocksError } = await supabase
@@ -670,6 +698,7 @@ export async function duplicateWorkoutProgramAction(
                 section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
                 section_template_id: scopedSectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id, allowedAreaIds),
                 is_override: false,
+                ...polymorphicBlockColumns(block as Record<string, unknown>),
             }))
 
             if (blocksToInsert.length > 0) {
@@ -884,6 +913,7 @@ export async function assignProgramToClientsAction(
                         section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
                         section_template_id: scopedSectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id, allowedAreaIds),
                         is_override: false,
+                        ...polymorphicBlockColumns(block as Record<string, unknown>),
                     }))
 
                     if (blocksToInsert.length > 0) {
@@ -1061,7 +1091,10 @@ export async function loadTemplateForBuilderAction(templateId: string): Promise<
                     exercise_id, sets, reps, target_weight_kg,
                     tempo, rir, rest_time, notes, order_index, superset_group,
                     progression_type, progression_value, section, section_template_id, is_override,
-                    exercises ( name, muscle_group, gif_url, video_url )
+                    is_unilateral, side_mode, reps_value, reps_unit, load_type, load_value, load_unit,
+                    distance_value, distance_unit, duration_sec, target_pace_sec_per_km, hr_zone,
+                    instructions, exercise_type_override, interval_config, extra_targets,
+                    exercises ( name, muscle_group, gif_url, video_url, exercise_type )
                 )
             )
         `)
@@ -1116,6 +1149,24 @@ function mapDbBlockToWorkoutInput(b: any): WorkoutBlockInput {
         section: b.section && ['warmup', 'main', 'cooldown'].includes(b.section) ? b.section : 'main',
         section_template_id: sectionTemplateIdFor(b.section, (b as { section_template_id?: string | null }).section_template_id),
         is_override: !!b.is_override,
+        // Polimórfico: el sync re-pasa por saveWorkoutProgramAction — sin esto, sincronizar
+        // con plantilla borraría la prescripción tipada (regresión silenciosa).
+        is_unilateral: b.is_unilateral ?? null,
+        side_mode: b.side_mode ?? null,
+        reps_value: b.reps_value ?? null,
+        reps_unit: b.reps_unit ?? null,
+        load_type: b.load_type ?? null,
+        load_value: b.load_value ?? null,
+        load_unit: b.load_unit ?? null,
+        distance_value: b.distance_value ?? null,
+        distance_unit: b.distance_unit ?? null,
+        duration_sec: b.duration_sec ?? null,
+        target_pace_sec_per_km: b.target_pace_sec_per_km ?? null,
+        hr_zone: b.hr_zone ?? null,
+        instructions: b.instructions ?? null,
+        exercise_type_override: b.exercise_type_override ?? null,
+        interval_config: b.interval_config ?? null,
+        extra_targets: b.extra_targets ?? null,
     }
 }
 

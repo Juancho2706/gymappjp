@@ -30,6 +30,10 @@ interface Props {
   onToggleFoodFavorite?: (foodId: string) => void
   onApplyFoodSwap?: (mealId: string, originalFoodId: string, swappedFoodId: string) => void
   activeSwaps?: Map<string, string>
+  /** Módulo nutrition_exchanges: macros derivados de porciones (la comida no tiene alimentos). */
+  macroOverride?: { calories: number; protein: number; carbs: number; fats: number } | null
+  /** Módulo nutrition_exchanges: chips de códigos ("2C · 1LAC") renderizados bajo los macros. */
+  exchangeContent?: React.ReactNode
 }
 
 const SATISFACTION = [
@@ -52,10 +56,12 @@ export function MealCard({
   onToggleFoodFavorite,
   onApplyFoodSwap,
   activeSwaps,
+  macroOverride,
+  exchangeContent,
 }: Props) {
   const reduceMotion = useReducedMotion()
   const [isExpanded, setIsExpanded] = useState(false)
-  const mealMacros = sumMealMacros(meal)
+  const mealMacros = macroOverride ?? sumMealMacros(meal)
   const macroScale = partialPlanPct != null ? partialPlanPct / 100 : 1
   const desc = meal.description?.trim()
 
@@ -172,6 +178,7 @@ export function MealCard({
               G {Math.round(mealMacros.fats * macroScale)}g
             </span>
           </div>
+          {exchangeContent}
           {desc && !isExpanded && (
             <p className="text-[11px] text-muted-foreground/60 mt-0.5 truncate">{desc}</p>
           )}

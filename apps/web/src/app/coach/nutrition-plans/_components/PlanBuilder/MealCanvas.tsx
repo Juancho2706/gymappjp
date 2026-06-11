@@ -8,6 +8,9 @@ import type { MealDraft } from './types'
 
 interface Props {
   meals: MealDraft[]
+  /** Modo intercambios: cada MealBlock oculta alimentos y muestra el editor de porciones. */
+  exchangeMode?: boolean
+  renderMealExtra?: (mealId: string) => React.ReactNode
   onAddMeal: () => void
   onUpdateMealName: (mealId: string, name: string) => void
   onUpdateMealDayOfWeek: (mealId: string, day: number | null) => void
@@ -30,6 +33,8 @@ interface Props {
 
 export function MealCanvas({
   meals,
+  exchangeMode = false,
+  renderMealExtra,
   onAddMeal,
   onUpdateMealName,
   onUpdateMealDayOfWeek,
@@ -66,6 +71,8 @@ export function MealCanvas({
             <MealBlock
               key={meal.id}
               meal={meal}
+              exchangeMode={exchangeMode}
+              extraContent={renderMealExtra?.(meal.id)}
               onUpdateName={(name) => onUpdateMealName(meal.id, name)}
               onUpdateDayOfWeek={(day) => onUpdateMealDayOfWeek(meal.id, day)}
               onUpdateNotes={(notes) => onUpdateMealNotes(meal.id, notes)}

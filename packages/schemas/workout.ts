@@ -45,6 +45,54 @@ function preprocessIntInRange(min: number, max: number, fallback: number) {
 const optionalKg = z.union([z.number().min(0), z.null()]).optional()
 const optionalProgression = z.union([z.number().min(0).max(1000), z.null()]).optional()
 
+// ─── Prescripción polimórfica (specs/movida-entrenamiento) ──────────────────
+// Ejes ortogonales (research Hevy): reps/duración/distancia/carga/lado coexisten.
+// TODOS los campos nuevos son nullable/opcionales: un payload clásico de hoy
+// (solo sets/reps/target_weight_kg) valida EXACTAMENTE igual que antes (AC3).
+
+export const EXERCISE_TYPE_VALUES = ['strength', 'cardio', 'mobility', 'roller'] as const
+export const SIDE_MODE_VALUES = ['bilateral', 'per_side', 'alternating'] as const
+export const LOAD_TYPE_VALUES = ['weight', 'time', 'bodyweight', 'none'] as const
+export const LOAD_UNIT_VALUES = ['kg', 'lb', 'sec'] as const
+export const DISTANCE_UNIT_VALUES = ['m', 'km'] as const
+export const REPS_UNIT_VALUES = ['reps', 'passes', 'breaths'] as const
+
+const IntervalTargetSchema = z.object({
+    kind: z.enum(['hr_zone', 'pace', 'rpe', 'none']),
+    hr_zone: z.number().int().min(1).max(5).optional(),
+    pace_sec_per_km: z.number().int().positive().max(3600).optional(),
+    rpe: z.number().min(1).max(10).optional(),
+})
+
+/** Shape de workout_blocks.interval_config (jsonb) — validado en app layer (decisión M2). */
+export const IntervalConfigSchema = z.object({
+    warmup_sec: z.number().int().min(0).max(7200).optional(),
+    cooldown_sec: z.number().int().min(0).max(7200).optional(),
+    /** N repeticiones del paso work/recovery (M externo = block.sets). */
+    repeats: z.number().int().min(1).max(100),
+    work: z.object({
+        duration_sec: z.number().int().min(1).max(14400).optional(),
+        distance_m: z.number().min(1).max(100000).optional(),
+        target: IntervalTargetSchema.optional(),
+    }),
+    recovery: z
+        .object({
+            duration_sec: z.number().int().min(0).max(7200).optional(),
+            distance_m: z.number().min(0).max(100000).optional(),
+            mode: z.enum(['rest', 'jog', 'walk']).optional(),
+        })
+        .optional(),
+})
+
+export type IntervalConfigInput = z.infer<typeof IntervalConfigSchema>
+
+const optionalNonNegativeInt = (max: number) =>
+    z.union([z.number().int().min(0).max(max), z.null()]).optional()
+const optionalNonNegativeNumber = (max: number) =>
+    z.union([z.number().min(0).max(max), z.null()]).optional()
+const optionalEnum = <T extends readonly [string, ...string[]]>(values: T) =>
+    z.union([z.enum(values), z.null()]).optional()
+
 export const WorkoutBlockSchema = z.object({
     exercise_id: z.string().uuid(),
     sets: z.preprocess(preprocessSets, z.number().int().min(1, 'Mínimo 1 serie').max(20, 'Máximo 20 series')),
@@ -62,6 +110,38 @@ export const WorkoutBlockSchema = z.object({
     // no cumplen RFC 9562 y el .uuid() estricto de Zod 4 los rechaza (rompe el save de todo plan).
     section_template_id: z.guid().nullable().optional(),
     is_override: z.boolean().optional(),
+    // ── Campos polimórficos (todos opcionales — retrocompatibilidad TOTAL) ──
+    is_unilateral: z.union([z.boolean(), z.null()]).optional(),
+    side_mode: optionalEnum(SIDE_MODE_VALUES),
+    reps_value: optionalNonNegativeInt(10000),
+    reps_unit: optionalEnum(REPS_UNIT_VALUES),
+    load_type: optionalEnum(LOAD_TYPE_VALUES),
+    load_value: optionalNonNegativeNumber(10000),
+    load_unit: optionalEnum(LOAD_UNIT_VALUES),
+    distance_value: optionalNonNegativeNumber(1000000),
+    distance_unit: optionalEnum(DISTANCE_UNIT_VALUES),
+    duration_sec: optionalNonNegativeInt(86400),
+    target_pace_sec_per_km: z.union([z.number().int().positive().max(3600), z.null()]).optional(),
+    hr_zone: z.union([z.number().int().min(1).max(5), z.null()]).optional(),
+    instructions: z.string().max(2000, 'Máximo 2000 caracteres en instrucciones').nullable().optional(),
+    exercise_type_override: optionalEnum(EXERCISE_TYPE_VALUES),
+    interval_config: z.union([IntervalConfigSchema, z.null()]).optional(),
+    extra_targets: z.union([z.record(z.string(), z.unknown()), z.null()]).optional(),
+}).superRefine((block, ctx) => {
+    // Solo aplica cuando el bloque declara explícitamente cardio (override):
+    // un bloque legacy (sin override) jamás entra acá — cero regresión (AC3).
+    if (block.exercise_type_override === 'cardio') {
+        const hasDuration = block.duration_sec != null && block.duration_sec > 0
+        const hasDistance = block.distance_value != null && block.distance_value > 0
+        const hasInterval = block.interval_config != null
+        if (!hasDuration && !hasDistance && !hasInterval) {
+            ctx.addIssue({
+                code: 'custom',
+                message: 'Un bloque cardio necesita duración, distancia o intervalos',
+                path: ['duration_sec'],
+            })
+        }
+    }
 })
 
 export const ProgramPhaseSchema = z.object({
@@ -118,8 +198,44 @@ export const WorkoutLogSetSchema = z.object({
     reps_done: z.coerce.number().int().min(0).optional(),
     rpe: z.coerce.number().min(1).max(10).optional(),
     rir: z.coerce.number().int().min(0).max(10).optional(),
+    // ── Espejo polimórfico (M3) — opcionales, el log strength de hoy no cambia ──
+    actual_duration_sec: z.coerce.number().int().min(0).max(86400).optional(),
+    actual_distance_m: z.coerce.number().min(0).max(1000000).optional(),
+    actual_pace_sec_per_km: z.coerce.number().int().positive().max(3600).optional(),
+    actual_hold_sec: z.coerce.number().int().min(0).max(86400).optional(),
+    actual_avg_hr: z.coerce.number().int().min(25).max(250).optional(),
 })
 export type WorkoutLogSetInput = z.infer<typeof WorkoutLogSetSchema>
+
+// ─── Perfil cardio del cliente (M4, módulo `cardio`) ─────────────────────────
+
+function preprocessNullableInt(val: unknown): number | null | undefined {
+    if (val === undefined) return undefined
+    if (val === null || val === '') return null
+    const n = typeof val === 'number' ? val : Number(String(val).trim())
+    if (!Number.isFinite(n)) return null
+    return Math.round(n)
+}
+
+export const CardioProfileUpdateSchema = z.object({
+    clientId: z.string().uuid(),
+    birth_date: z
+        .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida (AAAA-MM-DD)'), z.null()])
+        .optional(),
+    resting_hr: z.preprocess(
+        preprocessNullableInt,
+        z.union([z.number().int().min(25, 'FC reposo mínima 25').max(120, 'FC reposo máxima 120'), z.null()]).optional()
+    ),
+    max_hr_override: z.preprocess(
+        preprocessNullableInt,
+        z.union([z.number().int().min(120, 'FCmax mínima 120').max(230, 'FCmax máxima 230'), z.null()]).optional()
+    ),
+    ref_5k_time_sec: z.preprocess(
+        preprocessNullableInt,
+        z.union([z.number().int().min(600, 'Mínimo 10:00').max(7200, 'Máximo 2:00:00'), z.null()]).optional()
+    ),
+})
+export type CardioProfileUpdateInput = z.infer<typeof CardioProfileUpdateSchema>
 
 export type WorkoutBlockInput = z.infer<typeof WorkoutBlockSchema>
 export type WorkoutDayInput = z.infer<typeof WorkoutDaySchema>

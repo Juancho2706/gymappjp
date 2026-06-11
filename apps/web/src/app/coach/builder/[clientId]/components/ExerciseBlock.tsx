@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { getMuscleColor } from '../muscle-colors'
 import { buildAreaVMs, type BuilderAreaVM } from '../area-ui'
 import { effectiveAreaKey } from '@/lib/workout-areas'
+import { EXERCISE_TYPE_LABEL, effectiveExerciseType, typedBlockSummary } from '@/lib/workout-exercise-type'
 import type { BuilderBlock } from '../types'
 
 interface ExerciseBlockProps {
@@ -73,6 +74,18 @@ function ExerciseBlockInner({
     }
 
     const muscleColor = getMuscleColor(block.muscle_group)
+
+    // Resumen por tipo (specs/movida-entrenamiento): null en bloques strength ⇒ el chip
+    // legacy "sets × reps" se renderiza EXACTAMENTE igual que hoy (AC3).
+    const blockType = effectiveExerciseType(block, { exercise_type: block.exercise_type })
+    const typedSummary = useMemo(() => {
+        if (blockType === 'strength') return null
+        const dist = parseFloat((block.distance_value || '').replace(',', '.'))
+        return typedBlockSummary(
+            { ...block, distance_value: Number.isFinite(dist) ? dist : null, load_value: null },
+            blockType
+        )
+    }, [block, blockType])
 
     function handleQuickSave() {
         if (onUpdate) {
@@ -192,7 +205,14 @@ function ExerciseBlockInner({
                                 >
                                     {currentArea?.shortLabel}
                                 </span>
-                                {(block.sets || 0) > 0 && block.reps ? (
+                                {typedSummary ? (
+                                    <div
+                                        className="flex items-center gap-1 bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-[10px] font-bold text-foreground"
+                                        title={`${EXERCISE_TYPE_LABEL[blockType]}: ${typedSummary}`}
+                                    >
+                                        <span>{typedSummary}</span>
+                                    </div>
+                                ) : (block.sets || 0) > 0 && block.reps ? (
                                     <div
                                         className="flex items-center gap-1 bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-[10px] font-bold text-foreground cursor-pointer hover:bg-primary/10 hover:text-primary transition-colors"
                                         title="Doble click para editar rápido"

@@ -43,8 +43,9 @@ import { BuilderOnboardingTour, type BuilderTourStep } from './components/Builde
 import { ProgramPhasesBar } from '@/components/shared/ProgramPhasesBar'
 import { ExerciseBlock } from './components/ExerciseBlock'
 import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
-import type { BuilderBlock, DayState, ProgramPhase } from './types'
+import type { BuilderBlock, BuilderCardioContext, DayState, ProgramPhase } from './types'
 import type { WorkoutArea } from '@/domain/workout/types'
+import { effectiveExerciseType, legacyRepsSummaryFor } from '@/lib/workout-exercise-type'
 import { buildAreaVMs } from './area-ui'
 import { getMuscleColor } from './muscle-colors'
 
@@ -81,6 +82,7 @@ type EmbeddedExercise = {
     muscle_group?: string | null
     gif_url?: string | null
     video_url?: string | null
+    exercise_type?: string | null
 }
 
 /** PostgREST puede devolver la FK `exercises` como objeto o como array de un elemento. */
@@ -123,6 +125,23 @@ function mapDbBlockToBuilderBlock(
         section: b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main',
         section_template_id: b.section_template_id ?? null,
         is_override: !!b.is_override,
+        // Polimórfico (specs/movida-entrenamiento): round-trip de los campos tipados.
+        // Filas legacy: todo NULL ⇒ el bloque queda byte-identical al mapeo de siempre.
+        exercise_type: ((exRel?.exercise_type ?? cat?.exercise_type) || null) as BuilderBlock['exercise_type'],
+        exercise_type_override: (b.exercise_type_override ?? null) as BuilderBlock['exercise_type_override'],
+        side_mode: b.side_mode ?? null,
+        reps_value: b.reps_value ?? null,
+        reps_unit: b.reps_unit ?? null,
+        load_type: b.load_type ?? null,
+        load_value: b.load_value != null ? String(b.load_value) : '',
+        load_unit: b.load_unit ?? null,
+        distance_value: b.distance_value != null ? String(b.distance_value) : '',
+        distance_unit: b.distance_unit ?? null,
+        duration_sec: b.duration_sec ?? null,
+        target_pace_sec_per_km: b.target_pace_sec_per_km ?? null,
+        hr_zone: b.hr_zone ?? null,
+        instructions: b.instructions || '',
+        interval_config: b.interval_config ?? null,
         dayId,
     }
 }
@@ -143,7 +162,8 @@ function enrichDaysWithExerciseMedia(days: DayState[], exerciseById: Map<string,
 }
 
 function createDefaultBlock(exercise: Exercise): BuilderBlock {
-    return {
+    const exerciseType = effectiveExerciseType(null, { exercise_type: (exercise as { exercise_type?: string | null }).exercise_type })
+    const base: BuilderBlock = {
         uid: `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         exercise_id: exercise.id,
         exercise_name: exercise.name,
@@ -160,7 +180,19 @@ function createDefaultBlock(exercise: Exercise): BuilderBlock {
         section: 'main',
         section_template_id: null,
         is_override: false,
+        exercise_type: exerciseType,
     }
+    // Defaults por tipo (ejercicios strength: EXACTAMENTE el default de siempre — AC3)
+    if (exerciseType === 'cardio') {
+        return { ...base, sets: 1, reps: '10min', duration_sec: 600, rest_time: '' }
+    }
+    if (exerciseType === 'mobility') {
+        return { ...base, sets: 3, reps: '30s', duration_sec: 30, rest_time: '' }
+    }
+    if (exerciseType === 'roller') {
+        return { ...base, sets: 1, reps: '10 pasadas', reps_value: 10, reps_unit: 'passes', rest_time: '' }
+    }
+    return base
 }
 
 function trackRecentExercise(exerciseId: string) {
@@ -173,7 +205,7 @@ function trackRecentExercise(exerciseId: string) {
     } catch { /* silently ignore storage errors */ }
 }
 
-export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName, lastEditor, areas = [] }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any, coachName?: string, lastEditor?: { name: string; at: string | null } | null, areas?: WorkoutArea[] }) {
+export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName, lastEditor, areas = [], cardio }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any, coachName?: string, lastEditor?: { name: string; at: string | null } | null, areas?: WorkoutArea[], cardio?: BuilderCardioContext }) {
     const router = useRouter()
     const { t } = useTranslation()
 
@@ -863,8 +895,24 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         const allDaysToCheck = isABMode ? [...builderA.days, ...builderB.days] : days
         const hasExercises = allDaysToCheck.some(d => d.blocks.length > 0)
         if (!hasExercises) { toast.error('Debes añadir al menos un ejercicio al programa.'); return }
-        const missingData = allDaysToCheck.some(d => d.blocks.some(b => !b.sets || b.sets < 1 || !b.reps?.trim()))
-        if (missingData) { toast.error('Hay ejercicios con datos incompletos (Series o Repeticiones faltan).'); return }
+        // Completitud POR TIPO: strength exige sets+reps EXACTAMENTE como hoy (AC3);
+        // los tipos nuevos exigen su prescripción mínima (duración/distancia/intervalos/pasadas).
+        const blockIncomplete = (b: BuilderBlock): boolean => {
+            const type = effectiveExerciseType(b, { exercise_type: b.exercise_type })
+            if (type === 'cardio') {
+                const dist = parseFloat((b.distance_value || '').replace(',', '.'))
+                return !((b.duration_sec ?? 0) > 0 || (Number.isFinite(dist) && dist > 0) || !!b.interval_config)
+            }
+            if (type === 'mobility') {
+                return !b.sets || b.sets < 1 || !((b.duration_sec ?? 0) > 0 || (b.reps_value ?? 0) > 0 || !!b.reps?.trim())
+            }
+            if (type === 'roller') {
+                return !((b.duration_sec ?? 0) > 0 || (b.reps_value ?? 0) > 0 || !!b.reps?.trim())
+            }
+            return !b.sets || b.sets < 1 || !b.reps?.trim()
+        }
+        const missingData = allDaysToCheck.some(d => d.blocks.some(blockIncomplete))
+        if (missingData) { toast.error('Hay ejercicios con datos incompletos (revisa series, repeticiones, duración o distancia).'); return }
 
         const parseOptionalKg = (raw: string | undefined): number | null => {
             if (raw == null) return null
@@ -879,26 +927,54 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 day_of_week: d.id,
                 title: d.title.trim(),
                 week_variant: variant,
-                blocks: d.blocks.map((b, idx) => ({
-                    exercise_id: b.exercise_id,
-                    sets: Number.isFinite(b.sets as number) && (b.sets as number) >= 1 ? Math.round(b.sets as number) : 3,
-                    reps: b.reps || '',
-                    target_weight_kg: parseOptionalKg(b.target_weight_kg),
-                    tempo: b.tempo || null,
-                    rir: b.rir || null,
-                    rest_time: b.rest_time || null,
-                    notes: b.notes || null,
-                    superset_group: b.superset_group || null,
-                    progression_type: b.progression_type || null,
-                    progression_value:
-                        b.progression_value != null && Number.isFinite(b.progression_value)
-                            ? b.progression_value
-                            : null,
-                    section: (b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main') as 'warmup' | 'main' | 'cooldown',
-                    section_template_id: b.section_template_id ?? null,
-                    is_override: b.is_override ?? false,
-                    order_index: idx
-                }))
+                blocks: d.blocks.map((b, idx) => {
+                    const type = effectiveExerciseType(b, { exercise_type: b.exercise_type })
+                    const distanceValue = parseOptionalKg(b.distance_value)
+                    const loadValue = parseOptionalKg(b.load_value)
+                    // Coexistencia (decisión #3): reps SIEMPRE poblado. En strength manda el
+                    // texto del coach; en tipos nuevos se genera el resumen legacy ≤20 chars.
+                    const reps = type === 'strength'
+                        ? (b.reps || '')
+                        : legacyRepsSummaryFor(
+                            { ...b, distance_value: distanceValue, load_value: loadValue },
+                            type,
+                        )
+                    return {
+                        exercise_id: b.exercise_id,
+                        sets: Number.isFinite(b.sets as number) && (b.sets as number) >= 1 ? Math.round(b.sets as number) : type === 'strength' ? 3 : 1,
+                        reps,
+                        target_weight_kg: parseOptionalKg(b.target_weight_kg),
+                        tempo: b.tempo || null,
+                        rir: b.rir || null,
+                        rest_time: b.rest_time || null,
+                        notes: b.notes || null,
+                        superset_group: b.superset_group || null,
+                        progression_type: b.progression_type || null,
+                        progression_value:
+                            b.progression_value != null && Number.isFinite(b.progression_value)
+                                ? b.progression_value
+                                : null,
+                        section: (b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main') as 'warmup' | 'main' | 'cooldown',
+                        section_template_id: b.section_template_id ?? null,
+                        is_override: b.is_override ?? false,
+                        // Polimórfico: solo se envían valores reales (legacy ⇒ null, byte-identical)
+                        exercise_type_override: b.exercise_type_override ?? null,
+                        side_mode: b.side_mode ?? null,
+                        reps_value: b.reps_value ?? null,
+                        reps_unit: b.reps_unit ?? null,
+                        load_type: b.load_type ?? null,
+                        load_value: loadValue,
+                        load_unit: b.load_unit ?? null,
+                        distance_value: distanceValue,
+                        distance_unit: distanceValue != null ? (b.distance_unit ?? 'm') : null,
+                        duration_sec: b.duration_sec ?? null,
+                        target_pace_sec_per_km: b.target_pace_sec_per_km ?? null,
+                        hr_zone: b.hr_zone ?? null,
+                        instructions: b.instructions?.trim() ? b.instructions.trim() : null,
+                        interval_config: b.interval_config ?? null,
+                        order_index: idx,
+                    }
+                })
             }))
 
         startTransition(async () => {
@@ -1757,6 +1833,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
             <BlockEditSheet
                 block={editingBlock}
                 clientId={client?.id}
+                cardio={cardio}
                 onClose={() => setEditingBlock(null)}
                 onUpdate={(b) => {
                     updateBlock(b);
