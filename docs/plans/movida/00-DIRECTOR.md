@@ -118,6 +118,7 @@ Detalle (fórmulas/valores) vive en cada plan. Hooks: builder/ejercicios polimó
 - **Export actual de los ~300 alumnos** (Medilink/Excel) — bloqueante de onboarding.
 - Confirmación de **responsable del tratamiento** (Movida) para el DPA.
 - Nutrición: valores **kcal/macro por grupo** de intercambio (la guía de Fran trae equivalencias, no macros) → confirmar vs SMAE/UDD. Set canónico de grupos (incluye `SP` scoop proteína). ¿Subgrupos por % grasa?
+- Nutrición (nuevos del SDD `specs/movida-intercambios/`, 2026-06-11): set canónico de **variantes de día** (¿Descanso/Entreno AM/Entreno PM fijo o libre?) · **granularidad de porciones** (¿medias porciones 0.5?) · contenido esperado de la **lista de compras** · macros de `SP` ¿genérico del team u override por alumno? · **logo Movida alta resolución fondo claro** (PNG) para el PDF · ¿cuántas pautas son para personas **sin cuenta** en la app? (prioriza el flujo coach-descarga-PDF).
 - Antropometría: 3-5 fichas reales **ISAK** (ecuación/pliegues) + 3-5 reportes **bioimpedancia** (marca/modelo, export CSV?).
 - Screening de movimiento: la **hoja real** del kine (¿7 patrones? ¿clearing de dolor? frecuencia re-test).
 - Entreno: 2-3 sesiones más (incl. **HYROX** de box). ¿**kg y lb** indistinto o forzar uno?
