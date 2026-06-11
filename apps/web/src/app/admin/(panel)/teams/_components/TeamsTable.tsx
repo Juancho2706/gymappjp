@@ -46,7 +46,12 @@ export function TeamsTable({ teams }: { teams: AdminTeamRow[] }) {
                                 return (
                                     <tr key={t.id} onClick={() => setEditTarget(t)} className="cursor-pointer bg-[--admin-bg-elevated] hover:bg-[--admin-bg-surface] transition-colors">
                                         <td className="px-4 py-3">
-                                            <p className="font-medium text-[--admin-text-1]">{t.name}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-medium text-[--admin-text-1]">{t.name}</p>
+                                                {t.suspended_at && (
+                                                    <span className="rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[10px] font-semibold text-red-400">SUSPENDIDO</span>
+                                                )}
+                                            </div>
                                             <p className="font-mono text-[11px] text-[--admin-text-3]">/t/{t.slug}</p>
                                         </td>
                                         <td className="px-4 py-3 text-[--admin-text-2]">{t.ownerName ?? '—'}</td>

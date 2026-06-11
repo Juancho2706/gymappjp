@@ -48,6 +48,9 @@ export const NAV_MODULES: ReadonlyArray<NavModule> = [
     { key: 'exercises', href: '/coach/exercises', label: 'Ejercicios', shortLabel: 'Ejer.', icon: Dumbbell, contexts: ALL },
     { key: 'nutrition', href: '/coach/nutrition-plans', label: 'Nutrición', shortLabel: 'Nutri', icon: Apple, contexts: ALL },
     { key: 'brand', href: '/coach/settings', label: 'Mi Marca', shortLabel: 'Marca', icon: Settings, contexts: ['coach_standalone'] },
+    // C (Settings hub): mismo href que 'brand' pero en contexto TEAM — la página es
+    // context-aware (hub: módulos del pool + Mi Equipo + cuenta; sin marca personal).
+    { key: 'settings_team', href: '/coach/settings', label: 'Opciones', shortLabel: 'Opcs.', icon: Settings, contexts: ['coach_team'] },
     { key: 'billing', href: '/coach/subscription', label: 'Suscripción', shortLabel: 'Plan', icon: CreditCard, contexts: ['coach_standalone'] },
     { key: 'support', href: '/coach/support', label: 'Soporte', shortLabel: 'Ayuda', icon: LifeBuoy, contexts: ALL },
 ]

@@ -6,6 +6,7 @@ export type AdminTeamRow = {
     slug: string
     invite_code: string | null
     seat_limit: number
+    suspended_at: string | null
     owner_coach_id: string
     enabled_modules: Record<string, boolean>
     created_at: string | null
@@ -20,7 +21,7 @@ export async function getTeamsForAdmin(): Promise<AdminTeamRow[]> {
 
     const { data: teams } = await admin
         .from('teams')
-        .select('id, name, slug, invite_code, seat_limit, owner_coach_id, enabled_modules, created_at')
+        .select('id, name, slug, invite_code, seat_limit, suspended_at, owner_coach_id, enabled_modules, created_at')
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
 
@@ -48,6 +49,7 @@ export async function getTeamsForAdmin(): Promise<AdminTeamRow[]> {
         slug: t.slug,
         invite_code: t.invite_code,
         seat_limit: t.seat_limit,
+        suspended_at: t.suspended_at,
         owner_coach_id: t.owner_coach_id,
         enabled_modules: (t.enabled_modules && typeof t.enabled_modules === 'object'
             ? (t.enabled_modules as Record<string, boolean>)

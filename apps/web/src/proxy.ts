@@ -342,9 +342,14 @@ export async function proxy(request: NextRequest) {
         if (
             (coach.subscription_status === 'org_managed' || coach.subscription_status === 'team_managed') &&
             (pathname.startsWith('/coach/subscription') || pathname.startsWith('/coach/settings')) &&
-            // Los toggles de MÓDULOS del team viven bajo /coach/settings/modules y el owner/co-gestor
-            // team_managed DEBE poder editarlos (la página resuelve el contexto team por sí misma).
-            !(coach.subscription_status === 'team_managed' && pathname.startsWith('/coach/settings/modules'))
+            // C (Settings hub): team_managed SÍ entra a /coach/settings (hub context-aware del
+            // team: Módulos + Mi Equipo + cuenta) — EXCEPTO el preview de marca personal.
+            // Suscripción sigue bloqueada para todo managed.
+            !(
+                coach.subscription_status === 'team_managed' &&
+                pathname.startsWith('/coach/settings') &&
+                !pathname.startsWith('/coach/settings/preview')
+            )
         ) {
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = '/coach/dashboard'

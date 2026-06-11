@@ -38,7 +38,7 @@ export const MODULES = {
     /** Visibles en TODOS los contextos de coach */
     common: ['Dashboard', 'Alumnos', 'Programas', 'Ejercicios', 'Nutrición', 'Soporte'],
     /** SOLO contexto coach_team */
-    teamOnly: ['Equipo'],
+    teamOnly: ['Equipo', 'Opciones'],
     /** SOLO contexto coach_standalone */
     standaloneOnly: ['Mi Marca', 'Suscripción'],
 } as const

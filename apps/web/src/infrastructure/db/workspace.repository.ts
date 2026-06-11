@@ -94,7 +94,7 @@ export async function findWorkspaceIdentityRows(db: DB, userId: string) {
             .is('deleted_at', null),
         db
             .from('team_members')
-            .select('id, team_id, teams(id, name, slug, owner_coach_id, deleted_at)')
+            .select('id, team_id, teams(id, name, slug, owner_coach_id, deleted_at, suspended_at)')
             .eq('coach_id', userId)
             .eq('status', 'active')
             .is('deleted_at', null),
@@ -107,8 +107,9 @@ export async function findWorkspaceIdentityRows(db: DB, userId: string) {
     const teams: WorkspaceTeamRow[] = []
     for (const row of (teamsRes.data ?? [])) {
         const t = (row as { teams?: unknown }).teams
-        const team = (Array.isArray(t) ? t[0] : t) as { id: string; name: string; slug: string; owner_coach_id: string; deleted_at: string | null } | null
-        if (!team || team.deleted_at) continue
+        const team = (Array.isArray(t) ? t[0] : t) as { id: string; name: string; slug: string; owner_coach_id: string; deleted_at: string | null; suspended_at: string | null } | null
+        // Kill-switch: team suspendido por el operador = workspace invisible (coaches caen a su otro contexto o holding).
+        if (!team || team.deleted_at || team.suspended_at) continue
         teams.push({ memberId: (row as { id: string }).id, teamId: team.id, name: team.name, slug: team.slug, ownerCoachId: team.owner_coach_id })
     }
 
@@ -136,12 +137,12 @@ export async function findWorkspaceIdentityRows(db: DB, userId: string) {
                 .in('id', coachIds)
             : Promise.resolve({ data: [] }),
         client?.team_id
-            ? db.from('teams').select('id, name, slug, deleted_at').eq('id', client.team_id).maybeSingle()
+            ? db.from('teams').select('id, name, slug, deleted_at, suspended_at').eq('id', client.team_id).maybeSingle()
             : Promise.resolve({ data: null }),
     ])
 
-    const ctRaw = (clientTeamRes.data ?? null) as { id: string; name: string; slug: string; deleted_at: string | null } | null
-    const clientTeam = ctRaw && !ctRaw.deleted_at ? { id: ctRaw.id, name: ctRaw.name, slug: ctRaw.slug } : null
+    const ctRaw = (clientTeamRes.data ?? null) as { id: string; name: string; slug: string; deleted_at: string | null; suspended_at: string | null } | null
+    const clientTeam = ctRaw && !ctRaw.deleted_at && !ctRaw.suspended_at ? { id: ctRaw.id, name: ctRaw.name, slug: ctRaw.slug } : null
 
     return {
         coach,

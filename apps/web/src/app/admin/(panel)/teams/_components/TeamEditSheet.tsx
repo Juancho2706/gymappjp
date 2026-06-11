@@ -6,7 +6,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { updateTeamAction } from '../_actions/teams.actions'
+import { updateTeamAction, setTeamSuspendedAction } from '../_actions/teams.actions'
 import { MODULE_KEYS, MODULE_LABELS } from './module-labels'
 import type { AdminTeamRow } from '../_data/teams.queries'
 
@@ -74,6 +74,34 @@ export function TeamEditSheet({ team, onClose }: Props) {
                             <Button type="submit" disabled={isPending}>{isPending ? 'Guardando...' : 'Guardar cambios'}</Button>
                         </SheetFooter>
                     </form>
+                )}
+
+                {team && (
+                    <div className="mt-8 rounded-lg border border-red-500/25 bg-red-500/5 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-red-400">Kill-switch</p>
+                        <p className="mt-1 text-xs text-neutral-400">
+                            {team.suspended_at
+                                ? 'Equipo SUSPENDIDO: alumnos y coaches no pueden entrar. Reactivar lo restaura tal cual.'
+                                : 'Suspende el equipo completo: el shell /t deja de resolver y los coaches pierden el contexto. Reversible, no borra nada.'}
+                        </p>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            disabled={isPending}
+                            onClick={() => {
+                                setError(null)
+                                startTransition(async () => {
+                                    const res = await setTeamSuspendedAction(team.id, !team.suspended_at)
+                                    if (res && 'error' in res) { setError(res.error); return }
+                                    router.refresh()
+                                    onClose()
+                                })
+                            }}
+                            className={`mt-3 ${team.suspended_at ? 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10' : 'border-red-500/40 text-red-400 hover:bg-red-500/10'}`}
+                        >
+                            {isPending ? 'Aplicando...' : team.suspended_at ? 'Reactivar equipo' : 'Suspender equipo'}
+                        </Button>
+                    </div>
                 )}
             </SheetContent>
         </Sheet>

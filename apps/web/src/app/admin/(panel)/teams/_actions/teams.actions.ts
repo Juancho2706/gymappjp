@@ -161,3 +161,23 @@ export async function updateTeamAction(teamId: string, formData: FormData): Prom
     revalidatePath('/admin/teams')
     return { success: true }
 }
+
+/**
+ * Kill-switch de plataforma: suspende/reactiva un team COMPLETO (flag de operador).
+ * Suspendido ⇒ el RPC del alumno no resuelve el team (shell /t cae en holding) y los
+ * coaches pierden el workspace team (workspace.repository lo excluye). Reversible.
+ */
+export async function setTeamSuspendedAction(teamId: string, suspend: boolean): Promise<UpdateTeamResult> {
+    const { user, adminClient } = await assertAdmin()
+
+    const { error } = await adminClient
+        .from('teams')
+        .update({ suspended_at: suspend ? new Date().toISOString() : null })
+        .eq('id', teamId)
+        .is('deleted_at', null)
+    if (error) return { error: error.message }
+
+    await logAdminAction(adminClient, suspend ? 'team.suspend' : 'team.unsuspend', 'teams', teamId, {}, user.email)
+    revalidatePath('/admin/teams')
+    return { success: true }
+}

@@ -5,21 +5,66 @@ import { LogoUploadForm } from './LogoUploadForm'
 import { WhatChangesList } from './_components/WhatChangesList'
 import { BrandSettingsTourClient } from './_components/BrandSettingsTourClient'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
-import { Check, Palette, Package, ChevronRight } from 'lucide-react'
+import { Check, Palette, Package, ChevronRight, Users } from 'lucide-react'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 import { DangerZone } from './_components/DangerZone'
 import { getCoachSettingsForUser } from './_data/settings.queries'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    title: 'Mi Marca | EVA',
+    title: 'Opciones | EVA',
 }
 
 export default async function CoachSettingsPage() {
     const { user, coach } = await getCoachSettingsForUser()
     if (!user) redirect('/login')
     if (!coach) redirect('/login')
-    if (coach.subscription_status === 'org_managed' || coach.subscription_status === 'team_managed') redirect('/coach/dashboard')
+    if (coach.subscription_status === 'org_managed') redirect('/coach/dashboard')
+
+    // C (Settings hub): en contexto team la marca es DEL EQUIPO (Brand Studio en /coach/team)
+    // y la facturación la maneja EVA — acá queda lo del coach como persona: módulos y cuenta.
+    if (coach.subscription_status === 'team_managed') {
+        return (
+            <div className="px-4 py-6 md:px-8 max-w-3xl animate-fade-in mx-auto space-y-6">
+                <div>
+                    <h1 className="text-xl md:text-2xl font-extrabold text-foreground leading-tight">Opciones</h1>
+                    <p className="text-muted-foreground text-sm mt-2 leading-relaxed">
+                        La marca y la suscripción las gestiona tu equipo. Aquí están los módulos del pool y tu cuenta personal.
+                    </p>
+                </div>
+
+                <Link
+                    href="/coach/settings/modules"
+                    className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
+                >
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+                        <Package className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-foreground">Módulos del equipo</h3>
+                        <p className="text-xs text-muted-foreground">Cardio, evaluación de movimiento, composición corporal, intercambios</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </Link>
+
+                <Link
+                    href="/coach/team"
+                    className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
+                >
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+                        <Users className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-foreground">Mi Equipo</h3>
+                        <p className="text-xs text-muted-foreground">Marca del equipo, miembros, accesos de alumnos y código de invitación</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </Link>
+
+                <DangerZone />
+            </div>
+        )
+    }
 
     const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
     const capabilities = getTierCapabilities(tier)
@@ -113,6 +158,9 @@ export default async function CoachSettingsPage() {
                     </Link>
                     <p className="text-center text-xs text-muted-foreground">Sin permanencia · Cancelá cuando quieras</p>
                 </div>
+
+                {/* La eliminación de cuenta es un derecho del usuario: visible también sin branding. */}
+                <DangerZone />
             </div>
         )
     }

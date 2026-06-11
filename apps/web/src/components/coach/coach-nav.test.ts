@@ -19,9 +19,9 @@ describe('getVisibleNavItems — matriz por contexto', () => {
         expect(k).not.toContain('team')
     })
 
-    it('coach_team: Equipo SÍ; Marca/Suscripción NO', () => {
+    it('coach_team: Equipo y Opciones SÍ; Marca/Suscripción NO', () => {
         const k = keys(getVisibleNavItems({ activeWorkspaceType: 'coach_team', subscriptionStatus: 'team_managed' }))
-        expect(k).toEqual(['dashboard', 'clients', 'team', 'programs', 'exercises', 'nutrition', 'support'])
+        expect(k).toEqual(['dashboard', 'clients', 'team', 'programs', 'exercises', 'nutrition', 'settings_team', 'support'])
     })
 
     it('coach_team con status personal activo (multi-contexto como josefit): igual sin Marca/Suscripción', () => {
@@ -57,5 +57,13 @@ describe('getVisibleNavItems — matriz por contexto', () => {
         for (const key of ['brand', 'billing']) {
             expect(NAV_MODULES.find((m) => m.key === key)!.contexts).toEqual(['coach_standalone'])
         }
+        // C: "Opciones" (hub context-aware de /coach/settings) existe SOLO en coach_team.
+        expect(NAV_MODULES.find((m) => m.key === 'settings_team')!.contexts).toEqual(['coach_team'])
+    })
+
+    it('enterprise_coach NUNCA ve settings (ni brand ni settings_team)', () => {
+        const k = keys(getVisibleNavItems({ activeWorkspaceType: 'enterprise_coach', subscriptionStatus: 'org_managed' }))
+        expect(k).not.toContain('brand')
+        expect(k).not.toContain('settings_team')
     })
 })

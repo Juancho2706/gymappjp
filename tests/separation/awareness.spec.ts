@@ -40,6 +40,25 @@ test.describe('E — awareness de último editor en el pool', () => {
         })
     })
 
+    test.describe('team coach — Settings hub (C)', () => {
+        test.use({ storageState: PERSONAS.teamCoach.storageState })
+
+        test('/coach/settings en contexto team = hub del pool (sin marca personal)', async ({ page }) => {
+            await page.goto('/coach/settings')
+            await expect(page.getByRole('heading', { name: 'Opciones' })).toBeVisible({ timeout: 20_000 })
+            await expect(page.getByText('Módulos del equipo')).toBeVisible()
+            await expect(page.getByText('Mi Equipo').first()).toBeVisible()
+            // Nada de la página de marca personal standalone.
+            await expect(page.getByText('Personaliza la app de tus alumnos')).toHaveCount(0)
+            await expect(page.getByText(/Disponible en Starter/)).toHaveCount(0)
+        })
+
+        test('/coach/settings/preview sigue DENEGADO en team (marca personal)', async ({ page }) => {
+            await page.goto('/coach/settings/preview')
+            await page.waitForURL((url) => !url.pathname.startsWith('/coach/settings/preview'), { timeout: 15_000 })
+        })
+    })
+
     test.describe('solo coach (standalone — fuera del pool)', () => {
         test.use({ storageState: PERSONAS.soloCoach.storageState })
 

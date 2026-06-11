@@ -2964,6 +2964,7 @@ export type Database = {
           seat_limit: number
           slug: string
           splash_bg_color: string | null
+          suspended_at: string | null
           use_custom_loader: boolean
         }
         Insert: {
@@ -2986,6 +2987,7 @@ export type Database = {
           seat_limit?: number
           slug: string
           splash_bg_color?: string | null
+          suspended_at?: string | null
           use_custom_loader?: boolean
         }
         Update: {
@@ -3008,6 +3010,7 @@ export type Database = {
           seat_limit?: number
           slug?: string
           splash_bg_color?: string | null
+          suspended_at?: string | null
           use_custom_loader?: boolean
         }
         Relationships: [

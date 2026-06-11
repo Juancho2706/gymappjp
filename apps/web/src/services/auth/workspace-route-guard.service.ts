@@ -17,16 +17,18 @@ export function canAccessWorkspacePath(workspace: ActiveWorkspace, pathname: str
         return { allowed: false, reason: 'billing_requires_coach_standalone', redirectTo: defaultWorkspaceHome(workspace) }
     }
 
-    // Los toggles de MÓDULOS del team viven bajo /coach/settings/modules: el owner/co-gestor en
-    // contexto team DEBE poder editarlos (la página resuelve el contexto y gatea por gestor).
-    if (pathname.startsWith('/coach/settings/modules')) {
-        if (workspace.type === 'coach_standalone' || workspace.type === 'coach_team') return { allowed: true }
-        return { allowed: false, reason: 'modules_require_coach_workspace', redirectTo: defaultWorkspaceHome(workspace) }
+    // El preview de la app del alumno es de la marca PERSONAL: solo standalone.
+    if (pathname.startsWith('/coach/settings/preview')) {
+        if (workspace.type === 'coach_standalone') return { allowed: true }
+        return { allowed: false, reason: 'brand_preview_requires_coach_standalone', redirectTo: defaultWorkspaceHome(workspace) }
     }
 
+    // C (Settings hub): /coach/settings es CONTEXT-AWARE — standalone ve Mi Marca completa;
+    // coach_team ve el hub del team (Módulos + Mi Equipo + cuenta). La página decide el contenido.
+    // /coach/settings/modules incluido (el owner/co-gestor del team edita los toggles del pool).
     if (pathname.startsWith('/coach/settings')) {
-        if (workspace.type === 'coach_standalone') return { allowed: true }
-        return { allowed: false, reason: 'brand_settings_require_coach_standalone', redirectTo: defaultWorkspaceHome(workspace) }
+        if (workspace.type === 'coach_standalone' || workspace.type === 'coach_team') return { allowed: true }
+        return { allowed: false, reason: 'settings_require_coach_workspace', redirectTo: defaultWorkspaceHome(workspace) }
     }
 
     if (pathname.startsWith('/coach/')) {

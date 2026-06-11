@@ -43,17 +43,20 @@ describe('workspaceHome / defaultWorkspaceHome', () => {
 })
 
 describe('canAccessWorkspacePath', () => {
-    it('coach_team accede a /coach/* pero NO a billing/marca personal', () => {
+    it('coach_team accede a /coach/* y al hub /coach/settings, pero NO a billing ni preview de marca', () => {
         expect(canAccessWorkspacePath(ws.coachTeam, '/coach/dashboard').allowed).toBe(true)
         expect(canAccessWorkspacePath(ws.coachTeam, '/coach/team').allowed).toBe(true)
         expect(canAccessWorkspacePath(ws.coachTeam, '/coach/subscription').allowed).toBe(false)
-        expect(canAccessWorkspacePath(ws.coachTeam, '/coach/settings').allowed).toBe(false)
+        // C (Settings hub): /coach/settings es context-aware — en team muestra el hub del pool.
+        expect(canAccessWorkspacePath(ws.coachTeam, '/coach/settings').allowed).toBe(true)
+        expect(canAccessWorkspacePath(ws.coachTeam, '/coach/settings/preview').allowed).toBe(false)
     })
 
     it('coach_team SÍ accede a /coach/settings/modules (toggles del team, gobernanza del owner)', () => {
         expect(canAccessWorkspacePath(ws.coachTeam, '/coach/settings/modules').allowed).toBe(true)
         expect(canAccessWorkspacePath(ws.coachStandalone, '/coach/settings/modules').allowed).toBe(true)
         expect(canAccessWorkspacePath(ws.enterpriseCoach, '/coach/settings/modules').allowed).toBe(false)
+        expect(canAccessWorkspacePath(ws.enterpriseCoach, '/coach/settings').allowed).toBe(false)
     })
 
     it('student_team accede a /c/* (lo sirve el rewrite del proxy /t)', () => {
