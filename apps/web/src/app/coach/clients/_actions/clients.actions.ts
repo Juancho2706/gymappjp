@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Tables } from '@/lib/database.types'
 import { revalidatePath } from 'next/cache'
@@ -100,14 +99,17 @@ export async function createClientAction(
         }
     }
 
-    const admin = await createRawAdminClient()
+    // R3 (auditoria 2026-06-11): solo GoTrue Admin API necesita la service key; las queries
+    // PostgREST de esta accion pasan RLS del coach y van con el cliente user-scoped `supabase`.
+    const authAdmin = createServiceRoleClient()
     const emailSan = sanitizePlatformEmail(parsed.data.email)
-    const availability = await assertPlatformEmailAvailable(admin, parsed.data.email)
+    // RPC SECURITY DEFINER con GRANT a authenticated → el cliente user-scoped alcanza.
+    const availability = await assertPlatformEmailAvailable(supabase, parsed.data.email)
     if (!availability.ok) {
         return { error: availability.error }
     }
 
-    const { data: newAuthUser, error: authError } = await admin.auth.admin.createUser({
+    const { data: newAuthUser, error: authError } = await authAdmin.auth.admin.createUser({
         email: emailSan,
         password: parsed.data.temp_password,
         email_confirm: true,
@@ -120,7 +122,8 @@ export async function createClientAction(
         return { error: `Error al crear el usuario: ${authError.message}` }
     }
 
-    const { error: dbError } = await admin.from('clients').insert({
+    // INSERT user-scoped: el WITH CHECK de RLS (standalone/team/org-coach) es el techo real.
+    const { error: dbError } = await supabase.from('clients').insert({
         id: newAuthUser.user.id,
         coach_id: coach.id,
         full_name: parsed.data.full_name,
@@ -135,7 +138,7 @@ export async function createClientAction(
     })
 
     if (dbError) {
-        await admin.auth.admin.deleteUser(newAuthUser.user.id)
+        await authAdmin.auth.admin.deleteUser(newAuthUser.user.id)
         if (dbError.code === '23505') {
             return { error: 'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.' }
         }
@@ -168,7 +171,7 @@ export async function createClientAction(
         if (assignErr) {
             console.error('Failed to create coach_client_assignment (rolling back):', assignErr)
             await serviceDb.from('clients').delete().eq('id', newAuthUser.user.id)
-            await admin.auth.admin.deleteUser(newAuthUser.user.id)
+            await authAdmin.auth.admin.deleteUser(newAuthUser.user.id)
             return { error: 'No se pudo asignar el alumno a tu cuenta. Intenta de nuevo.' }
         }
     }
@@ -178,7 +181,7 @@ export async function createClientAction(
     let loginPath: string
     let emailBrandName = coach.brand_name
     if (scope.activeTeamId) {
-        const { data: team } = await admin
+        const { data: team } = await supabase
             .from('teams')
             .select('slug, name')
             .eq('id', scope.activeTeamId)
@@ -347,12 +350,12 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
 
     if (!client) return { error: 'Alumno no encontrado.' }
 
-    const admin = await createRawAdminClient()
-
-    const { data: coachProfile } = await admin.from('coaches').select('id').eq('id', clientId).maybeSingle()
+    // Edge coach-como-cliente: el SELECT en coaches es publico y el DELETE pasa la RLS propia
+    // del coach → cliente user-scoped. Solo deleteUser (GoTrue Admin) exige la service key.
+    const { data: coachProfile } = await supabase.from('coaches').select('id').eq('id', clientId).maybeSingle()
 
     if (coachProfile) {
-        let deleteQuery = admin
+        let deleteQuery = supabase
             .from('clients')
             .delete()
             .eq('id', clientId)
@@ -361,7 +364,8 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
         const { error: delErr } = await deleteQuery
         if (delErr) return { error: delErr.message }
     } else {
-        const { error } = await admin.auth.admin.deleteUser(clientId)
+        const authAdmin = createServiceRoleClient()
+        const { error } = await authAdmin.auth.admin.deleteUser(clientId)
         if (error) return { error: error.message }
     }
 
@@ -388,8 +392,9 @@ export async function resetClientPasswordAction(clientId: string): Promise<{ err
 
     const tempPassword = Math.floor(100000 + Math.random() * 900000).toString()
 
-    const admin = await createRawAdminClient()
-    const { error: authError } = await admin.auth.admin.updateUserById(clientId, {
+    // GoTrue Admin API: aqui si se necesita (y se tiene) admin real.
+    const authAdmin = createServiceRoleClient()
+    const { error: authError } = await authAdmin.auth.admin.updateUserById(clientId, {
         password: tempPassword,
     })
 
@@ -425,8 +430,7 @@ export async function archiveClientAction(clientId: string): Promise<{ error?: s
 
     if (!client) return { error: 'Alumno no encontrado.' }
 
-    const admin = await createRawAdminClient()
-    let archiveQuery = admin
+    let archiveQuery = supabase
         .from('clients')
         .update({ is_archived: true })
         .eq('id', clientId)
@@ -496,8 +500,7 @@ export async function unarchiveClientAction(clientId: string): Promise<{ error?:
         return { error: `Alcanzaste el límite de ${maxClients} alumnos activos. Archiva otro alumno antes de reactivar este.` }
     }
 
-    const admin = await createRawAdminClient()
-    let unarchiveQuery = admin
+    let unarchiveQuery = supabase
         .from('clients')
         .update({ is_archived: false })
         .eq('id', clientId)
@@ -535,9 +538,7 @@ export async function toggleClientStatusAction(clientId: string, isActive: boole
     const scope = await getCoachClientScope(supabase, coachUser.id)
     if (!scope.ok) return { error: scope.error }
 
-    const admin = await createRawAdminClient()
-
-    let statusQuery = admin
+    let statusQuery = supabase
         .from('clients')
         .update({ is_active: isActive })
         .eq('id', clientId)

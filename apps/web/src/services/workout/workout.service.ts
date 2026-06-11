@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { WorkoutProgramSchema, type WorkoutBlockInput, type WorkoutDayInput, type WorkoutProgramInput } from '@eva/schemas'
@@ -78,8 +77,7 @@ function sectionTemplateIdFor(section: string | null | undefined, existing?: str
 
 /**
  * Hardening F4: el payload del builder es client-controlled y workout_blocks no valida la
- * tenencia del FK section_template_id (ninguna policy mira el target del FK; ademas
- * createRawAdminClient con sesion en cookies corre como el usuario, no como service_role).
+ * tenencia del FK section_template_id (ninguna policy mira el target del FK).
  * Coerce: un section_template_id que NO este entre las areas visibles del usuario (RLS-scoped
  * via su propio client) se descarta → cae al mapeo legacy por section. Evita persistir
  * referencias a areas de otro coach/team (stale o forjadas).
@@ -108,7 +106,8 @@ function scopedSectionTemplateIdFor(
  * (separación estricta de contextos): team activo ⇒ SOLO alumnos de ESE pool (colaborativo,
  * sin filtro coach_id; RLS techo); enterprise ⇒ coach_id+org; standalone ⇒ propios NO-pool.
  * Mutar un alumno de pool exige estar EN el contexto de ese team (no cualquier membresía).
- * Devuelve viaTeam para que el caller acote mutaciones admin (service-role NO pasa por RLS).
+ * Devuelve viaTeam para que el caller distinga el origen del acceso. Todas las mutaciones de
+ * este servicio usan el cliente user-scoped: RLS aplica siempre (defensa en profundidad).
  */
 async function resolveCoachClientAccess(
     db: Awaited<ReturnType<typeof createClient>>,
@@ -154,8 +153,12 @@ async function assertCoachCanManageWorkoutClient(
     if (!ok) throw new Error('Alumno no encontrado.')
 }
 
-async function deactivateActiveProgramsForClient(adminDb: any, clientId: string, orgId: string | null) {
-    let query = adminDb
+async function deactivateActiveProgramsForClient(
+    db: Awaited<ReturnType<typeof createClient>>,
+    clientId: string,
+    orgId: string | null
+) {
+    let query = db
         .from('workout_programs')
         .update({ is_active: false })
         .eq('client_id', clientId)
@@ -227,8 +230,6 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
         if (!access.ok) return { error: 'Alumno no encontrado.' }
     }
 
-    const adminDb = await createRawAdminClient()
-
     // Calcular end_date si hay startDate
     let endDate = null
     if (startDateToUse) {
@@ -245,7 +246,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
             // Obtener estado actual del programa para validaciones.
             // Programas de cliente: acotar por client_id (un miembro del pool puede editar
             // el programa de un alumno del pool, no solo el creador). Plantillas: por coach.
-                let currentProgramQuery = adminDb
+                let currentProgramQuery = supabase
                     .from('workout_programs')
                     .select('name, client_id')
                     .eq('id', finalProgramId)
@@ -268,7 +269,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
 
                 // 2. Validar unicidad de nombre si es una plantilla (ahora o antes)
                 if (!clientId) {
-                    let existingNameQuery = adminDb
+                    let existingNameQuery = supabase
                         .from('workout_programs')
                         .select('id')
                         .eq('coach_id', user.id)
@@ -287,7 +288,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
             // E (awareness): conflicto no destructivo — si otro coach (pool) guardó desde que
             // este builder cargó, NO pisar su trabajo: devolver conflict y que el coach decida.
             if (saveOptions?.expectedUpdatedAt && !saveOptions.force) {
-                const { data: currentRow } = await adminDb
+                const { data: currentRow } = await supabase
                     .from('workout_programs')
                     .select('updated_at, last_edited_by_coach_id')
                     .eq('id', finalProgramId)
@@ -295,7 +296,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
                 if (currentRow && currentRow.updated_at !== saveOptions.expectedUpdatedAt) {
                     let editedBy: string | null = null
                     if (currentRow.last_edited_by_coach_id && currentRow.last_edited_by_coach_id !== user.id) {
-                        const { data: editor } = await adminDb
+                        const { data: editor } = await supabase
                             .from('coaches')
                             .select('full_name, brand_name')
                             .eq('id', currentRow.last_edited_by_coach_id)
@@ -307,7 +308,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
             }
 
             // Actualizar programa existente
-            let updateProgramQuery = adminDb
+            let updateProgramQuery = supabase
                 .from('workout_programs')
                 .update({
                     name: programName,
@@ -336,7 +337,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
             if (updateError) throw new Error('Error al actualizar el programa.')
 
             // Borrar planes antiguos asociados al programa (CASCADE borrará los bloques)
-            const { error: deleteError } = await adminDb
+            const { error: deleteError } = await supabase
                 .from('workout_plans')
                 .delete()
                 .eq('program_id', finalProgramId)
@@ -344,7 +345,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
             if (deleteError) throw new Error('Error al limpiar planes antiguos.')
         } else {
             if (clientId) {
-                const { error: deactivateError } = await deactivateActiveProgramsForClient(adminDb, clientId, scope.orgId)
+                const { error: deactivateError } = await deactivateActiveProgramsForClient(supabase, clientId, scope.orgId)
                 if (deactivateError) {
                     throw new Error('No se pudo desactivar el programa activo actual del alumno.')
                 }
@@ -352,7 +353,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
 
             // Validar unicidad de nombre si es una nueva plantilla
             if (!clientId) {
-                let existingNameQuery = adminDb
+                let existingNameQuery = supabase
                     .from('workout_programs')
                     .select('id')
                     .eq('coach_id', user.id)
@@ -367,7 +368,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
             }
 
             // Insertar nuevo programa
-            const { data: program, error: programError } = await adminDb
+            const { data: program, error: programError } = await supabase
                 .from('workout_programs')
                 .insert({
                     client_id: clientId || null,
@@ -401,7 +402,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
 
         // Insertar los nuevos planes vinculados al programa
         for (const day of days) {
-            const { data: plan, error: planError } = await adminDb
+            const { data: plan, error: planError } = await supabase
                 .from('workout_plans')
                 .insert({
                     client_id: clientId || null,
@@ -440,7 +441,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
                 is_override: block.is_override ?? false,
             }))
 
-            const { error: blocksError } = await adminDb
+            const { error: blocksError } = await supabase
                 .from('workout_blocks')
                 .insert(blocksToInsert)
 
@@ -476,8 +477,7 @@ export async function deleteWorkoutProgramAction(programId: string, clientId: st
         if (!access.ok) return { error: 'Alumno no encontrado.' }
     }
 
-    const adminDb = await createRawAdminClient()
-    let deleteQuery = adminDb
+    let deleteQuery = supabase
         .from('workout_programs')
         .delete()
         .eq('id', programId)
@@ -513,8 +513,7 @@ export async function deletePlanAction(planId: string, clientId: string): Promis
         if (!access.ok) return { error: 'Alumno no encontrado.' }
     }
 
-    const adminDb = await createRawAdminClient()
-    let planLookup = adminDb
+    let planLookup = supabase
         .from('workout_plans')
         .select('id, program_id, workout_programs(org_id)')
         .eq('id', planId)
@@ -526,7 +525,7 @@ export async function deletePlanAction(planId: string, clientId: string): Promis
         return { error: 'Plan no encontrado.' }
     }
 
-    let planDelete = adminDb
+    let planDelete = supabase
         .from('workout_plans')
         .delete()
         .eq('id', planId)
@@ -572,14 +571,13 @@ export async function duplicateWorkoutProgramAction(
     const scope = await getCoachWorkoutScope(supabase, user.id)
     if (!scope.ok) return { error: scope.error }
 
-    const adminDb = await createRawAdminClient()
     // Coercion de areas (misma regla que el save): ids fuera de las areas visibles del coach
     // (p.ej. de un team que abandono) caen al mapeo legacy al copiar.
     const allowedAreaIds = await resolveAllowedAreaIds(supabase)
 
     try {
         // 1. Obtener el programa original
-        let originalQuery = adminDb
+        let originalQuery = supabase
             .from('workout_programs')
             .select(`
                 *,
@@ -596,7 +594,7 @@ export async function duplicateWorkoutProgramAction(
 
         if (originalError || !original) throw new Error('Programa no encontrado.')
 
-        let existingNameQuery = adminDb
+        let existingNameQuery = supabase
             .from('workout_programs')
             .select('id')
             .eq('coach_id', user.id)
@@ -610,7 +608,7 @@ export async function duplicateWorkoutProgramAction(
         }
 
         // 2. Insertar nuevo programa como plantilla
-        const { data: newProgram, error: newProgramError } = await adminDb
+        const { data: newProgram, error: newProgramError } = await supabase
             .from('workout_programs')
             .insert({
                 coach_id: user.id,
@@ -638,7 +636,7 @@ export async function duplicateWorkoutProgramAction(
 
         // 3. Duplicar planes y bloques
         for (const plan of (original.workout_plans || [])) {
-            const { data: newPlan, error: newPlanError } = await adminDb
+            const { data: newPlan, error: newPlanError } = await supabase
                 .from('workout_plans')
                 .insert({
                     coach_id: user.id,
@@ -675,7 +673,7 @@ export async function duplicateWorkoutProgramAction(
             }))
 
             if (blocksToInsert.length > 0) {
-                const { error: blocksError } = await adminDb
+                const { error: blocksError } = await supabase
                     .from('workout_blocks')
                     .insert(blocksToInsert)
                 if (blocksError) throw new Error(blocksError.message)
@@ -684,7 +682,7 @@ export async function duplicateWorkoutProgramAction(
 
         revalidatePath('/coach/workout-programs')
 
-        const { data: libraryRow, error: librarySelectError } = await adminDb
+        const { data: libraryRow, error: librarySelectError } = await supabase
             .from('workout_programs')
             .select(LIBRARY_PROGRAM_LIST_SELECT)
             .eq('id', newProgram.id)
@@ -718,7 +716,6 @@ export async function assignProgramToClientsAction(
 
     if (!clientIds.length) return { error: 'Selecciona al menos un alumno.' }
 
-    const adminDb = await createRawAdminClient()
     // Coercion de areas (misma regla que el save) al copiar plantilla -> alumnos.
     const allowedAreaIds = await resolveAllowedAreaIds(supabase)
 
@@ -730,7 +727,7 @@ export async function assignProgramToClientsAction(
 
     try {
         // 1. Obtener plantilla
-        let templateQuery = adminDb
+        let templateQuery = supabase
             .from('workout_programs')
             .select(`
                 *,
@@ -749,7 +746,7 @@ export async function assignProgramToClientsAction(
 
         // Destinos válidos según el workspace ACTIVO (3-vías, sin cruce de contextos):
         // team = alumnos de ESE pool; enterprise = propios de la org; standalone = propios NO-pool.
-        let ownedClientsQuery = adminDb
+        let ownedClientsQuery = supabase
             .from('clients')
             .select('id, full_name, email')
             .in('id', clientIds)
@@ -808,7 +805,7 @@ export async function assignProgramToClientsAction(
         const endDate = end.toISOString().split('T')[0]
 
         let assignedCount = 0
-        const coachBrand = await adminDb
+        const coachBrand = await supabase
             .from('coaches')
             .select('brand_name, slug')
             .eq('id', user.id)
@@ -821,11 +818,11 @@ export async function assignProgramToClientsAction(
         for (const clientId of validClientIds) {
             try {
                 // 2.a Desactivar programas anteriores del cliente sin borrar historial.
-                const { error: deactivateError } = await deactivateActiveProgramsForClient(adminDb, clientId, scope.orgId)
+                const { error: deactivateError } = await deactivateActiveProgramsForClient(supabase, clientId, scope.orgId)
                 if (deactivateError) throw new Error('No se pudo desactivar el plan activo previo.')
 
                 // 2.b Duplicar programa para el cliente
-                const { data: newProgram, error: newProgramError } = await adminDb
+                const { data: newProgram, error: newProgramError } = await supabase
                     .from('workout_programs')
                     .insert({
                         client_id: clientId,
@@ -853,7 +850,7 @@ export async function assignProgramToClientsAction(
 
                 // 3. Duplicar planes y bloques
                 for (const plan of templatePlans) {
-                    const { data: newPlan, error: newPlanError } = await adminDb
+                    const { data: newPlan, error: newPlanError } = await supabase
                         .from('workout_plans')
                         .insert({
                             client_id: clientId,
@@ -890,7 +887,7 @@ export async function assignProgramToClientsAction(
                     }))
 
                     if (blocksToInsert.length > 0) {
-                        const { error: blocksError } = await adminDb
+                        const { error: blocksError } = await supabase
                             .from('workout_blocks')
                             .insert(blocksToInsert)
                         if (blocksError) throw new Error(blocksError.message)
@@ -968,10 +965,8 @@ export async function getExerciseHistoryAction(clientId: string, exerciseId: str
         return { data: [] }
     }
 
-    const adminDb = await createRawAdminClient()
-
     // Buscar el último logged_at para este cliente + ejercicio
-    const { data: lastLog, error: lastLogError } = await adminDb
+    const { data: lastLog, error: lastLogError } = await supabase
         .from('workout_logs')
         .select('logged_at, weight_kg, reps_done, set_number, workout_blocks!inner(exercise_id)')
         .eq('client_id', clientId)
@@ -985,7 +980,7 @@ export async function getExerciseHistoryAction(clientId: string, exerciseId: str
     // Traer todos los sets de esa misma sesión (mismo logged_at redondeado al minuto)
     const sessionDate = (lastLog.logged_at as string).slice(0, 16) // YYYY-MM-DDTHH:MM
 
-    const { data: sessionSets, error: sessionError } = await adminDb
+    const { data: sessionSets, error: sessionError } = await supabase
         .from('workout_logs')
         .select('logged_at, weight_kg, reps_done, set_number, workout_blocks!inner(exercise_id)')
         .eq('client_id', clientId)
@@ -1019,8 +1014,7 @@ export async function getTemplatesForBuilderAction(): Promise<{
     const scope = await getCoachWorkoutScope(supabase, user.id)
     if (!scope.ok) return { error: scope.error }
 
-    const adminDb = await createRawAdminClient()
-    let templatesQuery = adminDb
+    let templatesQuery = supabase
         .from('workout_programs')
         .select('id, name, weeks_to_repeat, duration_type, workout_plans(count)')
         .eq('coach_id', user.id)
@@ -1056,8 +1050,7 @@ export async function loadTemplateForBuilderAction(templateId: string): Promise<
     const scope = await getCoachWorkoutScope(supabase, user.id)
     if (!scope.ok) return { error: scope.error }
 
-    const adminDb = await createRawAdminClient()
-    let templateQuery = adminDb
+    let templateQuery = supabase
         .from('workout_programs')
         .select(`
             id, name, weeks_to_repeat, duration_type, duration_days,
@@ -1136,8 +1129,7 @@ export async function syncProgramFromTemplateAction(programId: string): Promise<
     const scope = await getCoachWorkoutScope(supabase, user.id)
     if (!scope.ok) return { error: scope.error }
 
-    const adminDb = await createRawAdminClient()
-    let programQuery = adminDb
+    let programQuery = supabase
         .from('workout_programs')
         .select('*, workout_plans ( *, workout_blocks ( * ) )')
         .eq('id', programId)
@@ -1151,7 +1143,7 @@ export async function syncProgramFromTemplateAction(programId: string): Promise<
     const templateId = program.source_template_id
     if (!templateId) return { error: 'Este programa no tiene plantilla base vinculada.' }
 
-    let templateQuery = adminDb
+    let templateQuery = supabase
         .from('workout_programs')
         .select('*, workout_plans ( *, workout_blocks ( * ) )')
         .eq('id', templateId)
@@ -1227,9 +1219,8 @@ export async function getCoachClientsAction(): Promise<{
 
     // Picker scopeado por el workspace ACTIVO (3-vías): team = SOLO ese pool;
     // enterprise = propios de la org; standalone = propios NO-pool. Sin cruce de contextos.
-    const adminDb = await createRawAdminClient()
     const clientsById = new Map<string, { id: string; full_name: string | null }>()
-    let clientsQuery = adminDb
+    let clientsQuery = supabase
         .from('clients')
         .select('id, full_name')
         .order('full_name', { ascending: true })

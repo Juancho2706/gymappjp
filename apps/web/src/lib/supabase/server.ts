@@ -35,27 +35,7 @@ export async function createClient() {
     )
 }
 
-export async function createAdminClient() {
-    const cookieStore = await cookies()
-
-    return createServerClient<Database>(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!,
-        {
-            cookies: {
-                getAll() {
-                    return cookieStore.getAll()
-                },
-                setAll(cookiesToSet) {
-                    try {
-                        cookiesToSet.forEach(({ name, value, options }) =>
-                            cookieStore.set(name, value, options)
-                        )
-                    } catch {
-                        // no-op
-                    }
-                },
-            },
-        }
-    )
-}
+// createAdminClient fue ELIMINADO (R3, auditoria 2026-06-11): era un duplicado bimodal de
+// createRawAdminClient (service key + cookies => con sesion corria como el USUARIO, RLS aplicaba;
+// no era bypass). Para bypass real usar createServiceRoleClient() de '@/lib/supabase/admin-client'
+// SOLO post-gate server-side y con filtros explicitos de tenant.

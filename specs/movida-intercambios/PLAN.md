@@ -258,6 +258,22 @@ SECURITY` en las 3 tablas nuevas. `auth.uid()` SIEMPRE como `(select auth.uid())
     `plan_id IN (SELECT p.id FROM public.nutrition_plans p WHERE p.client_id = (select auth.uid()))`.
   - `npdv_pool_all` (ALL): `plan_id IN (SELECT public.current_user_pool_nutrition_plan_ids())`
     (helper YA en prod, migración `20260609160000`).
+- **`nutrition_plan_templates` (tabla existente — guard de tenant sobre el `team_id` nuevo):**
+  - **DECISIÓN de ownership (vinculante para F7):** `coach_id` = **autor SIEMPRE** y `team_id`
+    es solo **marcador de scope** para la librería 3-vías (mío / team / org). NO hay ownership
+    puro por team (`coach_id NULL + team_id NOT NULL`): el pool comparte POR AUTOR
+    (`team_nutrition_plan_templates_member_all`, `20260609160000`) y el CHECK
+    `chk_nutrition_template_owner` (`20260601000100`: `coach_id IS NOT NULL OR org_id IS NOT NULL`)
+    queda INTACTO. F7 JAMÁS debe insertar templates con `coach_id NULL + team_id NOT NULL` —
+    sería `check_violation` en runtime.
+  - Como las permissive vigentes NO miran `team_id` (standalone `coach_id = auth.uid()`; pool
+    por autor), la migración agrega policies **RESTRICTIVE** `npt_team_id_guard` (INSERT) y
+    `npt_team_id_guard_upd` (UPDATE, `USING (true)`) con
+    `WITH CHECK (team_id IS NULL OR team_id IN (SELECT public.current_user_team_ids()))`:
+    impide pre-plantar/mover templates con `team_id` de un team AJENO antes de que F7 lea por
+    `team_id`. Flujos existentes escriben `team_id NULL` ⇒ cero impacto; `service_role` tiene
+    BYPASSRLS. Assert: **T10** en `tests/team/exchanges-isolation.sql` (forjado negativo +
+    control positivo con team propio).
 - **Validación en branch (obligatoria antes de merge):** seed sintético 2 teams + standalone,
   asserts de aislamiento impersonando `authenticated`+claims (nunca `service_role`),
   `EXPLAIN ANALYZE` sobre `meal_exchange_targets` con `loops=1`, `get_advisors`
@@ -388,7 +404,9 @@ alumno afectada.
   `dayTotalsByVariant`. Gate: typecheck + vitest.
 - **F7 — Templates team + CRUD grupos custom (1-2 días, post-M1):** `nutrition_plan_templates.team_id`
   en queries/actions de templates (scope 3-vías) + CRUD de grupos custom espejo de
-  `/coach/settings/areas`. Gate: typecheck + vitest.
+  `/coach/settings/areas`. Ownership: `coach_id` = autor SIEMPRE + `team_id` solo como marcador
+  de scope (ver §RLS — `chk_nutrition_template_owner` bloquea `coach_id NULL + team_id NOT NULL`;
+  el guard RESTRICTIVE `npt_team_id_guard*` exige `team_id` de un team propio). Gate: typecheck + vitest.
 - **GATE FINAL (con autorización explícita del usuario, regla 2026-06-10):** 1 corrida
   `--workers=1` contra build prod de `tests/separation/nutrition-exchanges.spec.ts` +
   `tests/team/exchanges-isolation.sql` + suites existentes de separación. Personas e2e
@@ -403,7 +421,9 @@ Esfuerzo total estimado: MVP visual (F0-F5 compacto) 2-3 días intensos; complet
 - **Unit (por tanda, sin Supabase):** golden tests calc; entitlements + kill-switch; coerción de
   `exchangeGroupId`; threading de marca al PDF; `portionsSummaryLabel`; reducers/estado del editor.
 - **SQL (solo gate):** `tests/team/exchanges-isolation.sql` — team A no ve grupos/targets de team
-  B; coach standalone no ve custom de teams; alumno solo su plan; system read-only; seed visible.
+  B; coach standalone no ve custom de teams; alumno solo su plan; system read-only; seed visible;
+  T10: guard de `team_id` forjado en `nutrition_plan_templates` (INSERT/UPDATE hacia team ajeno
+  bloqueado + control positivo con team propio).
 - **E2E (solo gate):** flujo Fran completo (crear pauta exchanges → PDF marca team) + alumno pool
   (chips → equivalencias → completar offline) + módulo OFF (sin toggle, action falla).
 - **Manual:** checklist visual PDF vs Canva de Fran; dark mode; viewport móvil real.

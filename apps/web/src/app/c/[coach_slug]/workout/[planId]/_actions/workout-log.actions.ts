@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import { revalidatePath } from 'next/cache'
 import { WorkoutLogSetSchema } from '@eva/schemas'
 import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '@/lib/date-utils'
@@ -39,12 +38,12 @@ export async function logSetAction(
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
 
-    const adminDb = await createRawAdminClient()
-
+    // R3 (auditoria 2026-06-11): todas las operaciones son sobre workout_logs propios del alumno
+    // (client_manage_logs) → cliente user-scoped. RLS ademas acota el DELETE de duplicados.
     const { iso: todayStr } = getTodayInSantiago()
     const { startIso: startTs, endIso: endTs } = getSantiagoUtcBoundsForDay(todayStr)
 
-    const { data: existingRows } = await adminDb
+    const { data: existingRows } = await supabase
         .from('workout_logs')
         .select('id')
         .eq('block_id', parsed.data.block_id)
@@ -58,7 +57,7 @@ export async function logSetAction(
 
     if (existingRows && existingRows.length > 0) {
         const targetId = existingRows[0].id
-        const { error: updateError } = await adminDb
+        const { error: updateError } = await supabase
             .from('workout_logs')
             .update({
                 weight_kg: parsed.data.weight_kg ?? null,
@@ -71,10 +70,10 @@ export async function logSetAction(
 
         if (existingRows.length > 1) {
             const duplicateIds = existingRows.slice(1).map(r => r.id)
-            await adminDb.from('workout_logs').delete().in('id', duplicateIds)
+            await supabase.from('workout_logs').delete().in('id', duplicateIds)
         }
     } else {
-        const { error: insertError } = await adminDb.from('workout_logs').insert({
+        const { error: insertError } = await supabase.from('workout_logs').insert({
             block_id: parsed.data.block_id,
             client_id: user.id,
             set_number: parsed.data.set_number,

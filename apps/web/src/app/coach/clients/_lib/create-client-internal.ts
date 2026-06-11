@@ -9,7 +9,7 @@ import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildClientWelcomeEmail } from '@/lib/email/transactional-templates'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
 
-type AdminClient = SupabaseClient<Database>
+type Db = SupabaseClient<Database>
 
 export type CreateClientData = {
     full_name: string
@@ -37,20 +37,28 @@ export type CreateClientResult =
     | { ok: true; clientId: string; loginUrl: string }
     | { ok: false; error: string; code?: 'duplicate_email' | 'db_error' | 'auth_error' }
 
+/**
+ * R3 (auditoria 2026-06-11) — clientes separados y honestos:
+ * - `db`: cliente USER-scoped (sesion del coach / org admin). El INSERT en clients y el RPC de
+ *   disponibilidad (SECURITY DEFINER + GRANT a authenticated) pasan RLS del usuario — igual que
+ *   antes, cuando el "admin client" con cookies corria con la misma RLS sin que se notara.
+ * - `authAdmin`: createServiceRoleClient() SOLO para GoTrue Admin API (createUser/deleteUser).
+ */
 export async function createClientInternal(
-    admin: AdminClient,
+    db: Db,
+    authAdmin: Db,
     coach: CoachContext,
     data: CreateClientData,
     options: { sendEmail?: boolean } = { sendEmail: true }
 ): Promise<CreateClientResult> {
     const emailSan = sanitizePlatformEmail(data.email)
 
-    const availability = await assertPlatformEmailAvailable(admin, data.email)
+    const availability = await assertPlatformEmailAvailable(db, data.email)
     if (!availability.ok) {
         return { ok: false, error: availability.error, code: 'duplicate_email' }
     }
 
-    const { data: newAuthUser, error: authError } = await admin.auth.admin.createUser({
+    const { data: newAuthUser, error: authError } = await authAdmin.auth.admin.createUser({
         email: emailSan,
         password: data.temp_password,
         email_confirm: true,
@@ -88,10 +96,10 @@ export async function createClientInternal(
             force_password_change: true,
         }
 
-    const { error: dbError } = await admin.from('clients').insert(clientInsert)
+    const { error: dbError } = await db.from('clients').insert(clientInsert)
 
     if (dbError) {
-        await admin.auth.admin.deleteUser(newAuthUser.user.id)
+        await authAdmin.auth.admin.deleteUser(newAuthUser.user.id)
         console.error('createClientInternal db error:', dbError)
         if (dbError.code === '23505') {
             return { ok: false, error: 'Email ya registrado en la plataforma.', code: 'duplicate_email' }

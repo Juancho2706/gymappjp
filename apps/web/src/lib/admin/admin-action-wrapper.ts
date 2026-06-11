@@ -1,13 +1,15 @@
 'use server'
 
-import { createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { isAdminEmail } from './admin-gate'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/database.types'
 
 export async function assertAdmin() {
-    const supabase = await createAdminClient()
+    // Solo lee la sesion de cookies para el gate por ADMIN_EMAILS — el cliente anon normal basta
+    // (el antiguo createAdminClient con service key + cookies era superficie innecesaria).
+    const supabase = await createClient()
     const {
         data: { user },
         error,

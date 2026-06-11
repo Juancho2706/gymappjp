@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { createRawAdminClient } from '@/lib/supabase/admin-raw'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { getTierCapabilities, getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
@@ -167,7 +167,10 @@ export async function importClientsAction(
 
     const existingEmails = new Set((existingClients ?? []).map((c) => c.email.toLowerCase()))
 
-    const admin = await createRawAdminClient()
+    // R3 (auditoria 2026-06-11): los INSERT por fila pasan RLS del usuario (org admin manage /
+    // team pool / standalone propio) con el cliente user-scoped; la service key queda SOLO para
+    // GoTrue Admin (createUser/deleteUser) dentro de createClientInternal.
+    const authAdmin = createServiceRoleClient()
     const rowErrors: ImportRowError[] = []
     let succeeded = 0
     let skipped = 0
@@ -214,7 +217,7 @@ export async function importClientsAction(
                 }
                 seenInBatch.add(emailKey)
 
-                const result = await createClientInternal(admin, {
+                const result = await createClientInternal(supabase, authAdmin, {
                     ...rawCoach,
                     brand_name: team?.name ?? rawCoach.brand_name ?? rawCoach.full_name,
                     orgId,

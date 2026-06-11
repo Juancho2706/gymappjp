@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { createClientMock, createRawAdminClientMock, revalidatePathMock } = vi.hoisted(() => ({
+const { createClientMock, createServiceRoleClientMock, revalidatePathMock } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
-  createRawAdminClientMock: vi.fn(),
+  createServiceRoleClientMock: vi.fn(),
   revalidatePathMock: vi.fn(),
 }))
 
@@ -10,8 +10,9 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: createClientMock,
 }))
 
-vi.mock('@/lib/supabase/admin-raw', () => ({
-  createRawAdminClient: createRawAdminClientMock,
+// R3 (auditoria 2026-06-11): PostgREST va user-scoped; solo GoTrue Admin usa el service role.
+vi.mock('@/lib/supabase/admin-client', () => ({
+  createServiceRoleClient: createServiceRoleClientMock,
 }))
 
 // Bypass workspace resolution — coach standalone scope (orgId null).
@@ -71,9 +72,8 @@ describe('createClientAction', () => {
     }
 
     createClientMock.mockResolvedValue(supabase)
-    createRawAdminClientMock.mockResolvedValue({
+    createServiceRoleClientMock.mockReturnValue({
       auth: { admin: { createUser: vi.fn() } },
-      from: vi.fn(),
     })
 
     const result = await createClientAction({}, buildFormData())
@@ -88,39 +88,40 @@ describe('createClientAction', () => {
         data: { id: 'coach-1', slug: 'coach', subscription_tier: 'starter', max_clients: 10 },
       }),
     }
-    const clientsCountQuery = {
+    // from('clients') sirve el count (select→eq→is) Y el insert user-scoped (R3).
+    const clientsQuery = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       is: vi.fn().mockResolvedValue({ count: 2, error: null }),
+      insert: vi.fn().mockResolvedValue({ error: null }),
     }
 
     const supabase = {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'coach-1' } } }) },
       from: vi.fn((table: string) => {
         if (table === 'coaches') return coachesQuery
-        if (table === 'clients') return clientsCountQuery
+        if (table === 'clients') return clientsQuery
         throw new Error(`Unexpected table: ${table}`)
       }),
+      rpc: vi.fn().mockResolvedValue({ data: { available: true }, error: null }),
     }
 
-    const admin = {
+    const authAdmin = {
       auth: {
         admin: {
           createUser: vi.fn().mockResolvedValue({ data: { user: { id: 'client-1' } }, error: null }),
           deleteUser: vi.fn(),
         },
       },
-      from: vi.fn(() => ({
-        insert: vi.fn().mockResolvedValue({ error: null }),
-      })),
-      rpc: vi.fn().mockResolvedValue({ data: { available: true }, error: null }),
     }
 
     createClientMock.mockResolvedValue(supabase)
-    createRawAdminClientMock.mockResolvedValue(admin)
+    createServiceRoleClientMock.mockReturnValue(authAdmin)
 
     const result = await createClientAction({}, buildFormData())
     expect(result.success).toBe(true)
+    expect(authAdmin.auth.admin.createUser).toHaveBeenCalled()
+    expect(clientsQuery.insert).toHaveBeenCalled()
     expect(revalidatePathMock).toHaveBeenCalledWith('/coach/clients')
   })
 })
