@@ -34,6 +34,7 @@ export function TeamsTable({ teams }: { teams: AdminTeamRow[] }) {
                             <tr className="text-left text-[11px] uppercase tracking-widest">
                                 <th className="px-4 py-2.5 font-medium">Equipo</th>
                                 <th className="px-4 py-2.5 font-medium">Owner</th>
+                                <th className="px-4 py-2.5 font-medium">Código</th>
                                 <th className="px-4 py-2.5 font-medium">Cupos</th>
                                 <th className="px-4 py-2.5 font-medium">Alumnos</th>
                                 <th className="px-4 py-2.5 font-medium">Módulos</th>
@@ -49,6 +50,11 @@ export function TeamsTable({ teams }: { teams: AdminTeamRow[] }) {
                                             <p className="font-mono text-[11px] text-[--admin-text-3]">/t/{t.slug}</p>
                                         </td>
                                         <td className="px-4 py-3 text-[--admin-text-2]">{t.ownerName ?? '—'}</td>
+                                        <td className="px-4 py-3">
+                                            {t.invite_code
+                                                ? <span className="font-mono text-[11px] font-semibold tracking-[0.15em] text-[--admin-text-1]">{t.invite_code}</span>
+                                                : <span className="text-[--admin-text-3]">—</span>}
+                                        </td>
                                         <td className="px-4 py-3">
                                             <span className="inline-flex items-center gap-1 text-[--admin-text-2]">
                                                 <UserCheck className="h-3.5 w-3.5" /> {t.memberCount}/{t.seat_limit}

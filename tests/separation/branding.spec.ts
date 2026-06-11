@@ -227,7 +227,8 @@ test.describe('C4 coach standalone — panel /coach', () => {
         await page.waitForURL('**/coach/dashboard**', { timeout: 25_000 })
         expect(page.url()).not.toContain('/login')
 
-        await expect(page.getByText(SOLO.name).first()).toBeVisible({ timeout: 20_000 })
+        // filter visible: el sidebar renderiza la marca 2 veces (variante colapsada 0x0 + <p> visible).
+        await expect(page.getByText(SOLO.name).filter({ visible: true }).first()).toBeVisible({ timeout: 20_000 })
         // Panel coach inyecta el hex crudo de la marca → comparacion exacta.
         await expectThemePrimary(page, SOLO.color, { exact: true })
         await expectNoRuntimeError(page)
@@ -247,7 +248,7 @@ test.describe('C5 coach enterprise — panel /coach', () => {
         await page.waitForURL('**/coach/dashboard**', { timeout: 25_000 })
         expect(page.url()).not.toContain('/login')
 
-        await expect(page.getByText(ORG.name).first()).toBeVisible({ timeout: 20_000 })
+        await expect(page.getByText(ORG.name).filter({ visible: true }).first()).toBeVisible({ timeout: 20_000 })
         await expectThemePrimary(page, ORG.color, { exact: true })
 
         // Sin fuga de otras marcas en el panel enterprise.
@@ -270,7 +271,7 @@ test.describe('C6 team owner — panel /coach con marca del team', () => {
         await page.waitForURL('**/coach/dashboard**', { timeout: 25_000 })
         expect(page.url()).not.toContain('/login')
 
-        await expect(page.getByText(TEAM.name).first()).toBeVisible({ timeout: 20_000 })
+        await expect(page.getByText(TEAM.name).filter({ visible: true }).first()).toBeVisible({ timeout: 20_000 })
         await expectThemePrimary(page, TEAM.color, { exact: true })
 
         await expect(page.getByText(SOLO.name)).toHaveCount(0)

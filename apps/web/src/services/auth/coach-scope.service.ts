@@ -13,18 +13,21 @@ type DB = SupabaseClient<Database>
  * Any other workspace type is invalid for coach-side client/data actions.
  */
 export type CoachScope =
-    | { ok: true; orgId: string | null; isEnterprise: boolean; coachId: string }
+    | { ok: true; orgId: string | null; activeTeamId: string | null; isEnterprise: boolean; coachId: string }
     | { ok: false; error: string }
 
 export async function resolveCoachScope(db: DB, userId: string): Promise<CoachScope> {
     const workspace = await resolvePreferredWorkspace(db, userId)
-    // coach_team se trata como scope org_id NULL; el acceso al pool lo gatean los checks per-client
-    // (currentUserHasTeamAccessToClient) + RLS, igual que un coach standalone con alumnos de pool.
-    if (!workspace || workspace.type === 'coach_standalone' || workspace.type === 'coach_team') {
-        return { ok: true, orgId: null, isEnterprise: false, coachId: userId }
+    if (!workspace || workspace.type === 'coach_standalone') {
+        return { ok: true, orgId: null, activeTeamId: null, isEnterprise: false, coachId: userId }
+    }
+    // coach_team: scope org∅ + el team ACTIVO (los writes de creación estampan team_id; los
+    // checks per-client + RLS gatean el acceso al pool).
+    if (workspace.type === 'coach_team') {
+        return { ok: true, orgId: null, activeTeamId: workspace.teamId, isEnterprise: false, coachId: userId }
     }
     if (workspace.type === 'enterprise_coach') {
-        return { ok: true, orgId: workspace.orgId, isEnterprise: true, coachId: userId }
+        return { ok: true, orgId: workspace.orgId, activeTeamId: null, isEnterprise: true, coachId: userId }
     }
     return { ok: false, error: 'Workspace invalido para gestionar alumnos.' }
 }

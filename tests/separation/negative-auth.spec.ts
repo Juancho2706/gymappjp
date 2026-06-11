@@ -116,8 +116,10 @@ test.describe('Suite E — negative auth entre flujos', () => {
             await page.goto(`/org/${SLUGS.org}`)
             await page.waitForURL((url) => !url.pathname.startsWith('/org'), { timeout: 20_000 })
             expect(new URL(page.url()).pathname.startsWith('/org')).toBe(false)
-            // El shell del panel org muestra el nombre de la org: no debe renderizarse jamás.
-            await expect(page.getByText(ORG_NAME)).toHaveCount(0)
+            // El guard lo expulsa a SU shell de alumno, que muestra la marca de la org
+            // legítimamente (white-label). Lo prohibido es el PANEL org: nada de navegación
+            // interna /org/* renderizada.
+            await expect(page.locator('a[href^="/org/"]')).toHaveCount(0)
             await expectNoRuntimeError(page)
         })
     })

@@ -100,9 +100,11 @@ export async function createTeamAction(_prev: CreateTeamResult | null, formData:
     }
 
     // ── Crear team + fila de owner en team_members (service-role) ──
+    // A.bis2: invite_code SIEMPRE explícito (lección coaches: el default '' rompe la unicidad).
+    const teamInviteCode = await generateUniqueInviteCode(adminClient)
     const { data: team, error: teamError } = await adminClient
         .from('teams')
-        .insert({ name, slug, owner_coach_id: ownerCoachId, seat_limit, enabled_modules: enabledModules as Json })
+        .insert({ name, slug, owner_coach_id: ownerCoachId, seat_limit, enabled_modules: enabledModules as Json, invite_code: teamInviteCode })
         .select('id')
         .single()
     if (teamError || !team) {

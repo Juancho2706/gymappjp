@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { getTierCapabilities, getTierMaxClients, type SubscriptionTier } from '@/lib/constants'
 import { getCoachOrgContext } from '@/lib/coach-context'
+import { resolveCoachScope } from '@/services/auth/coach-scope.service'
 import { createClientInternal } from '../../_lib/create-client-internal'
 import { sanitizeCell } from '@/lib/import/csv-injection'
 
@@ -89,6 +90,23 @@ export async function importClientsAction(
 
     const orgId = ctx?.isOrgAdmin ? ctx.orgId : null
 
+    // A.bis2: el import respeta el workspace ACTIVO — en contexto team las filas entran al POOL
+    // (team_id), no a la cartera personal del coach.
+    let activeTeamId: string | null = null
+    let team: { slug: string; name: string } | null = null
+    if (!orgId) {
+        const scope = await resolveCoachScope(supabase, user.id)
+        if (scope.ok && scope.activeTeamId) {
+            activeTeamId = scope.activeTeamId
+            const { data: teamRow } = await supabase
+                .from('teams')
+                .select('slug, name')
+                .eq('id', activeTeamId)
+                .maybeSingle()
+            team = teamRow
+        }
+    }
+
     const { data: rawCoach } = await supabase
         .from('coaches')
         .select('id, slug, full_name, brand_name, welcome_message, subscription_tier, max_clients')
@@ -99,13 +117,13 @@ export async function importClientsAction(
 
     const tier = (rawCoach.subscription_tier ?? 'free') as SubscriptionTier
     const caps = getTierCapabilities(tier)
-    if (!orgId && !caps.canImportClients) return { error: 'upgrade_required' }
+    if (!orgId && !activeTeamId && !caps.canImportClients) return { error: 'upgrade_required' }
 
     if (!rows.length) return { error: 'No hay filas para importar.' }
     if (rows.length > 1000) return { error: 'El archivo supera el límite de 1.000 filas. Dividilo en partes.' }
 
-    // Client cap check (org has no cap; standalone uses tier max)
-    if (!orgId) {
+    // Client cap check (org/team have no per-coach cap; standalone uses tier max)
+    if (!orgId && !activeTeamId) {
         const maxClients = rawCoach.max_clients ?? getTierMaxClients(tier)
         const { count: activeCount } = await supabase
             .from('clients')
@@ -143,6 +161,7 @@ export async function importClientsAction(
         .select('email')
         .in('email', emailsToCheck)
     if (orgId) existingQuery.eq('org_id', orgId)
+    else if (activeTeamId) existingQuery.eq('team_id', activeTeamId)
     else existingQuery.eq('coach_id', rawCoach.id)
     const { data: existingClients } = await existingQuery
 
@@ -197,8 +216,10 @@ export async function importClientsAction(
 
                 const result = await createClientInternal(admin, {
                     ...rawCoach,
-                    brand_name: rawCoach.brand_name ?? rawCoach.full_name,
+                    brand_name: team?.name ?? rawCoach.brand_name ?? rawCoach.full_name,
                     orgId,
+                    teamId: activeTeamId,
+                    loginPath: team ? `/t/${team.slug}/login` : null,
                 }, {
                     full_name: parsed.data.full_name,
                     email: parsed.data.email,

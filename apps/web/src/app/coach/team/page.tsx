@@ -88,7 +88,7 @@ export default async function CoachTeamPage() {
                                     </div>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-2">
-                                    <TeamShareLink teamSlug={team.slug} />
+                                    <TeamShareLink teamSlug={team.slug} inviteCode={team.invite_code} />
                                 </div>
                             </div>
 

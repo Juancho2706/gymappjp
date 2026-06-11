@@ -2948,6 +2948,7 @@ export type Database = {
           deleted_at: string | null
           enabled_modules: Json
           id: string
+          invite_code: string | null
           loader_icon_mode: string
           loader_text: string | null
           loader_text_color: string | null
@@ -2969,6 +2970,7 @@ export type Database = {
           deleted_at?: string | null
           enabled_modules?: Json
           id?: string
+          invite_code?: string | null
           loader_icon_mode?: string
           loader_text?: string | null
           loader_text_color?: string | null
@@ -2990,6 +2992,7 @@ export type Database = {
           deleted_at?: string | null
           enabled_modules?: Json
           id?: string
+          invite_code?: string | null
           loader_icon_mode?: string
           loader_text?: string | null
           loader_text_color?: string | null

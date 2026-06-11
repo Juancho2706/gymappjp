@@ -81,7 +81,8 @@ export async function createClientAction(
     if (countError) {
         return { error: 'No pudimos validar el límite de alumnos de tu plan.' }
     }
-    if (!scope.isEnterprise && (activeClientsCount ?? 0) >= maxClients) {
+    // Cap del tier personal: solo standalone (enterprise y team pagan centralizado).
+    if (!scope.isEnterprise && !scope.activeTeamId && (activeClientsCount ?? 0) >= maxClients) {
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
         const { subject, html } = buildUpgradeRequiredEmail({
             coachName: coach.full_name ?? 'Coach',
@@ -128,6 +129,8 @@ export async function createClientAction(
         force_password_change: true,
         age_confirmed_at: new Date().toISOString(),
         org_id: scope.orgId,
+        // Contexto team: el alumno nace EN el pool (todo el equipo lo ve; consent gate en /t).
+        team_id: scope.activeTeamId,
     })
 
     if (dbError) {
@@ -144,6 +147,7 @@ export async function createClientAction(
         clientId: newAuthUser.user.id,
         coachId: coach.id,
         orgId: scope.orgId,
+        teamId: scope.activeTeamId,
     })
     if (!identity.ok) console.error('createClientIdentity (non-fatal):', identity.error)
 
@@ -160,10 +164,23 @@ export async function createClientAction(
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
-    const publicIdentifier = getCoachPublicIdentifier(coach)
-    const loginUrl = appUrl ? `${appUrl}/c/${publicIdentifier}/login` : `https://app.tu-dominio.com/c/${publicIdentifier}/login`
+    // Contexto team: el alumno entra por /t/[team]/login con la marca del TEAM (no la personal).
+    let loginPath: string
+    let emailBrandName = coach.brand_name
+    if (scope.activeTeamId) {
+        const { data: team } = await admin
+            .from('teams')
+            .select('slug, name')
+            .eq('id', scope.activeTeamId)
+            .maybeSingle()
+        loginPath = `/t/${team?.slug ?? ''}/login`
+        emailBrandName = team?.name ?? coach.brand_name
+    } else {
+        loginPath = `/c/${getCoachPublicIdentifier(coach)}/login`
+    }
+    const loginUrl = appUrl ? `${appUrl}${loginPath}` : `https://app.tu-dominio.com${loginPath}`
     const welcomeEmail = buildClientWelcomeEmail({
-        brandName: coach.brand_name,
+        brandName: emailBrandName,
         coachName: coach.full_name,
         clientName: parsed.data.full_name,
         loginUrl,

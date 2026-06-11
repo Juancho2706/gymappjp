@@ -13,7 +13,7 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
  * service-role only). Idempotent: re-running yields the same single active row (unique-violation
  * 23505 is treated as success), so retries and double-submits are safe.
  */
-export type MembershipScope = 'standalone' | 'enterprise'
+export type MembershipScope = 'standalone' | 'enterprise' | 'team'
 
 export interface CreateClientIdentityParams {
     /** auth.users.id — the person. Equals clientId in the current 1:1 model. */
@@ -22,8 +22,10 @@ export interface CreateClientIdentityParams {
     clientId: string
     /** Assigned coach, or null for an org pool client. */
     coachId: string | null
-    /** Org id for enterprise scope; null for standalone. Drives the scope. */
+    /** Org id for enterprise scope; null for standalone/team. Drives the scope. */
     orgId: string | null
+    /** Team id for pool scope; null for standalone/enterprise. Drives the scope (org wins if both — no debería pasar: INV8). */
+    teamId?: string | null
 }
 
 const UNIQUE_VIOLATION = '23505'
@@ -32,7 +34,8 @@ export async function createClientIdentity(
     params: CreateClientIdentityParams,
 ): Promise<{ ok: boolean; error?: string }> {
     const { accountId, clientId, coachId, orgId } = params
-    const scope: MembershipScope = orgId ? 'enterprise' : 'standalone'
+    const teamId = params.teamId ?? null
+    const scope: MembershipScope = orgId ? 'enterprise' : teamId ? 'team' : 'standalone'
 
     // Defensive: this is a non-fatal side effect of client creation — it must NEVER throw and
     // break the calling flow (a failed write degrades to the legacy-clients read fallback).
@@ -54,6 +57,7 @@ export async function createClientIdentity(
             scope,
             coach_id: coachId,
             org_id: orgId,
+            team_id: teamId,
             status: 'active',
         })
         if (memErr && memErr.code !== UNIQUE_VIOLATION) {

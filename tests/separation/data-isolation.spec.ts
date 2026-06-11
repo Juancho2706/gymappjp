@@ -51,6 +51,9 @@ const STUDENT_IDS = {
 
 /** Programa creado por el OWNER del team — el pool plano lo comparte con todos los coaches. */
 const TEAM_PROGRAM_NAME = 'E2E-SEED Programa Base'
+/** Programa del pool con nombre ÚNICO cross-flujo ("Programa Base" existe homónimo en los 3
+ *  scopes por el seed — inservible para asserts de NO-fuga). Autoría del team coach. */
+const TEAM_ONLY_PROGRAM_NAME = 'E2E-SEED Programa Member'
 
 const SOLO_MEAL_GROUP = process.env.E2E_SOLO_MEAL_GROUP_NAME ?? ''
 const FOREIGN_MEAL_GROUP = process.env.E2E_FOREIGN_MEAL_GROUP_NAME ?? ''
@@ -131,7 +134,8 @@ test.describe('Suite B — aislamiento de datos por flujo', () => {
             await expect(page.getByRole('main')).toBeVisible({ timeout: 20_000 })
 
             // Bidireccional extra: el programa del team JAMAS aparece en la biblioteca standalone.
-            await expect(page.getByText(TEAM_PROGRAM_NAME)).toHaveCount(0)
+            // (Se usa el nombre único del pool: "Programa Base" existe homónimo en standalone.)
+            await expect(page.getByText(TEAM_ONLY_PROGRAM_NAME)).toHaveCount(0)
 
             // El picker vive en el diálogo "Asignar programa" (solo plantillas muestran el botón).
             const assignButton = page.getByRole('button', { name: 'Asignar', exact: true }).first()
@@ -182,7 +186,8 @@ test.describe('Suite B — aislamiento de datos por flujo', () => {
             await page.goto('/coach/nutrition-plans')
             const alumnosTab = page.getByRole('tab', { name: 'Alumnos' })
             await expect(alumnosTab).toBeVisible({ timeout: 20_000 })
-            await alumnosTab.click()
+            // dispatchEvent: el click normal cuelga en scrollIntoViewIfNeeded (CDP) con estos tabs Base UI.
+            await alumnosTab.dispatchEvent('click')
 
             await expect(page.getByText(STUDENT_NAMES.org).first()).toBeVisible({ timeout: 20_000 })
             await expect(page.getByText(STUDENT_NAMES.solo)).toHaveCount(0)
@@ -222,7 +227,8 @@ test.describe('Suite B — aislamiento de datos por flujo', () => {
             await page.goto('/coach/nutrition-plans')
             const alumnosTab = page.getByRole('tab', { name: 'Alumnos' })
             await expect(alumnosTab).toBeVisible({ timeout: 20_000 })
-            await alumnosTab.click()
+            // dispatchEvent: el click normal cuelga en scrollIntoViewIfNeeded (CDP) con estos tabs Base UI.
+            await alumnosTab.dispatchEvent('click')
 
             await expect(page.getByText(STUDENT_NAMES.pool).first()).toBeVisible({ timeout: 20_000 })
             await expect(page.getByText(STUDENT_NAMES.solo)).toHaveCount(0)
