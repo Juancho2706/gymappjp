@@ -12,6 +12,14 @@ import {
 
 const DEFAULT_FOOD_PAGE_SIZE = 50
 
+/**
+ * Tope del board de planes activos (War Room nutrición). Acota el fan-out de queries derivadas
+ * (logs 7d + meals por plan) en coaches grandes (deal Movida, ~300+ alumnos). Ordenado por
+ * `updated_at` DESC, así que se conservan los planes activos más recientes. No cambia la forma:
+ * sigue siendo el mismo arreglo de filas, solo acotado.
+ */
+const ACTIVE_PLANS_BOARD_LIMIT = 500
+
 function applyOrgScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
   query: T,
   orgId: string | null
@@ -129,6 +137,7 @@ export const getActiveClientPlans = cache(async (coachId: string, orgId: string 
     .eq('coach_id', coachId)
     .eq('is_active', true)
     .order('updated_at', { ascending: false })
+    .limit(ACTIVE_PLANS_BOARD_LIMIT)
   query = applyOrgScope(query, orgId)
   const { data } = await query
   return data ?? []

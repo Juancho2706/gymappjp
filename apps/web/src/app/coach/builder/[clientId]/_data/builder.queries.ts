@@ -2,6 +2,7 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/database.types'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { EXERCISE_LIST_COLUMNS } from '@/lib/exercises/exercise-catalog-select'
 
 type Client = Pick<Tables<'clients'>, 'id' | 'full_name' | 'email'>
 type Exercise = Tables<'exercises'>
@@ -38,7 +39,7 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
         clientQuery.maybeSingle(),
         supabase
             .from('exercises')
-            .select('*')
+            .select(EXERCISE_LIST_COLUMNS)
             .or(exercisesFilter)
             .order('muscle_group')
             .order('name'),

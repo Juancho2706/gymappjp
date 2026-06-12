@@ -133,6 +133,24 @@ function plannedSetsFromProgram(program: any): number {
 const CLIENT_ID_IN_CHUNK = 120
 const PROGRAM_ID_RPC_CHUNK = 80
 
+/**
+ * Cota de seguridad de filas de `workout_logs` por chunk de clientes (120 clientes × ventana de 35 días).
+ * Antes era 10000; se baja a 2000 porque el War Room real (deal Movida, ~300+ alumnos por coach,
+ * 120 clientes por chunk) en 35 días no se acerca a ese volumen, y `lastWorkoutDate` ya se resuelve
+ * por RPC con MAX server-side (no depende de este límite). Es solo un tope anti-runaway: si algún
+ * chunk lo tocara, solo afecta adherencia/1RM (ventanas de 7–14 días), nunca la fecha de último workout.
+ */
+const WORKOUT_LOGS_ROW_CAP = 2000
+
+/**
+ * Tope duro de RPCs per-cliente del fallback de streaks (ver `getDirectoryPulseInner`).
+ * El RPC batch `get_coach_clients_streaks` exige `auth.uid() = p_coach_id`: bajo `service_role`
+ * (ruta mobile `/api/mobile/coach/clients/pulse`) `auth.uid()` es NULL y devuelve 0 filas, así que
+ * el fallback es el único camino válido ahí. Lo acotamos para que NUNCA degenere en N+1 ilimitado
+ * (un coach con cientos de alumnos dispararía cientos de round-trips). Más allá del tope, streak=0.
+ */
+const STREAK_FALLBACK_MAX_CLIENTS = 400
+
 function chunkIds<T>(arr: T[], size: number): T[][] {
     const out: T[][] = []
     for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
@@ -306,9 +324,9 @@ export class DashboardService {
         const lastWeekStr = subDays(now, 7).toISOString();
         const logsFrom = subDays(now, 35).toISOString();
 
-        // Raise limit to 10 000 so the adherence/1RM window isn't silently truncated.
-        // lastWorkoutDate is resolved via a dedicated RPC (see below) which uses
-        // a server-side MAX and is never affected by PostgREST row limits.
+        // Cota anti-runaway por chunk (ver WORKOUT_LOGS_ROW_CAP). El volumen real del War Room
+        // no se acerca al tope; y lastWorkoutDate se resuelve por RPC con MAX server-side (abajo),
+        // así que nunca depende de este límite de filas de PostgREST.
         const logChunks = await Promise.all(
             chunkIds(clientIds, CLIENT_ID_IN_CHUNK).map((chunk) =>
                 this.supabase
@@ -316,7 +334,7 @@ export class DashboardService {
                     .select('client_id, logged_at, weight_kg, reps_done, plan_name_at_log')
                     .in('client_id', chunk)
                     .gte('logged_at', logsFrom)
-                    .limit(10000)
+                    .limit(WORKOUT_LOGS_ROW_CAP)
             )
         );
 
@@ -443,6 +461,9 @@ export class DashboardService {
             }
         }
 
+        // Camino batch (preferido): una sola llamada agrega los streaks de TODOS los alumnos del coach
+        // en Postgres. Requiere `auth.uid() = p_coach_id` (SECURITY DEFINER con guard), por lo que solo
+        // funciona en sesión `authenticated` (web/RSC). Bajo `service_role` (ruta mobile) devuelve [].
         const streakMap = new Map<string, number>();
         const { data: streakBatch, error: streakBatchErr } = await this.supabase.rpc(
             'get_coach_clients_streaks',
@@ -456,8 +477,14 @@ export class DashboardService {
             }
         }
 
+        // Fallback per-cliente: SOLO para clientes que el batch no cubrió (típicamente la ruta mobile
+        // bajo service_role, donde el batch devuelve 0 filas por el guard de auth.uid()). Acotado por
+        // STREAK_FALLBACK_MAX_CLIENTS para que jamás degenere en N+1 ilimitado en coaches grandes
+        // (deal Movida): pasado el tope, streak=0 (degradación silenciosa, no rompe la forma del row).
         if (streakMap.size < clientIds.length) {
-            const missing = clientIds.filter((id) => !streakMap.has(id));
+            const missing = clientIds
+                .filter((id) => !streakMap.has(id))
+                .slice(0, STREAK_FALLBACK_MAX_CLIENTS);
             const STREAK_FALLBACK_CONCURRENCY = 8
             for (let i = 0; i < missing.length; i += STREAK_FALLBACK_CONCURRENCY) {
                 const slice = missing.slice(i, i + STREAK_FALLBACK_CONCURRENCY);

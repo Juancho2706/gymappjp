@@ -18,6 +18,10 @@ export interface DaySummary {
   subtitle: string
 }
 
+// Default de la pantalla de historial (armonizado con la web: 90d default, 180d "ver más").
+export const HISTORY_DAYS_DEFAULT = 90
+export const HISTORY_DAYS_EXTENDED = 180
+
 export async function getWorkoutHistoryFull(clientId: string) {
   const since = new Date(Date.now() - 180 * 86400000).toISOString()
   return supabase
@@ -27,6 +31,37 @@ export async function getWorkoutHistoryFull(clientId: string) {
     .gte('logged_at', since)
     .order('logged_at', { ascending: false })
     .limit(8000)
+}
+
+/**
+ * Conteo de series por día AGREGADO EN DB (RPC get_client_workout_day_counts, zona Santiago).
+ * Reemplaza el patrón getWorkoutHistoryFull (bajaba hasta 8000 filas crudas) + buildDaySummaries
+ * para la pantalla de historial. Paridad 1:1 con web getWorkoutHistoryDayCounts:
+ * el map a dateLabel/subtitle es idéntico al de buildDaySummaries.
+ */
+export async function getWorkoutDaySummaries(
+  clientId: string,
+  daysBack: number = HISTORY_DAYS_DEFAULT
+): Promise<DaySummary[]> {
+  const { data, error } = await supabase.rpc('get_client_workout_day_counts', {
+    p_client_id: clientId,
+    p_days_back: daysBack,
+  })
+  if (error) {
+    console.warn('[history.queries] day counts failed', error)
+    return []
+  }
+  const rows = (data ?? []) as { day: string; sets: number }[]
+  const todayIso = getTodayInSantiago().iso
+  return rows
+    .map((r) => ({ dayKey: r.day.slice(0, 10), sets: Number(r.sets) }))
+    .sort((a, b) => b.dayKey.localeCompare(a.dayKey))
+    .map(({ dayKey, sets }) => ({
+      dayKey,
+      dateLabel: formatRelativeDate(dayKey, todayIso),
+      sets,
+      subtitle: `${sets} serie${sets !== 1 ? 's' : ''} registrada${sets !== 1 ? 's' : ''}`,
+    }))
 }
 
 export function buildDaySummaries(logs: WorkoutLogRow[]): DaySummary[] {

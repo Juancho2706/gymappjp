@@ -3,12 +3,16 @@ import {
   SectionList,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native'
 import { History } from 'lucide-react-native'
 import { getClientProfile } from '../../../lib/client'
-import { getWorkoutHistoryFull, buildDaySummaries } from '../../../lib/history.queries'
-import type { DaySummary } from '../../../lib/history.queries'
+import {
+  getWorkoutDaySummaries,
+  HISTORY_DAYS_DEFAULT,
+  HISTORY_DAYS_EXTENDED,
+} from '../../../lib/history.queries'
 import { useTheme } from '../../../context/ThemeContext'
 import { EmptyState, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -18,23 +22,35 @@ import { AppBackground } from '../../../components/AppBackground'
 export default function HistoryScreen() {
   const { theme } = useTheme()
   const [loading, setLoading] = useState(true)
+  const [expanding, setExpanding] = useState(false)
+  const [daysBack, setDaysBack] = useState(HISTORY_DAYS_DEFAULT)
   const [sections, setSections] = useState<{ title: string; subtitle: string; data: string[] }[]>([])
 
-  useEffect(() => { load().catch(() => setLoading(false)) }, [])
+  useEffect(() => { load(HISTORY_DAYS_DEFAULT).catch(() => setLoading(false)) }, [])
 
-  async function load() {
+  async function load(days: number) {
     setLoading(true)
     const client = await getClientProfile()
     if (!client) { setLoading(false); return }
 
-    const { data } = await getWorkoutHistoryFull(client.id)
-    const summaries = buildDaySummaries((data ?? []) as any[])
+    // Conteo de series por día agregado en DB (RPC) — 90d por defecto, 180d al "ver más".
+    const summaries = await getWorkoutDaySummaries(client.id, days)
     setSections(summaries.map((s) => ({
       title: s.dateLabel,
       subtitle: s.subtitle,
       data: [s.dayKey],
     })))
+    setDaysBack(days)
     setLoading(false)
+  }
+
+  async function showMore() {
+    setExpanding(true)
+    try {
+      await load(HISTORY_DAYS_EXTENDED)
+    } finally {
+      setExpanding(false)
+    }
   }
 
   if (loading) {
@@ -87,6 +103,20 @@ export default function HistoryScreen() {
           </View>
         )}
         SectionSeparatorComponent={() => <View style={{ height: 4 }} />}
+        ListFooterComponent={
+          daysBack < HISTORY_DAYS_EXTENDED && sections.length > 0 ? (
+            <TouchableOpacity
+              activeOpacity={0.82}
+              onPress={showMore}
+              disabled={expanding}
+              style={[styles.moreBtn, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.xl }]}
+            >
+              <Text style={[styles.moreTxt, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>
+                {expanding ? 'Cargando…' : 'Ver más (180 días)'}
+              </Text>
+            </TouchableOpacity>
+          ) : null
+        }
       />
     </SafeAreaView>
   )
@@ -101,4 +131,6 @@ const styles = StyleSheet.create({
   dayCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderWidth: 1, marginBottom: 4 },
   dayDot: { width: 8, height: 8, borderRadius: 4 },
   dayLabel: { fontSize: 13 },
+  moreBtn: { marginTop: 14, paddingVertical: 13, alignItems: 'center', borderWidth: 1 },
+  moreTxt: { fontSize: 14 },
 })

@@ -21,8 +21,8 @@ import {
     updateClientGoalWeightForCoach,
 } from '@/services/client/client.service'
 import {
-    buildMuscleVolumeFromLogs,
-    buildPersonalRecordsFromLogs,
+    mapExercisePrsRpc,
+    mapMuscleVolumeRpc,
 } from '@/app/coach/clients/[clientId]/profileDataHelpers'
 import { checkInRegularityPercentAsOf } from '@/app/coach/clients/[clientId]/profileOverviewUtils'
 import {
@@ -241,31 +241,12 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .filter((p: { is_active?: boolean }) => p.is_active)
         .map((p: { id: string }) => p.id)
 
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    const thirtyDaysIso = thirtyDaysAgo.toISOString()
-
-    const workoutLogSelect = `
-        weight_kg, reps_done, logged_at,
-        workout_blocks (
-            exercise_id,
-            exercises ( name, muscle_group )
-        )
-    `
-
+    // PRs (peso máx por ejercicio) y volumen por grupo (30d): Postgres agrega.
+    // Antes: doble fetch de workout_logs (hasta 4000 filas para PRs + ventana 30d
+    // para volumen) + reducción en JS. Ahora: 2 RPCs que ya devuelven lo agregado.
     const [prsRes, volRes] = await Promise.all([
-        supabase
-            .from('workout_logs')
-            .select(workoutLogSelect)
-            .eq('client_id', clientId)
-            .not('weight_kg', 'is', null)
-            .order('weight_kg', { ascending: false })
-            .limit(4000),
-        supabase
-            .from('workout_logs')
-            .select(workoutLogSelect)
-            .eq('client_id', clientId)
-            .gte('logged_at', thirtyDaysIso),
+        supabase.rpc('get_client_exercise_prs', { p_client_id: clientId }),
+        supabase.rpc('get_client_muscle_volume', { p_client_id: clientId, p_days_back: 30 }),
     ])
 
     let mealDetails: unknown[] = []
@@ -288,8 +269,8 @@ export const getClientProfileData = cache(async (clientId: string) => {
         mealDetails = meals || []
     }
 
-    const personalRecords = buildPersonalRecordsFromLogs(prsRes.data as unknown[])
-    const muscleVolumeByGroup = buildMuscleVolumeFromLogs(volRes.data as unknown[])
+    const personalRecords = mapExercisePrsRpc(prsRes.data ?? null)
+    const muscleVolumeByGroup = mapMuscleVolumeRpc(volRes.data ?? null)
 
     // 1. Calcular Workouts Target: días con entreno en la variante A/B que toca esta semana
     let weeklyWorkoutTarget = 0
@@ -839,28 +820,15 @@ export async function getClientWorkoutActivityDates(clientId: string): Promise<s
         return []
     }
 
-    const from = new Date()
-    from.setDate(from.getDate() - 90)
-    const fromIso = from.toISOString().slice(0, 10)
-
-    const { data } = await supabase
-        .from('workout_logs')
-        .select('logged_at')
-        .eq('client_id', clientId)
-        .gte('logged_at', `${fromIso}T00:00:00`)
-        .order('logged_at')
+    // Postgres devuelve los días distintos ya convertidos a zona Santiago
+    // (antes: traer cada logged_at y convertir UTC→Santiago en JS).
+    const { data } = await supabase.rpc('get_client_activity_dates', {
+        p_client_id: clientId,
+        p_days_back: 90,
+    })
 
     if (!data) return []
-    const seen = new Set<string>()
-    for (const row of data) {
-        // Convert UTC timestamp to Santiago date to avoid late-night logs appearing on wrong day
-        const utcDate = new Date(row.logged_at as string)
-        const sanStr = utcDate.toLocaleString('en-US', { timeZone: 'America/Santiago' })
-        const sanDate = new Date(sanStr)
-        const iso = `${sanDate.getFullYear()}-${String(sanDate.getMonth() + 1).padStart(2, '0')}-${String(sanDate.getDate()).padStart(2, '0')}`
-        seen.add(iso)
-    }
-    return [...seen]
+    return [...new Set(data.map((r) => r.day))]
 }
 
 /** Hábitos del día del alumno (coach lee por RLS: coach_id = auth.uid() en client_profiles). */
