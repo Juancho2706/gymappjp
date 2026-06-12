@@ -117,7 +117,18 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .eq('client_id', clientId)
         .order('created_at', { ascending: false })
 
-    // Fetch workout history (for adherence & volume)
+    // Fetch workout history (for adherence & volume).
+    // Ventana de 548d (~18 meses): cubre el heatmap de actividad (371d) con margen para planes de
+    // larga duracion, y MATA el full-scan ilimitado anterior (un alumno con años de historico bajaba
+    // TODO el historial anidado -> saturaba memoria; causa del incidente de Supabase del 2026-06-12).
+    // Las curvas de 1RM/fuerza por ejercicio (que hoy no tienen corte propio) muestran hasta esta
+    // ventana; el tramo mas viejo se migrara a get_client_strength_series (RPC) en una fase posterior.
+    const WORKOUT_HISTORY_WINDOW_DAYS = 548
+    const { iso: workoutHistoryTodayIso } = getTodayInSantiago()
+    const workoutHistoryFromDate = format(
+        subDays(parseISO(`${workoutHistoryTodayIso}T12:00:00`), WORKOUT_HISTORY_WINDOW_DAYS),
+        'yyyy-MM-dd'
+    )
     const workoutHistoryPromise = supabase
         .from('workout_plans')
         .select(`
@@ -131,6 +142,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
             )
         `)
         .eq('client_id', clientId)
+        .gte('assigned_date', workoutHistoryFromDate)
         .order('assigned_date', { ascending: false })
 
     // Fetch real payment history (table not yet in generated types)

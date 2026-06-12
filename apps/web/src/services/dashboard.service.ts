@@ -142,15 +142,6 @@ const PROGRAM_ID_RPC_CHUNK = 80
  */
 const WORKOUT_LOGS_ROW_CAP = 2000
 
-/**
- * Tope duro de RPCs per-cliente del fallback de streaks (ver `getDirectoryPulseInner`).
- * El RPC batch `get_coach_clients_streaks` exige `auth.uid() = p_coach_id`: bajo `service_role`
- * (ruta mobile `/api/mobile/coach/clients/pulse`) `auth.uid()` es NULL y devuelve 0 filas, así que
- * el fallback es el único camino válido ahí. Lo acotamos para que NUNCA degenere en N+1 ilimitado
- * (un coach con cientos de alumnos dispararía cientos de round-trips). Más allá del tope, streak=0.
- */
-const STREAK_FALLBACK_MAX_CLIENTS = 400
-
 function chunkIds<T>(arr: T[], size: number): T[][] {
     const out: T[][] = []
     for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
@@ -477,27 +468,21 @@ export class DashboardService {
             }
         }
 
-        // Fallback per-cliente: SOLO para clientes que el batch no cubrió (típicamente la ruta mobile
-        // bajo service_role, donde el batch devuelve 0 filas por el guard de auth.uid()). Acotado por
-        // STREAK_FALLBACK_MAX_CLIENTS para que jamás degenere en N+1 ilimitado en coaches grandes
-        // (deal Movida): pasado el tope, streak=0 (degradación silenciosa, no rompe la forma del row).
+        // Fallback batch-by-ids: para los clientes que el batch por-coach no cubrió (típicamente la
+        // ruta mobile bajo service_role, donde get_coach_clients_streaks devuelve 0 por el guard
+        // auth.uid()=coach). UNA sola llamada resuelve TODOS los streaks faltantes en Postgres
+        // (get_clients_streaks_by_ids, guard service_role/coach/cliente/pool) — sin el N+1 de antes,
+        // así que ya no hay tope ni degradación silenciosa: todos los alumnos reciben su streak real.
         if (streakMap.size < clientIds.length) {
-            const missing = clientIds
-                .filter((id) => !streakMap.has(id))
-                .slice(0, STREAK_FALLBACK_MAX_CLIENTS);
-            const STREAK_FALLBACK_CONCURRENCY = 8
-            for (let i = 0; i < missing.length; i += STREAK_FALLBACK_CONCURRENCY) {
-                const slice = missing.slice(i, i + STREAK_FALLBACK_CONCURRENCY);
-                const fallback = await Promise.all(
-                    slice.map(async (clientId) => {
-                        const { data, error } = await this.supabase.rpc('get_client_current_streak', {
-                            p_client_id: clientId,
-                        });
-                        if (error) return { clientId, streak: 0 };
-                        return { clientId, streak: typeof data === 'number' ? data : 0 };
-                    })
-                );
-                for (const s of fallback) streakMap.set(s.clientId, s.streak);
+            const missing = clientIds.filter((id) => !streakMap.has(id));
+            const { data: byIds, error: byIdsErr } = await this.supabase.rpc(
+                'get_clients_streaks_by_ids',
+                { p_client_ids: missing }
+            );
+            if (!byIdsErr && byIds) {
+                for (const row of byIds) {
+                    streakMap.set(row.client_id, typeof row.streak === 'number' ? row.streak : 0);
+                }
             }
         }
 

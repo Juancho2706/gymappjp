@@ -3217,6 +3217,13 @@ export type Database = {
           last_logged_at: string
         }[]
       }
+      get_clients_streaks_by_ids: {
+        Args: { p_client_ids: string[] }
+        Returns: {
+          client_id: string
+          streak: number
+        }[]
+      }
       get_coach_client_signups_last_6_months: {
         Args: { p_coach_id: string }
         Returns: {
