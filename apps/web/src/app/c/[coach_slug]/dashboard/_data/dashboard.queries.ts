@@ -204,6 +204,37 @@ export function buildWorkoutLogDaySummaries(logs: RecentWorkoutLog[], opts?: { d
     })
 }
 
+/**
+ * Conteo de series por dia AGREGADO EN DB (RPC get_client_workout_day_counts, zona Santiago).
+ * Reemplaza el patron getWorkoutHistoryLogsFull (bajaba hasta 8000 filas crudas) +
+ * buildWorkoutLogDaySummaries para la pagina de historial. Devuelve ya los dias con su conteo;
+ * el map a dateLabel/subtitle es identico al de buildWorkoutLogDaySummaries (paridad).
+ */
+export const getWorkoutHistoryDayCounts = cache(
+    async (clientId: string, daysBack: number): Promise<WorkoutLogDaySummary[]> => {
+        const supabase = await createClient()
+        const { data } = await supabase.rpc('get_client_workout_day_counts', {
+            p_client_id: clientId,
+            p_days_back: daysBack,
+        })
+        const rows = (data ?? []) as { day: string; sets: number }[]
+        return rows.map((r) => {
+            const sets = Number(r.sets)
+            const dateLabel = new Date(r.day + 'T12:00:00').toLocaleDateString('es-CL', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'short',
+            })
+            return {
+                dayKey: r.day,
+                dateLabel,
+                sets,
+                subtitle: `${sets} ${sets === 1 ? 'serie registrada' : 'series registradas'}`,
+            }
+        })
+    }
+)
+
 export const getActiveNutritionPlan = cache(async (clientId: string) => {
     const supabase = await createClient()
     const { data } = await supabase

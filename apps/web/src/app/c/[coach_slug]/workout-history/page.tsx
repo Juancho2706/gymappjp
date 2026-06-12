@@ -1,28 +1,35 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { ArrowLeft, Dumbbell } from 'lucide-react'
+import { ArrowLeft, Dumbbell, ChevronDown } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
-import { buildWorkoutLogDaySummaries, getWorkoutHistoryLogsFull } from '@/app/c/[coach_slug]/dashboard/_data/dashboard.queries'
+import { getWorkoutHistoryDayCounts } from '@/app/c/[coach_slug]/dashboard/_data/dashboard.queries'
 import { WorkoutLogItems } from '@/app/c/[coach_slug]/dashboard/_components/history/WorkoutLogItem'
 import { getWorkoutHistoryUser } from './_data/workout-history.queries'
 import { getClientBasePath } from '@/lib/client/base-path'
 
 export const metadata: Metadata = { title: 'Historial de entrenos' }
 
+const DEFAULT_DAYS = 90
+const EXTENDED_DAYS = 180
+
 interface Props {
     params: Promise<{ coach_slug: string }>
+    searchParams: Promise<{ range?: string }>
 }
 
-export default async function ClientWorkoutHistoryPage({ params }: Props) {
+export default async function ClientWorkoutHistoryPage({ params, searchParams }: Props) {
     const { coach_slug } = await params
+    const { range } = await searchParams
     const base = await getClientBasePath(coach_slug)
     const { user, hasClientRow } = await getWorkoutHistoryUser()
     if (!user) redirect(`${base}/login`)
     if (!hasClientRow) redirect(`${base}/login`)
 
-    const logs = await getWorkoutHistoryLogsFull(user.id)
-    const items = buildWorkoutLogDaySummaries(logs)
+    const extended = range === String(EXTENDED_DAYS)
+    const daysBack = extended ? EXTENDED_DAYS : DEFAULT_DAYS
+    const monthsLabel = extended ? '6 meses' : '3 meses'
+    const items = await getWorkoutHistoryDayCounts(user.id, daysBack)
 
     return (
         <div className="min-h-dvh bg-background">
@@ -42,7 +49,7 @@ export default async function ClientWorkoutHistoryPage({ params }: Props) {
                 </div>
                 <div className="min-w-0 flex-1">
                     <h1 className="font-display text-lg font-bold text-foreground">Historial de entrenos</h1>
-                    <p className="text-[11px] text-muted-foreground">Días con series registradas (últimos 12 meses)</p>
+                    <p className="text-[11px] text-muted-foreground">Días con series registradas (últimos {monthsLabel})</p>
                 </div>
             </header>
 
@@ -56,8 +63,19 @@ export default async function ClientWorkoutHistoryPage({ params }: Props) {
                         <GlassCard className="overflow-hidden">
                             <WorkoutLogItems items={items} />
                         </GlassCard>
+                        {!extended && (
+                            <div className="mt-4 flex justify-center">
+                                <Link
+                                    href={`${base}/workout-history?range=${EXTENDED_DAYS}`}
+                                    className="inline-flex items-center gap-1.5 rounded-full border border-border/40 bg-card/40 px-4 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                                >
+                                    Ver últimos 6 meses
+                                    <ChevronDown className="h-3.5 w-3.5" />
+                                </Link>
+                            </div>
+                        )}
                         <p className="mt-4 px-1 text-center text-[10px] leading-relaxed text-muted-foreground">
-                            Solo ves tus propios registros. Máximo 12 meses hacia atrás y hasta 8000 series cargadas en esta vista.
+                            Solo ves tus propios registros. {extended ? 'Mostrando los últimos 6 meses.' : 'Mostrando los últimos 3 meses.'}
                         </p>
                     </>
                 )}

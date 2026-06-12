@@ -3145,6 +3145,13 @@ export type Database = {
         Args: { p_client_id: string }
         Returns: number
       }
+      get_client_workout_day_counts: {
+        Args: { p_client_id: string; p_days_back: number }
+        Returns: {
+          day: string
+          sets: number
+        }[]
+      }
       get_clients_last_workout_date: {
         Args: { p_client_ids: string[]; p_since: string }
         Returns: {
