@@ -8,7 +8,6 @@ import {
     buildStyles,
 } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
-import { ActivityCalendar } from 'react-activity-calendar'
 import {
     Flame,
     Star,
@@ -119,27 +118,12 @@ export function ProfileOverviewB3({
 
     const nutColor = nutAvg >= 70 ? emeraldHex : nutAvg >= 50 ? amberHex : redHex
 
-    const themeLight: [string, string, string, string, string] = [
-        '#e8e8ec',
-        'rgba(0, 122, 255, 0.22)',
-        'rgba(0, 122, 255, 0.45)',
-        'rgba(0, 122, 255, 0.68)',
-        'rgb(0, 122, 255)',
-    ]
-    const themeDark: [string, string, string, string, string] = [
-        '#1a1a1e',
-        'rgba(96, 165, 250, 0.28)',
-        'rgba(96, 165, 250, 0.48)',
-        'rgba(96, 165, 250, 0.72)',
-        'rgb(147, 197, 253)',
-    ]
-
     const kpiItems = [
         {
             icon: Star,
             label: 'Mejor racha',
             value: `${longestStreak} día${longestStreak === 1 ? '' : 's'}`,
-            hint: 'histórico (heatmap)',
+            hint: 'histórico',
         },
         {
             icon: Dumbbell,
@@ -200,44 +184,6 @@ export function ProfileOverviewB3({
                         pathColor={checkPct >= 70 ? emeraldHex : checkPct >= 40 ? amberHex : redHex}
                         trailColor={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}
                         textColor={isDark ? '#fafafa' : '#111'}
-                    />
-                </div>
-            </GlassCard>
-
-            <GlassCard className="p-6 border-dashed border-border/50 dark:border-white/10 overflow-x-auto">
-                <h3 className="text-xs font-black uppercase tracking-widest text-primary mb-4">
-                    Historial de actividad
-                </h3>
-                <div className="min-w-[780px] flex justify-center py-2">
-                    <ActivityCalendar
-                        data={calendarData}
-                        blockSize={11}
-                        blockMargin={3}
-                        fontSize={11}
-                        colorScheme={isDark ? 'dark' : 'light'}
-                        theme={{
-                            light: themeLight,
-                            dark: themeDark,
-                        }}
-                        labels={{
-                            months: [
-                                'Ene',
-                                'Feb',
-                                'Mar',
-                                'Abr',
-                                'May',
-                                'Jun',
-                                'Jul',
-                                'Ago',
-                                'Sep',
-                                'Oct',
-                                'Nov',
-                                'Dic',
-                            ],
-                            weekdays: ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'],
-                            legend: { less: 'Menos', more: 'Más' },
-                            totalCount: `{{count}} días activos en {{year}}`,
-                        }}
                     />
                 </div>
             </GlassCard>

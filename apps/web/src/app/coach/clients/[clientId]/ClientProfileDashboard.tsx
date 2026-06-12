@@ -377,11 +377,13 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                     <div className="grid grid-cols-3 gap-4 relative z-10">
                                         {checkInsWithPhotos.map((c: any, i: number) => (
                                             <div key={i} className="relative aspect-[3/4] bg-secondary/50 rounded-xl overflow-hidden group">
-                                                <Image 
-                                                    src={c.front_photo_url || c.side_photo_url || c.back_photo_url} 
-                                                    alt="Progreso" 
-                                                    fill 
-                                                    className="object-cover transition-transform duration-500 group-hover:scale-110" 
+                                                <Image
+                                                    src={c.front_photo_url || c.side_photo_url || c.back_photo_url}
+                                                    alt="Progreso"
+                                                    fill
+                                                    sizes="(max-width: 768px) 33vw, 200px"
+                                                    unoptimized
+                                                    className="object-cover transition-transform duration-500 group-hover:scale-110"
                                                 />
                                                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
                                                     <span className="text-[10px] font-black uppercase tracking-widest text-white">
