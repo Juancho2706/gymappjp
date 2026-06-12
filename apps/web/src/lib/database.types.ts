@@ -4669,11 +4669,83 @@ export type Database = {
         Args: { p_client_id: string }
         Returns: number
       }
+      get_client_activity_dates: {
+        Args: { p_client_id: string; p_days_back: number }
+        Returns: { day: string }[]
+      }
+      get_client_daily_tonnage: {
+        Args: { p_client_id: string; p_max_days?: number }
+        Returns: {
+          day: string
+          tonnage: number
+          sessions: number
+          moving_avg: number
+        }[]
+      }
+      get_client_exercise_prs: {
+        Args: { p_client_id: string }
+        Returns: {
+          exercise_id: string
+          name: string
+          muscle_group: string
+          max_weight_kg: number
+          reps_at_max: number
+        }[]
+      }
+      get_client_muscle_volume: {
+        Args: { p_client_id: string; p_days_back?: number }
+        Returns: {
+          muscle_group: string
+          volume: number
+        }[]
+      }
+      get_client_strength_series: {
+        Args: { p_client_id: string }
+        Returns: {
+          exercise_id: string
+          name: string
+          muscle_group: string
+          day: string
+          one_rm: number
+          weight_kg: number
+          reps_done: number
+          total_volume: number
+        }[]
+      }
+      get_client_weekly_prs: {
+        Args: { p_client_id: string }
+        Returns: {
+          exercise_id: string
+          name: string
+          muscle_group: string
+          week_weight: number
+          week_reps: number
+          week_1rm: number
+          before_weight: number
+          before_reps: number
+          before_1rm: number
+          pct_change: number
+        }[]
+      }
+      get_client_workout_day_counts: {
+        Args: { p_client_id: string; p_days_back: number }
+        Returns: {
+          day: string
+          sets: number
+        }[]
+      }
       get_clients_last_workout_date: {
         Args: { p_client_ids: string[]; p_since: string }
         Returns: {
           client_id: string
           last_logged_at: string
+        }[]
+      }
+      get_clients_streaks_by_ids: {
+        Args: { p_client_ids: string[] }
+        Returns: {
+          client_id: string
+          streak: number
         }[]
       }
       get_coach_client_signups_last_6_months: {

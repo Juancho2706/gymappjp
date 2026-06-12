@@ -2,6 +2,7 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { listAvailableWorkoutAreas } from '@/services/workout/workout-areas.service'
+import { EXERCISE_LIST_COLUMNS } from '@/lib/exercises/exercise-catalog-select'
 import type { Tables } from '@/lib/database.types'
 import type { WorkoutArea } from '@/domain/workout/types'
 
@@ -20,7 +21,7 @@ export const getTemplateBuilderData = cache(async (programId?: string) => {
     const [{ data: rawExercises }, areas] = await Promise.all([
         supabase
             .from('exercises')
-            .select('*')
+            .select(EXERCISE_LIST_COLUMNS)
             .or(`coach_id.is.null,coach_id.eq.${user.id}`)
             .order('muscle_group')
             .order('name'),

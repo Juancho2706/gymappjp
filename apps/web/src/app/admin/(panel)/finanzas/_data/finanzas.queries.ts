@@ -1,4 +1,4 @@
-import { unstable_cache } from 'next/cache'
+import { cache } from 'react'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 
 export interface FinanzasData {
@@ -31,7 +31,7 @@ const TIER_PRICES: Record<string, number> = {
     scale: 190000,
 }
 
-export const getFinanzasData = unstable_cache(
+export const getFinanzasData = cache(
     async (): Promise<FinanzasData> => {
         const admin = createServiceRoleClient()
 
@@ -97,7 +97,5 @@ export const getFinanzasData = unstable_cache(
             revenueByTier: (revByTierRes.data ?? []) as unknown as { tier: string; mrr_clp: number; coach_count: number }[],
             recentEvents,
         }
-    },
-    ['admin-finanzas'],
-    { revalidate: 300, tags: ['admin-finanzas'] }
+    }
 )

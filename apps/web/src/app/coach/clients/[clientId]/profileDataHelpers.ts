@@ -70,3 +70,50 @@ export function buildMuscleVolumeFromLogs(rows: unknown[] | null): MuscleVolumeR
         .map(([muscleGroup, volume]) => ({ muscleGroup, volume }))
         .sort((a, b) => b.volume - a.volume)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RPC mappers (Postgres ya agrega) — sustituyen el cálculo JS sobre miles de filas.
+// Mantienen la MISMA forma de salida que los `build*FromLogs` de arriba.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Fila de `get_client_exercise_prs` (1 fila por ejercicio, ya es el PR de peso máx). */
+export type ExercisePrRpcRow = {
+    exercise_id: string
+    name: string
+    muscle_group: string
+    max_weight_kg: number
+    reps_at_max: number
+}
+
+/** `get_client_exercise_prs` → `PersonalRecordRow[]` (orden por peso máx DESC). */
+export function mapExercisePrsRpc(rows: ExercisePrRpcRow[] | null): PersonalRecordRow[] {
+    if (!rows?.length) return []
+    return rows
+        .filter((r) => (r.max_weight_kg ?? 0) > 0)
+        .map((r) => ({
+            exerciseId: r.exercise_id,
+            exerciseName: r.name ?? 'Ejercicio',
+            muscleGroup: r.muscle_group ?? '—',
+            maxWeightKg: r.max_weight_kg,
+            repsAtMax: r.reps_at_max ?? 0,
+        }))
+        .sort((a, b) => b.maxWeightKg - a.maxWeightKg)
+}
+
+/** Fila de `get_client_muscle_volume` (ya agregada por grupo, orden volume DESC). */
+export type MuscleVolumeRpcRow = {
+    muscle_group: string
+    volume: number
+}
+
+/** `get_client_muscle_volume` → `MuscleVolumeRow[]` (orden volume DESC). */
+export function mapMuscleVolumeRpc(rows: MuscleVolumeRpcRow[] | null): MuscleVolumeRow[] {
+    if (!rows?.length) return []
+    return rows
+        .map((r) => ({
+            muscleGroup: r.muscle_group?.trim() || 'Otro',
+            volume: r.volume ?? 0,
+        }))
+        .filter((r) => r.volume > 0)
+        .sort((a, b) => b.volume - a.volume)
+}

@@ -6,7 +6,14 @@ import {
 } from './date-utils'
 import { isMissingColumnError, selectWithFallback } from './db-compat'
 import { getCoachProfile } from './coach'
-import type { WorkoutLogRow } from './profile-analytics'
+import type {
+  WorkoutLogRow,
+  ExerciseStrengthSeries,
+  OneRMHistoryPoint,
+  SessionTonnagePoint,
+  WeeklyWeightPR,
+} from './profile-analytics'
+import { selectStrengthCardsFromSeries } from './profile-analytics'
 import {
   calculateConsumedMacrosWithCompletionFallback,
   normalizeMealForMacros,
@@ -422,6 +429,111 @@ function buildWorkoutLogRows(rows: any[]): WorkoutLogRow[] {
   return out
 }
 
+// ── Mapeo RPC → shapes que consumen los componentes (paridad con web) ─────────
+// Las RPC ya AGREGAN en Postgres; aquí solo renombramos snake_case → camelCase y
+// reconstruimos las MISMAS estructuras que antes producían los helpers JS
+// (buildMuscleVolume, buildPersonalRecords, buildExerciseStrengthSeriesMap →
+// selectStrengthCardExercises, buildDailyTonnageSeries, findWeeklyWeightPRs).
+
+// Etiqueta de fecha idéntica a profile-analytics.shortLabel (es-ES, dd + mes corto).
+function rpcShortLabel(dayKey: string): string {
+  return new Date(`${dayKey.slice(0, 10)}T12:00:00`).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+}
+
+// get_client_muscle_volume → MuscleVolumeEntry[] (orden volume DESC ya viene de la RPC).
+function mapMuscleVolumeRpc(rows: any[]): MuscleVolumeEntry[] {
+  return (rows ?? [])
+    .map((r) => ({ muscleGroup: String(r.muscle_group ?? 'Otro'), volume: Number(r.volume ?? 0) }))
+    .filter((r) => r.volume > 0)
+}
+
+// get_client_exercise_prs → PersonalRecordEntry[] (1 fila/ejercicio = PR de peso máx).
+// Web ordena por peso DESC y corta a 8 (paridad con buildPersonalRecords).
+function mapExercisePrsRpc(rows: any[]): PersonalRecordEntry[] {
+  return (rows ?? [])
+    .map((r) => ({
+      exerciseName: String(r.name ?? 'Ejercicio'),
+      muscleGroup: r.muscle_group ?? null,
+      maxWeightKg: Number(r.max_weight_kg ?? 0),
+      repsAtMax: r.reps_at_max == null ? null : Number(r.reps_at_max),
+    }))
+    .filter((r) => r.maxWeightKg > 0)
+    .sort((a, b) => b.maxWeightKg - a.maxWeightKg)
+    .slice(0, 8)
+}
+
+// get_client_strength_series (filas PLANAS, 1 por ejercicio+día) → ExerciseStrengthSeries[].
+// Agrupamos por exercise_id (total_volume es idéntico en todas las filas del ejercicio),
+// ordenamos los puntos por día ASC y dejamos que selectStrengthCardExercises (mismo
+// criterio que la web) elija las 4 tarjetas.
+function mapStrengthSeriesRpc(rows: any[], maxCards = 4): ExerciseStrengthSeries[] {
+  type Acc = { exerciseName: string; muscleGroup: string; totalVolume: number; byDay: Map<string, OneRMHistoryPoint> }
+  const byEx = new Map<string, Acc>()
+  for (const r of rows ?? []) {
+    const exId = String(r.exercise_id ?? `name:${String(r.name ?? '').toLowerCase()}`)
+    const day = String(r.day ?? '').slice(0, 10)
+    if (!day) continue
+    let acc = byEx.get(exId)
+    if (!acc) {
+      acc = {
+        exerciseName: String(r.name ?? 'Ejercicio'),
+        muscleGroup: (r.muscle_group ?? '').toString().trim() || '—',
+        totalVolume: Number(r.total_volume ?? 0),
+        byDay: new Map(),
+      }
+      byEx.set(exId, acc)
+    }
+    // total_volume es por-ejercicio (idéntico en cada fila) → tomamos el máximo visto.
+    acc.totalVolume = Math.max(acc.totalVolume, Number(r.total_volume ?? 0))
+    acc.byDay.set(day, {
+      dateKey: day,
+      label: rpcShortLabel(day),
+      oneRm: Math.round(Number(r.one_rm ?? 0) * 10) / 10,
+      weightKg: Number(r.weight_kg ?? 0),
+      reps: Number(r.reps_done ?? 0),
+    })
+  }
+  const all: ExerciseStrengthSeries[] = []
+  for (const [exerciseId, acc] of byEx) {
+    const series = [...acc.byDay.keys()].sort().map((k) => acc.byDay.get(k)!)
+    if (series.length === 0) continue
+    // total_volume viene correcto de la RPC (verdadero total sobre todas las series),
+    // NO se recalcula desde los puntos diarios → paridad con el "Volumen total" de la web.
+    all.push({ exerciseId, exerciseName: acc.exerciseName, muscleGroup: acc.muscleGroup, series, totalVolume: acc.totalVolume })
+  }
+  // Mismo ranking/corte que la web (key lifts → volumen → nº sesiones), sobre series ya armadas.
+  return selectStrengthCardsFromSeries(all, maxCards)
+}
+
+// get_client_daily_tonnage → SessionTonnagePoint[] (orden day ASC; moving_avg ya calculado en DB).
+function mapDailyTonnageRpc(rows: any[]): SessionTonnagePoint[] {
+  return (rows ?? []).map((r) => ({
+    dateKey: String(r.day ?? '').slice(0, 10),
+    label: rpcShortLabel(String(r.day ?? '')),
+    tonnage: Math.round(Number(r.tonnage ?? 0)),
+    sessions: Number(r.sessions ?? 1),
+    movingAvg: Math.round(Number(r.moving_avg ?? r.tonnage ?? 0)),
+  }))
+}
+
+// get_client_weekly_prs (solo ejercicios que mejoraron esta semana) → WeeklyWeightPR[].
+function mapWeeklyPrsRpc(rows: any[]): WeeklyWeightPR[] {
+  return (rows ?? [])
+    .map((r) => ({
+      exerciseId: String(r.exercise_id ?? `name:${String(r.name ?? '').toLowerCase()}`),
+      exerciseName: String(r.name ?? 'Ejercicio'),
+      muscleGroup: (r.muscle_group ?? '').toString().trim() || '—',
+      newWeightKg: Number(r.week_weight ?? 0),
+      newReps: Number(r.week_reps ?? 0),
+      newOneRm: Math.round(Number(r.week_1rm ?? 0) * 10) / 10,
+      prevWeightKg: Number(r.before_weight ?? 0),
+      prevReps: Number(r.before_reps ?? 0),
+      prevOneRm: Math.round(Number(r.before_1rm ?? 0) * 10) / 10,
+      pctChange: r.pct_change == null ? null : Math.round(Number(r.pct_change) * 10) / 10,
+    }))
+    .sort((a, b) => b.newOneRm - a.newOneRm)
+}
+
 export async function getCoachClientDetail(clientId: string): Promise<{
   client: CoachClientDetail | null
   checkIns: CheckInEntry[]
@@ -435,6 +547,9 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   muscleVolume: MuscleVolumeEntry[]
   volumeSeries: DaySeriesPoint[]
   strengthSeries: DaySeriesPoint[]
+  strengthCards: ExerciseStrengthSeries[]
+  tonnageSeries: SessionTonnagePoint[]
+  weeklyPRs: WeeklyWeightPR[]
   nutritionMeals: NutritionMealPlanEntry[]
   nutritionTimeline: NutritionTimelineEntry[]
   nutritionMonthlyAvgPct: number
@@ -469,6 +584,9 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     muscleVolume: [] as MuscleVolumeEntry[],
     volumeSeries: [] as DaySeriesPoint[],
     strengthSeries: [] as DaySeriesPoint[],
+    strengthCards: [] as ExerciseStrengthSeries[],
+    tonnageSeries: [] as SessionTonnagePoint[],
+    weeklyPRs: [] as WeeklyWeightPR[],
     nutritionMeals: [] as NutritionMealPlanEntry[],
     nutritionTimeline: [] as NutritionTimelineEntry[],
     nutritionMonthlyAvgPct: 0,
@@ -486,18 +604,36 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   const fourteenDaysAgo = isoDateAddDays(todayIso, -14)
   const thirtyDaysAgo = isoDateAddDays(todayIso, -30)
   const since30 = new Date(Date.now() - 30 * 86400000).toISOString()
-  const since371 = new Date(Date.now() - 371 * 86400000).toISOString()
 
-  const workoutLogAnalyticsSelect = `
-    weight_kg, reps_done, exercise_name_at_log, logged_at,
+  // Volumen por SERIES (calistenia/cardio): NO hay RPC equivalente (get_client_muscle_volume
+  // sólo agrega peso×reps), así que mantenemos un fetch crudo MÍNIMO de 30d sólo para
+  // buildMuscleVolumeBySets. El resto del análisis (PRs, volumen con peso, fuerza/1RM,
+  // tonelaje, PRs semanales, fechas de actividad, conteo de días) ya viene de RPC agregada.
+  const muscleSetsSelect = `
+    reps_done,
     workout_blocks (
-      exercise_id,
-      exercises ( name, muscle_group )
+      exercises ( muscle_group )
     )
   `
 
-  const [clientRes, checkInRes, paymentRes, programRes, nutritionRes, logsRes, nutritionLogsRes, sessionsRes, prLogsRes, volumeLogsRes, favoriteFoodsRes, activity371Res] =
-    await Promise.all([
+  const [
+    clientRes,
+    checkInRes,
+    paymentRes,
+    programRes,
+    nutritionRes,
+    dayCounts30Res,
+    nutritionLogsRes,
+    sessionsRes,
+    muscleVolumeRes,
+    exercisePrsRes,
+    strengthSeriesRes,
+    tonnageRes,
+    weeklyPrsRes,
+    activityDatesRes,
+    setsLogsRes,
+    favoriteFoodsRes,
+  ] = await Promise.all([
       selectWithFallback<any>(
         () => supabase.from('clients').select('id, full_name, email, phone, is_active, is_archived, goal_weight_kg, height_cm, initial_weight_kg, subscription_start_date, created_at').eq('id', clientId).maybeSingle(),
         () => supabase.from('clients').select('id, full_name, email, phone, is_active, is_archived, goal_weight_kg, subscription_start_date, created_at').eq('id', clientId).maybeSingle()
@@ -540,12 +676,8 @@ export async function getCoachClientDetail(clientId: string): Promise<{
         .eq('client_id', clientId)
         .eq('is_active', true)
         .maybeSingle(),
-      supabase
-        .from('workout_logs')
-        .select('logged_at')
-        .eq('client_id', clientId)
-        .gte('logged_at', since30)
-        .limit(5000),
+      // Conteo de días con series (30d, zona Santiago) → reemplaza el fetch de logged_at crudo.
+      supabase.rpc('get_client_workout_day_counts', { p_client_id: clientId, p_days_back: 30 }),
       supabase
         .from('daily_nutrition_logs')
         .select('log_date, target_calories_at_log, target_protein_at_log, target_carbs_at_log, target_fats_at_log, nutrition_meal_logs ( meal_id, is_completed, consumed_quantity )')
@@ -557,15 +689,22 @@ export async function getCoachClientDetail(clientId: string): Promise<{
         .select('date_completed')
         .eq('client_id', clientId)
         .gte('date_completed', fourteenDaysAgo),
+      // Volumen muscular con peso (30d) agregado en DB.
+      supabase.rpc('get_client_muscle_volume', { p_client_id: clientId, p_days_back: 30 }),
+      // PR de peso máximo por ejercicio agregado en DB.
+      supabase.rpc('get_client_exercise_prs', { p_client_id: clientId }),
+      // Serie de fuerza (1RM) por ejercicio/día agregada en DB.
+      supabase.rpc('get_client_strength_series', { p_client_id: clientId }),
+      // Tonelaje diario + media móvil agregado en DB.
+      supabase.rpc('get_client_daily_tonnage', { p_client_id: clientId, p_max_days: 21 }),
+      // PRs 1RM de la semana agregados en DB.
+      supabase.rpc('get_client_weekly_prs', { p_client_id: clientId }),
+      // Fechas con actividad del último año (zona Santiago) agregadas en DB.
+      supabase.rpc('get_client_activity_dates', { p_client_id: clientId, p_days_back: 371 }),
+      // Fallback por SERIES (sin RPC): fetch crudo mínimo 30d.
       supabase
         .from('workout_logs')
-        .select(workoutLogAnalyticsSelect)
-        .eq('client_id', clientId)
-        .not('weight_kg', 'is', null)
-        .limit(4000),
-      supabase
-        .from('workout_logs')
-        .select(workoutLogAnalyticsSelect)
+        .select(muscleSetsSelect)
         .eq('client_id', clientId)
         .gte('logged_at', since30),
       supabase
@@ -574,12 +713,6 @@ export async function getCoachClientDetail(clientId: string): Promise<{
         .eq('client_id' as never, clientId as never)
         .eq('preference_type' as never, 'favorite' as never)
         .limit(20),
-      supabase
-        .from('workout_logs')
-        .select('logged_at')
-        .eq('client_id', clientId)
-        .gte('logged_at', since371)
-        .limit(20000),
     ])
 
   const rawProgram = programRes.data as any
@@ -622,13 +755,15 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     : null
 
   const checkIns = (checkInRes.data as CheckInEntry[] | null) ?? []
+  // Días con series (30d) — la RPC ya devuelve `day` en zona Santiago (YYYY-MM-DD).
   const workoutDays30 = new Set<string>()
-  for (const row of (logsRes.data as { logged_at: string }[] | null) ?? []) {
-    workoutDays30.add(getSantiagoIsoYmdForUtcInstant(row.logged_at))
+  for (const row of (dayCounts30Res.data as { day: string; sets: number }[] | null) ?? []) {
+    if (row.day) workoutDays30.add(row.day.slice(0, 10))
   }
+  // Fechas de actividad del último año — RPC en zona Santiago (YYYY-MM-DD).
   const workoutDays371 = new Set<string>()
-  for (const row of (activity371Res.data as { logged_at: string }[] | null) ?? []) {
-    workoutDays371.add(getSantiagoIsoYmdForUtcInstant(row.logged_at))
+  for (const row of (activityDatesRes.data as { day: string }[] | null) ?? []) {
+    if (row.day) workoutDays371.add(row.day.slice(0, 10))
   }
 
   const workoutThisWeek = new Set<string>()
@@ -707,10 +842,15 @@ export async function getCoachClientDetail(clientId: string): Promise<{
       checkInCompliancePercentWeekAgo: checkInRegularityPercent(sevenDaysAgo, checkIns),
     },
     activity: Array.from(activityByDate.values()).reverse(),
-    personalRecords: buildPersonalRecords((prLogsRes.data as any[] | null) ?? []),
-    muscleVolume: buildMuscleVolume((volumeLogsRes.data as any[] | null) ?? []),
-    volumeSeries: buildVolumeSeries((volumeLogsRes.data as any[] | null) ?? []),
-    strengthSeries: buildStrengthSeries((prLogsRes.data as any[] | null) ?? []),
+    // ── Análisis de entrenamiento: AGREGADO EN DB (RPC), no iterando logs crudos en JS ──
+    personalRecords: mapExercisePrsRpc(exercisePrsRes.data as any[]),
+    muscleVolume: mapMuscleVolumeRpc(muscleVolumeRes.data as any[]),
+    // volumeSeries/strengthSeries (DaySeriesPoint) sin consumidores actuales → stub vacío.
+    volumeSeries: [],
+    strengthSeries: [],
+    strengthCards: mapStrengthSeriesRpc(strengthSeriesRes.data as any[], 4),
+    tonnageSeries: mapDailyTonnageRpc(tonnageRes.data as any[]),
+    weeklyPRs: mapWeeklyPrsRpc(weeklyPrsRes.data as any[]),
     nutritionMeals,
     nutritionTimeline,
     nutritionMonthlyAvgPct: Math.round(
@@ -721,11 +861,18 @@ export async function getCoachClientDetail(clientId: string): Promise<{
       .map((row) => row.foods)
       .filter(Boolean) as any[])
       .map((food) => ({ id: food.id as string, name: food.name as string })),
-    workoutLogs: buildWorkoutLogRows((prLogsRes.data as any[] | null) ?? []),
-    workoutLogsAll: buildWorkoutLogRows((volumeLogsRes.data as any[] | null) ?? []),
-    muscleVolumeReps: buildMuscleVolumeBySets((volumeLogsRes.data as any[] | null) ?? []),
+    // workoutLogs/workoutLogsAll (logs planos) ya no se calculan en cliente — el análisis
+    // viene precomputado de RPC. Se dejan vacíos por compatibilidad de tipo.
+    workoutLogs: [],
+    workoutLogsAll: [],
+    muscleVolumeReps: buildMuscleVolumeBySets((setsLogsRes.data as any[] | null) ?? []),
     workoutDates371: [...workoutDays371].sort(),
-    hasTrained: workoutDays371.size > 0 || workoutDays30.size > 0 || ((volumeLogsRes.data as any[] | null)?.length ?? 0) > 0,
+    hasTrained:
+      workoutDays371.size > 0 ||
+      workoutDays30.size > 0 ||
+      ((exercisePrsRes.data as any[] | null)?.length ?? 0) > 0 ||
+      ((muscleVolumeRes.data as any[] | null)?.length ?? 0) > 0 ||
+      ((strengthSeriesRes.data as any[] | null)?.length ?? 0) > 0,
   }
   } catch (e) {
     console.warn('[coach-client-detail] partial load', e)

@@ -36,19 +36,18 @@ export function AnalisisTab({
   dayLoading: boolean
 }) {
   const { theme } = useTheme()
-  const { workoutLogs, muscleVolume, muscleVolumeReps, hasTrained, workoutDates371 } = data
+  // Análisis ya AGREGADO en DB (RPC): PRs semanales, fuerza por ejercicio y tonelaje
+  // vienen precomputados en `data` — ya no se iteran logs crudos en el cliente.
+  const { strengthCards, tonnageSeries, weeklyPRs: prs, muscleVolume, muscleVolumeReps, hasTrained, workoutDates371 } = data
 
-  const prs = useMemo(() => findWeeklyWeightPRs(workoutLogs), [workoutLogs])
-  const strengthCards = useMemo(() => selectStrengthCardExercises(workoutLogs, 4), [workoutLogs])
-  const tonnage = useMemo(() => buildDailyTonnageSeries(workoutLogs, 21), [workoutLogs])
   const imbalances = useMemo(() => detectVolumeImbalances(muscleVolume), [muscleVolume])
   const maxVolume = Math.max(1, ...muscleVolume.map((r) => r.volume))
   const maxSets = Math.max(1, ...muscleVolumeReps.map((r) => r.sets))
 
-  const tonnagePoints: BarComposedPoint[] = tonnage.map((p, i) => ({ i, bar: p.tonnage, avg: p.movingAvg ?? p.tonnage, label: p.label }))
+  const tonnagePoints: BarComposedPoint[] = tonnageSeries.map((p, i) => ({ i, bar: p.tonnage, avg: p.movingAvg ?? p.tonnage, label: p.label }))
 
   // ¿Hay datos con peso? Si no, caemos a volumen por series (calistenia/cardio).
-  const hasWeighted = workoutLogs.length > 0 || muscleVolume.length > 0
+  const hasWeighted = strengthCards.length > 0 || muscleVolume.length > 0
 
   if (!hasTrained) {
     return <EmptyState icon={Dumbbell} title="Sin entrenamientos" subtitle="Este alumno aún no registra entrenamientos." />

@@ -1,4 +1,5 @@
-import { unstable_cache, unstable_noStore as noStore } from 'next/cache'
+import { cache } from 'react'
+import { unstable_noStore as noStore } from 'next/cache'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { TIER_CONFIG } from '@/lib/constants'
 import {
@@ -40,7 +41,7 @@ function computeLifecycleStage(status: string | null, daysLeft: number | null | 
     return 'active_healthy'
 }
 
-export const getPlatformOverview = unstable_cache(
+export const getPlatformOverview = cache(
     async (): Promise<PlatformOverview> => {
         const admin = createServiceRoleClient()
 
@@ -141,9 +142,7 @@ export const getPlatformOverview = unstable_cache(
                 return { converted, total_trials, pct }
             })(),
         }
-    },
-    ['admin-platform-overview'],
-    { revalidate: 60, tags: ['admin-dashboard'] }
+    }
 )
 
 export async function getAllCoachesPaginated(params: {

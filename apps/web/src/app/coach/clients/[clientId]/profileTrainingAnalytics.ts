@@ -110,6 +110,102 @@ export function buildExerciseStrengthSeriesMap(workoutHistory: any[]): Map<strin
     return out
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// RPC mapper — `get_client_strength_series` (filas PLANAS, ORDER BY exercise_id, day ASC).
+// Reconstruye el mismo Map<exerciseId, ExerciseStrengthSeries> que el helper JS,
+// pero el agregado (1RM Epley por día, total_volume) lo calcula Postgres.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Fila plana de `get_client_strength_series` (1 fila por (ejercicio, día)). */
+export type StrengthSeriesRpcRow = {
+    exercise_id: string
+    name: string
+    muscle_group: string
+    /** YYYY-MM-DD en zona Santiago. */
+    day: string
+    one_rm: number
+    weight_kg: number
+    reps_done: number
+    /** Por-ejercicio: idéntico en todas las filas de ese exercise_id. */
+    total_volume: number
+}
+
+/** `get_client_strength_series` → `Map<string, ExerciseStrengthSeries>`. */
+export function mapStrengthSeriesRpc(
+    rows: StrengthSeriesRpcRow[] | null
+): Map<string, ExerciseStrengthSeries> {
+    const out = new Map<string, ExerciseStrengthSeries>()
+    if (!rows?.length) return out
+
+    // Las filas ya vienen ORDER BY exercise_id, day ASC → empujamos en orden.
+    for (const r of rows) {
+        const exId = r.exercise_id
+        let entry = out.get(exId)
+        if (!entry) {
+            entry = {
+                exerciseId: exId,
+                exerciseName: r.name ?? 'Ejercicio',
+                muscleGroup: r.muscle_group?.trim() || '—',
+                series: [],
+                // total_volume es por-ejercicio: igual en todas las filas → se toma una vez.
+                totalVolume: r.total_volume ?? 0,
+            }
+            out.set(exId, entry)
+        }
+        const dt = new Date(r.day + 'T12:00:00')
+        entry.series.push({
+            dateKey: r.day,
+            label: dt.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+            oneRm: Math.round((r.one_rm ?? 0) * 10) / 10,
+            weightKg: r.weight_kg,
+            reps: r.reps_done,
+        })
+    }
+
+    // Paridad con el helper viejo: descarta ejercicios sin puntos.
+    for (const [exId, entry] of out) {
+        if (entry.series.length === 0) out.delete(exId)
+    }
+    return out
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RPC mapper — `get_client_weekly_prs` (solo ejercicios que mejoraron esta semana).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Fila de `get_client_weekly_prs`. */
+export type WeeklyPrRpcRow = {
+    exercise_id: string
+    name: string
+    muscle_group: string
+    week_weight: number
+    week_reps: number
+    week_1rm: number
+    before_weight: number
+    before_reps: number
+    before_1rm: number
+    pct_change: number
+}
+
+/** `get_client_weekly_prs` → `WeeklyWeightPR[]` (orden por 1RM nuevo DESC). */
+export function mapWeeklyWeightPRsRpc(rows: WeeklyPrRpcRow[] | null): WeeklyWeightPR[] {
+    if (!rows?.length) return []
+    return rows
+        .map((r) => ({
+            exerciseId: r.exercise_id,
+            exerciseName: r.name ?? 'Ejercicio',
+            muscleGroup: r.muscle_group?.trim() || '—',
+            newWeightKg: r.week_weight,
+            newReps: r.week_reps,
+            newOneRm: Math.round((r.week_1rm ?? 0) * 10) / 10,
+            prevWeightKg: r.before_weight,
+            prevReps: r.before_reps,
+            prevOneRm: Math.round((r.before_1rm ?? 0) * 10) / 10,
+            pctChange: r.pct_change,
+        }))
+        .sort((a, b) => b.newOneRm - a.newOneRm)
+}
+
 /** Hasta `maxCards` ejercicios: prioriza banca/sentadilla/peso muerto, luego por volumen. */
 export function selectStrengthCardExercises(
     workoutHistory: any[],
@@ -305,6 +401,35 @@ export function buildDailyTonnageSeries(
         const slice = points.slice(start, i + 1)
         const avg = Math.round(slice.reduce((s, p) => s + p.tonnage, 0) / slice.length)
         return { ...pt, movingAvg: avg }
+    })
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RPC mapper — `get_client_daily_tonnage` (ORDER BY day ASC; día en Santiago).
+// `moving_avg` y `sessions` ya los calcula Postgres.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Fila de `get_client_daily_tonnage`. */
+export type DailyTonnageRpcRow = {
+    /** YYYY-MM-DD en zona Santiago. */
+    day: string
+    tonnage: number
+    sessions: number
+    moving_avg: number
+}
+
+/** `get_client_daily_tonnage` → `SessionTonnagePoint[]` (mantiene el orden day ASC). */
+export function mapDailyTonnageRpc(rows: DailyTonnageRpcRow[] | null): SessionTonnagePoint[] {
+    if (!rows?.length) return []
+    return rows.map((r) => {
+        const d = new Date(r.day + 'T12:00:00')
+        return {
+            dateKey: r.day,
+            label: d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
+            tonnage: Math.round(r.tonnage ?? 0),
+            sessions: r.sessions ?? 1,
+            movingAvg: Math.round(r.moving_avg ?? 0),
+        }
     })
 }
 

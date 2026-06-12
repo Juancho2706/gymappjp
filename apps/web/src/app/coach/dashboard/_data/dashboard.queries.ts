@@ -319,10 +319,11 @@ async function getCoachDashboardDataInner(
             .lte('end_date', expiringEndUpper)
             .order('end_date', { ascending: true })
             .limit(200),
-        Promise.resolve({ data: null, error: null }),
-        // Fast SQL aggregation (if migration is applied)
-        Promise.resolve({ data: null, error: null }),
-        // 30-day workout sessions for AreaChart (solo columnas necesarias; join para RLS/filtro coach)
+        supabase.rpc('get_coach_client_signups_last_6_months', { p_coach_id: userId }),
+        // Agregacion server-side: sesiones unicas por dia (zona Santiago) calculadas en DB.
+        // Si la RPC devuelve vacio/error, el consumo cae al fallback JS sobre workoutLogs30d (abajo).
+        supabase.rpc('get_coach_workout_sessions_30d', { p_coach_id: userId }),
+        // 30-day workout sessions: fallback crudo del AreaChart (se mantiene un ciclo; solo columnas necesarias)
         applyOrgScope(
             supabase
                 .from('workout_logs')

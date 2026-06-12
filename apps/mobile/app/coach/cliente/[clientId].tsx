@@ -140,7 +140,7 @@ export default function ClientDetailScreen() {
     const trainingAge = formatTrainingAgeLabel(client.subscription_start_date, client.created_at)
     const todayIso = getTodayInSantiago().iso
     const today = data.nutritionTimeline.find((t) => t.date === todayIso) ?? data.nutritionTimeline[0]
-    const weeklyPRs = findWeeklyWeightPRs(data.workoutLogs)
+    const weeklyPRs = data.weeklyPRs
     const pendingPays = data.payments.filter((p) => ['pending', 'pendiente'].includes((p.status ?? '').toLowerCase())).length
 
     // Attention

@@ -133,6 +133,15 @@ function plannedSetsFromProgram(program: any): number {
 const CLIENT_ID_IN_CHUNK = 120
 const PROGRAM_ID_RPC_CHUNK = 80
 
+/**
+ * Cota de seguridad de filas de `workout_logs` por chunk de clientes (120 clientes × ventana de 35 días).
+ * Antes era 10000; se baja a 2000 porque el War Room real (deal Movida, ~300+ alumnos por coach,
+ * 120 clientes por chunk) en 35 días no se acerca a ese volumen, y `lastWorkoutDate` ya se resuelve
+ * por RPC con MAX server-side (no depende de este límite). Es solo un tope anti-runaway: si algún
+ * chunk lo tocara, solo afecta adherencia/1RM (ventanas de 7–14 días), nunca la fecha de último workout.
+ */
+const WORKOUT_LOGS_ROW_CAP = 2000
+
 function chunkIds<T>(arr: T[], size: number): T[][] {
     const out: T[][] = []
     for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
@@ -306,9 +315,9 @@ export class DashboardService {
         const lastWeekStr = subDays(now, 7).toISOString();
         const logsFrom = subDays(now, 35).toISOString();
 
-        // Raise limit to 10 000 so the adherence/1RM window isn't silently truncated.
-        // lastWorkoutDate is resolved via a dedicated RPC (see below) which uses
-        // a server-side MAX and is never affected by PostgREST row limits.
+        // Cota anti-runaway por chunk (ver WORKOUT_LOGS_ROW_CAP). El volumen real del War Room
+        // no se acerca al tope; y lastWorkoutDate se resuelve por RPC con MAX server-side (abajo),
+        // así que nunca depende de este límite de filas de PostgREST.
         const logChunks = await Promise.all(
             chunkIds(clientIds, CLIENT_ID_IN_CHUNK).map((chunk) =>
                 this.supabase
@@ -316,7 +325,7 @@ export class DashboardService {
                     .select('client_id, logged_at, weight_kg, reps_done, plan_name_at_log')
                     .in('client_id', chunk)
                     .gte('logged_at', logsFrom)
-                    .limit(10000)
+                    .limit(WORKOUT_LOGS_ROW_CAP)
             )
         );
 
@@ -443,6 +452,9 @@ export class DashboardService {
             }
         }
 
+        // Camino batch (preferido): una sola llamada agrega los streaks de TODOS los alumnos del coach
+        // en Postgres. Requiere `auth.uid() = p_coach_id` (SECURITY DEFINER con guard), por lo que solo
+        // funciona en sesión `authenticated` (web/RSC). Bajo `service_role` (ruta mobile) devuelve [].
         const streakMap = new Map<string, number>();
         const { data: streakBatch, error: streakBatchErr } = await this.supabase.rpc(
             'get_coach_clients_streaks',
@@ -456,21 +468,21 @@ export class DashboardService {
             }
         }
 
+        // Fallback batch-by-ids: para los clientes que el batch por-coach no cubrió (típicamente la
+        // ruta mobile bajo service_role, donde get_coach_clients_streaks devuelve 0 por el guard
+        // auth.uid()=coach). UNA sola llamada resuelve TODOS los streaks faltantes en Postgres
+        // (get_clients_streaks_by_ids, guard service_role/coach/cliente/pool) — sin el N+1 de antes,
+        // así que ya no hay tope ni degradación silenciosa: todos los alumnos reciben su streak real.
         if (streakMap.size < clientIds.length) {
             const missing = clientIds.filter((id) => !streakMap.has(id));
-            const STREAK_FALLBACK_CONCURRENCY = 8
-            for (let i = 0; i < missing.length; i += STREAK_FALLBACK_CONCURRENCY) {
-                const slice = missing.slice(i, i + STREAK_FALLBACK_CONCURRENCY);
-                const fallback = await Promise.all(
-                    slice.map(async (clientId) => {
-                        const { data, error } = await this.supabase.rpc('get_client_current_streak', {
-                            p_client_id: clientId,
-                        });
-                        if (error) return { clientId, streak: 0 };
-                        return { clientId, streak: typeof data === 'number' ? data : 0 };
-                    })
-                );
-                for (const s of fallback) streakMap.set(s.clientId, s.streak);
+            const { data: byIds, error: byIdsErr } = await this.supabase.rpc(
+                'get_clients_streaks_by_ids',
+                { p_client_ids: missing }
+            );
+            if (!byIdsErr && byIds) {
+                for (const row of byIds) {
+                    streakMap.set(row.client_id, typeof row.streak === 'number' ? row.streak : 0);
+                }
             }
         }
 

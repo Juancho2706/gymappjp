@@ -81,7 +81,14 @@ export function buildExerciseStrengthSeriesMap(logs: WorkoutLogRow[]): Map<strin
 }
 
 export function selectStrengthCardExercises(logs: WorkoutLogRow[], maxCards = 4): ExerciseStrengthSeries[] {
-  const list = [...buildExerciseStrengthSeriesMap(logs).values()].filter((s) => s.series.length > 0)
+  return selectStrengthCardsFromSeries([...buildExerciseStrengthSeriesMap(logs).values()], maxCards)
+}
+
+// Mismo ranking/criterio que selectStrengthCardExercises pero sobre series YA construidas
+// (p.ej. desde la RPC get_client_strength_series, que ya trae total_volume correcto).
+// Single-source del ordenamiento para no duplicar isKeyCompoundLift.
+export function selectStrengthCardsFromSeries(series: ExerciseStrengthSeries[], maxCards = 4): ExerciseStrengthSeries[] {
+  const list = [...series].filter((s) => s.series.length > 0)
   list.sort((a, b) => {
     const ka = isKeyCompoundLift(a.exerciseName) ? 1 : 0, kb = isKeyCompoundLift(b.exerciseName) ? 1 : 0
     if (ka !== kb) return kb - ka
