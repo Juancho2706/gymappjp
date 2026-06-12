@@ -16,7 +16,8 @@ INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password, e
   ('e8c00000-0000-0000-0000-0000000000b1','00000000-0000-0000-0000-000000000000','authenticated','authenticated','xg_b1@e.test','x',now(),now(),now(),'{}','{}'),
   ('e8c00000-0000-0000-0000-0000000000c1','00000000-0000-0000-0000-000000000000','authenticated','authenticated','xg_c1@e.test','x',now(),now(),now(),'{}','{}'),
   ('e8c00000-0000-0000-0000-0000000000f1','00000000-0000-0000-0000-000000000000','authenticated','authenticated','xg_f1@e.test','x',now(),now(),now(),'{}','{}'),
-  ('e8c00000-0000-0000-0000-0000000000f2','00000000-0000-0000-0000-000000000000','authenticated','authenticated','xg_f2@e.test','x',now(),now(),now(),'{}','{}')
+  ('e8c00000-0000-0000-0000-0000000000f2','00000000-0000-0000-0000-000000000000','authenticated','authenticated','xg_f2@e.test','x',now(),now(),now(),'{}','{}'),
+  ('e8c00000-0000-0000-0000-0000000000f3','00000000-0000-0000-0000-000000000000','authenticated','authenticated','xg_f3@e.test','x',now(),now(),now(),'{}','{}')
 ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.coaches (id, slug, full_name, brand_name, invite_code) VALUES
   ('e8c00000-0000-0000-0000-0000000000a1','xg-a1','A1 manager','XGA1','XG-A1'),

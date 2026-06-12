@@ -1,4 +1,4 @@
--- POST_DEPLOY — Seed del modulo NUTRICION POR INTERCAMBIOS (`nutrition_exchanges`).
+﻿-- POST_DEPLOY — Seed del modulo NUTRICION POR INTERCAMBIOS (`nutrition_exchanges`).
 -- Spec: specs/movida-intercambios/PLAN.md §Seed · Requiere 20260611093001_nutrition_exchanges.sql.
 -- Convencion _POST_DEPLOY_ del repo: NO entra al historial de migraciones del CLI; se ejecuta
 -- manualmente (branch MCP / execute_sql) despues de la DDL. Idempotente y RE-EJECUTABLE:
@@ -48,6 +48,8 @@ WHERE exchange_groups.macros_confirmed = false;  -- jamas pisar valores confirma
 
 -- ============ 2) Equivalencias alimento -> porcion (foods system, productos chilenos) ============
 -- Medida casera + gramos estilo UDD (taza 200 cc, cucharada 10 cc, cucharadita 5 cc).
+-- FIX gate 2026-06-11: category mapeada al CHECK real foods_category_check (proteina|carbohidrato|
+-- grasa|lacteo|fruta|verdura|legumbre|bebida|snack|otro) — los valores display originales lo violaban.
 -- Macros por porcion = ref del grupo (definicion del metodo: 1 porcion ~ macros de referencia);
 -- LEG = suma P+C (125 kcal / 9 P / 15 C / 3 G). STARTER SET provisorio: la lista definitiva sale
 -- de `PORCIONES DE INTERCAMBIO.pdf` de Fran (no versionado en el repo) — spot-check obligatorio
@@ -68,54 +70,54 @@ CREATE TEMP TABLE _exchange_seed (
 
 INSERT INTO _exchange_seed VALUES
   -- C — Carbohidratos/Cereales (70 kcal / 2 P / 15 C / 0 G)
-  ('Pan marraqueta',               'cereales',             50,  '1/2 unidad',        70, 2, 15, 0, false, 'Cereales'),
-  ('Pan hallulla',                 'cereales',             50,  '1/2 unidad',        70, 2, 15, 0, false, 'Cereales'),
-  ('Arroz cocido',                 'cereales',             80,  '1/2 taza',          70, 2, 15, 0, false, 'Cereales'),
-  ('Fideos cocidos',               'cereales',             80,  '1/2 taza',          70, 2, 15, 0, false, 'Cereales'),
-  ('Papa cocida',                  'cereales',             100, '1 unidad chica',    70, 2, 15, 0, false, 'Cereales'),
-  ('Avena tradicional',            'cereales',             30,  '1/3 taza',          70, 2, 15, 0, false, 'Cereales'),
-  ('Choclo desgranado',            'cereales',             80,  '1/2 taza',          70, 2, 15, 0, false, 'Cereales'),
-  ('Quinoa cocida',                'cereales',             80,  '1/2 taza',          70, 2, 15, 0, false, 'Cereales'),
+  ('Pan marraqueta',               'cereales',             50,  '1/2 unidad',        70, 2, 15, 0, false, 'carbohidrato'),
+  ('Pan hallulla',                 'cereales',             50,  '1/2 unidad',        70, 2, 15, 0, false, 'carbohidrato'),
+  ('Arroz cocido',                 'cereales',             80,  '1/2 taza',          70, 2, 15, 0, false, 'carbohidrato'),
+  ('Fideos cocidos',               'cereales',             80,  '1/2 taza',          70, 2, 15, 0, false, 'carbohidrato'),
+  ('Papa cocida',                  'cereales',             100, '1 unidad chica',    70, 2, 15, 0, false, 'carbohidrato'),
+  ('Avena tradicional',            'cereales',             30,  '1/3 taza',          70, 2, 15, 0, false, 'carbohidrato'),
+  ('Choclo desgranado',            'cereales',             80,  '1/2 taza',          70, 2, 15, 0, false, 'carbohidrato'),
+  ('Quinoa cocida',                'cereales',             80,  '1/2 taza',          70, 2, 15, 0, false, 'carbohidrato'),
   -- P — Proteinas bajo grasa (55 kcal / 7 P / 0 C / 3 G)
-  ('Pechuga de pollo cocida',      'proteinas-bajo-grasa', 30,  '1 trozo chico',     55, 7, 0,  3, false, 'Proteinas'),
-  ('Posta de vacuno cocida',       'proteinas-bajo-grasa', 30,  '1 trozo chico',     55, 7, 0,  3, false, 'Proteinas'),
-  ('Merluza cocida',               'proteinas-bajo-grasa', 40,  '1 trozo chico',     55, 7, 0,  3, false, 'Proteinas'),
-  ('Atun al agua',                 'proteinas-bajo-grasa', 40,  '1/4 taza',          55, 7, 0,  3, false, 'Proteinas'),
-  ('Huevo',                        'proteinas-bajo-grasa', 50,  '1 unidad',          55, 7, 0,  3, false, 'Proteinas'),
-  ('Pavo molido cocido',           'proteinas-bajo-grasa', 30,  '2 cucharadas',      55, 7, 0,  3, false, 'Proteinas'),
+  ('Pechuga de pollo cocida',      'proteinas-bajo-grasa', 30,  '1 trozo chico',     55, 7, 0,  3, false, 'proteina'),
+  ('Posta de vacuno cocida',       'proteinas-bajo-grasa', 30,  '1 trozo chico',     55, 7, 0,  3, false, 'proteina'),
+  ('Merluza cocida',               'proteinas-bajo-grasa', 40,  '1 trozo chico',     55, 7, 0,  3, false, 'proteina'),
+  ('Atun al agua',                 'proteinas-bajo-grasa', 40,  '1/4 taza',          55, 7, 0,  3, false, 'proteina'),
+  ('Huevo',                        'proteinas-bajo-grasa', 50,  '1 unidad',          55, 7, 0,  3, false, 'proteina'),
+  ('Pavo molido cocido',           'proteinas-bajo-grasa', 30,  '2 cucharadas',      55, 7, 0,  3, false, 'proteina'),
   -- F — Frutas (60 kcal / 0 P / 15 C / 0 G)
-  ('Manzana',                      'frutas',               100, '1 unidad chica',    60, 0, 15, 0, false, 'Frutas'),
-  ('Platano',                      'frutas',               60,  '1/2 unidad',        60, 0, 15, 0, false, 'Frutas'),
-  ('Naranja',                      'frutas',               120, '1 unidad chica',    60, 0, 15, 0, false, 'Frutas'),
-  ('Pera',                         'frutas',               100, '1 unidad chica',    60, 0, 15, 0, false, 'Frutas'),
-  ('Uvas',                         'frutas',               90,  '10 unidades',       60, 0, 15, 0, false, 'Frutas'),
-  ('Frutillas',                    'frutas',               200, '1 taza',            60, 0, 15, 0, false, 'Frutas'),
+  ('Manzana',                      'frutas',               100, '1 unidad chica',    60, 0, 15, 0, false, 'fruta'),
+  ('Platano',                      'frutas',               60,  '1/2 unidad',        60, 0, 15, 0, false, 'fruta'),
+  ('Naranja',                      'frutas',               120, '1 unidad chica',    60, 0, 15, 0, false, 'fruta'),
+  ('Pera',                         'frutas',               100, '1 unidad chica',    60, 0, 15, 0, false, 'fruta'),
+  ('Uvas',                         'frutas',               90,  '10 unidades',       60, 0, 15, 0, false, 'fruta'),
+  ('Frutillas',                    'frutas',               200, '1 taza',            60, 0, 15, 0, false, 'fruta'),
   -- V — Verduras (25 kcal / 2 P / 4 C / 0 G)
-  ('Tomate',                       'verduras',             120, '1 unidad',          25, 2, 4,  0, false, 'Verduras'),
-  ('Lechuga',                      'verduras',             50,  '1 taza',            25, 2, 4,  0, false, 'Verduras'),
-  ('Zanahoria cruda',              'verduras',             50,  '1/2 taza',          25, 2, 4,  0, false, 'Verduras'),
-  ('Brocoli cocido',               'verduras',             80,  '1/2 taza',          25, 2, 4,  0, false, 'Verduras'),
-  ('Espinaca cruda',               'verduras',             30,  '1 taza',            25, 2, 4,  0, false, 'Verduras'),
+  ('Tomate',                       'verduras',             120, '1 unidad',          25, 2, 4,  0, false, 'verdura'),
+  ('Lechuga',                      'verduras',             50,  '1 taza',            25, 2, 4,  0, false, 'verdura'),
+  ('Zanahoria cruda',              'verduras',             50,  '1/2 taza',          25, 2, 4,  0, false, 'verdura'),
+  ('Brocoli cocido',               'verduras',             80,  '1/2 taza',          25, 2, 4,  0, false, 'verdura'),
+  ('Espinaca cruda',               'verduras',             30,  '1 taza',            25, 2, 4,  0, false, 'verdura'),
   -- LAC — Lacteo (95 kcal / 9 P / 12 C / 2 G; subdividir por % grasa cuando Fran confirme)
-  ('Leche descremada',             'lacteos',              200, '1 taza (200 cc)',   95, 9, 12, 2, true,  'Lacteos'),
-  ('Leche semidescremada',         'lacteos',              200, '1 taza (200 cc)',   95, 9, 12, 2, true,  'Lacteos'),
-  ('Yogur descremado',             'lacteos',              125, '1 unidad',          95, 9, 12, 2, false, 'Lacteos'),
+  ('Leche descremada',             'lacteos',              200, '1 taza (200 cc)',   95, 9, 12, 2, true,  'lacteo'),
+  ('Leche semidescremada',         'lacteos',              200, '1 taza (200 cc)',   95, 9, 12, 2, true,  'lacteo'),
+  ('Yogur descremado',             'lacteos',              125, '1 unidad',          95, 9, 12, 2, false, 'lacteo'),
   -- ARL — Alimento rico en lipidos (45 kcal / 0 P / 0 C / 5 G)
-  ('Palta',                        'ricos-en-lipidos',     30,  '2 cucharadas',      45, 0, 0,  5, false, 'Lipidos'),
-  ('Almendras',                    'ricos-en-lipidos',     10,  '1 cucharada',       45, 0, 0,  5, false, 'Lipidos'),
-  ('Nueces',                       'ricos-en-lipidos',     8,   '2 mariposas',       45, 0, 0,  5, false, 'Lipidos'),
-  ('Mani sin sal',                 'ricos-en-lipidos',     10,  '1 cucharada',       45, 0, 0,  5, false, 'Lipidos'),
-  ('Aceitunas',                    'ricos-en-lipidos',     30,  '5 unidades',        45, 0, 0,  5, false, 'Lipidos'),
+  ('Palta',                        'ricos-en-lipidos',     30,  '2 cucharadas',      45, 0, 0,  5, false, 'grasa'),
+  ('Almendras',                    'ricos-en-lipidos',     10,  '1 cucharada',       45, 0, 0,  5, false, 'grasa'),
+  ('Nueces',                       'ricos-en-lipidos',     8,   '2 mariposas',       45, 0, 0,  5, false, 'grasa'),
+  ('Mani sin sal',                 'ricos-en-lipidos',     10,  '1 cucharada',       45, 0, 0,  5, false, 'grasa'),
+  ('Aceitunas',                    'ricos-en-lipidos',     30,  '5 unidades',        45, 0, 0,  5, false, 'grasa'),
   -- SP — Scoop proteina (120 kcal / 24 P / 2 C / 1 G; generico, override por producto pendiente Fran)
-  ('Proteina en polvo (scoop)',    'scoop-proteina',       30,  '1 scoop',          120, 24, 2, 1, false, 'Suplementos'),
+  ('Proteina en polvo (scoop)',    'scoop-proteina',       30,  '1 scoop',          120, 24, 2, 1, false, 'proteina'),
   -- G — Grasa de cocina (45 kcal / 0 P / 0 C / 5 G)
-  ('Aceite de oliva',              'grasa-cocina',         5,   '1 cucharadita',     45, 0, 0,  5, true,  'Aceites y grasas'),
-  ('Aceite vegetal',               'grasa-cocina',         5,   '1 cucharadita',     45, 0, 0,  5, true,  'Aceites y grasas'),
-  ('Mantequilla',                  'grasa-cocina',         5,   '1 cucharadita',     45, 0, 0,  5, false, 'Aceites y grasas'),
+  ('Aceite de oliva',              'grasa-cocina',         5,   '1 cucharadita',     45, 0, 0,  5, true,  'grasa'),
+  ('Aceite vegetal',               'grasa-cocina',         5,   '1 cucharadita',     45, 0, 0,  5, true,  'grasa'),
+  ('Mantequilla',                  'grasa-cocina',         5,   '1 cucharadita',     45, 0, 0,  5, false, 'grasa'),
   -- LEG — Legumbres (compuesto 1P+1C => 125 kcal / 9 P / 15 C / 3 G por porcion)
-  ('Porotos cocidos',              'legumbres',            130, '3/4 taza',         125, 9, 15, 3, false, 'Legumbres'),
-  ('Lentejas cocidas',             'legumbres',            130, '3/4 taza',         125, 9, 15, 3, false, 'Legumbres'),
-  ('Garbanzos cocidos',            'legumbres',            130, '3/4 taza',         125, 9, 15, 3, false, 'Legumbres');
+  ('Porotos cocidos',              'legumbres',            130, '3/4 taza',         125, 9, 15, 3, false, 'legumbre'),
+  ('Lentejas cocidas',             'legumbres',            130, '3/4 taza',         125, 9, 15, 3, false, 'legumbre'),
+  ('Garbanzos cocidos',            'legumbres',            130, '3/4 taza',         125, 9, 15, 3, false, 'legumbre');
 
 -- 2a) INSERT de foods system faltantes (coach_id NULL, org_id NULL). Guard por nombre (case-
 -- insensitive) entre foods system: re-ejecutable sin duplicados. serving = la porcion de intercambio.
