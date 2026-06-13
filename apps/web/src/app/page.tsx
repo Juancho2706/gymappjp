@@ -10,6 +10,7 @@ import { LandingStudentTabs } from '@/components/landing/LandingStudentTabs'
 import { LandingFinalCTA } from '@/components/landing/LandingFinalCTA'
 import { LandingContactFooter } from '@/components/landing/LandingContactFooter'
 import { LandingTeamsSection } from '@/components/landing/LandingTeamsSection'
+import { LandingModulesSection } from '@/components/landing/LandingModulesSection'
 import { SALES_EMAIL } from '@/lib/brand-assets'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 
@@ -97,6 +98,7 @@ export default async function LandingPage() {
                 <LandingCoachCalloutSections />
                 <LandingExerciseCatalogShowcase exerciseCount={exerciseCount} />
                 <LandingPricingPreview />
+                <LandingModulesSection />
                 <LandingStudentTabs />
                 <LandingTeamsSection />
                 <LandingFinalCTA />
