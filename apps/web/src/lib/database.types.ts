@@ -920,9 +920,11 @@ export type Database = {
           granted_at: string | null
           granted_via: string | null
           id: string
+          ip_address: string | null
           purpose: string
           revoked_at: string | null
           team_id: string | null
+          user_agent: string | null
         }
         Insert: {
           account_id?: string | null
@@ -932,9 +934,11 @@ export type Database = {
           granted_at?: string | null
           granted_via?: string | null
           id?: string
+          ip_address?: string | null
           purpose: string
           revoked_at?: string | null
           team_id?: string | null
+          user_agent?: string | null
         }
         Update: {
           account_id?: string | null
@@ -944,9 +948,11 @@ export type Database = {
           granted_at?: string | null
           granted_via?: string | null
           id?: string
+          ip_address?: string | null
           purpose?: string
           revoked_at?: string | null
           team_id?: string | null
+          user_agent?: string | null
         }
         Relationships: [
           {

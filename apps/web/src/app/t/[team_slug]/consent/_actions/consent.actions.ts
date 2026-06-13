@@ -2,6 +2,7 @@
 
 import { z } from 'zod'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 
@@ -102,6 +103,11 @@ export async function grantTeamConsentAction(
 
     if (purposes.length > 0) {
         const nowIso = new Date().toISOString()
+        // Evidencia Ley 21.719: IP + User-Agent del titular al otorgar (insert vía service-role).
+        const hdrs = await headers()
+        const ipAddress =
+            hdrs.get('x-forwarded-for')?.split(',')[0]?.trim() || hdrs.get('x-real-ip') || null
+        const userAgent = hdrs.get('user-agent') || null
         const { error: insertError } = await admin.from('client_consents').insert(
             purposes.map(purpose => ({
                 client_id: clientId!,
@@ -111,6 +117,8 @@ export async function grantTeamConsentAction(
                 granted_at: nowIso,
                 consent_text_version: CONSENT_TEXT_VERSION,
                 granted_via: 'team_onboarding',
+                ip_address: ipAddress,
+                user_agent: userAgent,
             }))
         )
         if (insertError) return { error: 'No se pudo registrar el consentimiento. Intenta de nuevo.' }

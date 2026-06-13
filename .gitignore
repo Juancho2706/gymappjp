@@ -96,6 +96,7 @@ prod-data.sql
 backup-*.sql
 
 # Untracked script outputs / personal notes
+LINKEDIN-EVA-PLAN.md
 scripts/WELCOME-NEWS-ITEM.md
 scripts/seed-welcome-news.sql
 apps/web/public/MISSING_GROUPS_INSTRUCTIONS.md
@@ -116,3 +117,4 @@ docs/plans/movida/00-DIRECTOR.md
 docs/plans/movida/00-DIRECTOR.md
 docs/plans/movida/00-DIRECTOR.md
 docs/anidocs/PROPUESTA MOVIDA-EVA.pdf
+.playwright-mcp/
