@@ -56,7 +56,7 @@ function buildMpHeaders(accessToken: string) {
     return headers
 }
 
-function resolvePayerEmail(accessToken: string, coachEmail: string) {
+function resolvePayerEmail(coachEmail: string) {
     const configured = process.env.MERCADOPAGO_TEST_PAYER_EMAIL?.trim()
     let normalizedConfigured = ''
     if (configured) {
@@ -72,20 +72,23 @@ function resolvePayerEmail(accessToken: string, coachEmail: string) {
         }
     }
 
-    // Sandbox only when token starts with TEST-.
-    // MERCADOPAGO_TEST_PAYER_EMAIL is used ONLY in sandbox to override the payer email.
-    const isSandbox = accessToken.startsWith('TEST-')
-
-    if (isSandbox) {
-        const payerEmail = normalizedConfigured || coachEmail
-        if (!payerEmail.toLowerCase().endsWith('@testuser.com')) {
+    // Modo TEST señalado por MERCADOPAGO_TEST_PAYER_EMAIL (SOLO el entorno Preview lo setea; en prod
+    // NUNCA existe → ahí se usa el email real del coach, comportamiento idéntico al actual). Si está,
+    // el payer es ese comprador de prueba — sirve para los DOS caminos de prueba de MP:
+    //   (a) sandbox: token TEST- + X-scope:stage (buildMpHeaders) — simple pero inestable en preapproval.
+    //   (b) credenciales del VENDEDOR de prueba (token APP_USR- de un test user) + comprador de prueba —
+    //       el camino que MP recomienda para suscripciones: ambos test users => plata FALSA, entorno
+    //       prod-like, sin la flakiness del sandbox. El payer DEBE ser @testuser.com (otro test user).
+    if (normalizedConfigured) {
+        if (!normalizedConfigured.toLowerCase().endsWith('@testuser.com')) {
             throw new Error(
-                'MercadoPago sandbox requiere payer_email @testuser.com. Configura MERCADOPAGO_TEST_PAYER_EMAIL con un test user de MP.'
+                'MercadoPago test requiere payer_email @testuser.com. Configura MERCADOPAGO_TEST_PAYER_EMAIL con un comprador de prueba de MP.'
             )
         }
-        return payerEmail
+        return normalizedConfigured
     }
 
+    // Sin test payer configurado: producción real. Un coach con email @testuser.com no debe pagar en prod.
     if (coachEmail.toLowerCase().endsWith('@testuser.com')) {
         throw new Error('Con token de produccion, el payer_email no puede ser un test user (@testuser.com).')
     }
@@ -171,7 +174,7 @@ export class MercadoPagoProvider implements PaymentsProvider {
 
     async createCheckout(input: CreateCheckoutInput): Promise<CreateCheckoutResult> {
         const accessToken = getMpAccessToken()
-        const payerEmail = resolvePayerEmail(accessToken, input.coachEmail)
+        const payerEmail = resolvePayerEmail(input.coachEmail)
         const externalReference = buildExternalReference(input)
         const cycle = BILLING_CYCLE_CONFIG[input.billingCycle]
         // Use provided startDate (mid-cycle upgrades) or default to 60s from now
@@ -323,7 +326,7 @@ export class MercadoPagoProvider implements PaymentsProvider {
      */
     async createOneShotPayment(input: CreateOneShotInput): Promise<CreateOneShotResult> {
         const accessToken = getMpAccessToken()
-        const payerEmail = resolvePayerEmail(accessToken, input.coachEmail)
+        const payerEmail = resolvePayerEmail(input.coachEmail)
         const payload = await mpPostJson('/checkout/preferences', {
             items: [
                 {
