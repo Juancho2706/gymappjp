@@ -167,6 +167,7 @@ WHERE enabled_modules <> '{}'::jsonb
     WHERE u.email LIKE '%@evatest.cl'
   )
   AND slug NOT IN (
-    -- (b) slugs de teams de prueba conocidos (DERIVAR/COMPLETAR al sellar el .sql)
-    'e2e-pool-vortex'
+    -- (b) slugs de teams de prueba conocidos (derivados contra prod 2026-06-13 al aplicar:
+    --     smoketeam = cuenta smoke-test 0 alumnos; movida-test = team de prueba del deal Movida)
+    'e2e-pool-vortex', 'smoketeam', 'movida-test'
   );
