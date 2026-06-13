@@ -1,6 +1,6 @@
 # NEXT STEPS — Prioridades actuales
 
-> Leer al inicio de cada sesión (referenciado en `CLAUDE.md`). Última actualización: 2026-06-12 (plan 02 landing Teams-first + plan 04 consolidación planes+ciclos + gate Planes 2+3 + incidente E2E + archivado enterprise).
+> Leer al inicio de cada sesión (referenciado en `CLAUDE.md`). Última actualización: 2026-06-13 (plan 05 billing add-ons self-service ejecutado — motor de cobro compuesto + override CEO write-through + métricas admin; pendiente gate + sandbox MP).
 
 ### Estado 2026-06-12 — Plan 02 landing Teams-first EJECUTADO (solo UI de la landing)
 
@@ -41,7 +41,20 @@
 
 **Sin precios** (pre-cierre Movida; los precios de lista llegan recién con el plan 05).
 
-**Siguiente: Plan 05 billing add-ons self-service** (`docs/plans/estrategia/05-PLAN-billing-addons-selfservice.md`) — preapproval MercadoPago + `coach_addons` + trigger de sync (write-through); prende `SELF_SERVICE_ADDONS_ENABLED` y activa el CTA "Agregar" → `/coach/subscription#modulos`; re-modela el override CEO como `source='admin_grant'`. Publica precios post-cierre Movida ($9.990/módulo uniforme — D3 dueño).
+**Siguiente: Plan 05 billing add-ons self-service** ✅ EJECUTADO (ver bloque abajo).
+
+### Estado 2026-06-13 — Plan 05 billing add-ons self-service EJECUTADO (código + migración + suites; pendiente gate + sandbox MP)
+
+**Plan:** `docs/plans/estrategia/05-PLAN-billing-addons-selfservice.md`. Decisiones del dueño (2026-06-11, NO se re-litigan): **$9.990/mes uniforme** los 4 módulos; descuento por ciclo (trim −10%, anual −20%); cortesía-hasta-corte SOLO mensual; trim/anual = one-shot prorrateado inmediato + PUT desde renovación; compromiso mínimo 1 ciclo; starter NO compra `nutrition_exchanges` (Pro+); CERO IVA en copy; bundle 4 módulos POST-v1.
+
+**Motor de cobro standalone con un solo preapproval MercadoPago cuyo monto = base del tier + add-ons facturables.**
+- **Migración AUTORADA (NO aplicada — branch efímero POSTERIOR al gate Movida):** `supabase/migrations/20260612150000_coach_addons_selfservice_billing.sql` — `coach_addons` (RLS SELECT propio, escritura solo service-role, índice único parcial por `source`) + trigger D1 `sync_coach_enabled_modules` (recomputa `coaches.enabled_modules` desde las filas vivas, cero drift) + `billing_snapshots` (evidencia SERNAC por cobro). Tipos extendidos a mano en `database.types.ts` (regenerar tras merge = tarea del gate).
+- **Dominio/servicios:** `domain/billing/types.ts`, `infrastructure/db/coach-addons.repository.ts`, `services/billing/addons.service.ts` (`getCompositeAmountClp` único cálculo del compuesto; `getAddonProrationClp`; `activateAddonForCoach` bifurca por ciclo D4; `materializeAddonFromOneShot`; `requestAddonCancellation` reglas 3-4; `syncAdminGrants` write-through del override CEO).
+- **F6 (esta tanda) — override CEO write-through (D2):** `updateCoachAction` (`/admin/coaches`) crea/cancela filas `coach_addons` `source='admin_grant'` `price_clp=0` vía `syncAdminGrants` en vez de escribir `enabled_modules` directo (el trigger lo pisaría); audit log `coach.modules_grant`. Teams NO cambian (`teams.enabled_modules` toggle directo). CTA del catálogo Settings>Módulos → `/coach/subscription#addons` (antes `#modulos`). **Métricas de add-ons en `/admin/finanzas`** (`AddonMetricsSection` + `getAddonMetrics`): MRR mensualizado, adopción por módulo, churn — service-role, junto a finanzas del plan 04.
+- **`SELF_SERVICE_ADDONS_ENABLED` queda en `false`** (switch de LANZAMIENTO manual: post-gate + sandbox MP verde + hardening RLS del plan 03 confirmado en prod). La UI/endpoints se construyen detrás de la lógica pero NO se exponen aún.
+- **Anti-hostigamiento:** exactamente 2 superficies de venta (catálogo Settings>Módulos + sección Add-ons de `/coach/subscription`). Cero banners nuevos.
+
+**Pendiente del GATE (con OK del usuario):** suite SQL `tests/billing/coach-addons-rls.sql`, Playwright `tests/billing/addons-flow.spec.ts` y **sandbox MP `specs/addons-billing/SANDBOX-CHECKLIST.md` (9 ítems, toca red/MP)** — se escriben en las fases pero se EJECUTAN solo en el gate (regla 2026-06-10). Migración entra al branch efímero post-gate Movida.
 
 ### Estado 2026-06-12 — Plan 04 consolidación de planes + ciclos (código + migración MRR)
 
@@ -65,7 +78,7 @@
 ### Estado 2026-06-12 — Enterprise ARCHIVADO comercialmente (estrategia teams-first, F1-F4)
 **Hecho:** visibilidad enterprise ejecutada. Crons `org-health-alert` + `payment-reminder` retirados de schedule en `vercel.json` (handlers vivos, sin disparo automático). Copy legal swapeado a "planes empresariales a medida" (la landing NO se tocó — es scope del plan 02). Precios enterprise googleables neutralizados + noindex. Proxy: `/org/*` en dominio principal → `/login`; el flujo de alumno `/e` sigue vivo por diseño; `/enterprise` se sigue sirviendo con noindex hasta el redirect 308 → `/pricing` (post-plan 02). Redirect 308 del subdominio `enterprise.eva-app.cl` pendiente de config en Vercel — paso manual. Motor enterprise intacto (infra compartida: workspace engine, org.service, JWT hook); única puerta activa: `/admin/orgs`. Cero impacto en teams ni en el gate de Movida. Ver `docs/plans/estrategia/01-PLAN-archivado-enterprise.md`.
 
-**Siguiente:** Planes 02 landing Teams-first, 03 módulos compra-only y 04 consolidación ✅ EJECUTADOS (ver bloques arriba). Resta **plan 05 billing add-ons self-service** (`docs/plans/estrategia/05-PLAN-billing-addons-selfservice.md`).
+**Siguiente:** Planes 02 landing Teams-first, 03 módulos compra-only, 04 consolidación y 05 billing add-ons self-service ✅ EJECUTADOS (ver bloques arriba). Resta el **GATE** de los planes (suites SQL/E2E + sandbox MP del plan 05) en branch efímero, con OK del usuario.
 
 ---
 

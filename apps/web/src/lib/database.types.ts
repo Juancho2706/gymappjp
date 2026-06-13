@@ -789,6 +789,56 @@ export type Database = {
           },
         ]
       }
+      billing_snapshots: {
+        Row: {
+          addons: Json
+          base_clp: number
+          billing_cycle: string | null
+          charged_at: string
+          coach_id: string
+          created_at: string
+          id: string
+          kind: string
+          provider_payment_id: string
+          tier: string | null
+          total_clp: number
+        }
+        Insert: {
+          addons?: Json
+          base_clp: number
+          billing_cycle?: string | null
+          charged_at: string
+          coach_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          provider_payment_id: string
+          tier?: string | null
+          total_clp: number
+        }
+        Update: {
+          addons?: Json
+          base_clp?: number
+          billing_cycle?: string | null
+          charged_at?: string
+          coach_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          provider_payment_id?: string
+          tier?: string | null
+          total_clp?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_snapshots_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       check_ins: {
         Row: {
           back_photo_url: string | null
@@ -1284,6 +1334,68 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coach_addons: {
+        Row: {
+          activated_at: string
+          cancel_requested_at: string | null
+          cancelled_at: string | null
+          coach_id: string
+          created_at: string
+          expires_at: string | null
+          first_charged_at: string | null
+          id: string
+          module_key: string
+          price_clp: number
+          source: string
+          status: string
+          terms_accepted_at: string
+          terms_version: string
+          updated_at: string
+        }
+        Insert: {
+          activated_at?: string
+          cancel_requested_at?: string | null
+          cancelled_at?: string | null
+          coach_id: string
+          created_at?: string
+          expires_at?: string | null
+          first_charged_at?: string | null
+          id?: string
+          module_key: string
+          price_clp: number
+          source?: string
+          status?: string
+          terms_accepted_at?: string
+          terms_version: string
+          updated_at?: string
+        }
+        Update: {
+          activated_at?: string
+          cancel_requested_at?: string | null
+          cancelled_at?: string | null
+          coach_id?: string
+          created_at?: string
+          expires_at?: string | null
+          first_charged_at?: string | null
+          id?: string
+          module_key?: string
+          price_clp?: number
+          source?: string
+          status?: string
+          terms_accepted_at?: string
+          terms_version?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_addons_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
             referencedColumns: ["id"]
           },
         ]

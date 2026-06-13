@@ -238,3 +238,42 @@ No hay flujo self-service para resucitar un tier muerto. Opciones:
 `/admin/finanzas` muestra una card **"Legacy (grandfather)"** alimentada por el RPC `get_legacy_tier_counts()`: conteo de filas growth/scale por status y ciclo. Sirve para saber cuándo el grandfather se extingue solo (los placeholders `team_managed`/`org_managed` aparecen ahí pero se distinguen por status — no son suscriptores reales). Cuando los reales lleguen a 0, se puede planear matar el union legacy.
 
 > **Nunca** "limpiar" growth/scale del union type, de `TIER_CONFIG` ni del CHECK de DB para resolver uno de estos casos: rompería el webhook de pago de cualquier grandfathered en vuelo y los placeholders `scale` de las cuentas team/org-managed. Los tiers salen de la VENTA, no del runtime.
+
+---
+
+## Add-ons self-service — incidentes de cobro (plan estrategia 05)
+
+> Contexto: el coach standalone tiene **un solo preapproval MercadoPago** cuyo monto = base del tier + add-ons facturables (`getCompositeAmountClp`). La fuente de verdad es la DB (`coach_addons`); el monto en MP es opaco y la reconciliación **solo alerta** divergencias (nunca auto-corrige). Detalle de diseño: `docs/plans/estrategia/05-PLAN-billing-addons-selfservice.md` §F3.
+
+### Divergencia de monto (DB ≠ MP)
+
+**Síntoma:** el reconcile diario (`/api/cron/mp-reconcile`) alerta por email que `auto_recurring.transaction_amount` de un preapproval ≠ `getCompositeAmountClp` esperado, o lo reporta un evento de webhook `updated` (confirmación del PUT que no cuadra).
+
+1. Identificar el coach y recalcular el monto esperado: base del tier por ciclo + Σ `getAddonCycleAmountClp` de los add-ons facturables vivos (`status='active'` o `cancel_pending` sin `first_charged_at`).
+2. La DB MANDA. Si el monto en MP quedó viejo (PUT caído, ver abajo), corregir con un PUT manual: script service-role que llame `provider.updateCheckoutAmount(subscriptionMpId, montoEsperado)`. NO tocar `coach_addons` para "cuadrar" con MP — sería invertir la fuente de verdad.
+3. Registrar la corrección en `subscription_events` (patrón `addon:<uuid>:<acción>`).
+
+### PUT de monto caído (alta/baja in-app)
+
+**Síntoma:** alta o baja in-app de un add-on devolvió error, o el reconcile detecta un add-on facturable cuyo monto no se reflejó en MP.
+
+- **Alta mensual (D5):** el orden es DB-primero → PUT-después con reversión inmediata. Si el PUT falla, la fila recién insertada se borra en el mismo request (el trigger D1 apaga el módulo) y se relanza el error → el coach ve el fallo y reintenta. Si la reversión TAMBIÉN falló (fila viva + monto MP viejo), el reconcile diario lo detecta como divergencia de monto → PUT manual (arriba).
+- **Alta trim/anual:** la fila se materializa recién en el webhook del one-shot aprobado; si el PUT de ese webhook falla, el reconcile lo detecta como drift → PUT manual.
+- **Baja regla 4:** si el PUT que baja el monto falló, el próximo cobro cobraría de más. Reconcile lo detecta → PUT manual con el monto SIN el add-on de baja.
+
+### Dunning — preapproval `paused` prolongado (política explícita)
+
+**Síntoma:** el reconcile alerta que un preapproval lleva en `status='paused'` (dunning de MP por cobros fallidos) **más de N días (default 14)**.
+
+1. Un preapproval pausado NO cobra → los add-ons no se pueden seguir cobrando.
+2. Pasar los add-ons del coach a `cancel_pending` **SIN PUT** (el preapproval pausado ya no cobra; el PUT no aplica). Dejar registro en `subscription_events`.
+3. Si el preapproval vuelve a `authorized` antes del corte, **revertir manualmente** (volver los add-ons a `active`) según el caso — no hay auto-revert.
+4. Ejecución semiautomática: la detección es del reconcile (F3.5.e), la ejecución la decide el operador.
+
+### Kill-switch de operador prolongado vs cobro (exposición SERNAC)
+
+**Síntoma:** el reconcile alerta que un add-on FACTURABLE lleva su `module_key` en `EVA_DISABLED_MODULES` (kill-switch de operador) **más de N días (default 3)**.
+
+- Cobrar un servicio que el operador apagó es exposición SERNAC directa (servicio no provisto). El kill-switch NO pausa el cobro por sí mismo.
+- **Acción del CEO:** kill prolongado → compensar al coach. Opciones: pausar el add-on (bajar su monto del preapproval con un PUT manual mientras dure el incidente) o convertirlo en cortesía (`source='admin_grant'`, price 0, vía el override del CEO en `/admin/coaches`). Registrar la compensación.
+- El kill-switch sigue siendo palanca de incidentes (no bloquea compra): la compensación es operativa, no automática. Ver también `docs/operations/MANUAL_TASKS.md`.

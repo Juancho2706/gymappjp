@@ -27,8 +27,11 @@ export function readModules(formData: FormData): Record<string, boolean> {
  * `coach-actions.ts`: un módulo Server Actions ('use server') solo puede exportar
  * funciones async, así que un helper síncrono exportado desde ahí rompe el build.
  *
- * D6: `enabled_modules` SOLO se incluye cuando el form trae el hidden `modules_present`
- * — un caller sin checkboxes `module_*` apagaría los 4 módulos del coach editado.
+ * ⚠️ NO incluye `enabled_modules` (plan 05 / F6.1 / D2): el override de módulos del CEO
+ * para standalone pasó a WRITE-THROUGH de `coach_addons` (filas `admin_grant`, price 0) —
+ * el trigger D1 recomputa `coaches.enabled_modules`. Escribir el jsonb directo acá lo
+ * pisaría el trigger en la próxima mutación de add-ons. La rama de módulos vive ahora en
+ * `updateCoachAction` (lee `modules_present` + `readModules` y llama `syncAdminGrants`).
  */
 export function buildCoachUpdateData(formData: FormData): Record<string, unknown> {
     const updateData: Record<string, unknown> = {}
@@ -39,8 +42,5 @@ export function buildCoachUpdateData(formData: FormData): Record<string, unknown
     }
     const maxClients = formData.get('max_clients')
     if (maxClients) updateData.max_clients = Number(maxClients)
-    if (formData.get('modules_present')) {
-        updateData.enabled_modules = readModules(formData)
-    }
     return updateData
 }

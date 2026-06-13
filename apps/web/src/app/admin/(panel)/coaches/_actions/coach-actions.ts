@@ -14,7 +14,8 @@ import {
     buildTrialExpiredEmail,
 } from '@/lib/email/transactional-templates'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { buildCoachUpdateData } from '../../_actions/module-form'
+import { buildCoachUpdateData, readModules } from '../../_actions/module-form'
+import { syncAdminGrants } from '@/services/billing/addons.service'
 
 function revalidateAdmin() {
     revalidatePath('/admin/coaches', 'page')
@@ -126,7 +127,7 @@ const UpdateCoachSchema = z.object({
 })
 
 export async function updateCoachAction(_prev: unknown, formData: FormData) {
-    const { adminClient } = await assertAdmin()
+    const { user, adminClient } = await assertAdmin()
 
     const raw = Object.fromEntries(formData)
     const parsed = UpdateCoachSchema.safeParse(raw)
@@ -136,10 +137,27 @@ export async function updateCoachAction(_prev: unknown, formData: FormData) {
 
     const updateData = buildCoachUpdateData(formData)
 
-    const { error } = await adminClient.from('coaches').update(updateData).eq('id', parsed.data.coachId)
-    if (error) return { error: error.message }
+    // Solo escribir si hay campos fuera de módulos (un override SOLO de módulos no toca `coaches`).
+    if (Object.keys(updateData).length > 0) {
+        const { error } = await adminClient.from('coaches').update(updateData).eq('id', parsed.data.coachId)
+        if (error) return { error: error.message }
+        await logAdminAction(adminClient, 'coach.update', 'coaches', parsed.data.coachId, updateData, user.email)
+    }
 
-    await logAdminAction(adminClient, 'coach.update', 'coaches', parsed.data.coachId, updateData)
+    // Override de módulos del CEO → WRITE-THROUGH coach_addons (plan 05 / F6.1 / D2): el toggle
+    // crea/cancela filas `admin_grant` (price 0); el trigger D1 recomputa `enabled_modules`. NO se
+    // escribe el jsonb directo (lo pisaría el trigger). Solo standalone: teams van por teams.actions.ts.
+    if (formData.get('modules_present')) {
+        try {
+            const { granted, revoked } = await syncAdminGrants(adminClient, parsed.data.coachId, readModules(formData))
+            if (granted.length || revoked.length) {
+                await logAdminAction(adminClient, 'coach.modules_grant', 'coaches', parsed.data.coachId, { granted, revoked, source: 'admin_grant' }, user.email)
+            }
+        } catch (err) {
+            return { error: err instanceof Error ? err.message : 'No se pudieron actualizar los módulos del coach.' }
+        }
+    }
+
     revalidateAdmin()
     return { success: true }
 }

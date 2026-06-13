@@ -866,8 +866,23 @@ Al quedar inscrita la sociedad (EVA Technology SpA, en proceso jun-2026), revisa
 
 1. **Copy de precios** en cualquier página pública donde se mencionen valores (verificar que no quedaron precios de lista expuestos).
 2. **Páginas legales** (`/legal`, `/privacidad`, `/legal/contrato-enterprise`): reemplazar "Juan Villegas (persona natural)" por razón social + RUT empresa + representante legal.
-3. **Tratamiento de IVA (plan 04 — F0-f / D5 del dueño):** hasta que quede inscrita la SpA hay **silencio total** sobre IVA en TODO el copy de precios — ningún "+ IVA" ni "IVA incluido" en pricing, landing, register ni mails (`docs/plans/estrategia/04-PLAN-consolidacion-planes-ciclos.md`, F0-f). Al constituirse la SpA el coach pagará como empresa: **revisar TODO el copy de precios** (pricing, landing, register, mails) Y los contratos/facturas para definir el tratamiento del IVA. Es la misma tarea — no duplicar en otra entrada.
+3. **Tratamiento de IVA (plan 04 — F0-f / plan 05 — F0.2/D5 del dueño):** hasta que quede inscrita la SpA hay **silencio total** sobre IVA en TODO el copy de precios — ningún "+ IVA" ni "IVA incluido" en pricing, landing, register ni mails (`docs/plans/estrategia/04-PLAN-consolidacion-planes-ciclos.md`, F0-f). Al constituirse la SpA el coach pagará como empresa: **revisar TODO el copy de precios** Y los contratos/facturas para definir el tratamiento del IVA. Superficies a revisar (lista completa, no duplicar en otra entrada):
+   - Pricing, landing, register, mails transaccionales del plan base (plan 04).
+   - **Add-ons (plan 05):** `ADDON_CONFIG`/`ADDON_PAYMENT_RULES` (`lib/constants.ts`), las 2 superficies de venta (catálogo Settings > Módulos y la sección Add-ons de `/coach/subscription`), el modal de confirmación de alta, y los **recibos transaccionales de alta/baja por email** (Resend) — hoy todos guardan silencio total sobre IVA por decisión D5 del dueño (2026-06-11).
 4. **Aviso Legal §1**: actualizar domicilio legal con la dirección registrada en notaría.
+
+---
+
+## MT-39 — Emisión de boleta/factura de add-ons (proceso manual) · 🔁 Por cada cobro de add-on
+
+> Plan estrategia 05 (F0.4 / F6.4). Mientras EVA opere como persona natural (y aun tras constituir la SpA, hasta automatizar), la **emisión tributaria es manual** — la app NO emite boleta/factura. El motor de cobro (preapproval MercadoPago + `coach_addons`) cobra; la evidencia del desglose queda en `billing_snapshots` (base + add-ons + total, congelado por cobro).
+
+**Pasos por cobro de add-on (recurrente u one-shot prorrateado):**
+1. El webhook de MercadoPago dejó un snapshot en `billing_snapshots` con `provider_payment_id`, `base_clp`, `addons[]`, `total_clp`, `kind` (`recurring` | `addon_proration`).
+2. Emitir la boleta/factura manualmente por el `total_clp` cobrado (canal tributario habitual del dueño).
+3. **Tratamiento de IVA:** silencio total en el copy de la app (MT-38 §3); en la emisión tributaria, aplicar el tratamiento que corresponda según el estado de la SpA. Cuando la SpA quede inscrita, revisar y eventualmente automatizar (cross-ref MT-38).
+
+**Pausa de add-ons ante kill-switch prolongado (exposición SERNAC):** si un módulo PAGADO queda apagado por el operador (`EVA_DISABLED_MODULES`) más de N días (default 3), el reconcile diario alerta. Acción del CEO: compensar al coach (pausar el cobro del add-on con un PUT manual, o convertirlo en cortesía vía el override del CEO en `/admin/coaches`). Cobrar un servicio no provisto es exposición SERNAC directa. Procedimiento en `docs/operations/RUNBOOK.md` §"Kill-switch de operador prolongado vs cobro".
 
 ---
 

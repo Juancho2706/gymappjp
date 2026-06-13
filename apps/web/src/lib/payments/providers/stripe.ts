@@ -1,6 +1,8 @@
 import type {
     CreateCheckoutInput,
     CreateCheckoutResult,
+    CreateOneShotInput,
+    CreateOneShotResult,
     PaymentsProvider,
     ProviderCheckoutSnapshot,
     WebhookProcessResult,
@@ -22,6 +24,14 @@ export class StripeProvider implements PaymentsProvider {
     }
 
     async cancelCheckoutAtProvider(_checkoutId: string): Promise<void> {
+        throw new Error('Stripe provider is not implemented yet. Configure PAYMENT_PROVIDER=mercadopago.')
+    }
+
+    async updateCheckoutAmount(_checkoutId: string, _amountClp: number): Promise<void> {
+        throw new Error('Stripe provider is not implemented yet. Configure PAYMENT_PROVIDER=mercadopago.')
+    }
+
+    async createOneShotPayment(_input: CreateOneShotInput): Promise<CreateOneShotResult> {
         throw new Error('Stripe provider is not implemented yet. Configure PAYMENT_PROVIDER=mercadopago.')
     }
 }

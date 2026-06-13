@@ -1,6 +1,6 @@
 # Flows and Component Map
 
-Ultima modificacion: 2026-05-21 18:25 -04:00
+Ultima modificacion: 2026-06-13 (plan estrategia 05 — cobro compuesto de add-ons + override CEO write-through)
 
 ## Zonas de producto
 
@@ -88,11 +88,24 @@ Los 4 modulos (`cardio`, `movement_assessment`, `body_composition`, `nutrition_e
 |---|---|---|
 | Ver catalogo (coach) | `/coach/settings/modules` | `_data/modules.queries.ts` (`getModulesContext` — `isTeamManager` solo discrimina el CTA, ya NO habilita edicion), `ModulesForm` **read-only** |
 | Copy canonico de modulos | `packages/module-catalog/` | constante pura por `ModuleKey` (`label`/`pitch`/`surfaces`); la RN futura reusa el MISMO paquete (anti-drift) |
-| CTA por contexto | `ModulesForm` | standalone → mailto `contacto@eva-app.cl` mientras `SELF_SERVICE_ADDONS_ENABLED=false` (plan 05 lo prende → `/coach/subscription#modulos`); team gestor → "Conversemos" mailto; team no-gestor → "pidelo al owner"; telemetria `module_interest_cta_clicked` |
-| Activacion HOY (override CEO) | `/admin/(panel)/coaches` → `CoachEditSheet` | bloque "Modulos habilitados"; `getCoachModulesAction` (on-open) + `updateCoachAction` (hidden `modules_present`) → escribe `coaches.enabled_modules` (service-role) + audit log. Teams: `/admin/teams` → `TeamEditSheet` (`teams.enabled_modules`) |
-| Activacion MAÑANA (self-service) | plan 05 billing add-ons | preapproval MercadoPago + `coach_addons` + trigger de sync (write-through); el override CEO se re-modela como `source='admin_grant'` |
+| CTA por contexto | `ModulesForm` | standalone → mailto `contacto@eva-app.cl` mientras `SELF_SERVICE_ADDONS_ENABLED=false` (plan 05 lo prende → `/coach/subscription#addons`); team gestor → "Conversemos" mailto; team no-gestor → "pidelo al owner"; telemetria `module_interest_cta_clicked` |
+| Activacion override CEO (standalone — WRITE-THROUGH, plan 05 F6.1 / D2) | `/admin/(panel)/coaches` → `CoachEditSheet` | bloque "Modulos habilitados"; `getCoachModulesAction` (on-open) + `updateCoachAction` (hidden `modules_present`) → `syncAdminGrants` crea/cancela filas `coach_addons` `source='admin_grant'` `price_clp=0` (service-role) → el trigger D1 recomputa `coaches.enabled_modules`. **Ya NO escribe el jsonb directo** (lo pisaria el trigger). Audit log `coach.modules_grant`. Teams: `/admin/teams` → `TeamEditSheet` (`teams.enabled_modules`, toggle directo — NO cambia) |
+| Activacion self-service (plan 05 billing add-ons) | `coach_addons` + trigger de sync (D1) | preapproval MercadoPago unico cuyo monto = `getCompositeAmountClp(tier, cycle, addons facturables)`; alta mensual = INSERT + PUT del monto; alta trim/anual = pago one-shot prorrateado inmediato (Checkout Pro) + el webhook materializa la fila + PUT desde la renovacion; `billing_snapshots` congela el desglose por cobro (evidencia SERNAC) |
 | Resolucion del entitlement (server-side) | `apps/web/src/services/entitlements.service.ts` | `assertModule(db, key, {teamId\|coachId})` — pool manda; kill-switch de operador `EVA_DISABLED_MODULES` por encima del entitlement |
 | Nav agrupado | `components/coach/coach-nav.ts`, `CoachSidebar.tsx` | `splitNavItems` → modulos ON bajo divisor "MODULOS" (desktop), al final del scroll (mobile); sin modulos el nav es identico al actual |
+| Metricas de add-ons (admin) | `/admin/(panel)/finanzas` → `AddonMetricsSection` | `getAddonMetrics` (service-role): MRR mensualizado (Σ `price_clp` de filas pagas facturables), adopcion por modulo (pagos + cortesias), churn 12 meses. Las cortesias `admin_grant` se reportan aparte (NO entran al MRR) |
+
+## Flujo: cobro compuesto de add-ons (plan estrategia 05)
+
+El coach standalone tiene **un solo preapproval MercadoPago** cuyo monto = base del tier + add-ons facturables. `getCompositeAmountClp` (`services/billing/addons.service.ts`) es el UNICO calculo del monto compuesto (lo consumen create-preference, el PUT, la UI y los tests).
+
+| Paso | Ruta/archivo principal | Detalle |
+|---|---|---|
+| Alta MENSUAL | `POST /api/payments/addons` → `activateAddonForCoach` | INSERT `coach_addons` (service-role) + PUT del monto compuesto al preapproval; reversion D5 si el PUT falla (borra la fila, el trigger apaga el modulo). Cortesia hasta el corte (`first_charged_at` NULL hasta el 1er cobro) |
+| Alta TRIM/ANUAL | `POST /api/payments/addons` → `activateAddonForCoach` | pago one-shot prorrateado INMEDIATO (Checkout Pro clasico, `external_reference = addon_oneshot\|coachId\|moduleKey\|termsVersion`); devuelve `checkoutUrl` SIN crear fila. El webhook del pago aprobado → `materializeAddonFromOneShot` (fila con `first_charged_at` = fecha del pago + PUT desde la renovacion). Abandono = cero filas |
+| Baja | `POST /api/payments/addons/cancel` → `requestAddonCancellation` | regla 4 (ya cobrado) → `cancel_pending` + PUT que baja el monto YA + `expires_at` al corte; regla 3 (mensual sin cobrar, compromiso minimo) → `cancel_pending` SIN PUT (el corte lo cobra igual), `expires_at` diferido al 1er cobro |
+| Webhook | `app/api/payments/webhook/route.ts` | materializa filas del `external_reference` (preapproval `authorized` + one-shot aprobado); `markFirstCharged` (set-once, mensual); snapshot `billing_snapshots` por cada cobro; evento `updated` = confirmacion del PUT (alerta drift si difiere); rama `expire` → `cancelAllForCoach` |
+| Reconcile diario | `app/api/cron/mp-reconcile/route.ts` (`0 10 * * *`) | expira `cancel_pending` vencidos; alerta drift de monto, kill-switch prolongado (`EVA_DISABLED_MODULES` > N dias sobre add-on facturable) y `paused` prolongado (dunning > N dias) |
 
 ## Como mantener este mapa
 

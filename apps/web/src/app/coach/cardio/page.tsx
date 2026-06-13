@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import Link from 'next/link'
 import { HeartPulse } from 'lucide-react'
 import { getCardioPageData } from './_data/cardio.queries'
 import { CardioToolsClient } from './_components/CardioToolsClient'
+import { ModuleOffNotice } from '@/components/coach/ModuleOffNotice'
 
 export const metadata: Metadata = { title: 'Cardio | EVA' }
 
@@ -17,24 +17,7 @@ export default async function CardioPage() {
     if (data.status === 'unauthenticated') redirect('/login')
 
     if (data.status === 'module_off') {
-        return (
-            <div className="mx-auto flex min-h-[60dvh] max-w-lg flex-col items-center justify-center gap-4 px-6 text-center">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                    <HeartPulse className="h-8 w-8" />
-                </div>
-                <h1 className="text-xl font-bold text-foreground">Módulo cardio no habilitado</h1>
-                <p className="text-sm text-muted-foreground">
-                    Las zonas de FC personalizadas, la calculadora de pace y las plantillas de
-                    intervalos son parte del módulo cardio. Pide su activación para tu cuenta o equipo.
-                </p>
-                <Link
-                    href="/coach/dashboard"
-                    className="flex min-h-[44px] items-center rounded-xl bg-primary px-6 text-xs font-bold uppercase tracking-widest text-primary-foreground"
-                >
-                    Volver al dashboard
-                </Link>
-            </div>
-        )
+        return <ModuleOffNotice moduleKey="cardio" />
     }
 
     return (

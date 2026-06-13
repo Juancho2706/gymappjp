@@ -1,6 +1,9 @@
 import { cache } from 'react'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { TIER_CONFIG } from '@/lib/constants'
+import { isAddonBillable } from '@/services/billing/addons.service'
+import { MODULE_KEYS, type ModuleKey } from '@/services/entitlements.service'
+import { MODULE_LABELS } from '../../_components/module-labels'
 
 export interface FinanzasData {
     mrrEstimate: number
@@ -105,3 +108,122 @@ export const getFinanzasData = cache(
         }
     }
 )
+
+// ── Métricas de adopción de add-ons (plan 05 / F6.3) ──────────────────────────────
+
+export interface AddonAdoptionRow {
+    moduleKey: ModuleKey
+    label: string
+    /** Coaches con un add-on PAGO (self_service) facturable vivo de este módulo. */
+    payingCoaches: number
+    /** Cortesías del CEO vivas (admin_grant) de este módulo — NO facturan, se reportan aparte. */
+    grantedCoaches: number
+}
+
+export interface AddonChurnRow {
+    /** Mes YYYY-MM de la baja (cancelled_at de filas self_service). */
+    ym: string
+    cancelled: number
+}
+
+export interface AddonMetrics {
+    /** MRR mensualizado de add-ons = Σ del precio MENSUAL congelado de las filas pagas facturables. */
+    addonMrrClp: number
+    /** Add-ons pagos facturables vivos (filas, no coaches). */
+    billableAddonCount: number
+    /** Coaches con al menos un add-on pago facturable vivo. */
+    coachesWithAddons: number
+    adoptionByModule: AddonAdoptionRow[]
+    churnSeries: AddonChurnRow[]
+}
+
+/**
+ * Métricas de add-ons para el panel /admin (service-role, junto a finanzas). El monto compuesto
+ * y la facturabilidad se derivan con las MISMAS funciones del motor (`isAddonBillable`), nunca se
+ * re-implementan acá. MRR mensualizado = Σ del precio mensual congelado (`price_clp`) de las filas
+ * pagas facturables — la mensualización del descuento por ciclo se cancela al volver al mensual.
+ * Las cortesías (`admin_grant`, price 0) se reportan aparte (NO entran al MRR).
+ */
+export const getAddonMetrics = cache(async (): Promise<AddonMetrics> => {
+    const admin = createServiceRoleClient()
+
+    // Filas vivas (active|cancel_pending) — facturabilidad se filtra en TS con isAddonBillable.
+    const [liveRes, churnRes] = await Promise.all([
+        admin
+            .from('coach_addons')
+            .select('coach_id, module_key, status, source, price_clp, first_charged_at')
+            .in('status', ['active', 'cancel_pending']),
+        admin
+            .from('coach_addons')
+            .select('cancelled_at')
+            .eq('source', 'self_service')
+            .eq('status', 'cancelled')
+            .not('cancelled_at', 'is', null)
+            .order('cancelled_at', { ascending: false })
+            .limit(2000),
+    ])
+
+    const liveRows = (liveRes.data ?? []) as Array<{
+        coach_id: string
+        module_key: string
+        status: string
+        source: string
+        price_clp: number
+        first_charged_at: string | null
+    }>
+
+    let addonMrrClp = 0
+    let billableAddonCount = 0
+    const coachesWithAddons = new Set<string>()
+    const payingByModule: Record<string, Set<string>> = {}
+    const grantedByModule: Record<string, Set<string>> = {}
+    for (const key of MODULE_KEYS) {
+        payingByModule[key] = new Set()
+        grantedByModule[key] = new Set()
+    }
+
+    for (const row of liveRows) {
+        if (!(row.module_key in payingByModule)) continue // módulo desconocido — defensivo
+        if (row.source === 'admin_grant') {
+            grantedByModule[row.module_key].add(row.coach_id)
+            continue
+        }
+        // self_service: solo cuenta al MRR/adopción si es facturable (regla 3/4).
+        const billable = isAddonBillable({
+            status: row.status as 'active' | 'cancel_pending' | 'cancelled',
+            firstChargedAt: row.first_charged_at,
+        })
+        if (!billable) continue
+        addonMrrClp += row.price_clp
+        billableAddonCount += 1
+        coachesWithAddons.add(row.coach_id)
+        payingByModule[row.module_key].add(row.coach_id)
+    }
+
+    const adoptionByModule: AddonAdoptionRow[] = MODULE_KEYS.map((key) => ({
+        moduleKey: key,
+        label: MODULE_LABELS[key],
+        payingCoaches: payingByModule[key].size,
+        grantedCoaches: grantedByModule[key].size,
+    }))
+
+    // Churn por mes (bajas self_service: cancelled_at agrupado YYYY-MM).
+    const churnMap = new Map<string, number>()
+    for (const row of (churnRes.data ?? []) as Array<{ cancelled_at: string | null }>) {
+        if (!row.cancelled_at) continue
+        const ym = row.cancelled_at.slice(0, 7)
+        churnMap.set(ym, (churnMap.get(ym) ?? 0) + 1)
+    }
+    const churnSeries: AddonChurnRow[] = [...churnMap.entries()]
+        .map(([ym, cancelled]) => ({ ym, cancelled }))
+        .sort((a, b) => a.ym.localeCompare(b.ym))
+        .slice(-12)
+
+    return {
+        addonMrrClp,
+        billableAddonCount,
+        coachesWithAddons: coachesWithAddons.size,
+        adoptionByModule,
+        churnSeries,
+    }
+})

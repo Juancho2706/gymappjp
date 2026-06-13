@@ -1,8 +1,12 @@
 import { BILLING_CYCLE_CONFIG } from '@/lib/constants'
 import { parseCheckoutExternalReference } from '@/lib/payments/checkout-external-reference'
+import { MODULE_KEYS, type ModuleKey } from '@/services/entitlements.service'
 import type {
     CreateCheckoutInput,
     CreateCheckoutResult,
+    CreateOneShotInput,
+    CreateOneShotResult,
+    OneShotAddonRef,
     PaymentsProvider,
     ProviderCheckoutSnapshot,
     WebhookProcessResult,
@@ -13,6 +17,26 @@ type WebhookShape = {
     action?: string
     topic?: string
     data?: { id?: string | number }
+}
+
+const MODULE_KEY_SET = new Set<string>(MODULE_KEYS)
+
+/**
+ * Parsea el `external_reference` dedicado del one-shot de add-on (`addon_oneshot|coachId|moduleKey|termsVersion`,
+ * plan 05 F3.2). La 1ª parte literal `addon_oneshot` lo distingue del reference de suscripción
+ * (que arranca con el uuid del coach) → el parser de suscripción no lo confunde. Devuelve null
+ * si no coincide el formato o la clave de módulo no es válida.
+ */
+function parseOneShotAddonReference(reference?: string | null): OneShotAddonRef | null {
+    if (!reference) return null
+    const parts = reference.split('|')
+    if (parts[0]?.trim() !== 'addon_oneshot') return null
+    const coachId = parts[1]?.trim()
+    const moduleKey = parts[2]?.trim()
+    const termsVersion = parts[3]?.trim()
+    if (!coachId || !moduleKey || !termsVersion) return null
+    if (!MODULE_KEY_SET.has(moduleKey)) return null
+    return { coachId, moduleKey: moduleKey as ModuleKey, termsVersion }
 }
 
 function getMpAccessToken() {
@@ -70,7 +94,13 @@ function resolvePayerEmail(accessToken: string, coachEmail: string) {
 }
 
 function buildExternalReference(input: CreateCheckoutInput) {
-    return `${input.coachId}|${input.tier}|${input.billingCycle}`
+    const base = `${input.coachId}|${input.tier}|${input.billingCycle}`
+    // 4ª parte opcional `addon1+addon2` (plan 05 F2/F3.3). Solo módulos válidos; orden estable
+    // (dedup + filtro contra MODULE_KEYS) para que el round-trip con parseCheckoutExternalReference
+    // sea idempotente. Sin add-ons ⇒ reference de 3 partes (backward compatible con preapprovals vivos).
+    const addons = [...new Set((input.addons ?? []).filter((k) => MODULE_KEY_SET.has(k)))]
+    if (addons.length === 0) return base
+    return `${base}|${addons.join('+')}`
 }
 
 async function mpRequest(path: string) {
@@ -101,8 +131,25 @@ async function mpPutJson(path: string, body: Record<string, unknown>) {
     return response.json().catch(() => ({}))
 }
 
+async function mpPostJson(path: string, body: Record<string, unknown>) {
+    const accessToken = getMpAccessToken()
+    const response = await fetch(`https://api.mercadopago.com${path}`, {
+        method: 'POST',
+        headers: buildMpHeaders(accessToken),
+        body: JSON.stringify(body),
+    })
+    if (!response.ok) {
+        const text = await response.text()
+        const requestId = response.headers.get('x-request-id')
+        throw new Error(`MercadoPago POST failed (${response.status})${requestId ? ` [x-request-id: ${requestId}]` : ''}: ${text}`)
+    }
+    return response.json()
+}
+
 function toSnapshot(preapproval: Record<string, unknown>, fallbackId: string): ProviderCheckoutSnapshot {
-    const ar = preapproval.auto_recurring as { end_date?: string | null } | undefined
+    const ar = preapproval.auto_recurring as
+        | { end_date?: string | null; transaction_amount?: number | null }
+        | undefined
     return {
         id: String(preapproval.id ?? fallbackId),
         external_reference: (preapproval.external_reference as string | null | undefined) ?? null,
@@ -110,6 +157,13 @@ function toSnapshot(preapproval: Record<string, unknown>, fallbackId: string): P
         next_payment_date: (preapproval.next_payment_date as string | null | undefined) ?? null,
         auto_recurring: ar,
     }
+}
+
+/** Lee `auto_recurring.transaction_amount` de un preapproval (monto vigente del próximo cobro). */
+function readPreapprovalAmount(preapproval: Record<string, unknown>): number | null {
+    const ar = preapproval.auto_recurring as { transaction_amount?: number | null } | undefined
+    const amount = ar?.transaction_amount
+    return typeof amount === 'number' ? amount : null
 }
 
 export class MercadoPagoProvider implements PaymentsProvider {
@@ -177,6 +231,7 @@ export class MercadoPagoProvider implements PaymentsProvider {
             return {
                 accepted: true,
                 eventId,
+                eventKind: 'preapproval',
                 providerStatus: preapproval.status ?? undefined,
                 coachId: parsed?.coachId,
                 providerCheckoutId: String(preapproval.id ?? eventId),
@@ -184,26 +239,47 @@ export class MercadoPagoProvider implements PaymentsProvider {
                 externalReference: extRef,
                 subscriptionTier: parsed?.tier ?? undefined,
                 billingCycle: parsed?.billingCycle ?? undefined,
+                // Monto vigente del preapproval: confirma el PUT en eventos `updated` y detecta drift.
+                providerAmountClp: readPreapprovalAmount(preapproval),
+                addons: parsed?.addons ?? [],
             }
         }
 
         if (!eventType.includes('payment')) {
-            return { accepted: true, eventId }
+            return { accepted: true, eventId, eventKind: 'other' }
         }
 
         const payment = await mpRequest(`/v1/payments/${eventId}`)
         const extRef = typeof payment.external_reference === 'string' ? payment.external_reference : null
-        const parsed = parseCheckoutExternalReference(extRef)
+        // Un cobro one-shot de add-on trae el reference dedicado `addon_oneshot|...`; un cobro
+        // recurrente trae el reference de suscripción `coachId|tier|cycle[|addons]`.
+        const oneShotAddon = parseOneShotAddonReference(extRef)
+        const parsed = oneShotAddon ? null : parseCheckoutExternalReference(extRef)
+
+        // ⚠️ payment.order.id ≠ preapproval id (Riesgo 2). El match robusto del cobro recurrente
+        // contra el preapproval del coach se hace en el webhook por coachId (del external_reference);
+        // capturar el payload real para fijar metadata.preapproval_id — validar en sandbox (item 2).
+        const paidAt =
+            typeof payment.date_approved === 'string'
+                ? payment.date_approved
+                : typeof payment.date_created === 'string'
+                  ? payment.date_created
+                  : null
 
         return {
             accepted: true,
             eventId,
+            eventKind: 'payment',
             providerStatus: payment.status ?? undefined,
-            coachId: parsed?.coachId,
+            coachId: oneShotAddon?.coachId ?? parsed?.coachId,
             providerCheckoutId: payment.order?.id ? String(payment.order.id) : undefined,
+            providerPaymentId: payment.id != null ? String(payment.id) : eventId,
+            paidAt,
             externalReference: extRef,
             subscriptionTier: parsed?.tier ?? undefined,
             billingCycle: parsed?.billingCycle ?? undefined,
+            addons: parsed?.addons ?? [],
+            oneShotAddon,
         }
     }
 
@@ -216,5 +292,61 @@ export class MercadoPagoProvider implements PaymentsProvider {
     async cancelCheckoutAtProvider(checkoutId: string): Promise<void> {
         const encoded = encodeURIComponent(checkoutId)
         await mpPutJson(`/preapproval/${encoded}`, { status: 'cancelled' })
+    }
+
+    /**
+     * PUT /preapproval/{id}: sube/baja el monto del próximo cobro sin re-autorizar al pagador
+     * (plan 05 F3.1). El body solo toca `auto_recurring.transaction_amount` + `currency_id`.
+     *
+     * validar en sandbox (item 1): MP no documenta CUÁNDO aplica el nuevo monto. Comportamiento
+     * esperado: próximo cobro, sin cargo inmediato; MP notifica al pagador por email. Si el
+     * preapproval está `paused`/`cancelled`, el PUT puede fallar — el llamador maneja el error
+     * (reversión D5 en alta mensual; alerta de drift en el reconcile). validar en sandbox (item 7).
+     */
+    async updateCheckoutAmount(checkoutId: string, amountClp: number): Promise<void> {
+        const encoded = encodeURIComponent(checkoutId)
+        await mpPutJson(`/preapproval/${encoded}`, {
+            auto_recurring: {
+                transaction_amount: amountClp,
+                currency_id: 'CLP',
+            },
+        })
+    }
+
+    /**
+     * Pago one-shot (Checkout Pro clásico vía Preferences, NO preapproval — plan 05 F3.2).
+     * El `external_reference` dedicado `addon_oneshot|...` deja al webhook materializar la fila al
+     * aprobarse el pago. El monto SIEMPRE lo calcula el server (`getAddonProrationClp`).
+     *
+     * validar en sandbox (item 9): preference one-shot con monto prorrateado correcto; pago
+     * aprobado materializa fila + PUT; abandono = cero filas.
+     */
+    async createOneShotPayment(input: CreateOneShotInput): Promise<CreateOneShotResult> {
+        const accessToken = getMpAccessToken()
+        const payerEmail = resolvePayerEmail(accessToken, input.coachEmail)
+        const payload = await mpPostJson('/checkout/preferences', {
+            items: [
+                {
+                    id: input.externalReference,
+                    title: input.description,
+                    quantity: 1,
+                    unit_price: input.amountClp,
+                    currency_id: 'CLP',
+                },
+            ],
+            payer: { email: payerEmail },
+            external_reference: input.externalReference,
+            notification_url: input.webhookUrl,
+            back_urls: {
+                success: input.successUrl,
+                failure: input.failureUrl,
+                pending: input.pendingUrl,
+            },
+            auto_return: 'approved',
+        })
+        return {
+            checkoutUrl: payload.init_point ?? payload.sandbox_init_point ?? '',
+            preferenceId: String(payload.id ?? ''),
+        }
     }
 }

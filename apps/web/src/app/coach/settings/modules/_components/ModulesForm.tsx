@@ -144,7 +144,7 @@ function ModuleCta({
     if (SELF_SERVICE_ADDONS_ENABLED) {
         return (
             <a
-                href="/coach/subscription#modulos"
+                href="/coach/subscription#addons"
                 className={CTA_LINK_CLASS}
                 onClick={() => onCapture(moduleKey, 'self_service', tier)}
             >

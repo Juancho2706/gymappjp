@@ -10,6 +10,9 @@ import { completeOAuthOnboarding, type CompleteOnboardingState } from '@/app/coa
 import { cn } from '@/lib/utils'
 import { getCurrentOAuthUserProfile, startCoachGoogleRegistration } from '@/lib/auth/client-oauth'
 import {
+    ADDON_CONFIG,
+    ADDON_MODULE_KEYS,
+    getAddonPaymentRulesForCycle,
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
@@ -20,10 +23,12 @@ import {
     isBillingCycleAllowedForTier,
     isSaleTier,
     SALE_TIERS,
+    SELF_SERVICE_ADDONS_ENABLED,
     TIER_CONFIG,
     type BillingCycle,
     type SaleTier,
 } from '@/lib/constants'
+import type { ModuleKey } from '@/services/entitlements.service'
 
 const initialState: RegisterState = {}
 const googleInitialState: CompleteOnboardingState = {}
@@ -73,8 +78,19 @@ export default function RegisterPage() {
     const [fromGoogle, setFromGoogle] = useState(false)
     const [tier, setTier] = useState<SaleTier>('starter')
     const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
+    // Add-ons opcionales del signup (plan 05 F5.5) — solo tiers pagos.
+    const [selectedAddons, setSelectedAddons] = useState<ModuleKey[]>([])
     const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
     const selectedPrice = useMemo(() => getTierPriceClp(tier, billingCycle), [tier, billingCycle])
+    // Total en vivo = plan + add-ons seleccionados (monto por ciclo, mismos descuentos del plan).
+    const addonsCycleTotal = useMemo(() => {
+        const { months, discountPercent } = BILLING_CYCLE_CONFIG[billingCycle]
+        return selectedAddons.reduce((sum, key) => {
+            const gross = ADDON_CONFIG[key].priceClpMensual * months
+            return sum + Math.round(gross * (1 - discountPercent / 100))
+        }, 0)
+    }, [selectedAddons, billingCycle])
+    const liveTotal = selectedPrice + addonsCycleTotal
     const allowedCycles = useMemo(() => getTierAllowedBillingCycles(tier), [tier])
     const allowedCycleOptions = useMemo(
         () => cycleOptions.filter(([key]) => allowedCycles.includes(key)),
@@ -121,6 +137,22 @@ export default function RegisterPage() {
             setBillingCycle(getDefaultBillingCycleForTier(tier))
         }
     }, [tier, billingCycle, isFreeTier])
+
+    // Add-ons solo en tiers pagos; nutrition_exchanges solo en tiers con nutrición (D8).
+    // Al cambiar de plan se purgan los add-ons que dejen de ser válidos.
+    useEffect(() => {
+        if (isFreeTier) {
+            if (selectedAddons.length > 0) setSelectedAddons([])
+            return
+        }
+        const caps = getTierCapabilities(tier)
+        setSelectedAddons((prev) => {
+            const next = prev.filter((k) => (k === 'nutrition_exchanges' ? caps.canUseNutrition : true))
+            return next.length === prev.length ? prev : next
+        })
+    }, [tier, isFreeTier, selectedAddons.length])
+
+    const addonsCsv = selectedAddons.join(',')
 
     function nextStep() {
         if (step === 1) {
@@ -169,6 +201,7 @@ export default function RegisterPage() {
                 <form action={fromGoogle ? googleFormAction : formAction} className="space-y-4">
                     <input type="hidden" name="subscription_tier" value={tier} />
                     <input type="hidden" name="billing_cycle" value={billingCycle} />
+                    <input type="hidden" name="addons" value={addonsCsv} />
                     {/* Honeypot — bots fill this, humans don't */}
                     <input
                         name="website"
@@ -407,6 +440,81 @@ export default function RegisterPage() {
                                     </div>
                                 </section>
                             )}
+
+                            {/* Paso opcional de add-ons — solo tiers pagos (plan 05 F5.5). Free: oculto. */}
+                            {!isFreeTier && SELF_SERVICE_ADDONS_ENABLED && (
+                                <section className="space-y-2">
+                                    <h2 className="text-sm font-semibold text-foreground">Módulos opcionales</h2>
+                                    <p className="text-xs text-muted-foreground">
+                                        Suma módulos a tu plan. Se cobran junto a tu suscripción y puedes quitarlos cuando quieras.
+                                    </p>
+                                    <div className="grid gap-2">
+                                        {ADDON_MODULE_KEYS.map((key) => {
+                                            const cfg = ADDON_CONFIG[key]
+                                            const requiresNutrition = key === 'nutrition_exchanges' && !getTierCapabilities(tier).canUseNutrition
+                                            const checked = selectedAddons.includes(key)
+                                            return (
+                                                <label
+                                                    key={key}
+                                                    className={cn(
+                                                        'flex items-start gap-2 rounded-xl border p-3 text-left transition',
+                                                        requiresNutrition
+                                                            ? 'border-border opacity-60'
+                                                            : checked
+                                                                ? 'border-primary bg-primary/10 cursor-pointer'
+                                                                : 'border-border hover:border-primary/40 cursor-pointer'
+                                                    )}
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        disabled={requiresNutrition}
+                                                        onChange={(e) =>
+                                                            setSelectedAddons((prev) =>
+                                                                e.target.checked ? [...prev, key] : prev.filter((k) => k !== key)
+                                                            )
+                                                        }
+                                                        className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
+                                                    />
+                                                    <span className="min-w-0 flex-1">
+                                                        <span className="flex items-center justify-between gap-2">
+                                                            <span className="font-semibold text-foreground text-sm">{cfg.label}</span>
+                                                            <span className="text-xs font-semibold text-foreground shrink-0">
+                                                                ${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes
+                                                            </span>
+                                                        </span>
+                                                        <span className="block text-xs text-muted-foreground mt-0.5">{cfg.description}</span>
+                                                        {requiresNutrition && (
+                                                            <span className="mt-1 inline-block text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                                                                Requiere un plan con nutrición (Pro o superior).
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                </label>
+                                            )
+                                        })}
+                                    </div>
+                                    {selectedAddons.length > 0 && (
+                                        <div className="rounded-xl border border-border bg-secondary/40 p-3 text-sm">
+                                            <div className="flex justify-between font-semibold text-foreground">
+                                                <span>Total {BILLING_CYCLE_CONFIG[billingCycle].label.toLowerCase()}</span>
+                                                <span>${liveTotal.toLocaleString('es-CL')} CLP</span>
+                                            </div>
+                                            <p className="mt-1 text-xs text-muted-foreground">Plan ${selectedPrice.toLocaleString('es-CL')} + módulos ${addonsCycleTotal.toLocaleString('es-CL')} CLP</p>
+                                        </div>
+                                    )}
+                                    {/* Las 5 reglas de cobro de los módulos, visibles también en el signup */}
+                                    {selectedAddons.length > 0 && (
+                                        <ol className="space-y-1.5">
+                                            {getAddonPaymentRulesForCycle(billingCycle).rules.map((r) => (
+                                                <li key={r.number} className="text-[11px] text-muted-foreground">
+                                                    <span className="font-semibold text-foreground">{r.title}.</span> {r.text}
+                                                </li>
+                                            ))}
+                                        </ol>
+                                    )}
+                                </section>
+                            )}
                         </>
                     ) : null}
 
@@ -436,13 +544,21 @@ export default function RegisterPage() {
                                         {getTierCapabilities(tier).canUseNutrition ? 'Incluida' : 'No incluida'}
                                     </span>
                                 </div>
+                                {!isFreeTier && selectedAddons.length > 0 && (
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">
+                                            Módulos ({selectedAddons.map((k) => ADDON_CONFIG[k].label).join(', ')})
+                                        </span>
+                                        <span className="font-semibold text-foreground">${addonsCycleTotal.toLocaleString('es-CL')} CLP</span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between border-t border-border pt-2 mt-2">
                                     <span className="text-muted-foreground">{isFreeTier ? 'Costo' : 'Total a pagar'}</span>
                                     <span className="text-lg font-black text-foreground">
                                         {isFreeTier ? (
                                             <span className="text-emerald-600 dark:text-emerald-400">$0 — Gratis</span>
                                         ) : (
-                                            `$${selectedPrice.toLocaleString('es-CL')} CLP`
+                                            `$${liveTotal.toLocaleString('es-CL')} CLP`
                                         )}
                                     </span>
                                 </div>

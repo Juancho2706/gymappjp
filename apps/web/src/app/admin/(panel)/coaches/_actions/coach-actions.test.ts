@@ -1,61 +1,44 @@
 import { describe, expect, it } from 'vitest'
 
 /**
- * Unit del armado puro de `updateData` del override del CEO (plan estrategia 03 F1.3 / D6).
+ * Unit del armado puro de `updateData` del override del CEO.
  *
- * El bug que evita: `updateCoachAction` se invoca desde formularios variados
- * (`coaches/update/route.ts`). Si `enabled_modules` se incluyera siempre, cualquier caller
- * que no mande checkboxes `module_*` apagaría los 4 módulos del coach (readModules → todo
- * false). El fix es el hidden `modules_present`: SOLO con ese flag se toca `enabled_modules`.
+ * Plan 05 / F6.1 / D2: el override de módulos pasó a WRITE-THROUGH de `coach_addons`
+ * (filas `admin_grant`, el trigger D1 recomputa `enabled_modules`). Por eso
+ * `buildCoachUpdateData` ya NO emite `enabled_modules` — escribir el jsonb directo lo
+ * pisaría el trigger. La rama de módulos vive en `updateCoachAction` vía `syncAdminGrants`,
+ * que diffea `readModules(formData)` contra las filas grant vivas.
  *
  * `buildCoachUpdateData` vive en `_actions/module-form` (módulo puro, sin 'use server') —
  * `coach-actions.ts` es un módulo Server Actions y solo puede exportar funciones async.
  */
 import { buildCoachUpdateData } from '../../_actions/module-form'
 
-describe('buildCoachUpdateData (D6 — modules_present)', () => {
-    it('SIN modules_present el updateData NO incluye enabled_modules', () => {
+describe('buildCoachUpdateData (D2 — modules via write-through, NO jsonb directo)', () => {
+    it('NUNCA incluye enabled_modules, aunque vengan modules_present + checkboxes', () => {
         const fd = new FormData()
         fd.set('full_name', 'Ana Coach')
         fd.set('subscription_tier', 'pro')
-        // Aun trayendo checkboxes module_*, sin el flag no se tocan los módulos:
+        fd.set('modules_present', '1')
         fd.set('module_cardio', 'on')
 
         const updateData = buildCoachUpdateData(fd)
 
+        // El jsonb ya no se escribe directo (lo sincroniza el trigger desde coach_addons).
         expect('enabled_modules' in updateData).toBe(false)
         expect(updateData.full_name).toBe('Ana Coach')
         expect(updateData.subscription_tier).toBe('pro')
     })
 
-    it('CON modules_present incluye enabled_modules con el mapa de checkboxes', () => {
+    it('un override SOLO de módulos deja updateData VACÍO (no toca la fila coaches)', () => {
         const fd = new FormData()
         fd.set('modules_present', '1')
         fd.set('module_cardio', 'on')
-        fd.set('module_nutrition_exchanges', 'on')
 
         const updateData = buildCoachUpdateData(fd)
 
-        expect(updateData.enabled_modules).toEqual({
-            cardio: true,
-            movement_assessment: false,
-            body_composition: false,
-            nutrition_exchanges: true,
-        })
-    })
-
-    it('CON modules_present y CERO checkboxes apaga los 4 módulos (desactivar todo)', () => {
-        const fd = new FormData()
-        fd.set('modules_present', '1')
-
-        const updateData = buildCoachUpdateData(fd)
-
-        expect(updateData.enabled_modules).toEqual({
-            cardio: false,
-            movement_assessment: false,
-            body_composition: false,
-            nutrition_exchanges: false,
-        })
+        // updateCoachAction salta el UPDATE de coaches cuando no hay campos no-módulo.
+        expect(Object.keys(updateData)).toHaveLength(0)
     })
 
     it('campos vacíos no se incluyen y max_clients se castea a número', () => {
