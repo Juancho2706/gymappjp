@@ -783,8 +783,13 @@ export default function CoachSubscriptionPage() {
                                 <strong className="text-foreground">{TIER_CONFIG[selectedTier].label}</strong>{' '}
                                 se activará por{' '}
                                 <strong className="text-foreground">
-                                    ${selectedPrice.toLocaleString('es-CL')} CLP / {BILLING_CYCLE_CONFIG[selectedCycle].label.toLowerCase()}
+                                    ${selectedComposite.toLocaleString('es-CL')} CLP / {BILLING_CYCLE_CONFIG[selectedCycle].label.toLowerCase()}
                                 </strong>
+                                {upgradeAddons.length > 0 && (
+                                    <span className="text-muted-foreground">
+                                        {' '}(plan ${selectedPrice.toLocaleString('es-CL')} + {upgradeAddons.map((k) => ADDON_CONFIG[k].label).join(', ')})
+                                    </span>
+                                )}
                                 .
                             </p>
                             {!TIER_CONFIG[selectedTier].features.includes('Planes de nutrición') &&
