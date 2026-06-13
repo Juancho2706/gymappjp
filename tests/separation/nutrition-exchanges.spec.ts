@@ -103,9 +103,10 @@ test.describe('B — coach del pool: pauta por porciones + PDF marca team', () =
 
     test('PDF de pauta descarga con marca del TEAM, no EVA (AC4)', async ({ page }) => {
         await gotoNutritionBuilder(page, STUDENT_IDS.pool)
-        // Preview de marca server-side: nombre del team, jamás EVA
-        await expect(page.getByText(BRANDS.team.name).first()).toBeVisible()
-        await expect(page.getByText('Se genera con la marca de:')).toBeVisible()
+        // Preview de marca server-side: nombre del team, jamás EVA. Verificamos el texto COMPLETO
+        // del <p> del preview (visible), no getByText(name).first() — el nombre tambien vive en un
+        // header responsive oculto (w=0) que .first() tomaria y fallaria toBeVisible.
+        await expect(page.getByText(`Se genera con la marca de: ${BRANDS.team.name}`)).toBeVisible()
 
         const downloadPromise = page.waitForEvent('download', { timeout: 30_000 })
         await page.getByRole('button', { name: 'Descargar PDF' }).click()
@@ -139,8 +140,11 @@ test.describe('C — alumno del pool', () => {
         await page.waitForURL((url) => !url.pathname.includes('/login'), { timeout: 30_000 })
         await expect(page.getByRole('heading', { name: 'Plan Nutricional' })).toBeVisible({ timeout: 20_000 })
 
-        // Chips "2C", "1P", ... (código de grupo en chip tocable)
-        const chip = page.locator('button', { hasText: /^\d+(\.\d+)?[A-Z]{1,3}$/ }).first()
+        // Chips "2C", "1P", ... El chip es un <button> con aria-label "N <grupo>", pero su text
+        // content incluye el codigo del badge de color (ej "C2C") -> el regex anclado ^Ncodigo$ no
+        // matchea el button. Apuntamos al <span> visible con el codigo ("2C"); el click burbujea al
+        // button padre (que llama onChipTap y abre el sheet).
+        const chip = page.getByText(/^\d+(\.\d+)?[A-Z]{1,3}$/).first()
         await expect(chip).toBeVisible({ timeout: 15_000 })
         await chip.click()
 
@@ -191,8 +195,9 @@ test.describe('D — coach standalone con módulo ON', () => {
         if ((await switchEl.getAttribute('aria-checked')) === 'false') {
             await switchEl.click()
         }
-        await expect(page.getByText('Se genera con la marca de:')).toBeVisible()
-        await expect(page.getByText(BRANDS.standalone.name).first()).toBeVisible()
+        // Texto COMPLETO del preview (visible), no getByText(name).first(): el nombre tambien vive
+        // en un header responsive oculto (w=0) que .first() tomaria y fallaria toBeVisible.
+        await expect(page.getByText(`Se genera con la marca de: ${BRANDS.standalone.name}`)).toBeVisible()
         await expect(page.getByText(BRANDS.team.name)).toHaveCount(0)
         await expect(page.getByText(STUDENT_NAMES.pool)).toHaveCount(0)
         await expectNoRuntimeError(page)
