@@ -25,12 +25,14 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
+        // App español-first (latam neutro): el estado inicial 'es' ES el default y se mantiene salvo
+        // que el usuario haya elegido un idioma explícitamente (selector -> localStorage 'omni-lang').
+        // NO derivamos de navigator.language: antes caía a 'en' en cualquier navegador no-español
+        // (p. ej. Chrome en-US), dejando los módulos i18n —como intercambios de nutrición— en inglés
+        // pese a que el resto de la app (labels hardcoded) se ve en español.
         const storedLang = localStorage.getItem('omni-lang') as Language;
-        if (storedLang && (storedLang === 'en' || storedLang === 'es')) {
+        if (storedLang === 'en' || storedLang === 'es') {
             setLanguageState(storedLang);
-        } else {
-            const browserLang = navigator.language.startsWith('es') ? 'es' : 'en';
-            setLanguageState(browserLang);
         }
         setMounted(true);
     }, []);

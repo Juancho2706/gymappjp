@@ -236,27 +236,38 @@ export function PlanBuilderSidebar({
 
       {mode === 'client-plan' && clientProfile?.weight_kg && clientProfile?.height_cm && (
         <div className="rounded-xl border border-violet-500/25 bg-violet-500/5">
-          <button
-            type="button"
+          {/* div (no <button>): el InfoTooltip de base-ui renderiza su propio <button>;
+              anidar button-en-button es HTML invalido y dispara un hydration error. */}
+          <div
+            role="button"
+            tabIndex={0}
             onClick={() => setSuggOpen((v) => !v)}
-            className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setSuggOpen((v) => !v)
+              }
+            }}
+            className="flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2.5 text-left"
           >
             <div className="flex items-center gap-1.5">
               <Sparkles className="h-3.5 w-3.5 text-violet-500" />
               <span className="text-[11px] font-bold text-violet-700 dark:text-violet-300">
                 Macros sugeridos (Mifflin-St Jeor)
               </span>
-              <InfoTooltip
-                content="Cálculo estimado basado en peso, altura, edad y nivel de actividad del alumno. Es solo una referencia — tú defines los valores finales."
-                iconClassName="w-3 h-3"
-              />
+              <span onClick={(e) => e.stopPropagation()}>
+                <InfoTooltip
+                  content="Cálculo estimado basado en peso, altura, edad y nivel de actividad del alumno. Es solo una referencia — tú defines los valores finales."
+                  iconClassName="w-3 h-3"
+                />
+              </span>
             </div>
             {suggOpen ? (
               <ChevronUp className="h-3.5 w-3.5 text-violet-500 shrink-0" />
             ) : (
               <ChevronDown className="h-3.5 w-3.5 text-violet-500 shrink-0" />
             )}
-          </button>
+          </div>
 
           {suggOpen && (
             <div className="border-t border-violet-500/20 px-3 pb-3 pt-2 space-y-3">

@@ -30,7 +30,9 @@ const TEAM_NAME = 'E2E Pool Vortex'
 // Orden exacto del registro NAV_MODULES (coach-nav.ts) por contexto:
 const STANDALONE_MODULES = ['Dashboard', 'Alumnos', 'Programas', 'Ejercicios', 'Nutrición', 'Mi Marca', 'Suscripción', 'Soporte']
 const ENTERPRISE_MODULES = ['Dashboard', 'Alumnos', 'Programas', 'Ejercicios', 'Nutrición', 'Soporte']
-const TEAM_MODULES = ['Dashboard', 'Alumnos', 'Equipo', 'Programas', 'Ejercicios', 'Nutrición', 'Opciones', 'Soporte']
+// Cardio + Movimiento aparecen para el team owner cuando enabled_modules los tiene ON
+// (E2E Pool Vortex: cardio/movement_assessment = true). Planes 2+3 los agregaron a la nav.
+const TEAM_MODULES = ['Dashboard', 'Alumnos', 'Equipo', 'Programas', 'Ejercicios', 'Cardio', 'Movimiento', 'Nutrición', 'Opciones', 'Soporte']
 
 const hasPassword = !!process.env.E2E_PERSONAS_PASSWORD
 
