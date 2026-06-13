@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
+import { SALES_EMAIL } from '@/lib/brand-assets'
 
 const fadeUp = {
     hidden: { opacity: 0, y: 40 },
@@ -41,9 +42,12 @@ export function LandingFinalCTA() {
                     <ArrowRight className="w-5 h-5" aria-hidden />
                 </Link>
                 <p className="mt-6 text-xs text-muted-foreground">
-                    ¿Gestionas un gym o academia?{' '}
-                    <a href="#enterprise" className="font-medium text-foreground underline underline-offset-2 hover:text-primary">
-                        Ver planes enterprise →
+                    {t('landing.final.empresas').replace(SALES_EMAIL, '').trim()}{' '}
+                    <a
+                        href="/api/contact-teams?src=final-cta"
+                        className="font-medium text-foreground underline underline-offset-2 hover:text-emerald-600 dark:hover:text-emerald-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-sm"
+                    >
+                        {SALES_EMAIL}
                     </a>
                 </p>
             </motion.div>

@@ -1,7 +1,8 @@
 import Link from 'next/link'
-import { Check, Zap, Crown, Dumbbell, Sprout } from 'lucide-react'
+import { Check, Zap, Crown, Dumbbell, Sprout, Users2 } from 'lucide-react'
 import type { Metadata } from 'next'
 import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
+import { SALES_EMAIL, teamsContactMailto } from '@/lib/brand-assets'
 import {
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
@@ -137,11 +138,12 @@ export default function PricingPage() {
                     <div className="flex-1 border-t border-border" />
                     <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Mensual, trimestral o anual</span>
                 </div>
-                {/* Solo elite — la card "EVA Teams" la agrega el plan 02 (sin números pre-cierre Movida). */}
+                {/* Elite + card "EVA Teams" (conversemos, sin números pre-cierre Movida — plan 02). */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {planDisplay.filter((p) => p.id === 'elite').map((plan) => (
                         <PlanCard key={plan.id} plan={plan} cycleOrder={cycleOrder} />
                     ))}
+                    <TeamsContactCard />
                 </div>
 
                 <section className="mt-12 grid gap-4 md:grid-cols-2">
@@ -170,18 +172,41 @@ export default function PricingPage() {
                         </p>
                     </article>
                 </section>
-
-                {/* Teams callout — sin números pre-cierre Movida; respuesta sin plazo comprometido */}
-                <p className="mt-10 text-center text-xs text-muted-foreground">
-                    ¿Trabajas en equipo o superaste el plan Elite? Conoce{' '}
-                    <strong className="text-foreground">EVA Teams</strong>.{' '}
-                    Escríbenos a{' '}
-                    <a href="mailto:contacto@eva-app.cl" className="underline hover:text-foreground transition-colors">
-                        contacto@eva-app.cl
-                    </a>{' '}
-                    y te contactamos a la brevedad.
-                </p>
             </div>
+        </div>
+    )
+}
+
+// Card "EVA Teams" del grupo "Negocio establecido" — conversemos, SIN números
+// (regla dura project-movida-commercial, pre-cierre Movida). Mismo look que PlanCard.
+function TeamsContactCard() {
+    return (
+        <div className="relative flex flex-col rounded-2xl border border-emerald-500/30 bg-card p-6">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10">
+                <Users2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" aria-hidden />
+            </div>
+
+            <h2 className="mb-1 text-lg font-bold text-foreground">EVA Teams</h2>
+            <p className="mb-3 text-sm text-muted-foreground">
+                Para centros de entrenamiento y equipos multidisciplinarios.
+            </p>
+
+            <ul className="mb-8 flex-1 space-y-3">
+                {['Pool de alumnos compartido', 'Marca de tu centro', 'Módulos profesionales'].map((cap) => (
+                    <li key={cap} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                        <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" aria-hidden />
+                        {cap}
+                    </li>
+                ))}
+            </ul>
+
+            <a
+                href={teamsContactMailto('pricing-callout')}
+                className="block w-full rounded-xl bg-emerald-600 py-3 text-center text-sm font-semibold text-white transition-colors hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400"
+            >
+                Conversemos
+            </a>
+            <p className="mt-2 text-center text-xs text-muted-foreground">{SALES_EMAIL}</p>
         </div>
     )
 }

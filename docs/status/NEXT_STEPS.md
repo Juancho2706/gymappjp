@@ -1,6 +1,22 @@
 # NEXT STEPS — Prioridades actuales
 
-> Leer al inicio de cada sesión (referenciado en `CLAUDE.md`). Última actualización: 2026-06-12 (plan 04 consolidación planes+ciclos + gate Planes 2+3 + incidente E2E + archivado enterprise).
+> Leer al inicio de cada sesión (referenciado en `CLAUDE.md`). Última actualización: 2026-06-12 (plan 02 landing Teams-first + plan 04 consolidación planes+ciclos + gate Planes 2+3 + incidente E2E + archivado enterprise).
+
+### Estado 2026-06-12 — Plan 02 landing Teams-first EJECUTADO (solo UI de la landing)
+
+**Plan:** `docs/plans/estrategia/02-PLAN-landing-teams-ui.md`. Marketing puro — cero DB, cero migraciones; el gate Movida no se toca.
+
+**Hecho (working tree `feat/movida-platform`):** la landing pública (`/`) deja de vender Enterprise y vende **EVA Teams**.
+- **Enterprise fuera de la landing:** `LandingEnterpriseSection.tsx` BORRADO (D7); item de nav 'Para Gyms' reemplazado por 'Teams' → `#teams` (nav unificado en una constante `NAV_ITEMS` única, D12 — muere la duplicación desktop/sheet); footnote de `LandingFinalCTA` y callout del pricing preview reescritos sin precios enterprise (muere la inconsistencia $49.990/$89.990); meta description sin "enterprise"/"por organización"; `overflow-x-hidden`→`overflow-x-clip` en el wrapper (regla del repo); key huérfana `landing.pricing.enterprise` eliminada de ambos json.
+- **`LandingTeamsSection` nueva** (`#teams`, acento emerald, dark mode): eyebrow + H2 "EVA Teams — tu centro completo en una plataforma" + 4 value props (pool compartido / marca del centro / módulos profesionales / equipo self-service) + CTA al embudo de contacto con subtexto "Te contactamos a la brevedad". **CERO números de precio** (regla dura `project-movida-commercial` — Movida cierra 12-jun); JSON-LD `OfferCatalog` "EVA Teams" sin `price`/`priceCurrency` + `contactPoint` sales.
+- **Medición (§F2bis):** route handler `/api/contact-teams` (GET) lee `?src=` (allowlist `teams-section`/`final-cta`/`pricing-callout`), registra el click (PostHog server-side o log estructurado) y responde 302 al `mailto:` con subject prefijado. Los 3 CTAs apuntan al endpoint; el correo `contacto@eva-app.cl` queda visible como texto copiable. Cero servicios pagos nuevos.
+- **Pricing preview a 4 cards + `TeamsPlanCard`** (F3, desbloqueada por el plan 04 ya mergeado — `SALE_TIERS` vivo): free/starter/pro/elite + card Teams dedicada (sin precio, CTA `#teams` + contacto secundario), separador "Negocio establecido" eliminado.
+- **`SALES_EMAIL = 'contacto@eva-app.cl'` centralizado** en `lib/brand-assets.ts` (mailto deja de ser string repetido).
+- **Tests escritos (se corren en el GATE autorizado, no por tanda):** `tests/landing-teams.spec.ts` (guards anti-precio + nav + 302→mailto + ausencia de "enterprise"), `i18n-parity.test.ts` (paridad GLOBAL es/en) + `i18n-orphans.test.ts` (detector de huérfanas con allowlist). Spec SDD en `specs/landing-teams-section/`.
+
+**Pendiente manual del dueño (NO ejecutado por el agente):** F1.8 — remoción en Search Console de las URLs con precios viejos (`/enterprise`, subdominio enterprise con "$89.990"/"$49.990"), pre-12-jun. Complementa el redirect 308 `/enterprise`→`/pricing` que el plan 01 ejecuta post-deploy.
+
+**Siguiente: Plan 03 módulos add-on compra-only** (`docs/plans/estrategia/03-PLAN-modulos-compra-only.md`).
 
 ### Estado 2026-06-12 — Plan 04 consolidación de planes + ciclos (código + migración MRR)
 
@@ -24,7 +40,7 @@
 ### Estado 2026-06-12 — Enterprise ARCHIVADO comercialmente (estrategia teams-first, F1-F4)
 **Hecho:** visibilidad enterprise ejecutada. Crons `org-health-alert` + `payment-reminder` retirados de schedule en `vercel.json` (handlers vivos, sin disparo automático). Copy legal swapeado a "planes empresariales a medida" (la landing NO se tocó — es scope del plan 02). Precios enterprise googleables neutralizados + noindex. Proxy: `/org/*` en dominio principal → `/login`; el flujo de alumno `/e` sigue vivo por diseño; `/enterprise` se sigue sirviendo con noindex hasta el redirect 308 → `/pricing` (post-plan 02). Redirect 308 del subdominio `enterprise.eva-app.cl` pendiente de config en Vercel — paso manual. Motor enterprise intacto (infra compartida: workspace engine, org.service, JWT hook); única puerta activa: `/admin/orgs`. Cero impacto en teams ni en el gate de Movida. Ver `docs/plans/estrategia/01-PLAN-archivado-enterprise.md`.
 
-**Siguiente: Plan 02 landing Teams-first** (`docs/plans/estrategia/02-PLAN-landing-teams-ui.md`) — nueva sección Teams en la landing pública + CTA "Para equipos". Luego plan 03 (módulos add-on de pago) y plan 04 (consolidación ciclos trimestral/anual).
+**Siguiente:** Plan 02 landing Teams-first ✅ EJECUTADO (ver bloque arriba) y plan 04 ✅ EJECUTADO. Resta **plan 03 módulos add-on de pago** (`docs/plans/estrategia/03-PLAN-modulos-compra-only.md`) y plan 05 billing add-ons self-service.
 
 ---
 
