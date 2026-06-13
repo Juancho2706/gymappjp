@@ -78,6 +78,7 @@ export async function createTeamCoachAction(teamId: string, formData: FormData) 
         generateUniqueCoachSlug(admin, parsed.data.full_name),
         generateUniqueInviteCode(admin),
     ])
+    const now = new Date().toISOString()
     const { error: coachError } = await admin.from('coaches').insert({
         id: newCoachId,
         full_name: parsed.data.full_name,
@@ -92,6 +93,9 @@ export async function createTeamCoachAction(teamId: string, formData: FormData) 
         billing_cycle: 'monthly',
         payment_provider: 'admin',
         max_clients: getTierMaxClients('scale'),
+        // Coach creado por un gestor con invite_code conocido — saltea el modal de migración
+        // one-shot (PublicCodeRequiredModal), pensado solo para coaches legacy sin código.
+        onboarding_guide: { invite_code_confirmed: true, invite_code_confirmed_at: now },
     })
     if (coachError) {
         await admin.auth.admin.deleteUser(newCoachId)

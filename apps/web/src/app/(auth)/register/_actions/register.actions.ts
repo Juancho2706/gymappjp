@@ -176,6 +176,7 @@ export async function registerAction(
     }
 
     // Create coaches row
+    const now = new Date().toISOString()
     const { error: coachError } = await adminDb
         .from('coaches')
         .insert({
@@ -192,8 +193,14 @@ export async function registerAction(
             billing_cycle: isFreeTier ? 'monthly' : selectedBillingCycle,
             payment_provider: isFreeTier ? 'admin' : (process.env.PAYMENT_PROVIDER ?? 'mercadopago'),
             max_clients: getTierMaxClients(selectedTier),
-            health_data_consent_at: new Date().toISOString(),
+            health_data_consent_at: now,
             marketing_consent: acceptMarketing,
+            // New coaches already know their invite code — skip the one-shot migration modal
+            // (PublicCodeRequiredModal) intended only for legacy coaches without a code.
+            onboarding_guide: {
+                invite_code_confirmed: true,
+                invite_code_confirmed_at: now,
+            },
             ...(isFreeTier && { trial_used_email: emailNorm }),
             ...(registrationIp && { registration_ip: registrationIp }),
         })

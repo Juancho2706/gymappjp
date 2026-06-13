@@ -88,10 +88,14 @@ export async function createTeamAction(_prev: CreateTeamResult | null, formData:
             generateUniqueCoachSlug(adminClient, owner_full_name),
             generateUniqueInviteCode(adminClient),
         ])
+        const now = new Date().toISOString()
         const { error: coachError } = await adminClient.from('coaches').insert({
             id: ownerCoachId, full_name: owner_full_name, brand_name: name, slug: coachSlug, invite_code: inviteCode,
             primary_color: '#10B981', subscription_status: 'team_managed', subscription_tier: 'scale',
             billing_cycle: 'monthly', payment_provider: 'admin', max_clients: getTierMaxClients('scale'),
+            // El owner se crea con invite_code conocido — saltea el modal de migración one-shot
+            // (PublicCodeRequiredModal), pensado solo para coaches legacy sin código.
+            onboarding_guide: { invite_code_confirmed: true, invite_code_confirmed_at: now } as Json,
         })
         if (coachError) {
             await adminClient.auth.admin.deleteUser(ownerCoachId)

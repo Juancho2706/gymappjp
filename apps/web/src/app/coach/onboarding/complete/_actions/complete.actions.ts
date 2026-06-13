@@ -11,6 +11,7 @@ import {
     type SubscriptionTier,
 } from '@/lib/constants'
 import { normalizePlatformEmail, isDisposableEmail } from '@/lib/auth/platform-email'
+import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
 
 export type CompleteOnboardingState = { error?: string }
 
@@ -93,11 +94,15 @@ export async function completeOAuthOnboarding(
         slug = `${baseSlug}-${Math.random().toString(36).slice(2, 8)}`
     }
 
+    const inviteCode = await generateUniqueInviteCode(adminDb)
+
+    const now = new Date().toISOString()
     const { error: insertError } = await adminDb.from('coaches').insert({
         id: user.id,
         full_name: fullName,
         brand_name: brandName,
         slug,
+        invite_code: inviteCode,
         primary_color: '#10B981',
         // Google accounts are already email-confirmed — free tier is active immediately
         subscription_status: isFreeTier ? 'active' : 'pending_payment',
@@ -105,8 +110,14 @@ export async function completeOAuthOnboarding(
         billing_cycle: isFreeTier ? 'monthly' : selectedBillingCycle,
         payment_provider: isFreeTier ? 'admin' : (process.env.PAYMENT_PROVIDER ?? 'mercadopago'),
         max_clients: getTierMaxClients(selectedTier),
-        health_data_consent_at: new Date().toISOString(),
+        health_data_consent_at: now,
         marketing_consent: acceptMarketing,
+        // New coaches already know their invite code — skip the one-shot migration modal
+        // (PublicCodeRequiredModal) intended only for legacy coaches without a code.
+        onboarding_guide: {
+            invite_code_confirmed: true,
+            invite_code_confirmed_at: now,
+        },
         ...(isFreeTier && { trial_used_email: emailNorm }),
     })
 
