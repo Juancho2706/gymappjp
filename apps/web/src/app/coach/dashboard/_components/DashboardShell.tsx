@@ -98,8 +98,8 @@ export function DashboardShell({
                     {subscriptionTier === 'free' && (
                         <FreeTierBanner totalClients={data.kpi.totalClients} />
                     )}
-                    {subscriptionTier === 'elite' && data.kpi.totalClients >= 48 && (
-                        <GrowthUpgradeBanner totalClients={data.kpi.totalClients} />
+                    {subscriptionTier === 'elite' && data.kpi.totalClients >= 80 && (
+                        <TeamsBridgeBanner totalClients={data.kpi.totalClients} />
                     )}
                 </motion.div>
 
@@ -209,7 +209,7 @@ function FreeTierBanner({ totalClients }: { totalClients: number }) {
     )
 }
 
-function GrowthUpgradeBanner({ totalClients }: { totalClients: number }) {
+function TeamsBridgeBanner({ totalClients }: { totalClients: number }) {
     const max = TIER_CONFIG.elite.maxClients
     const pct = Math.round((Math.min(totalClients, max) / max) * 100)
 
@@ -220,15 +220,15 @@ function GrowthUpgradeBanner({ totalClients }: { totalClients: number }) {
                     {totalClients}/{max} alumnos · {pct}% de tu plan Elite
                 </p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Hay un plan Growth para coaches con 60–120 alumnos
+                    ¿Más de 100 alumnos o trabajas con otros profesionales? Conoce EVA Teams
                 </p>
             </div>
-            <Link
-                href="/coach/subscription?upgrade=growth"
+            <a
+                href="mailto:contacto@eva-app.cl?subject=Quiero%20conocer%20EVA%20Teams"
                 className="shrink-0 text-xs font-semibold text-emerald-500 hover:underline"
             >
-                Ver Growth →
-            </Link>
+                Conversemos →
+            </a>
         </div>
     )
 }

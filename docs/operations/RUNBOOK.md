@@ -208,3 +208,33 @@ curl https://eva-app.cl/<endpoint> \
 3. Hacer redeploy.
 
 > El motor enterprise (tablas `organizations`, `organization_members`, RLS, JWT hook, `org.service`) sigue intacto en la DB y en el código — no se borró nada. Reactivar es reversible sin migración.
+
+---
+
+## Coach grandfathered (growth/scale) pide cambio de ciclo o reactivación (plan 04)
+
+> Contexto: desde el plan 04 (`docs/plans/estrategia/04-PLAN-consolidacion-planes-ciclos.md`) los tiers `growth` y `scale` salieron de TODA superficie de venta, pero los suscriptores existentes (grandfathered) **conservan su plan, precio y límite de alumnos** mientras no cambien nada. El union type, `TIER_CONFIG` y el CHECK de DB conservan las 6 entradas: el grandfathered sigue viendo "Growth"/"Scale" correcto en su página de suscripción y el webhook de renovación sigue resolviendo su tier+ciclo sin romper.
+
+**Lo que el grandfathered YA NO puede hacer self-service:** cambiar de ciclo (mensual↔trimestral↔anual) ni reactivarse EN su tier muerto. El checkout (`create-preference`) solo acepta sale tiers (`starter`/`pro`/`elite`) → un intento self-service en growth/scale responde 400. La reactivación pública (`/coach/reactivate`) ancla al plan elite (o muestra el puente a Teams si su cartera supera el techo). **Esto es intencional, no un bug.**
+
+### Caso A — pide cambiar de ciclo manteniéndose en su tier legacy
+
+El CEO/admin lo cambia desde `/admin/coaches` (la palanca de soporte):
+
+1. Abrir el coach en el panel admin → `CoachEditSheet`.
+2. El Select de tier **conserva el union completo** (incluye growth/scale/free) → mantener su tier legacy.
+3. Cambiar el Select de ciclo al deseado. **Importante:** el valor válido es `annual` (no `yearly`) — el fix del plan 04 alineó los selects al CHECK de DB; si ves un error de constraint al guardar el ciclo anual, confirmá que el deploy con el fix `yearly`→`annual` ya está en prod.
+4. Guardar. El cambio escribe directo `coaches.subscription_tier`/`billing_cycle`/`max_clients` (no pasa por MercadoPago — el monto del preapproval en MP queda como está; si el coach quiere recobrar al nuevo monto/ciclo hay que recrear el preapproval, decisión caso a caso con el dueño).
+
+### Caso B — pide reactivarse (estaba cancelado) en growth/scale
+
+No hay flujo self-service para resucitar un tier muerto. Opciones:
+
+1. **Mantenerlo legacy (excepción):** el admin re-activa el coach en su tier legacy desde `CoachEditSheet` (status → `active`, tier legacy, ciclo `annual`/`quarterly`/`monthly`). Solo si el dueño aprueba conservar el precio viejo.
+2. **Migrarlo a la oferta vigente (preferido):** ofrecerle elite ($44.990, techo 100 alumnos) o, si su cartera supera 100, EVA Teams (mailto `contacto@eva-app.cl`). El coach se reactiva self-service en elite por el flujo público normal.
+
+### Observabilidad — cuántos grandfathered quedan
+
+`/admin/finanzas` muestra una card **"Legacy (grandfather)"** alimentada por el RPC `get_legacy_tier_counts()`: conteo de filas growth/scale por status y ciclo. Sirve para saber cuándo el grandfather se extingue solo (los placeholders `team_managed`/`org_managed` aparecen ahí pero se distinguen por status — no son suscriptores reales). Cuando los reales lleguen a 0, se puede planear matar el union legacy.
+
+> **Nunca** "limpiar" growth/scale del union type, de `TIER_CONFIG` ni del CHECK de DB para resolver uno de estos casos: rompería el webhook de pago de cualquier grandfathered en vuelo y los placeholders `scale` de las cuentas team/org-managed. Los tiers salen de la VENTA, no del runtime.

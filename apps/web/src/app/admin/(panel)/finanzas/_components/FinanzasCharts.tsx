@@ -15,14 +15,16 @@ const TOOLTIP_STYLE = {
 const CYCLE_COLORS: Record<string, string> = {
     monthly: '#2e7cf6',
     quarterly: '#a78bfa',
-    yearly: '#22c55e',
+    annual: '#22c55e', // el RPC devuelve billing_cycle='annual' (no 'yearly') — clave alineada al CHECK de DB
 }
 
 const TIER_COLORS: Record<string, string> = {
+    free: '#64748b',
     starter: '#475569',
     pro: '#60a5fa',
     elite: '#a78bfa',
-    scale: '#22c55e',
+    growth: '#f59e0b', // LEGACY — visible en el desglose de grandfathered
+    scale: '#22c55e', // LEGACY
 }
 
 function clpK(n: number) {

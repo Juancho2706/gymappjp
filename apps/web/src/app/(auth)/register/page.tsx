@@ -18,14 +18,17 @@ import {
     getTierNutritionSummary,
     getTierPriceClp,
     isBillingCycleAllowedForTier,
+    isSaleTier,
+    SALE_TIERS,
     TIER_CONFIG,
     type BillingCycle,
-    type SubscriptionTier,
+    type SaleTier,
 } from '@/lib/constants'
 
 const initialState: RegisterState = {}
 const googleInitialState: CompleteOnboardingState = {}
-const tierOptions = Object.entries(TIER_CONFIG) as [SubscriptionTier, (typeof TIER_CONFIG)[SubscriptionTier]][]
+// Solo se ofrecen tiers a la venta (free/starter/pro/elite). growth/scale quedan fuera de venta (grandfathered, ver plan 04).
+const tierOptions = SALE_TIERS.map((tier) => [tier, TIER_CONFIG[tier]] as const)
 const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [
     BillingCycle,
     (typeof BILLING_CYCLE_CONFIG)[BillingCycle],
@@ -68,7 +71,7 @@ export default function RegisterPage() {
     const [password, setPassword] = useState('')
     const [clientError, setClientError] = useState<string | null>(null)
     const [fromGoogle, setFromGoogle] = useState(false)
-    const [tier, setTier] = useState<SubscriptionTier>('starter')
+    const [tier, setTier] = useState<SaleTier>('starter')
     const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
     const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
     const selectedPrice = useMemo(() => getTierPriceClp(tier, billingCycle), [tier, billingCycle])
@@ -95,9 +98,10 @@ export default function RegisterPage() {
         const rawTier = params.get('tier')
         const normalizedTier = rawTier === 'starter_lite' ? 'starter' : rawTier
         const queryCycle = params.get('cycle')
-        const nextTier =
-            normalizedTier && normalizedTier in TIER_CONFIG
-                ? (normalizedTier as SubscriptionTier)
+        // Solo aceptamos tiers a la venta. Un link viejo con ?tier=growth/scale degrada a 'starter'.
+        const nextTier: SaleTier =
+            normalizedTier && isSaleTier(normalizedTier)
+                ? normalizedTier
                 : 'starter'
         setTier(nextTier)
         if (queryCycle && queryCycle in BILLING_CYCLE_CONFIG) {
@@ -318,6 +322,8 @@ export default function RegisterPage() {
                                         const defaultCycleForKey = getDefaultBillingCycleForTier(key)
                                         const displayPrice = getTierPriceClp(key, defaultCycleForKey)
                                         const isFree = key === 'free'
+                                        // Paridad con /pricing: pro es el plan destacado ("Más popular").
+                                        const isPopular = key === 'pro'
                                         return (
                                             <button
                                                 key={key}
@@ -327,7 +333,9 @@ export default function RegisterPage() {
                                                     'rounded-xl border p-3 text-left transition',
                                                     tier === key
                                                         ? 'border-primary bg-primary/10'
-                                                        : 'border-border hover:border-primary/40'
+                                                        : isPopular
+                                                            ? 'border-primary/50 hover:border-primary/70'
+                                                            : 'border-border hover:border-primary/40'
                                                 )}
                                             >
                                                 <div className="flex items-start justify-between gap-2">
@@ -336,6 +344,11 @@ export default function RegisterPage() {
                                                         {isFree && (
                                                             <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-slate-500/15 text-slate-600 dark:text-slate-400">
                                                                 Gratis para siempre
+                                                            </span>
+                                                        )}
+                                                        {isPopular && (
+                                                            <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-500/15 text-violet-600 dark:text-violet-400">
+                                                                Más popular
                                                             </span>
                                                         )}
                                                     </div>

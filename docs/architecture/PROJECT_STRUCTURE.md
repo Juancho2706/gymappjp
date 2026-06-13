@@ -19,6 +19,10 @@ packages/
   schemas/    Contratos Zod compartidos web/mobile
   types/      Tipos compartidos
   tokens/     Design tokens compartidos
+  brand-kit/  Motor de color white-label (puro TS, OKLCH) compartido web/mobile
+  calc/       Calculos puros compartidos web/mobile
+  tiers/      @eva/tiers: catalogo de planes/tiers + ciclos de cobro (puro TS). Fuente UNICA;
+              web (lib/constants, domain/coach/types) y mobile (lib/coach-tiers) RE-EXPORTAN de aca (anti-drift, plan 04 F6)
 supabase/
   migrations/ Migraciones activas
   seed.sql    Fixtures locales/E2E

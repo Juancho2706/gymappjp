@@ -384,6 +384,23 @@ GRANT UPDATE (
 -- existente -> RAISE EXCEPTION; service-role exento. OJO: invite_code PERMANECE en el GRANT de
 -- columnas de coaches — el set-once lo impone el trigger, no el grant. Memoria
 -- project-coach-code-identity: el codigo es identificador primario, jamas debe mutar self-service.
+
+-- ===== Clawback de modulos auto-activados (CINTURON — agregado 2026-06-12) =====
+-- El REVOKE/GRANT cierra la auto-activacion A FUTURO, pero NO resetea lo ya activado por el
+-- hueco mientras estuvo abierto (el hueco vive hasta que ESTA migracion despliegue). Reset
+-- idempotente a '{}' de todo coach/team REAL, EXCLUYENDO las cuentas de prueba permanentes
+-- (personas @evatest.cl — en especial e2e-modules-coach, que DEBE quedar ON — y los teams de
+-- test). La lista exacta de exclusion se DERIVA AL SELLAR el .sql (join a auth.users por
+-- email LIKE '%@evatest.cl' + ids/slugs de los teams de prueba), mismo criterio que los purges.
+-- Verificado en prod 2026-06-12: 26/27 coaches reales ya estan en '{}' y los teams con modulos
+-- son de test => este UPDATE es DEFENSA (cierra la ventana), no una migracion de datos masiva.
+UPDATE public.coaches SET enabled_modules = '{}'::jsonb
+WHERE enabled_modules <> '{}'::jsonb
+  AND id NOT IN (
+    SELECT c.id FROM public.coaches c JOIN auth.users u ON u.id = c.id
+    WHERE u.email LIKE '%@evatest.cl'
+  );
+-- teams: mismo reset excluyendo los teams de prueba (lista de ids/slugs derivada al sellar).
 ```
 
 - Quedan SOLO service-role: `coaches.enabled_modules/subscription_tier/subscription_status/max_clients/
@@ -601,6 +618,10 @@ personas.ts}` · `lib/database.types.ts` (regenerar post-merge).
 - Ningún rol `authenticated` puede mover `clients` de scope: `org_id`/`team_id`/`coach_id` solo
   service-role (migración hermana F2.1b); la reasignación org admin funciona vía service-role (F1.4).
 - `invite_code` es set-once a nivel DB para `authenticated` (solo NULL→valor; trigger de F2.1).
+- **Clawback ejecutado (cinturón):** todo coach/team REAL queda en `enabled_modules='{}'` tras la
+  migración F2.1 (excluidas las cuentas de prueba permanentes, en especial `e2e-modules-coach` que
+  conserva sus 4 módulos ON); ningún coach real arranca con módulos gratis. Caso de verificación en la
+  suite SQL: post-UPDATE, `COUNT(coaches con módulos AND no-test) = 0`.
 - Check de drift de grants (caso 11 de la suite) verde: `information_schema.column_privileges` ==
   allowlist esperado para `coaches`/`teams`/`clients`.
 - Copy del catálogo vive en `packages/module-catalog` (puro, estrategia i18n anotada) y todo click de

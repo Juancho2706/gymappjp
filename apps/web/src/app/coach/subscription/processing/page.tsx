@@ -45,6 +45,10 @@ export default function SubscriptionProcessingPage() {
     const normalizedTierParam = rawTierParam === 'starter_lite' ? 'starter'
         : rawTierParam === 'free' ? null  // free coaches don't use this page
         : rawTierParam
+    // LEGACY: `in TIER_CONFIG` valida contra TODAS las entradas (incluidas growth/scale, ya
+    // fuera de venta). Se queda intencionalmente: esta pantalla solo muestra el label de lo que
+    // se está pagando; un coach grandfathered con un cargo legacy en vuelo debe ver su tier real,
+    // no un fallback a 'starter'. No es una superficie de venta.
     const tierFromUrl = (
         normalizedTierParam && normalizedTierParam in TIER_CONFIG ? normalizedTierParam : 'starter'
     ) as SubscriptionTier

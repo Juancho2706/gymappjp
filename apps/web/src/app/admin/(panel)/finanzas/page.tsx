@@ -2,6 +2,7 @@ import { getFinanzasData } from './_data/finanzas.queries'
 import { FinanzasKpis } from './_components/FinanzasKpis'
 import { FinanzasCharts } from './_components/FinanzasCharts'
 import { RevenueTable } from './_components/RevenueTable'
+import { LegacyTierCard } from './_components/LegacyTierCard'
 
 export const metadata = { title: 'Finanzas' }
 
@@ -28,6 +29,8 @@ export default async function AdminFinanzasPage() {
                 revenueByCycle={data.revenueByCycle}
                 revenueByTier={data.revenueByTier}
             />
+
+            <LegacyTierCard rows={data.legacyTierCounts} />
 
             <RevenueTable events={data.recentEvents} />
         </div>

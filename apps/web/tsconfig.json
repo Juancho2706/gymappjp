@@ -27,7 +27,8 @@
       "@eva/schemas/nutrition-exchanges": ["../../packages/schemas/nutrition-exchanges.ts"],
       "@eva/schemas/bodycomp": ["../../packages/schemas/bodycomp.ts"],
       "@eva/calc": ["../../packages/calc/index.ts"],
-      "@eva/brand-kit": ["../../packages/brand-kit/index.ts"]
+      "@eva/brand-kit": ["../../packages/brand-kit/index.ts"],
+      "@eva/tiers": ["../../packages/tiers/index.ts"]
     }
   },
   "include": [

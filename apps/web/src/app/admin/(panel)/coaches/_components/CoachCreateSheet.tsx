@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CheckCircle2, Copy, ExternalLink, RefreshCw } from 'lucide-react'
 import { createCoachAction, type CreateCoachResult } from '../_actions/coach-actions'
 import { generateTempPassword } from '../../_components/generateTempPassword'
+import { SALE_TIERS, TIER_CONFIG } from '@/lib/constants'
 
 interface Props {
     open: boolean
@@ -178,10 +179,10 @@ export function CoachCreateSheet({ open, onClose }: Props) {
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent className="bg-neutral-900 border-neutral-800 text-white">
-                                        <SelectItem value="starter">Starter</SelectItem>
-                                        <SelectItem value="pro">Pro</SelectItem>
-                                        <SelectItem value="elite">Elite</SelectItem>
-                                        <SelectItem value="scale">Scale</SelectItem>
+                                        {/* Solo sale tiers: cuentas nuevas no nacen en growth/scale (legacy, fuera de venta). D5 del plan 04. */}
+                                        {SALE_TIERS.map(t => (
+                                            <SelectItem key={t} value={t}>{TIER_CONFIG[t].label}</SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>

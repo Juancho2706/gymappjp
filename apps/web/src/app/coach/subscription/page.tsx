@@ -10,13 +10,18 @@ import {
     getTierNutritionSummary,
     getTierPriceClp,
     isBillingCycleAllowedForTier,
+    isSaleTier,
+    SALE_TIERS,
     TIER_CONFIG,
     TIER_STUDENT_RANGE_LABEL,
     type BillingCycle,
+    type SaleTier,
     type SubscriptionTier,
 } from '@/lib/constants'
-import { Zap, Crown, Rocket, TrendingUp, Building2, Check, Leaf, type LucideIcon } from 'lucide-react'
+import { Zap, Crown, Rocket, TrendingUp, Building2, Check, Leaf, HelpCircle, type LucideIcon } from 'lucide-react'
 
+// growth/scale: LEGACY (fuera de venta). Se mantienen en los mapas de display porque el PLAN
+// ACTUAL de un coach grandfathered puede ser legacy y debe renderizar su icono/color correcto.
 const TIER_ICON: Record<SubscriptionTier, LucideIcon> = {
     free: Leaf, starter: Zap, pro: Rocket, elite: Crown, growth: TrendingUp, scale: Building2,
 }
@@ -67,8 +72,9 @@ function extractAmountClpFromEventPayload(payload: unknown): number | null {
     return null
 }
 
-// Free is excluded — coaches can't manually downgrade to free; it's automatic on cancellation
-const tierOptions = (Object.keys(TIER_CONFIG) as SubscriptionTier[]).filter((t) => t !== 'free')
+// Solo tiers a la venta. Free excluido — el coach no puede bajar manualmente a free (es
+// automatico al cancelar). growth/scale fuera de venta (LEGACY): no se ofertan para cambiar.
+const tierOptions = SALE_TIERS.filter((t) => t !== 'free')
 const cycleOptions = Object.keys(BILLING_CYCLE_CONFIG) as BillingCycle[]
 
 export default function CoachSubscriptionPage() {
@@ -101,12 +107,24 @@ export default function CoachSubscriptionPage() {
                 setEvents(Array.isArray(payload.events) ? payload.events : [])
                 const tier = payload.coach.subscription_tier as SubscriptionTier
                 const cycle = payload.coach.billing_cycle as BillingCycle
-                if (tier && tier in TIER_CONFIG) setSelectedTier(tier)
-                if (tier && tier in TIER_CONFIG && cycle && cycle in BILLING_CYCLE_CONFIG) {
+                // Pre-seleccion para la lista de venta (starter/pro/elite):
+                //  - un tier de venta pago (starter/pro/elite) se pre-selecciona a si mismo;
+                //  - un tier legacy (growth/scale, fuera de venta) ancla a 'elite' — sin esto un
+                //    grandfathered abriria con selectedTier='growth', que ya no se renderiza, y
+                //    "Continuar" mandaria un tier que create-preference rechaza (400);
+                //  - free / desconocido cae al default 'starter' (el pago mas economico de la lista).
+                const preselectTier: SaleTier =
+                    tier && isSaleTier(tier) && tier !== 'free'
+                        ? tier
+                        : tier === 'growth' || tier === 'scale'
+                        ? 'elite'
+                        : 'starter'
+                setSelectedTier(preselectTier)
+                if (cycle && cycle in BILLING_CYCLE_CONFIG) {
                     setSelectedCycle(
-                        isBillingCycleAllowedForTier(tier, cycle)
+                        isBillingCycleAllowedForTier(preselectTier, cycle)
                             ? cycle
-                            : getDefaultBillingCycleForTier(tier)
+                            : getDefaultBillingCycleForTier(preselectTier)
                     )
                 }
             } catch (err) {
@@ -198,7 +216,18 @@ export default function CoachSubscriptionPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Plan actual</p>
                     <div className="flex items-start gap-4">
                         {(() => {
-                            const t = (coach.subscription_tier in TIER_CONFIG ? coach.subscription_tier : 'starter') as SubscriptionTier
+                            // Un tier desconocido (ni venta ni legacy — data corrupta o tier nuevo
+                            // sin display) NO colapsa a 'starter' (mentiria con su icono/color).
+                            // Estado de error explicito: icono neutro + label crudo + aviso (abajo).
+                            const isKnownTier = coach.subscription_tier in TIER_CONFIG
+                            if (!isKnownTier) {
+                                return (
+                                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/40">
+                                        <HelpCircle className="h-5 w-5 text-muted-foreground" />
+                                    </div>
+                                )
+                            }
+                            const t = coach.subscription_tier as SubscriptionTier
                             const TierIcon = TIER_ICON[t]
                             return (
                                 <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${TIER_ICON_BG[t]}`}>
@@ -231,6 +260,11 @@ export default function CoachSubscriptionPage() {
                             <p className="text-sm text-muted-foreground mt-0.5">
                                 {TIER_STUDENT_RANGE_LABEL[coach.subscription_tier as SubscriptionTier] ?? ''}
                             </p>
+                            {!(coach.subscription_tier in TIER_CONFIG) && (
+                                <p className="mt-1 text-sm font-medium text-amber-600 dark:text-amber-400">
+                                    Plan no reconocido — contacta soporte.
+                                </p>
+                            )}
                             {coach.current_period_end ? (
                                 <p className="text-sm text-muted-foreground mt-1">
                                     {coach.subscription_status === 'canceled' ? 'Acceso hasta' : 'Próximo cobro'}:{' '}

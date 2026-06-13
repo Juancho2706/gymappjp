@@ -8,6 +8,7 @@ import {
     BILLING_CYCLE_CONFIG,
     getTierMaxClients,
     isBillingCycleAllowedForTier,
+    SALE_TIERS,
     type BillingCycle,
     type SubscriptionTier,
 } from '@/lib/constants'
@@ -28,7 +29,8 @@ export type RegisterState = {
     error?: string
 }
 
-const VALID_TIERS: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
+// Solo se vende free/starter/pro/elite. growth/scale fuera de venta (grandfathered, plan 04).
+const VALID_TIERS = SALE_TIERS
 const VALID_CYCLES: BillingCycle[] = ['monthly', 'quarterly', 'annual']
 
 const RESERVED_SLUGS = new Set([
@@ -75,7 +77,7 @@ export async function registerAction(
         }
     }
 
-    const isTierValid = VALID_TIERS.includes(selectedTier)
+    const isTierValid = (VALID_TIERS as readonly string[]).includes(selectedTier)
     const isCycleValid = VALID_CYCLES.includes(selectedBillingCycle)
     const isFreeTier = selectedTier === 'free'
 

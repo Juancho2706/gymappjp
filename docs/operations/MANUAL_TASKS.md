@@ -866,7 +866,7 @@ Al quedar inscrita la sociedad (EVA Technology SpA, en proceso jun-2026), revisa
 
 1. **Copy de precios** en cualquier página pública donde se mencionen valores (verificar que no quedaron precios de lista expuestos).
 2. **Páginas legales** (`/legal`, `/privacidad`, `/legal/contrato-enterprise`): reemplazar "Juan Villegas (persona natural)" por razón social + RUT empresa + representante legal.
-3. **Tratamiento de IVA**: una vez constituida la SpA, el coach pagará como empresa; revisar si corresponde añadir mención de IVA en los contratos o facturas.
+3. **Tratamiento de IVA (plan 04 — F0-f / D5 del dueño):** hasta que quede inscrita la SpA hay **silencio total** sobre IVA en TODO el copy de precios — ningún "+ IVA" ni "IVA incluido" en pricing, landing, register ni mails (`docs/plans/estrategia/04-PLAN-consolidacion-planes-ciclos.md`, F0-f). Al constituirse la SpA el coach pagará como empresa: **revisar TODO el copy de precios** (pricing, landing, register, mails) Y los contratos/facturas para definir el tratamiento del IVA. Es la misma tarea — no duplicar en otra entrada.
 4. **Aviso Legal §1**: actualizar domicilio legal con la dirección registrada en notaría.
 
 ---

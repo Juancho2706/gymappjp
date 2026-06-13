@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { AlertTriangle, CheckCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Users } from 'lucide-react'
 import {
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
@@ -13,13 +13,17 @@ import {
     getTierNutritionSummary,
     getTierPriceClp,
     isBillingCycleAllowedForTier,
+    isSaleTier,
+    SALE_TIERS,
     TIER_CONFIG,
     TIER_STUDENT_RANGE_LABEL,
     type BillingCycle,
+    type SaleTier,
     type SubscriptionTier,
 } from '@/lib/constants'
 
-const tierOptions = Object.entries(TIER_CONFIG) as [SubscriptionTier, (typeof TIER_CONFIG)[SubscriptionTier]][]
+// Solo se ofertan tiers a la venta (free/starter/pro/elite). growth/scale quedan fuera (LEGACY).
+const tierOptions = SALE_TIERS.map((key) => [key, TIER_CONFIG[key]] as const)
 const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [
     BillingCycle,
     (typeof BILLING_CYCLE_CONFIG)[BillingCycle],
@@ -35,20 +39,28 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
     const searchParams = useSearchParams()
 
     // Pre-select the minimum viable tier for the coach's current client count,
-    // anchored to their actual tier (not always starter).
-    const initialTier = useMemo<SubscriptionTier>(() => {
+    // anchored to their actual tier (not always starter). growth/scale ya no se venden:
+    // un currentTier/query legacy ancla a 'elite' (D4 — la reactivacion publica nunca
+    // resucita un tier muerto; quien supere elite ve el puente a Teams, no un auto-bump).
+    const initialTier = useMemo<SaleTier>(() => {
         const raw = searchParams.get('tier')
         const queryTier = raw === 'starter_lite' ? 'starter' : raw
-        const candidate = queryTier && queryTier in TIER_CONFIG ? queryTier as SubscriptionTier : currentTier
-        // If the candidate can't cover current clients, bump up to the minimum viable tier
+        const candidate: SaleTier =
+            queryTier && isSaleTier(queryTier)
+                ? queryTier
+                : isSaleTier(currentTier)
+                ? currentTier
+                : 'elite'
+        // If the candidate can't cover current clients, bump up to the minimum viable sale tier.
+        // Si ni siquiera elite (el techo de venta) los cubre, anclamos a elite y la UI muestra
+        // el bloque "conversemos de EVA Teams" (boton de pago deshabilitado).
         if (TIER_CONFIG[candidate].maxClients < activeClientCount) {
-            const ordered: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
-            return ordered.find(t => TIER_CONFIG[t].maxClients >= activeClientCount) ?? 'scale'
+            return SALE_TIERS.find((t) => TIER_CONFIG[t].maxClients >= activeClientCount) ?? 'elite'
         }
         return candidate
     }, [searchParams, currentTier, activeClientCount])
 
-    const [tier, setTier] = useState<SubscriptionTier>(initialTier)
+    const [tier, setTier] = useState<SaleTier>(initialTier)
     const [billingCycle, setBillingCycle] = useState<BillingCycle>(() => {
         const queryCycle = searchParams.get('cycle')
         if (queryCycle && queryCycle in BILLING_CYCLE_CONFIG) return queryCycle as BillingCycle
@@ -71,6 +83,13 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
     )
 
     const tierBlockedByClients = useMemo(() => getTierMaxClients(tier) < activeClientCount, [tier, activeClientCount])
+
+    // La cartera supera el plan mas alto a la venta (elite): ya no hay tier al que auto-subir
+    // (growth/scale estan fuera de venta). Mostramos el puente a EVA Teams y deshabilitamos el pago.
+    const exceedsTopSaleTier = useMemo(
+        () => activeClientCount > getTierMaxClients('elite'),
+        [activeClientCount]
+    )
 
     const paymentStatus = searchParams.get('payment')
     const subscriptionBlocked = searchParams.get('reason') === 'subscription_blocked'
@@ -311,7 +330,25 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                     </div>
                 </section>
 
-                {tierBlockedByClients && (
+                {exceedsTopSaleTier ? (
+                    <div className="mt-4 flex items-start gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm">
+                        <Users className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                        <div>
+                            <p className="font-semibold text-foreground">Tu cartera supera el plan más alto</p>
+                            <p className="mt-0.5 text-muted-foreground">
+                                Tienes {activeClientCount} alumnos activos, más de los que cubre nuestro plan
+                                individual más alto. Conversemos de EVA Teams, pensado para carteras grandes y
+                                equipos de profesionales.{' '}
+                                <a
+                                    href="mailto:contacto@eva-app.cl?subject=Quiero%20conocer%20EVA%20Teams"
+                                    className="font-medium underline"
+                                >
+                                    Escríbenos a contacto@eva-app.cl →
+                                </a>
+                            </p>
+                        </div>
+                    </div>
+                ) : tierBlockedByClients ? (
                     <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm">
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
                         <div>
@@ -322,7 +359,7 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                             </p>
                         </div>
                     </div>
-                )}
+                ) : null}
 
                 <section className="mt-6">
                     <h2 className="text-sm font-semibold text-foreground">Frecuencia de pago</h2>
@@ -375,7 +412,7 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                     <button
                         type="button"
                         onClick={handleCheckout}
-                        disabled={isLoading || tierBlockedByClients}
+                        disabled={isLoading || tierBlockedByClients || exceedsTopSaleTier}
                         className="inline-flex h-12 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-md transition hover:opacity-95 disabled:opacity-60 w-full md:w-auto md:min-w-[220px]"
                     >
                         {isLoading ? 'Redirigiendo...' : 'Continuar al pago con Mercado Pago'}

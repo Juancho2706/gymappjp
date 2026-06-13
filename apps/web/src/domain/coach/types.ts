@@ -1,6 +1,8 @@
-export type BillingCycle = 'monthly' | 'quarterly' | 'annual'
+// Tipos de tiers/ciclos: fuente única en @eva/tiers (paquete puro, compartido web+mobile — plan 04 F6).
+// domain/ RE-EXPORTA del paquete (mismo patrón que packages/schemas; respeta "domain no importa de lib/").
+export type { BillingCycle, SubscriptionTier, SaleTier, TierConfig, TierCapabilities } from '@eva/tiers'
+
 export type PaymentProvider = 'mercadopago' | 'stripe' | 'admin'
-export type SubscriptionTier = 'free' | 'starter' | 'pro' | 'elite' | 'growth' | 'scale'
 
 export type SubscriptionStatus =
     | 'active'
@@ -13,23 +15,6 @@ export type SubscriptionStatus =
     | 'pending_email'
     | 'org_managed'
     | 'team_managed'
-
-export type TierConfig = {
-    label: string
-    maxClients: number
-    monthlyPriceClp: number
-    annualPriceClp?: number
-    features: string[]
-    isMostAffordable?: boolean
-}
-
-export type TierCapabilities = {
-    canUseNutrition: boolean
-    canUseBranding: boolean
-    canUseAdvancedReports: boolean
-    canCreateCustomExercises: boolean
-    canImportClients: boolean
-}
 
 export type CoachOrgContext = {
     coachId: string | null

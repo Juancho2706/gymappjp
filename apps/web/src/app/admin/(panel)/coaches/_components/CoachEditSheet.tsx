@@ -14,6 +14,11 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import type { CoachListItem } from '../../dashboard/_data/types'
+import { TIER_CONFIG } from '@eva/tiers'
+
+// Union COMPLETO derivado de las constantes (NO re-hardcodear — las 3 listas de tiers del admin divergieron).
+// Incluye growth/scale (LEGACY, fuera de venta) porque el admin es la palanca para editar cuentas grandfathered.
+const ALL_TIERS = Object.keys(TIER_CONFIG) as Array<keyof typeof TIER_CONFIG>
 
 interface Props {
     coach: CoachListItem
@@ -74,10 +79,9 @@ export function CoachEditSheet({ coach, open, onClose }: Props) {
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent className="bg-neutral-900 border-neutral-800">
-                                <SelectItem value="starter">Starter</SelectItem>
-                                <SelectItem value="pro">Pro</SelectItem>
-                                <SelectItem value="elite">Elite</SelectItem>
-                                <SelectItem value="scale">Scale</SelectItem>
+                                {ALL_TIERS.map(t => (
+                                    <SelectItem key={t} value={t}>{TIER_CONFIG[t].label}</SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                     </div>
@@ -111,7 +115,7 @@ export function CoachEditSheet({ coach, open, onClose }: Props) {
                             <SelectContent className="bg-neutral-900 border-neutral-800">
                                 <SelectItem value="monthly">Mensual</SelectItem>
                                 <SelectItem value="quarterly">Trimestral</SelectItem>
-                                <SelectItem value="yearly">Anual</SelectItem>
+                                <SelectItem value="annual">Anual</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

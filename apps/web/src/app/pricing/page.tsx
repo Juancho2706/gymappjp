@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Check, Zap, Crown, Dumbbell, Sprout, TrendingUp } from 'lucide-react'
+import { Check, Zap, Crown, Dumbbell, Sprout } from 'lucide-react'
 import type { Metadata } from 'next'
 import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
 import {
@@ -71,23 +71,7 @@ const planDisplay: Array<{
         bg: 'bg-amber-500/10',
         border: 'border-amber-500/20',
     },
-    {
-        id: 'growth',
-        description: 'Para academias y coaches consolidados',
-        icon: TrendingUp,
-        color: 'text-emerald-400',
-        bg: 'bg-emerald-500/10',
-        border: 'border-emerald-500/20',
-        badge: 'Nuevo',
-    },
-    {
-        id: 'scale',
-        description: 'Operación avanzada para alto volumen',
-        icon: Crown,
-        color: 'text-rose-300',
-        bg: 'bg-rose-500/10',
-        border: 'border-rose-500/25',
-    },
+    // LEGACY — growth/scale fuera de venta (grandfathered + placeholder team/org_managed). Recortados de planDisplay; runtime/DB/admin intactos. NO re-agregar aquí.
 ]
 
 const cycleOrder: BillingCycle[] = ['monthly', 'quarterly', 'annual']
@@ -153,8 +137,9 @@ export default function PricingPage() {
                     <div className="flex-1 border-t border-border" />
                     <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Mensual, trimestral o anual</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {planDisplay.filter((p) => ['elite', 'growth', 'scale'].includes(p.id)).map((plan) => (
+                {/* Solo elite — la card "EVA Teams" la agrega el plan 02 (sin números pre-cierre Movida). */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {planDisplay.filter((p) => p.id === 'elite').map((plan) => (
                         <PlanCard key={plan.id} plan={plan} cycleOrder={cycleOrder} />
                     ))}
                 </div>
@@ -186,14 +171,15 @@ export default function PricingPage() {
                     </article>
                 </section>
 
-                {/* Enterprise callout */}
+                {/* Teams callout — sin números pre-cierre Movida; respuesta sin plazo comprometido */}
                 <p className="mt-10 text-center text-xs text-muted-foreground">
-                    ¿Necesitas más de 500 alumnos o funciones personalizadas? Tenemos{' '}
-                    <strong className="text-foreground">planes empresariales</strong>.{' '}
+                    ¿Trabajas en equipo o superaste el plan Elite? Conoce{' '}
+                    <strong className="text-foreground">EVA Teams</strong>.{' '}
                     Escríbenos a{' '}
                     <a href="mailto:contacto@eva-app.cl" className="underline hover:text-foreground transition-colors">
                         contacto@eva-app.cl
-                    </a>
+                    </a>{' '}
+                    y te contactamos a la brevedad.
                 </p>
             </div>
         </div>

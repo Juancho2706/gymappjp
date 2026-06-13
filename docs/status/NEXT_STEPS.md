@@ -1,6 +1,25 @@
 # NEXT STEPS — Prioridades actuales
 
-> Leer al inicio de cada sesión (referenciado en `CLAUDE.md`). Última actualización: 2026-06-12 (gate Planes 2+3 + incidente E2E + archivado enterprise).
+> Leer al inicio de cada sesión (referenciado en `CLAUDE.md`). Última actualización: 2026-06-12 (plan 04 consolidación planes+ciclos + gate Planes 2+3 + incidente E2E + archivado enterprise).
+
+### Estado 2026-06-12 — Plan 04 consolidación de planes + ciclos (código + migración MRR)
+
+**Plan:** `docs/plans/estrategia/04-PLAN-consolidacion-planes-ciclos.md`. Decisiones del dueño (2026-06-11, NO se re-litigan).
+
+**Oferta pública consolidada — exactamente 4 planes: free + starter + pro + elite.**
+- **Precios SIN cambios:** starter $19.990 · pro $29.990 · elite $44.990 (free $0). El dueño decidió dar más valor (techo elite 60→100) al mismo precio; revisión post-cierre Movida.
+- **Ciclos: mensual, trimestral y anual seleccionables y cobrables en los 3 planes pagos** (antes el trimestral existía solo en elite+). El cobro trimestral ya corre en prod (MercadoPago `months=1/3/12`); habilitarlo en starter/pro fue solo abrir la compuerta de la constante.
+- **pro marcado "Más popular"** en register y pricing (anchoring + paridad de superficies de venta).
+
+**Política grandfather (growth/scale):** `growth` y `scale` salen de TODA superficie de venta (register, pricing, landing preview, reactivate, subscription upgrade, create-preference) pero quedan **intactos solo en runtime, admin y DB** — NO se borran del union type ni del `TIER_CONFIG`; el CHECK de DB no se toca. Los suscriptores legacy mantienen plan, precio y límite de alumnos mientras no cambien nada. Un grandfathered NO puede cambiar de ciclo ni reactivarse self-service en su tier muerto: se resuelve vía admin/soporte (ver `docs/operations/RUNBOOK.md`) o migrando a elite/Teams. `scale` además sigue siendo el placeholder de cuentas `team_managed`/`org_managed` — por eso jamás se borra del runtime.
+
+**Techo elite = 100 alumnos** (subió de 60). El bump es **regalado** a los elite existentes vía UPDATE idempotente post-deploy (statuses `active`/`trialing`/`canceled`/`past_due`/`paused`; el webhook corrige `max_clients` al reactivar). Umbral del banner puente a Teams (`TeamsBridgeBanner`) ajustado a 80 (~80% del techo).
+
+**Tarea diferida — revisión de copy IVA al constituir EVAapp SpA (F0-f / D5 del dueño):** SILENCIO total sobre IVA en TODO el copy de precios (pricing, landing, register, mails) hasta que el dueño constituya **EVAapp SpA** (en proceso, jun-2026). Ningún "+ IVA" ni "IVA incluido". Al constituirse la SpA, revisar todo el copy de precios para definir el tratamiento del IVA — ver `docs/operations/MANUAL_TASKS.md` MT-38 (revisión de copy legal al constituir la SpA).
+
+**Migración MRR (única migración del plan, aditiva):** `CREATE OR REPLACE` de los 3 RPCs de MRR del admin (`get_platform_mrr_12_months`, `get_platform_revenue_by_cycle`, `get_platform_revenue_by_tier`) — corrige bug pre-existente (`scale=64990` desactualizado y `growth` ausente del CASE) → CASE final: starter 19990 · pro 29990 · elite 44990 · growth 84990 · scale 190000. + RPC nuevo `get_legacy_tier_counts()` (observabilidad de extinción del grandfather) + UPDATE elite→100. **AUTORADA, pendiente de aplicar en el GATE** (mismo branch/sesión del gate Movida; aditiva/idempotente/forward-only).
+
+---
 
 ### Estado 2026-06-12 — Enterprise ARCHIVADO comercialmente (estrategia teams-first, F1-F4)
 **Hecho:** visibilidad enterprise ejecutada. Crons `org-health-alert` + `payment-reminder` retirados de schedule en `vercel.json` (handlers vivos, sin disparo automático). Copy legal swapeado a "planes empresariales a medida" (la landing NO se tocó — es scope del plan 02). Precios enterprise googleables neutralizados + noindex. Proxy: `/org/*` en dominio principal → `/login`; el flujo de alumno `/e` sigue vivo por diseño; `/enterprise` se sigue sirviendo con noindex hasta el redirect 308 → `/pricing` (post-plan 02). Redirect 308 del subdominio `enterprise.eva-app.cl` pendiente de config en Vercel — paso manual. Motor enterprise intacto (infra compartida: workspace engine, org.service, JWT hook); única puerta activa: `/admin/orgs`. Cero impacto en teams ni en el gate de Movida. Ver `docs/plans/estrategia/01-PLAN-archivado-enterprise.md`.

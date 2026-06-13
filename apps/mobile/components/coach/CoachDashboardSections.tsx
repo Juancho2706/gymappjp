@@ -182,7 +182,8 @@ export function MobileTierUsageBanners({ coach, totalClients }: { coach: CoachPr
   return (
     <View style={styles.tierStack}>
       {coach.subscriptionTier === 'free' ? <MobileFreeTierBanner totalClients={totalClients} /> : null}
-      {coach.subscriptionTier === 'elite' && totalClients >= 48 ? <MobileGrowthUpgradeBanner totalClients={totalClients} /> : null}
+      {/* Plan 04: umbral 80 (~80% del techo elite nuevo 100, mismo momento Head-of-Sales que el 48/60 anterior). */}
+      {coach.subscriptionTier === 'elite' && totalClients >= 80 ? <MobileTeamsBridgeBanner totalClients={totalClients} /> : null}
     </View>
   )
 }
@@ -230,7 +231,10 @@ function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
   )
 }
 
-function MobileGrowthUpgradeBanner({ totalClients }: { totalClients: number }) {
+// Plan 04 (espejo del TeamsBridgeBanner web): el plan Growth salió de la venta.
+// Coach con cartera grande → puente a EVA Teams, NO upsell a un tier muerto.
+// Sin precios (pre-cierre Movida); CTA = mailto contacto@eva-app.cl. Muere el ?upgrade=growth.
+function MobileTeamsBridgeBanner({ totalClients }: { totalClients: number }) {
   const { theme } = useTheme()
   const max = TIER_CONFIG.elite.maxClients
   const pct = Math.round((Math.min(totalClients, max) / max) * 100)
@@ -238,7 +242,11 @@ function MobileGrowthUpgradeBanner({ totalClients }: { totalClients: number }) {
   return (
     <TouchableOpacity
       activeOpacity={0.82}
-      onPress={() => openCoachWebPath('/coach/subscription?upgrade=growth')}
+      onPress={() =>
+        Linking.openURL(
+          'mailto:contacto@eva-app.cl?subject=' + encodeURIComponent('Quiero conocer EVA Teams')
+        ).catch(() => null)
+      }
       style={[
         styles.tierBanner,
         {
@@ -253,11 +261,11 @@ function MobileGrowthUpgradeBanner({ totalClients }: { totalClients: number }) {
           {totalClients}/{max} alumnos - {pct}% de tu plan Elite
         </Text>
         <Text style={[styles.tierSubtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          Hay un plan Growth para coaches con 60-120 alumnos.
+          ¿Más de 100 alumnos o trabajas con otros profesionales? Conoce EVA Teams. Te contactamos a la brevedad.
         </Text>
       </View>
       <Text style={[styles.tierAction, { color: '#10B981', fontFamily: 'Inter_700Bold' }]}>
-        Ver Growth
+        Conocer Teams
       </Text>
     </TouchableOpacity>
   )

@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { useTransition, useRef } from 'react'
 import { Search, X, RefreshCw } from 'lucide-react'
+import { TIER_CONFIG } from '@eva/tiers'
 
 const STATUS_OPTIONS = [
     { value: 'active',           label: 'Activo' },
@@ -13,14 +14,12 @@ const STATUS_OPTIONS = [
     { value: 'paused',           label: 'Suspendido' },
 ]
 
-const TIER_OPTIONS = [
-    { value: 'free',    label: 'Free' },
-    { value: 'starter', label: 'Starter' },
-    { value: 'pro',     label: 'Pro' },
-    { value: 'elite',   label: 'Elite' },
-    { value: 'growth',  label: 'Growth' },
-    { value: 'scale',   label: 'Scale' },
-]
+// Union COMPLETO derivado de las constantes (mejora #7: NO re-hardcodear).
+// Incluye growth/scale (LEGACY, fuera de venta) — filtrar cuentas grandfathered es correcto en el admin.
+const TIER_OPTIONS = (Object.keys(TIER_CONFIG) as Array<keyof typeof TIER_CONFIG>).map(t => ({
+    value: t,
+    label: TIER_CONFIG[t].label,
+}))
 
 const PROVIDER_OPTIONS = [
     { value: 'beta',         label: 'Beta' },

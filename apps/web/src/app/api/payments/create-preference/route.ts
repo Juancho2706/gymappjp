@@ -14,8 +14,14 @@ import { getPaymentsProvider } from '@/lib/payments/provider'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 
+// El checkout solo acepta los tiers EN VENTA (SALE_TIERS sin free): starter/pro/elite.
+// growth/scale quedan fuera de venta (LEGACY). Consecuencia D4: un coach grandfathered
+// en growth/scale NO puede re-checkout en su tier por esta puerta (el enum lo rechaza con 400);
+// su continuidad/cambio se gestiona vía admin o conversación EVA Teams (elite). NO reintroducir
+// growth/scale aquí. El guard de ciclo (isBillingCycleAllowedForTier) y el monto
+// (getTierPriceClp) mantienen su firma — el plan 05 sumará add-ons sobre esa misma base.
 const schema = z.object({
-    tier: z.enum(['starter', 'pro', 'elite', 'growth', 'scale']),
+    tier: z.enum(['starter', 'pro', 'elite']),
     billingCycle: z.enum(['monthly', 'quarterly', 'annual']),
 })
 

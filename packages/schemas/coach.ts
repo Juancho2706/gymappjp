@@ -65,7 +65,9 @@ export const AdminCreateCoachSchema = z.object({
     email: z.string().email(),
     temp_password: z.string().min(8),
     brand_name: z.string().min(2).max(80),
-    subscription_tier: z.enum(['free', 'starter', 'pro', 'elite', 'growth', 'scale']),
+    // Solo sale tiers en la CREACION (D5 del plan 04): growth/scale son legacy fuera de venta — no se crean cuentas nuevas en esos tiers.
+    // El UPDATE (UpdateCoachSchema en coach-actions.ts) SI conserva el union completo para gestionar grandfathered.
+    subscription_tier: z.enum(['free', 'starter', 'pro', 'elite']),
     billing_cycle: z.enum(['monthly', 'quarterly', 'annual']),
     trial_days: z.coerce.number().int().min(0).max(3650),
 })

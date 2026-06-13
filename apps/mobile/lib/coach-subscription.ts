@@ -1,6 +1,8 @@
 import { supabase } from './supabase'
 import { getCoachProfile, type CoachProfile } from './coach'
 import { getCoachOrgContext } from './org'
+// F6 (plan 04): TIER_LABELS vive en @eva/tiers (fuente única web+mobile). Re-export, no espejo a mano.
+import { TIER_LABELS } from '@eva/tiers'
 
 export interface CoachSubscriptionOverview {
   profile: CoachProfile
@@ -9,14 +11,7 @@ export interface CoachSubscriptionOverview {
   clientCount: number
 }
 
-export const TIER_LABELS: Record<CoachProfile['subscriptionTier'], string> = {
-  free: 'Gratis',
-  starter: 'Starter',
-  pro: 'Pro',
-  elite: 'Elite',
-  growth: 'Growth',
-  scale: 'Scale',
-}
+export { TIER_LABELS }
 
 export const STATUS_LABELS: Record<string, string> = {
   active: 'Activa',
@@ -27,6 +22,7 @@ export const STATUS_LABELS: Record<string, string> = {
   pending_payment: 'Pago pendiente',
   paused: 'Pausada',
   org_managed: 'Gestionada por tu organización',
+  team_managed: 'Gestionada por tu equipo',
 }
 
 export async function getCoachSubscriptionOverview(): Promise<CoachSubscriptionOverview | null> {

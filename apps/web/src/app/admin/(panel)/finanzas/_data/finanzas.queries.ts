@@ -1,5 +1,6 @@
 import { cache } from 'react'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { TIER_CONFIG } from '@/lib/constants'
 
 export interface FinanzasData {
     mrrEstimate: number
@@ -10,6 +11,8 @@ export interface FinanzasData {
     churnSeries: { ym: string; churned_count: number }[]
     revenueByCycle: { billing_cycle: string; mrr_clp: number; coach_count: number }[]
     revenueByTier: { tier: string; mrr_clp: number; coach_count: number }[]
+    /** Conteo de cuentas legacy (growth/scale) por status/ciclo — dashboard de extinción del grandfather (D4/mejora #5). */
+    legacyTierCounts: { subscription_tier: string; subscription_status: string; billing_cycle: string | null; total: number }[]
     recentEvents: {
         id: string
         coach_id: string | null
@@ -22,15 +25,14 @@ export interface FinanzasData {
     }[]
 }
 
-const TIER_PRICES: Record<string, number> = {
-    free: 0,
-    starter: 19990,
-    pro: 29990,
-    elite: 44990,
-    growth: 84990,
-    scale: 190000,
-}
+// Precio mensual derivado de TIER_CONFIG (fuente única) — antes era una tercera copia hardcodeada que divergió (plan 04 F4.2).
+const TIER_PRICES: Record<string, number> = Object.fromEntries(
+    (Object.keys(TIER_CONFIG) as Array<keyof typeof TIER_CONFIG>).map(t => [t, TIER_CONFIG[t].monthlyPriceClp])
+)
 
+// Nota de arquitectura: se usa `React.cache` (no `unstable_cache`) por la regla del repo
+// (unstable_cache es incompatible con el contexto de cookies de Supabase SSR). Acá NO hay riesgo
+// adicional porque la query corre con `createServiceRoleClient()` SIN cookies — es el patrón correcto.
 export const getFinanzasData = cache(
     async (): Promise<FinanzasData> => {
         const admin = createServiceRoleClient()
@@ -41,6 +43,7 @@ export const getFinanzasData = cache(
             churnSeriesRes,
             revByCycleRes,
             revByTierRes,
+            legacyTierCountsRes,
             eventsRes,
         ] = await Promise.all([
             admin.from('coaches')
@@ -52,6 +55,8 @@ export const getFinanzasData = cache(
             (admin.rpc as any)('get_platform_churn_monthly'),
             (admin.rpc as any)('get_platform_revenue_by_cycle'),
             (admin.rpc as any)('get_platform_revenue_by_tier'),
+            // RPC de la migración F4.1 (consolidación tiers): conteo legacy growth/scale por status/ciclo.
+            (admin.rpc as any)('get_legacy_tier_counts'),
             admin.from('subscription_events')
                 .select('id, coach_id, provider, provider_event_id, provider_status, payload, created_at')
                 .order('created_at', { ascending: false })
@@ -95,6 +100,7 @@ export const getFinanzasData = cache(
             churnSeries: (churnSeriesRes.data ?? []) as unknown as { ym: string; churned_count: number }[],
             revenueByCycle: (revByCycleRes.data ?? []) as unknown as { billing_cycle: string; mrr_clp: number; coach_count: number }[],
             revenueByTier: (revByTierRes.data ?? []) as unknown as { tier: string; mrr_clp: number; coach_count: number }[],
+            legacyTierCounts: (legacyTierCountsRes.data ?? []) as unknown as { subscription_tier: string; subscription_status: string; billing_cycle: string | null; total: number }[],
             recentEvents,
         }
     }

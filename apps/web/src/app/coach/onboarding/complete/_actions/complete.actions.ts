@@ -7,6 +7,7 @@ import {
     BILLING_CYCLE_CONFIG,
     getTierMaxClients,
     isBillingCycleAllowedForTier,
+    SALE_TIERS,
     type BillingCycle,
     type SubscriptionTier,
 } from '@/lib/constants'
@@ -15,7 +16,8 @@ import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
 
 export type CompleteOnboardingState = { error?: string }
 
-const VALID_TIERS: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
+// Solo se vende free/starter/pro/elite. growth/scale fuera de venta (grandfathered, plan 04).
+const VALID_TIERS = SALE_TIERS
 const VALID_CYCLES: BillingCycle[] = ['monthly', 'quarterly', 'annual']
 
 const RESERVED_SLUGS = new Set([
@@ -48,7 +50,7 @@ export async function completeOAuthOnboarding(
     if (!fullName || fullName.length < 2) return { error: 'Tu nombre completo es obligatorio.' }
     if (!acceptLegal) return { error: 'Debés aceptar los términos de servicio y la política de privacidad.' }
     if (!acceptHealthData) return { error: 'Debés aceptar el tratamiento de datos de salud (Ley 21.719, Art. 16).' }
-    if (!VALID_TIERS.includes(selectedTier)) return { error: 'Plan inválido.' }
+    if (!(VALID_TIERS as readonly string[]).includes(selectedTier)) return { error: 'Plan inválido.' }
     if (!VALID_CYCLES.includes(selectedBillingCycle)) return { error: 'Frecuencia de pago inválida.' }
 
     const isFreeTier = selectedTier === 'free'

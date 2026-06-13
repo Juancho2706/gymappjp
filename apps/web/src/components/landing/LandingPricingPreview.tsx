@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Check, Crown, Dumbbell, Zap, Sprout, TrendingUp } from 'lucide-react'
+import { Check, Crown, Dumbbell, Zap, Sprout } from 'lucide-react'
 import dynamic from 'next/dynamic'
 
 const Player = dynamic(
@@ -15,6 +15,7 @@ import {
     getTierAllowedBillingCycles,
     getTierCapabilities,
     getTierPriceClp,
+    SALE_TIERS,
     TIER_CONFIG,
     TIER_STUDENT_RANGE_LABEL,
     type BillingCycle,
@@ -89,28 +90,11 @@ const planDisplay: Array<{
         border: 'border-amber-500/20',
         topBorder: 'border-t-amber-500/70 dark:border-t-amber-400/60',
     },
-    {
-        id: 'growth',
-        descKey: 'landing.pricing.plan.growth.desc',
-        icon: TrendingUp,
-        color: 'text-emerald-600 dark:text-emerald-400',
-        bg: 'bg-emerald-500/10',
-        border: 'border-emerald-500/20',
-        topBorder: 'border-t-emerald-500/70 dark:border-t-emerald-400/60',
-        badge: 'Nuevo',
-    },
-    {
-        id: 'scale',
-        descKey: 'landing.pricing.plan.scale.desc',
-        icon: Crown,
-        color: 'text-rose-600 dark:text-rose-400',
-        bg: 'bg-rose-500/10',
-        border: 'border-rose-500/25',
-        topBorder: 'border-t-rose-500/70 dark:border-t-rose-400/60',
-    },
+    // LEGACY — growth/scale fuera de venta (grandfathered + placeholder team/org_managed). Recortados de planDisplay; runtime/DB/admin intactos. NO re-agregar aquí.
 ]
 
-const ALL_ORDER: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
+// SALE_TIERS = ['free','starter','pro','elite']. La card Teams (re-layout 6→4) la agrega el plan 02.
+const ALL_ORDER: readonly SubscriptionTier[] = SALE_TIERS
 
 function planById(id: SubscriptionTier) {
     const p = planDisplay.find((x) => x.id === id)
@@ -861,8 +845,7 @@ export function LandingPricingPreview() {
                     </div>
 
                     <PlanCardCompact plan={planById('elite')} billingCycle={billingCycle} />
-                    <PlanCardCompact plan={planById('growth')} billingCycle={billingCycle} />
-                    <PlanCardCompact plan={planById('scale')} billingCycle={billingCycle} />
+                    {/* growth/scale recortados (LEGACY, fuera de venta). La card Teams + re-layout fino del grid (6→4 cols) es del plan 02. */}
                 </div>
 
                 {/* Enterprise callout */}

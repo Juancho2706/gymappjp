@@ -14,6 +14,8 @@ const DEFAULT_COACH_ONBOARDING_GUIDE: Json = {}
 
 function normalizeCoachSubscriptionTier(raw: string | null | undefined): SubscriptionTier {
     const v = String(raw ?? 'starter').toLowerCase()
+    // LEGACY (plan 04): es PARSE del valor crudo de DB, no venta. Reconoce los 6 valores del CHECK
+    // (incluye growth/scale grandfathered + placeholders team/org_managed). NO bajar a sale tiers.
     if (v === 'free' || v === 'starter' || v === 'pro' || v === 'elite' || v === 'growth' || v === 'scale') return v
     return 'starter'
 }
