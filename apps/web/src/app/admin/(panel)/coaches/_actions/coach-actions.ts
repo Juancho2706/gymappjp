@@ -14,6 +14,7 @@ import {
     buildTrialExpiredEmail,
 } from '@/lib/email/transactional-templates'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { buildCoachUpdateData } from '../../_actions/module-form'
 
 function revalidateAdmin() {
     revalidatePath('/admin/coaches', 'page')
@@ -133,12 +134,7 @@ export async function updateCoachAction(_prev: unknown, formData: FormData) {
         return { error: parsed.error.issues.map(i => i.message).join(', ') }
     }
 
-    const updateData: Record<string, unknown> = {}
-    const fields = ['full_name', 'brand_name', 'subscription_tier', 'subscription_status', 'billing_cycle', 'current_period_end', 'trial_ends_at', 'admin_notes', 'payment_provider', 'primary_color'] as const
-    for (const f of fields) {
-        if (raw[f]) updateData[f] = raw[f] as string
-    }
-    if (raw.max_clients) updateData.max_clients = Number(raw.max_clients)
+    const updateData = buildCoachUpdateData(formData)
 
     const { error } = await adminClient.from('coaches').update(updateData).eq('id', parsed.data.coachId)
     if (error) return { error: error.message }
@@ -432,6 +428,20 @@ export async function getCoachSubscriptionEvents(coachId: string): Promise<Subsc
         .order('created_at', { ascending: false })
         .limit(10)
     return (data ?? []) as SubscriptionEventRow[]
+}
+
+// Override del CEO (plan estrategia 03 F1.3 / D5): el sheet carga los módulos del coach
+// al abrir — patrón de getCoachNotesAction, sin tocar el RPC paginado de la lista.
+export async function getCoachModulesAction(coachId: string): Promise<Record<string, boolean>> {
+    await assertAdmin()
+    const admin = createServiceRoleClient()
+    const { data } = await admin
+        .from('coaches')
+        .select('enabled_modules')
+        .eq('id', coachId)
+        .maybeSingle()
+    const raw = (data as { enabled_modules?: Record<string, boolean> | null } | null)?.enabled_modules
+    return (raw && typeof raw === 'object') ? raw : {}
 }
 
 export async function getCoachNotesAction(coachId: string): Promise<string> {

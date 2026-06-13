@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { updateTeamAction, setTeamSuspendedAction } from '../_actions/teams.actions'
-import { MODULE_KEYS, MODULE_LABELS } from './module-labels'
+import { MODULE_KEYS, MODULE_LABELS } from '../../_components/module-labels'
 import type { AdminTeamRow } from '../_data/teams.queries'
 
 interface Props {

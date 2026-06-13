@@ -28,7 +28,8 @@
       "@eva/schemas/bodycomp": ["../../packages/schemas/bodycomp.ts"],
       "@eva/calc": ["../../packages/calc/index.ts"],
       "@eva/brand-kit": ["../../packages/brand-kit/index.ts"],
-      "@eva/tiers": ["../../packages/tiers/index.ts"]
+      "@eva/tiers": ["../../packages/tiers/index.ts"],
+      "@eva/module-catalog": ["../../packages/module-catalog/catalog.ts"]
     }
   },
   "include": [

@@ -491,6 +491,8 @@ importers:
 
   packages/calc: {}
 
+  packages/module-catalog: {}
+
   packages/schemas: {}
 
   packages/tiers: {}

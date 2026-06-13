@@ -47,11 +47,22 @@ const EMAILS = {
     teamOwner: 'e2e-team-owner@evatest.cl',
     teamCoach: 'e2e-team-coach@evatest.cl',
     poolAlumno: 'e2e-pool-alumno@evatest.cl',
+    // Persona 9 (D7/F4 plan 03): coach standalone con los 4 modulos ON. 9na cuenta PERMANENTE.
+    modulesCoach: 'e2e-modules-coach@evatest.cl',
 }
 
 const SOLO_BRAND = { name: 'Aurora Strength', slug: 'e2e-aurora-strength', color: '#F59E0B' }
 const ORG = { name: 'E2E Performance Lab', slug: 'e2e-performance-lab', color: '#8B5CF6' }
 const TEAM = { name: 'E2E Pool Vortex', slug: 'e2e-pool-vortex', color: '#EC4899' }
+// Persona 9: standalone con modulos ON. Marca propia (no colisiona con Aurora Strength).
+const MODULES_BRAND = { name: 'Flux Conditioning', slug: 'e2e-flux-conditioning', color: '#06B6D4' }
+// Los 4 MODULE_KEYS (apps/web/src/services/entitlements.service.ts:19-24) ON para la persona 9.
+const ALL_MODULES_ON = {
+    cardio: true,
+    movement_assessment: true,
+    body_composition: true,
+    nutrition_exchanges: true,
+}
 
 const PROGRAM_BASE_NAME = 'E2E-SEED Programa Base'
 const PROGRAM_MEMBER_NAME = 'E2E-SEED Programa Member'
@@ -134,10 +145,22 @@ async function generateInviteCode(admin) {
 
 async function ensureCoach(admin, user, opts) {
     const existing = must(
-        await admin.from('coaches').select('id, slug, invite_code').eq('id', user.id).maybeSingle(),
+        await admin.from('coaches').select('id, slug, invite_code, enabled_modules').eq('id', user.id).maybeSingle(),
         `coaches select (${opts.slug})`
     )
     if (existing) {
+        // Reconciliacion idempotente de enabled_modules (persona 9: los 4 modulos DEBEN quedar ON
+        // incluso en reruns y tras el clawback de la migracion F2.1 que resetea coaches reales a '{}').
+        if (opts.enabledModules) {
+            const current = existing.enabled_modules ?? {}
+            const needsUpdate = JSON.stringify(current) !== JSON.stringify(opts.enabledModules)
+            if (needsUpdate) {
+                must(
+                    await admin.from('coaches').update({ enabled_modules: opts.enabledModules }).eq('id', user.id),
+                    `coaches update enabled_modules (${opts.slug})`
+                )
+            }
+        }
         track('coaches', false)
         return existing
     }
@@ -158,6 +181,7 @@ async function ensureCoach(admin, user, opts) {
             use_brand_colors_coach: true,
             active_org_id: opts.activeOrgId ?? null,
             current_period_end: opts.currentPeriodEnd ?? null,
+            enabled_modules: opts.enabledModules ?? {},
         }),
         `coaches insert (${opts.slug})`
     )
@@ -925,6 +949,23 @@ async function main() {
         label: 'pool-alumno (member)',
     })
 
+    // ----- Persona 9: coach standalone con los 4 modulos ON (D7/F4 plan 03) ------
+    // Standalone single-contexto con enabled_modules ON via service-role. FUERA de la matriz
+    // de separacion (sus listas esperadas son propias: incluyen el grupo MODULOS en el nav).
+    // 9na cuenta PERMANENTE: nunca purgar; el clawback de la migracion F2.1 la EXCLUYE (email @evatest.cl).
+    console.log('== Persona 9: coach standalone con modulos ON ==')
+    const modulesCoachUser = await ensureUser(admin, EMAILS.modulesCoach, 'E2E Modules Coach', password)
+    const modulesCoach = await ensureCoach(admin, modulesCoachUser, {
+        fullName: 'E2E Modules Coach',
+        brandName: MODULES_BRAND.name,
+        slug: MODULES_BRAND.slug,
+        primaryColor: MODULES_BRAND.color,
+        tier: 'elite',
+        status: 'active',
+        currentPeriodEnd: periodEnd.toISOString(),
+        enabledModules: ALL_MODULES_ON,
+    })
+
     // ----- Inventario ------------------------------------------------------------
     const inventory = {
         target: url,
@@ -937,6 +978,7 @@ async function main() {
             { email: EMAILS.teamOwner, id: teamOwnerUser.id, role: 'coach_team_owner', slug: 'e2e-team-owner' },
             { email: EMAILS.teamCoach, id: teamCoachUser.id, role: 'coach_team_member', slug: 'e2e-team-coach' },
             { email: EMAILS.poolAlumno, id: poolAlumnoUser.id, role: 'alumno_pool' },
+            { email: EMAILS.modulesCoach, id: modulesCoachUser.id, role: 'coach_standalone_modules', slug: MODULES_BRAND.slug, invite_code: modulesCoach.invite_code ?? null, enabled_modules: ALL_MODULES_ON },
         ],
         orgs: [{ slug: ORG.slug, id: org.id, name: ORG.name }],
         teams: [{ slug: TEAM.slug, id: team.id, name: TEAM.name }],

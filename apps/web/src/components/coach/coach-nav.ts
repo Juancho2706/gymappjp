@@ -48,10 +48,6 @@ export const NAV_MODULES: ReadonlyArray<NavModule> = [
     { key: 'team', href: '/coach/team', label: 'Equipo', shortLabel: 'Team', icon: UsersRound, contexts: ['coach_team'] },
     { key: 'programs', href: '/coach/workout-programs', label: 'Programas', shortLabel: 'Planes', icon: ClipboardList, contexts: ALL },
     { key: 'exercises', href: '/coach/exercises', label: 'Ejercicios', shortLabel: 'Ejer.', icon: Dumbbell, contexts: ALL },
-    // Módulos toggleables (specs movida): visibles solo con el entitlement ON para el contexto
-    // activo (enabledModules en getVisibleNavItems); enterprise excluido en v1.
-    { key: 'cardio', href: '/coach/cardio', label: 'Cardio', shortLabel: 'Cardio', icon: HeartPulse, contexts: ['coach_standalone', 'coach_team'], entitlement: 'cardio' },
-    { key: 'movement', href: '/coach/movement', label: 'Movimiento', shortLabel: 'Movim.', icon: PersonStanding, contexts: ['coach_standalone', 'coach_team'], entitlement: 'movement_assessment' },
     { key: 'nutrition', href: '/coach/nutrition-plans', label: 'Nutrición', shortLabel: 'Nutri', icon: Apple, contexts: ALL },
     { key: 'brand', href: '/coach/settings', label: 'Mi Marca', shortLabel: 'Marca', icon: Settings, contexts: ['coach_standalone'] },
     // C (Settings hub): mismo href que 'brand' pero en contexto TEAM — la página es
@@ -59,6 +55,13 @@ export const NAV_MODULES: ReadonlyArray<NavModule> = [
     { key: 'settings_team', href: '/coach/settings', label: 'Opciones', shortLabel: 'Opcs.', icon: Settings, contexts: ['coach_team'] },
     { key: 'billing', href: '/coach/subscription', label: 'Suscripción', shortLabel: 'Plan', icon: CreditCard, contexts: ['coach_standalone'] },
     { key: 'support', href: '/coach/support', label: 'Soporte', shortLabel: 'Ayuda', icon: LifeBuoy, contexts: ALL },
+    // Módulos toggleables (compra-only — plan estrategia 03): visibles solo con el entitlement ON
+    // para el contexto activo (enabledModules en getVisibleNavItems); enterprise excluido en v1.
+    // AL FINAL del registro a propósito: en mobile el bottom bar renderiza plano por orden de
+    // registro ⇒ los módulos comprados quedan contiguos al final del scroll horizontal. En desktop
+    // el orden lo impone `splitNavItems` (grupo "MÓDULOS" bajo divisor), no el registro.
+    { key: 'cardio', href: '/coach/cardio', label: 'Cardio', shortLabel: 'Cardio', icon: HeartPulse, contexts: ['coach_standalone', 'coach_team'], entitlement: 'cardio' },
+    { key: 'movement', href: '/coach/movement', label: 'Movimiento', shortLabel: 'Movim.', icon: PersonStanding, contexts: ['coach_standalone', 'coach_team'], entitlement: 'movement_assessment' },
 ]
 
 export const REACTIVATE_NAV_ITEM: NavModule = {
@@ -107,4 +110,24 @@ export function getVisibleNavItems(ctx: VisibleNavContext): NavModule[] {
         if (item.entitlement && ctx.enabledModules?.[item.entitlement] !== true) return false
         return true
     })
+}
+
+/**
+ * Particiona los items visibles del nav en `core` (siempre presentes) y `modules`
+ * (módulos comprados/toggleables). Discriminador: `item.entitlement != null`.
+ *
+ * Se aplica SOBRE el resultado de `getVisibleNavItems` — los módulos OFF ya vienen filtrados,
+ * así que `modules` solo contiene módulos con su entitlement ON. Cuando no hay ninguno,
+ * `modules` queda vacío ⇒ el sidebar no renderiza el divisor "MÓDULOS" (grupo gratis).
+ *
+ * Función PURA (unit-testeable sin render); preserva el orden relativo de `items`.
+ */
+export function splitNavItems(items: NavModule[]): { core: NavModule[]; modules: NavModule[] } {
+    const core: NavModule[] = []
+    const modules: NavModule[] = []
+    for (const item of items) {
+        if (item.entitlement != null) modules.push(item)
+        else core.push(item)
+    }
+    return { core, modules }
 }

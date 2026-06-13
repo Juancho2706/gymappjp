@@ -49,6 +49,30 @@ export function useCaptureUpgradeInitiated() {
     )
 }
 
+/**
+ * Coach clicked a module catalog CTA — captures purchase intent per module.
+ * Contexts: `standalone_mailto` (interino, plan 05 lo cambia a `self_service`),
+ * `team_manager_mailto` (gestor de equipo escribe a contacto). PostHog ya está
+ * gated por el consentimiento de cookies (no-op sin `ph`); cero servicios nuevos.
+ */
+export function useCaptureModuleInterest() {
+    const ph = usePostHog()
+    return useCallback(
+        (
+            moduleKey: string,
+            ctaContext: 'standalone_mailto' | 'team_manager_mailto' | 'self_service',
+            tier: SubscriptionTier
+        ) => {
+            ph?.capture('module_interest_cta_clicked', {
+                module_key: moduleKey,
+                cta_context: ctaContext,
+                tier,
+            })
+        },
+        [ph]
+    )
+}
+
 /** Coach completed registration — free or paid. */
 export function useCaptureRegistration() {
     const ph = usePostHog()

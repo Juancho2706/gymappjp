@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import {
     BILLING_CYCLE_CONFIG,
     getTierMaxClients,
@@ -137,7 +138,15 @@ export async function POST(request: Request) {
                 superseded_mp_preapproval_id: supersededMpPreapprovalId,
             }
 
-        const { error: updateError } = await supabase
+        // El UPDATE de columnas de billing va por service-role (patrón de
+        // cancel-subscription/route.ts:37,70): la migración hermana F2 revoca el UPDATE de
+        // subscription_tier/subscription_status/billing_cycle/max_clients/payment_provider/
+        // subscription_mp_id/superseded_mp_preapproval_id al rol `authenticated`, dejando esas
+        // columnas en manos exclusivas de service-role (checkout + webhook MP). La autenticación
+        // sigue user-scoped (supabase.auth.getUser arriba) y conservamos eq('id', user.id) — el id
+        // viene siempre de la sesión, jamás del body — para que el alcance no se ensanche.
+        const admin = createServiceRoleClient()
+        const { error: updateError } = await admin
             .from('coaches')
             .update(updatePayload)
             .eq('id', user.id)

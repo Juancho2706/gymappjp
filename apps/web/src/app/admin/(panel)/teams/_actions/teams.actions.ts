@@ -6,8 +6,8 @@ import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
 import { assertPlatformEmailAvailable, sanitizePlatformEmail } from '@/lib/auth/platform-email'
 import { generateUniqueCoachSlug } from '@/services/org/org.service'
 import { generateUniqueInviteCode } from '@/services/coach/coach.service'
-import { MODULE_KEYS } from '@/services/entitlements.service'
 import { getTierMaxClients } from '@/lib/constants'
+import { readModules } from '../../_actions/module-form'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '@/lib/database.types'
 
@@ -19,15 +19,6 @@ export type CreateTeamResult =
 
 const slugify = (s: string) =>
     s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 46)
-
-function readModules(formData: FormData): Record<string, boolean> {
-    const mods: Record<string, boolean> = {}
-    for (const key of MODULE_KEYS) {
-        const v = formData.get(`module_${key}`)
-        mods[key] = v === 'on' || v === 'true'
-    }
-    return mods
-}
 
 async function uniqueTeamSlug(admin: DB, base: string): Promise<string | null> {
     const clean = slugify(base)

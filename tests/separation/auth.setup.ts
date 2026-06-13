@@ -85,6 +85,13 @@ setup('persona 1: solo coach (standalone)', async ({ page }) => {
     await saveState(page, PERSONAS.soloCoach.storageState)
 })
 
+setup('persona 9: modules coach (standalone, 4 modulos ON)', async ({ page }) => {
+    setup.skip(!hasPersonasPassword, 'E2E_PERSONAS_PASSWORD no seteado')
+    setup.skip(hasFreshState(PERSONAS.modulesCoach.storageState), 'sesion fresca reusada (anti-saturacion auth)')
+    await loginCoach(page, PERSONAS.modulesCoach.email, PERSONAS.modulesCoach.password)
+    await saveState(page, PERSONAS.modulesCoach.storageState)
+})
+
 setup('persona 4: org coach (enterprise)', async ({ page }) => {
     setup.skip(!hasPersonasPassword, 'E2E_PERSONAS_PASSWORD no seteado')
     setup.skip(hasFreshState(PERSONAS.orgCoach.storageState), 'sesion fresca reusada (anti-saturacion auth)')

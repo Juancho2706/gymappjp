@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { CheckCircle2, Copy, ExternalLink, RefreshCw } from 'lucide-react'
 import { createTeamAction, type CreateTeamResult } from '../_actions/teams.actions'
 import { generateTempPassword } from '../../_components/generateTempPassword'
-import { MODULE_KEYS, MODULE_LABELS } from './module-labels'
+import { MODULE_KEYS, MODULE_LABELS } from '../../_components/module-labels'
 
 interface Props {
     open: boolean

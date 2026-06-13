@@ -16,7 +16,32 @@
 
 **Pendiente manual del dueño (NO ejecutado por el agente):** F1.8 — remoción en Search Console de las URLs con precios viejos (`/enterprise`, subdominio enterprise con "$89.990"/"$49.990"), pre-12-jun. Complementa el redirect 308 `/enterprise`→`/pricing` que el plan 01 ejecuta post-deploy.
 
-**Siguiente: Plan 03 módulos add-on compra-only** (`docs/plans/estrategia/03-PLAN-modulos-compra-only.md`).
+**Siguiente: Plan 03 módulos add-on compra-only** ✅ EJECUTADO (ver bloque abajo).
+
+### Estado 2026-06-12 — Plan 03 módulos add-on compra-only EJECUTADO (código + migraciones autoradas)
+
+**Plan:** `docs/plans/estrategia/03-PLAN-modulos-compra-only.md`. Decisiones del dueño (2026-06-11, NO se re-litigan).
+
+**Los 4 módulos (`cardio`/`movement_assessment`/`body_composition`/`nutrition_exchanges`) dejan de ser self-toggle gratis y pasan a compra-only.**
+
+**Código (F1 + F3 — working tree `feat/movida-platform`):**
+- **`create-preference`** (`app/api/payments/create-preference/route.ts`): el UPDATE de billing pasa a **service-role** (prerrequisito fintech duro: la migración rompería el checkout standalone si llegara primero).
+- **Settings > Módulos → catálogo read-only** (`ModulesForm`): switches → badge **Activo/Disponible** + pitch + lista de superficies por módulo; CTA por contexto (standalone → mailto `contacto@eva-app.cl` mientras `SELF_SERVICE_ADDONS_ENABLED=false`; gestor de team → "Conversemos"; no-gestor → "pídelo al owner"). Copy canónico en paquete puro **`packages/module-catalog/`** (reusable por RN, anti-drift, estrategia i18n anotada). `modules.actions.ts` **ELIMINADO**. Telemetría `module_interest_cta_clicked` en cada click de CTA.
+- **Admin coaches → bloque "Módulos habilitados" (override del CEO)**: `getCoachModulesAction` (on-open) + `updateCoachAction` (hidden `modules_present` para no apagar por accidente) escriben `coaches.enabled_modules` service-role con audit log (paridad con `/admin/teams`).
+- **Scoping de `clients` a service-role** (F1.4): reasignación de alumnos por org admin (`apps/enterprise/lib/org-admin.ts`) refactorizada — prerrequisito de la migración hermana.
+- **Auditoría `assertModule`** (F1.5) en las 4 superficies.
+- **Nav agrupa módulos ON bajo divisor "MÓDULOS"** (`splitNavItems` en `coach-nav.ts` + `CoachSidebar`): desktop divisor, mobile al final del scroll; sin módulos el nav es byte-idéntico al actual.
+
+**Migraciones AUTORADAS (NO aplicadas — branch efímero POSTERIOR al gate Movida):**
+- `supabase/migrations/20260611120000_modules_compra_only_grants.sql`: REVOKE table-level + GRANT column-allowlist en `coaches`/`teams`; drop de `coaches_insert_own`/`coaches_delete_own`/`"Coach can update their own profile"`; `teams_guard_owner_fields` endurecido (`seat_limit` bloqueado al owner); trigger set-once de `invite_code`; **clawback** de módulos auto-activados a `'{}'` excluyendo cuentas `@evatest.cl`.
+- `supabase/migrations/20260611120001_clients_scoping_grants.sql` (hermana): scoping `org_id`/`team_id`/`coach_id` solo service-role.
+- **Regla dura del orden:** las migraciones JAMÁS llegan a prod antes que el código de F1 esté **vivo en master** (romperían checkout standalone — fintech — y la reasignación org de alumnos). Branch efímero propio, posterior al gate Movida → borrar el MISMO día (Director §3).
+
+**Tests escritos (se corren en el GATE autorizado, no por tanda):** `packages/module-catalog/catalog.test.ts` (cobertura exacta de `MODULE_KEYS`), `tests/separation/module-catalog.spec.ts` (3 describes: teamCoach/teamOwner/soloCoach), `tests/separation/module-grants.sql` (11 casos, incluye drift contra `information_schema.column_privileges`). **9na persona e2e permanente** `e2e-modules-coach@evatest.cl` (standalone, 4 módulos ON por seed service-role) — nunca purgar.
+
+**Sin precios** (pre-cierre Movida; los precios de lista llegan recién con el plan 05).
+
+**Siguiente: Plan 05 billing add-ons self-service** (`docs/plans/estrategia/05-PLAN-billing-addons-selfservice.md`) — preapproval MercadoPago + `coach_addons` + trigger de sync (write-through); prende `SELF_SERVICE_ADDONS_ENABLED` y activa el CTA "Agregar" → `/coach/subscription#modulos`; re-modela el override CEO como `source='admin_grant'`. Publica precios post-cierre Movida ($9.990/módulo uniforme — D3 dueño).
 
 ### Estado 2026-06-12 — Plan 04 consolidación de planes + ciclos (código + migración MRR)
 
@@ -40,7 +65,7 @@
 ### Estado 2026-06-12 — Enterprise ARCHIVADO comercialmente (estrategia teams-first, F1-F4)
 **Hecho:** visibilidad enterprise ejecutada. Crons `org-health-alert` + `payment-reminder` retirados de schedule en `vercel.json` (handlers vivos, sin disparo automático). Copy legal swapeado a "planes empresariales a medida" (la landing NO se tocó — es scope del plan 02). Precios enterprise googleables neutralizados + noindex. Proxy: `/org/*` en dominio principal → `/login`; el flujo de alumno `/e` sigue vivo por diseño; `/enterprise` se sigue sirviendo con noindex hasta el redirect 308 → `/pricing` (post-plan 02). Redirect 308 del subdominio `enterprise.eva-app.cl` pendiente de config en Vercel — paso manual. Motor enterprise intacto (infra compartida: workspace engine, org.service, JWT hook); única puerta activa: `/admin/orgs`. Cero impacto en teams ni en el gate de Movida. Ver `docs/plans/estrategia/01-PLAN-archivado-enterprise.md`.
 
-**Siguiente:** Plan 02 landing Teams-first ✅ EJECUTADO (ver bloque arriba) y plan 04 ✅ EJECUTADO. Resta **plan 03 módulos add-on de pago** (`docs/plans/estrategia/03-PLAN-modulos-compra-only.md`) y plan 05 billing add-ons self-service.
+**Siguiente:** Planes 02 landing Teams-first, 03 módulos compra-only y 04 consolidación ✅ EJECUTADOS (ver bloques arriba). Resta **plan 05 billing add-ons self-service** (`docs/plans/estrategia/05-PLAN-billing-addons-selfservice.md`).
 
 ---
 

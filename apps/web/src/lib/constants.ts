@@ -83,3 +83,11 @@ export const SUBSCRIPTION_BLOCKED_STATUSES = [
     'past_due',
     'paused',
 ] as const
+
+// ── Módulos add-on: compra self-service (plan estrategia 03 / D4) ────────────
+// Interruptor de feature para la compra self-service de módulos add-on. Mientras
+// esté en `false`, el catálogo (Settings > Módulos) muestra el CTA interino
+// (mailto contacto@eva-app.cl) en vez de un link a /coach/subscription#modulos —
+// esa sección la construye el plan 05, que prende esta constante y activa el link.
+// Una sola constante evita un deploy coordinado entre planes (D4).
+export const SELF_SERVICE_ADDONS_ENABLED = false

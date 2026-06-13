@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getVisibleNavItems, NAV_MODULES } from './coach-nav'
+import { getVisibleNavItems, splitNavItems, NAV_MODULES } from './coach-nav'
 
 // Matriz de módulos por contexto (separación de flujos — regresión del smoke 2026-06-09:
 // josefit en standalone veía "Equipo").
@@ -106,5 +106,109 @@ describe('getVisibleNavItems — módulos toggleables (entitlements, specs movid
         }))
         expect(k).not.toContain('cardio')
         expect(k).not.toContain('movement')
+    })
+})
+
+describe('reorden del registro (cardio/movement al final) — F3', () => {
+    // El registro mueve cardio/movement al FINAL (después de support) para que en mobile (bottom
+    // bar plano por orden de registro) queden contiguos al final. Estos asserts blindan que ese
+    // reorden NO altera las listas visibles cuando los módulos están OFF (el filtro de entitlement
+    // actúa ANTES de que el orden importe), porque module-matrix.spec.ts las assertea byte-idénticas.
+
+    it('los módulos toggleables están declarados al final del registro (después de support)', () => {
+        const supportIdx = NAV_MODULES.findIndex((m) => m.key === 'support')
+        const cardioIdx = NAV_MODULES.findIndex((m) => m.key === 'cardio')
+        const movementIdx = NAV_MODULES.findIndex((m) => m.key === 'movement')
+        expect(cardioIdx).toBeGreaterThan(supportIdx)
+        expect(movementIdx).toBeGreaterThan(supportIdx)
+        // Y son los DOS últimos del registro (ningún core declarado después).
+        expect(NAV_MODULES.slice(supportIdx + 1).map((m) => m.key)).toEqual(['cardio', 'movement'])
+    })
+
+    it('con módulos OFF las listas existentes NO cambian (verificación explícita del reorden)', () => {
+        // Exactamente las mismas listas que assertean los specs de la matriz, post-reorden.
+        expect(keys(getVisibleNavItems({ activeWorkspaceType: 'coach_standalone', subscriptionStatus: 'active' })))
+            .toEqual(['dashboard', 'clients', 'programs', 'exercises', 'nutrition', 'brand', 'billing', 'support'])
+        expect(keys(getVisibleNavItems({ activeWorkspaceType: 'coach_team', subscriptionStatus: 'team_managed' })))
+            .toEqual(['dashboard', 'clients', 'team', 'programs', 'exercises', 'nutrition', 'settings_team', 'support'])
+        expect(keys(getVisibleNavItems({ activeWorkspaceType: 'enterprise_coach', subscriptionStatus: 'org_managed' })))
+            .toEqual(['dashboard', 'clients', 'programs', 'exercises', 'nutrition', 'support'])
+    })
+
+    it('con módulos ON cardio/movement quedan AL FINAL del array visible (no en medio)', () => {
+        for (const ws of ['coach_standalone', 'coach_team'] as const) {
+            const k = keys(getVisibleNavItems({
+                activeWorkspaceType: ws,
+                subscriptionStatus: ws === 'coach_team' ? 'team_managed' : 'active',
+                enabledModules: { cardio: true, movement_assessment: true },
+            }))
+            // Los dos últimos son los módulos, en orden de registro.
+            expect(k.slice(-2)).toEqual(['cardio', 'movement'])
+            // support (último core) precede a ambos módulos.
+            expect(k.indexOf('support')).toBeLessThan(k.indexOf('cardio'))
+        }
+    })
+})
+
+describe('splitNavItems — partición core / módulos (F3)', () => {
+    it('discriminador: items con entitlement van a modules, el resto a core', () => {
+        const items = getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'active',
+            enabledModules: { cardio: true, movement_assessment: true },
+        })
+        const { core, modules } = splitNavItems(items)
+        expect(modules.map((m) => m.key)).toEqual(['cardio', 'movement'])
+        expect(modules.every((m) => m.entitlement != null)).toBe(true)
+        expect(core.every((m) => m.entitlement == null)).toBe(true)
+    })
+
+    it('grupos disjuntos y cobertura total (core ∪ modules = items, sin solapamiento)', () => {
+        const items = getVisibleNavItems({
+            activeWorkspaceType: 'coach_team',
+            subscriptionStatus: 'team_managed',
+            enabledModules: { cardio: true, movement_assessment: true },
+        })
+        const { core, modules } = splitNavItems(items)
+        expect(core.length + modules.length).toBe(items.length)
+        const coreKeys = new Set(core.map((m) => m.key))
+        const moduleKeys = new Set(modules.map((m) => m.key))
+        // Disjuntos: ninguna key aparece en ambos grupos.
+        for (const k of coreKeys) expect(moduleKeys.has(k)).toBe(false)
+    })
+
+    it('modules vacío cuando no hay entitlements ON (grupo MÓDULOS no se renderiza)', () => {
+        const items = getVisibleNavItems({ activeWorkspaceType: 'coach_standalone', subscriptionStatus: 'active' })
+        const { core, modules } = splitNavItems(items)
+        expect(modules).toEqual([])
+        expect(core).toEqual(items)
+    })
+
+    it('preserva el orden relativo de items dentro de cada grupo (estable)', () => {
+        const items = getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'active',
+            enabledModules: { cardio: true, movement_assessment: true },
+        })
+        const { core, modules } = splitNavItems(items)
+        // El orden de core coincide con su orden en items (solo se quitan los módulos del medio/final).
+        expect(core.map((m) => m.key)).toEqual(items.filter((i) => i.entitlement == null).map((m) => m.key))
+        expect(modules.map((m) => m.key)).toEqual(items.filter((i) => i.entitlement != null).map((m) => m.key))
+    })
+
+    it('ON parcial: solo el módulo habilitado entra en modules', () => {
+        const items = getVisibleNavItems({
+            activeWorkspaceType: 'coach_team',
+            subscriptionStatus: 'team_managed',
+            enabledModules: { cardio: true },
+        })
+        const { modules } = splitNavItems(items)
+        expect(modules.map((m) => m.key)).toEqual(['cardio'])
+    })
+
+    it('lista vacía ⇒ ambos grupos vacíos (función pura, sin throw)', () => {
+        const { core, modules } = splitNavItems([])
+        expect(core).toEqual([])
+        expect(modules).toEqual([])
     })
 })

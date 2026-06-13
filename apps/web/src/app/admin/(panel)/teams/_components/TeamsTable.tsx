@@ -5,7 +5,7 @@ import { Plus, Users, UserCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TeamCreateSheet } from './TeamCreateSheet'
 import { TeamEditSheet } from './TeamEditSheet'
-import { MODULE_KEYS, MODULE_LABELS } from './module-labels'
+import { MODULE_KEYS, MODULE_LABELS } from '../../_components/module-labels'
 import type { AdminTeamRow } from '../_data/teams.queries'
 
 export function TeamsTable({ teams }: { teams: AdminTeamRow[] }) {

@@ -24,6 +24,8 @@ export const SLUGS = {
     org: 'e2e-performance-lab',
     /** Team (pool) — shell alumno /t/[team_slug] */
     team: 'e2e-pool-vortex',
+    /** Coach standalone "con módulos" (persona 9) — shell alumno /c/[coach_slug] */
+    modulesCoach: 'e2e-flux-conditioning',
 } as const
 
 // ── Marcas por contexto (nombre visible en sidebar + --theme-primary) ────────
@@ -57,7 +59,7 @@ export interface Persona {
     storageState: string
 }
 
-/** Las 8 personas seeded (password compartida via E2E_PERSONAS_PASSWORD). */
+/** Las 9 personas seeded (password compartida via E2E_PERSONAS_PASSWORD). */
 export const PERSONAS = {
     /** 1 — coach standalone "Aurora Strength" (tier elite, active) */
     soloCoach: { email: 'e2e-solo-coach@evatest.cl', password: PERSONAS_PASSWORD, storageState: authFile('solo-coach') },
@@ -75,6 +77,10 @@ export const PERSONAS = {
     teamCoach: { email: 'e2e-team-coach@evatest.cl', password: PERSONAS_PASSWORD, storageState: authFile('team-coach') },
     /** 8 — alumno del pool (scope team; consent ya otorgado por el seed) */
     poolAlumno: { email: 'e2e-pool-alumno@evatest.cl', password: PERSONAS_PASSWORD, storageState: authFile('pool-alumno') },
+    /** 9 — coach standalone "con módulos" (elite/active, los 4 módulos ON vía seed service-role).
+     *  9na cuenta PERMANENTE (D7/F4): nunca purgar (memoria de cuentas de prueba permanentes).
+     *  FUERA de la matriz de separación — sus listas esperadas son propias (incluyen el grupo MÓDULOS). */
+    modulesCoach: { email: 'e2e-modules-coach@evatest.cl', password: PERSONAS_PASSWORD, storageState: authFile('modules-coach') },
 } as const satisfies Record<string, Persona>
 
 /**

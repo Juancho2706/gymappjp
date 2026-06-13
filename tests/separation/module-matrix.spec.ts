@@ -10,11 +10,13 @@ import { PERSONAS } from './personas'
  * las rutas exclusivas (/coach/team, /coach/settings/modules) respeten el contexto activo.
  *
  * Personas Wave 2 (seed @evatest.cl) via storageState pre-generado por ./personas:
- *   PERSONAS.soloCoach  -> e2e-solo-coach@evatest.cl  (standalone, elite/active)
- *   PERSONAS.orgOwner   -> e2e-org-owner@evatest.cl   (org_owner, SIN fila coaches)
- *   PERSONAS.orgCoach   -> e2e-org-coach@evatest.cl   (org_managed, rol coach)
- *   PERSONAS.teamOwner  -> e2e-team-owner@evatest.cl  (team_managed, owner del pool)
- *   PERSONAS.teamCoach  -> e2e-team-coach@evatest.cl  (team_managed, miembro sin manage)
+ *   PERSONAS.soloCoach    -> e2e-solo-coach@evatest.cl    (standalone, elite/active, módulos OFF)
+ *   PERSONAS.orgOwner     -> e2e-org-owner@evatest.cl     (org_owner, SIN fila coaches)
+ *   PERSONAS.orgCoach     -> e2e-org-coach@evatest.cl     (org_managed, rol coach)
+ *   PERSONAS.teamOwner    -> e2e-team-owner@evatest.cl    (team_managed, owner del pool)
+ *   PERSONAS.teamCoach    -> e2e-team-coach@evatest.cl    (team_managed, miembro sin manage)
+ *   PERSONAS.modulesCoach -> e2e-modules-coach@evatest.cl (standalone, los 4 módulos ON — persona 9,
+ *                            FUERA de la matriz: listas propias con el grupo MÓDULOS; D7/F4 plan 03)
  *
  * Disciplina E2E (de tests/team/team-flows.spec.ts): NUNCA networkidle; waitForURL con
  * patrones que EXCLUYEN /login; guard del overlay de error de Next dev; sin storageState
@@ -33,6 +35,15 @@ const ENTERPRISE_MODULES = ['Dashboard', 'Alumnos', 'Programas', 'Ejercicios', '
 // Cardio + Movimiento aparecen para el team owner cuando enabled_modules los tiene ON
 // (E2E Pool Vortex: cardio/movement_assessment = true). Planes 2+3 los agregaron a la nav.
 const TEAM_MODULES = ['Dashboard', 'Alumnos', 'Equipo', 'Programas', 'Ejercicios', 'Cardio', 'Movimiento', 'Nutrición', 'Opciones', 'Soporte']
+// Persona 9 (e2e-modules-coach): standalone con los 4 módulos ON. El nav desktop renderiza el
+// bloque CORE y, tras el divisor "MÓDULOS" (F3 — splitNavItems), el bloque de módulos al final.
+// collectNavTitles lee a[title] en orden de DOM ⇒ core seguido de los módulos.
+const MODULES_COACH_MODULES = [
+    'Dashboard', 'Alumnos', 'Programas', 'Ejercicios', 'Nutrición', 'Mi Marca', 'Suscripción', 'Soporte',
+    'Cardio', 'Movimiento',
+]
+// Contrato con F3 (CoachSidebar.tsx): el divisor del grupo MÓDULOS expone este testid en desktop.
+const MODULES_DIVIDER_TESTID = 'nav-modules-divider'
 
 const hasPassword = !!process.env.E2E_PERSONAS_PASSWORD
 
@@ -214,6 +225,50 @@ test.describe('Org owner — e2e-org-owner', () => {
         } else {
             expect(page.url()).not.toContain('/coach/dashboard')
         }
+        await expectNoRuntimeError(page)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// 13. STANDALONE CON MÓDULOS ON (persona 9 — fuera de la matriz; D7/F4 plan 03)
+//
+// Las 8 personas de arriba quedan SIN módulos (assertan el nav byte-idéntico al actual).
+// e2e-modules-coach es la 9na cuenta permanente con los 4 módulos ON via seed service-role:
+// ejercita el grupo "MÓDULOS" del nav (divisor desktop + módulos al final) y que las rutas
+// de módulo cargan sin redirect. Sus listas esperadas son PROPIAS (no tocan las de la matriz).
+// ---------------------------------------------------------------------------
+test.describe('Standalone con módulos — e2e-modules-coach', () => {
+    test.skip(!personaReady(PERSONAS.modulesCoach), SKIP_MSG)
+    test.use({ storageState: PERSONAS.modulesCoach?.storageState ?? EMPTY_STATE })
+
+    test('A13: sidebar incluye Cardio + Movimiento AL FINAL (grupo MÓDULOS tras el core)', async ({ page }) => {
+        await gotoCoachDashboard(page)
+        const titles = await collectNavTitles(page)
+        expect(titles).toEqual(MODULES_COACH_MODULES)
+        // Cardio/Movimiento existen (entitlement ON) y van después del core (orden del array).
+        await expect(page.locator('aside nav a[title="Cardio"]')).toBeVisible()
+        await expect(page.locator('aside nav a[title="Movimiento"]')).toBeVisible()
+        // Standalone: conserva Mi Marca + Suscripción y NO ve Equipo.
+        await expect(page.locator('aside nav a[title="Equipo"]')).toHaveCount(0)
+        await expectNoRuntimeError(page)
+    })
+
+    test('A14: el divisor del grupo MÓDULOS es visible en desktop (no contamina collectNavTitles)', async ({ page }) => {
+        await gotoCoachDashboard(page)
+        await collectNavTitles(page) // asegura el nav renderizado antes de afirmar el divisor
+        // El divisor lo renderiza CoachSidebar (F3) con este testid SOLO cuando hay ≥1 módulo ON.
+        // No es <a title> ⇒ no aparece en la lista de títulos (A13 sigue exacta).
+        await expect(page.getByTestId(MODULES_DIVIDER_TESTID)).toBeVisible({ timeout: 20_000 })
+        await expectNoRuntimeError(page)
+    })
+
+    test('A15: /coach/cardio carga SIN redirect (entitlement ON ⇒ assertModule pasa)', async ({ page }) => {
+        await page.goto('/coach/cardio')
+        // El patrón excluye /dashboard y /login: si assertModule rebotara, esto falla con timeout.
+        await page.waitForURL('**/coach/cardio**', { timeout: 25_000 })
+        expect(page.url()).toContain('/coach/cardio')
+        expect(page.url()).not.toContain('/coach/dashboard')
+        await expect(page.getByRole('main')).toBeVisible({ timeout: 20_000 })
         await expectNoRuntimeError(page)
     })
 })

@@ -80,6 +80,20 @@ Ultima modificacion: 2026-05-21 18:25 -04:00
 | Panel | `/admin/(panel)/*` | `_data/*.queries.ts`, `_components/*` |
 | CRUD global | `coaches`, `clients`, `novedades` | `_actions/*` por modulo |
 
+## Flujo: modulos add-on (compra-only — plan estrategia 03)
+
+Los 4 modulos (`cardio`, `movement_assessment`, `body_composition`, `nutrition_exchanges`) son **add-ons de pago, no self-toggle gratis**. La escritura de `enabled_modules` es **service-role only** (column-level grants; ver CLAUDE.md §Database).
+
+| Paso | Ruta/archivo principal | Componentes/actions |
+|---|---|---|
+| Ver catalogo (coach) | `/coach/settings/modules` | `_data/modules.queries.ts` (`getModulesContext` — `isTeamManager` solo discrimina el CTA, ya NO habilita edicion), `ModulesForm` **read-only** |
+| Copy canonico de modulos | `packages/module-catalog/` | constante pura por `ModuleKey` (`label`/`pitch`/`surfaces`); la RN futura reusa el MISMO paquete (anti-drift) |
+| CTA por contexto | `ModulesForm` | standalone → mailto `contacto@eva-app.cl` mientras `SELF_SERVICE_ADDONS_ENABLED=false` (plan 05 lo prende → `/coach/subscription#modulos`); team gestor → "Conversemos" mailto; team no-gestor → "pidelo al owner"; telemetria `module_interest_cta_clicked` |
+| Activacion HOY (override CEO) | `/admin/(panel)/coaches` → `CoachEditSheet` | bloque "Modulos habilitados"; `getCoachModulesAction` (on-open) + `updateCoachAction` (hidden `modules_present`) → escribe `coaches.enabled_modules` (service-role) + audit log. Teams: `/admin/teams` → `TeamEditSheet` (`teams.enabled_modules`) |
+| Activacion MAÑANA (self-service) | plan 05 billing add-ons | preapproval MercadoPago + `coach_addons` + trigger de sync (write-through); el override CEO se re-modela como `source='admin_grant'` |
+| Resolucion del entitlement (server-side) | `apps/web/src/services/entitlements.service.ts` | `assertModule(db, key, {teamId\|coachId})` — pool manda; kill-switch de operador `EVA_DISABLED_MODULES` por encima del entitlement |
+| Nav agrupado | `components/coach/coach-nav.ts`, `CoachSidebar.tsx` | `splitNavItems` → modulos ON bajo divisor "MODULOS" (desktop), al final del scroll (mobile); sin modulos el nav es identico al actual |
+
 ## Como mantener este mapa
 
 Actualizar este archivo cuando:
