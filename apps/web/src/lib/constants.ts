@@ -103,7 +103,7 @@ export const SUBSCRIPTION_BLOCKED_STATUSES = [
 // self-service (plan 05): la UI y los endpoints se construyen detrás de esta
 // lógica, pero el lanzamiento es MANUAL y solo ocurre POST-gate + sandbox MP
 // verde + hardening RLS del plan 03 confirmado en prod (doc fuente §2.2).
-export const SELF_SERVICE_ADDONS_ENABLED = false
+export const SELF_SERVICE_ADDONS_ENABLED = true // ⚠️ PREVIEW-ONLY (rama preview/addons-test, QA de pago real). NO mergear a master — en master DEBE quedar false hasta el flip de lanzamiento.
 
 // ── Add-ons: catálogo de precios + reglas de pago (plan estrategia 05, F0) ────
 // MODULE_KEYS / ModuleKey vienen de entitlements.service (import al tope del módulo,
