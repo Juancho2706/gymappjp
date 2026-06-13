@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { coachIdentifierColumn } from '@/lib/coach/invite-code'
 import { isStudentMovementEnabled } from '@/services/assessment/movement-assessment.service'
+import { isStudentBodyCompositionEnabled } from '@/services/bodycomp/body-composition.service'
 
 export const getClientRootUser = cache(async () => {
     const supabase = await createClient()
@@ -21,6 +22,22 @@ export const getStudentMovementNavEnabled = cache(async () => {
     const supabase = await createClient()
     try {
         return await isStudentMovementEnabled(supabase, createServiceRoleClient(), user.id)
+    } catch {
+        return false
+    }
+})
+
+/**
+ * Espejo del modulo body_composition para el nav del alumno (pool => su team; standalone => su
+ * coach). Service-role SOLO para leer enabled_modules (RLS no deja al alumno leer teams/coaches);
+ * el gate real es la page de bodycomp.
+ */
+export const getStudentBodyCompositionNavEnabled = cache(async () => {
+    const user = await getClientRootUser()
+    if (!user) return false
+    const supabase = await createClient()
+    try {
+        return await isStudentBodyCompositionEnabled(supabase, createServiceRoleClient(), user.id)
     } catch {
         return false
     }

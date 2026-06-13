@@ -1,5 +1,6 @@
 'use client'
 
+import { useReducedMotion } from 'framer-motion'
 import {
     Line,
     LineChart,
@@ -16,6 +17,7 @@ import {
 } from 'recharts'
 import { MOVEMENT_PATTERNS_V1 } from '@eva/calc'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
+import { Reveal } from '@/components/motion/Reveal'
 import type { MovementAssessmentWithItems } from '@/domain/assessment/types'
 
 /**
@@ -24,6 +26,7 @@ import type { MovementAssessmentWithItems } from '@/domain/assessment/types'
  */
 export function EvolutionCharts({ finals }: { finals: MovementAssessmentWithItems[] }) {
     const { t, language } = useTranslation()
+    const reduce = useReducedMotion()
     if (finals.length < 2) return null
 
     const locale = language === 'es' ? 'es-CL' : 'en-US'
@@ -41,7 +44,7 @@ export function EvolutionCharts({ finals }: { finals: MovementAssessmentWithItem
     }))
 
     return (
-        <section className="rounded-2xl border border-border bg-card p-4 sm:p-6">
+        <Reveal as="section" className="rounded-2xl border border-border bg-card p-4 sm:p-6">
             <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
                 {t('assessment.evolution.title')}
             </h2>
@@ -62,7 +65,7 @@ export function EvolutionCharts({ finals }: { finals: MovementAssessmentWithItem
                             stroke="#10B981"
                             strokeWidth={2.5}
                             dot={{ r: 4 }}
-                            isAnimationActive={false}
+                            isAnimationActive={!reduce}
                         />
                     </LineChart>
                 </ResponsiveContainer>
@@ -80,7 +83,7 @@ export function EvolutionCharts({ finals }: { finals: MovementAssessmentWithItem
                             stroke="#94a3b8"
                             fill="#94a3b8"
                             fillOpacity={0.25}
-                            isAnimationActive={false}
+                            isAnimationActive={!reduce}
                         />
                         <Radar
                             name={t('assessment.evolution.last')}
@@ -88,12 +91,12 @@ export function EvolutionCharts({ finals }: { finals: MovementAssessmentWithItem
                             stroke="#10B981"
                             fill="#10B981"
                             fillOpacity={0.35}
-                            isAnimationActive={false}
+                            isAnimationActive={!reduce}
                         />
                         <Legend wrapperStyle={{ fontSize: 12 }} />
                     </RadarChart>
                 </ResponsiveContainer>
             </div>
-        </section>
+        </Reveal>
     )
 }

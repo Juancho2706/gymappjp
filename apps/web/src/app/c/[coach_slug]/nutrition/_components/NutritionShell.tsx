@@ -1,6 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { fadeSlideLeft } from '@/lib/animation-presets'
 import { DayNavigator } from './DayNavigator'
 import { MacroRingSummary } from './MacroRingSummary'
 import { MealCard, type MealCardMeal } from './MealCard'
@@ -49,6 +51,10 @@ type PlanMealRow = NutritionMealMacroSource & {
   order_index: number
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fireConfetti = (opts: object) =>
+  (import('canvas-confetti') as Promise<any>).then((m) => (m.default ?? m)(opts))
+
 function toMealCardMeal(m: PlanMealRow): MealCardMeal {
   return {
     id: m.id,
@@ -96,8 +102,11 @@ export function NutritionShell({
   pdfBrand,
   brandLogoUrl,
 }: Props) {
+  const reduceMotion = useReducedMotion()
   const [selectedDate, setSelectedDate] = useState(today)
   const [currentLog, setCurrentLog] = useState<Record<string, unknown> | null>(initialLog)
+  /** Evita repetir el confetti del "día completo" más de una vez por fecha. */
+  const dayCompleteConfettiRef = useRef<Set<string>>(new Set())
   useEffect(() => {
     if (selectedDate !== today) return
     if (initialLog != null) {
@@ -364,6 +373,21 @@ export function NutritionShell({
   const handleToggle = useCallback(
     (mealId: string, currentCompleted: boolean) => {
       const next = !currentCompleted
+      // Confetti chico al completar la ÚLTIMA comida del día (delight, 1×/fecha, reduce off).
+      if (next) {
+        const stillPending = mealsVisible.filter(
+          (m) => m.id !== mealId && !optimisticCompletions[m.id]
+        )
+        if (
+          stillPending.length === 0 &&
+          mealsVisible.length > 0 &&
+          !reduceMotion &&
+          !dayCompleteConfettiRef.current.has(selectedDate)
+        ) {
+          dayCompleteConfettiRef.current.add(selectedDate)
+          void fireConfetti({ particleCount: 45, spread: 45, startVelocity: 28, origin: { x: 0.5, y: 0.7 } })
+        }
+      }
       startToggleTransition(async () => {
         setOptimisticCompletion({ mealId, isCompleted: next })
         try {
@@ -414,7 +438,18 @@ export function NutritionShell({
         }
       })
     },
-    [setOptimisticCompletion, userId, plan.id, currentLog, coachSlug, selectedDate, today]
+    [
+      setOptimisticCompletion,
+      userId,
+      plan.id,
+      currentLog,
+      coachSlug,
+      selectedDate,
+      today,
+      mealsVisible,
+      optimisticCompletions,
+      reduceMotion,
+    ]
   )
 
   const handlePartialPctChange = useCallback(
@@ -759,7 +794,16 @@ export function NutritionShell({
         isReadOnly={!isToday}
       />
 
-      <div className="space-y-3">
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={selectedDate}
+          className="space-y-3"
+          variants={fadeSlideLeft}
+          initial={reduceMotion ? false : 'hidden'}
+          animate="show"
+          exit={reduceMotion ? undefined : 'hidden'}
+          transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        >
         {mealsVisible.length === 0 ? (
           <p className="rounded-2xl border border-border/60 bg-muted/15 px-4 py-3 text-center text-xs text-muted-foreground">
             No hay comidas planificadas para este día.
@@ -814,7 +858,8 @@ export function NutritionShell({
             )
           })
         )}
-      </div>
+        </motion.div>
+      </AnimatePresence>
 
       {exchangeEnabled && exchange && (
         <ExchangeEquivalencesSheet

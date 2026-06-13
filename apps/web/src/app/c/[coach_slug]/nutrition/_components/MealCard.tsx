@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { CheckCircle2, ChevronDown, ChevronUp, Lock } from 'lucide-react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import { springs } from '@/lib/animation-presets'
 import { cn } from '@/lib/utils'
 import { sumMealMacros, type FoodItemForMacros } from '@/lib/nutrition-utils'
 import { MealIngredientRow } from './MealIngredientRow'
@@ -101,18 +102,14 @@ export function MealCard({
           <motion.div
             animate={
               isCompleted
-                ? { scale: [1, 1.2, 1], backgroundColor: '#10b981' }
+                ? { scale: 1, backgroundColor: '#10b981' }
                 : { scale: 1, backgroundColor: 'transparent' }
             }
             transition={
               reduceMotion
                 ? { duration: 0 }
                 : isCompleted
-                  ? {
-                      duration: 0.45,
-                      ease: 'easeOut',
-                      times: [0, 0.35, 1],
-                    }
+                  ? springs.elastic
                   : { duration: 0.2, ease: 'easeOut' }
             }
             className={cn(
@@ -129,7 +126,7 @@ export function MealCard({
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0, opacity: 0 }}
-                  transition={{ duration: reduceMotion ? 0 : 0.15 }}
+                  transition={reduceMotion ? { duration: 0 } : springs.elastic}
                 >
                   <CheckCircle2 className="w-4 h-4 text-white" />
                 </motion.div>

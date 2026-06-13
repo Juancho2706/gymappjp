@@ -14,6 +14,7 @@ import {
     CheckCircle,
     Dumbbell,
     PersonStanding,
+    Gauge,
     PanelLeftClose,
     PanelLeft
 } from 'lucide-react'
@@ -38,9 +39,11 @@ interface Props {
     initialUseBrandColors?: boolean
     /** Espejo del modulo movement_assessment (resuelto server-side; gate real en la page). */
     showMovement?: boolean
+    /** Espejo del modulo body_composition (resuelto server-side; gate real en la page). */
+    showBodyComposition?: boolean
 }
 
-export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initialUseBrandColors = true, showMovement = false }: Props) {
+export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initialUseBrandColors = true, showMovement = false, showBodyComposition = false }: Props) {
     const base = basePath ?? `/c/${coachSlug}`
     const pathname = usePathname()
     const router = useRouter()
@@ -103,6 +106,13 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
             href: `${base}/movimiento`,
             label: 'Movimiento',
             icon: PersonStanding,
+        }] : []),
+        // Guard de nav: base 4 + movimiento + bodycomp = 6 (tope). El bottom bar mobile ya tiene
+        // scroll horizontal con afford; NO agregar un 7º item sin un menu "mas".
+        ...(showBodyComposition ? [{
+            href: `${base}/bodycomp`,
+            label: 'Composición',
+            icon: Gauge,
         }] : []),
     ]
 

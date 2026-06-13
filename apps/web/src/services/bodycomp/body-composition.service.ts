@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
-import { assertModule } from '@/services/entitlements.service'
+import { assertModule, hasModule, isModuleKilledByOperator } from '@/services/entitlements.service'
 import { getCoachClientScope, type CoachClientScope } from '@/services/client/client-scope.service'
 import { logTeamClientAccess } from '@/services/team/team.service'
 import { computeIsak } from '@/domain/bodycomp'
@@ -272,4 +272,69 @@ export async function listClientMeasurements(
         })
     }
     return { bia, isak }
+}
+
+const MODULE_KEY = 'body_composition' as const
+
+export type StudentBodyCompositionView = {
+    enabled: boolean
+    clientName: string | null
+    bia: repo.BodyCompositionRow[]
+    isak: repo.BodyCompositionRow[]
+}
+
+/**
+ * Vista del ALUMNO (read-only — la rama self-select de bcm_select es el techo: el alumno solo
+ * ve SUS propias mediciones y NO puede escribir ninguna policy). `db` = cliente request-scoped del
+ * alumno. `entitlementsDb` = cliente service-role SOLO para leer enabled_modules (el alumno no
+ * puede SELECT en teams/coaches por RLS); se usa despues de confirmar que la fila del cliente es
+ * la del propio usuario.
+ *
+ * Espejo de getStudentMovementView. A PROPOSITO NO se llama assertHealthConsent ni
+ * logTeamClientAccess: ambos son controles del COACH accediendo a datos de un tercero. Aqui el
+ * alumno es el TITULAR del dato — gatear su propia vista por el consentimiento que dio al coach, o
+ * registrarla como "acceso de coach a cliente", es semanticamente incorrecto. (Open Q legal Ley
+ * 21.719: si legal exige un log de auto-acceso, agregar un `view` best-effort separado — no aqui.)
+ */
+export async function getStudentBodyCompositionView(
+    db: DB,
+    entitlementsDb: DB,
+    userId: string
+): Promise<StudentBodyCompositionView> {
+    // Kill-switch de plataforma (Edge Config) — antes de todo, como en el resto del modulo.
+    await assertBodyCompositionEnabled()
+    if (isModuleKilledByOperator(MODULE_KEY)) return { enabled: false, clientName: null, bia: [], isak: [] }
+    // Identidad legacy: clients.id = auth.uid() (mismo criterio que la vista de movimiento del alumno).
+    const client = await repo.findClientScopeRow(db, userId)
+    if (!client) return { enabled: false, clientName: null, bia: [], isak: [] }
+    const enabled = await hasModule(
+        entitlementsDb,
+        MODULE_KEY,
+        client.team_id ? { teamId: client.team_id } : { coachId: client.coach_id }
+    )
+    if (!enabled) return { enabled: false, clientName: client.full_name, bia: [], isak: [] }
+    const [bia, isak] = await Promise.all([
+        repo.listByClientAndMethod(db, client.id, 'bia'),
+        repo.listByClientAndMethod(db, client.id, 'isak'),
+    ])
+    return { enabled: true, clientName: client.full_name, bia, isak }
+}
+
+/**
+ * Espejo liviano para el nav del alumno (sin filas): mismo gate que getStudentBodyCompositionView
+ * — el gate real sigue siendo la page (notFound).
+ */
+export async function isStudentBodyCompositionEnabled(
+    db: DB,
+    entitlementsDb: DB,
+    userId: string
+): Promise<boolean> {
+    if (isModuleKilledByOperator(MODULE_KEY)) return false
+    const client = await repo.findClientScopeRow(db, userId)
+    if (!client) return false
+    return hasModule(
+        entitlementsDb,
+        MODULE_KEY,
+        client.team_id ? { teamId: client.team_id } : { coachId: client.coach_id }
+    )
 }

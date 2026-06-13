@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react'
 import { ShieldCheck, Zap } from 'lucide-react'
 import { CALENDLY_URL, ENTERPRISE_LOGIN_PATH, HERO } from '../../_data/enterprise-content'
 import { LottiePlayer } from '../atoms/LottiePlayer'
-import { Reveal, RevealStagger, RevealItem } from '../atoms/Reveal'
+import { Reveal, RevealStagger, RevealItem } from '@/components/motion/Reveal'
 
 const PARTICLE_COUNT = 30
 

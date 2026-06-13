@@ -28,6 +28,23 @@ const DETAIL_COLUMNS = `${LIST_COLUMNS}, raw_input`
 
 export type BodyCompositionMethod = 'bia' | 'isak'
 
+/**
+ * Fila minima del alumno para resolver SU contexto de modulo (vista read-only del alumno).
+ * Identidad legacy: clients.id = auth.uid() (mismo criterio que la vista de movimiento).
+ */
+export async function findClientScopeRow(
+    db: DB,
+    clientId: string
+): Promise<{ id: string; full_name: string | null; team_id: string | null; coach_id: string | null } | null> {
+    const { data, error } = await db
+        .from('clients')
+        .select('id, full_name, team_id, coach_id')
+        .eq('id', clientId)
+        .maybeSingle()
+    if (error) throw new Error(error.message)
+    return data
+}
+
 /** Lista las mediciones (no borradas) de un cliente para UN metodo, mas reciente primero. */
 export async function listByClientAndMethod(
     db: DB,

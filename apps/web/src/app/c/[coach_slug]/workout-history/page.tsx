@@ -4,7 +4,7 @@ import type { Metadata } from 'next'
 import { ArrowLeft, Dumbbell, ChevronDown } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { getWorkoutHistoryDayCounts } from '@/app/c/[coach_slug]/dashboard/_data/dashboard.queries'
-import { WorkoutLogItems } from '@/app/c/[coach_slug]/dashboard/_components/history/WorkoutLogItem'
+import { WorkoutHistoryList } from './_components/WorkoutHistoryList'
 import { getWorkoutHistoryUser } from './_data/workout-history.queries'
 import { getClientBasePath } from '@/lib/client/base-path'
 
@@ -61,7 +61,7 @@ export default async function ClientWorkoutHistoryPage({ params, searchParams }:
                 ) : (
                     <>
                         <GlassCard className="overflow-hidden">
-                            <WorkoutLogItems items={items} />
+                            <WorkoutHistoryList items={items} />
                         </GlassCard>
                         {!extended && (
                             <div className="mt-4 flex justify-center">

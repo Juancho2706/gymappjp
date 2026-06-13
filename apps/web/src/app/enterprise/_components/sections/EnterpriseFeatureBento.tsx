@@ -4,7 +4,7 @@ import { Database, Zap } from 'lucide-react'
 import { FEATURES } from '../../_data/enterprise-content'
 import { FeatureCard } from '../molecules/FeatureCard'
 import { SectionEyebrow } from '../atoms/SectionEyebrow'
-import { Reveal, RevealStagger, RevealItem } from '../atoms/Reveal'
+import { Reveal, RevealStagger, RevealItem } from '@/components/motion/Reveal'
 
 export function EnterpriseFeatureBento() {
   return (

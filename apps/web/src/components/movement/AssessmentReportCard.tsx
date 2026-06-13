@@ -4,6 +4,7 @@ import { AlertTriangle, Scale } from 'lucide-react'
 import { MOVEMENT_PATTERNS_V1 } from '@eva/calc'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { cn } from '@/lib/utils'
+import { Reveal } from '@/components/motion/Reveal'
 import type { MovementAssessmentItem, MovementAssessmentWithItems } from '@/domain/assessment/types'
 import { PriorityBadge } from './PriorityBadge'
 import { MovementDisclaimer } from './MovementDisclaimer'
@@ -90,7 +91,7 @@ export function AssessmentReportCard({ assessment }: { assessment: MovementAsses
     )
 
     return (
-        <section className="rounded-2xl border border-border bg-card p-4 sm:p-6">
+        <Reveal as="section" className="rounded-2xl border border-border bg-card p-4 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -156,6 +157,6 @@ export function AssessmentReportCard({ assessment }: { assessment: MovementAsses
             )}
 
             <MovementDisclaimer className="mt-4" />
-        </section>
+        </Reveal>
     )
 }

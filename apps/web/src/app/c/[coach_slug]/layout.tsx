@@ -11,7 +11,7 @@ import {
 } from '@/lib/brand-assets'
 import { resolveMetadataBase } from '@/lib/site-url'
 import { ClientNav } from '@/components/client/ClientNav'
-import { getStudentMovementNavEnabled } from './_data/client-root.queries'
+import { getStudentMovementNavEnabled, getStudentBodyCompositionNavEnabled } from './_data/client-root.queries'
 import { BasePathProvider } from '@/components/client/BasePathProvider'
 import { InstallPrompt } from '@/components/InstallPrompt'
 import { AppDownloadBanner } from '@/components/AppDownloadBanner'
@@ -169,9 +169,12 @@ export default async function ClientBrandLayout({ children, params }: Props) {
         redirect('/not-found')
     }
 
-    // Espejo del modulo movement_assessment con el contexto del PROPIO alumno
-    // (pool => su team; standalone => su coach) — mismo gate que la page.
-    const showMovement = await getStudentMovementNavEnabled()
+    // Espejo de los modulos movement_assessment + body_composition con el contexto del PROPIO
+    // alumno (pool => su team; standalone => su coach) — mismo gate que la page.
+    const [showMovement, showBodyComposition] = await Promise.all([
+        getStudentMovementNavEnabled(),
+        getStudentBodyCompositionNavEnabled(),
+    ])
 
     return (
         <>
@@ -226,6 +229,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                         coachLogoUrl={logoUrl}
                         initialUseBrandColors={initialUseBrandColors}
                         showMovement={showMovement}
+                        showBodyComposition={showBodyComposition}
                     />
                     <InstallPrompt brandName={brandName} logoUrl={logoUrl} coachInitial={brandName.charAt(0)} primaryColor={primaryColor} />
                     <AppDownloadBanner brandName={brandName} primaryColor={primaryColor} />

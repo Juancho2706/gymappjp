@@ -1,11 +1,15 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useReducedMotion } from 'framer-motion'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { TrendingUp, Scale, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { useBasePath } from '@/components/client/BasePathProvider'
+
+/** Brand-themed chart color: respects per-coach `--theme-primary`, never a hardcoded hex. */
+const THEME_PRIMARY = 'var(--theme-primary)'
 
 interface CheckIn {
     date: string
@@ -14,12 +18,12 @@ interface CheckIn {
 
 interface Props {
     data: CheckIn[]
-    primaryColor?: string
     coachSlug?: string
 }
 
-export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug }: Props) {
+export function WeightProgressChart({ data, coachSlug }: Props) {
     const base = useBasePath(`/c/${coachSlug}`)
+    const reduce = useReducedMotion()
     const [mounted, setMounted] = useState(false)
     const chartRef = useRef<HTMLDivElement>(null)
     const [chartWidth, setChartWidth] = useState(0)
@@ -42,7 +46,7 @@ export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug 
             <Card className="bg-card border-border shadow-sm">
                 <CardHeader className="pb-4">
                     <CardTitle className="text-base flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-muted-foreground" style={{ color: primaryColor }} />
+                        <TrendingUp className="w-4 h-4 text-muted-foreground" style={{ color: THEME_PRIMARY }} />
                         Evolución de Peso
                     </CardTitle>
                 </CardHeader>
@@ -70,7 +74,7 @@ export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug 
                         <Link
                             href={`${base}/check-in`}
                             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-90 active:scale-95 text-white"
-                            style={{ backgroundColor: primaryColor }}
+                            style={{ backgroundColor: THEME_PRIMARY }}
                         >
                             <Plus className="w-4 h-4" />
                             Registrar Peso Hoy
@@ -94,7 +98,7 @@ export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug 
         <Card className="bg-card border-border shadow-sm">
             <CardHeader className="pb-4">
                 <CardTitle className="text-base flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-muted-foreground" style={{ color: primaryColor }} />
+                    <TrendingUp className="w-4 h-4 text-muted-foreground" style={{ color: THEME_PRIMARY }} />
                     Evolución de Peso
                 </CardTitle>
             </CardHeader>
@@ -109,8 +113,8 @@ export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug 
                         >
                             <defs>
                                 <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor={primaryColor} stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor={primaryColor} stopOpacity={0} />
+                                    <stop offset="5%" stopColor={THEME_PRIMARY} stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor={THEME_PRIMARY} stopOpacity={0} />
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.5} />
@@ -141,10 +145,11 @@ export function WeightProgressChart({ data, primaryColor = '#10B981', coachSlug 
                             <Area
                                 type="monotone"
                                 dataKey="weight"
-                                stroke={primaryColor}
+                                stroke={THEME_PRIMARY}
                                 strokeWidth={3}
                                 fillOpacity={1}
                                 fill="url(#colorWeight)"
+                                isAnimationActive={!reduce}
                             />
                         </AreaChart>
                     )}

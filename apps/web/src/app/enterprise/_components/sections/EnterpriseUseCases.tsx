@@ -2,7 +2,7 @@
 
 import { USE_CASES } from '../../_data/enterprise-content'
 import { SectionEyebrow } from '../atoms/SectionEyebrow'
-import { Reveal, RevealStagger, RevealItem } from '../atoms/Reveal'
+import { Reveal, RevealStagger, RevealItem } from '@/components/motion/Reveal'
 import { cn } from '@/lib/utils'
 
 const ACCENTS = ['#007AFF', '#00E5FF', '#0040DD', '#7C3AED'] as const

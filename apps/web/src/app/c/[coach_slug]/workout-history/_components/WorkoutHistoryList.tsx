@@ -2,18 +2,18 @@
 
 import { Dumbbell } from 'lucide-react'
 import { RevealStagger, RevealItem } from '@/components/motion/Reveal'
+import type { WorkoutLogDaySummary } from '@/app/c/[coach_slug]/dashboard/_data/dashboard.queries'
 
 /**
- * P7: filas en `RevealStagger` (cascada whileInView, barata: solo opacity/transform),
- * cada fila un `RevealItem variant="fadeUp"`. Reduced-motion aware vía el toolkit Reveal.
+ * History list for the dedicated workout-history page.
+ * Rows fade/slide up as they scroll into view (whileInView, cheap) via the
+ * shared scroll-reveal toolkit — reduced-motion aware. Kept separate from the
+ * dashboard's <WorkoutLogItems> (RecentWorkoutsSection) so each surface owns
+ * its own entrance treatment.
  */
-export function WorkoutLogItems({
-    items,
-}: {
-    items: Array<{ dayKey: string; dateLabel: string; sets: number; subtitle: string }>
-}) {
+export function WorkoutHistoryList({ items }: { items: WorkoutLogDaySummary[] }) {
     return (
-        <RevealStagger className="divide-y divide-border/30">
+        <RevealStagger className="divide-y divide-border/30" stagger={0.04}>
             {items.map((item) => (
                 <RevealItem key={item.dayKey} variant="fadeUp">
                     <div className="flex items-center gap-3 px-4 py-3">

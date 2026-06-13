@@ -2,7 +2,7 @@
 
 import { ExternalLink, Phone, ShieldCheck, Clock, Sparkles } from 'lucide-react'
 import { CALENDLY_URL, CONTACT_EMAIL } from '../../_data/enterprise-content'
-import { Reveal } from '../atoms/Reveal'
+import { Reveal } from '@/components/motion/Reveal'
 
 const FOOTNOTE_BADGES = [
   { icon: Clock, label: 'Sin permanencia' },

@@ -12,12 +12,100 @@ import {
 import { Dumbbell, Search, Play, X, Info } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
 import { filterExercises } from "@/lib/utils";
+import { RevealStagger, RevealItem } from "@/components/motion/Reveal";
 
 type Exercise = Tables<"exercises">;
 
 interface Props {
   byMuscle: Record<string, Exercise[]>;
   primaryColor: string;
+}
+
+/** Image that fades in once the GIF / next-image has finished loading. */
+function FadeImage({ src, alt }: { src: string; alt: string }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      fill
+      onLoad={() => setLoaded(true)}
+      className={`object-cover group-hover:scale-110 transition-transform duration-500 transition-opacity ${
+        loaded ? "opacity-100" : "opacity-0"
+      }`}
+      unoptimized
+    />
+  );
+}
+
+/** A single exercise card: thumbnail + muscle group + name. */
+function ExerciseCard({
+  ex,
+  primaryColor,
+  onSelect,
+}: {
+  ex: Exercise;
+  primaryColor: string;
+  onSelect: () => void;
+}) {
+  const renderThumb = () => {
+    // If it has a gif, show it immediately without checking youtube logic
+    if (ex.gif_url) {
+      return <FadeImage src={ex.gif_url} alt={ex.name} />;
+    }
+
+    const url = ex.video_url;
+    const isYouTube = url?.includes("youtube.com") || url?.includes("youtu.be");
+    const getYouTubeId = (u: string) => {
+      const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
+      return match ? match[1] : null;
+    };
+
+    if (isYouTube) {
+      const ytId = getYouTubeId(url!);
+      return ytId ? (
+        <FadeImage
+          src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
+          alt={ex.name}
+        />
+      ) : (
+        <Dumbbell className="w-6 h-6 text-muted-foreground/50" />
+      );
+    }
+
+    if (url) {
+      return <FadeImage src={url} alt={ex.name} />;
+    }
+
+    return <Dumbbell className="w-6 h-6 text-muted-foreground/50" />;
+  };
+
+  return (
+    <RevealItem variant="scale">
+      <div
+        onClick={onSelect}
+        className="bg-card border border-border rounded-2xl p-3 flex gap-4 items-center cursor-pointer hover:border-border/80 hover:bg-muted/30 transition-all shadow-sm group"
+      >
+        <div className="w-16 h-16 rounded-xl bg-muted overflow-hidden flex-shrink-0 relative flex items-center justify-center">
+          {renderThumb()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p
+            className="text-xs font-bold uppercase tracking-wider mb-1"
+            style={{ color: primaryColor }}
+          >
+            {ex.muscle_group}
+          </p>
+          <h3 className="font-semibold text-foreground leading-tight">
+            {ex.name}
+          </h3>
+        </div>
+        <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors mr-1">
+          <Info className="w-4 h-4" />
+        </div>
+      </div>
+    </RevealItem>
+  );
 }
 
 export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
@@ -75,78 +163,17 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
       </div>
 
       {/* Results Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <RevealStagger
+        key={`${selectedMuscle}|${search}`}
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+      >
         {filteredExercises.map((ex) => (
-          <div
+          <ExerciseCard
             key={ex.id}
-            onClick={() => setSelectedExercise(ex)}
-            className="bg-card border border-border rounded-2xl p-3 flex gap-4 items-center cursor-pointer hover:border-border/80 hover:bg-muted/30 transition-all shadow-sm group"
-          >
-            <div className="w-16 h-16 rounded-xl bg-muted overflow-hidden flex-shrink-0 relative flex items-center justify-center">
-              {(() => {
-                // If it has a gif, show it immediately without checking youtube logic
-                if (ex.gif_url) {
-                  return (
-                    <Image
-                      src={ex.gif_url}
-                      alt={ex.name}
-                      fill
-                      className="object-cover group-hover:scale-110 transition-transform duration-500"
-                      unoptimized
-                    />
-                  );
-                }
-
-                const url = ex.video_url;
-                const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be');
-                const getYouTubeId = (u: string) => {
-                  const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
-                  return match ? match[1] : null;
-                };
-
-                if (isYouTube) {
-                  const ytId = getYouTubeId(url!);
-                  return ytId ? (
-                    <Image
-                      src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
-                      alt={ex.name}
-                      fill
-                      className="object-cover group-hover:scale-110 transition-transform duration-500"
-                      unoptimized
-                    />
-                  ) : <Dumbbell className="w-6 h-6 text-muted-foreground/50" />;
-                }
-
-                if (url) {
-                  return (
-                    <Image
-                      src={url}
-                      alt={ex.name}
-                      fill
-                      className="object-cover group-hover:scale-110 transition-transform duration-500"
-                      unoptimized
-                    />
-                  );
-                }
-
-                return <Dumbbell className="w-6 h-6 text-muted-foreground/50" />;
-              })()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p
-                className="text-xs font-bold uppercase tracking-wider mb-1"
-                style={{ color: primaryColor }}
-              >
-                {ex.muscle_group}
-              </p>
-              <h3 className="font-semibold text-foreground leading-tight">
-                {ex.name}
-              </h3>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors mr-1">
-              <Info className="w-4 h-4" />
-            </div>
-          </div>
+            ex={ex}
+            primaryColor={primaryColor}
+            onSelect={() => setSelectedExercise(ex)}
+          />
         ))}
 
         {filteredExercises.length === 0 && (
@@ -157,7 +184,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
             </p>
           </div>
         )}
-      </div>
+      </RevealStagger>
 
       {/* Detail Modal */}
       <Dialog

@@ -3,7 +3,7 @@
 import { XCircle, CheckCircle2 } from 'lucide-react'
 import { PROBLEM } from '../../_data/enterprise-content'
 import { SectionEyebrow } from '../atoms/SectionEyebrow'
-import { Reveal, RevealStagger, RevealItem } from '../atoms/Reveal'
+import { Reveal, RevealStagger, RevealItem } from '@/components/motion/Reveal'
 import { StatNumber } from '../atoms/StatNumber'
 
 export function EnterpriseProblemStatement() {

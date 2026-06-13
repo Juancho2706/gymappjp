@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useReducedMotion } from 'framer-motion'
 import { Area, AreaChart } from 'recharts'
 
 interface Point {
@@ -9,6 +10,7 @@ interface Point {
 }
 
 export function WeightSparkline({ data }: { data: Point[] }) {
+    const reduce = useReducedMotion()
     const chartData = useMemo(() => data.map((d) => ({ ...d, w: d.weight })), [data])
     const chartRef = useRef<HTMLDivElement>(null)
     const [chartWidth, setChartWidth] = useState(0)
@@ -34,7 +36,7 @@ export function WeightSparkline({ data }: { data: Point[] }) {
                             <stop offset="95%" stopColor="var(--theme-primary)" stopOpacity={0} />
                         </linearGradient>
                     </defs>
-                    <Area type="monotone" dataKey="w" stroke="var(--theme-primary)" strokeWidth={2} fill="url(#wGradDash)" dot={false} isAnimationActive />
+                    <Area type="monotone" dataKey="w" stroke="var(--theme-primary)" strokeWidth={2} fill="url(#wGradDash)" dot={false} isAnimationActive={!reduce} />
                 </AreaChart>
             )}
         </div>

@@ -6,6 +6,7 @@ import { getCheckInHistory30Days } from '../../_data/dashboard.queries'
 import { formatRelativeDate, getTodayInSantiago } from '@/lib/date-utils'
 import { WeightSparkline } from './WeightSparkline'
 import { TrendArrow, type Trend } from './TrendArrow'
+import { WeightHeadline } from './WeightHeadline'
 import { getClientBasePath } from '@/lib/client/base-path'
 
 function computeTrend(weights: { created_at: string; weight: number | null }[]): { trend: Trend; delta: number } {
@@ -66,7 +67,7 @@ export async function WeightWidget({ userId, coachSlug }: { userId: string; coac
                 </Link>
             </div>
             <div className="flex items-end gap-2">
-                <span className="font-display text-3xl font-black tabular-nums text-foreground">{current.toFixed(1)} kg</span>
+                <WeightHeadline value={current} />
                 <TrendArrow trend={trend} deltaKg={delta} />
             </div>
             <p className="mt-1 text-xs text-muted-foreground">{formatRelativeDate(lastDay, todayIso)}</p>
