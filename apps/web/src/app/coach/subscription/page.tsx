@@ -120,6 +120,20 @@ export default function CoachSubscriptionPage() {
     const [cancelAddonEffective, setCancelAddonEffective] = useState<string | null | undefined>(undefined)
     const captureAddonFunnel = useCaptureAddonFunnel()
 
+    // Add-ons NUEVOS elegidos durante el cambio/alta de plan: se pagan JUNTO al plan en UN solo
+    // checkout (el server arma el monto compuesto en create-preference; el webhook materializa las
+    // filas coach_addons al confirmar el pago). Visible solo con el flag de lanzamiento (en prod
+    // oculto hasta el flip). Espejo del combo del signup (register/page.tsx).
+    const [upgradeAddons, setUpgradeAddons] = useState<ModuleKey[]>([])
+    // nutrition_exchanges requiere Pro+: si el tier elegido no la soporta, sacarla de la selección
+    // (el server igual la rechazaría con 400, pero la UI no debe ofrecer algo inusable).
+    useEffect(() => {
+        if (getTierCapabilities(selectedTier).canUseNutrition) return
+        setUpgradeAddons((prev) =>
+            prev.includes('nutrition_exchanges') ? prev.filter((k) => k !== 'nutrition_exchanges') : prev
+        )
+    }, [selectedTier])
+
     useEffect(() => {
         let isMounted = true
         ;(async () => {
@@ -198,7 +212,7 @@ export default function CoachSubscriptionPage() {
             const response = await fetch('/api/payments/create-preference', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tier: selectedTier, billingCycle: selectedCycle }),
+                body: JSON.stringify({ tier: selectedTier, billingCycle: selectedCycle, addons: upgradeAddons }),
             })
             const payload = await response.json()
             if (!response.ok) throw new Error(payload.error ?? 'No se pudo iniciar el cambio de plan')
@@ -241,6 +255,14 @@ export default function CoachSubscriptionPage() {
     }
 
     const selectedPrice = getTierPriceClp(selectedTier, selectedCycle)
+    // Total compuesto en vivo = plan + add-ons elegidos (mismo descuento por ciclo del plan). Es
+    // SOLO el preview de la UI; el monto real lo recalcula el server en el checkout (nunca confía
+    // en montos del cliente).
+    const upgradeAddonsCycleTotal = upgradeAddons.reduce((sum, key) => {
+        const { months, discountPercent } = BILLING_CYCLE_CONFIG[selectedCycle]
+        return sum + Math.round(ADDON_CONFIG[key].priceClpMensual * months * (1 - discountPercent / 100))
+    }, 0)
+    const selectedComposite = selectedPrice + upgradeAddonsCycleTotal
     const coachCycle = (coach?.billing_cycle ?? 'monthly') as BillingCycle
     const coachTier = (coach?.subscription_tier ?? 'starter') as SubscriptionTier
     const hasActivePaidPlan =
@@ -656,13 +678,71 @@ export default function CoachSubscriptionPage() {
                     })}
                 </div>
 
+                {/* Combo plan + add-ons (plan 05): elegí módulos para pagarlos JUNTO al plan en un
+                    solo checkout. Visible solo con el flag de lanzamiento (en prod oculto). */}
+                {SELF_SERVICE_ADDONS_ENABLED && (
+                    <div className="rounded-xl border border-border bg-card p-4">
+                        <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            <Puzzle className="h-3.5 w-3.5" /> Sumar módulos (opcional · se pagan junto al plan)
+                        </p>
+                        <div className="space-y-1.5">
+                            {ADDON_MODULE_KEYS.map((key) => {
+                                const cfg = ADDON_CONFIG[key]
+                                const needsNutrition =
+                                    key === 'nutrition_exchanges' && !getTierCapabilities(selectedTier).canUseNutrition
+                                const checked = upgradeAddons.includes(key)
+                                return (
+                                    <label
+                                        key={key}
+                                        className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${
+                                            needsNutrition
+                                                ? 'cursor-not-allowed border-border opacity-50'
+                                                : 'cursor-pointer border-border hover:bg-secondary/40'
+                                        }`}
+                                    >
+                                        <span className="flex items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                disabled={needsNutrition}
+                                                checked={checked}
+                                                onChange={(e) =>
+                                                    setUpgradeAddons((prev) =>
+                                                        e.target.checked
+                                                            ? [...new Set([...prev, key])]
+                                                            : prev.filter((k) => k !== key)
+                                                    )
+                                                }
+                                                className="h-4 w-4 rounded border-border"
+                                            />
+                                            <span className="text-foreground">{cfg.label}</span>
+                                            {needsNutrition && (
+                                                <span className="text-[10px] font-semibold text-amber-500">requiere Pro+</span>
+                                            )}
+                                        </span>
+                                        <span className="text-muted-foreground">
+                                            ${cfg.priceClpMensual.toLocaleString('es-CL')}/mes
+                                        </span>
+                                    </label>
+                                )
+                            })}
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-secondary/30 px-4 py-3">
                     <div>
-                        <p className="text-xs text-muted-foreground">Total a pagar</p>
+                        <p className="text-xs text-muted-foreground">
+                            {upgradeAddons.length > 0 ? 'Total (plan + módulos)' : 'Total a pagar'}
+                        </p>
                         <p className="text-lg font-extrabold text-foreground">
-                            ${selectedPrice.toLocaleString('es-CL')} CLP
+                            ${selectedComposite.toLocaleString('es-CL')} CLP
                             <span className="text-sm font-normal text-muted-foreground"> / {BILLING_CYCLE_CONFIG[selectedCycle].label.toLowerCase()}</span>
                         </p>
+                        {upgradeAddons.length > 0 && (
+                            <p className="text-[11px] text-muted-foreground">
+                                plan ${selectedPrice.toLocaleString('es-CL')} + {upgradeAddons.length} módulo(s) ${upgradeAddonsCycleTotal.toLocaleString('es-CL')}
+                            </p>
+                        )}
                     </div>
                     <button
                         type="button"
