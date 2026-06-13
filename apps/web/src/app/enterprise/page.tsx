@@ -15,7 +15,8 @@ import { EnterpriseMobileBottomBar } from './_components/sections/EnterpriseMobi
 export const metadata: Metadata = {
   title: 'EVA Enterprise · Para Gyms y Academias',
   description:
-    'Panel de operaciones para organizaciones con múltiples coaches. Pool de alumnos compartido, datos aislados por RLS, white-label por coach incluido. Desde $89.990 CLP/mes.',
+    'Panel de operaciones para organizaciones con múltiples coaches. Pool de alumnos compartido, datos aislados por RLS, white-label por coach incluido.',
+  robots: { index: false, follow: false },
   openGraph: {
     title: 'EVA Enterprise · Para Gyms y Academias',
     description:

@@ -857,3 +857,20 @@ done
 1. [sheets.google.com](https://sheets.google.com) → nuevo documento: **"EVA Enterprise Pipeline"**
 2. Columnas: `Gym | Contacto | Email | Tel | Fuente | Coaches | Estado | Fecha Demo | Fecha Firma | Plan | MRR | Notas`
 3. Estados: `Prospecto → Demo agendada → Demo hecha → Contrato → Trial → Pagando → Churned`
+
+---
+
+## MT-38 — Revisar copy legal al constituir EVA Technology SpA · ⏳ Cuando quede inscrita la SpA
+
+Al quedar inscrita la sociedad (EVA Technology SpA, en proceso jun-2026), revisar y actualizar:
+
+1. **Copy de precios** en cualquier página pública donde se mencionen valores (verificar que no quedaron precios de lista expuestos).
+2. **Páginas legales** (`/legal`, `/privacidad`, `/legal/contrato-enterprise`): reemplazar "Juan Villegas (persona natural)" por razón social + RUT empresa + representante legal.
+3. **Tratamiento de IVA**: una vez constituida la SpA, el coach pagará como empresa; revisar si corresponde añadir mención de IVA en los contratos o facturas.
+4. **Aviso Legal §1**: actualizar domicilio legal con la dirección registrada en notaría.
+
+---
+
+## Nota — Search Console y páginas /enterprise
+
+Search Console removal de `/enterprise` y `/legal/contrato-enterprise`: **INNECESARIO** (verificado 2026-06-11, Google no tiene nada indexado de esas rutas). El `noindex` agregado en ambas páginas queda como cinturón de seguridad preventivo.

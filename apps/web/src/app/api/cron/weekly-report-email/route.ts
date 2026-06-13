@@ -12,7 +12,7 @@ import { sendTransactionalEmail } from '@/lib/email/send-email'
 
 function isAuthorized(req: Request) {
     const expected = process.env.CRON_SECRET
-    if (!expected) return true
+    if (!expected) return false
     return req.headers.get('authorization') === `Bearer ${expected}`
 }
 

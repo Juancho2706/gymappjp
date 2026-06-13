@@ -5,7 +5,7 @@ import { wrapEmailLayout } from '@/lib/email/base-layout'
 
 function isAuthorized(req: Request) {
     const expected = process.env.CRON_SECRET
-    if (!expected) return true
+    if (!expected) return false
     const auth = req.headers.get('authorization') ?? ''
     return auth === `Bearer ${expected}`
 }

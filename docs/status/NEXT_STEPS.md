@@ -1,6 +1,13 @@
 # NEXT STEPS — Prioridades actuales
 
-> Leer al inicio de cada sesión (referenciado en `CLAUDE.md`). Última actualización: 2026-06-12 (gate Planes 2+3 + incidente E2E).
+> Leer al inicio de cada sesión (referenciado en `CLAUDE.md`). Última actualización: 2026-06-12 (gate Planes 2+3 + incidente E2E + archivado enterprise).
+
+### Estado 2026-06-12 — Enterprise ARCHIVADO comercialmente (estrategia teams-first, F1-F4)
+**Hecho:** visibilidad enterprise ejecutada. Crons `org-health-alert` + `payment-reminder` retirados de schedule en `vercel.json` (handlers vivos, sin disparo automático). Copy legal swapeado a "planes empresariales a medida" (la landing NO se tocó — es scope del plan 02). Precios enterprise googleables neutralizados + noindex. Proxy: `/org/*` en dominio principal → `/login`; el flujo de alumno `/e` sigue vivo por diseño; `/enterprise` se sigue sirviendo con noindex hasta el redirect 308 → `/pricing` (post-plan 02). Redirect 308 del subdominio `enterprise.eva-app.cl` pendiente de config en Vercel — paso manual. Motor enterprise intacto (infra compartida: workspace engine, org.service, JWT hook); única puerta activa: `/admin/orgs`. Cero impacto en teams ni en el gate de Movida. Ver `docs/plans/estrategia/01-PLAN-archivado-enterprise.md`.
+
+**Siguiente: Plan 02 landing Teams-first** (`docs/plans/estrategia/02-PLAN-landing-teams-ui.md`) — nueva sección Teams en la landing pública + CTA "Para equipos". Luego plan 03 (módulos add-on de pago) y plan 04 (consolidación ciclos trimestral/anual).
+
+---
 
 ### Estado 2026-06-12 (tarde) — Follow-up de PERFORMANCE: RESUELTO (cierra la raíz del incidente E2E)
 **Hecho + en PROD (`master`, pusheado) + mergeado a `feat/movida-platform` (`fb210e8`):** el plan de optimización de Supabase. La causa raíz del incidente (queries `workout_logs limit=8000/3000` del progreso del alumno + detalle de cliente del coach) está atacada: **8 RPCs de agregación `SECURITY DEFINER`** (paridad bit-a-bit validada en tx-rollback), **índices covering** + FK nutrición, **historial del detalle de cliente acotado a 548d** (mata el full-scan ilimitado), **historial del alumno 90/180d**, **cap del streak a 730d**, **War Room sin N+1** (RPC `get_clients_streaks_by_ids`), `unstable_cache`→`React.cache`, `SELECT *` podados en catálogos. Mobile cableado completo; web PRs+volumen+historial. typecheck web+mobile + vitest 262 verdes. Smoke manual del dueño OK (+ fix de fotos check-in en overview con `unoptimized` + borrado del heatmap de actividad estilo GitHub). **Diferido opcional:** cablear las series 1RM web a RPC (mejora marginal de CPU) + Fase 5 (borrar JS muerto reemplazado). **Esto desbloquea correr el GATE E2E de forma más segura** (el dashboard del alumno ya no satura el Micro).

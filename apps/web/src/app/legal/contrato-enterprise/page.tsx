@@ -6,6 +6,7 @@ import type { Metadata } from 'next'
 export const metadata: Metadata = {
     title: 'Contrato de Servicio Enterprise | EVA',
     description: 'Términos y condiciones del plan Enterprise de EVA para organizaciones.',
+    robots: { index: false, follow: false },
 }
 
 const LAST_UPDATED = '22 de mayo de 2026'
@@ -47,6 +48,12 @@ export default function ContratoEnterprisePage() {
                             <p className="text-muted-foreground text-sm">
                                 Última actualización: {LAST_UPDATED} · Versión 1.0
                             </p>
+                            <p className="mt-4 text-sm text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3">
+                                <strong>Documento de referencia histórica (v1.0).</strong> EVA no comercializa actualmente
+                                el plan Enterprise de lista; las condiciones empresariales vigentes se pactan contrato a contrato.
+                                Contacto:{' '}
+                                <a href="mailto:contacto@eva-app.cl" className="underline hover:text-amber-300">contacto@eva-app.cl</a>.
+                            </p>
                         </div>
 
                         <div className="space-y-10 bg-card border border-border backdrop-blur-xl rounded-[2rem] p-8 md:p-12">
@@ -74,8 +81,7 @@ export default function ContratoEnterprisePage() {
 
                             <Section title="3. Precio y facturación">
                                 <p>
-                                    <strong className="text-foreground">Plan base:</strong> $49.990 CLP/mes (incluye hasta 3 coaches).
-                                    Coach adicional: $9.990 CLP/mes. Precios no incluyen IVA cuando corresponda.
+                                    <strong className="text-foreground">Precio:</strong> según la propuesta comercial pactada con cada organización.
                                 </p>
                                 <p>
                                     <strong className="text-foreground">Trial:</strong> 30 días gratuitos desde la activación.

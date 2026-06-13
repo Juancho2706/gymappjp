@@ -149,3 +149,62 @@ Si no puedes resolver en 30 minutos:
 - [ ] Post-mortem breve enviado al cliente si fue P0
 - [ ] Cambio preventivo identificado (índice, alerta, test)
 - [ ] Nuevo test E2E o alerta agregada para detectar este problema en el futuro
+
+---
+
+## Crons activos (vercel.json post-F1 — 2026-06-12)
+
+> Todos los guards son **fail-closed** desde F7: si falta `CRON_SECRET` o el header no coincide, el endpoint retorna 401 y no ejecuta nada.
+
+| Endpoint | Schedule (UTC) | Qué hace |
+|---|---|---|
+| `/api/cron/nutrition-cycles` | Diario 11:00 | Avanza los ciclos de planes nutricionales activos (genera el siguiente día del ciclo). |
+| `/api/cron/nutrition-reminder` | Diario 00:00 | Envía recordatorio push/email a alumnos que no registraron su comida del día anterior. |
+| `/api/cron/trial-expiry` | Diario 12:00 | Verifica coaches en período de prueba y los marca como expirados si corresponde. Solo afecta coaches standalone (no `team_managed` ni `org_managed`). |
+| `/api/cron/purge-data` | Domingos 03:00 | Purga datos de cuentas borradas/expiradas según política de retención; registra en `purge_audit`. |
+| `/api/cron/audit-checksum` | Domingos 02:00 | Calcula y almacena checksum de tablas de auditoría para detectar manipulación (`audit_log_checksums`). |
+| `/api/cron/mp-reconcile` | Viernes 10:00 | Reconcilia suscripciones de MercadoPago contra el estado local (detecta cancelaciones silenciosas, retries fallidos). |
+
+### Crons retirados del schedule en F1 (handlers vivos — sin disparo automático)
+
+| Endpoint | Por qué se retiró | Cómo desarchivar |
+|---|---|---|
+| `/api/cron/org-health-alert` | Enterprise archivado comercialmente 2026-06; el alert era exclusivo de orgs enterprise. | Volver a agregar en `vercel.json` `crons[]` con `"schedule": "0 13 * * *"` y hacer redeploy. |
+| `/api/cron/payment-reminder` | Enterprise archivado; el reminder era para invoices manuales de orgs. | Volver a agregar con `"schedule": "0 9 1,6,11 * *"` y hacer redeploy. |
+
+**Block 4 — Digest de alumnos inactivos (enterprise):** apagado en F1. Es un bloque de código inline dentro del handler de `org-health-alert` (`org-health-alert/route.ts:168-271`) que corría con el schedule diario de ese cron. Al retirar `org-health-alert` de `vercel.json` se apagó junto con el resto del handler. Para reactivar: re-agregar el schedule de `org-health-alert` (fila de arriba) y redeployar — vuelve solo, no requiere tocar otro endpoint.
+
+### Triggers manuales (sin schedule — invocar vía `curl` autenticado con `CRON_SECRET`)
+
+| Endpoint | Cuándo usarlo |
+|---|---|
+| `/api/cron/weekly-snapshot` | Snapshot semanal de métricas clave (coaches activos, alumnos, logs). Útil antes de migraciones de riesgo. |
+| `/api/cron/weekly-report-email` | Envía el reporte semanal de actividad a los coaches que lo tienen habilitado. Útil para re-envío manual si falló. |
+
+```bash
+# Invocar un cron manualmente (reemplazar <endpoint> y <secret>)
+# Los handlers de cron exponen GET (verbo por defecto de curl); los triggers manuales
+# (weekly-snapshot, weekly-report-email) aceptan además POST.
+curl https://eva-app.cl/<endpoint> \
+  -H "Authorization: Bearer <CRON_SECRET>"
+```
+
+---
+
+## Guarda del subdominio enterprise (archivado 2026-06-12)
+
+### Estado actual
+
+`enterprise.eva-app.cl` está activo pero sin contenido útil. El proxy de Next.js (`apps/web/src/proxy.ts`) tiene un condicional que redirige **solo `/org/*`** del dominio principal a `/login` en prod (`proxy.ts:145-147`). El panel `/org/[slug]/*` queda **inaccesible en prod a propósito** — decisión intencional de archivado comercial.
+
+**Alcance del guard (importante):** el condicional NO bloquea `/e` ni `/enterprise`. El flujo del alumno enterprise `/e/[org_slug]/*` sigue vivo **a propósito** (es un DoD del plan 01 — no se afecta). La landing `/enterprise` se sigue sirviendo hasta que se active el redirect 308 `/enterprise` → `/pricing` (F6 del plan 01, secuenciado post-deploy del plan 02); mientras tanto solo lleva `noindex` + meta description sin precio.
+
+**Paso manual pendiente (config Vercel):** agregar un redirect 308 en el dashboard de Vercel para el dominio `enterprise.eva-app.cl` → `https://eva-app.cl`. Esto hace que cualquier visita directa al subdominio aterrice en la landing principal.
+
+### Cómo revertir el archivado
+
+1. **Quitar el redirect 308** en Vercel (Dashboard → Domains → `enterprise.eva-app.cl` → eliminar redirect).
+2. **Revertir el condicional del proxy** en `apps/web/src/proxy.ts` (buscar el bloque con comentario `// ARCHIVADO 2026-06: subdominio enterprise redirige al home` en `:143` y remover la guarda `/org/*` → `/login` de `:145-147`).
+3. Hacer redeploy.
+
+> El motor enterprise (tablas `organizations`, `organization_members`, RLS, JWT hook, `org.service`) sigue intacto en la DB y en el código — no se borró nada. Reactivar es reversible sin migración.

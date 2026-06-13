@@ -16,7 +16,7 @@ import {
     rateLimitPayment,
     rateLimitAdmin,
 } from '@/lib/rate-limit'
-import { getEnterpriseDomain, getEnterpriseUrl } from '@/lib/enterprise/domain'
+import { getEnterpriseDomain } from '@/lib/enterprise/domain'
 import { ENTERPRISE_STAFF_ROLES } from '@/domain/org/permissions'
 
 type Coach = Tables<'coaches'>
@@ -140,10 +140,10 @@ export async function proxy(request: NextRequest) {
     }
 
     // Protect /org/* — accessible only via enterprise.eva-app.cl subdomain.
-    // Redirect main domain requests to the enterprise subdomain.
+    // ARCHIVADO 2026-06: subdominio enterprise redirige al home — ver docs/plans/estrategia/01-PLAN-archivado-enterprise.md §F3
     const isLocalDev = host.includes('localhost') || host.includes('127.0.0.1')
     if (pathname.startsWith('/org/') && !isLocalDev) {
-        return NextResponse.redirect(getEnterpriseUrl() + pathname)
+        return NextResponse.redirect(new URL('/login', request.url))
     }
 
     let supabaseResponse = NextResponse.next({ request })
