@@ -31,6 +31,11 @@ export function OfflineWorkoutQueueSync() {
                         if (item.repsDone != null) fd.set('reps_done', String(item.repsDone))
                         if (item.rpe != null) fd.set('rpe', String(item.rpe))
                         if (item.rir != null) fd.set('rir', String(item.rir))
+                        // Polimórfico (AC4): los items legacy no traen estas keys — no-op.
+                        if (item.actualDurationSec != null) fd.set('actual_duration_sec', String(item.actualDurationSec))
+                        if (item.actualDistanceM != null) fd.set('actual_distance_m', String(item.actualDistanceM))
+                        if (item.actualHoldSec != null) fd.set('actual_hold_sec', String(item.actualHoldSec))
+                        if (item.actualAvgHr != null) fd.set('actual_avg_hr', String(item.actualAvgHr))
                         const res = await logSetAction({}, fd)
                         if (res.success) flushed++
                         else remaining.push(item)

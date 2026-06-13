@@ -15,6 +15,18 @@ import {
     SheetTitle
 } from "@/components/ui/sheet"
 
+/**
+ * Items del nav (fuente unica para desktop + sheet mobile — D12 del plan 02).
+ * Unificar elimina el riesgo de desincronizacion entre las dos superficies.
+ * 'Para Gyms' (enterprise) fue reemplazado por 'Teams' → ancla `#teams`.
+ */
+const NAV_ITEMS = [
+    { key: 'landing.nav.panelCoach', id: 'panel-coach' },
+    { key: 'landing.nav.pricing', id: 'precios' },
+    { key: 'landing.nav.teams', id: 'teams' },
+    { key: 'landing.nav.contact', id: 'contacto' },
+] as const
+
 export function LandingPillNav() {
     const [scrolled, setScrolled] = useState(false)
     const { t } = useTranslation()
@@ -41,18 +53,13 @@ export function LandingPillNav() {
             <LandingBrandMark className="min-w-0" iconClassName="h-8 w-8 sm:h-9 sm:w-9" />
 
             <div className="hidden md:flex items-center gap-6 absolute left-1/2 -translate-x-1/2">
-                {[
-                    { key: 'landing.nav.panelCoach', id: 'panel-coach' },
-                    { key: 'landing.nav.pricing', id: 'precios' },
-                    { key: '', id: 'enterprise', label: 'Para Gyms' },
-                    { key: 'landing.nav.contact', id: 'contacto' }
-                ].map(item => (
+                {NAV_ITEMS.map(item => (
                     <a
                         key={item.id}
                         href={`#${item.id}`}
                         className="text-muted-foreground hover:text-foreground text-xs font-medium transition-colors whitespace-nowrap"
                     >
-                        {'label' in item ? item.label : t(item.key)}
+                        {t(item.key)}
                     </a>
                 ))}
             </div>
@@ -85,18 +92,13 @@ export function LandingPillNav() {
                         <SheetTitle className="sr-only">Menú</SheetTitle>
 
                         <div className="flex flex-col gap-1 px-2">
-                            {[
-                                { key: 'landing.nav.panelCoach', id: 'panel-coach' },
-                                { key: 'landing.nav.pricing', id: 'precios' },
-                                { key: '', id: 'enterprise', label: 'Para Gyms' },
-                                { key: 'landing.nav.contact', id: 'contacto' },
-                            ].map(item => (
+                            {NAV_ITEMS.map(item => (
                                 <a
                                     key={item.id}
                                     href={`#${item.id}`}
                                     className="text-base font-semibold text-foreground/90 hover:text-primary transition-colors py-3 border-b border-border/40"
                                 >
-                                    {'label' in item ? item.label : t(item.key)}
+                                    {t(item.key)}
                                 </a>
                             ))}
                         </div>

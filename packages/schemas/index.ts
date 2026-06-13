@@ -14,3 +14,10 @@ export * from './workout'
 // SERVER-ONLY (web / Next.js server actions only)
 // OrgCreateCoachSchema, OrgInviteSchema, etc. reference org_id / coach_id from DB.
 export * from './org'
+// Team (pool) member management schemas.
+export * from './team'
+// Modulos movida (specs/movida-*): screening de movimiento, composicion corporal,
+// nutricion por intercambios. Tambien accesibles por subpath (@eva/schemas/bodycomp).
+export * from './screening'
+export * from './bodycomp'
+export * from './nutrition-exchanges'

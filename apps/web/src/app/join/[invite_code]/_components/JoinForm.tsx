@@ -22,8 +22,8 @@ export function JoinForm({ inviteCode, primaryColor }: Props) {
             const result = await joinViaInviteAction(inviteCode, null, formData)
             if ('error' in result && result.error) {
                 setError(result.error)
-            } else if ('coachSlug' in result && result.coachSlug) {
-                router.push(`/c/${result.coachSlug}/login?registered=1`)
+            } else if ('loginHref' in result && result.loginHref) {
+                router.push(`${result.loginHref}?registered=1`)
             }
         })
     }

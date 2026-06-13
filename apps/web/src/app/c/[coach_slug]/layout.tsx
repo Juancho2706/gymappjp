@@ -11,8 +11,8 @@ import {
 } from '@/lib/brand-assets'
 import { resolveMetadataBase } from '@/lib/site-url'
 import { ClientNav } from '@/components/client/ClientNav'
+import { getStudentMovementNavEnabled, getStudentBodyCompositionNavEnabled } from './_data/client-root.queries'
 import { BasePathProvider } from '@/components/client/BasePathProvider'
-import { InstallPrompt } from '@/components/InstallPrompt'
 import { AppDownloadBanner } from '@/components/AppDownloadBanner'
 import { NetworkProvider } from '@/components/client/OfflineScreen'
 import { OfflineNutritionQueueSync } from '@/app/c/[coach_slug]/_components/OfflineNutritionQueueSync'
@@ -60,7 +60,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             template: `%s | ${brandName}`,
         },
         description: `Entrena con ${brandName}. Rutinas, nutrición y seguimiento desde tu móvil.`,
-        manifest: `/api/manifest/${coach_slug}`,
+        // NOTE: the manifest <link> is injected RAW in the layout JSX (not via this
+        // `manifest:` field) so it can carry crossOrigin="use-credentials". Without
+        // credentials the browser fetches /api/manifest/[slug] cookieless → getUser()
+        // is null → the route falls back to the bare coach brand and start_url/scope
+        // collapse to /c, defeating the team (/t) manifest branding.
         appleWebApp: {
             capable: true,
             statusBarStyle: 'black-translucent',
@@ -142,6 +146,19 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const loaderIconModeRaw = headersList.get('x-coach-loader-icon-mode') ?? 'eva'
     const loaderIconMode = (loaderIconModeRaw === 'coach' || loaderIconModeRaw === 'none') ? loaderIconModeRaw : 'eva'
 
+    // Hardening anti stored-XSS: estos valores los fija un org_admin/co-gestor de team al
+    // editar su marca y se inyectan crudos en un <style>. Las comillas simples se escapan,
+    // pero un `</style>` cerraría el elemento raw-text y permitiría inyectar tags/script.
+    // Como son valores de string CSS, los < > nunca son legítimos: los removemos (mata el
+    // breakout) y mantenemos el escape de comilla simple. (2da capa; los write paths validan).
+    const sanitizeCssStringValue = (v: string) =>
+        v.replace(/[<>]/g, '').replace(/'/g, "\\'")
+    // El color además debe ser un hex válido; si no, cae al string vacío (sin color custom).
+    const safeLoaderTextColor = loaderTextColor && /^#[0-9a-fA-F]{3,8}$/.test(loaderTextColor)
+        ? loaderTextColor
+        : ''
+    const safeLoaderText = sanitizeCssStringValue(loaderText || '')
+
     // Per-mode white-label accent (org-driven). brand-kit resolves a readable
     // light + dark accent from the brand color + optional per-mode overrides.
     const accentLight = isFreeTier ? null : (headersList.get('x-coach-accent-light') || null)
@@ -168,10 +185,21 @@ export default async function ClientBrandLayout({ children, params }: Props) {
         redirect('/not-found')
     }
 
+    // Espejo de los modulos movement_assessment + body_composition con el contexto del PROPIO
+    // alumno (pool => su team; standalone => su coach) — mismo gate que la page.
+    const [showMovement, showBodyComposition] = await Promise.all([
+        getStudentMovementNavEnabled(),
+        getStudentBodyCompositionNavEnabled(),
+    ])
+
     return (
         <>
             <link rel="icon" href={faviconUrl} />
             <link rel="apple-touch-icon" href={faviconUrl} />
+            {/* Raw manifest link (NOT metadata.manifest) so it carries crossOrigin —
+                the browser must send cookies when fetching /api/manifest/[slug], else
+                getUser() is null and the team (/t) start_url/scope/branding collapse to /c. */}
+            <link rel="manifest" href={`/api/manifest/${coach_slug}`} crossOrigin="use-credentials" />
             {APPLE_SPLASH.map(({ dw, dh, r }) => (
                 <link
                     key={`${dw}x${dh}@${r}`}
@@ -191,9 +219,9 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                     --theme-primary-foreground: ${lightOnAccent};
                     --primary: ${lightAccent};
                     --primary-foreground: ${lightOnAccent};
-                    --coach-loader-text: '${(loaderText || '').replace(/'/g, "\\'")}';
+                    --coach-loader-text: '${safeLoaderText}';
                     --coach-use-custom-loader: ${useCustomLoader ? '1' : '0'};
-                    --coach-loader-color: '${(loaderTextColor || '').replace(/'/g, "\\'")}';
+                    --coach-loader-color: '${safeLoaderTextColor}';
                     --coach-loader-icon-mode: '${loaderIconMode}';
                 }
                 /* Dark-mode accent (next-themes .dark class) — org can set a brighter accent for dark. */
@@ -220,8 +248,11 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                         coachBrand={brandName}
                         coachLogoUrl={logoUrl}
                         initialUseBrandColors={initialUseBrandColors}
+                        showMovement={showMovement}
+                        showBodyComposition={showBodyComposition}
                     />
-                    <InstallPrompt brandName={brandName} logoUrl={logoUrl} coachInitial={brandName.charAt(0)} primaryColor={primaryColor} />
+                    {/* InstallPrompt is rendered once globally in the root app/layout.tsx —
+                        rendering a second one here stacked two banners for the student tree. */}
                     <AppDownloadBanner brandName={brandName} primaryColor={primaryColor} />
 
                     <main className="relative z-0 flex-1 overflow-auto bg-muted/20 pb-[var(--mobile-content-bottom-offset)] dark:bg-background md:pb-0 has-[.is-workout-page]:pb-0">

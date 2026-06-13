@@ -12,9 +12,15 @@ import { getUnreadNewsCount, getPublishedNewsItems } from '@/lib/news/queries'
 import type { Metadata } from 'next'
 import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { generateBrandPalette } from '@/lib/color-utils'
-import { getCoachEnterpriseContext } from './_data/layout.queries'
+import { getCoachEnterpriseContext, getCoachTeamContext } from './_data/layout.queries'
 import { createClient } from '@/lib/supabase/server'
 import { resolvePreferredWorkspace, listUserWorkspaces } from '@/services/auth/workspace.service'
+import {
+    applyOperatorKillSwitch,
+    getCoachEnabledModules,
+    getTeamEnabledModules,
+    type EnabledModules,
+} from '@/services/entitlements.service'
 
 export const metadata: Metadata = {
     title: {
@@ -51,7 +57,22 @@ export default async function CoachLayout({
         listUserWorkspaces(supabase, coach.id),
     ])
     const activeEnterpriseCoach = activeWorkspace?.type === 'enterprise_coach' ? activeWorkspace : null
-    const enterpriseContext = await getCoachEnterpriseContext(coach, activeEnterpriseCoach?.orgId ?? null)
+    const activeTeamWorkspace = activeWorkspace?.type === 'coach_team' ? activeWorkspace : null
+    // Módulos toggleables del CONTEXTO activo (team ⇒ del pool; standalone ⇒ propios;
+    // enterprise ⇒ ninguno en v1). El nav los espeja; el gate real es assertModule.
+    const resolveEnabledModules = async (): Promise<EnabledModules> => {
+        if (activeEnterpriseCoach) return {}
+        const raw = activeTeamWorkspace
+            ? await getTeamEnabledModules(supabase, activeTeamWorkspace.teamId)
+            : await getCoachEnabledModules(supabase, coach.id)
+        return applyOperatorKillSwitch(raw)
+    }
+
+    const [enterpriseContext, teamContext, enabledModules] = await Promise.all([
+        getCoachEnterpriseContext(coach, activeEnterpriseCoach?.orgId ?? null),
+        getCoachTeamContext(activeTeamWorkspace?.teamId ?? null),
+        resolveEnabledModules(),
+    ])
     const currentWorkspaceLabel =
         activeWorkspace?.label ??
         enterpriseContext?.orgName ??
@@ -59,9 +80,12 @@ export default async function CoachLayout({
         coach.full_name ??
         'Mi negocio EVA'
 
+    // Marca por contexto: enterprise → org; team → team; standalone → la del coach.
     const primaryColor =
         enterpriseContext?.primaryColor
             ? enterpriseContext.primaryColor
+            : teamContext?.primaryColor
+            ? teamContext.primaryColor
             : coach.use_brand_colors_coach === false
             ? SYSTEM_PRIMARY_COLOR
             : (coach.primary_color || BRAND_PRIMARY_COLOR)
@@ -119,12 +143,20 @@ export default async function CoachLayout({
             <NewsFeedProvider initialUnreadCount={unreadCount} initialItems={newsItems}>
                 <CoachSidebar
                     coachName={coach.full_name}
-                    coachBrand={enterpriseContext?.orgName ?? coach.brand_name}
+                    coachBrand={enterpriseContext?.orgName ?? teamContext?.teamName ?? coach.brand_name}
                     primaryColor={primaryColor}
-                    subscriptionStatus={activeEnterpriseCoach ? 'org_managed' : coach.subscription_status}
+                    subscriptionStatus={
+                        activeEnterpriseCoach
+                            ? 'org_managed'
+                            : activeTeamWorkspace
+                            ? 'team_managed'
+                            : coach.subscription_status
+                    }
                     enterpriseContext={enterpriseContext}
                     workspaces={workspaces}
                     currentWorkspaceLabel={currentWorkspaceLabel}
+                    activeWorkspaceType={activeWorkspace?.type ?? null}
+                    enabledModules={enabledModules}
                 />
                 <CoachMainWrapper>
                     {/* Background ambient glow */}

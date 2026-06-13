@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Check, Crown, Dumbbell, Zap, Sprout, TrendingUp } from 'lucide-react'
+import { Check, Crown, Dumbbell, Zap, Sprout } from 'lucide-react'
 import dynamic from 'next/dynamic'
 
 const Player = dynamic(
@@ -15,6 +15,7 @@ import {
     getTierAllowedBillingCycles,
     getTierCapabilities,
     getTierPriceClp,
+    SALE_TIERS,
     TIER_CONFIG,
     TIER_STUDENT_RANGE_LABEL,
     type BillingCycle,
@@ -23,6 +24,7 @@ import {
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import { TeamsPlanCard } from './TeamsPlanCard'
 
 const ALL_CYCLES: BillingCycle[] = ['monthly', 'quarterly', 'annual']
 
@@ -89,28 +91,18 @@ const planDisplay: Array<{
         border: 'border-amber-500/20',
         topBorder: 'border-t-amber-500/70 dark:border-t-amber-400/60',
     },
-    {
-        id: 'growth',
-        descKey: 'landing.pricing.plan.growth.desc',
-        icon: TrendingUp,
-        color: 'text-emerald-600 dark:text-emerald-400',
-        bg: 'bg-emerald-500/10',
-        border: 'border-emerald-500/20',
-        topBorder: 'border-t-emerald-500/70 dark:border-t-emerald-400/60',
-        badge: 'Nuevo',
-    },
-    {
-        id: 'scale',
-        descKey: 'landing.pricing.plan.scale.desc',
-        icon: Crown,
-        color: 'text-rose-600 dark:text-rose-400',
-        bg: 'bg-rose-500/10',
-        border: 'border-rose-500/25',
-        topBorder: 'border-t-rose-500/70 dark:border-t-rose-400/60',
-    },
+    // LEGACY — growth/scale fuera de venta (grandfathered + placeholder team/org_managed). Recortados de planDisplay; runtime/DB/admin intactos. NO re-agregar aquí.
 ]
 
-const ALL_ORDER: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
+// SALE_TIERS = ['free','starter','pro','elite']. La card Teams (re-layout 6→4) la agrega el plan 02.
+const ALL_ORDER: readonly SubscriptionTier[] = SALE_TIERS
+
+// Slides del carousel mobile = los 4 tiers comprables + 1 slide Teams (no-tier).
+// Lista paralela para que el carousel y los dots incluyan Teams SIN contaminar
+// `SubscriptionTier` con un valor no comprable (D8 del plan 02).
+const TEAMS_SLIDE = 'teams' as const
+type CarouselSlide = SubscriptionTier | typeof TEAMS_SLIDE
+const CAROUSEL_SLIDES: readonly CarouselSlide[] = [...ALL_ORDER, TEAMS_SLIDE]
 
 function planById(id: SubscriptionTier) {
     const p = planDisplay.find((x) => x.id === id)
@@ -585,11 +577,11 @@ function PlanCardCompact({ plan, billingCycle }: PlanCardCompactProps) {
 
 function scrollPricingToTier(
     container: HTMLDivElement | null,
-    tierId: SubscriptionTier,
+    slideId: CarouselSlide,
     behavior: ScrollBehavior = 'auto'
 ) {
     if (!container) return
-    const slide = container.querySelector<HTMLElement>(`[data-plan-slide="${tierId}"]`)
+    const slide = container.querySelector<HTMLElement>(`[data-plan-slide="${slideId}"]`)
     if (!slide) return
     const slideCenter = slide.offsetLeft + slide.offsetWidth / 2
     const target = slideCenter - container.clientWidth / 2
@@ -611,7 +603,7 @@ function PricingMobileCarousel({
 }: PricingMobileCarouselProps) {
     const { t } = useTranslation()
     const scrollerRef = useRef<HTMLDivElement>(null)
-    const [centeredTier, setCenteredTier] = useState<SubscriptionTier>('pro')
+    const [centeredSlide, setCenteredSlide] = useState<CarouselSlide>('pro')
     const billingCycleRef = useRef(billingCycle)
     useEffect(() => { billingCycleRef.current = billingCycle }, [billingCycle])
 
@@ -626,13 +618,13 @@ function PricingMobileCarousel({
         }
     }, [scrollFnRef])
 
-    const findCenteredTier = useCallback((): SubscriptionTier => {
+    const findCenteredSlide = useCallback((): CarouselSlide => {
         const el = scrollerRef.current
         if (!el) return 'pro'
         const centerX = el.scrollLeft + el.clientWidth / 2
-        let best: SubscriptionTier = ALL_ORDER[0]!
+        let best: CarouselSlide = CAROUSEL_SLIDES[0]!
         let bestDist = Number.POSITIVE_INFINITY
-        for (const id of ALL_ORDER) {
+        for (const id of CAROUSEL_SLIDES) {
             const slide = el.querySelector<HTMLElement>(`[data-plan-slide="${id}"]`)
             if (!slide) continue
             const mid = slide.offsetLeft + slide.offsetWidth / 2
@@ -644,22 +636,25 @@ function PricingMobileCarousel({
 
     // Layout sync only — no cycle check (used by ResizeObserver & initial mount)
     const syncCentered = useCallback(() => {
-        const tier = findCenteredTier()
-        setCenteredTier(tier)
-        onCenteredTierChange(tier)
-    }, [findCenteredTier, onCenteredTierChange])
+        const slide = findCenteredSlide()
+        setCenteredSlide(slide)
+        // Teams no es un tier comprable: no propagar al estado de ciclo del parent.
+        if (slide !== TEAMS_SLIDE) onCenteredTierChange(slide)
+    }, [findCenteredSlide, onCenteredTierChange])
 
     // User-initiated scroll — sync + possibly reset cycle
     const handleUserScroll = useCallback(() => {
-        const tier = findCenteredTier()
-        setCenteredTier(tier)
-        onCenteredTierChange(tier)
+        const slide = findCenteredSlide()
+        setCenteredSlide(slide)
+        if (slide !== TEAMS_SLIDE) onCenteredTierChange(slide)
         if (isProgrammaticScrollRef.current) return
+        // El slide Teams no tiene ciclo de cobro — no resetear el toggle.
+        if (slide === TEAMS_SLIDE) return
         const cycle = billingCycleRef.current
-        if (cycle !== 'monthly' && !getTierAllowedBillingCycles(tier).includes(cycle)) {
+        if (cycle !== 'monthly' && !getTierAllowedBillingCycles(slide).includes(cycle)) {
             onBillingCycleChange('monthly')
         }
-    }, [findCenteredTier, onCenteredTierChange, onBillingCycleChange])
+    }, [findCenteredSlide, onCenteredTierChange, onBillingCycleChange])
 
     useLayoutEffect(() => {
         scrollPricingToTier(scrollerRef.current, 'pro', 'auto')
@@ -699,6 +694,13 @@ function PricingMobileCarousel({
                         />
                     </div>
                 ))}
+                {/* Slide final: card Teams (no-tier, sin precio — D8 plan 02) */}
+                <div
+                    data-plan-slide={TEAMS_SLIDE}
+                    className="w-[min(22rem,calc(100vw-2.5rem))] shrink-0 snap-center pt-1"
+                >
+                    <TeamsPlanCard variant="carousel" suppressEntrance />
+                </div>
             </div>
             <p className="mt-3 flex items-center justify-center gap-2 px-2 text-center text-xs leading-relaxed text-muted-foreground">
                 <span className="inline sm:hidden" aria-hidden>←</span>
@@ -710,10 +712,11 @@ function PricingMobileCarousel({
                 role="group"
                 aria-label={t('landing.pricing.dotsAria')}
             >
-                {ALL_ORDER.map((id) => {
-                    const label = TIER_CONFIG[id].label
+                {CAROUSEL_SLIDES.map((id) => {
+                    const isTeams = id === TEAMS_SLIDE
+                    const label = id === TEAMS_SLIDE ? t('landing.pricing.teamsCard.eyebrow') : TIER_CONFIG[id].label
                     const dotLabel = t('landing.pricing.planDotLabel').replace('{{plan}}', label)
-                    const active = centeredTier === id
+                    const active = centeredSlide === id
                     return (
                         <button
                             key={id}
@@ -724,13 +727,18 @@ function PricingMobileCarousel({
                             className={cn(
                                 'flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                                 active
-                                    ? 'bg-primary ring-2 ring-primary/40'
+                                    ? isTeams
+                                        ? 'bg-emerald-600 ring-2 ring-emerald-500/40 dark:bg-emerald-500'
+                                        : 'bg-primary ring-2 ring-primary/40'
                                     : 'bg-muted-foreground/25 hover:bg-muted-foreground/45'
                             )}
                         >
                             <span className="sr-only">{label}</span>
                             <span
-                                className={cn('block h-2 w-2 rounded-full', active ? 'bg-primary-foreground' : 'bg-background')}
+                                className={cn(
+                                    'block h-2 w-2 rounded-full',
+                                    active ? (isTeams ? 'bg-white' : 'bg-primary-foreground') : 'bg-background'
+                                )}
                                 aria-hidden
                             />
                         </button>
@@ -845,40 +853,42 @@ export function LandingPricingPreview() {
                     scrollFnRef={carouselScrollFnRef}
                 />
 
-                {/* Desktop grid */}
-                <div className="hidden lg:grid lg:grid-cols-3 xl:grid-cols-6 gap-3 overflow-y-visible pt-3">
+                {/* Desktop grid — 4 tiers + card Teams (plan 02).
+                    lg: 2×2 tiers + TeamsPlanCard a lo ancho (col-span-2, horizontal) debajo.
+                    xl: 5 cards en una fila (TeamsPlanCard vuelve a vertical). */}
+                <div className="hidden lg:grid lg:grid-cols-2 xl:grid-cols-5 gap-3 overflow-y-visible pt-3">
                     <PlanCardCompact plan={planById('free')} billingCycle={billingCycle} />
                     <PlanCardCompact plan={planById('starter')} billingCycle={billingCycle} />
                     <PlanCardCompact plan={planById('pro')} billingCycle={billingCycle} />
-
-                    {/* Row separator — visible in lg (3-col), hidden in xl (6-col) */}
-                    <div className="col-span-3 xl:hidden flex items-center gap-3 py-1">
-                        <div className="h-px flex-1 bg-border/40" />
-                        <span className="whitespace-nowrap text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                            {t('landing.pricing.group.business')}
-                        </span>
-                        <div className="h-px flex-1 bg-border/40" />
-                    </div>
-
                     <PlanCardCompact plan={planById('elite')} billingCycle={billingCycle} />
-                    <PlanCardCompact plan={planById('growth')} billingCycle={billingCycle} />
-                    <PlanCardCompact plan={planById('scale')} billingCycle={billingCycle} />
+                    {/* growth/scale recortados (LEGACY, fuera de venta). Card Teams = componente dedicado, sin precio. */}
+                    <div className="lg:col-span-2 xl:col-span-1">
+                        <TeamsPlanCard variant="grid" />
+                    </div>
                 </div>
 
-                {/* Enterprise callout */}
-                <div className="mt-8 flex items-center justify-between gap-4 rounded-2xl border border-amber-500/20 border-t-[3px] border-t-amber-400/70 bg-card/80 p-5 shadow-sm">
+                {/* Teams callout — sin precios pre-cierre Movida (D6 + D11 plan 02). Estilo emerald. */}
+                <div className="mt-8 flex flex-col gap-3 rounded-2xl border border-emerald-500/20 border-t-[3px] border-t-emerald-400/70 bg-card/80 p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                     <div className="min-w-0">
-                        <p className="text-sm font-bold text-foreground">¿Gym o academia con múltiples coaches?</p>
+                        <p className="text-sm font-bold text-foreground">{t('landing.pricing.teamsCallout.title')}</p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
-                            Panel centralizado · Pool de alumnos · Branding unificado · Desde $49.990/mes
+                            {t('landing.pricing.teamsCallout.subtitle')}
                         </p>
                     </div>
-                    <a
-                        href="#enterprise"
-                        className="shrink-0 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-white hover:bg-amber-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-                    >
-                        Ver planes →
-                    </a>
+                    <div className="flex shrink-0 flex-col items-start gap-1.5 sm:items-end">
+                        <a
+                            href="#teams"
+                            className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:bg-emerald-500 dark:hover:bg-emerald-400"
+                        >
+                            {t('landing.pricing.teamsCallout.cta')} →
+                        </a>
+                        <a
+                            href="/api/contact-teams?src=pricing-callout"
+                            className="text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                            {t('landing.pricing.teamsCallout.secondary')}
+                        </a>
+                    </div>
                 </div>
             </div>
         </section>

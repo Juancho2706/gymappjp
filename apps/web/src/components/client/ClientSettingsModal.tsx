@@ -11,13 +11,15 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { Settings, Moon, Sun, Palette, Volume2 } from 'lucide-react'
+import Link from 'next/link'
+import { Settings, Moon, Sun, Palette, Volume2, ShieldCheck, ChevronRight } from 'lucide-react'
 import { SettingsModalTrigger } from '@/components/client/SettingsModalTrigger'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useTheme } from 'next-themes'
 import { toggleClientBrandColors } from '@/app/c/[coach_slug]/_actions/client-root.actions'
 import { toast } from 'sonner'
 import { playTimerSound, TimerSound } from '@/lib/audioUtils'
+import { useBasePath } from '@/components/client/BasePathProvider'
 
 interface Props {
     coachSlug: string
@@ -26,6 +28,11 @@ interface Props {
 
 export function ClientSettingsModal({ coachSlug, initialUseBrandColors }: Props) {
     const { theme, setTheme } = useTheme()
+    // En contexto team/pool (/t/[team_slug]) el base path empieza con /t: el proxy fuerza el
+    // branding del team, asi que el toggle de "Colores del Coach" es no-op (se oculta) y en cambio
+    // exponemos la gestion del consentimiento (Ley 21.719). En standalone (/c/...) nada cambia.
+    const basePath = useBasePath(`/c/${coachSlug}`)
+    const isTeamContext = basePath.startsWith('/t/')
     const [useBrandColors, setUseBrandColors] = useState(initialUseBrandColors)
     const [isTogglingColors, setIsTogglingColors] = useState(false)
     const [soundType, setSoundType] = useState<TimerSound>('digital')
@@ -100,23 +107,44 @@ export function ClientSettingsModal({ coachSlug, initialUseBrandColors }: Props)
                         <ThemeToggle />
                     </div>
 
-                    {/* Brand Colors */}
-                    <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/50 dark:bg-muted/30 border border-border/50 shadow-sm">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-background border border-border/50 shadow-sm">
-                                <Palette className="w-4 h-4" style={{ color: 'var(--theme-primary, var(--primary))' }} />
+                    {/* Brand Colors — oculto en team/pool: el proxy /t fuerza el branding del team. */}
+                    {!isTeamContext && (
+                        <div className="flex items-center justify-between p-4 rounded-2xl bg-muted/50 dark:bg-muted/30 border border-border/50 shadow-sm">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-background border border-border/50 shadow-sm">
+                                    <Palette className="w-4 h-4" style={{ color: 'var(--theme-primary, var(--primary))' }} />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-semibold text-foreground">Colores del Coach</p>
+                                    <p className="text-xs text-muted-foreground">Usa la identidad de tu coach</p>
+                                </div>
                             </div>
-                            <div>
-                                <p className="text-sm font-semibold text-foreground">Colores del Coach</p>
-                                <p className="text-xs text-muted-foreground">Usa la identidad de tu coach</p>
-                            </div>
+                            <Switch
+                                checked={useBrandColors}
+                                onCheckedChange={handleToggleBrandColors}
+                                disabled={isTogglingColors}
+                            />
                         </div>
-                        <Switch 
-                            checked={useBrandColors} 
-                            onCheckedChange={handleToggleBrandColors}
-                            disabled={isTogglingColors}
-                        />
-                    </div>
+                    )}
+
+                    {/* Consentimiento (Ley 21.719) — solo en team/pool (/t): el alumno gestiona/revoca. */}
+                    {isTeamContext && (
+                        <Link
+                            href={`${basePath}/perfil`}
+                            className="flex items-center justify-between p-4 rounded-2xl bg-muted/50 dark:bg-muted/30 border border-border/50 shadow-sm transition-colors hover:bg-muted/70 dark:hover:bg-muted/40"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 rounded-lg bg-background border border-border/50 shadow-sm">
+                                    <ShieldCheck className="w-4 h-4" style={{ color: 'var(--theme-primary, var(--primary))' }} />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-semibold text-foreground">Consentimiento</p>
+                                    <p className="text-xs text-muted-foreground">Gestiona o revoca tu autorización</p>
+                                </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                        </Link>
+                    )}
 
                     {/* Alarma de descanso */}
                     <div className="space-y-4 p-4 rounded-2xl bg-muted/50 dark:bg-muted/30 border border-border/50 shadow-sm">

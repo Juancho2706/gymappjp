@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Building2, Users, UserCheck, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react'
 import { getOrgs, type OrgRow } from './_data/orgs.queries'
 import { ResendOwnerInviteButton } from './_components/ResendOwnerInviteButton'
+import { OrgStatusButton } from './_components/OrgStatusButton'
 
 export const metadata: Metadata = { title: 'Organizaciones' }
 
@@ -45,7 +46,7 @@ export default async function AdminOrgsPage() {
                                     <th className="text-center px-4 py-2.5 text-xs font-semibold text-muted-foreground">
                                         <UserCheck className="w-3.5 h-3.5 inline mr-0.5" />Clientes
                                     </th>
-                                    <th className="text-center px-4 py-2.5 text-xs font-semibold text-muted-foreground">Health</th>
+                                    <th className="text-center px-4 py-2.5 text-xs font-semibold text-muted-foreground">Health (congelado 2026-06)</th>
                                     <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Plan</th>
                                     <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Creada</th>
                                     <th className="px-4 py-2.5" />
@@ -109,6 +110,7 @@ export default async function AdminOrgsPage() {
                                                     Ver org →
                                                 </a>
                                                 <ResendOwnerInviteButton orgId={org.id} />
+                                                <OrgStatusButton orgId={org.id} currentStatus={org.status} />
                                             </div>
                                         </td>
                                     </tr>

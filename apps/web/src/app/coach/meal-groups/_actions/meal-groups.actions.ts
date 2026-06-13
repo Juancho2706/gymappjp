@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { revalidatePath } from 'next/cache'
 
 export async function saveMealGroup(groupData: { id?: string, name: string, items: { food_id: string, quantity: number, unit?: string }[] }, coachId: string) {
@@ -21,9 +22,15 @@ export async function saveMealGroup(groupData: { id?: string, name: string, item
             const { error: deleteError } = await supabase.from('saved_meal_items').delete().eq('saved_meal_id', groupId)
             if (deleteError) throw deleteError
         } else {
+            // org_id se deriva del workspace ACTIVO server-side (nunca del body): en enterprise el
+            // grupo pertenece a la org; en standalone/team es de la librería personal del coach.
+            const { data: { user } } = await supabase.auth.getUser()
+            const workspace = user ? await resolvePreferredWorkspace(supabase, user.id) : null
+            const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
+
             const { data: newGroup, error: insertError } = await supabase
                 .from('saved_meals')
-                .insert({ name: groupData.name, coach_id: coachId })
+                .insert({ name: groupData.name, coach_id: coachId, org_id: orgId })
                 .select()
                 .single()
 

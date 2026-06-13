@@ -1,6 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { fadeSlideLeft } from '@/lib/animation-presets'
 import { DayNavigator } from './DayNavigator'
 import { MacroRingSummary } from './MacroRingSummary'
 import { MealCard, type MealCardMeal } from './MealCard'
@@ -27,6 +29,12 @@ import { trackNutritionEvent } from '@/lib/product-analytics'
 import { downloadNutritionDayPdf } from '@/lib/nutrition-day-pdf'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { readNutritionReadModelCache, writeNutritionReadModelCache } from '@/lib/nutrition-plan-local-cache'
+import { ExchangeMealChips } from './ExchangeMealChips'
+import { ExchangeEquivalencesSheet } from './ExchangeEquivalencesSheet'
+import { macrosForTargets } from '@/services/nutrition-exchanges/exchange-calc'
+import { loadBrandLogoDataUrl } from '@/lib/nutrition-pdf-brand'
+import type { StudentExchangeBundle } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
+import type { ExchangeGroup, PdfBrand } from '@/domain/nutrition/exchange.types'
 
 type MealLogRow = { meal_id: string; is_completed: boolean; consumed_quantity: number | null; satisfaction_score?: number | null }
 type MealSwapRow = {
@@ -42,6 +50,10 @@ type PlanMealRow = NutritionMealMacroSource & {
   description?: string | null
   order_index: number
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fireConfetti = (opts: object) =>
+  (import('canvas-confetti') as Promise<any>).then((m) => (m.default ?? m)(opts))
 
 function toMealCardMeal(m: PlanMealRow): MealCardMeal {
   return {
@@ -71,6 +83,11 @@ interface Props {
   userId: string
   coachSlug: string
   today: string
+  /** Módulo nutrition_exchanges (OFF/grams ⇒ null/disabled: vista byte-identical, AC5). */
+  exchange?: StudentExchangeBundle | null
+  /** Marca del tenant resuelta SERVER-SIDE (headers del proxy) para los PDFs. */
+  pdfBrand?: PdfBrand | null
+  brandLogoUrl?: string | null
 }
 
 export function NutritionShell({
@@ -81,9 +98,15 @@ export function NutritionShell({
   userId,
   coachSlug,
   today,
+  exchange,
+  pdfBrand,
+  brandLogoUrl,
 }: Props) {
+  const reduceMotion = useReducedMotion()
   const [selectedDate, setSelectedDate] = useState(today)
   const [currentLog, setCurrentLog] = useState<Record<string, unknown> | null>(initialLog)
+  /** Evita repetir el confetti del "día completo" más de una vez por fecha. */
+  const dayCompleteConfettiRef = useRef<Set<string>>(new Set())
   useEffect(() => {
     if (selectedDate !== today) return
     if (initialLog != null) {
@@ -350,6 +373,21 @@ export function NutritionShell({
   const handleToggle = useCallback(
     (mealId: string, currentCompleted: boolean) => {
       const next = !currentCompleted
+      // Confetti chico al completar la ÚLTIMA comida del día (delight, 1×/fecha, reduce off).
+      if (next) {
+        const stillPending = mealsVisible.filter(
+          (m) => m.id !== mealId && !optimisticCompletions[m.id]
+        )
+        if (
+          stillPending.length === 0 &&
+          mealsVisible.length > 0 &&
+          !reduceMotion &&
+          !dayCompleteConfettiRef.current.has(selectedDate)
+        ) {
+          dayCompleteConfettiRef.current.add(selectedDate)
+          void fireConfetti({ particleCount: 45, spread: 45, startVelocity: 28, origin: { x: 0.5, y: 0.7 } })
+        }
+      }
       startToggleTransition(async () => {
         setOptimisticCompletion({ mealId, isCompleted: next })
         try {
@@ -400,7 +438,18 @@ export function NutritionShell({
         }
       })
     },
-    [setOptimisticCompletion, userId, plan.id, currentLog, coachSlug, selectedDate, today]
+    [
+      setOptimisticCompletion,
+      userId,
+      plan.id,
+      currentLog,
+      coachSlug,
+      selectedDate,
+      today,
+      mealsVisible,
+      optimisticCompletions,
+      reduceMotion,
+    ]
   )
 
   const handlePartialPctChange = useCallback(
@@ -645,6 +694,8 @@ export function NutritionShell({
           meals,
           goals,
           fileStem: `plan-nutricion-${selectedDate}`,
+          // Fix transversal white-label: marca del tenant resuelta server-side (AC4).
+          ...(pdfBrand ? { brand: pdfBrand } : {}),
         })
         trackNutritionEvent('nutrition_plan_pdf_downloaded', { date_is_today: selectedDate === today ? 1 : 0 })
         toast.success('PDF descargado')
@@ -653,7 +704,51 @@ export function NutritionShell({
         toast.error('No se pudo generar el PDF. Intenta de nuevo.')
       }
     })
-  }, [mealsVisibleWithSwaps, plan.name, plan.instructions, selectedDate, goals, today])
+  }, [mealsVisibleWithSwaps, plan.name, plan.instructions, selectedDate, goals, today, pdfBrand])
+
+  // ─── Módulo nutrition_exchanges (alumno) ─────────────────────────────────────
+  const exchangeEnabled = !!exchange?.enabled
+  const [equivalenceGroup, setEquivalenceGroup] = useState<ExchangeGroup | null>(null)
+  const variantNameById = useMemo(
+    () => new Map((exchange?.variants ?? []).map((v) => [v.id, v.name])),
+    [exchange?.variants]
+  )
+
+  const handleDownloadExchangePdf = useCallback(() => {
+    if (!exchange?.enabled) return
+    startPdfTransition(async () => {
+      try {
+        const { downloadNutritionExchangePdf } = await import('@/lib/nutrition-exchange-pdf')
+        const logoDataUrl = await loadBrandLogoDataUrl(brandLogoUrl)
+        await downloadNutritionExchangePdf({
+          format: 'equivalences',
+          brand: pdfBrand ?? { brandName: 'EVA FITNESS', primaryColor: '#10B981', poweredByEva: true },
+          logoDataUrl,
+          planName: plan.name ?? 'Pauta nutricional',
+          instructions: plan.instructions,
+          goals,
+          meals: mealsSorted.map((m) => ({
+            id: m.id,
+            name: m.name,
+            notes: m.description ?? null,
+            dayVariantId: exchange.variantByMealId[m.id] ?? null,
+            targets: exchange.targetsByMealId[m.id] ?? [],
+          })),
+          variants: exchange.variants,
+          groups: exchange.groups,
+          equivalences: exchange.equivalences,
+          fileStem: `pauta-porciones-${selectedDate}`,
+        })
+        trackNutritionEvent('nutrition_exchange_pdf_ok', { source: 'student_app' })
+        toast.success('PDF descargado')
+        // AC7: la descarga del ALUMNO de su propia pauta NO genera bitácora (sin action de log).
+      } catch (e) {
+        console.error('[module:nutrition_exchanges] pdf alumno', e)
+        trackNutritionEvent('nutrition_exchange_pdf_error', { source: 'student_app' })
+        toast.error('No se pudo generar el PDF. Intenta de nuevo.')
+      }
+    })
+  }, [exchange, pdfBrand, brandLogoUrl, plan.name, plan.instructions, goals, mealsSorted, selectedDate])
 
   return (
     <div className="space-y-5">
@@ -699,16 +794,54 @@ export function NutritionShell({
         isReadOnly={!isToday}
       />
 
-      <div className="space-y-3">
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={selectedDate}
+          className="space-y-3"
+          variants={fadeSlideLeft}
+          initial={reduceMotion ? false : 'hidden'}
+          animate="show"
+          exit={reduceMotion ? undefined : 'hidden'}
+          transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        >
         {mealsVisible.length === 0 ? (
           <p className="rounded-2xl border border-border/60 bg-muted/15 px-4 py-3 text-center text-xs text-muted-foreground">
             No hay comidas planificadas para este día.
           </p>
         ) : (
-          mealsVisibleWithSwaps.map((meal) => (
+          mealsVisibleWithSwaps.map((meal) => {
+            const mealTargets = exchangeEnabled ? (exchange?.targetsByMealId[meal.id] ?? []) : []
+            const hasExchangeTargets = mealTargets.length > 0
+            const derived = hasExchangeTargets && exchange
+              ? macrosForTargets(mealTargets, exchange.groups)
+              : null
+            const mealVariantId = exchangeEnabled ? (exchange?.variantByMealId[meal.id] ?? null) : null
+            const variantName = mealVariantId ? variantNameById.get(mealVariantId) : null
+            return (
             <MealCard
               key={meal.id}
               meal={toMealCardMeal(meal)}
+              macroOverride={
+                derived
+                  ? { calories: derived.calories, protein: derived.proteinG, carbs: derived.carbsG, fats: derived.fatsG }
+                  : null
+              }
+              exchangeContent={
+                hasExchangeTargets && exchange ? (
+                  <>
+                    {variantName && (
+                      <span className="mt-1 inline-block rounded-full bg-muted px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+                        {variantName}
+                      </span>
+                    )}
+                    <ExchangeMealChips
+                      targets={mealTargets}
+                      groups={exchange.groups}
+                      onChipTap={setEquivalenceGroup}
+                    />
+                  </>
+                ) : undefined
+              }
               isCompleted={!!optimisticCompletions[meal.id]}
               partialPlanPct={meal.id in optimisticPartialPct ? optimisticPartialPct[meal.id]! : null}
               isToday={isToday}
@@ -722,9 +855,19 @@ export function NutritionShell({
               onApplyFoodSwap={isToday ? handleApplySwap : undefined}
               activeSwaps={activeSwapByMealFoodKey}
             />
-          ))
+            )
+          })
         )}
-      </div>
+        </motion.div>
+      </AnimatePresence>
+
+      {exchangeEnabled && exchange && (
+        <ExchangeEquivalencesSheet
+          group={equivalenceGroup}
+          equivalences={exchange.equivalences}
+          onClose={() => setEquivalenceGroup(null)}
+        />
+      )}
 
       <HabitsTracker
         clientId={userId}
@@ -767,12 +910,21 @@ export function NutritionShell({
           </div>
           <div className="space-y-1">
             <div className="flex items-center justify-center gap-1">
-              <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">Exportar PDF</span>
-              <InfoTooltip content="Genera un PDF con comidas, alimentos y metas del día seleccionado." iconClassName="w-3 h-3" />
+              <span className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+                {exchangeEnabled ? 'Pauta PDF' : 'Exportar PDF'}
+              </span>
+              <InfoTooltip
+                content={
+                  exchangeEnabled
+                    ? 'Descarga tu pauta de porciones con equivalencias, con la marca de tu coach.'
+                    : 'Genera un PDF con comidas, alimentos y metas del día seleccionado.'
+                }
+                iconClassName="w-3 h-3"
+              />
             </div>
             <button
               type="button"
-              onClick={handleDownloadDayPdf}
+              onClick={exchangeEnabled ? handleDownloadExchangePdf : handleDownloadDayPdf}
               disabled={isPending}
               className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-border/60 bg-primary/10 py-3 px-2 text-[10px] font-bold uppercase tracking-wide text-primary transition-colors hover:bg-primary/15 active:scale-[0.98] disabled:opacity-50"
             >

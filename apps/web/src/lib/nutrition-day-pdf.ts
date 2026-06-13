@@ -4,6 +4,8 @@
  */
 
 import { calculateFoodItemMacros, type FoodItemForMacros } from '@/lib/nutrition-utils'
+import { derivePdfPalette, EVA_PDF_BRAND } from '@/lib/nutrition-pdf-brand'
+import type { PdfBrand } from '@/domain/nutrition/exchange.types'
 
 export type NutritionPdfMeal = {
   name: string
@@ -17,12 +19,17 @@ export type NutritionPdfParams = {
   meals: NutritionPdfMeal[]
   goals: { calories: number; protein: number; carbs: number; fats: number }
   fileStem: string
+  /**
+   * Marca del TENANT resuelta SERVER-SIDE (fix transversal white-label, SPEC AC4).
+   * Omitida o `poweredByEva` ⇒ paleta y marca EVA EXACTAS (byte-identical, AC1).
+   */
+  brand?: PdfBrand
 }
 
-// Color palette — colores sólidos, sin opacidad para compatibilidad PDF
+// Color palette — colores sólidos, sin opacidad para compatibilidad PDF.
+// headerBg/accent ahora se derivan de la marca (derivePdfPalette); estos valores
+// neutros no dependen del tenant.
 const C = {
-  headerBg: [15, 23, 42] as [number, number, number],      // slate-900
-  accent: [16, 185, 129] as [number, number, number],       // emerald-500
   sectionBg: [241, 245, 249] as [number, number, number],   // slate-100
   altRowBg: [248, 250, 252] as [number, number, number],    // slate-50
   textDark: [15, 23, 42] as [number, number, number],       // slate-900
@@ -37,6 +44,11 @@ const C = {
 }
 
 export async function downloadNutritionDayPdf(params: NutritionPdfParams): Promise<void> {
+  // Marca del tenant (default EVA exacto — rama free/fallback byte-identical).
+  const palette = derivePdfPalette(params.brand ?? EVA_PDF_BRAND)
+  const headerBg = palette.headerBg
+  const accent = palette.accent
+
   const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
 
@@ -113,17 +125,17 @@ export async function downloadNutritionDayPdf(params: NutritionPdfParams): Promi
 
   // ─── HEADER ─────────────────────────────────────────────────────────────────
 
-  filledRect(0, 0, pageW, 28, C.headerBg)
+  filledRect(0, 0, pageW, 28, headerBg)
 
   // accent bar top
-  setFill(C.accent)
+  setFill(accent)
   doc.rect(0, 0, pageW, 1.2, 'F')
 
-  // app name
+  // tenant brand name (free tier / sin marca ⇒ 'EVA FITNESS', byte-identical)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7)
-  setColor(C.accent)
-  doc.text('EVA FITNESS', margin, 9)
+  setColor(accent)
+  doc.text(palette.brandName.toUpperCase(), margin, 9)
 
   // plan name
   const displayName = (params.planName || 'Plan nutricional').toUpperCase()
@@ -200,7 +212,7 @@ export async function downloadNutritionDayPdf(params: NutritionPdfParams): Promi
     // section header
     checkPage(10)
     filledRect(margin, y, contentW, 8, C.sectionBg)
-    setFill(C.accent)
+    setFill(accent)
     doc.rect(margin, y, 2.5, 8, 'F')
 
     doc.setFont('helvetica', 'bold')
@@ -304,14 +316,14 @@ export async function downloadNutritionDayPdf(params: NutritionPdfParams): Promi
   checkPage(30)
 
   // box bg
-  filledRect(margin, y, contentW, 28, C.headerBg)
+  filledRect(margin, y, contentW, 28, headerBg)
   // top accent line
-  setFill(C.accent)
+  setFill(accent)
   doc.rect(margin, y, contentW, 1, 'F')
 
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
-  setColor(C.accent)
+  setColor(accent)
   doc.text('RESUMEN DEL DÍA', margin + 4, y + 6)
 
   // 4 columns, well spaced
@@ -358,7 +370,7 @@ export async function downloadNutritionDayPdf(params: NutritionPdfParams): Promi
   doc.setFontSize(6.5)
   setColor(C.textLight)
   doc.text(
-    'Generado con EVA Fitness. Uso personal. No reemplaza valoración clínica, dietética ni médica.',
+    `${palette.generatedWithLabel}. Uso personal. No reemplaza valoración clínica, dietética ni médica.`,
     margin,
     footerY
   )

@@ -7,14 +7,17 @@ import {
     BILLING_CYCLE_CONFIG,
     getTierMaxClients,
     isBillingCycleAllowedForTier,
+    SALE_TIERS,
     type BillingCycle,
     type SubscriptionTier,
 } from '@/lib/constants'
 import { normalizePlatformEmail, isDisposableEmail } from '@/lib/auth/platform-email'
+import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
 
 export type CompleteOnboardingState = { error?: string }
 
-const VALID_TIERS: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
+// Solo se vende free/starter/pro/elite. growth/scale fuera de venta (grandfathered, plan 04).
+const VALID_TIERS = SALE_TIERS
 const VALID_CYCLES: BillingCycle[] = ['monthly', 'quarterly', 'annual']
 
 const RESERVED_SLUGS = new Set([
@@ -47,7 +50,7 @@ export async function completeOAuthOnboarding(
     if (!fullName || fullName.length < 2) return { error: 'Tu nombre completo es obligatorio.' }
     if (!acceptLegal) return { error: 'Debés aceptar los términos de servicio y la política de privacidad.' }
     if (!acceptHealthData) return { error: 'Debés aceptar el tratamiento de datos de salud (Ley 21.719, Art. 16).' }
-    if (!VALID_TIERS.includes(selectedTier)) return { error: 'Plan inválido.' }
+    if (!(VALID_TIERS as readonly string[]).includes(selectedTier)) return { error: 'Plan inválido.' }
     if (!VALID_CYCLES.includes(selectedBillingCycle)) return { error: 'Frecuencia de pago inválida.' }
 
     const isFreeTier = selectedTier === 'free'
@@ -93,11 +96,15 @@ export async function completeOAuthOnboarding(
         slug = `${baseSlug}-${Math.random().toString(36).slice(2, 8)}`
     }
 
+    const inviteCode = await generateUniqueInviteCode(adminDb)
+
+    const now = new Date().toISOString()
     const { error: insertError } = await adminDb.from('coaches').insert({
         id: user.id,
         full_name: fullName,
         brand_name: brandName,
         slug,
+        invite_code: inviteCode,
         primary_color: '#10B981',
         // Google accounts are already email-confirmed — free tier is active immediately
         subscription_status: isFreeTier ? 'active' : 'pending_payment',
@@ -105,8 +112,14 @@ export async function completeOAuthOnboarding(
         billing_cycle: isFreeTier ? 'monthly' : selectedBillingCycle,
         payment_provider: isFreeTier ? 'admin' : (process.env.PAYMENT_PROVIDER ?? 'mercadopago'),
         max_clients: getTierMaxClients(selectedTier),
-        health_data_consent_at: new Date().toISOString(),
+        health_data_consent_at: now,
         marketing_consent: acceptMarketing,
+        // New coaches already know their invite code — skip the one-shot migration modal
+        // (PublicCodeRequiredModal) intended only for legacy coaches without a code.
+        onboarding_guide: {
+            invite_code_confirmed: true,
+            invite_code_confirmed_at: now,
+        },
         ...(isFreeTier && { trial_used_email: emailNorm }),
     })
 

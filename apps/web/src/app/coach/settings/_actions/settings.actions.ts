@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
@@ -60,8 +59,8 @@ export async function updateBrandSettingsAction(
         welcomeModalVersion += 1
     }
 
-    const admin = await createRawAdminClient()
-    const { error } = await admin
+    // UPDATE self: coaches_update_own lo cubre → user-scoped (R3, auditoria 2026-06-11).
+    const { error } = await supabase
         .from('coaches')
         .update({
             full_name: parsed.data.full_name,
@@ -127,8 +126,7 @@ export async function updateLogoAction(
     // Añadir timestamp para evitar problemas de caché del navegador
     const cacheBusterUrl = `${publicUrl}?t=${Date.now()}`
 
-    const adminDb = await createRawAdminClient()
-    const { error: dbError } = await adminDb
+    const { error: dbError } = await supabase
         .from('coaches')
         .update({ logo_url: cacheBusterUrl })
         .eq('id', user.id)

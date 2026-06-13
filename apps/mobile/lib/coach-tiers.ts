@@ -1,44 +1,24 @@
-import type { CoachProfile } from './coach'
+// F6 (plan 04): el espejo a mano de tiers MURIÓ. La fuente única es @eva/tiers (paquete puro
+// compartido web+mobile). Este archivo SOLO re-exporta + agrega azúcares de capability que la app
+// mobile ya consumía (canUseNutrition/... ); cero catálogo duplicado, cero drift posible.
+// Patrón ya probado en mobile: @eva/schemas / @eva/brand-kit (AGENTS.md, "Shared logic anti-drift").
+//
+// LEGACY: TIER_CONFIG conserva growth/scale para DISPLAY de cuentas grandfathered (el catálogo del
+// paquete los mantiene); elite.maxClients = 100 (techo subido — F0-a) vive en el paquete. NO borrar.
 
-export type SubscriptionTier = CoachProfile['subscriptionTier']
+import {
+  TIER_CONFIG,
+  getRecommendedTier,
+  getTierCapabilities,
+  type SubscriptionTier,
+  type TierCapabilities,
+} from '@eva/tiers'
 
-export const TIER_CONFIG: Record<SubscriptionTier, { label: string; maxClients: number }> = {
-  free: { label: 'Free', maxClients: 3 },
-  starter: { label: 'Starter', maxClients: 10 },
-  pro: { label: 'Pro', maxClients: 30 },
-  elite: { label: 'Elite', maxClients: 60 },
-  growth: { label: 'Growth', maxClients: 120 },
-  scale: { label: 'Scale', maxClients: 500 },
-}
+export { TIER_CONFIG, getRecommendedTier, getTierCapabilities }
+export type { SubscriptionTier, TierCapabilities }
 
-export function getRecommendedTier(clientCount: number): SubscriptionTier {
-  const ordered: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
-  return ordered.find((tier) => TIER_CONFIG[tier].maxClients >= clientCount) ?? 'scale'
-}
-
-// TX-7: capabilities 1:1 con web (lib/constants.TIER_CAPABILITIES). free = sin nada premium;
-// starter+ = branding + ejercicios custom + import; pro+ = nutrición.
-export interface TierCapabilities {
-  canUseNutrition: boolean
-  canUseBranding: boolean
-  canCreateCustomExercises: boolean
-  canImportClients: boolean
-  canUseAdvancedReports: boolean
-}
-
-const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
-  free: { canUseNutrition: false, canUseBranding: false, canCreateCustomExercises: false, canImportClients: false, canUseAdvancedReports: false },
-  starter: { canUseNutrition: false, canUseBranding: true, canCreateCustomExercises: true, canImportClients: true, canUseAdvancedReports: true },
-  pro: { canUseNutrition: true, canUseBranding: true, canCreateCustomExercises: true, canImportClients: true, canUseAdvancedReports: true },
-  elite: { canUseNutrition: true, canUseBranding: true, canCreateCustomExercises: true, canImportClients: true, canUseAdvancedReports: true },
-  growth: { canUseNutrition: true, canUseBranding: true, canCreateCustomExercises: true, canImportClients: true, canUseAdvancedReports: true },
-  scale: { canUseNutrition: true, canUseBranding: true, canCreateCustomExercises: true, canImportClients: true, canUseAdvancedReports: true },
-}
-
-export function getTierCapabilities(tier: SubscriptionTier): TierCapabilities {
-  return TIER_CAPABILITIES[tier] ?? TIER_CAPABILITIES.free
-}
-
+// Azúcares de capability (1:1 con web). El paquete expone getTierCapabilities; estas envolturas
+// mantienen la API que las pantallas mobile ya importan (nutricion/settings/ejercicios/dashboard).
 export function canUseNutrition(tier: SubscriptionTier): boolean {
   return getTierCapabilities(tier).canUseNutrition
 }

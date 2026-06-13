@@ -2,7 +2,7 @@
 
 import { TESTIMONIALS } from '../../_data/enterprise-content'
 import { SectionEyebrow } from '../atoms/SectionEyebrow'
-import { Reveal, RevealStagger, RevealItem } from '../atoms/Reveal'
+import { Reveal, RevealStagger, RevealItem } from '@/components/motion/Reveal'
 import { Quote } from 'lucide-react'
 
 const AVATAR_GRADIENTS = [

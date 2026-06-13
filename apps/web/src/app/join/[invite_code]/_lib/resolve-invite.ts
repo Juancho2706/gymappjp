@@ -5,33 +5,50 @@ import type { Database } from '@/lib/database.types'
 type Admin = SupabaseClient<Database>
 
 /**
- * B-7: an invite code ENCODES SCOPE.
+ * B-7 / A.bis2: an invite code ENCODES SCOPE.
  *  - organization_members.invite_code  → ENTERPRISE alumno (org_id set, org branding)
+ *  - teams.invite_code                 → TEAM/pool alumno (team_id set, team branding, coach = owner)
  *  - coaches.invite_code               → STANDALONE alumno (org_id null, coach branding)
  *
- * Enterprise is checked first so a (hypothetical) code shared between spaces resolves to
- * the org context. Generation guarantees no such overlap, but the order is defensive.
+ * Enterprise/team are checked before standalone so a (hypothetical) code shared between
+ * spaces resolves to the managed context. Generation guarantees no such overlap
+ * (generate_unique_invite_code checks the three spaces), but the order is defensive.
  */
 export type InviteResolution =
     | {
           scope: 'standalone'
           coachId: string
-          coachSlug: string | null
           orgId: null
+          teamId: null
           brandName: string
           primaryColor: string | null
           logoUrl: string | null
           welcomeMessage: string | null
+          /** Where the new alumno logs in (also the "ya tenés cuenta" link). */
+          loginHref: string
       }
     | {
           scope: 'enterprise'
           coachId: string
-          coachSlug: string | null
           orgId: string
+          teamId: null
           brandName: string
           primaryColor: string | null
           logoUrl: string | null
           welcomeMessage: string | null
+          loginHref: string
+      }
+    | {
+          scope: 'team'
+          /** Pool: the clients row is stamped with the team OWNER as coach_id (collaborative reads ignore it). */
+          coachId: string
+          orgId: null
+          teamId: string
+          brandName: string
+          primaryColor: string | null
+          logoUrl: string | null
+          welcomeMessage: null
+          loginHref: string
       }
     | null
 
@@ -58,16 +75,39 @@ export async function resolveInvite(admin: Admin, code: string): Promise<InviteR
         return {
             scope: 'enterprise',
             coachId: member.coach_id,
-            coachSlug: coach?.slug ?? null,
             orgId: member.org_id,
+            teamId: null,
             brandName: org?.name ?? coach?.brand_name ?? 'EVA',
             primaryColor: org?.primary_color ?? coach?.primary_color ?? null,
             logoUrl: org?.logo_url ?? coach?.logo_url ?? null,
             welcomeMessage: coach?.welcome_message ?? null,
+            loginHref: `/c/${coach?.slug ?? ''}/login`,
         }
     }
 
-    // 2) Standalone code → coach-scoped, coach branding.
+    // 2) Team code → pool-scoped (team_id), TEAM branding, alumno entra por /t/[slug].
+    const { data: team } = await admin
+        .from('teams')
+        .select('id, slug, name, primary_color, logo_url, owner_coach_id')
+        .eq('invite_code', code)
+        .is('deleted_at', null)
+        .maybeSingle()
+
+    if (team) {
+        return {
+            scope: 'team',
+            coachId: team.owner_coach_id,
+            orgId: null,
+            teamId: team.id,
+            brandName: team.name,
+            primaryColor: team.primary_color ?? null,
+            logoUrl: team.logo_url ?? null,
+            welcomeMessage: null,
+            loginHref: `/t/${team.slug}/login`,
+        }
+    }
+
+    // 3) Standalone code → coach-scoped, coach branding.
     const { data: coach } = await admin
         .from('coaches')
         .select('id, slug, brand_name, primary_color, logo_url, welcome_message')
@@ -78,12 +118,13 @@ export async function resolveInvite(admin: Admin, code: string): Promise<InviteR
         return {
             scope: 'standalone',
             coachId: coach.id,
-            coachSlug: coach.slug,
             orgId: null,
+            teamId: null,
             brandName: coach.brand_name ?? 'EVA',
             primaryColor: coach.primary_color ?? null,
             logoUrl: coach.logo_url ?? null,
             welcomeMessage: coach.welcome_message ?? null,
+            loginHref: `/c/${coach.slug ?? ''}/login`,
         }
     }
 

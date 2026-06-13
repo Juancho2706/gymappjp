@@ -30,44 +30,17 @@ import {
     resolveActiveWeekVariantForDisplay,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
-import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
-
-async function getCoachClientScope(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
-    const workspace = await resolvePreferredWorkspace(supabase, userId)
-    if (!workspace || workspace.type === 'coach_standalone') {
-        return { orgId: null }
-    }
-    if (workspace.type === 'enterprise_coach') {
-        return { orgId: workspace.orgId }
-    }
-    throw new Error('Workspace not allowed for coach client operations')
-}
-
-async function assertCoachClientReadAccess(
-    supabase: Awaited<ReturnType<typeof createClient>>,
-    userId: string,
-    clientId: string
-) {
-    const scope = await getCoachClientScope(supabase, userId)
-    let clientQuery = supabase
-        .from('clients')
-        .select('id')
-        .eq('id', clientId)
-        .eq('coach_id', userId)
-    clientQuery = scope.orgId ? clientQuery.eq('org_id', scope.orgId) : clientQuery.is('org_id', null)
-
-    const { data: client, error } = await clientQuery.maybeSingle()
-    if (error) throw new Error('Client access check failed')
-    if (!client) throw new Error('Client not found')
-    return scope
-}
+import { logTeamClientAccess } from '@/services/team/team.service'
+// Guards de scoping 3-vias extraidos a un servicio compartido (T3.0 specs/movida-screening):
+// la logica de scoping coach->alumno vive en UN solo lugar (client-scope.service.ts).
+import { assertCoachClientReadAccess, getCoachClientScope } from '@/services/client/client-scope.service'
 
 export const getClientProfileData = cache(async (clientId: string) => {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) throw new Error("Unauthorized")
-    const { orgId } = await assertCoachClientReadAccess(supabase, user.id, clientId)
+    const { orgId, viaTeam } = await assertCoachClientReadAccess(supabase, user.id, clientId)
 
     // Fetch client base data
     let clientQuery = supabase
@@ -78,9 +51,15 @@ export const getClientProfileData = cache(async (clientId: string) => {
             coaches ( slug )
         `)
         .eq('id', clientId)
-        .eq('coach_id', user.id)
 
-    clientQuery = orgId ? clientQuery.eq('org_id', orgId) : clientQuery.is('org_id', null)
+    // Pool (team) clients: authorized via team membership; let RLS gate the row.
+    // Standalone/enterprise: coach_id + org scoping. Standalone tambien excluye pool (team_id NULL)
+    // para no cruzar contextos.
+    if (!viaTeam) {
+        clientQuery = clientQuery.eq('coach_id', user.id)
+        clientQuery = orgId ? clientQuery.eq('org_id', orgId) : clientQuery.is('org_id', null)
+        if (!orgId) clientQuery = clientQuery.is('team_id', null)
+    }
     const clientPromise = clientQuery.maybeSingle()
 
     // Fetch active workout program
@@ -246,6 +225,19 @@ export const getClientProfileData = cache(async (clientId: string) => {
 
     if (clientErr || !client) {
         throw new Error("Client not found")
+    }
+
+    // Bitacora de acceso a datos de salud (Ley 21.719): SOLO cuando un coach del pool accede a un
+    // alumno del team (viaTeam). Standalone/enterprise no generan bitacora de team. Best-effort.
+    if (viaTeam && client.team_id) {
+        await logTeamClientAccess(supabase, {
+            teamId: client.team_id,
+            actorCoachId: user.id,
+            clientId,
+            resource: 'client_profile',
+            action: 'view',
+            metadata: { full_name: client.full_name ?? null },
+        })
     }
 
     // ─── B0: PRs, volumen por grupo (30d), detalle de comidas ─────────────

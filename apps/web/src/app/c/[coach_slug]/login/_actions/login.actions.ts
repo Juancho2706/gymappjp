@@ -1,12 +1,13 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { createRawAdminClient } from '@/lib/supabase/admin-raw'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { redirect } from 'next/navigation'
 import { ClientLoginSchema, ChangePasswordSchema } from '@eva/schemas'
 import type { Tables } from '@/lib/database.types'
 import type { WorkspaceSummary } from '@/domain/auth/types'
 import { setLastWorkspace } from '@/services/auth/workspace.service'
+import { getClientBasePath } from '@/lib/client/base-path'
 
 type Coach = Tables<'coaches'>
 type Client = Tables<'clients'>
@@ -46,10 +47,10 @@ export async function clientLoginAction(
         return { error: 'Error al obtener sesión.' }
     }
 
-    const rawAdmin = await createRawAdminClient()
-
+    // R3 (auditoria 2026-06-11): estas lecturas pasan RLS del alumno recien logueado
+    // (coaches tiene SELECT publico; clients permite self) → cliente user-scoped, sin service key.
     const INVITE_CODE_RE = /^[A-Z2-9]{5}$/
-    const coachQuery = rawAdmin.from('coaches').select('id')
+    const coachQuery = supabase.from('coaches').select('id')
     const { data: coachData, error: coachError } = await (
         INVITE_CODE_RE.test(coach_slug)
             ? coachQuery.eq('invite_code', coach_slug).maybeSingle()
@@ -57,7 +58,7 @@ export async function clientLoginAction(
     )
 
     if (coachError) {
-        console.error('[LoginAction] Error fetching coach (admin):', coachError)
+        console.error('[LoginAction] Error fetching coach:', coachError)
     }
 
     const coach = coachData as Pick<Coach, 'id'> | null
@@ -67,14 +68,14 @@ export async function clientLoginAction(
         return { error: 'Coach no encontrado.' }
     }
 
-    const { data: clientData, error: clientError } = await rawAdmin
+    const { data: clientData, error: clientError } = await supabase
         .from('clients')
         .select('id, force_password_change, is_active, coach_id, org_id')
         .eq('id', user.id)
         .maybeSingle()
 
     if (clientError) {
-        console.error('[LoginAction] Error fetching client (admin):', clientError)
+        console.error('[LoginAction] Error fetching client:', clientError)
     }
 
     type ClientRow = Pick<Client, 'id' | 'force_password_change' | 'is_active'> & { coach_id?: string | null; org_id?: string | null }
@@ -107,7 +108,12 @@ export async function clientLoginAction(
                     slug: coach_slug,
                 }
         } else if (rawClient.org_id) {
-            const { data: orgMember } = await rawAdmin
+            // R2 (auditoria 2026-06-11): el alumno NO tiene lectura RLS sobre organization_members
+            // y rawAdmin corre con la sesion del alumno recien creada => esta rama (entrar por el
+            // slug de OTRO coach de su misma org) devolvia siempre null. Service role REAL,
+            // acotado a la verificacion exacta org+coach+activo.
+            const serviceDb = createServiceRoleClient()
+            const { data: orgMember } = await serviceDb
                 .from('organization_members')
                 .select('id, organizations(name)')
                 .eq('org_id', rawClient.org_id)
@@ -182,11 +188,13 @@ export async function changePasswordAction(
     const { error: authError } = await supabase.auth.updateUser({ password })
     if (authError) return { error: authError.message }
 
-    const rawAdmin = await createRawAdminClient()
-    await rawAdmin
+    // UPDATE self: la policy "Client can update their own profile" lo cubre → user-scoped.
+    await supabase
         .from('clients')
         .update({ force_password_change: false })
         .eq('id', user.id)
 
-    redirect(`/c/${coach_slug}/dashboard`)
+    // Respeta el base path real del alumno (pool/team → /t/[team_slug]) en vez de
+    // hardcodear /c, que volcaria a un alumno de team a la marca personal del coach.
+    redirect(`${await getClientBasePath(coach_slug)}/dashboard`)
 }

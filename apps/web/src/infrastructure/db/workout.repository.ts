@@ -8,6 +8,85 @@ export type WorkoutProgramRow = Tables['workout_programs']['Row']
 export type WorkoutPlanRow = Tables['workout_plans']['Row']
 export type WorkoutBlockRow = Tables['workout_blocks']['Row']
 export type WorkoutLogRow = Tables['workout_logs']['Row']
+export type WorkoutSectionTemplateRow = Tables['workout_section_templates']['Row']
+
+/**
+ * Areas disponibles segun el workspace ACTIVO (separacion estricta de contextos):
+ * team ⇒ system + las del team; standalone ⇒ system + propias; sin scope ⇒ solo system.
+ * RLS (wst_select) es el techo; estos filtros son defensa en profundidad.
+ */
+export async function findAvailableSectionTemplates(
+    db: DB,
+    scope: { coachId: string | null; teamId: string | null }
+): Promise<WorkoutSectionTemplateRow[]> {
+    let query = db
+        .from('workout_section_templates')
+        .select('id, name, slug, coach_id, team_id, sort_order, is_system, created_at, deleted_at')
+        .is('deleted_at', null)
+
+    if (scope.teamId) {
+        query = query.or(`is_system.eq.true,team_id.eq.${scope.teamId}`)
+    } else if (scope.coachId) {
+        query = query.or(`is_system.eq.true,and(coach_id.eq.${scope.coachId},team_id.is.null)`)
+    } else {
+        query = query.eq('is_system', true)
+    }
+
+    const { data } = await query
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true })
+
+    return (data ?? []) as WorkoutSectionTemplateRow[]
+}
+
+const SECTION_TEMPLATE_COLUMNS = 'id, name, slug, coach_id, team_id, sort_order, is_system, created_at, deleted_at'
+
+/** Alta de area custom (coach XOR team — el CHECK ownership_chk y RLS wst_insert son el techo). */
+export async function insertSectionTemplate(
+    db: DB,
+    values: { name: string; slug: string; sort_order: number; coach_id: string | null; team_id: string | null }
+): Promise<{ row: WorkoutSectionTemplateRow | null; error: string | null }> {
+    const { data, error } = await db
+        .from('workout_section_templates')
+        .insert({ ...values, is_system: false })
+        .select(SECTION_TEMPLATE_COLUMNS)
+        .single()
+    return { row: (data as WorkoutSectionTemplateRow) ?? null, error: error?.message ?? null }
+}
+
+/** Update de area custom (nombre/slug y/u orden). `is_system = false` como defensa extra ante RLS. */
+export async function updateSectionTemplate(
+    db: DB,
+    id: string,
+    values: { name?: string; slug?: string; sort_order?: number }
+): Promise<{ row: WorkoutSectionTemplateRow | null; error: string | null }> {
+    const { data, error } = await db
+        .from('workout_section_templates')
+        .update(values)
+        .eq('id', id)
+        .eq('is_system', false)
+        .is('deleted_at', null)
+        .select(SECTION_TEMPLATE_COLUMNS)
+        .maybeSingle()
+    return { row: (data as WorkoutSectionTemplateRow) ?? null, error: error?.message ?? null }
+}
+
+/** Soft-delete de area custom. Los bloques que la referencian conservan el id (FK intacta);
+ *  el builder/ejecucion caen al bucket legacy via effectiveAreaKey. */
+export async function softDeleteSectionTemplate(
+    db: DB,
+    id: string
+): Promise<{ done: boolean; error: string | null }> {
+    const { data, error } = await db
+        .from('workout_section_templates')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', id)
+        .eq('is_system', false)
+        .is('deleted_at', null)
+        .select('id')
+        .maybeSingle()
+    return { done: !!data, error: error?.message ?? null }
+}
 
 export async function findWorkoutProgramById(
     db: DB,

@@ -13,6 +13,7 @@ import {
     jsonRateLimited,
     rateLimitSignup,
 } from '@/lib/rate-limit'
+import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
 
 const RESERVED_SLUGS = new Set([
     'admin', 'api', 'coach', 'coaches', 'register', 'login', 'logout', 'pricing',
@@ -129,19 +130,28 @@ export async function POST(request: NextRequest) {
     }
 
     const registrationIp = ip !== 'unknown' ? ip : null
+    const inviteCode = await generateUniqueInviteCode(adminDb)
+    const now = new Date().toISOString()
     const { error: coachError } = await adminDb.from('coaches').insert({
         id: authData.user.id,
         full_name: fullName,
         brand_name: brandName,
         slug,
+        invite_code: inviteCode,
         primary_color: '#10B981',
         subscription_status: 'pending_email',
         subscription_tier: selectedTier,
         billing_cycle: 'monthly',
         payment_provider: 'admin',
         max_clients: getTierMaxClients(selectedTier),
-        health_data_consent_at: new Date().toISOString(),
+        health_data_consent_at: now,
         marketing_consent: acceptMarketing,
+        // New coaches already know their invite code — skip the one-shot migration modal
+        // (PublicCodeRequiredModal) intended only for legacy coaches without a code.
+        onboarding_guide: {
+            invite_code_confirmed: true,
+            invite_code_confirmed_at: now,
+        },
         trial_used_email: emailNorm,
         ...(registrationIp && { registration_ip: registrationIp }),
     })

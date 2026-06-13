@@ -6,6 +6,7 @@ import { CloneExerciseSchema } from '@eva/schemas'
 import { z } from 'zod'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
 import { getCoachOrgContext } from '@/lib/coach-context'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { normalizeYoutubeEmbedUrl } from '@/lib/youtube'
 import { deleteExerciseMediaByUrlAction } from './exercise-media.actions'
 
@@ -14,6 +15,8 @@ const SUPABASE_MEDIA_PREFIX = `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''}/sto
 const exerciseSchema = z.object({
     name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(100),
     muscle_group: z.string().min(1, 'Seleccioná un grupo muscular'),
+    // Polimórfico (specs/movida-entrenamiento): default strength = comportamiento de siempre.
+    exercise_type: z.enum(['strength', 'cardio', 'mobility', 'roller']).default('strength'),
     equipment: z.string().optional(),
     difficulty: z.string().optional(),
     secondary_muscles: z.array(z.string()).optional(),
@@ -58,6 +61,7 @@ function parseExerciseFormData(formData: FormData) {
     return {
         name: formData.get('name') as string,
         muscle_group: formData.get('muscle_group') as string,
+        exercise_type: (formData.get('exercise_type') as string) || 'strength',
         equipment: (formData.get('equipment') as string) || undefined,
         difficulty: (formData.get('difficulty') as string) || undefined,
         secondary_muscles: rawSecondary
@@ -155,20 +159,33 @@ export async function cloneExerciseAction(formData: FormData) {
 // ── Custom exercise creator (enterprise-aware) ────────────────────────────────
 
 /**
- * Resolves owner fields for a custom exercise.
- * - Standalone coach → { coach_id: user.id, org_id: null }
- * - Org admin/owner  → { coach_id: null, org_id: ctx.orgId }
- * - Org coach        → error (no permission)
+ * Resolves owner fields for a custom exercise (exactamente UNO de coach_id | org_id | team_id).
+ * - Workspace activo team → { coach_id: null, org_id: null, team_id: workspace.teamId } — AC6/AC11
+ * - Standalone coach      → { coach_id: user.id, org_id: null, team_id: null }
+ * - Org admin/owner       → { coach_id: null, org_id: ctx.orgId, team_id: null }
+ * - Org coach             → error (no permission)
  */
 async function resolveExerciseOwner(
     supabase: Awaited<ReturnType<typeof createClient>>
 ): Promise<
-    | { ok: true; coachId: string | null; orgId: string | null; tier: SubscriptionTier }
+    | { ok: true; coachId: string | null; orgId: string | null; teamId: string | null; tier: SubscriptionTier }
     | { ok: false; error: string }
 > {
     const { data: userData } = await supabase.auth.getUser()
     const user = userData?.user
     if (!user) return { ok: false, error: 'No autenticado.' }
+
+    // 3er caso (mustFix AC6/AC11): workspace ACTIVO team ⇒ el ejercicio nace en el catálogo del
+    // POOL (team_id), nunca personal. Sin esto, un coach de Movida en contexto team creaba
+    // ejercicios coach_id = user.id: invisibles para los demás miembros (rompe full-access AC6)
+    // y NO legibles por los alumnos del pool vía exercises_client_coach_select (exige
+    // clients.coach_id = exercises.coach_id, que no se cumple en el pool) ⇒ bloque fantasma en
+    // la ejecución. La RLS exercises_team_insert (20260611090001) respalda este write-path.
+    const workspace = await resolvePreferredWorkspace(supabase, user.id)
+    if (workspace?.type === 'coach_team') {
+        // Full-access plano del pool: cualquier miembro activo crea/edita; billing a nivel team.
+        return { ok: true, coachId: null, orgId: null, teamId: workspace.teamId, tier: 'pro' }
+    }
 
     const ctx = await getCoachOrgContext()
     if (!ctx) return { ok: false, error: 'No autenticado.' }
@@ -180,7 +197,7 @@ async function resolveExerciseOwner(
 
     if (ctx.isOrgAdmin && ctx.orgId) {
         // Org admin: tier check via org — allow all (org manages billing separately)
-        return { ok: true, coachId: null, orgId: ctx.orgId, tier: 'pro' }
+        return { ok: true, coachId: null, orgId: ctx.orgId, teamId: null, tier: 'pro' }
     }
 
     // Standalone coach
@@ -195,8 +212,19 @@ async function resolveExerciseOwner(
         ok: true,
         coachId: coach.id,
         orgId: null,
+        teamId: null,
         tier: (coach.subscription_tier ?? 'free') as SubscriptionTier,
     }
+}
+
+/** Scoping 3-vías del owner sobre un query de exercises (team > coach personal > org). */
+function applyExerciseOwnerScope<T extends { eq: (column: string, value: string) => T }>(
+    query: T,
+    owner: { coachId: string | null; orgId: string | null; teamId: string | null }
+): T {
+    if (owner.teamId) return query.eq('team_id', owner.teamId)
+    if (owner.coachId) return query.eq('coach_id', owner.coachId)
+    return query.eq('org_id', owner.orgId!)
 }
 
 export async function createExerciseAction(
@@ -216,13 +244,14 @@ export async function createExerciseAction(
         return { fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> }
     }
 
-    // Duplicate name check (scoped to owner)
-    const nameQuery = supabase
-        .from('exercises')
-        .select('id', { count: 'exact', head: true })
-        .ilike('name', parsed.data.name)
-    if (owner.coachId) nameQuery.eq('coach_id', owner.coachId)
-    else nameQuery.eq('org_id', owner.orgId!)
+    // Duplicate name check (scoped to owner — en team, por team_id: el catálogo es del pool)
+    const nameQuery = applyExerciseOwnerScope(
+        supabase
+            .from('exercises')
+            .select('id', { count: 'exact', head: true })
+            .ilike('name', parsed.data.name),
+        owner
+    )
 
     const { count: nameCount } = await nameQuery
     if ((nameCount ?? 0) > 0) {
@@ -236,8 +265,10 @@ export async function createExerciseAction(
         .insert({
             coach_id: owner.coachId,
             org_id: owner.orgId,
+            team_id: owner.teamId,
             name: parsed.data.name,
             muscle_group: parsed.data.muscle_group,
+            exercise_type: parsed.data.exercise_type,
             equipment: parsed.data.equipment ?? null,
             difficulty: parsed.data.difficulty ?? null,
             secondary_muscles: parsed.data.secondary_muscles ?? [],
@@ -245,7 +276,7 @@ export async function createExerciseAction(
             video_url: media.video_url,
             gif_url: media.gif_url,
             image_url: media.image_url,
-            source: owner.orgId ? 'org' : 'coach',
+            source: owner.orgId ? 'org' : owner.teamId ? 'team' : 'coach',
         })
         .select('id')
         .single()
@@ -278,14 +309,15 @@ export async function updateExerciseAction(
         return { fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> }
     }
 
-    // Duplicate name check (exclude self)
-    const nameQuery = supabase
-        .from('exercises')
-        .select('id', { count: 'exact', head: true })
-        .ilike('name', parsed.data.name)
-        .neq('id', exerciseId)
-    if (owner.coachId) nameQuery.eq('coach_id', owner.coachId)
-    else nameQuery.eq('org_id', owner.orgId!)
+    // Duplicate name check (exclude self; en team, scoped por team_id)
+    const nameQuery = applyExerciseOwnerScope(
+        supabase
+            .from('exercises')
+            .select('id', { count: 'exact', head: true })
+            .ilike('name', parsed.data.name)
+            .neq('id', exerciseId),
+        owner
+    )
 
     const { count: nameCount } = await nameQuery
     if ((nameCount ?? 0) > 0) {
@@ -306,6 +338,7 @@ export async function updateExerciseAction(
         .update({
             name: parsed.data.name,
             muscle_group: parsed.data.muscle_group,
+            exercise_type: parsed.data.exercise_type,
             equipment: parsed.data.equipment ?? null,
             difficulty: parsed.data.difficulty ?? null,
             secondary_muscles: parsed.data.secondary_muscles ?? [],
@@ -315,8 +348,7 @@ export async function updateExerciseAction(
             image_url: media.image_url,
         })
         .eq('id', exerciseId)
-    if (owner.coachId) updateQuery.eq('coach_id', owner.coachId)
-    else updateQuery.eq('org_id', owner.orgId!)
+    applyExerciseOwnerScope(updateQuery, owner)
 
     const { error } = await updateQuery
     if (error) {
@@ -349,8 +381,7 @@ export async function softDeleteExerciseAction(exerciseId: string): Promise<Exer
         .from('exercises')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', exerciseId)
-    if (owner.coachId) updateQuery.eq('coach_id', owner.coachId)
-    else updateQuery.eq('org_id', owner.orgId!)
+    applyExerciseOwnerScope(updateQuery, owner)
 
     const { error } = await updateQuery
     if (error) return { error: 'Error al eliminar el ejercicio.' }
@@ -369,8 +400,7 @@ export async function restoreExerciseAction(exerciseId: string): Promise<Exercis
         .from('exercises')
         .update({ deleted_at: null })
         .eq('id', exerciseId)
-    if (owner.coachId) updateQuery.eq('coach_id', owner.coachId)
-    else updateQuery.eq('org_id', owner.orgId!)
+    applyExerciseOwnerScope(updateQuery, owner)
 
     const { error } = await updateQuery
     if (error) return { error: 'No se pudo restaurar.' }

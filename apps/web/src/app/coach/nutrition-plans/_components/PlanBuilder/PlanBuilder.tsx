@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -29,8 +29,30 @@ import {
   upsertClientNutritionPlanJson,
   getClientFoodFavorites,
 } from '../../_actions/nutrition-coach.actions'
-import type { FoodItemDraft, MealDraft, PlanBuilderInitialData } from './types'
+import {
+  createDayVariantAction,
+  deleteDayVariantAction,
+  assignMealVariantAction,
+  saveMealExchangeTargetsAction,
+  setPlanModeAction,
+  logNutritionPdfGeneratedAction,
+} from '../../_actions/exchange.actions'
+import { ExchangeModePanel } from './ExchangeModePanel'
+import { ExchangeTargetsEditor, type ExchangeSaveState } from './ExchangeTargetsEditor'
+import {
+  dayTotalsByVariant,
+  hasUnconfirmedMacros,
+} from '@/services/nutrition-exchanges/exchange-calc'
+import { loadBrandLogoDataUrl } from '@/lib/nutrition-pdf-brand'
+import { trackNutritionEvent } from '@/lib/product-analytics'
+import type { DayVariant, NutritionPlanMode } from '@/domain/nutrition/exchange.types'
+import type { ExchangeBuilderData, ExchangeTargetDraft, FoodItemDraft, MealDraft, PlanBuilderInitialData } from './types'
 import type { ClientProfileHint } from './PlanBuilderSidebar'
+
+/** Comidas nuevas usan id local `meal-*` hasta que el plan se guarda (no persistibles aún). */
+function isPersistedMealId(mealId: string): boolean {
+  return !mealId.startsWith('meal-')
+}
 
 function newMealId() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return `meal-${crypto.randomUUID()}`
@@ -43,9 +65,11 @@ interface Props {
   clientId?: string
   initialData?: PlanBuilderInitialData | null
   clientProfile?: ClientProfileHint | null
+  /** Módulo nutrition_exchanges (solo si está ON para el workspace activo). */
+  exchange?: ExchangeBuilderData | null
 }
 
-export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfile }: Props) {
+export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfile, exchange }: Props) {
   const router = useRouter()
   const [planName, setPlanName] = useState(initialData?.name ?? '')
   const [goals, setGoals] = useState({
@@ -70,6 +94,184 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
   const [isSaving, setIsSaving] = useState(false)
   const [autoSync, setAutoSync] = useState(true)
   const [clientFavoriteIds, setClientFavoriteIds] = useState<Set<string>>(new Set())
+
+  // ─── Módulo nutrition_exchanges (solo client-plan, con módulo ON) ──────────────
+  const exchangeEnabled = !!exchange && mode === 'client-plan'
+  const [planMode, setPlanMode] = useState<NutritionPlanMode>(exchange?.planMode ?? 'grams')
+  const [exchangeTargets, setExchangeTargets] = useState<Record<string, ExchangeTargetDraft[]>>(
+    exchange?.targetsByMealId ?? {}
+  )
+  const [dayVariants, setDayVariants] = useState<DayVariant[]>(exchange?.variants ?? [])
+  const [variantByMealId, setVariantByMealId] = useState<Record<string, string | null>>(
+    exchange?.variantByMealId ?? {}
+  )
+  const [exchangeSaveState, setExchangeSaveState] = useState<Record<string, ExchangeSaveState>>({})
+  const [isModeToggling, startModeToggle] = useTransition()
+  const [isVariantPending, startVariantTransition] = useTransition()
+  const [isExchangePdfPending, startExchangePdf] = useTransition()
+  const targetSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const exchangeActive = exchangeEnabled && planMode === 'exchanges'
+
+  // En modo porciones los objetivos son el REQUERIMIENTO de la nutri (no se autosincronizan
+  // con los alimentos por gramos).
+  useEffect(() => {
+    if (exchangeActive) setAutoSync(false)
+  }, [exchangeActive])
+
+  // Limpieza de debounces al desmontar.
+  useEffect(() => {
+    const timers = targetSaveTimers.current
+    return () => {
+      for (const t of Object.values(timers)) clearTimeout(t)
+    }
+  }, [])
+
+  const handleToggleExchangeMode = useCallback(
+    (next: boolean) => {
+      const planId = exchange?.planId
+      if (!planId) return
+      const nextMode: NutritionPlanMode = next ? 'exchanges' : 'grams'
+      const prev = planMode
+      setPlanMode(nextMode)
+      startModeToggle(async () => {
+        const res = await setPlanModeAction({ planId, mode: nextMode })
+        if (!res.success) {
+          setPlanMode(prev)
+          toast.error(res.error ?? 'No se pudo cambiar el modo del plan.')
+        }
+      })
+    },
+    [exchange?.planId, planMode]
+  )
+
+  const handleExchangeTargetsChange = useCallback((mealId: string, targets: ExchangeTargetDraft[]) => {
+    setExchangeTargets((prev) => ({ ...prev, [mealId]: targets }))
+    if (!isPersistedMealId(mealId)) return
+    setExchangeSaveState((prev) => ({ ...prev, [mealId]: 'saving' }))
+    if (targetSaveTimers.current[mealId]) clearTimeout(targetSaveTimers.current[mealId])
+    targetSaveTimers.current[mealId] = setTimeout(async () => {
+      const res = await saveMealExchangeTargetsAction({
+        mealId,
+        targets: targets.map((t) => ({
+          exchangeGroupId: t.exchangeGroupId,
+          portions: t.portions,
+          notes: t.notes ?? null,
+        })),
+      })
+      setExchangeSaveState((prev) => ({ ...prev, [mealId]: res.success ? 'saved' : 'error' }))
+      if (!res.success) toast.error(res.error ?? 'No se pudieron guardar las porciones.')
+    }, 700)
+  }, [])
+
+  const handleMealVariantChange = useCallback((mealId: string, variantId: string | null) => {
+    if (!isPersistedMealId(mealId)) return
+    setVariantByMealId((prev) => ({ ...prev, [mealId]: variantId }))
+    startVariantTransition(async () => {
+      const res = await assignMealVariantAction({ mealId, variantId })
+      if (!res.success) toast.error(res.error ?? 'No se pudo asignar la variante.')
+    })
+  }, [])
+
+  const handleCreateVariant = useCallback(
+    (name: string) => {
+      const planId = exchange?.planId
+      if (!planId) return
+      startVariantTransition(async () => {
+        const res = await createDayVariantAction({ planId, name })
+        if (res.success && res.variant) {
+          setDayVariants((prev) => [...prev, res.variant!])
+        } else {
+          toast.error(res.error ?? 'No se pudo crear la variante.')
+        }
+      })
+    },
+    [exchange?.planId]
+  )
+
+  const handleDeleteVariant = useCallback((variantId: string) => {
+    startVariantTransition(async () => {
+      const res = await deleteDayVariantAction({ variantId })
+      if (res.success) {
+        setDayVariants((prev) => prev.filter((v) => v.id !== variantId))
+        setVariantByMealId((prev) => {
+          const next: Record<string, string | null> = {}
+          for (const [mealId, vid] of Object.entries(prev)) next[mealId] = vid === variantId ? null : vid
+          return next
+        })
+      } else {
+        toast.error(res.error ?? 'No se pudo eliminar la variante.')
+      }
+    })
+  }, [])
+
+  const exchangeMealsLike = useMemo(
+    () =>
+      meals.map((m) => ({
+        targets: exchangeTargets[m.id] ?? [],
+        dayVariantId: variantByMealId[m.id] ?? null,
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [meals.map((m) => m.id).join('|'), exchangeTargets, variantByMealId]
+  )
+
+  const exchangeTotalsByVariant = useMemo(
+    () => (exchange ? dayTotalsByVariant(exchangeMealsLike, dayVariants, exchange.groups) : []),
+    [exchange, exchangeMealsLike, dayVariants]
+  )
+
+  const exchangeProvisional = useMemo(
+    () =>
+      exchange
+        ? hasUnconfirmedMacros(
+            Object.values(exchangeTargets).flat(),
+            exchange.groups
+          )
+        : false,
+    [exchange, exchangeTargets]
+  )
+
+  const handleDownloadExchangePdf = useCallback(
+    (format: 'compact' | 'equivalences') => {
+      if (!exchange) return
+      startExchangePdf(async () => {
+        try {
+          const { downloadNutritionExchangePdf } = await import('@/lib/nutrition-exchange-pdf')
+          const logoDataUrl = await loadBrandLogoDataUrl(exchange.brandLogoUrl)
+          await downloadNutritionExchangePdf({
+            format,
+            brand: exchange.brand,
+            logoDataUrl,
+            planName: planName || 'Pauta nutricional',
+            clientName: exchange.clientName ?? null,
+            instructions: instructions || null,
+            goals,
+            meals: meals.map((m) => ({
+              id: m.id,
+              name: m.name,
+              notes: m.notes ?? null,
+              dayVariantId: variantByMealId[m.id] ?? null,
+              targets: exchangeTargets[m.id] ?? [],
+            })),
+            variants: dayVariants,
+            groups: exchange.groups,
+            equivalences: exchange.equivalences,
+            fileStem: `pauta-${(exchange.clientName ?? planName ?? 'porciones').toLowerCase()}`,
+          })
+          trackNutritionEvent('nutrition_exchange_pdf_ok', { format, source: 'coach_builder' })
+          toast.success('PDF descargado')
+          // Bitácora AC7 — fire-and-forget; solo inserta si el contexto activo es team.
+          if (exchange.planId) {
+            void logNutritionPdfGeneratedAction({ planId: exchange.planId, format })
+          }
+        } catch (e) {
+          console.error('[module:nutrition_exchanges] pdf coach', e)
+          trackNutritionEvent('nutrition_exchange_pdf_error', { format, source: 'coach_builder' })
+          toast.error('No se pudo generar el PDF. Intenta de nuevo.')
+        }
+      })
+    },
+    [exchange, planName, instructions, goals, meals, variantByMealId, exchangeTargets, dayVariants]
+  )
 
   useEffect(() => {
     if (!clientId) return
@@ -275,12 +477,17 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
       toast.error('Agrega al menos una comida antes de guardar')
       return
     }
-    if (emptyMeals.length > 0) {
+    // Modo porciones: las comidas se prescriben por grupos de intercambio, no por alimentos.
+    if (!exchangeActive && emptyMeals.length > 0) {
       toast.error('Cada comida debe tener al menos 1 alimento')
       return
     }
 
     const payloadMeals = meals.map((m, i) => ({
+      // R1 (modo porciones): el server matchea por ID de DB — los targets de intercambio
+      // y la variante de día viajan SIEMPRE con su comida al reordenar/borrar comidas.
+      // Modo gramos NO envía id ⇒ matching legacy por posición byte-identical (AC1).
+      ...(exchangeActive && isPersistedMealId(m.id) ? { id: m.id } : {}),
       name: m.name,
       notes: m.notes ?? null,
       order_index: i,
@@ -340,6 +547,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
           fats_g: goals.fats,
           instructions: instructions || null,
           meals: payloadMeals,
+          plan_mode: exchangeActive ? 'exchanges' : 'grams',
         })
         if (!res.success) {
           toast.error(res.error ?? 'No se pudo guardar')
@@ -363,11 +571,45 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
     clientId,
     initialData?.id,
     router,
+    exchangeActive,
   ])
+
+  // Totales del sidebar: en modo porciones se derivan de los targets (Σ porciones × ref).
+  const sidebarTotals = useMemo(() => {
+    if (!exchangeActive || !exchange) return realTotals
+    const whole = exchangeTotalsByVariant.length > 0
+      ? exchangeTotalsByVariant[0].totals
+      : { calories: 0, proteinG: 0, carbsG: 0, fatsG: 0 }
+    return {
+      calories: whole.calories,
+      protein: whole.proteinG,
+      carbs: whole.carbsG,
+      fats: whole.fatsG,
+    }
+  }, [exchangeActive, exchange, realTotals, exchangeTotalsByVariant])
 
   return (
     <div className="flex min-h-[60vh] flex-col gap-6">
-      {emptyMeals.length > 0 && (
+      {exchangeEnabled && exchange && (
+        <ExchangeModePanel
+          active={exchangeActive}
+          canToggle={!!exchange.planId}
+          togglePending={isModeToggling}
+          onToggleMode={handleToggleExchangeMode}
+          groups={exchange.groups}
+          variants={dayVariants}
+          totalsByVariant={exchangeTotalsByVariant}
+          goals={goals}
+          provisional={exchangeProvisional}
+          variantPending={isVariantPending}
+          onCreateVariant={handleCreateVariant}
+          onDeleteVariant={handleDeleteVariant}
+          brand={exchange.brand}
+          pdfPending={isExchangePdfPending}
+          onDownloadPdf={handleDownloadExchangePdf}
+        />
+      )}
+      {!exchangeActive && emptyMeals.length > 0 && (
         <div className="w-full shrink-0 rounded-2xl border border-orange-500/40 bg-orange-500/10 px-4 py-3 text-sm text-orange-700 dark:text-orange-300">
           <p className="font-bold">Reparación asistida: hay comidas incompletas</p>
           <p className="mt-1 text-xs leading-relaxed">
@@ -383,7 +625,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
             onNameChange={setPlanName}
             goals={goals}
             onGoalsChange={setGoals}
-            realTotals={realTotals}
+            realTotals={sidebarTotals}
             onAutoSync={handleAutoSync}
             autoSync={autoSync}
             onAutoSyncToggle={setAutoSync}
@@ -401,6 +643,24 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
             <SortableContext items={meals.map((m) => m.id)} strategy={verticalListSortingStrategy}>
               <MealCanvas
                 meals={meals}
+                exchangeMode={exchangeActive}
+                renderMealExtra={
+                  exchangeActive && exchange
+                    ? (mealId) => (
+                        <ExchangeTargetsEditor
+                          mealId={mealId}
+                          persistable={isPersistedMealId(mealId)}
+                          groups={exchange.groups}
+                          targets={exchangeTargets[mealId] ?? []}
+                          onChange={handleExchangeTargetsChange}
+                          variants={dayVariants}
+                          variantId={variantByMealId[mealId] ?? null}
+                          onVariantChange={handleMealVariantChange}
+                          saveState={exchangeSaveState[mealId] ?? 'idle'}
+                        />
+                      )
+                    : undefined
+                }
                 onAddMeal={addMeal}
                 onUpdateMealName={updateMealName}
                 onUpdateMealDayOfWeek={updateMealDayOfWeek}

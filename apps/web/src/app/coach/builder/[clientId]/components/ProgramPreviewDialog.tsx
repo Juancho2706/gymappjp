@@ -3,14 +3,15 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import {
-    effectiveWorkoutSection,
     groupContiguousSupersetRuns,
-    WORKOUT_SECTION_ORDER,
     type WorkoutSectionKey,
 } from '@/lib/workout-block-grouping'
+import { executionAreaGroupsFor } from '@/lib/workout-areas'
+import type { WorkoutArea } from '@/domain/workout/types'
 import { getMuscleColor } from '../muscle-colors'
 import type { BuilderBlock, DayState } from '../types'
 
+/** Titulos legacy del preview — identicos a los de siempre (contrato anti-regresion). */
 const PREVIEW_SECTION_LABEL: Record<WorkoutSectionKey, string> = {
     warmup: 'Calentamiento',
     main: 'Principal',
@@ -20,23 +21,25 @@ const PREVIEW_SECTION_LABEL: Record<WorkoutSectionKey, string> = {
 
 type PreviewRow = BuilderBlock & { id: string; order_index: number; superset_group: string | null }
 
-function buildDayPreviewSections(blocks: BuilderBlock[]) {
+/**
+ * Agrupa los bloques del dia por AREA con fallback legacy (mismo helper que la
+ * ejecucion del alumno, `executionAreaGroupsFor`): un programa SOLO con secciones
+ * clasicas produce EXACTAMENTE las secciones de siempre (Calentamiento → Principal
+ * → Enfriamiento); bloques en areas custom/extra se agrupan bajo el nombre real
+ * del area, intercaladas por sort_order. Exportada solo para tests.
+ */
+export function buildDayPreviewSections(blocks: BuilderBlock[], areas: readonly WorkoutArea[]) {
     const rows: PreviewRow[] = blocks.map((b, order_index) => ({
         ...b,
         id: b.uid,
         order_index,
         superset_group: b.superset_group ?? null,
     }))
-    return WORKOUT_SECTION_ORDER.map((sectionKey) => {
-        const sectionBlocks = rows.filter((b) => effectiveWorkoutSection(b.section) === sectionKey)
-        if (sectionBlocks.length === 0) return null
-        const groups = groupContiguousSupersetRuns(sectionBlocks)
-        return { sectionKey, label: PREVIEW_SECTION_LABEL[sectionKey], groups }
-    }).filter(Boolean) as Array<{
-        sectionKey: WorkoutSectionKey
-        label: string
-        groups: ReturnType<typeof groupContiguousSupersetRuns<PreviewRow>>
-    }>
+    return executionAreaGroupsFor(rows, areas).map((areaGroup) => ({
+        key: areaGroup.key,
+        label: areaGroup.name ?? PREVIEW_SECTION_LABEL[areaGroup.legacySection ?? 'main'],
+        groups: groupContiguousSupersetRuns(areaGroup.blocks),
+    }))
 }
 
 interface ProgramPreviewDialogProps {
@@ -49,12 +52,14 @@ interface ProgramPreviewDialogProps {
     durationDays: number | null
     programNotes: string
     clientName?: string | null
+    /** Areas visibles del workspace activo — resuelve nombres de areas custom/extra (fallback legacy si falta). */
+    areas?: WorkoutArea[]
 }
 
 export function ProgramPreviewDialog({
     open, onClose,
     programName, days, weeksToRepeat, durationType, durationDays,
-    programNotes, clientName,
+    programNotes, clientName, areas = [],
 }: ProgramPreviewDialogProps) {
     const activeDays = days.filter(d => !d.is_rest && d.blocks.length > 0)
     const restDays = days.filter(d => d.is_rest)
@@ -165,8 +170,8 @@ export function ProgramPreviewDialog({
                                         </div>
                                     </div>
                                     <div className="space-y-3">
-                                        {buildDayPreviewSections(day.blocks).map((sec) => (
-                                            <div key={sec.sectionKey} className="space-y-1.5">
+                                        {buildDayPreviewSections(day.blocks, areas).map((sec) => (
+                                            <div key={sec.key} className="space-y-1.5">
                                                 <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground border-b border-border/60 pb-0.5">
                                                     {sec.label}
                                                 </div>

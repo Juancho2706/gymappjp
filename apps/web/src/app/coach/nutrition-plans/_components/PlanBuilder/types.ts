@@ -1,3 +1,36 @@
+import type {
+  DayVariant,
+  ExchangeFoodEquivalence,
+  ExchangeGroup,
+  NutritionPlanMode,
+  PdfBrand,
+} from '@/domain/nutrition/exchange.types'
+
+/** Target de porciones de UNA comida en el editor (módulo nutrition_exchanges). */
+export interface ExchangeTargetDraft {
+  exchangeGroupId: string
+  portions: number
+  notes?: string | null
+}
+
+/**
+ * Datos del modo intercambios para el builder. SOLO presente cuando el módulo
+ * `nutrition_exchanges` está ON para el workspace activo (gating server-side espejo).
+ * `brand` viene resuelta SERVER-SIDE (el cliente jamás la elige — AC4).
+ */
+export interface ExchangeBuilderData {
+  planId: string | null
+  planMode: NutritionPlanMode
+  groups: ExchangeGroup[]
+  targetsByMealId: Record<string, ExchangeTargetDraft[]>
+  variants: DayVariant[]
+  variantByMealId: Record<string, string | null>
+  equivalences: ExchangeFoodEquivalence[]
+  brand: PdfBrand
+  brandLogoUrl: string | null
+  clientName?: string | null
+}
+
 export interface FoodItemDraft {
   food_id: string
   food: {

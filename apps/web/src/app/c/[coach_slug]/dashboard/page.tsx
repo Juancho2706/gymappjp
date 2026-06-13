@@ -48,8 +48,21 @@ export default async function ClientDashboardPage({ params }: Props) {
 
     const announcements = client.org_id ? await getActiveOrgAnnouncements(client.org_id) : []
 
-    const useBrandColorsStr = (await headers()).get('x-client-use-brand-colors')
+    const headersList = await headers()
+    const useBrandColorsStr = headersList.get('x-client-use-brand-colors')
     const initialUseBrandColors = useBrandColorsStr ? useBrandColorsStr === 'true' : true
+
+    // Pool/team: el proxy /t reescribe a /c y reenvía la marca del TEAM en headers. La fila coaches
+    // anidada trae la marca PERSONAL del coach asignado — no debe filtrarse al alumno de pool. En
+    // contexto team usamos el nombre del team para el saludo y suprimimos el modal de bienvenida
+    // PERSONAL del coach (lo gestiona el dueño del team, no el coach). Standalone => sin cambios.
+    const basePath = headersList.get('x-client-base-path') ?? ''
+    const isTeamContext = headersList.get('x-workspace-brand-source') === 'organization' || basePath.startsWith('/t')
+    const headerTeamBrandName = headersList.get('x-coach-brand-name')
+
+    const greetingBrandName = isTeamContext ? headerTeamBrandName : coachBranding?.brand_name
+    const greetingWelcomeMessage = isTeamContext ? null : coachBranding?.welcome_message
+    const welcomeModalEnabled = isTeamContext ? false : (coachBranding?.welcome_modal_enabled ?? false)
 
     const sidebarMobile = <DashboardSidebarBlocks userId={user.id} coachSlug={coach_slug} />
     const sidebarDesktop = <DashboardSidebarBlocks userId={user.id} coachSlug={coach_slug} />
@@ -62,8 +75,8 @@ export default async function ClientDashboardPage({ params }: Props) {
                     userId={user.id}
                     coachSlug={coach_slug}
                     initialUseBrandColors={initialUseBrandColors}
-                    brandName={coachBranding?.brand_name}
-                    welcomeMessage={coachBranding?.welcome_message}
+                    brandName={greetingBrandName}
+                    welcomeMessage={greetingWelcomeMessage}
                 />
             </Suspense>
             <Suspense fallback={<CalendarSkeleton />}>
@@ -96,9 +109,9 @@ export default async function ClientDashboardPage({ params }: Props) {
         <DashboardPullToRefresh>
             <DashboardShell beforeSidebar={beforeSidebar} sidebarMobile={sidebarMobile} sidebarDesktop={sidebarDesktop} afterSidebar={afterSidebar} />
             <WelcomeModal
-                brandName={coachBranding?.brand_name ?? 'Tu Coach'}
-                welcomeModalEnabled={coachBranding?.welcome_modal_enabled ?? false}
-                welcomeModalContent={coachBranding?.welcome_modal_content ?? null}
+                brandName={(isTeamContext ? headerTeamBrandName : coachBranding?.brand_name) ?? 'Tu Coach'}
+                welcomeModalEnabled={welcomeModalEnabled}
+                welcomeModalContent={isTeamContext ? null : (coachBranding?.welcome_modal_content ?? null)}
                 welcomeModalType={coachBranding?.welcome_modal_type ?? 'text'}
                 welcomeModalVersion={coachBranding?.welcome_modal_version ?? 0}
             />

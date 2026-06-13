@@ -45,10 +45,22 @@ export default function SubscriptionProcessingPage() {
     const normalizedTierParam = rawTierParam === 'starter_lite' ? 'starter'
         : rawTierParam === 'free' ? null  // free coaches don't use this page
         : rawTierParam
+    // LEGACY: `in TIER_CONFIG` valida contra TODAS las entradas (incluidas growth/scale, ya
+    // fuera de venta). Se queda intencionalmente: esta pantalla solo muestra el label de lo que
+    // se está pagando; un coach grandfathered con un cargo legacy en vuelo debe ver su tier real,
+    // no un fallback a 'starter'. No es una superficie de venta.
     const tierFromUrl = (
         normalizedTierParam && normalizedTierParam in TIER_CONFIG ? normalizedTierParam : 'starter'
     ) as SubscriptionTier
     const cycleFromUrl = (searchParams.get('cycle') ?? 'monthly') as BillingCycle
+    // Add-ons del signup (plan 05 F5.5): CSV en el query → array en el body del POST.
+    // Sin esta lectura el CSV moría en la URL. El botón Reintentar lo conserva gratis (reusa
+    // startCheckoutFromRegister). create-preference re-valida (whitelist + coherencia D8).
+    const addonsFromUrl = useMemo(() => {
+        const raw = searchParams.get('addons')
+        if (!raw) return [] as string[]
+        return raw.split(',').map((s) => s.trim()).filter(Boolean)
+    }, [searchParams])
 
     const tierLabel = TIER_CONFIG[tierFromUrl]?.label ?? tierFromUrl
     const cycleLabel = BILLING_CYCLE_CONFIG[cycleFromUrl]?.label ?? cycleFromUrl
@@ -64,6 +76,7 @@ export default function SubscriptionProcessingPage() {
                 body: JSON.stringify({
                     tier: tierFromUrl,
                     billingCycle: cycleFromUrl,
+                    ...(addonsFromUrl.length > 0 ? { addons: addonsFromUrl } : {}),
                 }),
             })
             const raw = await response.text()

@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import {
+    ADDON_MONTHLY_PRICE_CLP,
     BILLING_CYCLE_CONFIG,
+    getTierCapabilities,
     getTierMaxClients,
-    getTierPriceClp,
     isBillingCycleAllowedForTier,
     TIER_CONFIG,
     type BillingCycle,
@@ -13,10 +15,26 @@ import {
 import { getPaymentsProvider } from '@/lib/payments/provider'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
+import { MODULE_KEYS, type ModuleKey } from '@/services/entitlements.service'
+import { listLive } from '@/infrastructure/db/coach-addons.repository'
+import {
+    getCompositeAmountClp,
+    toBillableAddons,
+} from '@/services/billing/addons.service'
+import type { BillableAddon } from '@/domain/billing/types'
 
+// El checkout solo acepta los tiers EN VENTA (SALE_TIERS sin free): starter/pro/elite.
+// growth/scale quedan fuera de venta (LEGACY). Consecuencia D4: un coach grandfathered
+// en growth/scale NO puede re-checkout en su tier por esta puerta (el enum lo rechaza con 400);
+// su continuidad/cambio se gestiona vía admin o conversación EVA Teams (elite). NO reintroducir
+// growth/scale aquí. El guard de ciclo (isBillingCycleAllowedForTier) y el monto
+// (getTierPriceClp) mantienen su firma — el plan 05 sumará add-ons sobre esa misma base.
 const schema = z.object({
-    tier: z.enum(['starter', 'pro', 'elite', 'growth', 'scale']),
+    tier: z.enum(['starter', 'pro', 'elite']),
     billingCycle: z.enum(['monthly', 'quarterly', 'annual']),
+    // Add-ons opcionales del signup (plan 05 F3.3). Solo MODULE_KEYS; del body JAMÁS se acepta
+    // monto ni precio — el cálculo compuesto lo hace el server (getCompositeAmountClp).
+    addons: z.array(z.enum(MODULE_KEYS)).optional(),
 })
 
 export async function POST(request: Request) {
@@ -51,6 +69,22 @@ export async function POST(request: Request) {
                 { status: 400 }
             )
         }
+
+        // Add-ons solicitados (signup/supersede). Dedup + filtro contra MODULE_KEYS (defensa extra
+        // sobre el Zod). D8: coherencia contra el tier SOLICITADO del body — NO confiar en que la UI
+        // del registro lo filtró. starter + nutrition_exchanges → 400 (cobrar algo inusable).
+        const requestedAddons = [
+            ...new Set((parsed.data.addons ?? []).filter((k): k is ModuleKey => MODULE_KEYS.includes(k))),
+        ]
+        if (
+            requestedAddons.includes('nutrition_exchanges') &&
+            !getTierCapabilities(tier).canUseNutrition
+        ) {
+            return NextResponse.json(
+                { error: 'El módulo de nutrición por intercambios requiere un plan Pro o superior.' },
+                { status: 400 }
+            )
+        }
         // Check if this is a mid-cycle upgrade (coach already active)
         const { data: currentCoach } = await supabase
             .from('coaches')
@@ -80,8 +114,30 @@ export async function POST(request: Request) {
 
         const previousMpId = currentCoach?.subscription_mp_id?.trim() || null
 
-        const amountClp = getTierPriceClp(tier, billingCycle)
+        // El UPDATE de columnas de billing + la lectura de add-ons facturables van por service-role.
+        const admin = createServiceRoleClient()
+
+        // Monto COMPUESTO (plan 05 F3.3): base del tier + Σ add-ons facturables. La fuente son las
+        // filas vivas de coach_addons (service-role) UNIDAS a los add-ons solicitados en el signup
+        // (estos últimos aún no tienen fila — la materializa el webhook al confirmar el pago). El
+        // cliente jamás manda montos: el server lee/calcula todo. Con esto upgrade/downgrade y cambio
+        // de ciclo arrastran los add-ons automáticamente (el preapproval nuevo nace con el compuesto).
+        const liveAddons = await listLive(admin, user.id)
+        const liveBillable = toBillableAddons(liveAddons)
+        const billableByKey = new Map<ModuleKey, BillableAddon>(
+            liveBillable.map((a) => [a.moduleKey, a])
+        )
+        for (const key of requestedAddons) {
+            if (!billableByKey.has(key)) {
+                billableByKey.set(key, { moduleKey: key, priceClpMensual: ADDON_MONTHLY_PRICE_CLP })
+            }
+        }
+        const billableAddons = [...billableByKey.values()]
+        const checkoutAddons = [...billableByKey.keys()]
+
+        const amountClp = getCompositeAmountClp(tier, billingCycle, billableAddons)
         const cycle = BILLING_CYCLE_CONFIG[billingCycle]
+        const addonSuffix = checkoutAddons.length > 0 ? ` + ${checkoutAddons.length} add-on(s)` : ''
         const provider = getPaymentsProvider()
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
         const webhookToken = process.env.MERCADOPAGO_WEBHOOK_TOKEN
@@ -96,12 +152,14 @@ export async function POST(request: Request) {
             tier,
             billingCycle,
             amountClp,
-            title: `Suscripción ${TIER_CONFIG[tier].label} ${cycle.label} (${cycle.months} mes/es)`,
+            title: `Suscripción ${TIER_CONFIG[tier].label} ${cycle.label} (${cycle.months} mes/es)${addonSuffix}`,
             successUrl: `${appUrl}/coach/subscription/processing`,
             failureUrl: `${appUrl}/coach/reactivate?payment=failure&${retryQuery}`,
             pendingUrl: `${appUrl}/coach/reactivate?payment=pending&${retryQuery}`,
             webhookUrl,
             startDate: upgradeStartDate ?? reactivationStartDate,
+            // 4ª parte del external_reference: el webhook materializa estas filas al confirmar el pago.
+            addons: checkoutAddons,
         })
 
         const newMpId = checkout.checkoutId.trim()
@@ -131,7 +189,14 @@ export async function POST(request: Request) {
                 superseded_mp_preapproval_id: supersededMpPreapprovalId,
             }
 
-        const { error: updateError } = await supabase
+        // El UPDATE de columnas de billing va por service-role (patrón de
+        // cancel-subscription/route.ts:37,70): la migración hermana F2 revoca el UPDATE de
+        // subscription_tier/subscription_status/billing_cycle/max_clients/payment_provider/
+        // subscription_mp_id/superseded_mp_preapproval_id al rol `authenticated`, dejando esas
+        // columnas en manos exclusivas de service-role (checkout + webhook MP). La autenticación
+        // sigue user-scoped (supabase.auth.getUser arriba) y conservamos eq('id', user.id) — el id
+        // viene siempre de la sesión, jamás del body — para que el alcance no se ensanche.
+        const { error: updateError } = await admin
             .from('coaches')
             .update(updatePayload)
             .eq('id', user.id)

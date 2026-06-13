@@ -144,12 +144,15 @@ describe('registerAction', () => {
     expect(result).toEqual({ error: 'Debes seleccionar un plan y una frecuencia válidos.' })
   })
 
-  it('rejects billing cycle not allowed for selected tier', async () => {
+  // Plan 04 (D2): trimestral ahora habilitado en starter/pro/elite — starter+quarterly
+  // ya NO debe rechazarse por frecuencia. Pin de que la compuerta quedó abierta.
+  it('accepts quarterly for a sale tier (starter) — passes cycle validation', async () => {
     const result = await registerAction(
       {},
       buildRegisterFormData({ subscription_tier: 'starter', billing_cycle: 'quarterly' })
     )
-    expect(result).toEqual({ error: 'La frecuencia elegida no está disponible para ese plan.' })
+    // No frena en la validación de frecuencia; cae más adelante (slug sin mocks).
+    expect(result.error).not.toBe('La frecuencia elegida no está disponible para ese plan.')
   })
 
   it('rolls back auth user when coach insert fails', async () => {

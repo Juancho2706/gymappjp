@@ -13,9 +13,10 @@ export async function forgotPasswordAction(
     _prev: ForgotPasswordState,
     formData: FormData
 ): Promise<ForgotPasswordState> {
-    const raw = { 
+    const raw = {
         email: formData.get('email') as string,
-        coach_slug: formData.get('coach_slug') as string | null
+        coach_slug: formData.get('coach_slug') as string | null,
+        team_slug: formData.get('team_slug') as string | null,
     }
     const parsed = ForgotPasswordSchema.safeParse(raw)
 
@@ -30,8 +31,14 @@ export async function forgotPasswordAction(
     const protocol = host.includes('localhost') ? 'http' : 'https'
     const appUrl = `${protocol}://${host}`
 
-    const nextPath = raw.coach_slug 
-        ? `/reset-password?coach_slug=${raw.coach_slug}` 
+    // El alumno de team (pool) debe volver a su login white-label /t/[team_slug];
+    // priorizamos team_slug sobre coach_slug para preservar la marca del pool.
+    const resetParams = new URLSearchParams()
+    if (raw.team_slug) resetParams.set('team_slug', raw.team_slug)
+    if (raw.coach_slug) resetParams.set('coach_slug', raw.coach_slug)
+    const queryString = resetParams.toString()
+    const nextPath = queryString
+        ? `/reset-password?${queryString}`
         : '/reset-password'
 
     const { error } = await supabase.auth.resetPasswordForEmail(parsed.data.email, {

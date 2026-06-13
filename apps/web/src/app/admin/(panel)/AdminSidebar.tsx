@@ -5,7 +5,7 @@ import {
     Shield, ChevronLeft, ChevronRight,
     LayoutDashboard, Users, UserCheck,
     TrendingUp, ClipboardList, Activity, Wallet,
-    Newspaper, Building2,
+    Newspaper, Building2, UsersRound,
 } from 'lucide-react'
 import { AdminNavItem } from './AdminNavItem'
 import { AdminLogoutButton } from './AdminLogoutButton'
@@ -15,6 +15,7 @@ const NAV_PLATAFORMA = [
     { href: '/admin/coaches',   label: 'Coaches',        icon: Users },
     { href: '/admin/clients',   label: 'Clientes',       icon: UserCheck },
     { href: '/admin/orgs',      label: 'Organizaciones', icon: Building2 },
+    { href: '/admin/teams',     label: 'Equipos',        icon: UsersRound },
     { href: '/admin/novedades', label: 'Novedades',      icon: Newspaper },
 ]
 const NAV_FINANZAS = [

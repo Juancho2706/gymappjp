@@ -2,7 +2,6 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { createRawAdminClient } from '@/lib/supabase/admin-raw'
 import type { Json } from '@/lib/database.types'
 
 export async function confirmCoachPublicCodeAction(): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -10,12 +9,10 @@ export async function confirmCoachPublicCodeAction(): Promise<{ ok: true } | { o
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { ok: false, error: 'No autenticado' }
 
-    // Write con admin client (mismo patrón que updateBrandSettingsAction). El write
-    // user-scoped no estaba persistiendo el flag (el modal volvía en cada carga).
-    // Se re-lee con el admin justo antes para mergear sin pisar otras keys del guide.
-    const admin = await createRawAdminClient()
-
-    const { data: coach } = await admin
+    // Write user-scoped: pasa coaches_update_own (R3, auditoria 2026-06-11 — el "admin client"
+    // anterior corria con la MISMA RLS del coach, no era bypass). El fix real del flag que no
+    // persistia fue el re-read + merge justo antes del update, para no pisar otras keys del guide.
+    const { data: coach } = await supabase
         .from('coaches')
         .select('onboarding_guide')
         .eq('id', user.id)
@@ -34,7 +31,7 @@ export async function confirmCoachPublicCodeAction(): Promise<{ ok: true } | { o
         invite_code_confirmed_at: new Date().toISOString(),
     }
 
-    const { error } = await admin
+    const { error } = await supabase
         .from('coaches')
         .update({ onboarding_guide: updated, updated_at: new Date().toISOString() })
         .eq('id', user.id)

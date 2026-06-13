@@ -168,8 +168,13 @@ export async function removeCoachFromOrg(orgId: string, memberId: string): Promi
 }
 
 export async function assignClientToCoach(clientId: string, coachId: string): Promise<void> {
-  await supabase
-    .from('clients')
-    .update({ coach_id: coachId })
-    .eq('id', clientId)
+  // F1.4 (plan 03): esta app es un cliente RN (sin servidor, no puede portar la service_role key).
+  // El UPDATE user-scoped de coach_id muere con 42501 tras el REVOKE de F2.1b, asi que la reasignacion
+  // pasa por la RPC SECURITY DEFINER assign_org_client_to_coach, que deriva la org del JWT (auth.uid())
+  // y exige que el caller sea org_owner/org_admin activo de esa org — la org JAMAS sale del body.
+  const { error } = await supabase.rpc('assign_org_client_to_coach', {
+    p_client_id: clientId,
+    p_coach_id: coachId,
+  })
+  if (error) throw new Error(error.message)
 }

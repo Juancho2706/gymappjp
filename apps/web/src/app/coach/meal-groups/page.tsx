@@ -3,13 +3,18 @@ import Link from 'next/link'
 import { ArrowLeft, LayoutGrid } from 'lucide-react'
 import { MealGroupLibraryClient } from './MealGroupLibraryClient'
 import { getCoach } from '@/lib/coach/get-coach'
+import { createClient } from '@/lib/supabase/server'
+import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { getMealGroups } from './_data/meal-groups.queries'
 
 export default async function CoachMealGroupsPage() {
     const coach = await getCoach()
     if (!coach) redirect('/login')
 
-    const mealGroups = await getMealGroups(coach.id)
+    const supabase = await createClient()
+    const workspace = await resolvePreferredWorkspace(supabase, coach.id)
+    const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
+    const mealGroups = await getMealGroups(coach.id, orgId)
 
     return (
         <div className="max-w-4xl mx-auto animate-fade-in mb-24 md:mb-0">

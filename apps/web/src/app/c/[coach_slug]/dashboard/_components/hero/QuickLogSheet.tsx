@@ -53,7 +53,7 @@ export function QuickLogSheet({ blocks, coachSlug, baseLoggedPerBlock, totalSets
             <SheetTrigger className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-xl border border-border bg-secondary/50 px-4 text-[10px] font-bold uppercase tracking-widest text-foreground backdrop-blur-md transition-colors hover:bg-secondary dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
                 Rápido
             </SheetTrigger>
-            <SheetContent side="bottom" className="max-h-[85vh] sm:max-w-md sm:data-[side=right]:max-w-md" data-side="bottom">
+            <SheetContent side="bottom" className="max-h-[85dvh] sm:max-w-md sm:data-[side=right]:max-w-md" data-side="bottom">
                 <SheetHeader>
                     <SheetTitle>Log rápido</SheetTitle>
                 </SheetHeader>

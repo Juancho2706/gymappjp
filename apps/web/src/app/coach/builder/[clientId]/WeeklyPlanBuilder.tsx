@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { AppOnlyPopup } from '@/components/AppOnlyPopup'
+import { EditedByBadge } from '@/components/coach/EditedByBadge'
 import { saveWorkoutProgramAction, syncProgramFromTemplateAction, type WorkoutProgramInput } from './_actions/builder.actions'
 import type { Tables } from '@/lib/database.types'
 import { toast } from 'sonner'
@@ -42,7 +43,10 @@ import { BuilderOnboardingTour, type BuilderTourStep } from './components/Builde
 import { ProgramPhasesBar } from '@/components/shared/ProgramPhasesBar'
 import { ExerciseBlock } from './components/ExerciseBlock'
 import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
-import type { BuilderBlock, DayState, ProgramPhase } from './types'
+import type { BuilderBlock, BuilderCardioContext, DayState, ProgramPhase } from './types'
+import type { WorkoutArea } from '@/domain/workout/types'
+import { effectiveExerciseType, legacyRepsSummaryFor } from '@/lib/workout-exercise-type'
+import { buildAreaVMs } from './area-ui'
 import { getMuscleColor } from './muscle-colors'
 
 type Client = Tables<'clients'>
@@ -78,6 +82,7 @@ type EmbeddedExercise = {
     muscle_group?: string | null
     gif_url?: string | null
     video_url?: string | null
+    exercise_type?: string | null
 }
 
 /** PostgREST puede devolver la FK `exercises` como objeto o como array de un elemento. */
@@ -118,7 +123,25 @@ function mapDbBlockToBuilderBlock(
         progression_type: b.progression_type || null,
         progression_value: b.progression_value ?? null,
         section: b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main',
+        section_template_id: b.section_template_id ?? null,
         is_override: !!b.is_override,
+        // Polimórfico (specs/movida-entrenamiento): round-trip de los campos tipados.
+        // Filas legacy: todo NULL ⇒ el bloque queda byte-identical al mapeo de siempre.
+        exercise_type: ((exRel?.exercise_type ?? cat?.exercise_type) || null) as BuilderBlock['exercise_type'],
+        exercise_type_override: (b.exercise_type_override ?? null) as BuilderBlock['exercise_type_override'],
+        side_mode: b.side_mode ?? null,
+        reps_value: b.reps_value ?? null,
+        reps_unit: b.reps_unit ?? null,
+        load_type: b.load_type ?? null,
+        load_value: b.load_value != null ? String(b.load_value) : '',
+        load_unit: b.load_unit ?? null,
+        distance_value: b.distance_value != null ? String(b.distance_value) : '',
+        distance_unit: b.distance_unit ?? null,
+        duration_sec: b.duration_sec ?? null,
+        target_pace_sec_per_km: b.target_pace_sec_per_km ?? null,
+        hr_zone: b.hr_zone ?? null,
+        instructions: b.instructions || '',
+        interval_config: b.interval_config ?? null,
         dayId,
     }
 }
@@ -139,7 +162,8 @@ function enrichDaysWithExerciseMedia(days: DayState[], exerciseById: Map<string,
 }
 
 function createDefaultBlock(exercise: Exercise): BuilderBlock {
-    return {
+    const exerciseType = effectiveExerciseType(null, { exercise_type: (exercise as { exercise_type?: string | null }).exercise_type })
+    const base: BuilderBlock = {
         uid: `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         exercise_id: exercise.id,
         exercise_name: exercise.name,
@@ -154,8 +178,21 @@ function createDefaultBlock(exercise: Exercise): BuilderBlock {
         rest_time: '90s',
         notes: '',
         section: 'main',
+        section_template_id: null,
         is_override: false,
+        exercise_type: exerciseType,
     }
+    // Defaults por tipo (ejercicios strength: EXACTAMENTE el default de siempre — AC3)
+    if (exerciseType === 'cardio') {
+        return { ...base, sets: 1, reps: '10min', duration_sec: 600, rest_time: '' }
+    }
+    if (exerciseType === 'mobility') {
+        return { ...base, sets: 3, reps: '30s', duration_sec: 30, rest_time: '' }
+    }
+    if (exerciseType === 'roller') {
+        return { ...base, sets: 1, reps: '10 pasadas', reps_value: 10, reps_unit: 'passes', rest_time: '' }
+    }
+    return base
 }
 
 function trackRecentExercise(exerciseId: string) {
@@ -168,7 +205,7 @@ function trackRecentExercise(exerciseId: string) {
     } catch { /* silently ignore storage errors */ }
 }
 
-export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any, coachName?: string }) {
+export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName, lastEditor, areas = [], cardio }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any, coachName?: string, lastEditor?: { name: string; at: string | null } | null, areas?: WorkoutArea[], cardio?: BuilderCardioContext }) {
     const router = useRouter()
     const { t } = useTranslation()
 
@@ -227,16 +264,18 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const initialDaysB = useMemo(() => getInitialDays('B'), [])
 
-    const builderA = usePlanBuilder(initialDaysA)
-    const builderB = usePlanBuilder(initialDaysB)
+    const builderA = usePlanBuilder(initialDaysA, areas)
+    const builderB = usePlanBuilder(initialDaysB, areas)
     const activeBuilder = activeVariant === 'A' ? builderA : builderB
 
     const {
         days, dispatch, dispatchWithHistory,
         addExercise, removeBlock, updateBlock, updateDayTitle, copyDay, toggleRestDay, toggleSuperset,
-        setBlockSection, toggleBlockOverride,
+        setBlockArea, toggleBlockOverride,
         undo, redo, canUndo, canRedo,
     } = activeBuilder
+
+    const overlayAreaVMs = useMemo(() => buildAreaVMs(areas), [areas])
 
     const [programName, setProgramName] = useState(initialProgram?.name || '')
     const [weeksToRepeat, setWeeksToRepeat] = useState(initialProgram?.weeks_to_repeat || 4)
@@ -552,10 +591,10 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         const activeData = active.data.current
         const overData = over?.data?.current
 
-        if (over && activeData?.type === 'block' && overData?.type === 'section' && activeData.dayId === overData.dayId) {
+        if (over && activeData?.type === 'block' && overData?.type === 'area' && activeData.dayId === overData.dayId) {
             dispatchWithHistory({
-                type: 'SET_BLOCK_SECTION',
-                payload: { dayId: overData.dayId, uid: active.id as string, section: overData.section },
+                type: 'SET_BLOCK_AREA',
+                payload: { dayId: overData.dayId, uid: active.id as string, areaId: overData.areaId },
             })
             setActiveId(null)
             setActiveData(null)
@@ -567,7 +606,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         if (activeData?.type === 'new-exercise') {
             const dayId = over.data.current?.dayId
             if (dayId) {
-                handleAddExercise(dayId, activeData.exercise)
+                // Drop sobre la zona punteada de un area: el bloque nuevo nace en esa area
+                handleAddExercise(dayId, activeData.exercise, overData?.type === 'area' ? overData.areaId : undefined)
             }
         } else if (active.id !== over.id) {
             const dayId = activeData?.dayId
@@ -585,8 +625,14 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         setHasUnsavedChanges(true)
     }
 
-    function handleAddExercise(dayId: number, exercise: Exercise) {
-        addExercise(dayId, createDefaultBlock(exercise))
+    function handleAddExercise(dayId: number, exercise: Exercise, areaId?: string) {
+        const block = createDefaultBlock(exercise)
+        addExercise(dayId, block)
+        if (areaId) {
+            // Raw dispatch (sin entrada de historia): el alta ya creo el snapshot,
+            // asi el undo revierte alta + area en un solo paso.
+            dispatch({ type: 'SET_BLOCK_AREA', payload: { dayId, uid: block.uid, areaId } })
+        }
         trackRecentExercise(exercise.id)
         setHasUnsavedChanges(true)
     }
@@ -622,10 +668,10 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         setHasUnsavedChanges(true)
     }, [toggleSuperset])
 
-    const handleSetBlockSection = useCallback((d: number, u: string, s: import('./types').BuilderSection) => {
-        setBlockSection(d, u, s)
+    const handleSetBlockArea = useCallback((d: number, u: string, areaId: string) => {
+        setBlockArea(d, u, areaId)
         setHasUnsavedChanges(true)
-    }, [setBlockSection])
+    }, [setBlockArea])
 
     const dismissBuilderHint = useCallback(() => {
         setShowBuilderHint(false)
@@ -844,13 +890,29 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         setHasUnsavedChanges(true)
     }, [toggleBlockOverride])
 
-    const handleSave = () => {
+    const handleSave = (force = false) => {
         if (!programName.trim()) { toast.error('El programa necesita un nombre.'); return }
         const allDaysToCheck = isABMode ? [...builderA.days, ...builderB.days] : days
         const hasExercises = allDaysToCheck.some(d => d.blocks.length > 0)
         if (!hasExercises) { toast.error('Debes añadir al menos un ejercicio al programa.'); return }
-        const missingData = allDaysToCheck.some(d => d.blocks.some(b => !b.sets || b.sets < 1 || !b.reps?.trim()))
-        if (missingData) { toast.error('Hay ejercicios con datos incompletos (Series o Repeticiones faltan).'); return }
+        // Completitud POR TIPO: strength exige sets+reps EXACTAMENTE como hoy (AC3);
+        // los tipos nuevos exigen su prescripción mínima (duración/distancia/intervalos/pasadas).
+        const blockIncomplete = (b: BuilderBlock): boolean => {
+            const type = effectiveExerciseType(b, { exercise_type: b.exercise_type })
+            if (type === 'cardio') {
+                const dist = parseFloat((b.distance_value || '').replace(',', '.'))
+                return !((b.duration_sec ?? 0) > 0 || (Number.isFinite(dist) && dist > 0) || !!b.interval_config)
+            }
+            if (type === 'mobility') {
+                return !b.sets || b.sets < 1 || !((b.duration_sec ?? 0) > 0 || (b.reps_value ?? 0) > 0 || !!b.reps?.trim())
+            }
+            if (type === 'roller') {
+                return !((b.duration_sec ?? 0) > 0 || (b.reps_value ?? 0) > 0 || !!b.reps?.trim())
+            }
+            return !b.sets || b.sets < 1 || !b.reps?.trim()
+        }
+        const missingData = allDaysToCheck.some(d => d.blocks.some(blockIncomplete))
+        if (missingData) { toast.error('Hay ejercicios con datos incompletos (revisa series, repeticiones, duración o distancia).'); return }
 
         const parseOptionalKg = (raw: string | undefined): number | null => {
             if (raw == null) return null
@@ -865,25 +927,54 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 day_of_week: d.id,
                 title: d.title.trim(),
                 week_variant: variant,
-                blocks: d.blocks.map((b, idx) => ({
-                    exercise_id: b.exercise_id,
-                    sets: Number.isFinite(b.sets as number) && (b.sets as number) >= 1 ? Math.round(b.sets as number) : 3,
-                    reps: b.reps || '',
-                    target_weight_kg: parseOptionalKg(b.target_weight_kg),
-                    tempo: b.tempo || null,
-                    rir: b.rir || null,
-                    rest_time: b.rest_time || null,
-                    notes: b.notes || null,
-                    superset_group: b.superset_group || null,
-                    progression_type: b.progression_type || null,
-                    progression_value:
-                        b.progression_value != null && Number.isFinite(b.progression_value)
-                            ? b.progression_value
-                            : null,
-                    section: (b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main') as 'warmup' | 'main' | 'cooldown',
-                    is_override: b.is_override ?? false,
-                    order_index: idx
-                }))
+                blocks: d.blocks.map((b, idx) => {
+                    const type = effectiveExerciseType(b, { exercise_type: b.exercise_type })
+                    const distanceValue = parseOptionalKg(b.distance_value)
+                    const loadValue = parseOptionalKg(b.load_value)
+                    // Coexistencia (decisión #3): reps SIEMPRE poblado. En strength manda el
+                    // texto del coach; en tipos nuevos se genera el resumen legacy ≤20 chars.
+                    const reps = type === 'strength'
+                        ? (b.reps || '')
+                        : legacyRepsSummaryFor(
+                            { ...b, distance_value: distanceValue, load_value: loadValue },
+                            type,
+                        )
+                    return {
+                        exercise_id: b.exercise_id,
+                        sets: Number.isFinite(b.sets as number) && (b.sets as number) >= 1 ? Math.round(b.sets as number) : type === 'strength' ? 3 : 1,
+                        reps,
+                        target_weight_kg: parseOptionalKg(b.target_weight_kg),
+                        tempo: b.tempo || null,
+                        rir: b.rir || null,
+                        rest_time: b.rest_time || null,
+                        notes: b.notes || null,
+                        superset_group: b.superset_group || null,
+                        progression_type: b.progression_type || null,
+                        progression_value:
+                            b.progression_value != null && Number.isFinite(b.progression_value)
+                                ? b.progression_value
+                                : null,
+                        section: (b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main') as 'warmup' | 'main' | 'cooldown',
+                        section_template_id: b.section_template_id ?? null,
+                        is_override: b.is_override ?? false,
+                        // Polimórfico: solo se envían valores reales (legacy ⇒ null, byte-identical)
+                        exercise_type_override: b.exercise_type_override ?? null,
+                        side_mode: b.side_mode ?? null,
+                        reps_value: b.reps_value ?? null,
+                        reps_unit: b.reps_unit ?? null,
+                        load_type: b.load_type ?? null,
+                        load_value: loadValue,
+                        load_unit: b.load_unit ?? null,
+                        distance_value: distanceValue,
+                        distance_unit: distanceValue != null ? (b.distance_unit ?? 'm') : null,
+                        duration_sec: b.duration_sec ?? null,
+                        target_pace_sec_per_km: b.target_pace_sec_per_km ?? null,
+                        hr_zone: b.hr_zone ?? null,
+                        instructions: b.instructions?.trim() ? b.instructions.trim() : null,
+                        interval_config: b.interval_config ?? null,
+                        order_index: idx,
+                    }
+                })
             }))
 
         startTransition(async () => {
@@ -907,8 +998,19 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                     : mapDays(days, 'A')
             }
 
-            const result = await saveWorkoutProgramAction(input)
-            if (result?.error) {
+            const result = await saveWorkoutProgramAction(input, {
+                expectedUpdatedAt: initialProgram?.updated_at ?? null,
+                force,
+            })
+            if (result?.conflict) {
+                // E (awareness): otro coach del pool guardó mientras editabas — nada se pisó.
+                const who = result.conflict.editedBy ?? 'Otro coach'
+                toast.warning(`${who} guardó cambios en este programa mientras editabas.`, {
+                    duration: 12000,
+                    action: { label: 'Ver lo nuevo', onClick: () => window.location.reload() },
+                    cancel: { label: 'Guardar igual', onClick: () => handleSave(true) },
+                })
+            } else if (result?.error) {
                 toast.error(result.error)
             } else {
                 toast.success('Programa guardado exitosamente.')
@@ -965,6 +1067,11 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                     <span className="hidden md:flex items-center gap-1 text-[9px] bg-orange-500/10 text-orange-500 px-2 py-0.5 rounded-full border border-orange-500/20 shrink-0">
                                         <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
                                         CAMBIOS SIN GUARDAR
+                                    </span>
+                                )}
+                                {lastEditor && (
+                                    <span className="hidden md:inline-flex shrink-0">
+                                        <EditedByBadge name={lastEditor.name} at={lastEditor.at} />
                                     </span>
                                 )}
                             </div>
@@ -1187,7 +1294,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
 
                         {/* Save — always visible */}
                         <Button
-                            onClick={handleSave}
+                            onClick={() => handleSave()}
                             disabled={isPending || !programName.trim()}
                             data-tour-id="save-button"
                             size="sm"
@@ -1436,6 +1543,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                                     isDragPending={isDragPending}
                                                     narrowLayout={isMobile}
                                                     compact={isMobile && isSimpleMode}
+                                                    areas={areas}
                                                     onAddExercise={handleAddExercise}
                                                     onEditBlock={setEditingBlock}
                                                     onRemoveBlock={handleRemoveBlock}
@@ -1444,7 +1552,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                                     onCopyDay={handleCopyDay}
                                                     onToggleRest={handleToggleRest}
                                                     onToggleSuperset={handleToggleSuperset}
-                                                    onSetBlockSection={handleSetBlockSection}
+                                                    onSetBlockArea={handleSetBlockArea}
                                                     onToggleBlockOverride={handleToggleBlockOverride}
                                                     templateLinked={!!(client?.id && sourceTemplateId)}
                                                 />
@@ -1464,6 +1572,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                             isCycleMode={programStructureType === 'cycle'}
                                             isDragPending={isDragPending}
                                             narrowLayout={isMobile}
+                                            areas={areas}
                                             onAddExercise={handleAddExercise}
                                             onEditBlock={setEditingBlock}
                                             onRemoveBlock={handleRemoveBlock}
@@ -1472,7 +1581,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                             onCopyDay={handleCopyDay}
                                             onToggleRest={handleToggleRest}
                                             onToggleSuperset={handleToggleSuperset}
-                                            onSetBlockSection={handleSetBlockSection}
+                                            onSetBlockArea={handleSetBlockArea}
                                             onToggleBlockOverride={handleToggleBlockOverride}
                                             templateLinked={!!(client?.id && sourceTemplateId)}
                                         />
@@ -1688,6 +1797,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                     <ExerciseBlock
                                         block={activeData.block}
                                         dayId={activeData.dayId}
+                                        areaVMs={overlayAreaVMs}
                                         onEdit={() => {}}
                                         onRemove={() => {}}
                                         narrowLayout={isMobile}
@@ -1723,6 +1833,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
             <BlockEditSheet
                 block={editingBlock}
                 clientId={client?.id}
+                cardio={cardio}
                 onClose={() => setEditingBlock(null)}
                 onUpdate={(b) => {
                     updateBlock(b);
@@ -1762,6 +1873,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 durationDays={durationDays}
                 programNotes={programNotes}
                 clientName={client?.full_name}
+                areas={areas}
             />
 
             {!client && initialProgram?.id && (

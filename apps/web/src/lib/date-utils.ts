@@ -65,12 +65,26 @@ export function timeGreetingSantiago(now = new Date()): 'Buenos días' | 'Buenas
 /**
  * Returns UTC ISO timestamp boundaries that cover the full calendar day `isoDate` in Santiago.
  * Correctly handles DST (UTC-3 summer / UTC-4 winter) so late-night logs are not lost.
+ *
+ * El offset se deriva con Intl.formatToParts, NUNCA con `new Date(toLocaleString(...))`:
+ * esa interpretación usa la TZ del HOST y solo es correcta cuando el server corre en UTC
+ * (en un host en hora chilena la ventana quedaba [00:00Z, 24:00Z) y los registros de
+ * 20:00-24:00 hora local "desaparecían" del día).
  */
 export function getSantiagoUtcBoundsForDay(isoDate: string): { startIso: string; endIso: string } {
     const noonUtc = new Date(`${isoDate}T12:00:00Z`)
-    const tzStr = noonUtc.toLocaleString('en-US', { timeZone: SANTIAGO_TZ })
-    const sanDateAsLocal = new Date(tzStr)
-    const offsetMs = noonUtc.getTime() - sanDateAsLocal.getTime()
+    const dtf = new Intl.DateTimeFormat('en-US', {
+        timeZone: SANTIAGO_TZ,
+        hour12: false,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+    })
+    const parts = Object.fromEntries(dtf.formatToParts(noonUtc).map(p => [p.type, p.value]))
+    const santiagoAsUtcMs = Date.UTC(
+        Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+        Number(parts.hour) % 24, Number(parts.minute), Number(parts.second)
+    )
+    const offsetMs = noonUtc.getTime() - santiagoAsUtcMs
     const midnightUtcMs = new Date(`${isoDate}T00:00:00Z`).getTime() + offsetMs
     return {
         startIso: new Date(midnightUtcMs).toISOString(),

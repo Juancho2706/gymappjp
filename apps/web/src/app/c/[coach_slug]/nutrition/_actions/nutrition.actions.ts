@@ -28,18 +28,25 @@ async function getOrCreateDailyNutritionLogId(
     .eq('id', planId)
     .single()
 
+  // Upsert idempotente: dos toggles casi simultáneos en un día nuevo
+  // ambos leen null y ambos insertan; sin onConflict el segundo recibe 23505
+  // (UNIQUE client_id,plan_id,log_date) y devuelve null. El upsert resuelve
+  // el conflicto a la fila existente en vez de fallar.
   const { data: newLog, error } = await supabase
     .from('daily_nutrition_logs')
-    .insert({
-      client_id: clientId,
-      plan_id: planId,
-      log_date: targetDate,
-      plan_name_at_log: plan?.name,
-      target_calories_at_log: plan?.daily_calories,
-      target_protein_at_log: plan?.protein_g,
-      target_carbs_at_log: plan?.carbs_g,
-      target_fats_at_log: plan?.fats_g,
-    })
+    .upsert(
+      {
+        client_id: clientId,
+        plan_id: planId,
+        log_date: targetDate,
+        plan_name_at_log: plan?.name,
+        target_calories_at_log: plan?.daily_calories,
+        target_protein_at_log: plan?.protein_g,
+        target_carbs_at_log: plan?.carbs_g,
+        target_fats_at_log: plan?.fats_g,
+      },
+      { onConflict: 'client_id,plan_id,log_date' }
+    )
     .select('id')
     .single()
 
@@ -83,7 +90,7 @@ export async function toggleMealCompletion(
     .maybeSingle()
 
   if (existing) {
-    await supabase
+    const { error } = await supabase
       .from('nutrition_meal_logs')
       .update(
         isCompleted
@@ -91,12 +98,14 @@ export async function toggleMealCompletion(
           : { is_completed: false, consumed_quantity: null }
       )
       .eq('id', existing.id)
+    if (error) return { success: false }
   } else {
-    await supabase.from('nutrition_meal_logs').insert({
+    const { error } = await supabase.from('nutrition_meal_logs').insert({
       daily_log_id: dailyLogId,
       meal_id: mealId,
       is_completed: isCompleted,
     })
+    if (error) return { success: false }
   }
 
   revalidatePath(`/c/${coachSlug}/nutrition`)

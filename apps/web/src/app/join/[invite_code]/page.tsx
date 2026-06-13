@@ -28,7 +28,6 @@ export default async function JoinPage({ params }: Props) {
         primary_color: invite.primaryColor,
         logo_url: invite.logoUrl,
         welcome_message: invite.welcomeMessage,
-        slug: invite.coachSlug,
     }
 
     const color = coach.primary_color ?? '#10B981'
@@ -63,7 +62,7 @@ export default async function JoinPage({ params }: Props) {
 
                 <p className="mt-4 text-center text-xs text-zinc-400">
                     ¿Ya tenés cuenta?{' '}
-                    <a href={`/c/${coach.slug}/login`} className="underline hover:text-zinc-600">
+                    <a href={invite.loginHref} className="underline hover:text-zinc-600">
                         Inicia sesión
                     </a>
                 </p>

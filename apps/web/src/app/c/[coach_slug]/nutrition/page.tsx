@@ -10,10 +10,13 @@ import {
   getNutritionAdherence30d,
 } from './_data/nutrition.queries'
 import { getHeroComplianceBundle } from '../dashboard/_data/heroComplianceBundle'
+import { headers } from 'next/headers'
 import { NutritionShell } from './_components/NutritionShell'
 import { NutritionNoPlanFromServer } from './_components/NutritionNoPlanFromServer'
 import { PushNotificationBanner } from './_components/PushNotificationBanner'
 import { getClientNutritionUser } from './_data/nutrition-auth.queries'
+import { getStudentExchangeData } from './_data/nutrition-exchanges.queries'
+import { pdfBrandFromProxyHeaders } from '@/lib/nutrition-pdf-brand'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
 
@@ -36,12 +39,23 @@ export default async function ClientNutritionPage({ params }: Props) {
   }
 
   const { iso: today } = getTodayInSantiago()
-  const [todayLog, adherence, heroBundle] = await Promise.all([
+  const [todayLog, adherence, heroBundle, exchange, headersList] = await Promise.all([
     getNutritionLogForDate(user.id, plan.id, today),
     getNutritionAdherence30d(user.id, plan.id),
     getHeroComplianceBundle(user.id, coach_slug),
+    // Módulo nutrition_exchanges: bundle vacío si el plan es 'grams' o el módulo está OFF (AC5).
+    getStudentExchangeData({
+      clientId: user.id,
+      planId: plan.id,
+      planCoachId: plan.coach_id ?? null,
+      planMode: (plan as { plan_mode?: string | null }).plan_mode,
+    }),
+    headers(),
   ])
   const hasTodayWorkout = heroBundle.hero.hasWorkout
+  // Marca del tenant resuelta SERVER-SIDE desde headers del proxy (free tier ⇒ EVA, AC4).
+  const pdfBrand = pdfBrandFromProxyHeaders(headersList)
+  const brandLogoUrl = pdfBrand.poweredByEva ? null : headersList.get('x-coach-logo-url')
 
   return (
     <div className="min-h-dvh bg-background">
@@ -91,6 +105,9 @@ export default async function ClientNutritionPage({ params }: Props) {
           userId={user.id}
           coachSlug={coach_slug}
           today={today}
+          exchange={exchange}
+          pdfBrand={pdfBrand}
+          brandLogoUrl={brandLogoUrl}
         />
       </main>
     </div>

@@ -1,22 +1,35 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
+    ADDON_CONFIG,
+    ADDON_MODULE_KEYS,
+    ADDON_PAYMENT_RULES,
     BILLING_CYCLE_CONFIG,
+    getAddonPaymentRulesForCycle,
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
     getTierBillingCycleSummary,
+    getTierCapabilities,
     getTierNutritionSummary,
     getTierPriceClp,
     isBillingCycleAllowedForTier,
+    isSaleTier,
+    SALE_TIERS,
+    SELF_SERVICE_ADDONS_ENABLED,
     TIER_CONFIG,
     TIER_STUDENT_RANGE_LABEL,
     type BillingCycle,
+    type SaleTier,
     type SubscriptionTier,
 } from '@/lib/constants'
-import { Zap, Crown, Rocket, TrendingUp, Building2, Check, Leaf, type LucideIcon } from 'lucide-react'
+import type { ModuleKey } from '@/services/entitlements.service'
+import { useCaptureAddonFunnel } from '@/lib/posthog/events'
+import { Zap, Crown, Rocket, TrendingUp, Building2, Check, Leaf, HelpCircle, Puzzle, Lock, Gift, type LucideIcon } from 'lucide-react'
 
+// growth/scale: LEGACY (fuera de venta). Se mantienen en los mapas de display porque el PLAN
+// ACTUAL de un coach grandfathered puede ser legacy y debe renderizar su icono/color correcto.
 const TIER_ICON: Record<SubscriptionTier, LucideIcon> = {
     free: Leaf, starter: Zap, pro: Rocket, elite: Crown, growth: TrendingUp, scale: Building2,
 }
@@ -52,6 +65,18 @@ type SubscriptionEvent = {
     payload: unknown
 }
 
+// Espejo de domain/billing CoachAddon (solo lo que la UI necesita; el endpoint expone más).
+type CoachAddonView = {
+    id: string
+    moduleKey: ModuleKey
+    status: 'active' | 'cancel_pending' | 'cancelled'
+    source: 'self_service' | 'admin_grant'
+    firstChargedAt: string | null
+    expiresAt: string | null
+}
+// billing compuesto del endpoint — la UI NUNCA calcula precios por su cuenta (plan 05 F5.3).
+type BillingBreakdown = { baseClp: number; addonsClp: number; totalClp: number }
+
 function extractAmountClpFromEventPayload(payload: unknown): number | null {
     if (!payload || typeof payload !== 'object') return null
     const root = payload as Record<string, unknown>
@@ -67,8 +92,9 @@ function extractAmountClpFromEventPayload(payload: unknown): number | null {
     return null
 }
 
-// Free is excluded — coaches can't manually downgrade to free; it's automatic on cancellation
-const tierOptions = (Object.keys(TIER_CONFIG) as SubscriptionTier[]).filter((t) => t !== 'free')
+// Solo tiers a la venta. Free excluido — el coach no puede bajar manualmente a free (es
+// automatico al cancelar). growth/scale fuera de venta (LEGACY): no se ofertan para cambiar.
+const tierOptions = SALE_TIERS.filter((t) => t !== 'free')
 const cycleOptions = Object.keys(BILLING_CYCLE_CONFIG) as BillingCycle[]
 
 export default function CoachSubscriptionPage() {
@@ -83,6 +109,16 @@ export default function CoachSubscriptionPage() {
     const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly')
     const [events, setEvents] = useState<SubscriptionEvent[]>([])
     const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false)
+
+    // ── Add-ons (plan 05 F5) ──────────────────────────────────────────────────
+    const [addons, setAddons] = useState<CoachAddonView[]>([])
+    const [billing, setBilling] = useState<BillingBreakdown | null>(null)
+    const [addonModalKey, setAddonModalKey] = useState<ModuleKey | null>(null)
+    const [addonTermsAccepted, setAddonTermsAccepted] = useState(false)
+    const [addonSaving, setAddonSaving] = useState(false)
+    const [cancelAddonKey, setCancelAddonKey] = useState<ModuleKey | null>(null)
+    const [cancelAddonEffective, setCancelAddonEffective] = useState<string | null | undefined>(undefined)
+    const captureAddonFunnel = useCaptureAddonFunnel()
 
     useEffect(() => {
         let isMounted = true
@@ -99,14 +135,28 @@ export default function CoachSubscriptionPage() {
                 }
                 setCoach(payload.coach)
                 setEvents(Array.isArray(payload.events) ? payload.events : [])
+                setAddons(Array.isArray(payload.addons) ? payload.addons : [])
+                setBilling(payload.billing ?? null)
                 const tier = payload.coach.subscription_tier as SubscriptionTier
                 const cycle = payload.coach.billing_cycle as BillingCycle
-                if (tier && tier in TIER_CONFIG) setSelectedTier(tier)
-                if (tier && tier in TIER_CONFIG && cycle && cycle in BILLING_CYCLE_CONFIG) {
+                // Pre-seleccion para la lista de venta (starter/pro/elite):
+                //  - un tier de venta pago (starter/pro/elite) se pre-selecciona a si mismo;
+                //  - un tier legacy (growth/scale, fuera de venta) ancla a 'elite' — sin esto un
+                //    grandfathered abriria con selectedTier='growth', que ya no se renderiza, y
+                //    "Continuar" mandaria un tier que create-preference rechaza (400);
+                //  - free / desconocido cae al default 'starter' (el pago mas economico de la lista).
+                const preselectTier: SaleTier =
+                    tier && isSaleTier(tier) && tier !== 'free'
+                        ? tier
+                        : tier === 'growth' || tier === 'scale'
+                        ? 'elite'
+                        : 'starter'
+                setSelectedTier(preselectTier)
+                if (cycle && cycle in BILLING_CYCLE_CONFIG) {
                     setSelectedCycle(
-                        isBillingCycleAllowedForTier(tier, cycle)
+                        isBillingCycleAllowedForTier(preselectTier, cycle)
                             ? cycle
-                            : getDefaultBillingCycleForTier(tier)
+                            : getDefaultBillingCycleForTier(preselectTier)
                     )
                 }
             } catch (err) {
@@ -128,6 +178,17 @@ export default function CoachSubscriptionPage() {
             setSelectedCycle(getDefaultBillingCycleForTier(selectedTier))
         }
     }, [selectedTier, selectedCycle])
+
+    // Funnel add-ons (analítica pasiva): catálogo visible una vez cargado el coach.
+    const catalogViewedRef = useRef(false)
+    useEffect(() => {
+        if (catalogViewedRef.current || !coach) return
+        catalogViewedRef.current = true
+        captureAddonFunnel('addon_catalog_viewed', {
+            billing_cycle: (coach.billing_cycle ?? 'monthly') as BillingCycle,
+            tier: coach.subscription_tier as SubscriptionTier,
+        })
+    }, [coach, captureAddonFunnel])
 
     async function handleChangePlan() {
         setSaving(true)
@@ -180,6 +241,95 @@ export default function CoachSubscriptionPage() {
     }
 
     const selectedPrice = getTierPriceClp(selectedTier, selectedCycle)
+    const coachCycle = (coach?.billing_cycle ?? 'monthly') as BillingCycle
+    const coachTier = (coach?.subscription_tier ?? 'starter') as SubscriptionTier
+    const hasActivePaidPlan =
+        coachTier !== 'free' &&
+        (coach?.subscription_status === 'active' || coach?.subscription_status === 'trialing')
+
+    // ── Add-ons: estado de cada módulo a partir de las filas vivas del endpoint ──
+    function addonForKey(key: ModuleKey): CoachAddonView | undefined {
+        // Una fila paga (self_service) manda sobre el grant para mostrar acción de baja;
+        // si solo hay grant, mostramos "Cortesía EVA".
+        const live = addons.filter((a) => a.moduleKey === key && a.status !== 'cancelled')
+        return live.find((a) => a.source === 'self_service') ?? live.find((a) => a.source === 'admin_grant')
+    }
+
+    async function refreshStatus() {
+        try {
+            const response = await fetch('/api/payments/subscription-status')
+            const payload = await response.json()
+            if (!response.ok) return
+            setCoach(payload.coach)
+            setEvents(Array.isArray(payload.events) ? payload.events : [])
+            setAddons(Array.isArray(payload.addons) ? payload.addons : [])
+            setBilling(payload.billing ?? null)
+        } catch {
+            /* transient — el estado previo sigue visible */
+        }
+    }
+
+    function openAddonModal(key: ModuleKey) {
+        setAddonTermsAccepted(false)
+        setAddonModalKey(key)
+        captureAddonFunnel('addon_modal_opened', { module_key: key, billing_cycle: coachCycle, tier: coachTier })
+    }
+
+    async function handleAddAddon() {
+        if (!addonModalKey || !addonTermsAccepted) return
+        const key = addonModalKey
+        setAddonSaving(true)
+        setError(null)
+        setSuccessMessage(null)
+        captureAddonFunnel('addon_confirmed', { module_key: key, billing_cycle: coachCycle, tier: coachTier })
+        try {
+            const response = await fetch('/api/payments/addons', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ moduleKey: key, acceptedTermsVersion: ADDON_PAYMENT_RULES.version }),
+            })
+            const payload = await response.json()
+            if (!response.ok) throw new Error(payload.error ?? 'No se pudo agregar el módulo.')
+            // Trimestral/anual: el endpoint devuelve la URL del one-shot prorrateado → redirige a MP.
+            if (payload.kind === 'one_shot_checkout' && payload.checkoutUrl) {
+                captureAddonFunnel('addon_oneshot_redirected', { module_key: key, billing_cycle: coachCycle, tier: coachTier })
+                window.location.href = payload.checkoutUrl
+                return
+            }
+            // Mensual: módulo activado al instante; refrescar estado + total compuesto.
+            setAddonModalKey(null)
+            setSuccessMessage('Módulo agregado. Ya está disponible en tu cuenta.')
+            await refreshStatus()
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error inesperado')
+        } finally {
+            setAddonSaving(false)
+        }
+    }
+
+    async function handleCancelAddon() {
+        if (!cancelAddonKey) return
+        const key = cancelAddonKey
+        setAddonSaving(true)
+        setError(null)
+        setSuccessMessage(null)
+        try {
+            const response = await fetch('/api/payments/addons/cancel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ moduleKey: key }),
+            })
+            const payload = await response.json()
+            if (!response.ok) throw new Error(payload.error ?? 'No se pudo quitar el módulo.')
+            setCancelAddonEffective(payload.effectiveAt ?? null)
+            await refreshStatus()
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Error inesperado')
+            setCancelAddonKey(null)
+        } finally {
+            setAddonSaving(false)
+        }
+    }
 
     return (
         <main className="mx-auto max-w-4xl px-4 py-8">
@@ -198,7 +348,18 @@ export default function CoachSubscriptionPage() {
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Plan actual</p>
                     <div className="flex items-start gap-4">
                         {(() => {
-                            const t = (coach.subscription_tier in TIER_CONFIG ? coach.subscription_tier : 'starter') as SubscriptionTier
+                            // Un tier desconocido (ni venta ni legacy — data corrupta o tier nuevo
+                            // sin display) NO colapsa a 'starter' (mentiria con su icono/color).
+                            // Estado de error explicito: icono neutro + label crudo + aviso (abajo).
+                            const isKnownTier = coach.subscription_tier in TIER_CONFIG
+                            if (!isKnownTier) {
+                                return (
+                                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/40">
+                                        <HelpCircle className="h-5 w-5 text-muted-foreground" />
+                                    </div>
+                                )
+                            }
+                            const t = coach.subscription_tier as SubscriptionTier
                             const TierIcon = TIER_ICON[t]
                             return (
                                 <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${TIER_ICON_BG[t]}`}>
@@ -231,6 +392,11 @@ export default function CoachSubscriptionPage() {
                             <p className="text-sm text-muted-foreground mt-0.5">
                                 {TIER_STUDENT_RANGE_LABEL[coach.subscription_tier as SubscriptionTier] ?? ''}
                             </p>
+                            {!(coach.subscription_tier in TIER_CONFIG) && (
+                                <p className="mt-1 text-sm font-medium text-amber-600 dark:text-amber-400">
+                                    Plan no reconocido — contacta soporte.
+                                </p>
+                            )}
                             {coach.current_period_end ? (
                                 <p className="text-sm text-muted-foreground mt-1">
                                     {coach.subscription_status === 'canceled' ? 'Acceso hasta' : 'Próximo cobro'}:{' '}
@@ -238,10 +404,9 @@ export default function CoachSubscriptionPage() {
                                         {new Date(coach.current_period_end).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}
                                     </span>
                                     {coach.subscription_status === 'active' && (() => {
-                                        const t = coach.subscription_tier as SubscriptionTier
-                                        const c = coach.billing_cycle as BillingCycle
-                                        const price = getTierPriceClp(t, c)
-                                        return price > 0 ? <span className="text-muted-foreground"> · ${price.toLocaleString('es-CL')} CLP</span> : null
+                                        // Total compuesto (base + add-ons) del endpoint — la UI NUNCA calcula precios.
+                                        const total = billing?.totalClp ?? getTierPriceClp(coach.subscription_tier as SubscriptionTier, coach.billing_cycle as BillingCycle)
+                                        return total > 0 ? <span className="text-muted-foreground"> · ${total.toLocaleString('es-CL')} CLP</span> : null
                                     })()}
                                 </p>
                             ) : coach.subscription_tier === 'free' ? (
@@ -249,8 +414,141 @@ export default function CoachSubscriptionPage() {
                                     Sin fecha de vencimiento · <span className="text-foreground font-semibold">Gratis para siempre</span>
                                 </p>
                             ) : null}
+                            {/* Desglose compuesto (base + add-ons) — solo si hay add-ons facturables */}
+                            {coach.subscription_status === 'active' && billing && billing.addonsClp > 0 && (
+                                <div className="mt-2 rounded-lg border border-border bg-secondary/30 px-3 py-2 text-xs">
+                                    <div className="flex justify-between text-muted-foreground">
+                                        <span>Plan base</span>
+                                        <span className="text-foreground">${billing.baseClp.toLocaleString('es-CL')} CLP</span>
+                                    </div>
+                                    <div className="mt-0.5 flex justify-between text-muted-foreground">
+                                        <span>Módulos add-on</span>
+                                        <span className="text-foreground">${billing.addonsClp.toLocaleString('es-CL')} CLP</span>
+                                    </div>
+                                    <div className="mt-1 flex justify-between border-t border-border pt-1 font-semibold text-foreground">
+                                        <span>Total próximo cobro</span>
+                                        <span>${billing.totalClp.toLocaleString('es-CL')} CLP</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
+                </section>
+            ) : null}
+
+            {/* ── Add-ons (módulos) — superficie de venta permitida #2 (anti-hostigamiento) ── */}
+            {coach ? (
+                <section id="addons" className="mt-6 rounded-2xl border border-border bg-card p-5">
+                    <div className="flex items-center gap-2">
+                        <Puzzle className="h-5 w-5 text-primary" />
+                        <h2 className="text-lg font-semibold text-foreground">Módulos add-on</h2>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Suma módulos a tu plan según los necesites. Cada módulo se cobra junto a tu suscripción
+                        y puedes quitarlo cuando quieras.
+                    </p>
+
+                    <div className="mt-4 space-y-3">
+                        {ADDON_MODULE_KEYS.map((key) => {
+                            const cfg = ADDON_CONFIG[key]
+                            const row = addonForKey(key)
+                            // Estado por módulo (plan 05 F5.1).
+                            const isCourtesy = row?.source === 'admin_grant'
+                            const isActive = row?.status === 'active' && row.source === 'self_service'
+                            const isCancelPendingCharged = row?.status === 'cancel_pending' && row.source === 'self_service' && row.firstChargedAt !== null
+                            const isCommitted = row?.status === 'cancel_pending' && row.source === 'self_service' && row.firstChargedAt === null
+                            // D8: nutrition_exchanges requiere tier con nutrición (Pro+).
+                            const requiresNutritionTier = key === 'nutrition_exchanges' && !getTierCapabilities(coachTier).canUseNutrition
+                            const canAdd = hasActivePaidPlan && !requiresNutritionTier && !row
+
+                            return (
+                                <div key={key} className="rounded-xl border border-border dark:border-white/10 p-4">
+                                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                                        <div className="min-w-0 flex-1">
+                                            <p className="font-semibold text-foreground">{cfg.label}</p>
+                                            <p className="mt-0.5 text-xs text-muted-foreground">{cfg.description}</p>
+                                        </div>
+                                        <div className="shrink-0 text-right">
+                                            {isCourtesy ? (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] font-semibold text-sky-500">
+                                                    <Gift className="h-3 w-3" /> Cortesía EVA
+                                                </span>
+                                            ) : isActive ? (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-500">
+                                                    <Check className="h-3 w-3" /> Activo
+                                                </span>
+                                            ) : isCancelPendingCharged ? (
+                                                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-500">
+                                                    Se desactiva el {row?.expiresAt ? new Date(row.expiresAt).toLocaleDateString('es-CL', { day: 'numeric', month: 'long' }) : 'fin del período'}
+                                                </span>
+                                            ) : isCommitted ? (
+                                                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-500">
+                                                    Comprometido hasta el primer cobro
+                                                </span>
+                                            ) : requiresNutritionTier ? (
+                                                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                                                    <Lock className="h-3 w-3" /> Requiere plan Pro+
+                                                </span>
+                                            ) : (
+                                                <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                                                    Disponible
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Acción Agregar / Quitar */}
+                                    <div className="mt-3 flex items-center justify-between gap-3">
+                                        <span className="text-xs text-muted-foreground">
+                                            ${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes
+                                            {coachCycle !== 'monthly' && (
+                                                <span className="ml-1">
+                                                    ({coachCycle === 'annual' ? 'tu ciclo anual descuenta 20%' : 'tu ciclo trimestral descuenta 10%'})
+                                                </span>
+                                            )}
+                                        </span>
+                                        {isActive || isCancelPendingCharged || isCommitted ? (
+                                            <button
+                                                type="button"
+                                                disabled={addonSaving || isCancelPendingCharged || isCommitted || !SELF_SERVICE_ADDONS_ENABLED}
+                                                onClick={() => { setCancelAddonEffective(undefined); setCancelAddonKey(key) }}
+                                                className="shrink-0 h-9 rounded-xl border border-border px-4 text-xs font-semibold text-muted-foreground hover:text-foreground disabled:opacity-60"
+                                            >
+                                                {isCancelPendingCharged || isCommitted ? 'Baja solicitada' : 'Quitar'}
+                                            </button>
+                                        ) : canAdd ? (
+                                            <button
+                                                type="button"
+                                                disabled={addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
+                                                onClick={() => openAddonModal(key)}
+                                                className="shrink-0 h-9 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                                            >
+                                                Agregar
+                                            </button>
+                                        ) : null}
+                                    </div>
+
+                                    {isCourtesy && (
+                                        <p className="mt-2 text-[11px] text-muted-foreground">
+                                            Activo sin costo por cortesía de EVA. No se incluye en tu cobro.
+                                        </p>
+                                    )}
+                                </div>
+                            )
+                        })}
+                    </div>
+
+                    {!hasActivePaidPlan && (
+                        <p className="mt-4 rounded-lg border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
+                            Los módulos add-on están disponibles con un plan pago activo.
+                        </p>
+                    )}
+                    {hasActivePaidPlan && !SELF_SERVICE_ADDONS_ENABLED && (
+                        <p className="mt-4 rounded-lg border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
+                            La compra y baja de módulos estará disponible muy pronto. Si necesitas un módulo ahora,
+                            escríbenos a <a href="mailto:contacto@eva-app.cl" className="text-primary hover:opacity-80">contacto@eva-app.cl</a>.
+                        </p>
+                    )}
                 </section>
             ) : null}
 
@@ -416,6 +714,16 @@ export default function CoachSubscriptionPage() {
                                     ⚠ El nuevo plan no incluye el módulo de nutrición. Perderás ese acceso al cambiar.
                                 </p>
                             )}
+                            {/* Add-ons activos viajan en el cambio de plan: el monto del checkout los incluye */}
+                            {addons.some((a) => a.source === 'self_service' && a.status !== 'cancelled') && (
+                                <p className="text-muted-foreground text-xs">
+                                    Tus módulos add-on activos ({addons
+                                        .filter((a) => a.source === 'self_service' && a.status !== 'cancelled')
+                                        .map((a) => ADDON_CONFIG[a.moduleKey].label)
+                                        .join(', ')}) se mantienen y se suman al monto del nuevo plan en el
+                                    checkout.
+                                </p>
+                            )}
                         </div>
                         <div className="mt-4 flex gap-3">
                             <button
@@ -434,6 +742,142 @@ export default function CoachSubscriptionPage() {
                                 {saving ? 'Procesando...' : 'Confirmar'}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Modal de confirmación de ALTA de add-on (plan 05 F5.2) ── */}
+            {addonModalKey && (() => {
+                const cfg = ADDON_CONFIG[addonModalKey]
+                const rules = getAddonPaymentRulesForCycle(coachCycle)
+                const isMonthly = coachCycle === 'monthly'
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+                        <div className="w-full max-w-lg rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-6 shadow-2xl max-h-[90dvh] overflow-y-auto">
+                            <h2 className="text-lg font-bold text-foreground">Agregar {cfg.label}</h2>
+                            <p className="mt-1 text-sm text-muted-foreground">{cfg.description}</p>
+
+                            {/* Desglose: el total compuesto en vivo lo da el endpoint (billing.totalClp) */}
+                            <div className="mt-4 space-y-1.5 rounded-xl border border-border bg-secondary/40 p-4 text-sm">
+                                <div className="flex justify-between text-muted-foreground">
+                                    <span>Tu plan ({TIER_CONFIG[coachTier]?.label ?? coachTier})</span>
+                                    <span className="text-foreground">${(billing?.baseClp ?? getTierPriceClp(coachTier, coachCycle)).toLocaleString('es-CL')} CLP</span>
+                                </div>
+                                <div className="flex justify-between text-muted-foreground">
+                                    <span>{cfg.label}</span>
+                                    <span className="text-foreground">${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes</span>
+                                </div>
+                                {isMonthly ? (
+                                    <p className="pt-1 text-xs text-muted-foreground">
+                                        Se sumará a tu próximo cobro mensual. La fracción que resta de este período es cortesía.
+                                    </p>
+                                ) : (
+                                    <p className="pt-1 text-xs text-muted-foreground">
+                                        Pagas ahora un monto único prorrateado por los días que restan de tu ciclo.
+                                        Desde la renovación, el valor del módulo se suma a tu cobro habitual. El monto exacto
+                                        del pago inicial se calcula en el checkout seguro de Mercado Pago.
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Las 5 reglas textuales (variante por ciclo) */}
+                            <div className="mt-4">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Condiciones de cobro</p>
+                                <ol className="mt-2 space-y-2">
+                                    {rules.rules.map((r) => (
+                                        <li key={r.number} className="text-xs text-muted-foreground">
+                                            <span className="font-semibold text-foreground">{r.title}.</span> {r.text}
+                                        </li>
+                                    ))}
+                                </ol>
+                            </div>
+
+                            {/* Checkbox obligatorio: habilita el CTA */}
+                            <label className="mt-4 flex items-start gap-2 text-xs text-muted-foreground">
+                                <input
+                                    type="checkbox"
+                                    checked={addonTermsAccepted}
+                                    onChange={(e) => {
+                                        setAddonTermsAccepted(e.target.checked)
+                                        if (e.target.checked) {
+                                            captureAddonFunnel('addon_terms_accepted', { module_key: addonModalKey, billing_cycle: coachCycle, tier: coachTier })
+                                        }
+                                    }}
+                                    className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
+                                />
+                                <span>Acepto estas condiciones de cobro, renovación y término.</span>
+                            </label>
+
+                            <div className="mt-5 flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setAddonModalKey(null)}
+                                    className="flex-1 h-10 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:text-foreground"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => void handleAddAddon()}
+                                    disabled={!addonTermsAccepted || addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
+                                    className="flex-1 h-10 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                                >
+                                    {addonSaving ? 'Procesando...' : isMonthly ? 'Activar módulo' : 'Ir a pagar'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            })()}
+
+            {/* ── Modal de BAJA de add-on (plan 05 F5.2) ── */}
+            {cancelAddonKey && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+                    <div className="w-full max-w-md rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-6 shadow-2xl">
+                        {cancelAddonEffective === undefined ? (
+                            <>
+                                <h2 className="text-lg font-bold text-foreground">Quitar {ADDON_CONFIG[cancelAddonKey].label}</h2>
+                                <p className="mt-2 text-sm text-muted-foreground">
+                                    Conservas el acceso hasta el final del período que ya pagaste. No hay reembolsos por
+                                    fracciones no usadas. ¿Confirmas que quieres quitar este módulo?
+                                </p>
+                                <div className="mt-5 flex gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setCancelAddonKey(null)}
+                                        className="flex-1 h-10 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:text-foreground"
+                                    >
+                                        Volver
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleCancelAddon()}
+                                        disabled={addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
+                                        className="flex-1 h-10 rounded-xl bg-red-600 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-60"
+                                    >
+                                        {addonSaving ? 'Procesando...' : 'Quitar módulo'}
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <h2 className="text-lg font-bold text-foreground">Baja registrada</h2>
+                                <p className="mt-2 text-sm text-muted-foreground" data-testid="addon-cancel-effective">
+                                    {cancelAddonEffective
+                                        ? `Conservas el acceso a ${ADDON_CONFIG[cancelAddonKey].label} hasta el ${new Date(cancelAddonEffective).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}. Sin reembolso de fracciones.`
+                                        : `Tu primer cobro incluirá igualmente ${ADDON_CONFIG[cancelAddonKey].label} (compromiso mínimo de un ciclo). Después de ese cobro se programa su término. Sin reembolso de fracciones.`}
+                                </p>
+                                <div className="mt-5">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setCancelAddonKey(null); setCancelAddonEffective(undefined) }}
+                                        className="h-10 w-full rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                                    >
+                                        Entendido
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             )}

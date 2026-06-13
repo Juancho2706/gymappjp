@@ -31,7 +31,7 @@ interface Props {
 
 function statusTone(status: string) {
     if (status === 'active') return 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300'
-    if (status === 'trialing') return 'border-sky-400/25 bg-sky-400/10 text-sky-300'
+    if (status === 'trial') return 'border-sky-400/25 bg-sky-400/10 text-sky-300'
     if (status === 'past_due') return 'border-amber-400/25 bg-amber-400/10 text-amber-300'
     return 'border-zinc-700 bg-zinc-900 text-zinc-400'
 }

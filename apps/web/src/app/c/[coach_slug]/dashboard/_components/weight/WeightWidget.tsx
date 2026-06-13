@@ -6,9 +6,10 @@ import { getCheckInHistory30Days } from '../../_data/dashboard.queries'
 import { formatRelativeDate, getTodayInSantiago } from '@/lib/date-utils'
 import { WeightSparkline } from './WeightSparkline'
 import { TrendArrow, type Trend } from './TrendArrow'
+import { WeightHeadline } from './WeightHeadline'
 import { getClientBasePath } from '@/lib/client/base-path'
 
-function computeTrend(weights: { created_at: string; weight: number | null }[]): { trend: Trend; delta: number } {
+function computeTrend(weights: { date: string; weight: number | null }[]): { trend: Trend; delta: number } {
     const pts = weights.filter((w) => w.weight != null).map((w) => ({ ...w, weight: w.weight as number }))
     if (pts.length < 2) return { trend: 'stable', delta: 0 }
     const last7 = pts.slice(-7)
@@ -47,10 +48,12 @@ export async function WeightWidget({ userId, coachSlug }: { userId: string; coac
 
     const last = withW[withW.length - 1]
     const current = last.weight as number
-    const lastDay = last.created_at.split('T')[0]
+    // Etiqueta por el dia de medicion (`date`), no por el instante UTC de inserción (corrige off-by-one TZ).
+    // `date` puede venir con componente horario (timestamp); se normaliza a YYYY-MM-DD para los helpers de fecha.
+    const lastDay = last.date.slice(0, 10)
     const { trend, delta } = computeTrend(withW)
     const spark = withW.slice(-14).map((r) => ({
-        iso: r.created_at.split('T')[0],
+        iso: r.date.slice(0, 10),
         weight: r.weight as number,
     }))
 
@@ -66,7 +69,7 @@ export async function WeightWidget({ userId, coachSlug }: { userId: string; coac
                 </Link>
             </div>
             <div className="flex items-end gap-2">
-                <span className="font-display text-3xl font-black tabular-nums text-foreground">{current.toFixed(1)} kg</span>
+                <WeightHeadline value={current} />
                 <TrendArrow trend={trend} deltaKg={delta} />
             </div>
             <p className="mt-1 text-xs text-muted-foreground">{formatRelativeDate(lastDay, todayIso)}</p>

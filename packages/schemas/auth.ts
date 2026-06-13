@@ -28,6 +28,7 @@ export type LoginInput = CoachLoginInput
 
 export const ForgotPasswordSchema = z.object({
     email: z.string().trim().toLowerCase().email('Email inválido'),
+    team_slug: z.string().optional(),
 })
 export type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>
 

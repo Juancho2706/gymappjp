@@ -4,18 +4,10 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-    LayoutDashboard,
-    Users,
-    Dumbbell,
-    Settings,
     LogOut,
-    Apple,
     PanelLeftClose,
     PanelLeft,
-    ClipboardList,
-    CreditCard,
     HelpCircle,
-    LifeBuoy,
     Building2,
     ChevronLeft,
     ChevronRight,
@@ -27,59 +19,10 @@ import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
-import { SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
-import type { WorkspaceSummary } from '@/domain/auth/types'
-
-const navItems = [
-    {
-        href: '/coach/dashboard',
-        label: 'Dashboard',
-        shortLabel: 'Inicio',
-        icon: LayoutDashboard,
-    },
-    {
-        href: '/coach/clients',
-        label: 'Alumnos',
-        icon: Users,
-    },
-    {
-        href: '/coach/workout-programs',
-        label: 'Programas',
-        shortLabel: 'Planes',
-        icon: ClipboardList,
-    },
-    {
-        href: '/coach/exercises',
-        label: 'Ejercicios',
-        shortLabel: 'Ejer.',
-        icon: Dumbbell,
-    },
-    {
-        href: '/coach/nutrition-plans',
-        label: 'Nutrición',
-        shortLabel: 'Nutri',
-        icon: Apple,
-    },
-    {
-        href: '/coach/settings',
-        label: 'Mi Marca',
-        shortLabel: 'Marca',
-        icon: Settings,
-    },
-    {
-        href: '/coach/subscription',
-        label: 'Suscripción',
-        shortLabel: 'Plan',
-        icon: CreditCard,
-    },
-    {
-        href: '/coach/support',
-        label: 'Soporte',
-        shortLabel: 'Ayuda',
-        icon: LifeBuoy,
-    },
-]
+import { getVisibleNavItems, splitNavItems, type NavModule } from '@/components/coach/coach-nav'
+import type { WorkspaceSummary, WorkspaceType } from '@/domain/auth/types'
+import type { EnabledModules } from '@/services/entitlements.service'
 
 interface CoachSidebarProps {
     coachName: string
@@ -93,9 +36,13 @@ interface CoachSidebarProps {
     } | null
     workspaces?: WorkspaceSummary[]
     currentWorkspaceLabel?: string
+    /** Workspace ACTIVO — gobierna qué módulos del nav se muestran (separación de flujos). */
+    activeWorkspaceType?: WorkspaceType | null
+    /** Módulos toggleables habilitados para el contexto activo (resuelto server-side en el layout). */
+    enabledModules?: EnabledModules | null
 }
 
-export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus, enterpriseContext, workspaces, currentWorkspaceLabel }: CoachSidebarProps) {
+export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus, enterpriseContext, workspaces, currentWorkspaceLabel, activeWorkspaceType, enabledModules }: CoachSidebarProps) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
@@ -148,22 +95,52 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
     }
 
     const isBuilder = pathname.startsWith('/coach/builder') || pathname.startsWith('/coach/workout-programs/builder')
-    const isSubscriptionBlocked = new Set<string>(SUBSCRIPTION_BLOCKED_STATUSES).has(subscriptionStatus ?? '')
-    const isOrgManaged = subscriptionStatus === 'org_managed'
     const isOrgAdmin = enterpriseContext?.orgRole === 'org_owner' || enterpriseContext?.orgRole === 'org_admin'
-    const visibleNavItems = isSubscriptionBlocked
-        ? [
-            {
-                href: '/coach/reactivate',
-                label: 'Reactivar',
-                shortLabel: 'Pago',
-                icon: LayoutDashboard,
-            },
-        ]
-        : navItems.filter((item) => {
-            if (!isOrgManaged) return true
-            return item.href !== '/coach/settings' && item.href !== '/coach/subscription'
-        })
+    // Registro nav-como-módulos: cada flujo (standalone/enterprise/team) ve SOLO sus módulos.
+    const visibleNavItems = getVisibleNavItems({ activeWorkspaceType, subscriptionStatus, enabledModules })
+    // Particionar para el grupo "MÓDULOS": en desktop core va arriba y, si hay módulos comprados,
+    // se agrupan bajo un divisor. En mobile el bottom bar renderiza plano [...core, ...modules].
+    const { core: coreNavItems, modules: moduleNavItems } = splitNavItems(visibleNavItems)
+    const hasModuleGroup = moduleNavItems.length > 0
+
+    const renderNavLink = (item: NavModule) => {
+        const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+        const Icon = item.icon
+        const short = item.shortLabel
+        return (
+            <Link
+                key={item.href}
+                href={item.href}
+                title={item.label}
+                className={cn(
+                    'flex shrink-0 flex-col items-center gap-1 rounded-xl border border-transparent px-2 py-2 text-[10px] font-semibold transition-all duration-300 group md:w-full md:flex-none md:flex-row md:gap-3 md:px-4 md:py-3 md:text-sm',
+                    'min-w-[3.5rem] max-w-[5.25rem] md:min-w-0 md:max-w-none',
+                    isCollapsed ? 'md:justify-center md:px-0' : 'md:justify-start',
+                    isActive
+                        ? 'text-sidebar-foreground bg-primary/10 border-primary/20 dark:shadow-[0_0_15px_-5px_rgba(var(--theme-primary-rgb,0,122,255),0.4)]'
+                        : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'
+                )}
+                style={isActive ? activeBgStyle : undefined}
+            >
+                <Icon
+                    className={cn(
+                        'w-5 h-5 md:w-5 md:h-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110',
+                        isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-sidebar-foreground'
+                    )}
+                    style={isActive ? activeColorStyle : undefined}
+                />
+                <span
+                    className={cn(
+                        'max-w-full text-center leading-tight tracking-wide line-clamp-2 md:truncate md:text-left',
+                        isCollapsed && 'md:hidden'
+                    )}
+                >
+                    <span className="hidden uppercase md:inline md:text-[11px]">{item.label}</span>
+                    <span className="inline md:hidden">{short || item.label}</span>
+                </span>
+            </Link>
+        )
+    }
 
     return (
         <>
@@ -300,44 +277,30 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                             <span className={cn('truncate text-left', isCollapsed && 'md:hidden')}>Panel empresa</span>
                         </Link>
                     )}
-                    {visibleNavItems.map((item) => {
-                        const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-                        const Icon = item.icon
-                        const short = item.shortLabel
-                        return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                title={item.label}
+                    {coreNavItems.map(renderNavLink)}
+                    {hasModuleGroup && (
+                        <>
+                            {/* Divisor del grupo "MÓDULOS" — SOLO desktop (md:). En mobile el bottom
+                                bar es plano [...core, ...modules]. NO es <a title> ⇒ no contamina
+                                collectNavTitles de los specs E2E (aside nav a[title]). */}
+                            <div
+                                aria-hidden="true"
+                                data-testid="nav-modules-divider"
                                 className={cn(
-                                    'flex shrink-0 flex-col items-center gap-1 rounded-xl border border-transparent px-2 py-2 text-[10px] font-semibold transition-all duration-300 group md:w-full md:flex-none md:flex-row md:gap-3 md:px-4 md:py-3 md:text-sm',
-                                    'min-w-[3.5rem] max-w-[5.25rem] md:min-w-0 md:max-w-none',
-                                    isCollapsed ? 'md:justify-center md:px-0' : 'md:justify-start',
-                                    isActive
-                                        ? 'text-sidebar-foreground bg-primary/10 border-primary/20 dark:shadow-[0_0_15px_-5px_rgba(var(--theme-primary-rgb,0,122,255),0.4)]'
-                                        : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'
+                                    'hidden md:flex shrink-0 select-none flex-col gap-2 pt-3',
+                                    isCollapsed ? 'items-center' : 'px-4'
                                 )}
-                                style={isActive ? activeBgStyle : undefined}
                             >
-                                <Icon
-                                    className={cn(
-                                        'w-5 h-5 md:w-5 md:h-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110',
-                                        isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-sidebar-foreground'
-                                    )}
-                                    style={isActive ? activeColorStyle : undefined}
-                                />
-                                <span
-                                    className={cn(
-                                        'max-w-full text-center leading-tight tracking-wide line-clamp-2 md:truncate md:text-left',
-                                        isCollapsed && 'md:hidden'
-                                    )}
-                                >
-                                    <span className="hidden uppercase md:inline md:text-[11px]">{item.label}</span>
-                                    <span className="inline md:hidden">{short || item.label}</span>
-                                </span>
-                            </Link>
-                        )
-                    })}
+                                <div className="h-px w-full bg-sidebar-border" />
+                                {!isCollapsed && (
+                                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
+                                        Módulos
+                                    </p>
+                                )}
+                            </div>
+                            {moduleNavItems.map(renderNavLink)}
+                        </>
+                    )}
                 </nav>
                 </div>
 

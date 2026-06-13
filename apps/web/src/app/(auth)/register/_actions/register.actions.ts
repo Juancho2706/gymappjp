@@ -6,11 +6,14 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import {
     BILLING_CYCLE_CONFIG,
+    getTierCapabilities,
     getTierMaxClients,
     isBillingCycleAllowedForTier,
+    SALE_TIERS,
     type BillingCycle,
     type SubscriptionTier,
 } from '@/lib/constants'
+import { MODULE_KEYS, type ModuleKey } from '@/services/entitlements.service'
 import {
     assertPlatformEmailAvailable,
     isAuthDuplicateEmailMessage,
@@ -28,7 +31,8 @@ export type RegisterState = {
     error?: string
 }
 
-const VALID_TIERS: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
+// Solo se vende free/starter/pro/elite. growth/scale fuera de venta (grandfathered, plan 04).
+const VALID_TIERS = SALE_TIERS
 const VALID_CYCLES: BillingCycle[] = ['monthly', 'quarterly', 'annual']
 
 const RESERVED_SLUGS = new Set([
@@ -51,6 +55,10 @@ export async function registerAction(
     const acceptMarketing = formData.get('accept_marketing') === 'on'
     const selectedTier = (formData.get('subscription_tier') as SubscriptionTier | null) ?? 'starter'
     const selectedBillingCycle = (formData.get('billing_cycle') as BillingCycle | null) ?? 'monthly'
+    // Add-ons opcionales del signup (plan 05 F5.5): CSV de MODULE_KEYS. Se validan contra la
+    // whitelist + coherencia D8 (nutrition_exchanges solo en tier con nutrición). El monto se
+    // calcula SOLO server-side en create-preference; acá solo se decide qué módulos viajan.
+    const rawAddons = (formData.get('addons') as string | null) ?? ''
 
     // Honeypot check — bots fill hidden fields, humans don't
     const honeypot = formData.get('website') as string
@@ -75,7 +83,7 @@ export async function registerAction(
         }
     }
 
-    const isTierValid = VALID_TIERS.includes(selectedTier)
+    const isTierValid = (VALID_TIERS as readonly string[]).includes(selectedTier)
     const isCycleValid = VALID_CYCLES.includes(selectedBillingCycle)
     const isFreeTier = selectedTier === 'free'
 
@@ -176,6 +184,7 @@ export async function registerAction(
     }
 
     // Create coaches row
+    const now = new Date().toISOString()
     const { error: coachError } = await adminDb
         .from('coaches')
         .insert({
@@ -192,8 +201,14 @@ export async function registerAction(
             billing_cycle: isFreeTier ? 'monthly' : selectedBillingCycle,
             payment_provider: isFreeTier ? 'admin' : (process.env.PAYMENT_PROVIDER ?? 'mercadopago'),
             max_clients: getTierMaxClients(selectedTier),
-            health_data_consent_at: new Date().toISOString(),
+            health_data_consent_at: now,
             marketing_consent: acceptMarketing,
+            // New coaches already know their invite code — skip the one-shot migration modal
+            // (PublicCodeRequiredModal) intended only for legacy coaches without a code.
+            onboarding_guide: {
+                invite_code_confirmed: true,
+                invite_code_confirmed_at: now,
+            },
             ...(isFreeTier && { trial_used_email: emailNorm }),
             ...(registrationIp && { registration_ip: registrationIp }),
         })
@@ -224,8 +239,22 @@ export async function registerAction(
     const supabase = await createClient()
     await supabase.auth.signInWithPassword({ email: emailSan, password })
 
+    // Sanitiza los add-ons: solo MODULE_KEYS válidos; nutrition_exchanges solo si el tier tiene
+    // nutrición (D8). El cálculo del monto y la validación dura se repiten en create-preference.
+    const canUseNutrition = getTierCapabilities(selectedTier).canUseNutrition
+    const sanitizedAddons = Array.from(
+        new Set(
+            rawAddons
+                .split(',')
+                .map((s) => s.trim())
+                .filter((s): s is ModuleKey => (MODULE_KEYS as readonly string[]).includes(s))
+                .filter((k) => (k === 'nutrition_exchanges' ? canUseNutrition : true))
+        )
+    )
+    const addonsParam = sanitizedAddons.length > 0 ? `&addons=${encodeURIComponent(sanitizedAddons.join(','))}` : ''
+
     const selectedCycleLabel = BILLING_CYCLE_CONFIG[selectedBillingCycle].label.toLowerCase()
     redirect(
-        `/coach/subscription/processing?from=register&tier=${encodeURIComponent(selectedTier)}&cycle=${encodeURIComponent(selectedBillingCycle)}&plan=${encodeURIComponent(selectedCycleLabel)}`
+        `/coach/subscription/processing?from=register&tier=${encodeURIComponent(selectedTier)}&cycle=${encodeURIComponent(selectedBillingCycle)}&plan=${encodeURIComponent(selectedCycleLabel)}${addonsParam}`
     )
 }

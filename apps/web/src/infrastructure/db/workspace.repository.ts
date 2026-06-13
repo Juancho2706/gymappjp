@@ -19,6 +19,7 @@ export type WorkspaceClientRow = {
     full_name: string | null
     coach_id: string | null
     org_id: string | null
+    team_id: string | null
 }
 
 export type WorkspaceMemberRow = {
@@ -27,6 +28,14 @@ export type WorkspaceMemberRow = {
     coach_id: string | null
     role: string
     status: string
+}
+
+export type WorkspaceTeamRow = {
+    memberId: string
+    teamId: string
+    name: string
+    slug: string
+    ownerCoachId: string
 }
 
 export type WorkspaceOrgRow = {
@@ -66,7 +75,7 @@ export type WorkspacePreferenceRow = {
 }
 
 export async function findWorkspaceIdentityRows(db: DB, userId: string) {
-    const [coachRes, clientRes, membersRes] = await Promise.all([
+    const [coachRes, clientRes, membersRes, teamsRes] = await Promise.all([
         db
             .from('coaches')
             .select('id, full_name, brand_name, slug, logo_url, primary_color, subscription_status, active_org_id')
@@ -74,7 +83,7 @@ export async function findWorkspaceIdentityRows(db: DB, userId: string) {
             .maybeSingle(),
         db
             .from('clients')
-            .select('id, full_name, coach_id, org_id')
+            .select('id, full_name, coach_id, org_id, team_id')
             .eq('id', userId)
             .maybeSingle(),
         db
@@ -83,11 +92,26 @@ export async function findWorkspaceIdentityRows(db: DB, userId: string) {
             .eq('user_id', userId)
             .eq('status', 'active')
             .is('deleted_at', null),
+        db
+            .from('team_members')
+            .select('id, team_id, teams(id, name, slug, owner_coach_id, deleted_at, suspended_at)')
+            .eq('coach_id', userId)
+            .eq('status', 'active')
+            .is('deleted_at', null),
     ])
 
     const coach = (coachRes.data ?? null) as WorkspaceCoachRow | null
     const client = (clientRes.data ?? null) as WorkspaceClientRow | null
     const members = (membersRes.data ?? []) as WorkspaceMemberRow[]
+
+    const teams: WorkspaceTeamRow[] = []
+    for (const row of (teamsRes.data ?? [])) {
+        const t = (row as { teams?: unknown }).teams
+        const team = (Array.isArray(t) ? t[0] : t) as { id: string; name: string; slug: string; owner_coach_id: string; deleted_at: string | null; suspended_at: string | null } | null
+        // Kill-switch: team suspendido por el operador = workspace invisible (coaches caen a su otro contexto o holding).
+        if (!team || team.deleted_at || team.suspended_at) continue
+        teams.push({ memberId: (row as { id: string }).id, teamId: team.id, name: team.name, slug: team.slug, ownerCoachId: team.owner_coach_id })
+    }
 
     const orgIds = [...new Set([
         ...members.map(member => member.org_id),
@@ -99,7 +123,7 @@ export async function findWorkspaceIdentityRows(db: DB, userId: string) {
         ...(client?.coach_id ? [client.coach_id] : []),
     ] as string[])]
 
-    const [orgsRes, coachesRes] = await Promise.all([
+    const [orgsRes, coachesRes, clientTeamRes] = await Promise.all([
         orgIds.length
             ? db
                 .from('organizations')
@@ -112,12 +136,20 @@ export async function findWorkspaceIdentityRows(db: DB, userId: string) {
                 .select('id, full_name, brand_name, slug, logo_url, primary_color, subscription_status, active_org_id')
                 .in('id', coachIds)
             : Promise.resolve({ data: [] }),
+        client?.team_id
+            ? db.from('teams').select('id, name, slug, deleted_at, suspended_at').eq('id', client.team_id).maybeSingle()
+            : Promise.resolve({ data: null }),
     ])
+
+    const ctRaw = (clientTeamRes.data ?? null) as { id: string; name: string; slug: string; deleted_at: string | null; suspended_at: string | null } | null
+    const clientTeam = ctRaw && !ctRaw.deleted_at && !ctRaw.suspended_at ? { id: ctRaw.id, name: ctRaw.name, slug: ctRaw.slug } : null
 
     return {
         coach,
         client,
         members,
+        teams,
+        clientTeam,
         orgs: (orgsRes.data ?? []) as WorkspaceOrgRow[],
         coaches: (coachesRes.data ?? []) as WorkspaceCoachRow[],
     }

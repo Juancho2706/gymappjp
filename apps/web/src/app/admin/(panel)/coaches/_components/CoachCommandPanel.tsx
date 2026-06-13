@@ -24,9 +24,13 @@ import {
     RefreshCw, Pause, Zap, ShieldOff, Edit3, Activity, Mail, Palette
 } from 'lucide-react'
 import type { CoachListItem } from '../../dashboard/_data/types'
-import { TIER_CONFIG } from '@/lib/constants'
+import { TIER_CONFIG } from '@eva/tiers'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+
+// Union COMPLETO derivado de las constantes (mejora #7: NO re-hardcodear las listas de tiers del admin).
+// Incluye growth/scale (LEGACY, fuera de venta) — el admin gestiona cuentas grandfathered.
+const ALL_TIERS = Object.keys(TIER_CONFIG) as Array<keyof typeof TIER_CONFIG>
 
 interface Props {
     coach: CoachListItem
@@ -391,7 +395,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="border-[--admin-border] bg-[--admin-bg-elevated]">
-                                            {(['free', 'starter', 'pro', 'elite', 'growth', 'scale'] as const).map(v => {
+                                            {ALL_TIERS.map(v => {
                                                 const cfg = TIER_CONFIG[v]
                                                 return (
                                                     <SelectItem key={v} value={v}>
@@ -444,7 +448,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                         <SelectContent className="border-[--admin-border] bg-[--admin-bg-elevated]">
                                             <SelectItem value="monthly">Mensual</SelectItem>
                                             <SelectItem value="quarterly">Trimestral</SelectItem>
-                                            <SelectItem value="yearly">Anual</SelectItem>
+                                            <SelectItem value="annual">Anual</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>

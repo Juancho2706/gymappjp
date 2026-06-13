@@ -30,9 +30,10 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
 
     const admin = createServiceRoleClient()
 
-    // B-7: the code itself decides the scope. An ENTERPRISE code (organization_members.invite_code)
-    // creates an org-scoped alumno (org_id set + coach assignment); a STANDALONE code
-    // (coaches.invite_code) creates a standalone alumno (org_id null). Single source of truth.
+    // B-7/A.bis2: the code itself decides the scope. An ENTERPRISE code (organization_members
+    // .invite_code) creates an org-scoped alumno (org_id set + coach assignment); a TEAM code
+    // (teams.invite_code) creates a pool alumno (team_id set, coach = team owner); a STANDALONE
+    // code (coaches.invite_code) creates a standalone alumno. Single source of truth.
     const invite = await resolveInvite(admin, inviteCode)
     if (!invite) return { error: 'Código de invitación inválido' }
 
@@ -58,6 +59,7 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
         phone: parsed.data.phone || null,
         coach_id: invite.coachId,
         org_id: invite.orgId,
+        team_id: invite.teamId,
         is_active: true,
         force_password_change: false,
         age_confirmed_at: new Date().toISOString(),
@@ -75,6 +77,7 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
         clientId: newUser.user.id,
         coachId: invite.coachId,
         orgId: invite.orgId,
+        teamId: invite.teamId,
     })
     if (!identity.ok) console.error('createClientIdentity (non-fatal):', identity.error)
 
@@ -88,5 +91,5 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
         })
     }
 
-    return { success: true, coachSlug: invite.coachSlug }
+    return { success: true, loginHref: invite.loginHref }
 }

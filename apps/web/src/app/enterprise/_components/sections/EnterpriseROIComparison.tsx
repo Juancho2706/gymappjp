@@ -5,7 +5,7 @@ import { calcROIAllPlans, formatCLP } from '../../_data/enterprise-pricing'
 import { Users2, TrendingDown, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LottiePlayer } from '../atoms/LottiePlayer'
-import { Reveal, RevealStagger, RevealItem } from '../atoms/Reveal'
+import { Reveal, RevealStagger, RevealItem } from '@/components/motion/Reveal'
 import { StatNumber } from '../atoms/StatNumber'
 
 export function EnterpriseROIComparison() {

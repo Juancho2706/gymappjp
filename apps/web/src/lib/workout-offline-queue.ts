@@ -10,6 +10,12 @@ export type WorkoutOfflineLog = {
     planId: string
     coachSlug: string
     timestamp: number
+    // ── Espejo polimórfico (specs/movida-entrenamiento, AC4) ──
+    // Opcionales: los items legacy ya encolados en localStorage siguen parseando.
+    actualDurationSec?: number | null
+    actualDistanceM?: number | null
+    actualHoldSec?: number | null
+    actualAvgHr?: number | null
 }
 
 export function readWorkoutOfflineQueue(): WorkoutOfflineLog[] {

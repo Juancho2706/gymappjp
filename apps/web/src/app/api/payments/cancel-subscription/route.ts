@@ -37,7 +37,7 @@ export async function POST(request: Request) {
         const admin = createServiceRoleClient()
         const { data: coach } = await admin
             .from('coaches')
-            .select('id, subscription_mp_id, payment_provider')
+            .select('id, subscription_mp_id, payment_provider, current_period_end')
             .eq('id', user.id)
             .maybeSingle()
 
@@ -76,6 +76,37 @@ export async function POST(request: Request) {
 
         if (updateError) {
             return NextResponse.json({ error: updateError.message }, { status: 500 })
+        }
+
+        // Add-ons (plan 05 F3.4): el coach conserva acceso al plan base hasta current_period_end (la
+        // ruta lo preserva a propósito). Los add-ons YA cobrados NO se apagan al instante — eso
+        // violaría la regla 4 (acceso hasta el fin del ciclo ya pagado). Pasan a cancel_pending con
+        // expires_at = current_period_end SIN PUT (el preapproval entero ya quedó cancelado en MP, no
+        // hay nada que cobrar) y el cron de expiry los pasa a cancelled al corte. Best-effort: un fallo
+        // acá no debe tumbar la cancelación de la suscripción base (ya hecha arriba).
+        try {
+            const periodEnd = coach.current_period_end ?? null
+            const { data: liveAddons } = await admin
+                .from('coach_addons')
+                .select('id')
+                .eq('coach_id', user.id)
+                .eq('status', 'active')
+            if (liveAddons && liveAddons.length > 0) {
+                await admin
+                    .from('coach_addons')
+                    .update({
+                        status: 'cancel_pending',
+                        cancel_requested_at: new Date().toISOString(),
+                        expires_at: periodEnd,
+                    })
+                    .eq('coach_id', user.id)
+                    .eq('status', 'active')
+            }
+        } catch (addonErr) {
+            console.error('[payments.cancel-subscription] failed to schedule addon cancellation', {
+                coachId: user.id,
+                message: addonErr instanceof Error ? addonErr.message : String(addonErr),
+            })
         }
 
         const payload: Json | null = reason ? ({ cancel_reason: reason } as Json) : null

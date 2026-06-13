@@ -1,26 +1,36 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { listAvailableWorkoutAreas } from '@/services/workout/workout-areas.service'
 import { EXERCISE_LIST_COLUMNS } from '@/lib/exercises/exercise-catalog-select'
 import type { Tables } from '@/lib/database.types'
+import type { WorkoutArea } from '@/domain/workout/types'
 
 type Exercise = Tables<'exercises'>
 
 export const getTemplateBuilderData = cache(async (programId?: string) => {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { user: null, exercises: [] as Exercise[], initialProgram: null }
+    if (!user) return { user: null, exercises: [] as Exercise[], initialProgram: null, areas: [] as WorkoutArea[] }
 
     // Resolve workspace to apply correct org scope
     const workspace = await resolvePreferredWorkspace(supabase, user.id)
     const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
+    const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
 
-    const { data: rawExercises } = await supabase
-        .from('exercises')
-        .select(EXERCISE_LIST_COLUMNS)
-        .or(`coach_id.is.null,coach_id.eq.${user.id}`)
-        .order('muscle_group')
-        .order('name')
+    const [{ data: rawExercises }, areas] = await Promise.all([
+        supabase
+            .from('exercises')
+            .select(EXERCISE_LIST_COLUMNS)
+            .or(`coach_id.is.null,coach_id.eq.${user.id}`)
+            .order('muscle_group')
+            .order('name'),
+        // Areas del builder segun workspace activo (enterprise: solo system en v1).
+        listAvailableWorkoutAreas(supabase, {
+            coachId: orgId ? null : user.id,
+            teamId: activeTeamId,
+        }),
+    ])
 
     let initialProgram = null
     if (programId) {
@@ -54,5 +64,6 @@ export const getTemplateBuilderData = cache(async (programId?: string) => {
         user,
         exercises: (rawExercises ?? []) as Exercise[],
         initialProgram,
+        areas,
     }
 })

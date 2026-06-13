@@ -14,6 +14,8 @@ import {
     buildTrialExpiredEmail,
 } from '@/lib/email/transactional-templates'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { buildCoachUpdateData, readModules } from '../../_actions/module-form'
+import { syncAdminGrants } from '@/services/billing/addons.service'
 
 function revalidateAdmin() {
     revalidatePath('/admin/coaches', 'page')
@@ -111,10 +113,12 @@ const UpdateCoachSchema = z.object({
     coachId: z.string().uuid(),
     full_name: z.string().min(1).optional(),
     brand_name: z.string().min(1).optional(),
+    // Union COMPLETO (incluye growth/scale LEGACY): el UPDATE admin es la palanca para gestionar cuentas grandfathered (D5). Solo la CREACION baja a sale tiers.
     subscription_tier: z.enum(['free', 'starter', 'pro', 'elite', 'growth', 'scale']).optional(),
     subscription_status: z.enum(['active', 'trialing', 'canceled', 'pending_payment', 'expired', 'past_due', 'paused']).optional(),
     max_clients: z.coerce.number().int().min(1).max(500).optional(),
-    billing_cycle: z.enum(['monthly', 'quarterly', 'yearly']).optional(),
+    // 'annual' (no 'yearly'): el CHECK coaches_billing_cycle_check de DB solo permite annual — enviar 'yearly' rompe el cambio de ciclo a anual vía admin.
+    billing_cycle: z.enum(['monthly', 'quarterly', 'annual']).optional(),
     current_period_end: z.string().datetime().optional(),
     trial_ends_at: z.string().datetime().optional(),
     admin_notes: z.string().max(2000).optional(),
@@ -123,7 +127,7 @@ const UpdateCoachSchema = z.object({
 })
 
 export async function updateCoachAction(_prev: unknown, formData: FormData) {
-    const { adminClient } = await assertAdmin()
+    const { user, adminClient } = await assertAdmin()
 
     const raw = Object.fromEntries(formData)
     const parsed = UpdateCoachSchema.safeParse(raw)
@@ -131,17 +135,29 @@ export async function updateCoachAction(_prev: unknown, formData: FormData) {
         return { error: parsed.error.issues.map(i => i.message).join(', ') }
     }
 
-    const updateData: Record<string, unknown> = {}
-    const fields = ['full_name', 'brand_name', 'subscription_tier', 'subscription_status', 'billing_cycle', 'current_period_end', 'trial_ends_at', 'admin_notes', 'payment_provider', 'primary_color'] as const
-    for (const f of fields) {
-        if (raw[f]) updateData[f] = raw[f] as string
+    const updateData = buildCoachUpdateData(formData)
+
+    // Solo escribir si hay campos fuera de módulos (un override SOLO de módulos no toca `coaches`).
+    if (Object.keys(updateData).length > 0) {
+        const { error } = await adminClient.from('coaches').update(updateData).eq('id', parsed.data.coachId)
+        if (error) return { error: error.message }
+        await logAdminAction(adminClient, 'coach.update', 'coaches', parsed.data.coachId, updateData, user.email)
     }
-    if (raw.max_clients) updateData.max_clients = Number(raw.max_clients)
 
-    const { error } = await adminClient.from('coaches').update(updateData).eq('id', parsed.data.coachId)
-    if (error) return { error: error.message }
+    // Override de módulos del CEO → WRITE-THROUGH coach_addons (plan 05 / F6.1 / D2): el toggle
+    // crea/cancela filas `admin_grant` (price 0); el trigger D1 recomputa `enabled_modules`. NO se
+    // escribe el jsonb directo (lo pisaría el trigger). Solo standalone: teams van por teams.actions.ts.
+    if (formData.get('modules_present')) {
+        try {
+            const { granted, revoked } = await syncAdminGrants(adminClient, parsed.data.coachId, readModules(formData))
+            if (granted.length || revoked.length) {
+                await logAdminAction(adminClient, 'coach.modules_grant', 'coaches', parsed.data.coachId, { granted, revoked, source: 'admin_grant' }, user.email)
+            }
+        } catch (err) {
+            return { error: err instanceof Error ? err.message : 'No se pudieron actualizar los módulos del coach.' }
+        }
+    }
 
-    await logAdminAction(adminClient, 'coach.update', 'coaches', parsed.data.coachId, updateData)
     revalidateAdmin()
     return { success: true }
 }
@@ -288,6 +304,7 @@ export async function bulkCoachStatusAction(coachIds: string[], status: string) 
 
 // Bulk tier update
 export async function bulkCoachTierAction(coachIds: string[], tier: string, maxClients: number) {
+    // Union COMPLETO (incluye growth/scale LEGACY): bulk re-asignación admin sobre cuentas existentes, grandfathered incluidas (D5).
     const tierSchema = z.enum(['free', 'starter', 'pro', 'elite', 'growth', 'scale'])
     if (!tierSchema.safeParse(tier).success) return { error: 'Tier inválido' }
     if (!coachIds.length) return { error: 'Sin coaches seleccionados' }
@@ -429,6 +446,20 @@ export async function getCoachSubscriptionEvents(coachId: string): Promise<Subsc
         .order('created_at', { ascending: false })
         .limit(10)
     return (data ?? []) as SubscriptionEventRow[]
+}
+
+// Override del CEO (plan estrategia 03 F1.3 / D5): el sheet carga los módulos del coach
+// al abrir — patrón de getCoachNotesAction, sin tocar el RPC paginado de la lista.
+export async function getCoachModulesAction(coachId: string): Promise<Record<string, boolean>> {
+    await assertAdmin()
+    const admin = createServiceRoleClient()
+    const { data } = await admin
+        .from('coaches')
+        .select('enabled_modules')
+        .eq('id', coachId)
+        .maybeSingle()
+    const raw = (data as { enabled_modules?: Record<string, boolean> | null } | null)?.enabled_modules
+    return (raw && typeof raw === 'object') ? raw : {}
 }
 
 export async function getCoachNotesAction(coachId: string): Promise<string> {

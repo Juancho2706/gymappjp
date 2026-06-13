@@ -3,23 +3,32 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { AlertTriangle, CheckCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Users } from 'lucide-react'
 import {
+    ADDON_CONFIG,
+    ADDON_MODULE_KEYS,
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
     getTierBillingCycleSummary,
+    getTierCapabilities,
     getTierMaxClients,
     getTierNutritionSummary,
     getTierPriceClp,
     isBillingCycleAllowedForTier,
+    isSaleTier,
+    SALE_TIERS,
+    SELF_SERVICE_ADDONS_ENABLED,
     TIER_CONFIG,
     TIER_STUDENT_RANGE_LABEL,
     type BillingCycle,
+    type SaleTier,
     type SubscriptionTier,
 } from '@/lib/constants'
+import type { ModuleKey } from '@/services/entitlements.service'
 
-const tierOptions = Object.entries(TIER_CONFIG) as [SubscriptionTier, (typeof TIER_CONFIG)[SubscriptionTier]][]
+// Solo se ofertan tiers a la venta (free/starter/pro/elite). growth/scale quedan fuera (LEGACY).
+const tierOptions = SALE_TIERS.map((key) => [key, TIER_CONFIG[key]] as const)
 const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [
     BillingCycle,
     (typeof BILLING_CYCLE_CONFIG)[BillingCycle],
@@ -29,31 +38,45 @@ interface ReactivateClientProps {
     currentTier: SubscriptionTier
     activeClientCount: number
     subscriptionStatus: string | null
+    /** Ex-add-ons pagos cancelados recientemente (plan 05 F5.6) — pre-marcados, deseleccionables. */
+    recentlyCancelledAddons?: ModuleKey[]
 }
 
-export function ReactivateClient({ currentTier, activeClientCount, subscriptionStatus }: ReactivateClientProps) {
+export function ReactivateClient({ currentTier, activeClientCount, subscriptionStatus, recentlyCancelledAddons = [] }: ReactivateClientProps) {
     const searchParams = useSearchParams()
 
     // Pre-select the minimum viable tier for the coach's current client count,
-    // anchored to their actual tier (not always starter).
-    const initialTier = useMemo<SubscriptionTier>(() => {
+    // anchored to their actual tier (not always starter). growth/scale ya no se venden:
+    // un currentTier/query legacy ancla a 'elite' (D4 — la reactivacion publica nunca
+    // resucita un tier muerto; quien supere elite ve el puente a Teams, no un auto-bump).
+    const initialTier = useMemo<SaleTier>(() => {
         const raw = searchParams.get('tier')
         const queryTier = raw === 'starter_lite' ? 'starter' : raw
-        const candidate = queryTier && queryTier in TIER_CONFIG ? queryTier as SubscriptionTier : currentTier
-        // If the candidate can't cover current clients, bump up to the minimum viable tier
+        const candidate: SaleTier =
+            queryTier && isSaleTier(queryTier)
+                ? queryTier
+                : isSaleTier(currentTier)
+                ? currentTier
+                : 'elite'
+        // If the candidate can't cover current clients, bump up to the minimum viable sale tier.
+        // Si ni siquiera elite (el techo de venta) los cubre, anclamos a elite y la UI muestra
+        // el bloque "conversemos de EVA Teams" (boton de pago deshabilitado).
         if (TIER_CONFIG[candidate].maxClients < activeClientCount) {
-            const ordered: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
-            return ordered.find(t => TIER_CONFIG[t].maxClients >= activeClientCount) ?? 'scale'
+            return SALE_TIERS.find((t) => TIER_CONFIG[t].maxClients >= activeClientCount) ?? 'elite'
         }
         return candidate
     }, [searchParams, currentTier, activeClientCount])
 
-    const [tier, setTier] = useState<SubscriptionTier>(initialTier)
+    const [tier, setTier] = useState<SaleTier>(initialTier)
     const [billingCycle, setBillingCycle] = useState<BillingCycle>(() => {
         const queryCycle = searchParams.get('cycle')
         if (queryCycle && queryCycle in BILLING_CYCLE_CONFIG) return queryCycle as BillingCycle
         return 'monthly'
     })
+    // Pre-marca ex-add-ons (deseleccionables). Solo cuando la compra self-service está activa.
+    const [selectedAddons, setSelectedAddons] = useState<ModuleKey[]>(
+        SELF_SERVICE_ADDONS_ENABLED ? recentlyCancelledAddons : []
+    )
     const [isLoading, setIsLoading] = useState(false)
     const [isConfirming, setIsConfirming] = useState(false)
     const [isActivatingFree, setIsActivatingFree] = useState(false)
@@ -71,6 +94,32 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
     )
 
     const tierBlockedByClients = useMemo(() => getTierMaxClients(tier) < activeClientCount, [tier, activeClientCount])
+
+    // Add-ons: nutrition_exchanges solo en tier con nutrición (D8). Purga al cambiar de plan.
+    useEffect(() => {
+        const caps = getTierCapabilities(tier)
+        setSelectedAddons((prev) => {
+            const next = prev.filter((k) => (k === 'nutrition_exchanges' ? caps.canUseNutrition : true))
+            return next.length === prev.length ? prev : next
+        })
+    }, [tier])
+
+    // Total en vivo de add-ons (monto por ciclo, mismos descuentos del plan). El precio se
+    // re-congela a lista VIGENTE en la fila nueva (no hereda el viejo) — server-side.
+    const addonsCycleTotal = useMemo(() => {
+        const { months, discountPercent } = BILLING_CYCLE_CONFIG[billingCycle]
+        return selectedAddons.reduce((sum, key) => {
+            const gross = ADDON_CONFIG[key].priceClpMensual * months
+            return sum + Math.round(gross * (1 - discountPercent / 100))
+        }, 0)
+    }, [selectedAddons, billingCycle])
+
+    // La cartera supera el plan mas alto a la venta (elite): ya no hay tier al que auto-subir
+    // (growth/scale estan fuera de venta). Mostramos el puente a EVA Teams y deshabilitamos el pago.
+    const exceedsTopSaleTier = useMemo(
+        () => activeClientCount > getTierMaxClients('elite'),
+        [activeClientCount]
+    )
 
     const paymentStatus = searchParams.get('payment')
     const subscriptionBlocked = searchParams.get('reason') === 'subscription_blocked'
@@ -151,7 +200,13 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
             const response = await fetch('/api/payments/create-preference', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tier, billingCycle }),
+                body: JSON.stringify({
+                    tier,
+                    billingCycle,
+                    // Add-ons pre-marcados viajan en external_reference del preapproval nuevo (D4 —
+                    // sin one-shot: el preapproval nace con el ciclo completo compuesto).
+                    ...(selectedAddons.length > 0 ? { addons: selectedAddons } : {}),
+                }),
             })
             const raw = await response.text()
             const payload = raw ? JSON.parse(raw) : {}
@@ -163,7 +218,7 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
         } finally {
             setIsLoading(false)
         }
-    }, [billingCycle, tier])
+    }, [billingCycle, tier, selectedAddons])
 
     const handleActivateFree = useCallback(async () => {
         setIsActivatingFree(true)
@@ -311,7 +366,25 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                     </div>
                 </section>
 
-                {tierBlockedByClients && (
+                {exceedsTopSaleTier ? (
+                    <div className="mt-4 flex items-start gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm">
+                        <Users className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                        <div>
+                            <p className="font-semibold text-foreground">Tu cartera supera el plan más alto</p>
+                            <p className="mt-0.5 text-muted-foreground">
+                                Tienes {activeClientCount} alumnos activos, más de los que cubre nuestro plan
+                                individual más alto. Conversemos de EVA Teams, pensado para carteras grandes y
+                                equipos de profesionales.{' '}
+                                <a
+                                    href="mailto:contacto@eva-app.cl?subject=Quiero%20conocer%20EVA%20Teams"
+                                    className="font-medium underline"
+                                >
+                                    Escríbenos a contacto@eva-app.cl →
+                                </a>
+                            </p>
+                        </div>
+                    </div>
+                ) : tierBlockedByClients ? (
                     <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm">
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
                         <div>
@@ -322,7 +395,7 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                             </p>
                         </div>
                     </div>
-                )}
+                ) : null}
 
                 <section className="mt-6">
                     <h2 className="text-sm font-semibold text-foreground">Frecuencia de pago</h2>
@@ -348,6 +421,61 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                     </div>
                 </section>
 
+                {/* Ex-add-ons pre-marcados (deseleccionables) — plan 05 F5.6. Solo con la compra activa. */}
+                {SELF_SERVICE_ADDONS_ENABLED && recentlyCancelledAddons.length > 0 && (
+                    <section className="mt-6">
+                        <h2 className="text-sm font-semibold text-foreground">Volver a sumar tus módulos</h2>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            Tenías estos módulos activos. Vuelven pre-seleccionados al precio de lista vigente —
+                            quita los que no necesites.
+                        </p>
+                        <div className="mt-3 grid gap-2">
+                            {ADDON_MODULE_KEYS.filter((k) => recentlyCancelledAddons.includes(k)).map((key) => {
+                                const cfg = ADDON_CONFIG[key]
+                                const requiresNutrition = key === 'nutrition_exchanges' && !getTierCapabilities(tier).canUseNutrition
+                                const checked = selectedAddons.includes(key)
+                                return (
+                                    <label
+                                        key={key}
+                                        className={`flex items-start gap-2 rounded-xl border p-3 text-left transition ${
+                                            requiresNutrition
+                                                ? 'border-border opacity-60'
+                                                : checked
+                                                    ? 'border-primary bg-primary/10 cursor-pointer'
+                                                    : 'border-border hover:border-primary/40 cursor-pointer'
+                                        }`}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            disabled={requiresNutrition}
+                                            onChange={(e) =>
+                                                setSelectedAddons((prev) =>
+                                                    e.target.checked ? [...prev, key] : prev.filter((k) => k !== key)
+                                                )
+                                            }
+                                            className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
+                                        />
+                                        <span className="min-w-0 flex-1">
+                                            <span className="flex items-center justify-between gap-2">
+                                                <span className="font-semibold text-foreground text-sm">{cfg.label}</span>
+                                                <span className="text-xs font-semibold text-foreground shrink-0">
+                                                    ${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes
+                                                </span>
+                                            </span>
+                                            {requiresNutrition && (
+                                                <span className="mt-1 inline-block text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                                                    Requiere un plan con nutrición (Pro o superior).
+                                                </span>
+                                            )}
+                                        </span>
+                                    </label>
+                                )
+                            })}
+                        </div>
+                    </section>
+                )}
+
                 <section className="mt-6 rounded-xl border border-border p-4">
                     <p className="text-sm text-muted-foreground">
                         Plan seleccionado: <span className="font-semibold text-foreground">{selectedTier.label}</span>
@@ -358,6 +486,13 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                             <span className="ml-2 text-xs">(mensual base ${monthlyBase.toLocaleString('es-CL')} CLP)</span>
                         )}
                     </p>
+                    {selectedAddons.length > 0 && (
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            Módulos ({selectedAddons.map((k) => ADDON_CONFIG[k].label).join(', ')}):{' '}
+                            <span className="font-semibold text-foreground">+${addonsCycleTotal.toLocaleString('es-CL')} CLP</span>
+                            {' · '}Total <span className="font-semibold text-foreground">${(selectedPrice + addonsCycleTotal).toLocaleString('es-CL')} CLP</span>
+                        </p>
+                    )}
                     <ul className="mt-3 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
                         {selectedTier.features.map((feature) => (
                             <li key={feature}>{feature}</li>
@@ -375,7 +510,7 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                     <button
                         type="button"
                         onClick={handleCheckout}
-                        disabled={isLoading || tierBlockedByClients}
+                        disabled={isLoading || tierBlockedByClients || exceedsTopSaleTier}
                         className="inline-flex h-12 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-md transition hover:opacity-95 disabled:opacity-60 w-full md:w-auto md:min-w-[220px]"
                     >
                         {isLoading ? 'Redirigiendo...' : 'Continuar al pago con Mercado Pago'}

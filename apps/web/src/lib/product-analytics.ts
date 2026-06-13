@@ -25,3 +25,6 @@ export type NutritionAnalyticsEvent =
   | 'nutrition_meal_toggle_queued'
   | 'nutrition_plan_export_copied'
   | 'nutrition_plan_pdf_downloaded'
+  // Módulo nutrition_exchanges — métrica mínima de PDF (regla director §3)
+  | 'nutrition_exchange_pdf_ok'
+  | 'nutrition_exchange_pdf_error'

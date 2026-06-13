@@ -17,16 +17,8 @@
       "schedule": "0 12 * * *"
     },
     {
-      "path": "/api/cron/org-health-alert",
-      "schedule": "0 13 * * *"
-    },
-    {
       "path": "/api/cron/purge-data",
       "schedule": "0 3 * * 0"
-    },
-    {
-      "path": "/api/cron/payment-reminder",
-      "schedule": "0 9 1,6,11 * *"
     },
     {
       "path": "/api/cron/audit-checksum",
@@ -34,7 +26,7 @@
     },
     {
       "path": "/api/cron/mp-reconcile",
-      "schedule": "0 10 * * 5"
+      "schedule": "0 10 * * *"
     }
   ],
   "headers": [

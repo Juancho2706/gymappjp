@@ -11,8 +11,12 @@ import { submitCheckinAction, type CheckinState } from './_actions/check-in.acti
 import { formatRelativeDate } from '@/lib/date-utils'
 import { springs } from '@/lib/animation-presets'
 import { useBasePath } from '@/components/client/BasePathProvider'
+import { SuccessWaveOverlay } from '@/components/ui/SuccessWaveOverlay'
 
 const initialState: CheckinState = {}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fireConfetti = (opts: object) => (import('canvas-confetti') as Promise<any>).then(m => (m.default ?? m)(opts))
 
 export type LastCheckInRow = {
     weight: number | null
@@ -46,6 +50,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
     const [backPreview, setBackPreview] = useState<string | null>(null)
     const [fileErrors, setFileErrors] = useState<{ front?: string; back?: string }>({})
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [showCelebration, setShowCelebration] = useState(false)
 
     useEffect(() => {
         if (state.error != null || state.success) {
@@ -56,11 +61,16 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
     useEffect(() => {
         if (state.success) {
             toast.success('Check-in enviado', { id: 'client-checkin-ok' })
+            // Delight: brand-themed wave overlay + confetti burst on a successful check-in.
+            setShowCelebration(true)
+            if (!reducedMotion) {
+                void fireConfetti({ particleCount: 90, spread: 70, startVelocity: 45, origin: { x: 0.5, y: 0.7 } })
+            }
         }
         if (state.error) {
             toast.error(state.error, { id: 'client-checkin-err' })
         }
-    }, [state.success, state.error])
+    }, [state.success, state.error, reducedMotion])
 
     const frontInputRef = useRef<HTMLInputElement>(null)
     const backInputRef = useRef<HTMLInputElement>(null)
@@ -149,28 +159,36 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
 
     if (state.success) {
         return (
-            <motion.div
-                initial={reducedMotion ? false : { scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={reducedMotion ? { duration: 0 } : springs.elastic}
-                className="bg-card border border-border rounded-2xl p-8 text-center"
-            >
-                <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle2 className="w-8 h-8" />
-                </div>
-                <h3 className="text-xl font-bold text-foreground mb-2">¡Check-in Enviado!</h3>
-                <p className="text-muted-foreground text-sm mb-6">
-                    Tu coach ha recibido tu actualización mensual.
-                </p>
-                <button
-                    type="button"
-                    onClick={() => router.push(`${base}/dashboard`)}
-                    className="px-6 py-2.5 rounded-xl font-semibold text-sm transition-all text-white w-full"
-                    style={{ backgroundColor: coachPrimaryColor }}
+            <>
+                <SuccessWaveOverlay
+                    show={showCelebration}
+                    message="¡Check-in enviado!"
+                    accentColor={coachPrimaryColor}
+                    onComplete={() => setShowCelebration(false)}
+                />
+                <motion.div
+                    initial={reducedMotion ? false : { scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={reducedMotion ? { duration: 0 } : springs.elastic}
+                    className="bg-card border border-border rounded-2xl p-8 text-center"
                 >
-                    Volver al Inicio
-                </button>
-            </motion.div>
+                    <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle2 className="w-8 h-8" />
+                    </div>
+                    <h3 className="text-xl font-bold text-foreground mb-2">¡Check-in Enviado!</h3>
+                    <p className="text-muted-foreground text-sm mb-6">
+                        Tu coach ha recibido tu actualización mensual.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => router.push(`${base}/dashboard`)}
+                        className="px-6 py-2.5 rounded-xl font-semibold text-sm transition-all text-white w-full"
+                        style={{ backgroundColor: coachPrimaryColor }}
+                    >
+                        Volver al Inicio
+                    </button>
+                </motion.div>
+            </>
         )
     }
 

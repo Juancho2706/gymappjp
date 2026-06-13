@@ -34,6 +34,10 @@ const DOW_OPTIONS: { value: string; label: string }[] = [
 
 interface Props {
   meal: MealDraft
+  /** Modo intercambios (módulo nutrition_exchanges): oculta la UI de alimentos por gramos. */
+  exchangeMode?: boolean
+  /** Contenido extra renderizado dentro del bloque (editor de porciones). */
+  extraContent?: React.ReactNode
   onUpdateName: (name: string) => void
   onUpdateDayOfWeek: (day: number | null) => void
   onUpdateNotes: (notes: string) => void
@@ -54,6 +58,8 @@ interface Props {
 
 export function MealBlock({
   meal,
+  exchangeMode = false,
+  extraContent,
   onUpdateName,
   onUpdateDayOfWeek,
   onUpdateNotes,
@@ -145,6 +151,10 @@ export function MealBlock({
         </div>
       </div>
 
+      {extraContent && <div className="mb-3">{extraContent}</div>}
+
+      {!exchangeMode && (
+      <>
       <div className="space-y-2 mb-3">
         <DndContext collisionDetection={closestCenter} onDragEnd={handleFoodDragEnd}>
           <SortableContext items={foodItemSortableIds} strategy={verticalListSortingStrategy}>
@@ -171,6 +181,8 @@ export function MealBlock({
           Comida vacía: agrega al menos 1 alimento para conservar consistencia del plan.
         </div>
       )}
+      </>
+      )}
 
       <div className="mb-3 space-y-1">
         <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
@@ -187,10 +199,12 @@ export function MealBlock({
         />
       </div>
 
-      <Button type="button" variant="outline" className="w-full gap-2 border-dashed" onClick={onOpenFoodSearch}>
-        <Plus className="h-4 w-4" />
-        Agregar alimento
-      </Button>
+      {!exchangeMode && (
+        <Button type="button" variant="outline" className="w-full gap-2 border-dashed" onClick={onOpenFoodSearch}>
+          <Plus className="h-4 w-4" />
+          Agregar alimento
+        </Button>
+      )}
     </div>
   )
 }

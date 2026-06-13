@@ -1,4 +1,6 @@
 import { supabase } from './supabase'
+// F6 (plan 04): el union de tiers vive en @eva/tiers (fuente única web+mobile). NO redeclarar acá.
+import type { SubscriptionTier } from '@eva/tiers'
 
 export interface CoachProfile {
   id: string
@@ -8,7 +10,9 @@ export interface CoachProfile {
   inviteCode: string | null
   primaryColor: string
   subscriptionStatus: string
-  subscriptionTier: 'free' | 'starter' | 'pro' | 'elite' | 'growth' | 'scale'
+  // LEGACY: 'growth'/'scale' fuera de venta (plan 04) pero SE MANTIENEN en el union (@eva/tiers) —
+  // parsean el valor crudo de DB de cuentas grandfathered + placeholders team/org_managed. NO borrar.
+  subscriptionTier: SubscriptionTier
   currentPeriodEnd: string | null
   trialEndsAt: string | null
   maxClients: number
@@ -18,6 +22,8 @@ export interface CoachProfile {
 
 function normalizeSubscriptionTier(raw: string | null | undefined): CoachProfile['subscriptionTier'] {
   const v = String(raw ?? 'starter').toLowerCase()
+  // LEGACY: reconoce los 6 valores del CHECK de DB (incluye growth/scale) para no degradar
+  // cuentas grandfathered a 'starter'. Fuera de venta, pero vivas en runtime (plan 04).
   if (v === 'free' || v === 'starter' || v === 'pro' || v === 'elite' || v === 'growth' || v === 'scale') return v
   return 'starter'
 }

@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     description: 'Términos y condiciones de uso de EVA, plataforma para coaches, entrenadores personales y organizaciones.',
 }
 
-const LAST_UPDATED = '22 de mayo de 2026'
+const LAST_UPDATED = '12 de junio de 2026'
 
 export default function AvisoLegalPage() {
   return (
@@ -100,20 +100,16 @@ export default function AvisoLegalPage() {
               </section>
 
               <section className="space-y-4">
-                <h2 className="text-2xl font-bold text-foreground">5.1 Plan Enterprise (Organizaciones)</h2>
+                <h2 className="text-2xl font-bold text-foreground">5.1 Planes empresariales (organizaciones y equipos)</h2>
                 <p className="leading-relaxed text-sm md:text-base">
-                  EVA ofrece un plan Enterprise para gyms, academias y organizaciones con múltiples coaches.
-                  Este plan incluye panel centralizado de administración, pool de alumnos compartido entre coaches,
-                  y datos completamente aislados por organización.
+                  EVA ofrece planes empresariales a medida para centros de salud, gimnasios, academias y equipos multidisciplinarios.
+                  El alcance, precio y nivel de servicio se pactan por contrato con cada organización.
+                  Para recibir una propuesta, escribe a{' '}
+                  <a href="mailto:contacto@eva-app.cl" className="text-cyan-400 hover:underline">contacto@eva-app.cl</a>.
                 </p>
                 <p className="leading-relaxed text-sm md:text-base">
-                  <strong>Precio base:</strong> $49.990 CLP/mes. Cada coach adicional sobre la cuota incluida: $9.990 CLP/mes.
-                  Incluye 30 días de prueba gratuita. Los precios no incluyen IVA cuando corresponda.
-                </p>
-                <p className="leading-relaxed text-sm md:text-base">
-                  Las organizaciones Enterprise firman un Contrato de Servicios adicional que complementa este Aviso Legal
-                  e incluye SLA específico, acuerdo de procesamiento de datos (DPA) y condiciones de terminación.
-                  En caso de conflicto, prevalece el Contrato Enterprise.
+                  Las organizaciones con contrato vigente se rigen por su Contrato de Servicios, que complementa este Aviso Legal.
+                  En caso de conflicto, prevalece el contrato firmado.
                 </p>
               </section>
 
@@ -182,7 +178,6 @@ export default function AvisoLegalPage() {
                     <div className="flex flex-wrap justify-center items-center gap-6 text-sm text-muted-foreground">
                         <Link href="/legal" className="transition-colors hover:text-foreground">Aviso Legal</Link>
                         <Link href="/privacidad" className="transition-colors hover:text-foreground">Privacidad</Link>
-                        <Link href="/legal/contrato-enterprise" className="transition-colors hover:text-foreground">Contrato Enterprise</Link>
                     </div>
                 </div>
             </div>

@@ -3,9 +3,10 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildOrgInactiveClientsEmail } from '@/lib/email/transactional-templates'
 
+// ARCHIVADO 2026-06: sin cron en vercel.json — ver docs/plans/estrategia/01-PLAN-archivado-enterprise.md
 function isAuthorized(req: Request) {
     const expected = process.env.CRON_SECRET
-    if (!expected) return true
+    if (!expected) return false
     const auth = req.headers.get('authorization') ?? ''
     return auth === `Bearer ${expected}`
 }

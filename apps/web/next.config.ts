@@ -44,21 +44,22 @@ const nextConfig: NextConfig = {
     dangerouslyAllowSVG: true,
     remotePatterns: [
       {
+        // Cubre /object/public/** y /object/sign/** (signed URLs de buckets privados: checkins, team-health-docs).
         protocol: 'https',
         hostname: 'jikjeokundmaafuytdcx.supabase.co',
-        pathname: '/storage/v1/object/public/**',
+        pathname: '/storage/v1/object/**',
       },
       {
         protocol: 'http',
         hostname: '127.0.0.1',
         port: '54321',
-        pathname: '/storage/v1/object/public/**',
+        pathname: '/storage/v1/object/**',
       },
       {
         protocol: 'http',
         hostname: 'localhost',
         port: '54321',
-        pathname: '/storage/v1/object/public/**',
+        pathname: '/storage/v1/object/**',
       },
       {
         protocol: 'https',

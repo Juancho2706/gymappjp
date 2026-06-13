@@ -10,7 +10,7 @@ import {
   type PricingTier,
 } from '../../_data/enterprise-pricing'
 import { SectionEyebrow } from '../atoms/SectionEyebrow'
-import { Reveal, RevealStagger, RevealItem } from '../atoms/Reveal'
+import { Reveal, RevealStagger, RevealItem } from '@/components/motion/Reveal'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 

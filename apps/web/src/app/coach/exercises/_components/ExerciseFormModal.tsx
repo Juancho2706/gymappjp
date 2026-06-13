@@ -41,6 +41,14 @@ const DIFFICULTY_OPTIONS = [
     { value: 'advanced', label: 'Avanzado' },
 ]
 
+/** Tipos polimórficos (specs/movida-entrenamiento): deciden los ejes del builder/alumno. */
+const EXERCISE_TYPE_OPTIONS = [
+    { value: 'strength', label: 'Fuerza (series × reps)' },
+    { value: 'cardio', label: 'Cardio (duración / distancia / zona FC)' },
+    { value: 'mobility', label: 'Movilidad (holds por lado)' },
+    { value: 'roller', label: 'Foam roller (duración o pasadas)' },
+]
+
 interface Props {
     open: boolean
     onClose: () => void
@@ -138,6 +146,27 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                         {state.fieldErrors?.muscle_group && (
                             <p className="text-xs text-destructive">{state.fieldErrors.muscle_group[0]}</p>
                         )}
+                    </div>
+
+                    {/* Tipo de ejercicio (polimórfico) */}
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium text-foreground">Tipo de ejercicio</label>
+                        <Select
+                            name="exercise_type"
+                            defaultValue={(exercise as Record<string, unknown> | undefined)?.exercise_type as string ?? 'strength'}
+                        >
+                            <SelectTrigger>
+                                <SelectValue placeholder="Fuerza (series × reps)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {EXERCISE_TYPE_OPTIONS.map(({ value, label }) => (
+                                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                            Define qué campos muestra el builder y la app del alumno.
+                        </p>
                     </div>
 
                     {/* Equipo + Dificultad */}

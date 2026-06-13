@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { createRawAdminClient } from '@/lib/supabase/admin-raw'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Tables } from '@/lib/database.types'
 import { revalidatePath } from 'next/cache'
 import { CreateClientSchema, UpdateClientDataSchema } from '@eva/schemas'
@@ -81,7 +81,8 @@ export async function createClientAction(
     if (countError) {
         return { error: 'No pudimos validar el límite de alumnos de tu plan.' }
     }
-    if (!scope.isEnterprise && (activeClientsCount ?? 0) >= maxClients) {
+    // Cap del tier personal: solo standalone (enterprise y team pagan centralizado).
+    if (!scope.isEnterprise && !scope.activeTeamId && (activeClientsCount ?? 0) >= maxClients) {
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
         const { subject, html } = buildUpgradeRequiredEmail({
             coachName: coach.full_name ?? 'Coach',
@@ -98,14 +99,17 @@ export async function createClientAction(
         }
     }
 
-    const admin = await createRawAdminClient()
+    // R3 (auditoria 2026-06-11): solo GoTrue Admin API necesita la service key; las queries
+    // PostgREST de esta accion pasan RLS del coach y van con el cliente user-scoped `supabase`.
+    const authAdmin = createServiceRoleClient()
     const emailSan = sanitizePlatformEmail(parsed.data.email)
-    const availability = await assertPlatformEmailAvailable(admin, parsed.data.email)
+    // RPC SECURITY DEFINER con GRANT a authenticated → el cliente user-scoped alcanza.
+    const availability = await assertPlatformEmailAvailable(supabase, parsed.data.email)
     if (!availability.ok) {
         return { error: availability.error }
     }
 
-    const { data: newAuthUser, error: authError } = await admin.auth.admin.createUser({
+    const { data: newAuthUser, error: authError } = await authAdmin.auth.admin.createUser({
         email: emailSan,
         password: parsed.data.temp_password,
         email_confirm: true,
@@ -118,7 +122,8 @@ export async function createClientAction(
         return { error: `Error al crear el usuario: ${authError.message}` }
     }
 
-    const { error: dbError } = await admin.from('clients').insert({
+    // INSERT user-scoped: el WITH CHECK de RLS (standalone/team/org-coach) es el techo real.
+    const { error: dbError } = await supabase.from('clients').insert({
         id: newAuthUser.user.id,
         coach_id: coach.id,
         full_name: parsed.data.full_name,
@@ -128,10 +133,12 @@ export async function createClientAction(
         force_password_change: true,
         age_confirmed_at: new Date().toISOString(),
         org_id: scope.orgId,
+        // Contexto team: el alumno nace EN el pool (todo el equipo lo ve; consent gate en /t).
+        team_id: scope.activeTeamId,
     })
 
     if (dbError) {
-        await admin.auth.admin.deleteUser(newAuthUser.user.id)
+        await authAdmin.auth.admin.deleteUser(newAuthUser.user.id)
         if (dbError.code === '23505') {
             return { error: 'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.' }
         }
@@ -144,26 +151,49 @@ export async function createClientAction(
         clientId: newAuthUser.user.id,
         coachId: coach.id,
         orgId: scope.orgId,
+        teamId: scope.activeTeamId,
     })
     if (!identity.ok) console.error('createClientIdentity (non-fatal):', identity.error)
 
     if (scope.orgId) {
-        const { error: assignErr } = await admin.from('coach_client_assignments').insert({
+        // R1 (auditoria 2026-06-11): no existe policy de INSERT en coach_client_assignments para
+        // coaches (a proposito: seria escalada horizontal) y el admin client con cookies corre
+        // como el coach => RLS bloqueaba este insert en silencio y el alumno quedaba invisible.
+        // Service role REAL acotado (org y coach ya validados por resolveCoachScope) y FATAL con
+        // rollback: un alumno enterprise sin asignacion es un alumno huerfano.
+        const serviceDb = createServiceRoleClient()
+        const { error: assignErr } = await serviceDb.from('coach_client_assignments').insert({
             org_id: scope.orgId,
             coach_id: coach.id,
             client_id: newAuthUser.user.id,
             assigned_by: coachUser.id,
         })
         if (assignErr) {
-            console.error('Failed to create coach_client_assignment (non-fatal):', assignErr)
+            console.error('Failed to create coach_client_assignment (rolling back):', assignErr)
+            await serviceDb.from('clients').delete().eq('id', newAuthUser.user.id)
+            await authAdmin.auth.admin.deleteUser(newAuthUser.user.id)
+            return { error: 'No se pudo asignar el alumno a tu cuenta. Intenta de nuevo.' }
         }
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
-    const publicIdentifier = getCoachPublicIdentifier(coach)
-    const loginUrl = appUrl ? `${appUrl}/c/${publicIdentifier}/login` : `https://app.tu-dominio.com/c/${publicIdentifier}/login`
+    // Contexto team: el alumno entra por /t/[team]/login con la marca del TEAM (no la personal).
+    let loginPath: string
+    let emailBrandName = coach.brand_name
+    if (scope.activeTeamId) {
+        const { data: team } = await supabase
+            .from('teams')
+            .select('slug, name')
+            .eq('id', scope.activeTeamId)
+            .maybeSingle()
+        loginPath = `/t/${team?.slug ?? ''}/login`
+        emailBrandName = team?.name ?? coach.brand_name
+    } else {
+        loginPath = `/c/${getCoachPublicIdentifier(coach)}/login`
+    }
+    const loginUrl = appUrl ? `${appUrl}${loginPath}` : `https://app.tu-dominio.com${loginPath}`
     const welcomeEmail = buildClientWelcomeEmail({
-        brandName: coach.brand_name,
+        brandName: emailBrandName,
         coachName: coach.full_name,
         clientName: parsed.data.full_name,
         loginUrl,
@@ -320,12 +350,12 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
 
     if (!client) return { error: 'Alumno no encontrado.' }
 
-    const admin = await createRawAdminClient()
-
-    const { data: coachProfile } = await admin.from('coaches').select('id').eq('id', clientId).maybeSingle()
+    // Edge coach-como-cliente: el SELECT en coaches es publico y el DELETE pasa la RLS propia
+    // del coach → cliente user-scoped. Solo deleteUser (GoTrue Admin) exige la service key.
+    const { data: coachProfile } = await supabase.from('coaches').select('id').eq('id', clientId).maybeSingle()
 
     if (coachProfile) {
-        let deleteQuery = admin
+        let deleteQuery = supabase
             .from('clients')
             .delete()
             .eq('id', clientId)
@@ -334,7 +364,8 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
         const { error: delErr } = await deleteQuery
         if (delErr) return { error: delErr.message }
     } else {
-        const { error } = await admin.auth.admin.deleteUser(clientId)
+        const authAdmin = createServiceRoleClient()
+        const { error } = await authAdmin.auth.admin.deleteUser(clientId)
         if (error) return { error: error.message }
     }
 
@@ -361,8 +392,9 @@ export async function resetClientPasswordAction(clientId: string): Promise<{ err
 
     const tempPassword = Math.floor(100000 + Math.random() * 900000).toString()
 
-    const admin = await createRawAdminClient()
-    const { error: authError } = await admin.auth.admin.updateUserById(clientId, {
+    // GoTrue Admin API: aqui si se necesita (y se tiene) admin real.
+    const authAdmin = createServiceRoleClient()
+    const { error: authError } = await authAdmin.auth.admin.updateUserById(clientId, {
         password: tempPassword,
     })
 
@@ -398,8 +430,7 @@ export async function archiveClientAction(clientId: string): Promise<{ error?: s
 
     if (!client) return { error: 'Alumno no encontrado.' }
 
-    const admin = await createRawAdminClient()
-    let archiveQuery = admin
+    let archiveQuery = supabase
         .from('clients')
         .update({ is_archived: true })
         .eq('id', clientId)
@@ -469,8 +500,7 @@ export async function unarchiveClientAction(clientId: string): Promise<{ error?:
         return { error: `Alcanzaste el límite de ${maxClients} alumnos activos. Archiva otro alumno antes de reactivar este.` }
     }
 
-    const admin = await createRawAdminClient()
-    let unarchiveQuery = admin
+    let unarchiveQuery = supabase
         .from('clients')
         .update({ is_archived: false })
         .eq('id', clientId)
@@ -508,9 +538,7 @@ export async function toggleClientStatusAction(clientId: string, isActive: boole
     const scope = await getCoachClientScope(supabase, coachUser.id)
     if (!scope.ok) return { error: scope.error }
 
-    const admin = await createRawAdminClient()
-
-    let statusQuery = admin
+    let statusQuery = supabase
         .from('clients')
         .update({ is_active: isActive })
         .eq('id', clientId)

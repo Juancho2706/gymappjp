@@ -2,6 +2,18 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
+import { listLive } from '@/infrastructure/db/coach-addons.repository'
+import {
+    getCompositeAmountClp,
+    getAddonCycleAmountClp,
+    toBillableAddons,
+} from '@/services/billing/addons.service'
+import { getTierPriceClp, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
+
+function normalizeCycle(raw: string | null): BillingCycle {
+    if (raw === 'monthly' || raw === 'quarterly' || raw === 'annual') return raw
+    return 'monthly'
+}
 
 export async function GET() {
     const supabase = await createClient()
@@ -41,5 +53,29 @@ export async function GET() {
         .order('created_at', { ascending: false })
         .limit(50)
 
-    return NextResponse.json({ coach, events: events ?? [] })
+    // Add-ons del coach (RLS SELECT propio: el client user-scoped solo ve sus filas) +
+    // billing compuesto. EL ÚNICO origen de montos para la UI — la página nunca calcula precios.
+    // tolerante a fallos: si la lectura de add-ons falla, el resto de la respuesta sigue viva.
+    const tier = coach.subscription_tier as SubscriptionTier
+    const cycle = normalizeCycle(coach.billing_cycle)
+    let addons: Awaited<ReturnType<typeof listLive>> = []
+    try {
+        addons = await listLive(supabase, user.id)
+    } catch {
+        addons = []
+    }
+    const billable = toBillableAddons(addons)
+    const baseClp = getTierPriceClp(tier, cycle)
+    const addonsClp = billable.reduce(
+        (sum, a) => sum + getAddonCycleAmountClp(a.priceClpMensual, cycle),
+        0
+    )
+    const totalClp = getCompositeAmountClp(tier, cycle, billable)
+
+    return NextResponse.json({
+        coach,
+        events: events ?? [],
+        addons,
+        billing: { baseClp, addonsClp, totalClp },
+    })
 }

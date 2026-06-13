@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     description: 'Política de privacidad de EVA conforme a la Ley 21.719 de Chile.',
 }
 
-const LAST_UPDATED = '22 de mayo de 2026'
+const LAST_UPDATED = '12 de junio de 2026'
 const CONTACT_EMAIL = 'privacidad@eva-app.cl'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -180,9 +180,9 @@ export default function PrivacidadPage() {
                                 </p>
                             </Section>
 
-                            <Section title="11. Plan Enterprise y organizaciones">
+                            <Section title="11. Organizaciones y equipos con contrato empresarial">
                                 <p>
-                                    Las organizaciones (gyms, academias) que contratan el plan Enterprise actúan como{' '}
+                                    Las organizaciones que contratan un plan empresarial a medida actúan como{' '}
                                     <strong className="text-foreground">responsables del tratamiento</strong> de los datos personales
                                     de sus alumnos y coaches. EVA actúa como <strong className="text-foreground">encargado del tratamiento</strong>,
                                     procesando datos únicamente por instrucción de la organización.
@@ -193,8 +193,8 @@ export default function PrivacidadPage() {
                                     puede ver datos de otra.
                                 </p>
                                 <p>
-                                    El contrato enterprise firmado con cada organización incluye un Acuerdo de Procesamiento
-                                    de Datos (DPA) que formaliza estos roles y obligaciones.
+                                    El contrato firmado con cada organización incluye un Acuerdo de Procesamiento
+                                    de Datos (DPA) que formaliza estos roles y obligaciones conforme a la Ley 21.719.
                                 </p>
                             </Section>
 

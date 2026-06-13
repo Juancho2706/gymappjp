@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useTransition } from "react";
 import Image from "next/image";
 import {
   Dialog,
@@ -9,9 +9,10 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog";
-import { Dumbbell, Search, Play, X, Info } from "lucide-react";
+import { Dumbbell, Search, X, Info, Loader2 } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
 import { filterExercises } from "@/lib/utils";
+import { getExerciseInstructions } from "./_actions/exercises.actions";
 
 type Exercise = Tables<"exercises">;
 
@@ -20,17 +21,143 @@ interface Props {
   primaryColor: string;
 }
 
+/** Cuántas tarjetas se montan por tanda (evita renderizar 800+ <Image> de golpe). */
+const PAGE_SIZE = 48;
+
+/** Image that fades in once the GIF / next-image has finished loading. */
+function FadeImage({ src, alt }: { src: string; alt: string }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      fill
+      sizes="(max-width: 768px) 45vw, 200px"
+      loading="lazy"
+      onLoad={() => setLoaded(true)}
+      className={`object-cover group-hover:scale-110 transition-transform duration-500 transition-opacity ${
+        loaded ? "opacity-100" : "opacity-0"
+      }`}
+      unoptimized
+    />
+  );
+}
+
+/** A single exercise card: thumbnail + muscle group + name. */
+function ExerciseCard({
+  ex,
+  primaryColor,
+  onSelect,
+}: {
+  ex: Exercise;
+  primaryColor: string;
+  onSelect: () => void;
+}) {
+  const renderThumb = () => {
+    if (ex.gif_url) {
+      return <FadeImage src={ex.gif_url} alt={ex.name} />;
+    }
+
+    const url = ex.video_url;
+    const isYouTube = url?.includes("youtube.com") || url?.includes("youtu.be");
+    const getYouTubeId = (u: string) => {
+      const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
+      return match ? match[1] : null;
+    };
+
+    if (isYouTube) {
+      const ytId = getYouTubeId(url!);
+      return ytId ? (
+        <FadeImage
+          src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
+          alt={ex.name}
+        />
+      ) : (
+        <Dumbbell className="w-6 h-6 text-muted-foreground/50" />
+      );
+    }
+
+    if (url) {
+      return <FadeImage src={url} alt={ex.name} />;
+    }
+
+    return <Dumbbell className="w-6 h-6 text-muted-foreground/50" />;
+  };
+
+  return (
+    <div
+      onClick={onSelect}
+      className="bg-card border border-border rounded-2xl p-3 flex gap-4 items-center cursor-pointer hover:border-border/80 hover:bg-muted/30 transition-all shadow-sm group animate-in fade-in duration-300"
+    >
+      <div className="w-16 h-16 rounded-xl bg-muted overflow-hidden flex-shrink-0 relative flex items-center justify-center">
+        {renderThumb()}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p
+          className="text-xs font-bold uppercase tracking-wider mb-1"
+          style={{ color: primaryColor }}
+        >
+          {ex.muscle_group}
+        </p>
+        <h3 className="font-semibold text-foreground leading-tight">
+          {ex.name}
+        </h3>
+      </div>
+      <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors mr-1">
+        <Info className="w-4 h-4" />
+      </div>
+    </div>
+  );
+}
+
 export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
   const [search, setSearch] = useState("");
   const [selectedMuscle, setSelectedMuscle] = useState<string>("Todos");
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(
     null,
   );
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  // Detalle on-demand (instrucciones) — el listado no las trae para no inflar el payload.
+  const [instructions, setInstructions] = useState<string[] | null>(null);
+  const [loadingDetail, startDetail] = useTransition();
 
   const muscleGroups = ["Todos", ...Object.keys(byMuscle).sort()];
-  // Flatten and filter exercises
   const allExercises = Object.values(byMuscle).flat();
   const filteredExercises = filterExercises(allExercises, search, selectedMuscle);
+  const displayed = filteredExercises.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredExercises.length;
+
+  // Reset de la paginación cuando cambia el filtro/búsqueda.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [search, selectedMuscle]);
+
+  // Infinite scroll: carga otra tanda cuando el sentinel entra en viewport.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((c) => c + PAGE_SIZE);
+        }
+      },
+      { rootMargin: "600px 0px" },
+    );
+    obs.observe(node);
+    return () => obs.disconnect();
+  }, [hasMore, displayed.length]);
+
+  const openExercise = (ex: Exercise) => {
+    setSelectedExercise(ex);
+    setInstructions(null);
+    startDetail(async () => {
+      const detail = await getExerciseInstructions(ex.id);
+      setInstructions(detail?.instructions ?? []);
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -76,77 +203,13 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
 
       {/* Results Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredExercises.map((ex) => (
-          <div
+        {displayed.map((ex) => (
+          <ExerciseCard
             key={ex.id}
-            onClick={() => setSelectedExercise(ex)}
-            className="bg-card border border-border rounded-2xl p-3 flex gap-4 items-center cursor-pointer hover:border-border/80 hover:bg-muted/30 transition-all shadow-sm group"
-          >
-            <div className="w-16 h-16 rounded-xl bg-muted overflow-hidden flex-shrink-0 relative flex items-center justify-center">
-              {(() => {
-                // If it has a gif, show it immediately without checking youtube logic
-                if (ex.gif_url) {
-                  return (
-                    <Image
-                      src={ex.gif_url}
-                      alt={ex.name}
-                      fill
-                      className="object-cover group-hover:scale-110 transition-transform duration-500"
-                      unoptimized
-                    />
-                  );
-                }
-
-                const url = ex.video_url;
-                const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be');
-                const getYouTubeId = (u: string) => {
-                  const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
-                  return match ? match[1] : null;
-                };
-
-                if (isYouTube) {
-                  const ytId = getYouTubeId(url!);
-                  return ytId ? (
-                    <Image
-                      src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
-                      alt={ex.name}
-                      fill
-                      className="object-cover group-hover:scale-110 transition-transform duration-500"
-                      unoptimized
-                    />
-                  ) : <Dumbbell className="w-6 h-6 text-muted-foreground/50" />;
-                }
-
-                if (url) {
-                  return (
-                    <Image
-                      src={url}
-                      alt={ex.name}
-                      fill
-                      className="object-cover group-hover:scale-110 transition-transform duration-500"
-                      unoptimized
-                    />
-                  );
-                }
-
-                return <Dumbbell className="w-6 h-6 text-muted-foreground/50" />;
-              })()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p
-                className="text-xs font-bold uppercase tracking-wider mb-1"
-                style={{ color: primaryColor }}
-              >
-                {ex.muscle_group}
-              </p>
-              <h3 className="font-semibold text-foreground leading-tight">
-                {ex.name}
-              </h3>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors mr-1">
-              <Info className="w-4 h-4" />
-            </div>
-          </div>
+            ex={ex}
+            primaryColor={primaryColor}
+            onSelect={() => openExercise(ex)}
+          />
         ))}
 
         {filteredExercises.length === 0 && (
@@ -159,14 +222,27 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
         )}
       </div>
 
+      {/* Infinite-scroll sentinel + contador */}
+      {hasMore && (
+        <div ref={sentinelRef} className="flex flex-col items-center gap-2 py-6">
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground/50" />
+          <button
+            onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+            className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+          >
+            Ver más ({filteredExercises.length - displayed.length} restantes)
+          </button>
+        </div>
+      )}
+
       {/* Detail Modal */}
       <Dialog
         open={!!selectedExercise}
         onOpenChange={(open) => !open && setSelectedExercise(null)}
       >
-        <DialogContent 
+        <DialogContent
           showCloseButton={false}
-          className="bg-card border-border rounded-3xl overflow-y-auto custom-scrollbar p-0 max-w-md w-[90vw] max-h-[85vh] focus:outline-none"
+          className="bg-card border-border rounded-3xl overflow-y-auto custom-scrollbar p-0 max-w-md w-[90vw] max-h-[85dvh] focus:outline-none"
         >
           {selectedExercise && (
             <>
@@ -178,6 +254,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                         src={selectedExercise.gif_url}
                         alt={selectedExercise.name}
                         fill
+                        sizes="(max-width: 768px) 100vw, 50vh"
                         className="object-contain"
                         unoptimized
                       />
@@ -217,7 +294,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                 if (selectedExercise.video_url) {
                   const urlLower = selectedExercise.video_url.toLowerCase();
                   const isMp4 = urlLower.includes('.mp4') || urlLower.includes('.mov') || urlLower.includes('.webm') || (urlLower.includes('supabase.co/storage') && !urlLower.includes('.gif') && !urlLower.includes('.jpg') && !urlLower.includes('.png'));
-                  
+
                   if (isMp4) {
                     return (
                       <div className="sticky top-0 z-10 relative w-full h-48 md:h-64 shrink-0 bg-white flex items-center justify-center border-b border-border/50">
@@ -239,6 +316,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                         src={selectedExercise.video_url}
                         alt={selectedExercise.name}
                         fill
+                        sizes="(max-width: 768px) 100vw, 50vh"
                         className="object-contain"
                         unoptimized
                       />
@@ -266,14 +344,18 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                   </p>
                 </DialogHeader>
 
-                {selectedExercise.instructions &&
-                selectedExercise.instructions.length > 0 ? (
+                {loadingDetail ? (
+                  <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Cargando instrucciones…
+                  </div>
+                ) : instructions && instructions.length > 0 ? (
                   <div className="space-y-4 pr-2">
                     <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                       <Info className="w-4 h-4" /> Instrucciones paso a paso
                     </h4>
                     <ol className="space-y-3">
-                      {selectedExercise.instructions.map((step, i) => (
+                      {instructions.map((step, i) => (
                         <li
                           key={i}
                           className="flex gap-3 text-sm text-foreground/80"

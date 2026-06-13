@@ -13,6 +13,13 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './apps/web/src'),
       '@eva/brand-kit': path.resolve(__dirname, './packages/brand-kit/index.ts'),
+      // Subpath ANTES del paquete raiz (resolucion por prefijo).
+      '@eva/schemas/screening': path.resolve(__dirname, './packages/schemas/screening.ts'),
+      '@eva/schemas/bodycomp': path.resolve(__dirname, './packages/schemas/bodycomp.ts'),
+      '@eva/schemas': path.resolve(__dirname, './packages/schemas/index.ts'),
+      '@eva/calc': path.resolve(__dirname, './packages/calc/index.ts'),
+      '@eva/tiers': path.resolve(__dirname, './packages/tiers/index.ts'),
+      '@eva/module-catalog': path.resolve(__dirname, './packages/module-catalog/catalog.ts'),
       // `server-only` throws outside an RSC; neutralize it for unit tests that transitively
       // import server modules. Build-time boundary is still enforced by Next.js.
       'server-only': path.resolve(__dirname, './vitest.server-only-stub.ts'),

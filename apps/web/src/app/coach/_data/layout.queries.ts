@@ -37,3 +37,22 @@ export const getCoachEnterpriseContext = cache(async (coach: {
         logoUrl: organization.logo_url ?? null,
     }
 })
+
+/** Marca del TEAM para el shell del coach en contexto coach_team (espejo de getCoachEnterpriseContext). */
+export const getCoachTeamContext = cache(async (teamId: string | null) => {
+    if (!teamId) return null
+    const supabase = await createClient()
+    const { data: team } = await supabase
+        .from('teams')
+        .select('name, slug, primary_color, logo_url')
+        .eq('id', teamId)
+        .is('deleted_at', null)
+        .maybeSingle()
+    if (!team?.name) return null
+    return {
+        teamName: team.name,
+        teamSlug: team.slug,
+        primaryColor: team.primary_color ?? null,
+        logoUrl: team.logo_url ?? null,
+    }
+})

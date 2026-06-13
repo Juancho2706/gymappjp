@@ -1,14 +1,15 @@
 import { getCheckInHistory30Days } from '../_data/dashboard.queries'
-import { getClientProfile } from '../_data/dashboard.queries'
 import { WeightProgressChart } from './weight/WeightProgressChart'
 
 export async function WeightFullChartSection({ userId, coachSlug }: { userId: string; coachSlug: string }) {
-    const [rows, { client }] = await Promise.all([getCheckInHistory30Days(userId), getClientProfile(userId)])
-    const coach = client?.coaches
-    const branding = Array.isArray(coach) ? coach[0] : coach
+    const rows = await getCheckInHistory30Days(userId)
     const data = rows
         .filter((r) => r.weight != null)
-        .map((r) => ({ date: r.created_at, weight: r.weight as number }))
+        // Eje X por el dia de medicion (`date`), no por el instante UTC de inserción (corrige off-by-one TZ).
+        // `date` puede traer componente horario (timestamp) -> normalizar a YYYY-MM-DD y anclar a mediodía
+        // local (`T12:00:00`) para que el chart no corra el día al parsear (`new Date`).
+        .map((r) => ({ date: `${r.date.slice(0, 10)}T12:00:00`, weight: r.weight as number }))
         .reverse()
-    return <WeightProgressChart data={data} primaryColor={branding?.primary_color ?? undefined} coachSlug={coachSlug} />
+    // El color del trazo lo resuelve el chart vía `var(--theme-primary)` (branding por coach del layout).
+    return <WeightProgressChart data={data} coachSlug={coachSlug} />
 }

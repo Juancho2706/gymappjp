@@ -130,10 +130,12 @@ export default async function NutritionPlansPage() {
   const supabase = await createClient()
   const workspace = await resolvePreferredWorkspace(supabase, coachId)
   const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
+  const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
+  const scope = { orgId, activeTeamId }
   const [templates, activePlans, coachClientsRaw, foodLib, orgTemplates] = await Promise.all([
     getCoachTemplates(coachId, orgId),
-    getActivePlansBoardData(coachId, orgId),
-    getCoachClients(coachId, orgId),
+    getActivePlansBoardData(coachId, scope),
+    getCoachClients(coachId, scope),
     getFoodLibrary(coachId, { page: 0, pageSize: 120, orgId }),
     orgId ? getCoachOrgNutritionTemplates(orgId) : Promise.resolve([]),
   ])

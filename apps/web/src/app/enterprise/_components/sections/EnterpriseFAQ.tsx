@@ -5,7 +5,7 @@ import { ChevronDown } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FAQS } from '../../_data/enterprise-content'
 import { SectionEyebrow } from '../atoms/SectionEyebrow'
-import { Reveal } from '../atoms/Reveal'
+import { Reveal } from '@/components/motion/Reveal'
 import { cn } from '@/lib/utils'
 
 export function EnterpriseFAQ() {

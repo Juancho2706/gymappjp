@@ -12,8 +12,10 @@ export type WorkspaceType =
     | 'coach_standalone'
     | 'enterprise_coach'
     | 'enterprise_staff'
+    | 'coach_team'
     | 'student_standalone'
     | 'student_enterprise'
+    | 'student_team'
 
 export type EnterpriseStaffRole = 'org_owner' | 'org_admin' | 'ops' | 'analyst' | 'brand_manager'
 
@@ -38,6 +40,12 @@ export type ActiveWorkspace =
         role: EnterpriseStaffRole
     }
     | {
+        type: 'coach_team'
+        userId: string
+        coachId: string
+        teamId: string
+    }
+    | {
         type: 'student_standalone'
         userId: string
         clientId: string
@@ -49,6 +57,12 @@ export type ActiveWorkspace =
         clientId: string
         orgId: string
         coachId: string | null
+    }
+    | {
+        type: 'student_team'
+        userId: string
+        clientId: string
+        teamId: string
     }
 
 export type WorkspaceSummary = ActiveWorkspace & {

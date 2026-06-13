@@ -70,6 +70,12 @@ export async function sendPushToClient(clientId: string, payload: PushPayload): 
     ])
 }
 
+/**
+ * OJO multi-tenant: filtra SOLO por coach_id ⇒ válido para coaches standalone. Para coaches de
+ * org (clients por org_id+assignments) o de team (clients por team_id) devuelve 0 — si se agrega
+ * un caller en esos contextos, aceptar scope {orgId|teamId} y resolver los clientes acorde.
+ * Hoy SIN callers (mantenida por compatibilidad de API).
+ */
 export async function sendPushToCoachClients(coachId: string, payload: PushPayload): Promise<void> {
     const admin = createServiceRoleClient()
     const { data: clients } = await admin
