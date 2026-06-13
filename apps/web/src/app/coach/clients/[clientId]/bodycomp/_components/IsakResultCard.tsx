@@ -2,8 +2,8 @@
 
 import { GlassCard } from '@/components/ui/glass-card'
 import { cn } from '@/lib/utils'
-import type { IsakMetricsView } from './bodycompView'
-import { formatKg, formatPct } from './bodycompView'
+import type { IsakMetricsView } from '@/lib/bodycomp/view-helpers'
+import { formatKg, formatPct } from '@/lib/bodycomp/view-helpers'
 
 const COMPONENT_LABELS: { key: keyof IsakMetricsView['fractionation']; label: string }[] = [
     { key: 'muscle', label: 'Muscular' },

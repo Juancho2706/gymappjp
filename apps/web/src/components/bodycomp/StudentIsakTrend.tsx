@@ -15,7 +15,7 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
-import { readIsakMetrics, type IsakMetricsView } from '@/app/coach/clients/[clientId]/bodycomp/_components/bodycompView'
+import { readIsakMetrics, type IsakMetricsView } from '@/lib/bodycomp/view-helpers'
 
 type SeriesKey = 'bodyFat' | 'muscle' | 'adipose'
 

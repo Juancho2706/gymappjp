@@ -1,9 +1,9 @@
 'use client'
 
-import { useActionState, useState } from 'react'
+import { useActionState, useState, useTransition } from 'react'
 import { useFormStatus } from 'react-dom'
-import { Loader2, ShieldCheck } from 'lucide-react'
-import { grantTeamConsentAction, type TeamConsentState } from './_actions/consent.actions'
+import { Loader2, ShieldCheck, ShieldOff } from 'lucide-react'
+import { grantTeamConsentAction, revokeTeamConsentAction, type TeamConsentState } from './_actions/consent.actions'
 import { cn } from '@/lib/utils'
 
 const initialState: TeamConsentState = {}
@@ -89,5 +89,53 @@ export default function ConsentForm({ teamSlug, primaryColor, brandName }: Props
                 <ShieldCheck className="w-3.5 h-3.5" /> Tus datos están protegidos y son confidenciales.
             </p>
         </form>
+    )
+}
+
+/**
+ * Boton de revocacion del consentimiento de pool (Ley 21.719) usado en /t/[team_slug]/perfil.
+ * Confirma antes de revocar; al exito la accion redirige (has_pool_consent=false → proxy /t
+ * devuelve al alumno a la pantalla de consentimiento).
+ */
+export function RevokeConsentButton({ teamSlug }: { teamSlug: string }) {
+    const [error, setError] = useState<string | null>(null)
+    const [isPending, startTransition] = useTransition()
+
+    function handleRevoke() {
+        if (!window.confirm('¿Seguro que quieres revocar tu consentimiento? Perderás el acceso a la plataforma del equipo hasta que lo autorices de nuevo.')) return
+        setError(null)
+        const formData = new FormData()
+        formData.set('team_slug', teamSlug)
+        startTransition(async () => {
+            const res = await revokeTeamConsentAction({}, formData)
+            if (res?.error) setError(res.error)
+            // En exito la accion hace redirect server-side; no hay retorno.
+        })
+    }
+
+    return (
+        <div>
+            <button
+                type="button"
+                onClick={handleRevoke}
+                disabled={isPending}
+                className="w-full h-12 rounded-xl border border-red-500/30 text-base font-semibold text-red-600 transition-colors hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed dark:text-red-400 flex items-center justify-center gap-2"
+            >
+                {isPending ? (
+                    <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Revocando...
+                    </>
+                ) : (
+                    <>
+                        <ShieldOff className="w-4 h-4" /> Revocar consentimiento
+                    </>
+                )}
+            </button>
+            {error && (
+                <div className="mt-3 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+                    {error}
+                </div>
+            )}
+        </div>
     )
 }

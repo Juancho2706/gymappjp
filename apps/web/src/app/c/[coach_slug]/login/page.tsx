@@ -5,7 +5,7 @@ import ClientLoginForm from './ClientLoginForm'
 import type { Metadata } from 'next'
 import { InstallPrompt } from '@/components/InstallPrompt'
 import { BRAND_APP_ICON } from '@/lib/brand-assets'
-import { LoginEntrance } from './_components/LoginEntrance'
+import { LoginEntrance, LoginEntranceItem } from './_components/LoginEntrance'
 import { getClientLoginCoach, getClientLoginMetadataCoach } from './_data/login.queries'
 
 interface Props {
@@ -64,7 +64,7 @@ export default async function ClientLoginPage({ params }: Props) {
 
             <LoginEntrance className="relative z-10 w-full max-w-sm">
                 {/* Coach brand header */}
-                <LoginEntrance.Item className="text-center mb-7">
+                <LoginEntranceItem className="text-center mb-7">
                     <div className="flex justify-center mb-4">
                         {coach.logo_url ? (
                             <div
@@ -97,25 +97,25 @@ export default async function ClientLoginPage({ params }: Props) {
                     <p className="mt-1.5 text-sm text-muted-foreground max-w-[260px] mx-auto leading-relaxed">
                         {coach.welcome_message?.trim() || 'Tu plataforma de entrenamiento personalizado'}
                     </p>
-                </LoginEntrance.Item>
+                </LoginEntranceItem>
 
                 {/* Login form */}
-                <LoginEntrance.Item>
+                <LoginEntranceItem>
                     <ClientLoginForm
                         coachSlug={coach_slug}
                         primaryColor={coach.primary_color}
                         brandName={coach.brand_name}
                         logoUrl={coach.logo_url}
                     />
-                </LoginEntrance.Item>
+                </LoginEntranceItem>
 
                 {/* Powered by EVA */}
-                <LoginEntrance.Item>
+                <LoginEntranceItem>
                     <p className="mt-5 text-center text-xs text-muted-foreground/60">
                         Impulsado por{' '}
                         <span className="font-semibold text-muted-foreground">EVA</span>
                     </p>
-                </LoginEntrance.Item>
+                </LoginEntranceItem>
             </LoginEntrance>
 
             <InstallPrompt brandName={coach.brand_name} />

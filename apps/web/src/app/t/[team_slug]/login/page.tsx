@@ -34,7 +34,7 @@ export default async function TeamLoginPage({ params }: Props) {
     if (!team) notFound()
 
     return (
-        <div className="relative min-h-dvh flex flex-col items-center justify-center p-4 pt-safe bg-background overflow-hidden">
+        <div className="relative min-h-dvh flex flex-col items-center justify-center p-4 pt-safe pb-safe bg-background overflow-hidden">
             <div
                 className="fixed inset-0 pointer-events-none"
                 aria-hidden="true"

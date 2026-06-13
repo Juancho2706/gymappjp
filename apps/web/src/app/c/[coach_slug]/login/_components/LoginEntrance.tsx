@@ -28,7 +28,14 @@ export function LoginEntrance({ children, className }: { children: ReactNode; cl
     )
 }
 
-function Item({ children, className }: { children: ReactNode; className?: string }) {
+/**
+ * Staggered child of <LoginEntrance>. Exported as a standalone named component
+ * (NOT a `LoginEntrance.Item` static prop): the login page is an RSC, and static
+ * properties on a client component are lost across the server/client boundary
+ * (the server only sees a client-reference stub), so `LoginEntrance.Item` would
+ * be `undefined` at render. Separate exports each cross the boundary cleanly.
+ */
+export function LoginEntranceItem({ children, className }: { children: ReactNode; className?: string }) {
     const reduce = useReducedMotion()
     if (reduce) {
         return <div className={className}>{children}</div>
@@ -43,5 +50,3 @@ function Item({ children, className }: { children: ReactNode; className?: string
         </motion.div>
     )
 }
-
-LoginEntrance.Item = Item

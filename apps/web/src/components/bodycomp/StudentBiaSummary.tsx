@@ -5,7 +5,7 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
-import { deltaVsPrev, deviceLabel, readBiaMetrics } from '@/app/coach/clients/[clientId]/bodycomp/_components/bodycompView'
+import { deltaVsPrev, deviceLabel, readBiaMetrics } from '@/lib/bodycomp/view-helpers'
 import type { BiaMetrics } from '@/domain/bodycomp'
 import { CountUpValue } from './CountUpValue'
 

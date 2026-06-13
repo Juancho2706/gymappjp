@@ -15,7 +15,8 @@ export async function resetPasswordAction(
     const raw = {
         password: formData.get('password') as string,
         confirm_password: formData.get('confirm_password') as string,
-        coach_slug: formData.get('coach_slug') as string | null
+        coach_slug: formData.get('coach_slug') as string | null,
+        team_slug: formData.get('team_slug') as string | null,
     }
 
     const parsed = ResetPasswordSchema.safeParse(raw)
@@ -30,6 +31,11 @@ export async function resetPasswordAction(
         return { error: 'Error al actualizar la contraseña. El link puede haber expirado.' }
     }
 
-    const redirectPath = raw.coach_slug ? `/c/${raw.coach_slug}/login` : '/login'
+    // El alumno de team vuelve a su login de pool white-label; el standalone al /c del coach.
+    const redirectPath = raw.team_slug
+        ? `/t/${raw.team_slug}/login`
+        : raw.coach_slug
+            ? `/c/${raw.coach_slug}/login`
+            : '/login'
     redirect(redirectPath)
 }

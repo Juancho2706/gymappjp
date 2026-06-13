@@ -1,17 +1,25 @@
 ﻿/**
  * EVA PWA Service Worker
  * - /coach + /api: pass-through
- * - /c/ navigation: network-first + cached page + offline fallback
- * - /c/ data/resources: stale-while-revalidate
+ * - /c/ + /t/ navigation: network-first + cached page + offline fallback
+ * - /c/ + /t/ data/resources: stale-while-revalidate
  * - static assets/images/fonts: cache-first
+ *
+ * /t/ (team/pool students — Movida) shares the same offline strategy as /c/.
+ * The proxy rewrites /t/...→/c/... server-side, but the browser URL and the SW
+ * both stay at /t/..., so the SW must match both prefixes. Cache keys are
+ * per-URL, so /c and /t never bleed across tenants.
  */
-const SHELL_CACHE = 'eva-shell-v4';
-const NAV_CACHE = 'eva-nav-v3';
-const STATIC_CACHE = 'eva-static-v5';
-const CLIENT_DATA_CACHE = 'eva-client-data-v2';
+const SHELL_CACHE = 'eva-shell-v5';
+const NAV_CACHE = 'eva-nav-v4';
+const STATIC_CACHE = 'eva-static-v6';
+const CLIENT_DATA_CACHE = 'eva-client-data-v3';
 
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [OFFLINE_URL, '/LOGOS/eva-icon.png'];
+
+// Student PWA trees: standalone /c/ and team/pool /t/ (proxy-rewritten to /c/).
+const isClientApp = (pathname) => pathname.startsWith('/c/') || pathname.startsWith('/t/');
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -89,8 +97,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // /c/ navigation requests — network-first with cache fallback
-  if (url.pathname.startsWith('/c/') && event.request.mode === 'navigate') {
+  // /c/ + /t/ navigation requests — network-first with cache fallback
+  if (isClientApp(url.pathname) && event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
         .then((res) => {
@@ -109,8 +117,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // /c/ same-origin resources/data — stale-while-revalidate for offline UX
-  if (url.pathname.startsWith('/c/') && url.origin === self.location.origin) {
+  // /c/ + /t/ same-origin resources/data — stale-while-revalidate for offline UX
+  if (isClientApp(url.pathname) && url.origin === self.location.origin) {
     event.respondWith(
       caches.open(CLIENT_DATA_CACHE).then(async (cache) => {
         const cached = await cache.match(event.request);
@@ -142,8 +150,8 @@ self.addEventListener('push', (event) => {
   const title = data.title ?? 'EVA Fitness'
   const options = {
     body: data.body ?? '',
-    icon: data.icon ?? '/icons/icon-192x192.png',
-    badge: data.badge ?? '/icons/icon-72x72.png',
+    icon: data.icon ?? '/LOGOS/eva-icon.png',
+    badge: data.badge ?? '/LOGOS/eva-icon.png',
     data: { url: data.url ?? '/' },
     vibrate: [100, 50, 100],
   }

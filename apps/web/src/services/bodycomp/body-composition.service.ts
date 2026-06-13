@@ -276,6 +276,23 @@ export async function listClientMeasurements(
 
 const MODULE_KEY = 'body_composition' as const
 
+/**
+ * B7: ¿la fila del propio alumno es enterprise-scoped (org_id NOT NULL)? `findClientScopeRow` no
+ * proyecta `org_id`, asi que se lee aparte con el MISMO cliente USER-scoped (`db`, RLS = techo) —
+ * nunca con service-role. Espeja el rechazo enterprise de movement-assessment.service (v1: el
+ * modulo no se ofrece en contexto org). Default defensivo: ante error/ausencia, tratar como org
+ * (no exponer datos de salud, Ley 21.719).
+ */
+async function isOrgScopedClient(db: DB, userId: string): Promise<boolean> {
+    const { data, error } = await db
+        .from('clients')
+        .select('org_id')
+        .eq('id', userId)
+        .maybeSingle()
+    if (error || !data) return true
+    return data.org_id != null
+}
+
 export type StudentBodyCompositionView = {
     enabled: boolean
     clientName: string | null
@@ -305,8 +322,17 @@ export async function getStudentBodyCompositionView(
     await assertBodyCompositionEnabled()
     if (isModuleKilledByOperator(MODULE_KEY)) return { enabled: false, clientName: null, bia: [], isak: [] }
     // Identidad legacy: clients.id = auth.uid() (mismo criterio que la vista de movimiento del alumno).
+    // B8: la fila de scope se lee SIEMPRE con el cliente USER-scoped (`db`, RLS = techo) — su
+    // team_id/coach_id no pueden venir de una fila que el llamante no puede ver. `entitlementsDb`
+    // (service-role) solo se usa DESPUES para leer enabled_modules, jamas para resolver el scope.
     const client = await repo.findClientScopeRow(db, userId)
     if (!client) return { enabled: false, clientName: null, bia: [], isak: [] }
+    // B7 (Ley 21.719): el modulo no se ofrece en contexto enterprise (org) — espeja la guarda de
+    // movement-assessment.service (resolveMovementClientContext). Sin esto, un alumno org-scoped
+    // gatearia por el coach_id de su fila. Se trata como deshabilitado (no se exponen mediciones).
+    if (await isOrgScopedClient(db, userId)) {
+        return { enabled: false, clientName: client.full_name, bia: [], isak: [] }
+    }
     const enabled = await hasModule(
         entitlementsDb,
         MODULE_KEY,
@@ -330,8 +356,12 @@ export async function isStudentBodyCompositionEnabled(
     userId: string
 ): Promise<boolean> {
     if (isModuleKilledByOperator(MODULE_KEY)) return false
+    // B8: la fila de scope se lee con el cliente USER-scoped (`db`, RLS = techo); `entitlementsDb`
+    // (service-role) solo lee enabled_modules despues, nunca resuelve el scope.
     const client = await repo.findClientScopeRow(db, userId)
     if (!client) return false
+    // B7: enterprise (org) excluido, igual que getStudentBodyCompositionView y movement.
+    if (await isOrgScopedClient(db, userId)) return false
     return hasModule(
         entitlementsDb,
         MODULE_KEY,

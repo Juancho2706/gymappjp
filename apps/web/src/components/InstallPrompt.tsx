@@ -124,7 +124,7 @@ export function InstallPrompt({
             >
               <button
                 onClick={handleDismiss}
-                className="absolute top-4 right-4 p-1 hover:bg-muted rounded-full transition-colors"
+                className="absolute top-4 right-4 p-2 hover:bg-muted rounded-full transition-colors"
                 aria-label="Cerrar"
               >
                 <X className="w-4 h-4 text-muted-foreground" />
@@ -211,7 +211,7 @@ export function InstallPrompt({
                 </button>
                 <button
                   onClick={handleDismiss}
-                  className="px-2 py-1 text-[9px] font-bold text-muted-foreground/60 hover:text-foreground transition-colors uppercase tracking-widest"
+                  className="px-2 py-2 text-xs font-bold text-muted-foreground/60 hover:text-foreground transition-colors uppercase tracking-widest"
                 >
                   Ocultar
                 </button>

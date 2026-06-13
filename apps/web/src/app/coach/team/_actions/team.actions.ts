@@ -394,6 +394,10 @@ export async function updateTeamBrandAction(teamId: string, formData: FormData) 
     if (loaderText !== null) {
         const v = String(loaderText).trim()
         if (v.length > 24) return { error: 'Texto del loader: máximo 24 caracteres.' }
+        // Stored-XSS hardening: este texto se inyecta en un <style> del shell del alumno
+        // (apps/web/.../c/[coach_slug]/layout.tsx). Sin esto, un gestor podía guardar
+        // `</style><script>…` y XSSear al pool. Los < > nunca son legítimos en una etiqueta.
+        if (/[<>]/.test(v)) return { error: 'El texto del loader no puede contener < o >.' }
         updates.loader_text = v || null
     }
 

@@ -29,6 +29,7 @@ function FadeImage({ src, alt }: { src: string; alt: string }) {
       src={src}
       alt={alt}
       fill
+      sizes="(max-width: 768px) 45vw, 200px"
       onLoad={() => setLoaded(true)}
       className={`object-cover group-hover:scale-110 transition-transform duration-500 transition-opacity ${
         loaded ? "opacity-100" : "opacity-0"
@@ -193,7 +194,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
       >
         <DialogContent 
           showCloseButton={false}
-          className="bg-card border-border rounded-3xl overflow-y-auto custom-scrollbar p-0 max-w-md w-[90vw] max-h-[85vh] focus:outline-none"
+          className="bg-card border-border rounded-3xl overflow-y-auto custom-scrollbar p-0 max-w-md w-[90vw] max-h-[85dvh] focus:outline-none"
         >
           {selectedExercise && (
             <>
@@ -205,6 +206,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                         src={selectedExercise.gif_url}
                         alt={selectedExercise.name}
                         fill
+                        sizes="(max-width: 768px) 100vw, 50vh"
                         className="object-contain"
                         unoptimized
                       />
@@ -266,6 +268,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                         src={selectedExercise.video_url}
                         alt={selectedExercise.name}
                         fill
+                        sizes="(max-width: 768px) 100vw, 50vh"
                         className="object-contain"
                         unoptimized
                       />

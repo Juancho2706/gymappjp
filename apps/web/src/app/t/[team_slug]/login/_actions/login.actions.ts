@@ -2,6 +2,14 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { ClientLoginSchema } from '@eva/schemas'
+import { z } from 'zod'
+
+// Espeja ClientLoginSchema (/c) — mismas reglas de email+password; el pool usa team_slug
+// en vez de coach_slug, asi que se reusa la base y se cambia ese unico campo.
+const TeamClientLoginSchema = ClientLoginSchema.omit({ coach_slug: true }).extend({
+    team_slug: z.string().trim().min(1),
+})
 
 export type TeamLoginState = {
     error?: string
@@ -21,13 +29,16 @@ export async function teamClientLoginAction(
     _prev: TeamLoginState,
     formData: FormData
 ): Promise<TeamLoginState> {
-    const email = String(formData.get('email') ?? '').trim()
-    const password = String(formData.get('password') ?? '')
-    const teamSlug = String(formData.get('team_slug') ?? '').trim()
-
-    if (!email || !password || !teamSlug) {
+    const parsed = TeamClientLoginSchema.safeParse({
+        email: formData.get('email') ?? '',
+        password: formData.get('password') ?? '',
+        team_slug: formData.get('team_slug') ?? '',
+    })
+    if (!parsed.success) {
         return { error: 'Completa tu email y contraseña.' }
     }
+
+    const { email, password, team_slug: teamSlug } = parsed.data
 
     const supabase = await createClient()
 

@@ -10,10 +10,12 @@ interface Props {
 export default async function SuspendedPage({ params }: Props) {
     const { coach_slug } = await params
     const base = await getClientBasePath(coach_slug)
-    const { user, coach: coachData } = await getSuspendedCoachData(coach_slug)
+    const { user, coach: coachData, isTeam } = await getSuspendedCoachData(coach_slug)
     if (!user) redirect(`${base}/login`)
 
-    const brandName = coachData?.brand_name || 'tu Coach'
+    // Pool/team: la suspensión la gestiona el dueño del team — mostrar la marca del TEAM y no el
+    // WhatsApp personal del coach (coachData.whatsapp ya viene null en contexto team).
+    const brandName = coachData?.brand_name || (isTeam ? 'tu equipo' : 'tu Coach')
 
     return (
         <div className="min-h-dvh bg-background flex flex-col items-center justify-center p-6 pt-safe text-center">
@@ -35,7 +37,7 @@ export default async function SuspendedPage({ params }: Props) {
                         rel="noopener noreferrer"
                         className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 flex items-center justify-center"
                     >
-                        Contactar a mi Coach
+                        {isTeam ? 'Contactar a mi equipo' : 'Contactar a mi Coach'}
                     </a>
                 )}
                 

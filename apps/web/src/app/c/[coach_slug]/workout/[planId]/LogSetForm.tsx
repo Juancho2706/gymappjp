@@ -186,7 +186,7 @@ function StrengthLogSetForm({
                     inputMode="decimal"
                     defaultValue={existingLog?.weight_kg ?? ''}
                     placeholder="-"
-                    className={`h-9 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
+                    className={`h-11 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
                 ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'}`}
                 />
 
@@ -198,7 +198,7 @@ function StrengthLogSetForm({
                     inputMode="numeric"
                     defaultValue={existingLog?.reps_done ?? ''}
                     placeholder="-"
-                    className={`h-9 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
+                    className={`h-11 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
                 ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'}`}
                 />
 
@@ -303,7 +303,7 @@ function StrengthLogSetForm({
 }
 
 const TYPED_INPUT_CLASS = (isLogged: boolean) =>
-    `h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1 ${
+    `h-11 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1 ${
         isLogged
             ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500'
             : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'
@@ -572,7 +572,7 @@ function SubmitSetButton({ isLogged }: { isLogged: boolean }) {
     return (
         <button
             type="submit"
-            className={`w-10 h-10 md:w-7 md:h-7 rounded-md flex items-center justify-center transition-all shadow-sm
+            className={`w-11 h-11 md:w-7 md:h-7 rounded-md flex items-center justify-center transition-all shadow-sm
             ${isLogged ? 'bg-emerald-500/20 text-emerald-400' : 'bg-secondary text-muted-foreground hover:bg-violet-600 hover:text-white'}`}
             title={pending ? 'Guardando set...' : isLogged ? 'Set guardado · toca para editar' : 'Guardar set'}
             aria-label={pending ? 'Guardando set...' : isLogged ? 'Set guardado, toca para editar' : 'Guardar set'}

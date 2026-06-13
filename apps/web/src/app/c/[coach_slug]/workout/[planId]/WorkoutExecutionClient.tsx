@@ -788,7 +788,7 @@ export function WorkoutExecutionClient({
                 <Dialog open={showTechnique} onOpenChange={setShowTechnique}>
                     <DialogContent 
                         showCloseButton={false}
-                        className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw] max-h-[85vh] flex flex-col focus:outline-none"
+                        className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw] max-h-[85dvh] flex flex-col focus:outline-none"
                     >
                         {(() => {
                             const exercise = selectedExercise

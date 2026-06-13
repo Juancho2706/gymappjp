@@ -23,7 +23,7 @@ import {
     formatPct,
     readIsakMetrics,
     type IsakMetricsView,
-} from './bodycompView'
+} from '@/lib/bodycomp/view-helpers'
 import { deleteBodyCompositionAction } from '../_actions/body-composition.actions'
 
 type IsakSeriesKey = 'bodyFat' | 'muscle' | 'adipose'

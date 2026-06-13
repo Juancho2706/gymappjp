@@ -18,7 +18,7 @@ import {
     PanelLeftClose,
     PanelLeft
 } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -55,6 +55,7 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
     const navRef = useRef<HTMLElement>(null)
     const [canScrollLeft, setCanScrollLeft] = useState(false)
     const [canScrollRight, setCanScrollRight] = useState(false)
+    const reduce = useReducedMotion()
 
     const updateScrollIndicators = useCallback(() => {
         const el = navRef.current
@@ -206,7 +207,7 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
                 {canScrollLeft && (
                     <div className="md:hidden pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center bg-gradient-to-r from-background/90 to-transparent w-10">
                         <motion.div
-                            animate={{ x: [0, -4, 0] }}
+                            animate={reduce ? undefined : { x: [0, -4, 0] }}
                             transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
                             className="ml-0.5"
                         >
@@ -217,7 +218,7 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
                 {canScrollRight && (
                     <div className="md:hidden pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center bg-gradient-to-l from-background/90 to-transparent w-10">
                         <motion.div
-                            animate={{ x: [0, 4, 0] }}
+                            animate={reduce ? undefined : { x: [0, 4, 0] }}
                             transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
                             className="mr-0.5 ml-auto"
                         >
@@ -225,7 +226,7 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
                         </motion.div>
                     </div>
                 )}
-                <nav ref={navRef} className="flex-1 flex flex-row justify-around md:flex-col md:justify-start px-2 pt-2 md:px-3 md:py-4 gap-1 md:space-y-1 overflow-x-auto overflow-y-auto custom-scrollbar">
+                <nav ref={navRef} className="flex-1 flex flex-row justify-start md:flex-col md:justify-start px-2 pt-2 md:px-3 md:py-4 gap-1 md:space-y-1 overflow-x-auto overflow-y-auto custom-scrollbar">
                     {navItems.map((item) => {
                         const isActive =
                             pathname === item.href ||
@@ -243,7 +244,7 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
                                 }}
                                 title={isCollapsed ? item.label : undefined}
                                 className={cn(
-                                    'relative flex md:flex-row flex-col items-center gap-1 md:gap-3 px-2 py-2 md:py-3 rounded-2xl text-[10px] md:text-sm font-medium transition-all duration-300 group flex-1 md:flex-none',
+                                    'relative flex md:flex-row flex-col items-center gap-1 md:gap-3 px-2 py-2 md:py-3 rounded-2xl text-[10px] md:text-sm font-medium transition-all duration-300 group flex-none shrink-0 basis-[4.5rem] md:basis-auto md:flex-none',
                                     isCollapsed ? 'md:justify-center md:px-0' : 'md:justify-start md:px-3',
                                     isActive
                                         ? 'text-foreground md:bg-muted/50 md:border md:border-border/50'
@@ -283,7 +284,7 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
                     <button
                         onClick={handleSignOut}
                         className={cn(
-                            'md:hidden relative flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-2xl text-[10px] font-medium transition-all duration-300 flex-1 text-muted-foreground hover:text-red-500'
+                            'md:hidden relative flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-2xl text-[10px] font-medium transition-all duration-300 flex-none shrink-0 basis-[4.5rem] text-muted-foreground hover:text-red-500'
                         )}
                     >
                         <LogOut className="w-6 h-6 flex-shrink-0 transition-transform duration-300" />

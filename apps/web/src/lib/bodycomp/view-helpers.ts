@@ -5,6 +5,10 @@ import type { BiaMetrics } from '@/domain/bodycomp'
  * Helpers PUROS de lectura/formato del jsonb `metrics` persistido (sin React, sin IO) —
  * testeables en Vitest. Aislan a la UI del shape del jsonb y NUNCA mezclan metodos (BIA vs ISAK
  * se leen con funciones distintas; las series jamas combinan % grasa de ambos).
+ *
+ * Vive en lib/ (framework-free) para que el bundle del ALUMNO no dependa del arbol de rutas del
+ * coach: los componentes de components/bodycomp/* y los del coach
+ * (app/coach/clients/[clientId]/bodycomp/_components/*) importan ambos desde aqui.
  */
 
 export type IsakMetricsView = {

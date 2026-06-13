@@ -42,6 +42,13 @@ function ForgotPasswordForm() {
     const [state, formAction] = useActionState(forgotPasswordAction, initialState)
     const searchParams = useSearchParams()
     const coachSlug = searchParams.get('coach_slug')
+    const teamSlug = searchParams.get('team_slug')
+    // El alumno de team vuelve a su login de pool white-label; el standalone al /c del coach.
+    const loginHref = teamSlug
+        ? `/t/${teamSlug}/login`
+        : coachSlug
+            ? `/c/${coachSlug}/login`
+            : '/login'
 
     return (
         <div className="animate-slide-up">
@@ -66,6 +73,7 @@ function ForgotPasswordForm() {
                 ) : (
                     <form action={formAction} className="space-y-5">
                         {coachSlug && <input type="hidden" name="coach_slug" value={coachSlug} />}
+                        {teamSlug && <input type="hidden" name="team_slug" value={teamSlug} />}
                         <div className="space-y-2">
                             <Label htmlFor="email" className="text-foreground text-sm font-semibold">
                                 Email de tu cuenta
@@ -101,7 +109,7 @@ function ForgotPasswordForm() {
 
             <div className="mt-6 text-center">
                 <Link
-                    href={coachSlug ? `/c/${coachSlug}/login` : "/login"}
+                    href={loginHref}
                     className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                     <ArrowLeft className="w-3.5 h-3.5" />

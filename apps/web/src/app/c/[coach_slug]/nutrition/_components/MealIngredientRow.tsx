@@ -42,7 +42,7 @@ export function MealIngredientRow({
           <div className="flex items-center gap-1.5">
             <p className="flex-1 text-sm font-semibold text-foreground/90 truncate">{item.foods.name}</p>
             {swapOptions.length > 0 && (
-              <div className="relative group/swap">
+              <>
                 <button
                   type="button"
                   onClick={(e) => {
@@ -51,41 +51,38 @@ export function MealIngredientRow({
                   }}
                   aria-label="Ver alternativas"
                   className={cn(
-                    'shrink-0 p-0.5 rounded-md transition-colors hover:bg-muted',
+                    'shrink-0 inline-flex min-w-6 min-h-6 p-2 items-center justify-center rounded-md transition-colors hover:bg-muted touch-manipulation',
                     showSwaps && 'bg-muted'
                   )}
                 >
                   <ArrowLeftRight className="w-3.5 h-3.5 text-sky-500" />
                 </button>
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/swap:block z-50 w-52 rounded-lg border border-border/50 bg-card/95 backdrop-blur-xl p-2 text-[11px] leading-relaxed text-muted-foreground shadow-xl pointer-events-none">
-                  Tu coach dejó opciones de cambio para este alimento. Elige una y pulsa Aplicar.
-                </div>
-              </div>
+                <InfoTooltip
+                  content="Tu coach dejó opciones de cambio para este alimento. Elige una y pulsa Aplicar."
+                  iconClassName="w-3.5 h-3.5"
+                  className="shrink-0 min-w-6 min-h-6 p-2"
+                />
+              </>
             )}
             {foodId && onToggleFavorite && (
-              <div className="relative group/fav">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onToggleFavorite(foodId)
-                  }}
-                  aria-label={isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
-                  className="shrink-0 p-0.5 rounded-md transition-colors hover:bg-muted"
-                >
-                  <Heart
-                    className={cn(
-                      'w-3.5 h-3.5 transition-colors',
-                      isFavorite
-                        ? 'fill-rose-400 text-rose-400'
-                        : 'text-muted-foreground/40 hover:text-rose-300'
-                    )}
-                  />
-                </button>
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/fav:block z-50 w-48 rounded-lg border border-border/50 bg-card/95 backdrop-blur-xl p-2 text-[11px] leading-relaxed text-muted-foreground shadow-xl pointer-events-none">
-                  {isFavorite ? 'Quitar de favoritos' : 'Marcar como favorito — tu coach lo verá en tu perfil.'}
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleFavorite(foodId)
+                }}
+                aria-label={isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos'}
+                className="shrink-0 inline-flex min-w-6 min-h-6 p-2 items-center justify-center rounded-md transition-colors hover:bg-muted touch-manipulation"
+              >
+                <Heart
+                  className={cn(
+                    'w-3.5 h-3.5 transition-colors',
+                    isFavorite
+                      ? 'fill-rose-400 text-rose-400'
+                      : 'text-muted-foreground/40 hover:text-rose-300'
+                  )}
+                />
+              </button>
             )}
           </div>
           <div className="flex gap-2 mt-0.5">

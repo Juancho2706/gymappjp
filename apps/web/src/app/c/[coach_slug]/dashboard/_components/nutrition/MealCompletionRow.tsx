@@ -7,7 +7,6 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import { toggleMealCompletion } from '@/app/c/[coach_slug]/nutrition/_actions/nutrition.actions'
-import { useRouter } from 'next/navigation'
 import {
   enqueueNutritionOfflineToggle,
   isLikelyOfflineError,
@@ -33,7 +32,6 @@ export function MealCompletionRow({
     dailyLogId,
     coachSlug,
 }: MealCompletionRowProps) {
-    const router = useRouter()
     const [pending, startTransition] = useTransition()
     const [optimistic, setOptimistic] = useOptimistic(completed, (_current, next: boolean) => next)
 
@@ -54,7 +52,6 @@ export function MealCompletionRow({
                 )
                 if (!res.success) {
                     toast.error('No se pudo registrar la comida')
-                    router.refresh()
                     return
                 }
                 trackNutritionEvent('nutrition_meal_toggled', {
@@ -62,7 +59,6 @@ export function MealCompletionRow({
                     completed: next ? 1 : 0,
                     date_is_today: 1,
                 })
-                router.refresh()
             } catch (e) {
                 if (isLikelyOfflineError(e)) {
                     enqueueNutritionOfflineToggle({
@@ -82,7 +78,6 @@ export function MealCompletionRow({
                 } else {
                     console.error(e)
                     toast.error('Error al registrar comida')
-                    router.refresh()
                 }
             }
         })

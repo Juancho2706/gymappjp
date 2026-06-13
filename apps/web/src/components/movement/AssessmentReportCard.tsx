@@ -134,7 +134,7 @@ export function AssessmentReportCard({ assessment }: { assessment: MovementAsses
                         <tr className="border-b border-border text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                             <th className="py-2 pr-2 font-semibold">{t('assessment.report.pattern')}</th>
                             <th className="px-2 py-2 text-center font-semibold">
-                                {t('assessment.side.left')[0]}/{t('assessment.side.right')[0]}
+                                {t('assessment.side.leftAbbr')}/{t('assessment.side.rightAbbr')}
                             </th>
                             <th className="px-2 py-2 text-center font-semibold">{t('assessment.report.final')}</th>
                         </tr>

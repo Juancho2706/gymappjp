@@ -246,6 +246,24 @@ export async function getMovementPrintData(
     return { assessment, clientName: client?.full_name ?? null, brandName, brandColor, logoUrl }
 }
 
+/**
+ * B7: ¿la fila del propio alumno es enterprise-scoped (org_id NOT NULL)? `findClientScopeRow` no
+ * proyecta `org_id`, asi que se lee aparte con el MISMO cliente USER-scoped (`db`, RLS = techo) —
+ * nunca con service-role. Espeja el rechazo enterprise del resto del modulo
+ * (resolveMovementClientContext, v1: el modulo no se ofrece en contexto org) y el helper homonimo
+ * de body-composition.service. Default defensivo: ante error/ausencia, tratar como org (no exponer
+ * datos de salud, Ley 21.719).
+ */
+async function isOrgScopedClient(db: DB, userId: string): Promise<boolean> {
+    const { data, error } = await db
+        .from('clients')
+        .select('org_id')
+        .eq('id', userId)
+        .maybeSingle()
+    if (error || !data) return true
+    return data.org_id != null
+}
+
 export type StudentMovementView = {
     enabled: boolean
     clientName: string | null
@@ -267,6 +285,12 @@ export async function getStudentMovementView(
     // Identidad legacy: clients.id = auth.uid() (mismo criterio que dashboard/check-in del alumno).
     const client = await repo.findClientScopeRow(db, userId)
     if (!client) return { enabled: false, clientName: null, finals: [] }
+    // B7 (Ley 21.719): el modulo no se ofrece en contexto enterprise (org) — espeja el rechazo de
+    // resolveMovementClientContext y getStudentBodyCompositionView. Sin esto, un alumno org-scoped
+    // gatearia por el coach_id de su fila. Se trata como deshabilitado (no se exponen finales).
+    if (await isOrgScopedClient(db, userId)) {
+        return { enabled: false, clientName: client.full_name, finals: [] }
+    }
     const enabled = await hasModule(
         entitlementsDb,
         MODULE_KEY,
@@ -289,6 +313,8 @@ export async function isStudentMovementEnabled(
     if (isModuleKilledByOperator(MODULE_KEY)) return false
     const client = await repo.findClientScopeRow(db, userId)
     if (!client) return false
+    // B7: enterprise (org) excluido, igual que getStudentMovementView y body-composition.
+    if (await isOrgScopedClient(db, userId)) return false
     return hasModule(
         entitlementsDb,
         MODULE_KEY,

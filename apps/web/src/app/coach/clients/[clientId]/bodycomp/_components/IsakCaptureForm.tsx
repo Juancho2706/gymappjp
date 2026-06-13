@@ -16,7 +16,7 @@ import {
 import { saveBodyCompositionAction } from '../_actions/body-composition.actions'
 import { IsakResultCard } from './IsakResultCard'
 import { isakRawToDomain, isakResultToMetricsJson } from '@/services/bodycomp/body-composition.mappers'
-import { readIsakMetrics, type IsakMetricsView } from './bodycompView'
+import { readIsakMetrics, type IsakMetricsView } from '@/lib/bodycomp/view-helpers'
 
 type Field = { name: string; label: string }
 

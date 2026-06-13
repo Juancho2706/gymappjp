@@ -42,6 +42,13 @@ function ResetPasswordForm() {
     const [state, formAction] = useActionState(resetPasswordAction, initialState)
     const searchParams = useSearchParams()
     const coachSlug = searchParams.get('coach_slug')
+    const teamSlug = searchParams.get('team_slug')
+    // El alumno de team vuelve a su login de pool white-label; el standalone al /c del coach.
+    const loginHref = teamSlug
+        ? `/t/${teamSlug}/login`
+        : coachSlug
+            ? `/c/${coachSlug}/login`
+            : '/login'
 
     return (
         <div className="animate-slide-up">
@@ -62,6 +69,7 @@ function ResetPasswordForm() {
             <div className="bg-card border border-border rounded-2xl p-8 shadow-2xl">
                 <form action={formAction} className="space-y-5">
                     {coachSlug && <input type="hidden" name="coach_slug" value={coachSlug} />}
+                    {teamSlug && <input type="hidden" name="team_slug" value={teamSlug} />}
                     <div className="space-y-2">
                         <Label htmlFor="password" className="text-muted-foreground text-sm font-medium">
                             Nueva contraseña
@@ -109,7 +117,7 @@ function ResetPasswordForm() {
 
             <div className="mt-6 text-center">
                 <Link
-                    href={coachSlug ? `/c/${coachSlug}/login` : "/login"}
+                    href={loginHref}
                     className="text-sm text-muted-foreground hover:text-muted-foreground transition-colors"
                 >
                     Volver al inicio de sesión

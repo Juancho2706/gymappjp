@@ -38,8 +38,10 @@ export const getLastCheckIn = cache(async (clientId: string) => {
     const supabase = await createClient()
     const { data } = await supabase
         .from('check_ins')
-        .select('id, weight, energy_level, created_at')
+        .select('id, weight, energy_level, date, created_at')
         .eq('client_id', clientId)
+        // Ordenar por el dia de medicion (`date`), no por el instante UTC de inserción.
+        .order('date', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -49,13 +51,14 @@ export const getLastCheckIn = cache(async (clientId: string) => {
 export const getCheckInHistory30Days = cache(async (clientId: string) => {
     const supabase = await createClient()
     const { iso } = getTodayInSantiago()
-    const anchor = parseISOAnchor(iso)
-    const thirtyDaysAgo = subDays(anchor, 30)
+    // Ventana de 30 días sobre el dia de medicion (`date`, YYYY-MM-DD), no sobre el instante UTC.
+    const thirtyDaysAgoStr = format(subDays(parseISOAnchor(iso), 30), 'yyyy-MM-dd')
     const { data } = await supabase
         .from('check_ins')
-        .select('id, weight, energy_level, created_at')
+        .select('id, weight, energy_level, date, created_at')
         .eq('client_id', clientId)
-        .gte('created_at', thirtyDaysAgo.toISOString())
+        .gte('date', thirtyDaysAgoStr)
+        .order('date', { ascending: true })
         .order('created_at', { ascending: true })
     return data ?? []
 })
@@ -262,8 +265,8 @@ export const getTodayNutritionBundle = cache(async (clientId: string, planId: st
                 `
             id, name, order_index, day_of_week,
             food_items (
-              quantity, unit, swap_options,
-              foods ( name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )
+              id, quantity, unit, swap_options,
+              foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )
             )
           `
             )

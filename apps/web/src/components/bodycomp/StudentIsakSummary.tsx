@@ -4,7 +4,7 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
-import { deviceLabel, formatKg, readIsakMetrics, type IsakMetricsView } from '@/app/coach/clients/[clientId]/bodycomp/_components/bodycompView'
+import { deviceLabel, formatKg, readIsakMetrics, type IsakMetricsView } from '@/lib/bodycomp/view-helpers'
 import { CountUpValue } from './CountUpValue'
 
 type CompKey = keyof IsakMetricsView['fractionation']
@@ -80,12 +80,15 @@ export function StudentIsakSummary({ rows }: { rows: BodyCompositionRow[] }) {
                 </p>
                 <div className="flex h-4 w-full overflow-hidden rounded-full bg-secondary/40">
                     {COMPONENTS.map(({ key, chart }) => {
-                        const pct = (f[key] as { pct: number }).pct
+                        // M4: null-guard del pct (default 0) y clamp a [0,100] — la suma de los 5
+                        // componentes Kerr puede pasar de 100% y desbordaria la barra.
+                        const raw = (f[key] as { pct: number | null | undefined }).pct
+                        const pct = Math.min(Math.max(raw ?? 0, 0), 100)
                         return (
                             <div
                                 key={key}
                                 className="h-full"
-                                style={{ width: `${Math.max(pct, 0)}%`, backgroundColor: chart }}
+                                style={{ width: `${pct}%`, backgroundColor: chart }}
                                 aria-hidden
                             />
                         )

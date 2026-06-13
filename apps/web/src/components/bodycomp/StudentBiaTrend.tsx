@@ -15,7 +15,7 @@ import { GlassCard } from '@/components/ui/glass-card'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
-import { readBiaMetrics } from '@/app/coach/clients/[clientId]/bodycomp/_components/bodycompView'
+import { readBiaMetrics } from '@/lib/bodycomp/view-helpers'
 
 type SeriesKey = 'bodyFatPercent' | 'skeletalMuscleMassKg'
 

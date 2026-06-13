@@ -1,7 +1,7 @@
 ﻿'use server'
 
 import { revalidatePath } from 'next/cache'
-import { UpdateOrgSchema, InviteCoachSchema, CreateEnterpriseCoachSchema } from '@eva/schemas'
+import { UpdateOrgSchema, InviteCoachSchema, CreateEnterpriseCoachSchema, OrgBrandDraftSchema } from '@eva/schemas'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { rateLimitOrgCreation } from '@/lib/rate-limit'
@@ -137,10 +137,15 @@ export async function saveBrandDraftAction(
     const admin = createServiceRoleClient()
     const { org } = context
 
+    // Stored-XSS hardening: loader_text/loader_text_color terminan en un <style> del shell del
+    // alumno → validar acá (sink layout.tsx ya sanitiza como 2da capa). Mata `</style><script>`.
+    const parsed = OrgBrandDraftSchema.safeParse(draft)
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos de marca inválidos' }
+
     // Merge into existing draft so a previously-uploaded logo isn't wiped by a
     // later name/color save (logo upload writes logo_url into the same draft).
     const { data: cur } = await admin.from('organizations').select('brand_draft').eq('id', org.id).single()
-    const merged = { ...((cur?.brand_draft as Record<string, unknown> | null) ?? {}), ...draft }
+    const merged = { ...((cur?.brand_draft as Record<string, unknown> | null) ?? {}), ...parsed.data }
 
     const { error } = await admin
         .from('organizations')

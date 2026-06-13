@@ -445,6 +445,8 @@
     "assessment.pattern.rotary_stability": "Estabilidad rotatoria",
     "assessment.side.left": "Izquierda",
     "assessment.side.right": "Derecha",
+    "assessment.side.leftAbbr": "I",
+    "assessment.side.rightAbbr": "D",
     "assessment.side.single": "Puntaje",
     "assessment.wizard.step": "Paso",
     "assessment.wizard.of": "de",

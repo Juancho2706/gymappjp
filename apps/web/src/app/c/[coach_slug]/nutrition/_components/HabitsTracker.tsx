@@ -177,7 +177,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
             <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
               {[
                 waterMl != null && `${(waterMl / 1000).toFixed(1).replace('.0', '')}L agua`,
-                steps != null && `${steps.toLocaleString()} pasos`,
+                steps != null && `${steps.toLocaleString('es-CL')} pasos`,
                 sleepHours != null && `${sleepHours}h sueño`,
                 fastingHours != null && `${fastingHours}h ayuno`,
                 supplements.length > 0 && `${supplements.length} supl.`,
@@ -215,7 +215,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
                   label={`Agua${waterMl != null ? ` · ${(waterMl / 1000).toFixed(1).replace('.0', '')}L` : ''}`}
                   colorClass="bg-sky-500/10"
                 />
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {WATER_OPTIONS.map((ml) => (
                     <button
                       key={ml}
@@ -223,7 +223,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
                       disabled={!isToday || isPending}
                       onClick={() => handleWater(ml)}
                       className={cn(
-                        'rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-all touch-manipulation',
+                        'inline-flex min-h-11 items-center justify-center rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all touch-manipulation',
                         waterMl === ml
                           ? 'bg-sky-500 text-white shadow-sm shadow-sky-500/30'
                           : 'bg-background border border-border/80 text-foreground hover:border-sky-500/40 hover:bg-sky-500/5'
@@ -274,7 +274,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
                   label={`Sueño${sleepHours != null ? ` · ${sleepHours}h` : ''}`}
                   colorClass="bg-violet-500/10"
                 />
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {SLEEP_OPTIONS.map((h) => (
                     <button
                       key={h}
@@ -282,7 +282,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
                       disabled={!isToday || isPending}
                       onClick={() => handleSleep(h)}
                       className={cn(
-                        'rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-all touch-manipulation',
+                        'inline-flex min-h-11 items-center justify-center rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all touch-manipulation',
                         sleepHours === h
                           ? 'bg-violet-500 text-white shadow-sm shadow-violet-500/30'
                           : 'bg-background border border-border/80 text-foreground hover:border-violet-500/40 hover:bg-violet-500/5'
@@ -301,7 +301,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
                   label={`Ayuno${fastingHours != null ? ` · ${fastingHours}h` : ''}`}
                   colorClass="bg-orange-500/10"
                 />
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {FASTING_OPTIONS.map((h) => (
                     <button
                       key={h}
@@ -309,7 +309,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
                       disabled={!isToday || isPending}
                       onClick={() => handleFasting(h)}
                       className={cn(
-                        'rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-all touch-manipulation',
+                        'inline-flex min-h-11 items-center justify-center rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all touch-manipulation',
                         fastingHours === h
                           ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
                           : 'bg-background border border-border/80 text-foreground hover:border-orange-500/40 hover:bg-orange-500/5'
@@ -328,7 +328,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
                   label={`Suplementos${supplements.length > 0 ? ` · ${supplements.length}` : ''}`}
                   colorClass="bg-rose-500/10"
                 />
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-2">
                   {SUPPLEMENT_OPTIONS.map((name) => {
                     const active = supplements.includes(name)
                     return (
@@ -338,7 +338,7 @@ export function HabitsTracker({ clientId, coachSlug, logDate, isToday, initialDa
                         disabled={!isToday || isPending}
                         onClick={() => handleSupplement(name)}
                         className={cn(
-                          'flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition-all touch-manipulation',
+                          'inline-flex min-h-11 items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all touch-manipulation',
                           active
                             ? 'bg-rose-500 text-white shadow-sm shadow-rose-500/30'
                             : 'bg-background border border-border/80 text-foreground hover:border-rose-500/40 hover:bg-rose-500/5'

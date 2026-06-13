@@ -7,6 +7,7 @@ import { ClientLoginSchema, ChangePasswordSchema } from '@eva/schemas'
 import type { Tables } from '@/lib/database.types'
 import type { WorkspaceSummary } from '@/domain/auth/types'
 import { setLastWorkspace } from '@/services/auth/workspace.service'
+import { getClientBasePath } from '@/lib/client/base-path'
 
 type Coach = Tables<'coaches'>
 type Client = Tables<'clients'>
@@ -193,5 +194,7 @@ export async function changePasswordAction(
         .update({ force_password_change: false })
         .eq('id', user.id)
 
-    redirect(`/c/${coach_slug}/dashboard`)
+    // Respeta el base path real del alumno (pool/team → /t/[team_slug]) en vez de
+    // hardcodear /c, que volcaria a un alumno de team a la marca personal del coach.
+    redirect(`${await getClientBasePath(coach_slug)}/dashboard`)
 }

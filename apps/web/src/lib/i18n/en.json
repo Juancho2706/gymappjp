@@ -445,6 +445,8 @@
     "assessment.pattern.rotary_stability": "Rotary stability",
     "assessment.side.left": "Left",
     "assessment.side.right": "Right",
+    "assessment.side.leftAbbr": "L",
+    "assessment.side.rightAbbr": "R",
     "assessment.side.single": "Score",
     "assessment.wizard.step": "Step",
     "assessment.wizard.of": "of",

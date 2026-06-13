@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Trash2 } from 'lucide-react'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
-import { deltaVsPrev, deviceLabel, formatKg, formatPct, readBiaMetrics } from './bodycompView'
+import { deltaVsPrev, deviceLabel, formatKg, formatPct, readBiaMetrics } from '@/lib/bodycomp/view-helpers'
 import { deleteBodyCompositionAction } from '../_actions/body-composition.actions'
 
 type BiaSeriesKey = 'bodyFatPercent' | 'skeletalMuscleMassKg'
