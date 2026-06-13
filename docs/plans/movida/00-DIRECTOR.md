@@ -9,6 +9,24 @@
 
 ---
 
+## ⚑ ESTADO — CERRADO / ARCHIVADO (2026-06-12)
+
+**Movida (Planes 1+2+3) cerrado.** El código de los 3 planes está en prod (`feat/movida-platform`, hasta `9caedeb`) y el gate E2E se ejecutó:
+
+- **Plan 1 — Separación de flujos: VERDE** (negative-auth 9/9, data-isolation 11/12, switcher/branding/awareness 16/18, **module-matrix 12/12**).
+- **Plan 2 (Entrenamiento) + Plan 3 (Evaluación/Nutrición):** módulos en prod, nav del team con Cardio/Movimiento, DB sellada (7 migraciones `20260611*`, advisors 0 críticos, suites SQL 6/6).
+- **Bugs reales encontrados y corregidos** (commits `cb41522`, `9caedeb`, pusheados): i18n del módulo de intercambios (renderizaba en **inglés** — `LanguageContext` ahora default `es`, no deriva de `navigator`); **hydration error** en `PlanBuilderSidebar` (button anidado con `InfoTooltip`). Módulo de nutrición intercambios **verificado funcional en browser** (chips, porciones, preview de marca, todo en español).
+- **Performance** (raíz del incidente E2E del 2026-06-12): RESUELTO en `master` + mergeado (ver `docs/status/NEXT_STEPS.md`).
+
+**FOLLOW-UP abierto (deuda de TEST, no de producto) — suite `tests/separation/nutrition-exchanges.spec.ts` quedó ~5-6/9:**
+1. **Trasladar al seed** (`scripts/seed-e2e-personas.mjs`) lo que se seteó a mano en prod durante el gate: `meal_exchange_targets` del plan del alumno pool (`client f646ac2a…`), `coaches.onboarding_guide.invite_code_confirmed=true` para `@evatest.cl`, `coaches.enabled_modules.nutrition_exchanges=true` para `e2e-solo-coach`.
+2. **Locators/fixtures frágiles:** `getByRole('dialog')` choca con el banner de cookies (cerrarlo en el setup); toast "Guardado" (timing); flakiness de E2E contra el Micro → correr con **compute Small**.
+3. **UI de alumno de los módulos:** solo `movement_assessment` + `nutrition_exchanges` tienen vista de alumno (web). **Cardio y body_composition son coach-only** (el alumno no ve nada). **Mobile: ninguno de los 4.**
+
+**Siguiente gran hilo:** estrategia teams-first (`docs/plans/estrategia/` 01-05) — archivar enterprise de la landing, módulos add-on de pago, consolidación de planes. NO ejecutado aún.
+
+---
+
 ## 1. Contexto y objetivo
 
 Movida (centro integral salud/deporte, Viña del Mar; ~300 alumnos, 20+ profesionales: entrenadores, kinesiólogos, nutricionistas, psicólogo) evalúa adoptar EVA como **plataforma única** reemplazando Medilink (parcial) + Trek Integral + 5componentes + Excel/Canva + FMS-Excel. Ani (socia, coord. entrenadores) es el canal. Fran (`@franallendel.nutri`) es la nutri (intercambios + Canva). El kine usa screening de movimiento + Excel. El entrenador evalúa con bioimpedancia.
