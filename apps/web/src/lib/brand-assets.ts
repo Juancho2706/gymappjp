@@ -8,6 +8,10 @@ export const BRAND_LOGO_WEB = '/LOGOS/eva-wordmark-outline.png'
 export const LANDING_LOGO_LIGHT_MARK = '/LOGOS/LOGO NEGRO SIN LETRAS SIN BG BORDE BLANCO.png'
 
 export const BRAND_APP_ICON = '/LOGOS/eva-icon.png'
+/** Ícono PWA EVA cuadrado 512×512 (purpose:any) — fallback cuando el coach/team no tiene logo. */
+export const BRAND_APP_ICON_512 = '/LOGOS/icon-512.png'
+/** Ícono PWA EVA maskable 512×512 con safe-zone 80% (purpose:maskable) — no se recorta en Android. */
+export const BRAND_APP_ICON_MASKABLE = '/LOGOS/icon-512-maskable.png'
 export const BRAND_PRIMARY_COLOR = '#10B981'
 /** Color primario del sistema EVA cuando el coach no usa colores personalizados */
 export const SYSTEM_PRIMARY_COLOR = '#007AFF'

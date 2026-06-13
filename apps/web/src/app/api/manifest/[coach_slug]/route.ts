@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/admin-client';
-import { BRAND_APP_ICON } from '@/lib/brand-assets';
+import { BRAND_APP_ICON_512, BRAND_APP_ICON_MASKABLE } from '@/lib/brand-assets';
 
 type ManifestBrand = {
   brand_name: string
@@ -56,32 +56,7 @@ export async function GET(
     display: "standalone",
     background_color: backgroundColor,
     theme_color: brand?.primary_color || "#000000",
-    icons: [
-      {
-        src: brand?.logo_url || BRAND_APP_ICON,
-        sizes: "192x192",
-        type: brand?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
-        purpose: "any"
-      },
-      {
-        src: brand?.logo_url || BRAND_APP_ICON,
-        sizes: "512x512",
-        type: brand?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
-        purpose: "any"
-      },
-      {
-        src: brand?.logo_url ? brand.logo_url : BRAND_APP_ICON,
-        sizes: "192x192",
-        type: brand?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
-        purpose: "maskable"
-      },
-      {
-        src: brand?.logo_url ? brand.logo_url : BRAND_APP_ICON,
-        sizes: "512x512",
-        type: brand?.logo_url?.endsWith('.svg') ? "image/svg+xml" : "image/png",
-        purpose: "maskable"
-      }
-    ]
+    icons: buildIcons(brand?.logo_url ?? null),
   };
 
   return NextResponse.json(manifest, {
@@ -91,6 +66,27 @@ export async function GET(
       'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=3600'
     },
   });
+}
+
+/**
+ * Íconos del manifest. Fallback EVA → archivos reales 512×512 (cuadrado `any` + maskable con
+ * safe-zone 80%, no se recorta en Android), declarados SOLO a 512 para no mentir el size. Marca
+ * propia (coach/team) → su logo en 192+512 (tamaño real desconocido; el OS reescala).
+ */
+function buildIcons(logoUrl: string | null) {
+  if (!logoUrl) {
+    return [
+      { src: BRAND_APP_ICON_512, sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: BRAND_APP_ICON_MASKABLE, sizes: "512x512", type: "image/png", purpose: "maskable" },
+    ]
+  }
+  const type = logoUrl.endsWith('.svg') ? "image/svg+xml" : "image/png"
+  return [
+    { src: logoUrl, sizes: "192x192", type, purpose: "any" },
+    { src: logoUrl, sizes: "512x512", type, purpose: "any" },
+    { src: logoUrl, sizes: "192x192", type, purpose: "maskable" },
+    { src: logoUrl, sizes: "512x512", type, purpose: "maskable" },
+  ]
 }
 
 async function resolveManifestBrand(
