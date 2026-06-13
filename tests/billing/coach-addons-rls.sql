@@ -136,14 +136,19 @@ DO $t8$ DECLARE v_own int; v_ins int; v_upd int; v_del int; BEGIN
       VALUES ('ad000000-0000-0000-0000-0000000000a1','nutrition_exchanges',9990,'v1-2026-06');
     RAISE EXCEPTION 'T8 FAIL authenticated pudo INSERT en coach_addons';
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
-  -- UPDATE denegado (0 filas afectadas: ninguna policy lo permite)
-  UPDATE public.coach_addons SET price_clp=1 WHERE coach_id='ad000000-0000-0000-0000-0000000000a1';
-  GET DIAGNOSTICS v_upd=ROW_COUNT;
-  IF v_upd<>0 THEN RAISE EXCEPTION 'T8 FAIL authenticated UPDATE afecto filas rows=%',v_upd; END IF;
-  -- DELETE denegado (0 filas)
-  DELETE FROM public.coach_addons WHERE coach_id='ad000000-0000-0000-0000-0000000000a1';
-  GET DIAGNOSTICS v_del=ROW_COUNT;
-  IF v_del<>0 THEN RAISE EXCEPTION 'T8 FAIL authenticated DELETE afecto filas rows=%',v_del; END IF;
+  -- UPDATE denegado: acepta RLS-0-rows O deny-duro de grant (42501) — el hardening REVOCA el
+  -- privilegio de UPDATE a authenticated, asi que el deny es a nivel grant (mas fuerte que RLS).
+  BEGIN
+    UPDATE public.coach_addons SET price_clp=1 WHERE coach_id='ad000000-0000-0000-0000-0000000000a1';
+    GET DIAGNOSTICS v_upd=ROW_COUNT;
+    IF v_upd<>0 THEN RAISE EXCEPTION 'T8 FAIL authenticated UPDATE afecto filas rows=%',v_upd; END IF;
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  -- DELETE denegado: idem (grant revocado).
+  BEGIN
+    DELETE FROM public.coach_addons WHERE coach_id='ad000000-0000-0000-0000-0000000000a1';
+    GET DIAGNOSTICS v_del=ROW_COUNT;
+    IF v_del<>0 THEN RAISE EXCEPTION 'T8 FAIL authenticated DELETE afecto filas rows=%',v_del; END IF;
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $t8$;
 RESET role;
 
@@ -167,12 +172,16 @@ DO $t10a$ DECLARE v_own int; v_upd int; v_del int; BEGIN
       VALUES ('ad000000-0000-0000-0000-0000000000a1','mp-pay-hack',now(),'recurring',1,1);
     RAISE EXCEPTION 'T10 FAIL authenticated pudo INSERT en billing_snapshots';
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
-  UPDATE public.billing_snapshots SET total_clp=0 WHERE coach_id='ad000000-0000-0000-0000-0000000000a1';
-  GET DIAGNOSTICS v_upd=ROW_COUNT;
-  IF v_upd<>0 THEN RAISE EXCEPTION 'T10 FAIL authenticated UPDATE afecto snapshots rows=%',v_upd; END IF;
-  DELETE FROM public.billing_snapshots WHERE coach_id='ad000000-0000-0000-0000-0000000000a1';
-  GET DIAGNOSTICS v_del=ROW_COUNT;
-  IF v_del<>0 THEN RAISE EXCEPTION 'T10 FAIL authenticated DELETE afecto snapshots rows=%',v_del; END IF;
+  BEGIN
+    UPDATE public.billing_snapshots SET total_clp=0 WHERE coach_id='ad000000-0000-0000-0000-0000000000a1';
+    GET DIAGNOSTICS v_upd=ROW_COUNT;
+    IF v_upd<>0 THEN RAISE EXCEPTION 'T10 FAIL authenticated UPDATE afecto snapshots rows=%',v_upd; END IF;
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    DELETE FROM public.billing_snapshots WHERE coach_id='ad000000-0000-0000-0000-0000000000a1';
+    GET DIAGNOSTICS v_del=ROW_COUNT;
+    IF v_del<>0 THEN RAISE EXCEPTION 'T10 FAIL authenticated DELETE afecto snapshots rows=%',v_del; END IF;
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $t10a$;
 RESET role;
 
