@@ -1,8 +1,8 @@
 # SPEC — Billing de add-ons self-service (módulos como add-ons de pago)
 
-**Status:** DRAFT (listo para implementación por fases)
+**Status:** ✅ EJECUTADO + MERGEADO a master 2026-06-14 (commit merge `4cf6050`). QA sandbox MP + 3 auditorías adversariales (money-safety, UI/UX, sweep pre-merge) verdes; suite 988/988. **Pendiente SOLO el lanzamiento manual:** setear `NEXT_PUBLIC_SELF_SERVICE_ADDONS_ENABLED='true'` en Vercel (Preview ya; Prod tras 1 prueba live). Ver `docs/status/NEXT_STEPS.md` (bloque 2026-06-14).
 **Owner:** Juan V.
-**Last updated:** 2026-06-12
+**Last updated:** 2026-06-14
 **Related plan:** `docs/plans/estrategia/05-PLAN-billing-addons-selfservice.md` · Director estrategia: `docs/plans/estrategia/00-DIRECTOR.md` · Doc fuente: `docs/plans/estrategia/2026-06-11-teams-first-modulos-addons.md` §2.3 / §4
 **Módulos:** `cardio`, `movement_assessment`, `body_composition`, `nutrition_exchanges` (`MODULE_KEYS`, `apps/web/src/services/entitlements.service.ts`)
 **Constantes congeladas (F0, este branch):** `ADDON_CONFIG` + `ADDON_PAYMENT_RULES` en `apps/web/src/lib/constants.ts`
