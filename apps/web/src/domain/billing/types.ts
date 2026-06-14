@@ -49,26 +49,19 @@ export type CoachAddon = {
 }
 
 /**
- * Resultado de `activateAddonForCoach` — BIFURCA por ciclo (D4):
- *   - mensual          → `kind: 'monthly_activated'` (fila ya creada + PUT aplicado).
- *   - trimestral/anual → `kind: 'one_shot_checkout'` (preference one-shot; la fila la
- *     materializa el webhook al aprobarse el pago — sin fila todavía).
+ * Resultado de `activateAddonForCoach` — one-shot prorrateado para TODOS los ciclos (D4):
+ * crea la preference de pago único (prorrateo del período restante) y devuelve la URL de
+ * checkout; la fila `coach_addons` la materializa el webhook al aprobarse el pago (sin fila
+ * todavía). Mensual ya no es cortesía: prorratea igual que trimestral/anual.
  */
-export type ActivateAddonResult =
-    | {
-          kind: 'monthly_activated'
-          addon: CoachAddon
-          /** Nuevo monto compuesto del preapproval (base + add-ons facturables). */
-          newCompositeAmountClp: number
-      }
-    | {
-          kind: 'one_shot_checkout'
-          checkoutUrl: string
-          /** Monto del one-shot prorrateado cobrado de inmediato (alineado al corte). */
-          prorationClp: number
-          /** Monto que se sumará al ciclo desde la renovación. */
-          cycleAmountClp: number
-      }
+export type ActivateAddonResult = {
+    kind: 'one_shot_checkout'
+    checkoutUrl: string
+    /** Monto del one-shot prorrateado cobrado de inmediato (alineado al corte). */
+    prorationClp: number
+    /** Monto que se sumará al ciclo desde la renovación. */
+    cycleAmountClp: number
+}
 
 /**
  * Resultado de `requestAddonCancellation` (reglas 3-4): fecha efectiva del término

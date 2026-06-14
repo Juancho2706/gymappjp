@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
 import { getPaymentsProvider } from '@/lib/payments/provider'
+import { rateLimitPayment, jsonRateLimited } from '@/lib/rate-limit'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 
@@ -21,6 +22,11 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
         }
 
+        const rl = await rateLimitPayment(user.id)
+        if (!rl.ok) {
+            return jsonRateLimited(rl.retryAfter)
+        }
+
         const workspace = await resolvePreferredWorkspace(supabase, user.id)
         if (!canViewBilling(workspace)) {
             return NextResponse.json({ error: 'Billing disponible solo para coach independiente.' }, { status: 403 })
@@ -37,7 +43,9 @@ export async function POST(request: Request) {
         const admin = createServiceRoleClient()
         const { data: coach } = await admin
             .from('coaches')
-            .select('id, subscription_mp_id, payment_provider, current_period_end')
+            .select(
+                'id, subscription_mp_id, payment_provider, current_period_end, superseded_mp_preapproval_id'
+            )
             .eq('id', user.id)
             .maybeSingle()
 
@@ -65,6 +73,42 @@ export async function POST(request: Request) {
             }
         }
 
+        // P0-3 — cancelar TAMBIÉN el preapproval SUPERSEDED en vuelo. Si el coach cancela mientras un
+        // cambio de plan está pendiente (un nuevo preapproval reemplazó al viejo pero el viejo quedó
+        // como backstop en superseded_mp_preapproval_id), cancelar solo subscription_mp_id dejaría al
+        // VIEJO cobrando. Lo cancelamos en MP (best-effort: un "already cancelled" no es error) y
+        // limpiamos el marcador para que no quede colgando. service-role.
+        const superseded = coach.superseded_mp_preapproval_id?.trim()
+        if (superseded && superseded !== checkoutId && providerMatches) {
+            try {
+                await provider.cancelCheckoutAtProvider(superseded)
+                console.info('[payments.cancel-subscription] cancelled superseded preapproval', {
+                    coachId: user.id,
+                    superseded,
+                })
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err)
+                if (!isAlreadyCanceledError(msg)) {
+                    console.warn('[payments.cancel-subscription] failed to cancel superseded preapproval', {
+                        coachId: user.id,
+                        superseded,
+                        message: msg,
+                    })
+                }
+            }
+            const { error: clearError } = await admin
+                .from('coaches')
+                .update({ superseded_mp_preapproval_id: null })
+                .eq('id', user.id)
+            if (clearError) {
+                console.error('[payments.cancel-subscription] failed to clear superseded marker', {
+                    coachId: user.id,
+                    superseded,
+                    message: clearError.message,
+                })
+            }
+        }
+
         // Preserve current_period_end so the coach keeps access until the end
         // of the period they already paid for. The gate logic checks this date.
         const { error: updateError } = await admin
@@ -86,11 +130,15 @@ export async function POST(request: Request) {
         // acá no debe tumbar la cancelación de la suscripción base (ya hecha arriba).
         try {
             const periodEnd = coach.current_period_end ?? null
+            // (1) add-ons ACTIVOS de pago propio (source='self_service') → cancel_pending con
+            // expires_at = corte. NO barremos los admin_grant (cortesía del CEO, price 0): cancelar la
+            // suscripción de pago del coach no debe apagar una cortesía que el CEO otorgó aparte.
             const { data: liveAddons } = await admin
                 .from('coach_addons')
                 .select('id')
                 .eq('coach_id', user.id)
                 .eq('status', 'active')
+                .eq('source', 'self_service')
             if (liveAddons && liveAddons.length > 0) {
                 await admin
                     .from('coach_addons')
@@ -101,7 +149,19 @@ export async function POST(request: Request) {
                     })
                     .eq('coach_id', user.id)
                     .eq('status', 'active')
+                    .eq('source', 'self_service')
             }
+            // (2) P2 — add-ons YA en cancel_pending pero con expires_at NULL (cancelados antes de tener
+            // un corte resuelto): fijarles expires_at = corte ahora que el preapproval base se va. Sin
+            // esto quedarían ON para siempre porque el cron de expiry filtra por expires_at no-null.
+            // También solo self_service.
+            await admin
+                .from('coach_addons')
+                .update({ expires_at: periodEnd })
+                .eq('coach_id', user.id)
+                .eq('status', 'cancel_pending')
+                .eq('source', 'self_service')
+                .is('expires_at', null)
         } catch (addonErr) {
             console.error('[payments.cancel-subscription] failed to schedule addon cancellation', {
                 coachId: user.id,

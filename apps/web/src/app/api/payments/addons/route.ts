@@ -6,21 +6,14 @@ import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 import { rateLimitPayment, jsonRateLimited } from '@/lib/rate-limit'
 import { MODULE_KEYS } from '@/services/entitlements.service'
-import { ADDON_PAYMENT_RULES } from '@/lib/constants'
+import { ADDON_PAYMENT_RULES, SELF_SERVICE_ADDONS_ENABLED } from '@/lib/constants'
 import { activateAddonForCoach, canPurchaseAddon } from '@/services/billing/addons.service'
+import { isUpgradeInFlight } from '@/services/billing/plan-change-lock'
+import { listLive } from '@/infrastructure/db/coach-addons.repository'
+import { getPaymentsProvider } from '@/lib/payments/provider'
+import { parseCheckoutExternalReference } from '@/lib/payments/checkout-external-reference'
 import { buildAddonPaymentsPort } from './_lib/payments-port'
-import {
-    acceptedRulesForCycle,
-    addonLabel,
-    buildActivateContext,
-    computeCompositeBreakdown,
-    cycleLabel,
-    fetchCoachBillingRow,
-    formatDateEsCl,
-    normalizeCycle,
-} from './_lib/coach-context'
-import { sendTransactionalEmail } from '@/lib/email/send-email'
-import { buildAddonActivationReceiptEmail } from '@/lib/email/addon-receipt-templates'
+import { buildActivateContext, fetchCoachBillingRow } from './_lib/coach-context'
 
 /**
  * POST /api/payments/addons — ALTA de un add-on self-service (plan 05 F4.1).
@@ -29,11 +22,9 @@ import { buildAddonActivationReceiptEmail } from '@/lib/email/addon-receipt-temp
  *   auth → canViewBilling (excluye team/org) → canPurchaseAddon → checkbox obligatorio
  *   (acceptedTermsVersion === ADDON_PAYMENT_RULES.version) → activateAddonForCoach.
  *
- * Respuesta BIFURCADA por ciclo (D4):
- *   - mensual          → fila creada (INSERT service-role + PUT con reversión D5) + nuevo
- *                        total compuesto + evento de historial + recibo email.
- *   - trimestral/anual → { checkoutUrl } del one-shot prorrateado (la fila, el PUT, el evento,
- *                        el snapshot y el recibo llegan vía webhook al aprobarse el pago — F3).
+ * Respuesta ÚNICA para TODOS los ciclos (D4): { checkoutUrl } del one-shot prorrateado.
+ * La fila, el PUT diferido, el evento de historial, el snapshot y el recibo llegan vía
+ * webhook al aprobarse el pago (F3) — incluido el ciclo mensual, que antes activaba en el acto.
  *
  * El monto SIEMPRE lo calcula el server. La feature está detrás de SELF_SERVICE_ADDONS_ENABLED.
  */
@@ -69,6 +60,12 @@ export async function POST(request: Request) {
 
         if (!user?.id || !user.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        // El switch de lanzamiento gatea la RUTA, no solo la UI: sin esto el endpoint de compra era
+        // alcanzable por API aun con el flag off (modulo "tomable" sin pasar por el lanzamiento).
+        if (!SELF_SERVICE_ADDONS_ENABLED) {
+            return NextResponse.json({ error: 'Función no disponible.', code: 'FEATURE_DISABLED' }, { status: 403 })
         }
 
         const rl = await rateLimitPayment(user.id)
@@ -121,8 +118,99 @@ export async function POST(request: Request) {
             )
         }
 
-        const cycle = normalizeCycle(coach.billing_cycle)
-        const ctx = buildActivateContext(coach, user.email)
+        // ── Guard P0-A (i): el coach YA tiene una fila viva de este módulo ──────────────────
+        // El one-shot NO inserta fila en el alta (la crean el webhook/confirm al aprobarse), así que
+        // el índice único parcial no dispara hasta entonces; sin este check, re-comprar un módulo ya
+        // activo cobraría una 2ª proración. Cubre cualquier source (self_service o admin_grant).
+        const liveAddons = await listLive(admin, user.id)
+        if (liveAddons.some((a) => a.moduleKey === moduleKey)) {
+            return NextResponse.json(
+                { error: 'Ya tienes este módulo activo.', code: 'ALREADY_ACTIVE' },
+                { status: 409 }
+            )
+        }
+
+        // ── Guard P0-A: doble cobro entre las dos superficies de add-on ─────────────────────
+        // El one-shot prorrateado de ESTE endpoint y el combo de create-preference (que embebe el
+        // módulo en un preapproval compuesto nuevo) no se reconcilian: comprar el mismo módulo por
+        // ambos lo cobra DOS veces. El índice único parcial bloquea filas duplicadas, no plata
+        // duplicada. Bloqueo:
+        //   (i)  fila viva ya existe → lo cubre isAlreadyActiveError/409 (más abajo).
+        //   (ii) el módulo YA viaja en el preapproval recurrente vigente del coach (combo ya pagado),
+        //        o hay un cambio de plan en vuelo (superseded_*) que puede embeberlo → 409 ALREADY_BILLED.
+        // Fail-open SOLO si el fetch del snapshot lanza (no bloqueamos por error del provider); pero
+        // SÍ bloqueamos ante un embed confirmado.
+        const { data: scopeRow } = await admin
+            .from('coaches')
+            .select('superseded_mp_preapproval_id')
+            .eq('id', user.id)
+            .maybeSingle()
+        if (scopeRow?.superseded_mp_preapproval_id) {
+            return NextResponse.json(
+                {
+                    error: 'Ese modulo ya esta incluido en tu plan o en un cambio en curso.',
+                    code: 'ALREADY_BILLED',
+                },
+                { status: 409 }
+            )
+        }
+        if (coach.subscription_mp_id) {
+            try {
+                const provider = getPaymentsProvider()
+                const snapshot = await provider.fetchCheckoutSnapshot(coach.subscription_mp_id)
+                const embedded = parseCheckoutExternalReference(snapshot.external_reference ?? null)
+                if (embedded?.addons.includes(moduleKey)) {
+                    return NextResponse.json(
+                        {
+                            error: 'Ese modulo ya esta incluido en tu plan o en un cambio en curso.',
+                            code: 'ALREADY_BILLED',
+                        },
+                        { status: 409 }
+                    )
+                }
+            } catch (snapshotErr) {
+                // Error del provider: fail-open (no bloqueamos la compra por un fallo de red/MP).
+                const msg = snapshotErr instanceof Error ? snapshotErr.message : String(snapshotErr)
+                console.warn('[payments.addons] no se pudo leer el preapproval para el guard P0-A', {
+                    coachId: user.id,
+                    moduleKey,
+                    message: msg,
+                })
+            }
+        }
+
+        // ── Guard P0-4b: alta de add-on mientras un UPGRADE de plan está en vuelo ─────────────
+        // El upgrade es un one-shot prorrateado que se confirma async (confirm-upgrade/webhook) y, al
+        // activarse, recomputa el compuesto desde listLive → plegaría ESTE add-on nuevo dos veces
+        // (una en el compuesto del upgrade, otra en su propio one-shot). Bloqueamos hasta que el
+        // upgrade en vuelo se resuelva (o el TTL del candado lo libere). db service-role.
+        if (await isUpgradeInFlight(admin, user.id)) {
+            return NextResponse.json(
+                {
+                    error: 'No puedes agregar un modulo mientras un cambio de plan esta en proceso.',
+                    code: 'UPGRADE_IN_FLIGHT',
+                },
+                { status: 409 }
+            )
+        }
+
+        // URLs del one-shot (back_urls + webhook) desde NEXT_PUBLIC_SITE_URL — mismo patrón que
+        // create-preference. MP exige back_urls.success cuando se manda auto_return.
+        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+        const webhookToken = process.env.MERCADOPAGO_WEBHOOK_TOKEN
+        const webhookUrl = webhookToken
+            ? `${appUrl}/api/payments/webhook?token=${encodeURIComponent(webhookToken)}`
+            : `${appUrl}/api/payments/webhook`
+        // buildActivateContext normaliza el ciclo y deriva el corte para el prorrateo del service.
+        // success → pantalla de procesamiento síncrono (confirm-addon): MP auto-agrega
+        // payment_id/collection_id/status al volver. Ya no es un landing no-op: la pantalla
+        // confirma el pago sin esperar el webhook (que sigue como backstop idempotente).
+        const ctx = buildActivateContext(coach, user.email, {
+            successUrl: `${appUrl}/coach/subscription/addon-processing`,
+            failureUrl: `${appUrl}/coach/subscription?addon=failure`,
+            pendingUrl: `${appUrl}/coach/subscription?addon=pending`,
+            webhookUrl,
+        })
         const payments = buildAddonPaymentsPort()
 
         let result
@@ -145,101 +233,24 @@ export async function POST(request: Request) {
             throw err
         }
 
-        // Trimestral / anual: la fila + PUT + evento + recibo llegan por webhook (F3).
-        if (result.kind === 'one_shot_checkout') {
-            return NextResponse.json({
-                kind: 'one_shot_checkout',
-                checkoutUrl: result.checkoutUrl,
-                prorationClp: result.prorationClp,
-                cycleAmountClp: result.cycleAmountClp,
-            })
+        // TODOS los ciclos: one-shot prorrateado. La fila + PUT diferido + evento + snapshot +
+        // recibo llegan por webhook al aprobarse el pago (F3); acá solo se redirige al checkout.
+        if (result.kind !== 'one_shot_checkout') {
+            // Inalcanzable: el service converge a one-shot en todos los ciclos (D4).
+            return NextResponse.json(
+                { error: 'No se pudo iniciar el cobro del módulo.' },
+                { status: 500 }
+            )
         }
-
-        // Mensual: fila ya creada + PUT aplicado. Evento de historial + recibo fire-and-forget.
-        const breakdown = await computeCompositeBreakdown(admin, user.id, ctx.tier, cycle)
-        const rules = acceptedRulesForCycle(cycle)
-        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
-
-        // Evento de historial con el TEXTO íntegro de las reglas aceptadas (evidencia SERNAC, F3.4).
-        await admin.from('subscription_events').insert({
-            coach_id: user.id,
-            provider: 'mercadopago',
-            provider_event_id: `addon:${result.addon.id}:activate`,
-            provider_status: 'addon_activated',
-            payload: {
-                action: 'addon_activated',
-                module_key: moduleKey,
-                billing_cycle: cycle,
-                terms_version: acceptedTermsVersion,
-                base_clp: breakdown.baseClp,
-                addons_clp: breakdown.addonsClp,
-                total_clp: breakdown.totalClp,
-                accepted_rules: rules,
-            } as never,
-        })
-
-        // Recibo email — fire-and-forget; error loggeado, NUNCA bloquea la mutación de cobro.
-        void sendAddonActivationReceipt({
-            to: user.email,
-            moduleLabel: addonLabel(moduleKey),
-            cycleText: cycleLabel(cycle),
-            baseClp: breakdown.baseClp,
-            addonLines: breakdown.addonLines,
-            totalClp: breakdown.totalClp,
-            oneShotClp: null,
-            nextChargeDate: formatDateEsCl(coach.current_period_end),
-            acceptedRules: rules,
-            termsVersion: acceptedTermsVersion,
-            subscriptionUrl: `${appUrl}/coach/subscription`,
-        })
-
         return NextResponse.json({
-            kind: 'monthly_activated',
-            addon: result.addon,
-            billing: {
-                baseClp: breakdown.baseClp,
-                addonsClp: breakdown.addonsClp,
-                totalClp: breakdown.totalClp,
-            },
+            kind: 'one_shot_checkout',
+            checkoutUrl: result.checkoutUrl,
+            prorationClp: result.prorationClp,
+            cycleAmountClp: result.cycleAmountClp,
         })
     } catch (error) {
         const message =
             error instanceof Error ? error.message : 'No se pudo agregar el módulo.'
         return NextResponse.json({ error: message }, { status: 500 })
-    }
-}
-
-/** Recibo de alta (fire-and-forget). Loggea y nunca relanza. */
-async function sendAddonActivationReceipt(input: {
-    to: string
-    moduleLabel: string
-    cycleText: string
-    baseClp: number
-    addonLines: { label: string; cycleAmountClp: number }[]
-    totalClp: number
-    oneShotClp: number | null
-    nextChargeDate: string | null
-    acceptedRules: { number: number; title: string; text: string }[]
-    termsVersion: string
-    subscriptionUrl: string
-}): Promise<void> {
-    try {
-        const { subject, html } = buildAddonActivationReceiptEmail({
-            coachName: input.to.split('@')[0] ?? 'coach',
-            addonLabel: input.moduleLabel,
-            cycleLabel: input.cycleText,
-            baseClp: input.baseClp,
-            addonLines: input.addonLines,
-            totalClp: input.totalClp,
-            oneShotClp: input.oneShotClp,
-            nextChargeDate: input.nextChargeDate,
-            acceptedRules: input.acceptedRules,
-            termsVersion: input.termsVersion,
-            subscriptionUrl: input.subscriptionUrl,
-        })
-        const res = await sendTransactionalEmail({ to: input.to, subject, html })
-        if (!res.ok) console.error('[addons] receipt email failed:', res.error)
-    } catch (err) {
-        console.error('[addons] receipt email threw:', err)
     }
 }

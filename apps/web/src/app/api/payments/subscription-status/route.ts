@@ -8,6 +8,7 @@ import {
     getAddonCycleAmountClp,
     toBillableAddons,
 } from '@/services/billing/addons.service'
+import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
 import { getTierPriceClp, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
 
 function normalizeCycle(raw: string | null): BillingCycle {
@@ -72,10 +73,21 @@ export async function GET() {
     )
     const totalClp = getCompositeAmountClp(tier, cycle, billable)
 
+    // Alumnos activos standalone (mismo filtro canónico que el cap gate de alta de alumno).
+    // La UI lo usa para bloquear downgrades a un tier cuyo max_clients < alumnos activos.
+    // Tolerante a fallos: si el count falla, 0 (no rompe el resto de la respuesta).
+    let activeClientCount = 0
+    try {
+        activeClientCount = await countActiveStandaloneClients(supabase, user.id)
+    } catch {
+        activeClientCount = 0
+    }
+
     return NextResponse.json({
         coach,
         events: events ?? [],
         addons,
         billing: { baseClp, addonsClp, totalClp },
+        activeClientCount,
     })
 }

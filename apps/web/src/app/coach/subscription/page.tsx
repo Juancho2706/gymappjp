@@ -1,17 +1,19 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useId, useRef, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
     ADDON_CONFIG,
     ADDON_MODULE_KEYS,
     ADDON_PAYMENT_RULES,
     BILLING_CYCLE_CONFIG,
+    comparePlanDirection,
     getAddonPaymentRulesForCycle,
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
     getTierBillingCycleSummary,
     getTierCapabilities,
+    getTierMaxClients,
     getTierNutritionSummary,
     getTierPriceClp,
     isBillingCycleAllowedForTier,
@@ -99,16 +101,30 @@ const cycleOptions = Object.keys(BILLING_CYCLE_CONFIG) as BillingCycle[]
 
 export default function CoachSubscriptionPage() {
     const router = useRouter()
+    const searchParams = useSearchParams()
+    // Refs para hacer scroll-into-view del banner relevante al setearse (off-screen en móvil).
+    const blockedMsgRef = useRef<HTMLDivElement | null>(null)
+    const feedbackBannerRef = useRef<HTMLParagraphElement | null>(null)
+    // ids estables para semántica de diálogo / aria de los modales hechos a mano.
+    const upgradeModalTitleId = useId()
+    const addonModalTitleId = useId()
+    const cancelAddonModalTitleId = useId()
+    // Restaurar el foco al disparador del modal al cerrarlo (a11y de diálogo).
+    const modalTriggerRef = useRef<HTMLElement | null>(null)
     const [coach, setCoach] = useState<CoachSubscription | null>(null)
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    // Motivo visible cuando el coach clickea una card de plan bloqueada (cupo / nutrición).
+    const [blockedMsg, setBlockedMsg] = useState<string | null>(null)
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
     const [reason, setReason] = useState('')
     const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('starter')
     const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly')
     const [events, setEvents] = useState<SubscriptionEvent[]>([])
     const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false)
+    // Alumnos activos standalone (del endpoint) — bloquea downgrades que no caben (OVER_CAPACITY).
+    const [activeClientCount, setActiveClientCount] = useState(0)
 
     // ── Add-ons (plan 05 F5) ──────────────────────────────────────────────────
     const [addons, setAddons] = useState<CoachAddonView[]>([])
@@ -133,6 +149,16 @@ export default function CoachSubscriptionPage() {
             prev.includes('nutrition_exchanges') ? prev.filter((k) => k !== 'nutrition_exchanges') : prev
         )
     }, [selectedTier])
+    // Issue #12: un módulo que ya tiene fila VIVA no debe viajar en el combo del cambio de plan
+    // (lo cobraría dos veces / el server lo rechazaría). Lo sacamos de la selección si aparece vivo
+    // tras un refresh de estado.
+    useEffect(() => {
+        const liveKeys = new Set(addons.filter((a) => a.status !== 'cancelled').map((a) => a.moduleKey))
+        setUpgradeAddons((prev) => {
+            const next = prev.filter((k) => !liveKeys.has(k))
+            return next.length === prev.length ? prev : next
+        })
+    }, [addons])
 
     useEffect(() => {
         let isMounted = true
@@ -143,7 +169,12 @@ export default function CoachSubscriptionPage() {
                 const payload = await response.json()
                 if (!response.ok) throw new Error(payload.error ?? 'No se pudo cargar la suscripción')
                 if (!isMounted) return
-                if (payload.coach?.subscription_status === 'org_managed') {
+                // Coaches gestionados por una org O por un team (pool plano) no tienen billing
+                // self-service: su plan/módulos los fija el contrato. Redirigimos ambos al dashboard.
+                if (
+                    payload.coach?.subscription_status === 'org_managed' ||
+                    payload.coach?.subscription_status === 'team_managed'
+                ) {
                     router.replace('/coach/dashboard')
                     return
                 }
@@ -151,6 +182,7 @@ export default function CoachSubscriptionPage() {
                 setEvents(Array.isArray(payload.events) ? payload.events : [])
                 setAddons(Array.isArray(payload.addons) ? payload.addons : [])
                 setBilling(payload.billing ?? null)
+                setActiveClientCount(typeof payload.activeClientCount === 'number' ? payload.activeClientCount : 0)
                 const tier = payload.coach.subscription_tier as SubscriptionTier
                 const cycle = payload.coach.billing_cycle as BillingCycle
                 // Pre-seleccion para la lista de venta (starter/pro/elite):
@@ -184,8 +216,98 @@ export default function CoachSubscriptionPage() {
         }
     }, [router])
 
+    // ── Feedback post-checkout (issue #2) ─────────────────────────────────────
+    // Al volver de Mercado Pago, las pantallas de procesamiento redirigen acá con un query param
+    // (?addon=success|failure|pending / ?upgrade=success|failure|pending). Sin esto el coach que
+    // acaba de pagar aterriza sin acuse de recibo. Mostramos el banner correspondiente, refrescamos
+    // el estado (para que el nuevo tier/módulo aparezca) y limpiamos el param para que un refresh no
+    // lo re-muestre. Los valores exactos vienen de addon-processing/upgrade-processing + create-preference.
+    const checkoutFeedbackHandledRef = useRef(false)
+    useEffect(() => {
+        if (checkoutFeedbackHandledRef.current) return
+        const addon = searchParams.get('addon')
+        const upgrade = searchParams.get('upgrade')
+        if (!addon && !upgrade) return
+        checkoutFeedbackHandledRef.current = true
+
+        if (addon === 'success') {
+            setError(null)
+            setSuccessMessage('Tu módulo quedó activo y se suma a tu próximo cobro.')
+            void refreshStatus()
+        } else if (addon === 'pending') {
+            setSuccessMessage(null)
+            setError('Tu pago del módulo está siendo procesado. El módulo se activará apenas Mercado Pago confirme el cobro; vuelve a revisar en unos minutos.')
+            void refreshStatus()
+        } else if (addon === 'failure') {
+            setSuccessMessage(null)
+            setError('No se pudo completar el pago del módulo. No se realizó ningún cobro. Puedes intentarlo nuevamente desde el catálogo de módulos.')
+        }
+
+        if (upgrade === 'success') {
+            setError(null)
+            setSuccessMessage('Plan actualizado.')
+            void refreshStatus()
+        } else if (upgrade === 'pending') {
+            setSuccessMessage(null)
+            setError('Tu cambio de plan está siendo procesado. El nuevo plan se activará apenas Mercado Pago confirme el cobro; vuelve a revisar en unos minutos.')
+            void refreshStatus()
+        } else if (upgrade === 'failure') {
+            setSuccessMessage(null)
+            setError('No se pudo completar el cambio de plan. No se realizó ningún cobro. Puedes intentarlo nuevamente.')
+        }
+
+        // Limpiar el param para que un refresh no re-muestre el banner.
+        router.replace('/coach/subscription')
+    }, [searchParams, router])
+
     const allowedCycles = getTierAllowedBillingCycles(selectedTier)
     const allowedCycleOptions = cycleOptions.filter((cycle) => allowedCycles.includes(cycle))
+
+    // Scroll del banner de feedback (éxito/error) a la vista al setearse (issue #3): se renderiza al
+    // final de la página, off-screen en móvil cuando se dispara desde un control de más arriba.
+    useEffect(() => {
+        if (!error && !successMessage) return
+        feedbackBannerRef.current?.scrollIntoView({ block: 'nearest' })
+    }, [error, successMessage])
+
+    // Scroll del banner ámbar de bloqueo a la vista al setearse (issue #3).
+    useEffect(() => {
+        if (!blockedMsg) return
+        blockedMsgRef.current?.scrollIntoView({ block: 'nearest' })
+    }, [blockedMsg])
+
+    // ── A11y de diálogo para los modales hechos a mano (issue #4) ──────────────
+    // Mantenemos los divs a mano (sin cambiar de primitiva, para no regresar comportamiento) pero
+    // sumamos cierre con Escape y restauración del foco al disparador al cerrar. El autofocus del
+    // primer interactivo se hace por panel (ref callback). Un único handler cubre los tres modales:
+    // el que esté abierto define la acción de cierre.
+    const anyModalOpen = showUpgradeConfirm || addonModalKey !== null || cancelAddonKey !== null
+    function closeAllModals() {
+        setShowUpgradeConfirm(false)
+        setAddonModalKey(null)
+        setCancelAddonKey(null)
+        setCancelAddonEffective(undefined)
+    }
+    useEffect(() => {
+        if (!anyModalOpen) return
+        function onKeyDown(e: KeyboardEvent) {
+            if (e.key === 'Escape') {
+                e.stopPropagation()
+                closeAllModals()
+            }
+        }
+        document.addEventListener('keydown', onKeyDown)
+        return () => document.removeEventListener('keydown', onKeyDown)
+    }, [anyModalOpen])
+    // Restaurar el foco al disparador cuando se cierran TODOS los modales.
+    useEffect(() => {
+        if (anyModalOpen) return
+        const trigger = modalTriggerRef.current
+        if (trigger) {
+            trigger.focus()
+            modalTriggerRef.current = null
+        }
+    }, [anyModalOpen])
 
     useEffect(() => {
         if (!isBillingCycleAllowedForTier(selectedTier, selectedCycle)) {
@@ -215,7 +337,25 @@ export default function CoachSubscriptionPage() {
                 body: JSON.stringify({ tier: selectedTier, billingCycle: selectedCycle, addons: upgradeAddons }),
             })
             const payload = await response.json()
-            if (!response.ok) throw new Error(payload.error ?? 'No se pudo iniciar el cambio de plan')
+            if (!response.ok) {
+                // 409 OVER_CAPACITY: el server bloquea bajar a un tier con menos cupo que tus
+                // alumnos activos. Mostramos su mensaje (incluye los números N/M) en el banner.
+                if (payload.code === 'OVER_CAPACITY') {
+                    throw new Error(
+                        payload.error ??
+                            `Ese plan permite hasta ${payload.maxClients ?? '—'} alumnos y tienes ${payload.activeClients ?? activeClientCount}. Archiva alumnos antes de bajar de plan.`
+                    )
+                }
+                // 409 NUTRITION_ADDON_ON_DOWNGRADE: el server bloquea bajar a un tier sin nutrición
+                // mientras haya un add-on de nutrición vivo. Mostramos su mensaje en el banner.
+                if (payload.code === 'NUTRITION_ADDON_ON_DOWNGRADE') {
+                    throw new Error(
+                        payload.error ??
+                            'Quita el modulo de Nutricion por intercambios antes de bajar a este plan.'
+                    )
+                }
+                throw new Error(payload.error ?? 'No se pudo iniciar el cambio de plan')
+            }
             if (!payload.checkoutUrl) throw new Error('No se recibió URL de checkout')
             window.location.href = payload.checkoutUrl
         } catch (err) {
@@ -265,9 +405,25 @@ export default function CoachSubscriptionPage() {
     const selectedComposite = selectedPrice + upgradeAddonsCycleTotal
     const coachCycle = (coach?.billing_cycle ?? 'monthly') as BillingCycle
     const coachTier = (coach?.subscription_tier ?? 'starter') as SubscriptionTier
+    // Dirección del cambio de plan elegido vs el tier vigente — bifurca el copy del modal (issue #1).
+    // Espejo de comparePlanDirection del server: 'upgrade' cobra la diferencia prorrateada y activa
+    // AHORA; 'downgrade'/'same' (cambio de ciclo) se agendan al corte.
+    const selectedDirection = comparePlanDirection(coachTier, selectedTier)
     const hasActivePaidPlan =
         coachTier !== 'free' &&
         (coach?.subscription_status === 'active' || coach?.subscription_status === 'trialing')
+    // El copy "upgrade activa ahora" solo aplica a un suscriptor pago ACTIVO (isActiveUpgrade del
+    // server). free→paid y reactivación son altas completas, no cambios mid-cycle.
+    const isUpgradeNow = hasActivePaidPlan && selectedDirection === 'upgrade'
+    // P1-3: ¿el coach tiene un add-on de nutrición por intercambios VIVO? Bloquea bajar a un tier
+    // sin nutrición (Starter) hasta quitarlo — espejo del 409 NUTRITION_ADDON_ON_DOWNGRADE del server.
+    // Solo ACTIVE bloquea: si ya dio de baja la nutrición (cancel_pending) el downgrade se permite.
+    const hasLiveNutrition = addons.some(
+        (a) => a.moduleKey === 'nutrition_exchanges' && a.status === 'active'
+    )
+    // No-op: el tier y ciclo elegidos son idénticos al plan actual → no hay nada que cobrar ni
+    // cambiar. Deshabilita "Continuar" (si llegara al server, devuelve 400/no-op igualmente).
+    const isNoOpChange = selectedTier === coachTier && selectedCycle === coachCycle
 
     // ── Add-ons: estado de cada módulo a partir de las filas vivas del endpoint ──
     function addonForKey(key: ModuleKey): CoachAddonView | undefined {
@@ -286,6 +442,7 @@ export default function CoachSubscriptionPage() {
             setEvents(Array.isArray(payload.events) ? payload.events : [])
             setAddons(Array.isArray(payload.addons) ? payload.addons : [])
             setBilling(payload.billing ?? null)
+            setActiveClientCount(typeof payload.activeClientCount === 'number' ? payload.activeClientCount : 0)
         } catch {
             /* transient — el estado previo sigue visible */
         }
@@ -312,16 +469,13 @@ export default function CoachSubscriptionPage() {
             })
             const payload = await response.json()
             if (!response.ok) throw new Error(payload.error ?? 'No se pudo agregar el módulo.')
-            // Trimestral/anual: el endpoint devuelve la URL del one-shot prorrateado → redirige a MP.
+            // Todos los ciclos: el endpoint devuelve la URL del one-shot prorrateado → redirige a MP.
             if (payload.kind === 'one_shot_checkout' && payload.checkoutUrl) {
                 captureAddonFunnel('addon_oneshot_redirected', { module_key: key, billing_cycle: coachCycle, tier: coachTier })
                 window.location.href = payload.checkoutUrl
                 return
             }
-            // Mensual: módulo activado al instante; refrescar estado + total compuesto.
-            setAddonModalKey(null)
-            setSuccessMessage('Módulo agregado. Ya está disponible en tu cuenta.')
-            await refreshStatus()
+            throw new Error('No se pudo iniciar el pago del módulo.')
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error inesperado')
         } finally {
@@ -362,7 +516,7 @@ export default function CoachSubscriptionPage() {
 
     
             {loading ? (
-                <p className="mt-6 text-sm text-muted-foreground">Cargando estado de suscripción...</p>
+                <p role="status" aria-live="polite" className="mt-6 text-sm text-muted-foreground">Cargando estado de suscripción...</p>
             ) : null}
 
             {coach ? (
@@ -521,11 +675,11 @@ export default function CoachSubscriptionPage() {
 
                                     {/* Acción Agregar / Quitar */}
                                     <div className="mt-3 flex items-center justify-between gap-3">
-                                        <span className="text-xs text-muted-foreground">
+                                        <span className="min-w-0 flex-1 text-xs text-muted-foreground">
                                             ${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes
                                             {coachCycle !== 'monthly' && (
                                                 <span className="ml-1">
-                                                    ({coachCycle === 'annual' ? 'tu ciclo anual descuenta 20%' : 'tu ciclo trimestral descuenta 10%'})
+                                                    (tu ciclo {coachCycle === 'annual' ? 'anual' : 'trimestral'} descuenta {BILLING_CYCLE_CONFIG[coachCycle].discountPercent}%)
                                                 </span>
                                             )}
                                         </span>
@@ -533,8 +687,8 @@ export default function CoachSubscriptionPage() {
                                             <button
                                                 type="button"
                                                 disabled={addonSaving || isCancelPendingCharged || isCommitted || !SELF_SERVICE_ADDONS_ENABLED}
-                                                onClick={() => { setCancelAddonEffective(undefined); setCancelAddonKey(key) }}
-                                                className="shrink-0 h-9 rounded-xl border border-border px-4 text-xs font-semibold text-muted-foreground hover:text-foreground disabled:opacity-60"
+                                                onClick={(e) => { modalTriggerRef.current = e.currentTarget; setCancelAddonEffective(undefined); setCancelAddonKey(key) }}
+                                                className="shrink-0 h-11 min-h-[44px] rounded-xl border border-border px-4 text-xs font-semibold text-muted-foreground hover:text-foreground disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                             >
                                                 {isCancelPendingCharged || isCommitted ? 'Baja solicitada' : 'Quitar'}
                                             </button>
@@ -542,8 +696,8 @@ export default function CoachSubscriptionPage() {
                                             <button
                                                 type="button"
                                                 disabled={addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
-                                                onClick={() => openAddonModal(key)}
-                                                className="shrink-0 h-9 rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                                                onClick={(e) => { modalTriggerRef.current = e.currentTarget; openAddonModal(key) }}
+                                                className="shrink-0 h-11 min-h-[44px] rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                             >
                                                 Agregar
                                             </button>
@@ -574,6 +728,11 @@ export default function CoachSubscriptionPage() {
                 </section>
             ) : null}
 
+            {/* Gateado en `coach` cargado: sin esto la sección renderiza con coachTier='starter'
+                default (coach=null) y los bloqueos (cupo/nutrición) no aplican → Starter clickeable
+                unos segundos hasta que carga subscription-status. coach se setea junto a addons +
+                activeClientCount en el mismo fetch → al aparecer la sección, la data está completa. */}
+            {coach && (
             <section className="mt-6 rounded-2xl border border-border bg-card p-5 space-y-5">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                     <h2 className="text-lg font-semibold text-foreground">Cambiar plan</h2>
@@ -585,7 +744,7 @@ export default function CoachSubscriptionPage() {
                                     key={cycle}
                                     type="button"
                                     onClick={() => setSelectedCycle(cycle)}
-                                    className={`flex items-center rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors sm:px-3 ${
+                                    className={`flex min-h-[44px] items-center rounded-lg px-2.5 py-2 text-xs font-semibold transition-colors sm:px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
                                         selectedCycle === cycle
                                             ? 'bg-background text-foreground shadow-sm'
                                             : 'text-muted-foreground hover:text-foreground'
@@ -593,10 +752,10 @@ export default function CoachSubscriptionPage() {
                                 >
                                     {BILLING_CYCLE_CONFIG[cycle].label}
                                     {cycle === 'annual' && (
-                                        <span className="ml-1 rounded bg-emerald-500/15 px-1 py-0.5 text-[9px] font-bold text-emerald-400">−20%</span>
+                                        <span className="ml-1 rounded bg-emerald-500/15 px-1 py-0.5 text-[9px] font-bold text-emerald-400">−{BILLING_CYCLE_CONFIG[cycle].discountPercent}%</span>
                                     )}
                                     {cycle === 'quarterly' && (
-                                        <span className="ml-1 rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-bold text-amber-400">−10%</span>
+                                        <span className="ml-1 rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-bold text-amber-400">−{BILLING_CYCLE_CONFIG[cycle].discountPercent}%</span>
                                     )}
                                 </button>
                             ))}
@@ -616,20 +775,67 @@ export default function CoachSubscriptionPage() {
                         const badge = TIER_BADGE[tier]
                         const hasNutrition = !getTierNutritionSummary(tier).startsWith('Sin')
                         const features = TIER_CONFIG[tier].features.slice(0, 3)
+                        // Downgrade que no cabe: bajar a un tier con menos cupo que tus alumnos
+                        // activos. Se bloquea (mismo guard que el 409 OVER_CAPACITY del server).
+                        const tierMaxClients = getTierMaxClients(tier)
+                        const wouldExceed =
+                            comparePlanDirection(coachTier, tier) === 'downgrade' &&
+                            tierMaxClients < activeClientCount
+                        // P1-3: bajar a un tier sin nutrición (Starter) con un add-on de nutrición vivo.
+                        // Se bloquea (mismo guard que el 409 NUTRITION_ADDON_ON_DOWNGRADE del server).
+                        const nutritionBlocks =
+                            comparePlanDirection(coachTier, tier) === 'downgrade' &&
+                            !getTierCapabilities(tier).canUseNutrition &&
+                            hasLiveNutrition
+                        const isBlocked = wouldExceed || nutritionBlocks
+                        const blockTooltip = wouldExceed
+                            ? `Este plan permite hasta ${tierMaxClients} alumnos y tienes ${activeClientCount} activos. Archiva alumnos para poder bajar a este plan.`
+                            : nutritionBlocks
+                            ? 'Quita el modulo de Nutricion para bajar a este plan.'
+                            : undefined
+                        // Razón corta siempre visible bajo la card bloqueada (issue #8): el usuario táctil
+                        // no debe tener que tocar una card que se ve deshabilitada para enterarse.
+                        const shortBlockReason = wouldExceed
+                            ? 'Sin cupo para tus alumnos activos.'
+                            : nutritionBlocks
+                            ? 'Quita el módulo de Nutrición primero.'
+                            : undefined
+                        const blockReasonId = `tier-block-${tier}`
                         return (
                             <button
                                 key={tier}
                                 type="button"
-                                onClick={() => setSelectedTier(tier)}
-                                className={`relative rounded-2xl border p-4 text-left transition-all ${
-                                    isSelected
+                                aria-disabled={isBlocked}
+                                aria-describedby={isBlocked ? blockReasonId : undefined}
+                                title={blockTooltip}
+                                onClick={() => {
+                                    if (isBlocked) { setBlockedMsg(blockTooltip ?? 'No puedes seleccionar este plan.'); return }
+                                    setBlockedMsg(null)
+                                    setSelectedTier(tier)
+                                }}
+                                className={`relative rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+                                    isBlocked
+                                        ? 'cursor-not-allowed border-border opacity-50'
+                                        : isSelected
                                         ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30'
                                         : 'border-border hover:border-border/80 hover:bg-secondary/30'
                                 }`}
                             >
-                                {badge && (
+                                {/* Razón del bloqueo para lectores de pantalla (referida por aria-describedby) */}
+                                {isBlocked && (
+                                    <span id={blockReasonId} className="sr-only">{blockTooltip}</span>
+                                )}
+                                {badge && !isBlocked && (
                                     <span className={`absolute right-3 top-3 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${badge.cls}`}>
                                         {badge.label}
+                                    </span>
+                                )}
+                                {isBlocked && (
+                                    <span
+                                        aria-label={wouldExceed ? 'Bloqueado: sin cupo' : 'Bloqueado: requiere quitar Nutrición'}
+                                        className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                                    >
+                                        <Lock className="h-3 w-3" aria-hidden="true" /> {wouldExceed ? 'Sin cupo' : 'Nutrición'}
                                     </span>
                                 )}
 
@@ -673,29 +879,54 @@ export default function CoachSubscriptionPage() {
                                         {getTierNutritionSummary(tier)}
                                     </span>
                                 </div>
+
+                                {/* Razón corta siempre visible bajo la card bloqueada (issue #8) */}
+                                {isBlocked && shortBlockReason && (
+                                    <p className="mt-3 flex items-start gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                                        <Lock className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                                        {shortBlockReason}
+                                    </p>
+                                )}
                             </button>
                         )
                     })}
                 </div>
 
+                {blockedMsg && (
+                    <div ref={blockedMsgRef} role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-600 dark:text-amber-300">
+                        <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>{blockedMsg}</span>
+                    </div>
+                )}
+
                 {/* Combo plan + add-ons (plan 05): elegí módulos para pagarlos JUNTO al plan en un
                     solo checkout. Visible solo con el flag de lanzamiento (en prod oculto). */}
                 {SELF_SERVICE_ADDONS_ENABLED && (
                     <div className="rounded-xl border border-border bg-card p-4">
-                        <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            <Puzzle className="h-3.5 w-3.5" /> Sumar módulos (opcional · se pagan junto al plan)
+                        <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            <Puzzle className="h-3.5 w-3.5" aria-hidden="true" /> Sumar módulos (opcional · se pagan junto al plan)
+                        </p>
+                        {/* Aclaración (issue #12): estos módulos se cobran CON el plan al corte; el catálogo
+                            "Agregar ahora" de arriba cobra una proración inmediata. Dos superficies distintas. */}
+                        <p className="mb-2 text-[11px] text-muted-foreground">
+                            Se cobran junto a tu plan en el mismo checkout y toman efecto al corte. Si necesitas
+                            un módulo de inmediato, usa &quot;Agregar&quot; en la sección Módulos add-on (cobro prorrateado ahora).
                         </p>
                         <div className="space-y-1.5">
                             {ADDON_MODULE_KEYS.map((key) => {
                                 const cfg = ADDON_CONFIG[key]
                                 const needsNutrition =
                                     key === 'nutrition_exchanges' && !getTierCapabilities(selectedTier).canUseNutrition
+                                // Un módulo con fila VIVA (activa/cortesía/baja-pendiente) ya está contratado:
+                                // no debe ofrecerse acá (lo cobraría dos veces / el server lo rechazaría).
+                                const alreadyLive = !!addonForKey(key)
+                                const disabled = needsNutrition || alreadyLive
                                 const checked = upgradeAddons.includes(key)
                                 return (
                                     <label
                                         key={key}
                                         className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${
-                                            needsNutrition
+                                            disabled
                                                 ? 'cursor-not-allowed border-border opacity-50'
                                                 : 'cursor-pointer border-border hover:bg-secondary/40'
                                         }`}
@@ -703,8 +934,8 @@ export default function CoachSubscriptionPage() {
                                         <span className="flex items-center gap-2">
                                             <input
                                                 type="checkbox"
-                                                disabled={needsNutrition}
-                                                checked={checked}
+                                                disabled={disabled}
+                                                checked={checked && !alreadyLive}
                                                 onChange={(e) =>
                                                     setUpgradeAddons((prev) =>
                                                         e.target.checked
@@ -715,9 +946,11 @@ export default function CoachSubscriptionPage() {
                                                 className="h-4 w-4 rounded border-border"
                                             />
                                             <span className="text-foreground">{cfg.label}</span>
-                                            {needsNutrition && (
+                                            {alreadyLive ? (
+                                                <span className="text-[10px] font-semibold text-emerald-500">ya activo</span>
+                                            ) : needsNutrition ? (
                                                 <span className="text-[10px] font-semibold text-amber-500">requiere Pro+</span>
-                                            )}
+                                            ) : null}
                                         </span>
                                         <span className="text-muted-foreground">
                                             ${cfg.priceClpMensual.toLocaleString('es-CL')}/mes
@@ -746,52 +979,98 @@ export default function CoachSubscriptionPage() {
                     </div>
                     <button
                         type="button"
-                        onClick={() => setShowUpgradeConfirm(true)}
-                        disabled={saving}
-                        className="shrink-0 h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-60"
+                        onClick={(e) => { modalTriggerRef.current = e.currentTarget; setShowUpgradeConfirm(true) }}
+                        disabled={saving || isNoOpChange}
+                        title={isNoOpChange ? 'Ya tienes este plan y ciclo. Elige un plan o ciclo distinto.' : undefined}
+                        className="shrink-0 h-11 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                     >
                         Continuar →
                     </button>
                 </div>
             </section>
+            )}
 
             {/* Upgrade confirmation modal */}
             {showUpgradeConfirm && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-                    <div className="w-full max-w-md rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-6 shadow-2xl">
-                        <h2 className="text-lg font-bold text-foreground">Confirmar cambio de plan</h2>
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+                    onClick={() => setShowUpgradeConfirm(false)}
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby={upgradeModalTitleId}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full max-w-md rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-6 pb-safe shadow-2xl max-h-[90dvh] overflow-y-auto"
+                    >
+                        <h2 id={upgradeModalTitleId} className="text-lg font-bold text-foreground">Confirmar cambio de plan</h2>
                         <div className="mt-4 space-y-2 rounded-xl border border-border bg-secondary/40 p-4 text-sm">
-                            {coach?.current_period_end && (
-                                <p className="text-muted-foreground">
-                                    Tu plan actual{' '}
-                                    <strong className="text-foreground">
-                                        ({coach.subscription_tier in TIER_CONFIG
-                                            ? TIER_CONFIG[coach.subscription_tier as SubscriptionTier].label
-                                            : coach.subscription_tier})
-                                    </strong>{' '}
-                                    continúa hasta el{' '}
-                                    <strong className="text-foreground">
-                                        {new Date(coach.current_period_end).toLocaleDateString('es-CL', {
-                                            day: 'numeric', month: 'long', year: 'numeric',
-                                        })}
-                                    </strong>
-                                    .
-                                </p>
+                            {/* Issue #1: el copy depende de la DIRECCIÓN del cambio. Un UPGRADE de un pago
+                                activo se activa AHORA y cobra solo la DIFERENCIA prorrateada (el server hace
+                                el one-shot); NO mostramos el compuesto completo como si fuera el cargo de hoy.
+                                Downgrade y cambio de ciclo SÍ se agendan al corte (el copy original aplica). */}
+                            {isUpgradeNow ? (
+                                <>
+                                    <p className="text-muted-foreground">
+                                        Tu nuevo plan{' '}
+                                        <strong className="text-foreground">{TIER_CONFIG[selectedTier].label}</strong>{' '}
+                                        se activa <strong className="text-foreground">ahora</strong>. Hoy pagas solo la{' '}
+                                        <strong className="text-foreground">diferencia prorrateada</strong> por los días que
+                                        restan de tu ciclo actual.
+                                    </p>
+                                    <p className="text-muted-foreground">
+                                        Desde tu próxima renovación se cobra el valor completo{' '}
+                                        <strong className="text-foreground">
+                                            ${getTierPriceClp(selectedTier, coachCycle).toLocaleString('es-CL')} CLP / {BILLING_CYCLE_CONFIG[coachCycle].label.toLowerCase()}
+                                        </strong>
+                                        {addons.some((a) => a.source === 'self_service' && a.status !== 'cancelled') && (
+                                            <span className="text-muted-foreground"> (más tus módulos add-on activos)</span>
+                                        )}
+                                        . El monto exacto de la diferencia se calcula en el checkout seguro de Mercado Pago.
+                                    </p>
+                                    {upgradeAddons.length > 0 && (
+                                        <p className="text-muted-foreground text-xs">
+                                            Nota: en un upgrade de plan, los módulos elegidos en &quot;Sumar módulos&quot;
+                                            ({upgradeAddons.map((k) => ADDON_CONFIG[k].label).join(', ')}) no se incluyen en
+                                            este cobro inmediato. Agrégalos desde la sección Módulos add-on cuando el plan esté activo.
+                                        </p>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    {coach?.current_period_end && (
+                                        <p className="text-muted-foreground">
+                                            Tu plan actual{' '}
+                                            <strong className="text-foreground">
+                                                ({coach.subscription_tier in TIER_CONFIG
+                                                    ? TIER_CONFIG[coach.subscription_tier as SubscriptionTier].label
+                                                    : coach.subscription_tier})
+                                            </strong>{' '}
+                                            continúa hasta el{' '}
+                                            <strong className="text-foreground">
+                                                {new Date(coach.current_period_end).toLocaleDateString('es-CL', {
+                                                    day: 'numeric', month: 'long', year: 'numeric',
+                                                })}
+                                            </strong>
+                                            .
+                                        </p>
+                                    )}
+                                    <p className="text-muted-foreground">
+                                        A partir de esa fecha, tu nuevo plan{' '}
+                                        <strong className="text-foreground">{TIER_CONFIG[selectedTier].label}</strong>{' '}
+                                        se activará por{' '}
+                                        <strong className="text-foreground">
+                                            ${selectedComposite.toLocaleString('es-CL')} CLP / {BILLING_CYCLE_CONFIG[selectedCycle].label.toLowerCase()}
+                                        </strong>
+                                        {upgradeAddons.length > 0 && (
+                                            <span className="text-muted-foreground">
+                                                {' '}(plan ${selectedPrice.toLocaleString('es-CL')} + {upgradeAddons.map((k) => ADDON_CONFIG[k].label).join(', ')})
+                                            </span>
+                                        )}
+                                        .
+                                    </p>
+                                </>
                             )}
-                            <p className="text-muted-foreground">
-                                A partir de esa fecha, tu nuevo plan{' '}
-                                <strong className="text-foreground">{TIER_CONFIG[selectedTier].label}</strong>{' '}
-                                se activará por{' '}
-                                <strong className="text-foreground">
-                                    ${selectedComposite.toLocaleString('es-CL')} CLP / {BILLING_CYCLE_CONFIG[selectedCycle].label.toLowerCase()}
-                                </strong>
-                                {upgradeAddons.length > 0 && (
-                                    <span className="text-muted-foreground">
-                                        {' '}(plan ${selectedPrice.toLocaleString('es-CL')} + {upgradeAddons.map((k) => ADDON_CONFIG[k].label).join(', ')})
-                                    </span>
-                                )}
-                                .
-                            </p>
                             {!TIER_CONFIG[selectedTier].features.includes('Planes de nutrición') &&
                              coach?.subscription_tier &&
                              TIER_CONFIG[coach.subscription_tier as SubscriptionTier]?.features.includes('Planes de nutrición') && (
@@ -813,8 +1092,9 @@ export default function CoachSubscriptionPage() {
                         <div className="mt-4 flex gap-3">
                             <button
                                 type="button"
+                                ref={(el) => { if (el) el.focus() }}
                                 onClick={() => setShowUpgradeConfirm(false)}
-                                className="flex-1 h-10 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:text-foreground"
+                                className="flex-1 h-11 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                             >
                                 Cancelar
                             </button>
@@ -822,7 +1102,7 @@ export default function CoachSubscriptionPage() {
                                 type="button"
                                 onClick={() => { setShowUpgradeConfirm(false); void handleChangePlan() }}
                                 disabled={saving}
-                                className="flex-1 h-10 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                                className="flex-1 h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                             >
                                 {saving ? 'Procesando...' : 'Confirmar'}
                             </button>
@@ -835,11 +1115,19 @@ export default function CoachSubscriptionPage() {
             {addonModalKey && (() => {
                 const cfg = ADDON_CONFIG[addonModalKey]
                 const rules = getAddonPaymentRulesForCycle(coachCycle)
-                const isMonthly = coachCycle === 'monthly'
                 return (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-                        <div className="w-full max-w-lg rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-6 shadow-2xl max-h-[90dvh] overflow-y-auto">
-                            <h2 className="text-lg font-bold text-foreground">Agregar {cfg.label}</h2>
+                    <div
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+                        onClick={() => setAddonModalKey(null)}
+                    >
+                        <div
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby={addonModalTitleId}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full max-w-lg rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-6 pb-safe shadow-2xl max-h-[90dvh] overflow-y-auto"
+                        >
+                            <h2 id={addonModalTitleId} className="text-lg font-bold text-foreground">Agregar {cfg.label}</h2>
                             <p className="mt-1 text-sm text-muted-foreground">{cfg.description}</p>
 
                             {/* Desglose: el total compuesto en vivo lo da el endpoint (billing.totalClp) */}
@@ -852,17 +1140,11 @@ export default function CoachSubscriptionPage() {
                                     <span>{cfg.label}</span>
                                     <span className="text-foreground">${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes</span>
                                 </div>
-                                {isMonthly ? (
-                                    <p className="pt-1 text-xs text-muted-foreground">
-                                        Se sumará a tu próximo cobro mensual. La fracción que resta de este período es cortesía.
-                                    </p>
-                                ) : (
-                                    <p className="pt-1 text-xs text-muted-foreground">
-                                        Pagas ahora un monto único prorrateado por los días que restan de tu ciclo.
-                                        Desde la renovación, el valor del módulo se suma a tu cobro habitual. El monto exacto
-                                        del pago inicial se calcula en el checkout seguro de Mercado Pago.
-                                    </p>
-                                )}
+                                <p className="pt-1 text-xs text-muted-foreground">
+                                    Pagas ahora un monto único prorrateado por los días que restan de tu ciclo.
+                                    Desde la renovación, el valor del módulo se suma a tu cobro habitual. El monto exacto
+                                    del pago inicial se calcula en el checkout seguro de Mercado Pago.
+                                </p>
                             </div>
 
                             {/* Las 5 reglas textuales (variante por ciclo) */}
@@ -877,10 +1159,11 @@ export default function CoachSubscriptionPage() {
                                 </ol>
                             </div>
 
-                            {/* Checkbox obligatorio: habilita el CTA */}
+                            {/* Checkbox obligatorio: habilita el CTA. Autofocus al abrir (primer interactivo). */}
                             <label className="mt-4 flex items-start gap-2 text-xs text-muted-foreground">
                                 <input
                                     type="checkbox"
+                                    ref={(el) => { if (el) el.focus() }}
                                     checked={addonTermsAccepted}
                                     onChange={(e) => {
                                         setAddonTermsAccepted(e.target.checked)
@@ -888,7 +1171,7 @@ export default function CoachSubscriptionPage() {
                                             captureAddonFunnel('addon_terms_accepted', { module_key: addonModalKey, billing_cycle: coachCycle, tier: coachTier })
                                         }
                                     }}
-                                    className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
+                                    className="mt-0.5 h-4 w-4 rounded border-border shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                 />
                                 <span>Acepto estas condiciones de cobro, renovación y término.</span>
                             </label>
@@ -897,7 +1180,7 @@ export default function CoachSubscriptionPage() {
                                 <button
                                     type="button"
                                     onClick={() => setAddonModalKey(null)}
-                                    className="flex-1 h-10 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:text-foreground"
+                                    className="flex-1 h-11 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                 >
                                     Cancelar
                                 </button>
@@ -905,9 +1188,9 @@ export default function CoachSubscriptionPage() {
                                     type="button"
                                     onClick={() => void handleAddAddon()}
                                     disabled={!addonTermsAccepted || addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
-                                    className="flex-1 h-10 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                                    className="flex-1 h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                 >
-                                    {addonSaving ? 'Procesando...' : isMonthly ? 'Activar módulo' : 'Ir a pagar'}
+                                    {addonSaving ? 'Procesando...' : 'Ir a pagar'}
                                 </button>
                             </div>
                         </div>
@@ -917,11 +1200,20 @@ export default function CoachSubscriptionPage() {
 
             {/* ── Modal de BAJA de add-on (plan 05 F5.2) ── */}
             {cancelAddonKey && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-                    <div className="w-full max-w-md rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-6 shadow-2xl">
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+                    onClick={() => { setCancelAddonKey(null); setCancelAddonEffective(undefined) }}
+                >
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby={cancelAddonModalTitleId}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full max-w-md rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-6 pb-safe shadow-2xl max-h-[90dvh] overflow-y-auto"
+                    >
                         {cancelAddonEffective === undefined ? (
                             <>
-                                <h2 className="text-lg font-bold text-foreground">Quitar {ADDON_CONFIG[cancelAddonKey].label}</h2>
+                                <h2 id={cancelAddonModalTitleId} className="text-lg font-bold text-foreground">Quitar {ADDON_CONFIG[cancelAddonKey].label}</h2>
                                 <p className="mt-2 text-sm text-muted-foreground">
                                     Conservas el acceso hasta el final del período que ya pagaste. No hay reembolsos por
                                     fracciones no usadas. ¿Confirmas que quieres quitar este módulo?
@@ -929,8 +1221,9 @@ export default function CoachSubscriptionPage() {
                                 <div className="mt-5 flex gap-3">
                                     <button
                                         type="button"
+                                        ref={(el) => { if (el) el.focus() }}
                                         onClick={() => setCancelAddonKey(null)}
-                                        className="flex-1 h-10 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:text-foreground"
+                                        className="flex-1 h-11 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                     >
                                         Volver
                                     </button>
@@ -938,7 +1231,7 @@ export default function CoachSubscriptionPage() {
                                         type="button"
                                         onClick={() => void handleCancelAddon()}
                                         disabled={addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
-                                        className="flex-1 h-10 rounded-xl bg-red-600 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-60"
+                                        className="flex-1 h-11 rounded-xl bg-red-600 text-sm font-semibold text-primary-foreground hover:bg-red-500 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
                                     >
                                         {addonSaving ? 'Procesando...' : 'Quitar módulo'}
                                     </button>
@@ -946,7 +1239,7 @@ export default function CoachSubscriptionPage() {
                             </>
                         ) : (
                             <>
-                                <h2 className="text-lg font-bold text-foreground">Baja registrada</h2>
+                                <h2 id={cancelAddonModalTitleId} className="text-lg font-bold text-foreground">Baja registrada</h2>
                                 <p className="mt-2 text-sm text-muted-foreground" data-testid="addon-cancel-effective">
                                     {cancelAddonEffective
                                         ? `Conservas el acceso a ${ADDON_CONFIG[cancelAddonKey].label} hasta el ${new Date(cancelAddonEffective).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}. Sin reembolso de fracciones.`
@@ -955,8 +1248,9 @@ export default function CoachSubscriptionPage() {
                                 <div className="mt-5">
                                     <button
                                         type="button"
+                                        ref={(el) => { if (el) el.focus() }}
                                         onClick={() => { setCancelAddonKey(null); setCancelAddonEffective(undefined) }}
-                                        className="h-10 w-full rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+                                        className="h-11 w-full rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                     >
                                         Entendido
                                     </button>
@@ -1045,19 +1339,19 @@ export default function CoachSubscriptionPage() {
                     type="button"
                     onClick={handleCancel}
                     disabled={saving}
-                    className="mt-3 inline-flex h-10 items-center justify-center rounded-xl border border-border px-4 text-sm font-semibold text-muted-foreground hover:text-foreground disabled:opacity-60"
+                    className="mt-3 inline-flex h-11 items-center justify-center rounded-xl border border-border px-4 text-sm font-semibold text-muted-foreground hover:text-foreground disabled:opacity-60"
                 >
                     Enviar solicitud de cancelación
                 </button>
             </section>
 
             {error ? (
-                <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                <p ref={feedbackBannerRef} role="alert" aria-live="assertive" className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
                     {error}
                 </p>
             ) : null}
             {successMessage ? (
-                <p className="mt-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">
+                <p ref={feedbackBannerRef} aria-live="polite" className="mt-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
                     {successMessage}
                 </p>
             ) : null}

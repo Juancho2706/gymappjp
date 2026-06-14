@@ -4,7 +4,10 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
 import { mapProviderStatus, resolveCurrentPeriodEnd, resolveTerminalEvent } from '@/lib/payments/subscription-state'
 import {
+    ADDON_CONFIG,
+    BILLING_CYCLE_CONFIG,
     getTierMaxClients,
+    getTierRank,
     isBillingCycleAllowedForTier,
     type BillingCycle,
     type SubscriptionTier,
@@ -15,12 +18,17 @@ import {
     verifyMercadoPagoSignatureIfConfigured,
 } from '@/lib/payments/webhook-authorization'
 import { cancelAllForCoach, listLive } from '@/infrastructure/db/coach-addons.repository'
+import { buildCheckoutExternalReference } from '@/lib/payments/providers/mercadopago'
+import { clearUpgradeInFlight } from '@/services/billing/plan-change-lock'
 import {
+    getAddonProrationClp,
     getCompositeAmountClp,
     materializeAddonFromOneShot,
     toBillableAddons,
     type AddonPaymentsPort,
 } from '@/services/billing/addons.service'
+import { sendTransactionalEmail } from '@/lib/email/send-email'
+import { buildAddonActivationReceiptEmail } from '@/lib/email/addon-receipt-templates'
 import {
     applyFirstChargeToAddons,
     buildAcceptedRulesPayload,
@@ -102,6 +110,35 @@ async function handleWebhook(request: Request, rawBody: string) {
     }
 
     if (!result.coachId) {
+        // P1-1 fallback (money-safety): una notificación de REFUND/CHARGEBACK de MP a veces OMITE el
+        // external_reference → no hay coachId y este early-return descartaría el refund en silencio
+        // (el coach queda activo, sin fila de auditoría). Recuperamos al coach por el preapproval id
+        // expuesto en el pago (metadata.preapproval_id) matcheando subscription_mp_id, y si existe lo
+        // tratamos como coachId efectivo para CONTINUAR el flujo normal (FIX-7 corre el refund). Si no
+        // hay match, seguimos al early-return de siempre. FIX-7 es inalterado e idempotente.
+        if (
+            result.eventKind === 'payment' &&
+            (result.providerStatus === 'refunded' || result.providerStatus === 'charged_back') &&
+            result.preapprovalId
+        ) {
+            const { data: byPreapproval } = await admin
+                .from('coaches')
+                .select('id')
+                .eq('subscription_mp_id', result.preapprovalId)
+                .maybeSingle()
+            if (byPreapproval) {
+                console.info('[payments.webhook] refund recovered coach by preapproval id', {
+                    traceId,
+                    coachId: byPreapproval.id,
+                    preapprovalId: result.preapprovalId,
+                    providerStatus: result.providerStatus,
+                })
+                result.coachId = byPreapproval.id
+            }
+        }
+    }
+
+    if (!result.coachId) {
         console.info('[payments.webhook] accepted without coachId', {
             traceId,
             eventId: result.eventId ?? null,
@@ -163,6 +200,27 @@ async function handleWebhook(request: Request, rawBody: string) {
             })
             return NextResponse.json({ ok: true })
         }
+        // FIX-5: the top-level replay guard dedups by provider_event_id === notificationId, but the
+        // one-shot history row below is keyed `addon:<id>:oneshot` (never the notificationId), so a
+        // REDELIVERED one-shot payment notification would reprocess and re-send the activation receipt
+        // every time. Short-circuit here if we already wrote a notificationId-keyed marker for this
+        // exact notification: materialization is idempotent (unique partial index), but the receipt
+        // email + side-effects are NOT, so skip the whole branch on redelivery.
+        if (notificationId) {
+            const { data: oneShotAlready } = await admin
+                .from('subscription_events')
+                .select('id')
+                .eq('provider_event_id', notificationId)
+                .maybeSingle()
+            if (oneShotAlready) {
+                console.info('[payments.webhook] duplicate one-shot notification, skipping receipt', {
+                    traceId,
+                    coachId: coach.id,
+                    notificationId,
+                })
+                return NextResponse.json({ ok: true })
+            }
+        }
         const tierForAddon = (coach.subscription_tier ?? 'starter') as SubscriptionTier
         const cycleForAddon = (coach.billing_cycle ?? 'monthly') as BillingCycle
         const paidAt = result.paidAt ?? new Date().toISOString()
@@ -214,6 +272,93 @@ async function handleWebhook(request: Request, rawBody: string) {
             await admin
                 .from('subscription_events')
                 .upsert(altaEvent, { onConflict: 'provider_event_id' })
+
+            // FIX-5: also write a notificationId-keyed marker so a redelivery of THIS notification
+            // short-circuits at the dedup check above (the history row above is keyed by addon id,
+            // not the notificationId, so it would not catch the replay). Idempotent on conflict.
+            if (notificationId) {
+                const dedupEvent: TablesInsert<'subscription_events'> = {
+                    coach_id: coach.id,
+                    provider: provider.name,
+                    provider_event_id: notificationId,
+                    provider_checkout_id: result.providerPaymentId ?? null,
+                    provider_status: result.providerStatus ?? 'approved',
+                    payload: toJsonPayload({
+                        action: 'addon_oneshot_notification_dedup',
+                        addon_id: addon.id,
+                        module_key: moduleKey,
+                    }),
+                }
+                await admin
+                    .from('subscription_events')
+                    .upsert(dedupEvent, { onConflict: 'provider_event_id' })
+            }
+
+            // Recibo de alta — fire-and-forget. TODOS los one-shots (mensual/trim/anual desde la
+            // convergencia D4) emiten recibo; un fallo de Resend se LOGUEA pero NUNCA tumba el
+            // webhook (la materialización y el cobro ya quedaron consistentes). Evidencia SERNAC.
+            try {
+                // El email no está en `coaches` (vive en auth.users); coach.id === auth uid.
+                const { data: authUser } = await admin.auth.admin.getUserById(coach.id)
+                const to = authUser?.user?.email ?? null
+                if (to) {
+                    const breakdown = buildAddonBreakdown([addon], cycleForAddon)
+                    const baseClp = tierBaseClp(tierForAddon, cycleForAddon)
+                    const addonsClp = breakdown.reduce((s, l) => s + l.cycle_amount_clp, 0)
+                    // oneShotClp = la fracción REALMENTE cobrada hoy (re-computada del corte vigente);
+                    // el monto MP es opaco, así que se deriva igual que en el alta (server-computed).
+                    const periodEnd = coach.current_period_end
+                    const oneShotClp = periodEnd
+                        ? getAddonProrationClp(
+                              addon.priceClpMensual,
+                              cycleForAddon,
+                              new Date(paidAt),
+                              new Date(periodEnd)
+                          )
+                        : addonsClp
+                    const acceptedRules = buildAcceptedRulesPayload(cycleForAddon)
+                    const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+                    const { subject, html } = buildAddonActivationReceiptEmail({
+                        coachName: to.split('@')[0] ?? 'coach',
+                        addonLabel: ADDON_CONFIG[moduleKey].label,
+                        cycleLabel: BILLING_CYCLE_CONFIG[cycleForAddon].label,
+                        baseClp,
+                        addonLines: breakdown.map((l) => ({
+                            label: ADDON_CONFIG[l.module_key].label,
+                            cycleAmountClp: l.cycle_amount_clp,
+                        })),
+                        totalClp: baseClp + addonsClp,
+                        oneShotClp,
+                        nextChargeDate: periodEnd
+                            ? new Date(periodEnd).toLocaleDateString('es-CL', {
+                                  day: 'numeric',
+                                  month: 'long',
+                                  year: 'numeric',
+                              })
+                            : null,
+                        acceptedRules: acceptedRules.rules,
+                        termsVersion: acceptedRules.version,
+                        subscriptionUrl: `${appUrl}/coach/subscription`,
+                    })
+                    const res = await sendTransactionalEmail({ to, subject, html })
+                    if (!res.ok) {
+                        console.error('[payments.webhook] one-shot addon receipt email failed', {
+                            traceId,
+                            coachId: coach.id,
+                            moduleKey,
+                            error: res.error,
+                        })
+                    }
+                }
+            } catch (receiptErr) {
+                console.error('[payments.webhook] one-shot addon receipt email threw', {
+                    traceId,
+                    coachId: coach.id,
+                    moduleKey,
+                    message:
+                        receiptErr instanceof Error ? receiptErr.message : String(receiptErr),
+                })
+            }
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
             console.error('[payments.webhook] one-shot addon materialization failed', {
@@ -229,6 +374,154 @@ async function handleWebhook(request: Request, rawBody: string) {
             traceId,
             coachId: coach.id,
             moduleKey,
+        })
+        return NextResponse.json({ ok: true })
+    }
+
+    // ── Pago ONE-SHOT de UPGRADE de tier (plan estrategia 06, C4) ─────────────────────
+    // Llega como PAYMENT con external_reference dedicado `tier_upgrade|...`. Backstop idempotente
+    // de confirm-upgrade: corre la MISMA activación rank-guarded (tier+max_clients+cycle) + PUT al
+    // nuevo compuesto y escribe el snapshot kind='tier_upgrade_proration' (dedup por
+    // provider_payment_id). NO toca el preapproval como un cobro recurrente: es un pago único, se
+    // procesa aparte y retorna. Seguro en cualquier orden respecto a confirm-upgrade.
+    if (result.eventKind === 'payment' && result.tierUpgrade) {
+        const isApproved = mapProviderStatus(result.providerStatus) === 'active'
+        if (!isApproved) {
+            // Pendiente/rechazado: nada que activar (abandono = tier intacto).
+            console.info('[payments.webhook] tier-upgrade payment not approved, skipping', {
+                traceId,
+                coachId: coach.id,
+                status: result.providerStatus,
+            })
+            return NextResponse.json({ ok: true })
+        }
+        const mpId = coach.subscription_mp_id?.trim()
+        if (!mpId) {
+            console.warn('[payments.webhook] tier-upgrade but coach has no preapproval — cannot PUT', {
+                traceId,
+                coachId: coach.id,
+            })
+            return NextResponse.json({ ok: true })
+        }
+        const newTier = result.tierUpgrade.newTier
+        const cycle = result.tierUpgrade.cycle
+        const currentTier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+        const paidAt = result.paidAt ?? new Date().toISOString()
+        try {
+            // Activación idempotente con RANK-GUARD: solo subimos tier/max_clients/cycle si el tier
+            // vigente es de rango MENOR (si ya activó —confirm-upgrade o un reintento—, no-op).
+            if (getTierRank(currentTier) < getTierRank(newTier)) {
+                const { error: activateErr } = await admin
+                    .from('coaches')
+                    .update({
+                        subscription_tier: newTier,
+                        max_clients: getTierMaxClients(newTier),
+                        billing_cycle: cycle,
+                        // status se mantiene (el upgrade no cambia el estado de la suscripción).
+                    })
+                    .eq('id', coach.id)
+                if (activateErr) {
+                    throw new Error(activateErr.message)
+                }
+            }
+
+            // PUT del preapproval al nuevo compuesto (tier nuevo + add-ons vivos) DESDE la renovación
+            // — sin cargo inmediato. Determinístico: correrlo dos veces deja el mismo valor.
+            //
+            // P0-1 STALE-REF REVERT: además del monto, reescribimos el `external_reference` del
+            // preapproval al NUEVO tier|cycle (+ add-ons vivos) para que el siguiente evento
+            // `preapproval` no re-derive el tier VIEJO y revierta el upgrade. NO agregamos un guard
+            // de "nunca bajar tier" acá: el downgrade-al-corte legítimo crea un preapproval nuevo
+            // cuyo reference (menor) SÍ es autoritativo y debe poder aplicar.
+            const live = await listLive(admin, coach.id)
+            const liveAddonKeys = live.map((a) => a.moduleKey)
+            const newComposite = getCompositeAmountClp(newTier, cycle, toBillableAddons(live))
+            await provider.updateCheckoutAmountAndRef(
+                mpId,
+                newComposite,
+                buildCheckoutExternalReference(coach.id, newTier, cycle, liveAddonKeys)
+            )
+
+            // Snapshot del cobro one-shot del upgrade (kind='tier_upgrade_proration') — idempotente
+            // por provider_payment_id. base_clp=0: el one-shot es SOLO la diferencia prorrateada de
+            // tier, no la base; el desglose de add-ons no entra en este cobro.
+            if (result.providerPaymentId) {
+                const snapshotRow: TablesInsert<'billing_snapshots'> = {
+                    coach_id: coach.id,
+                    provider_payment_id: result.providerPaymentId,
+                    charged_at: paidAt,
+                    tier: newTier,
+                    billing_cycle: cycle,
+                    kind: 'tier_upgrade_proration',
+                    base_clp: 0,
+                    addons: [],
+                    total_clp: 0,
+                }
+                const { error: snapErr } = await admin
+                    .from('billing_snapshots')
+                    .upsert(snapshotRow, { onConflict: 'provider_payment_id', ignoreDuplicates: true })
+                if (snapErr) throw new Error(snapErr.message)
+            }
+
+            // Evento de historial deduplicado por `tier_upgrade:${paymentId}` (misma key que
+            // confirm-upgrade → seguro en cualquier orden, no duplica).
+            if (result.providerPaymentId) {
+                const upgradeEvent: TablesInsert<'subscription_events'> = {
+                    coach_id: coach.id,
+                    provider: provider.name,
+                    provider_event_id: `tier_upgrade:${result.providerPaymentId}`,
+                    provider_checkout_id: mpId,
+                    provider_status: result.providerStatus ?? 'approved',
+                    payload: toJsonPayload({
+                        action: 'tier_upgrade_confirmed',
+                        new_tier: newTier,
+                        billing_cycle: cycle,
+                        first_charged_at: paidAt,
+                    }),
+                }
+                await admin
+                    .from('subscription_events')
+                    .upsert(upgradeEvent, { onConflict: 'provider_event_id' })
+            }
+
+            // Marker keyed por notificationId para que una reentrega de ESTA notificación corte en
+            // el guard de dedup superior (el evento de arriba va keyed por payment id, no por la
+            // notificationId, así que no atraparía el replay). Idempotente on conflict.
+            if (notificationId) {
+                const dedupEvent: TablesInsert<'subscription_events'> = {
+                    coach_id: coach.id,
+                    provider: provider.name,
+                    provider_event_id: notificationId,
+                    provider_checkout_id: mpId,
+                    provider_status: result.providerStatus ?? 'approved',
+                    payload: toJsonPayload({
+                        action: 'tier_upgrade_notification_dedup',
+                        new_tier: newTier,
+                    }),
+                }
+                await admin
+                    .from('subscription_events')
+                    .upsert(dedupEvent, { onConflict: 'provider_event_id' })
+            }
+
+            // P0-4: el upgrade quedó activado (este backstop o confirm-upgrade) → limpiamos el
+            // candado in-flight. Idempotente: si confirm-upgrade ya lo limpió, no-op.
+            await clearUpgradeInFlight(admin, coach.id)
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            console.error('[payments.webhook] tier-upgrade activation failed', {
+                traceId,
+                coachId: coach.id,
+                newTier,
+                message,
+            })
+            return NextResponse.json({ ok: false, error: message }, { status: 500 })
+        }
+        console.info('[payments.webhook] tier-upgrade activated', {
+            traceId,
+            coachId: coach.id,
+            newTier,
+            cycle,
         })
         return NextResponse.json({ ok: true })
     }
@@ -296,6 +589,66 @@ async function handleWebhook(request: Request, rawBody: string) {
                     traceId,
                     coachId: coach.id,
                     message: chargeErr instanceof Error ? chargeErr.message : String(chargeErr),
+                })
+            }
+        }
+
+        // FIX-7: REFUND / CHARGEBACK (first-pass, money-safety). A payment event with RAW status
+        // refunded/charged_back lands here on the recurring/stale-checkout branch where today NOTHING
+        // runs — the coach stays active and the billing_snapshot is never reversed. Minimal handler:
+        // cancel all add-ons (trigger D1 turns off the modules), block the coach
+        // (subscription_status='expired'), and annotate an audit row. We do NOT physically reverse the
+        // billing_snapshot — just record it via the audit log for SERNAC evidence. Idempotent:
+        // cancelAllForCoach is a no-op once cancelled, and the coach update is repeated-safe.
+        //
+        // ⚠️ Trigger es el ESTADO CRUDO refunded/charged_back, NO mapProviderStatus==='expired':
+        // mapProviderStatus colapsa rejected/refunded/charged_back a 'expired', y un cobro recurrente
+        // 'rejected' (decline transitorio / reintento de dunning de MP) NO debe expirar+bloquear a un
+        // coach con período pagado vigente (eso lo maneja la rama terminal con resolveTerminalEvent).
+        // LIMITACIÓN conocida (follow-up): si la notificación de refund NO trae external_reference, no
+        // hay coachId y el webhook retorna antes (accepted-without-coachId) → ese refund se pierde;
+        // el fallback (match por metadata.preapproval_id) queda pendiente.
+        if (
+            result.eventKind === 'payment' &&
+            !result.oneShotAddon &&
+            (result.providerStatus === 'refunded' || result.providerStatus === 'charged_back')
+        ) {
+            try {
+                const cancelled = await cancelAllForCoach(admin, coach.id, new Date().toISOString())
+                const { error: blockErr } = await admin
+                    .from('coaches')
+                    .update({ subscription_status: 'expired', current_period_end: null, subscription_mp_id: null })
+                    .eq('id', coach.id)
+                if (blockErr) {
+                    console.error('[payments.webhook] failed to block coach on refund/chargeback', {
+                        traceId,
+                        coachId: coach.id,
+                        message: blockErr.message,
+                    })
+                }
+                await admin.from('admin_audit_logs').insert({
+                    admin_email: 'webhook',
+                    action: 'coach.payment_refunded_or_chargeback',
+                    target_table: 'coaches',
+                    target_id: coach.id,
+                    payload: {
+                        provider_payment_id: result.providerPaymentId ?? null,
+                        provider_status: result.providerStatus ?? null,
+                        addons_cancelled: cancelled,
+                        triggered_by: 'payments/webhook',
+                    },
+                })
+                console.warn('[payments.webhook] coach blocked on refund/chargeback', {
+                    traceId,
+                    coachId: coach.id,
+                    providerPaymentId: result.providerPaymentId ?? null,
+                    addonsCancelled: cancelled,
+                })
+            } catch (refundErr) {
+                console.error('[payments.webhook] refund/chargeback handler failed (stale branch)', {
+                    traceId,
+                    coachId: coach.id,
+                    message: refundErr instanceof Error ? refundErr.message : String(refundErr),
                 })
             }
         }

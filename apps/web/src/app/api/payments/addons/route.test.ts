@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
 // ── Mocks de infraestructura (auth, DB, pagos, email) ────────────────────────────
 const getUser = vi.fn()
@@ -7,8 +7,14 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 const adminInsert = vi.fn().mockResolvedValue({ error: null })
+// scopeRow del guard P0-A: admin.from('coaches').select('superseded_mp_preapproval_id').eq().maybeSingle().
+// Cada test del guard ajusta lo que devuelve (default: sin upgrade en curso).
+const scopeMaybeSingle = vi.fn().mockResolvedValue({ data: { superseded_mp_preapproval_id: null }, error: null })
 const fakeAdmin = {
-    from: vi.fn(() => ({ insert: adminInsert })),
+    from: vi.fn(() => ({
+        insert: adminInsert,
+        select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: scopeMaybeSingle })) })),
+    })),
 }
 vi.mock('@/lib/supabase/admin-client', () => ({
     createServiceRoleClient: vi.fn(() => fakeAdmin),
@@ -52,6 +58,32 @@ vi.mock('./_lib/payments-port', () => ({
     })),
 }))
 
+// listLive: el guard P0-A(i) lee las filas vivas del coach para bloquear re-comprar un módulo ya
+// activo (default: vacío → pasa). Cada test del check lo sobreescribe.
+const listLive = vi.fn().mockResolvedValue([])
+vi.mock('@/infrastructure/db/coach-addons.repository', async (orig) => {
+    const actual = await orig<typeof import('@/infrastructure/db/coach-addons.repository')>()
+    return { ...actual, listLive: (...a: unknown[]) => listLive(...a) }
+})
+
+// P0-4b: guard de alta de add-on mientras un UPGRADE de plan está en vuelo. Default: no hay upgrade
+// en vuelo → el alta procede. El test del guard lo sobreescribe.
+const isUpgradeInFlight = vi.fn().mockResolvedValue(false)
+vi.mock('@/services/billing/plan-change-lock', () => ({
+    isUpgradeInFlight: (...a: unknown[]) => isUpgradeInFlight(...a),
+}))
+
+// Provider: el guard P0-A lee el external_reference del preapproval VIGENTE del coach para
+// bloquear comprar un módulo que la recurrente ya carga (doble cobro top "Agregar" vs combo).
+const fetchCheckoutSnapshot = vi.fn()
+const getPaymentsProvider = vi.fn(() => ({
+    name: 'mercadopago' as const,
+    fetchCheckoutSnapshot: (...a: unknown[]) => fetchCheckoutSnapshot(...a),
+}))
+vi.mock('@/lib/payments/provider', () => ({
+    getPaymentsProvider: () => getPaymentsProvider(),
+}))
+
 const fetchCoachBillingRow = vi.fn()
 const computeCompositeBreakdown = vi.fn()
 vi.mock('./_lib/coach-context', async (orig) => {
@@ -62,11 +94,6 @@ vi.mock('./_lib/coach-context', async (orig) => {
         computeCompositeBreakdown: (...a: unknown[]) => computeCompositeBreakdown(...a),
     }
 })
-
-const sendTransactionalEmail = vi.fn().mockResolvedValue({ ok: true, providerMessageId: 'm1' })
-vi.mock('@/lib/email/send-email', () => ({
-    sendTransactionalEmail: (...a: unknown[]) => sendTransactionalEmail(...a),
-}))
 
 import { POST } from './route'
 import { ADDON_PAYMENT_RULES } from '@/lib/constants'
@@ -89,6 +116,7 @@ const PAID_COACH = {
     billing_cycle: 'monthly',
     current_period_end: '2026-07-01T00:00:00.000Z',
     subscription_mp_id: 'preapproval-1',
+    superseded_mp_preapproval_id: null,
 }
 
 beforeEach(() => {
@@ -98,11 +126,43 @@ beforeEach(() => {
     resolvePreferredWorkspace.mockResolvedValue(STANDALONE_WS)
     fetchCoachBillingRow.mockResolvedValue(PAID_COACH)
     canPurchaseAddon.mockReturnValue({ allowed: true })
+    listLive.mockResolvedValue([]) // default: sin add-ons vivos → el live-row check pasa
+    isUpgradeInFlight.mockResolvedValue(false) // default: sin upgrade en vuelo → el alta procede
+    // Default: no hay upgrade en curso (superseded null) y el preapproval vigente NO trae el módulo
+    // embebido (reference de 3 partes) → el guard P0-A pasa. Cada test del guard sobreescribe.
+    scopeMaybeSingle.mockResolvedValue({ data: { superseded_mp_preapproval_id: null }, error: null })
+    fetchCheckoutSnapshot.mockResolvedValue({
+        id: 'preapproval-1',
+        external_reference: 'coach-1|pro|monthly',
+    })
     computeCompositeBreakdown.mockResolvedValue({
         baseClp: 29990,
         addonLines: [{ label: 'Cardio', cycleAmountClp: 9990 }],
         addonsClp: 9990,
         totalClp: 39980,
+    })
+})
+
+// ── Switch de lanzamiento OFF (fail-closed) ──────────────────────────────────────────────────────
+// La suite corre con el flag ON (vitest.config env). Acá lo APAGAMOS re-evaluando el módulo con la
+// env sobreescrita: el endpoint DEBE cortar con 403 FEATURE_DISABLED ANTES de rate-limit/servicios.
+// Cierra la historia fail-closed que el sweep pre-merge señaló sin cobertura.
+describe('POST /api/payments/addons — flag de lanzamiento OFF', () => {
+    afterEach(() => {
+        vi.unstubAllEnvs()
+        vi.resetModules()
+    })
+
+    it('SELF_SERVICE_ADDONS_ENABLED off → 403 FEATURE_DISABLED, sin tocar rate-limit ni el alta', async () => {
+        vi.stubEnv('NEXT_PUBLIC_SELF_SERVICE_ADDONS_ENABLED', '')
+        vi.resetModules()
+        const { POST: PostOff } = await import('./route')
+        const res = await PostOff(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
+        expect(res.status).toBe(403)
+        expect((await res.json()).code).toBe('FEATURE_DISABLED')
+        // El gate es lo primero tras leer al user: ni rate-limit ni el alta se ejecutan.
+        expect(rateLimitPayment).not.toHaveBeenCalled()
+        expect(activateAddonForCoach).not.toHaveBeenCalled()
     })
 })
 
@@ -177,23 +237,22 @@ describe('POST /api/payments/addons — guards de compra (D8)', () => {
 })
 
 describe('POST /api/payments/addons — respuesta bifurcada (D4)', () => {
-    it('MENSUAL → fila + billing compuesto + evento de historial', async () => {
+    it('MENSUAL → { checkoutUrl } del one-shot, sin evento (lo crea el webhook, converge con trim/anual)', async () => {
         activateAddonForCoach.mockResolvedValue({
-            kind: 'monthly_activated',
-            addon: { id: 'addon-x', moduleKey: 'cardio', status: 'active' },
-            newCompositeAmountClp: 39980,
+            kind: 'one_shot_checkout',
+            checkoutUrl: 'https://mp.test/checkout/abc',
+            prorationClp: 5161,
+            cycleAmountClp: 9990,
         })
         const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
         expect(res.status).toBe(200)
         const json = await res.json()
-        expect(json.kind).toBe('monthly_activated')
-        expect(json.billing).toEqual({ baseClp: 29990, addonsClp: 9990, totalClp: 39980 })
-        // evento de historial insertado (con texto de reglas en el payload)
-        expect(fakeAdmin.from).toHaveBeenCalledWith('subscription_events')
-        const inserted = adminInsert.mock.calls[0][0]
-        expect(inserted.provider_event_id).toBe('addon:addon-x:activate')
-        expect(inserted.payload.accepted_rules).toHaveLength(5)
-        expect(inserted.payload.terms_version).toBe(VERSION)
+        expect(json.kind).toBe('one_shot_checkout')
+        expect(json.checkoutUrl).toBe('https://mp.test/checkout/abc')
+        expect(json.prorationClp).toBe(5161)
+        expect(json.cycleAmountClp).toBe(9990)
+        // el evento/recibo llegan por webhook → el endpoint no inserta nada
+        expect(adminInsert).not.toHaveBeenCalled()
     })
 
     it('TRIMESTRAL → { checkoutUrl } del one-shot, sin evento (lo crea el webhook)', async () => {
@@ -213,15 +272,111 @@ describe('POST /api/payments/addons — respuesta bifurcada (D4)', () => {
         // el evento/recibo llegan por webhook → el endpoint no inserta nada
         expect(adminInsert).not.toHaveBeenCalled()
     })
+})
 
-    it('el recibo email es fire-and-forget: si falla no rompe la respuesta mensual', async () => {
-        activateAddonForCoach.mockResolvedValue({
-            kind: 'monthly_activated',
-            addon: { id: 'addon-x', moduleKey: 'cardio', status: 'active' },
-            newCompositeAmountClp: 39980,
+// ── Guard P0-A: no permitir pagar un one-shot por un módulo que la recurrente YA carga ──────
+// El "Agregar" de arriba (one-shot prorrateado) y el combo de abajo (que embebe el módulo en una
+// preapproval compuesta nueva) no estaban reconciliados → el mismo módulo por ambos = doble cobro.
+// El índice único parcial bloquea filas duplicadas, NO plata duplicada. El guard 409 lo previene
+// ANTES de iniciar el cobro: si el módulo ya está embebido en el preapproval vigente, o hay un
+// upgrade en curso (superseded_mp_preapproval_id seteado) que puede embeberlo.
+describe('POST /api/payments/addons — guard P0-A (ALREADY_BILLED)', () => {
+    it('409 ALREADY_BILLED si el módulo YA está embebido en el preapproval vigente', async () => {
+        fetchCheckoutSnapshot.mockResolvedValue({
+            id: 'preapproval-1',
+            external_reference: 'coach-1|pro|monthly|cardio', // 4ª parte: cardio embebido
         })
-        sendTransactionalEmail.mockResolvedValue({ ok: false, error: 'Resend 500' })
+        const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
+        expect(res.status).toBe(409)
+        const json = await res.json()
+        expect(json.code).toBe('ALREADY_BILLED')
+        // jamás se inicia el cobro one-shot del módulo ya cargado
+        expect(activateAddonForCoach).not.toHaveBeenCalled()
+    })
+
+    it('409 ALREADY_BILLED si hay un upgrade en curso (superseded_mp_preapproval_id seteado)', async () => {
+        // El route lee el marcador de upgrade con un select dedicado (no via fetchCoachBillingRow).
+        scopeMaybeSingle.mockResolvedValue({
+            data: { superseded_mp_preapproval_id: 'preapproval-OLD' },
+            error: null,
+        })
+        const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
+        expect(res.status).toBe(409)
+        const json = await res.json()
+        expect(json.code).toBe('ALREADY_BILLED')
+        // se bloquea ANTES de leer el snapshot y de iniciar el cobro
+        expect(activateAddonForCoach).not.toHaveBeenCalled()
+        expect(fetchCheckoutSnapshot).not.toHaveBeenCalled()
+    })
+
+    it('409 ALREADY_ACTIVE si el coach ya tiene una fila viva del módulo (anti 2ª proración)', async () => {
+        listLive.mockResolvedValue([{ moduleKey: 'cardio', source: 'self_service', status: 'active' }])
+        const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
+        expect(res.status).toBe(409)
+        const json = await res.json()
+        expect(json.code).toBe('ALREADY_ACTIVE')
+        // jamás se inicia el cobro one-shot de un módulo ya activo
+        expect(activateAddonForCoach).not.toHaveBeenCalled()
+    })
+
+    it('NO bloquea si el preapproval vigente trae OTRO módulo (no el solicitado)', async () => {
+        fetchCheckoutSnapshot.mockResolvedValue({
+            id: 'preapproval-1',
+            external_reference: 'coach-1|pro|monthly|body_composition', // embebido OTRO módulo
+        })
+        activateAddonForCoach.mockResolvedValue({
+            kind: 'one_shot_checkout',
+            checkoutUrl: 'https://mp.test/checkout/abc',
+            prorationClp: 5161,
+            cycleAmountClp: 9990,
+        })
         const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
         expect(res.status).toBe(200)
+        expect(activateAddonForCoach).toHaveBeenCalledOnce()
+    })
+
+    it('fail-open: si el fetch del snapshot LANZA, no se bloquea el alta (no se cae por error del provider)', async () => {
+        fetchCheckoutSnapshot.mockRejectedValue(new Error('MercadoPago request failed (502)'))
+        activateAddonForCoach.mockResolvedValue({
+            kind: 'one_shot_checkout',
+            checkoutUrl: 'https://mp.test/checkout/abc',
+            prorationClp: 5161,
+            cycleAmountClp: 9990,
+        })
+        const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
+        expect(res.status).toBe(200)
+        expect(activateAddonForCoach).toHaveBeenCalledOnce()
+    })
+})
+
+// ── Guard P0-4b: alta de add-on mientras un UPGRADE de plan está en vuelo ────────────────────
+// El upgrade es un one-shot prorrateado que se confirma async (confirm-upgrade/webhook) y, al
+// activarse, recomputa el compuesto desde listLive → plegaría ESTE add-on nuevo dos veces (una en
+// el compuesto del upgrade, otra en su propio one-shot). Bloqueamos con 409 UPGRADE_IN_FLIGHT hasta
+// que el upgrade en vuelo se resuelva (o el TTL del candado lo libere).
+describe('POST /api/payments/addons — guard P0-4b (UPGRADE_IN_FLIGHT)', () => {
+    it('409 UPGRADE_IN_FLIGHT si hay un upgrade de plan en vuelo: no inicia el cobro del add-on', async () => {
+        isUpgradeInFlight.mockResolvedValue(true)
+        const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
+        expect(res.status).toBe(409)
+        const json = await res.json()
+        expect(json.code).toBe('UPGRADE_IN_FLIGHT')
+        expect(typeof json.error).toBe('string')
+        // CERO efectos: jamás se llega a iniciar el one-shot del módulo.
+        expect(activateAddonForCoach).not.toHaveBeenCalled()
+    })
+
+    it('el guard se chequea por user.id (de la sesión)', async () => {
+        isUpgradeInFlight.mockResolvedValue(false)
+        activateAddonForCoach.mockResolvedValue({
+            kind: 'one_shot_checkout',
+            checkoutUrl: 'https://mp.test/checkout/abc',
+            prorationClp: 5161,
+            cycleAmountClp: 9990,
+        })
+        const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
+        expect(res.status).toBe(200)
+        expect(isUpgradeInFlight).toHaveBeenCalled()
+        expect(isUpgradeInFlight.mock.calls[0][1]).toBe('coach-1')
     })
 })

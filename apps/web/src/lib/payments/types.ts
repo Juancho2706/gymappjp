@@ -62,6 +62,18 @@ export type OneShotAddonRef = {
     termsVersion: string
 }
 
+/**
+ * Datos del one-shot de upgrade de tier parseados del `external_reference`
+ * `tier_upgrade|coachId|newTier|cycle` (FUNDACION F4). El monto del one-shot es la
+ * DIFERENCIA de tier prorrateada al ciclo vigente del coach; la activación del nuevo
+ * tier + el PUT del preapproval al nuevo compuesto los hace el confirm-upgrade/webhook.
+ */
+export type TierUpgradeRef = {
+    coachId: string
+    newTier: SubscriptionTier
+    cycle: BillingCycle
+}
+
 export type WebhookProcessResult = {
     accepted: boolean
     eventId?: string
@@ -89,6 +101,19 @@ export type WebhookProcessResult = {
     paidAt?: string | null
     /** Si el evento es un pago one-shot de add-on (reference `addon_oneshot|...`), sus datos. */
     oneShotAddon?: OneShotAddonRef | null
+    /**
+     * Si el evento es un pago one-shot de upgrade de tier (reference `tier_upgrade|...`,
+     * FUNDACION F4), sus datos. El webhook corre la activación idempotente (write rank-guarded
+     * de tier+max_clients+cycle + PUT al nuevo compuesto) y escribe el `billing_snapshot`.
+     */
+    tierUpgrade?: TierUpgradeRef | null
+    /**
+     * id del preapproval extraído del pago (`metadata.preapproval_id` o campo top-level). Fallback de
+     * refund/chargeback (P1-1): cuando una notificación de refund OMITE el external_reference no hay
+     * coachId; el webhook recupera al coach por `subscription_mp_id === preapprovalId` para no perder
+     * el refund en silencio. Null si el pago no expone preapproval.
+     */
+    preapprovalId?: string | null
 }
 
 /** Normalized preapproval / recurring checkout snapshot (Mercado Pago preapproval shape). */
@@ -97,7 +122,25 @@ export type ProviderCheckoutSnapshot = {
     external_reference?: string | null
     status?: string | null
     next_payment_date?: string | null
-    auto_recurring?: { end_date?: string | null; transaction_amount?: number | null }
+    /**
+     * Fecha de INICIO efectivo del preapproval (señal de "agendado al corte"). En MP la fuente
+     * load-bearing es `auto_recurring.start_date` (la que el provider devuelve); el top-level se
+     * incluye defensivamente. El early-slash guard de confirm-subscription la lee para NO degradar
+     * entitlements de un cambio agendado a futuro (SLASH-EARLY).
+     */
+    start_date?: string | null
+    auto_recurring?: { end_date?: string | null; transaction_amount?: number | null; start_date?: string | null }
+}
+
+/**
+ * Snapshot mínimo de un pago one-shot (Mercado Pago `/v1/payments/{id}`) — lo usa el camino
+ * síncrono `confirm-addon` para confirmar el pago del add-on sin esperar el webhook. El
+ * `external_reference` trae el reference dedicado `addon_oneshot|...`.
+ */
+export type ProviderPaymentSnapshot = {
+    id: string
+    status?: string | null
+    external_reference?: string | null
 }
 
 export interface PaymentsProvider {
@@ -106,6 +149,12 @@ export interface PaymentsProvider {
     processWebhook(payload: unknown): Promise<WebhookProcessResult>
     /** Fetch current state of a recurring checkout / preapproval by provider id. */
     fetchCheckoutSnapshot(checkoutId: string): Promise<ProviderCheckoutSnapshot>
+    /**
+     * Fetch current state of a one-shot payment by provider payment id (MP `/v1/payments/{id}`).
+     * Usado por el camino síncrono `confirm-addon` (plan 05) para materializar el add-on al volver
+     * del checkout sin depender del webhook (que sigue como backstop). Devuelve estado + reference.
+     */
+    fetchPaymentSnapshot(paymentId: string): Promise<ProviderPaymentSnapshot>
     /** Cancel recurring billing at the provider (e.g. MP preapproval cancelled). */
     cancelCheckoutAtProvider(checkoutId: string): Promise<void>
     /**
@@ -114,6 +163,19 @@ export interface PaymentsProvider {
      * validar en sandbox (item 1): ¿cuándo aplica?, ¿genera cargo inmediato?, ¿email al pagador?
      */
     updateCheckoutAmount(checkoutId: string, amountClp: number): Promise<void>
+    /**
+     * Como `updateCheckoutAmount` pero ADEMÁS reescribe el `external_reference` del preapproval
+     * (PUT /preapproval/{id} acepta `external_reference`). Lo usa el upgrade de tier
+     * (confirm-upgrade / webhook tierUpgrade) para subir el monto del próximo cobro al nuevo
+     * compuesto Y dejar el reference apuntando al NUEVO tier|cycle, evitando que el siguiente
+     * evento `preapproval` re-derive el tier viejo y revierta el upgrade (P0-1 stale-ref revert).
+     * Construir `externalReference` con `buildCheckoutExternalReference`.
+     */
+    updateCheckoutAmountAndRef(
+        checkoutId: string,
+        amountClp: number,
+        externalReference: string
+    ): Promise<void>
     /**
      * Crea un pago one-shot (Checkout Pro clásico, NO preapproval) y devuelve la URL de
      * checkout (plan 05 F3.2 — alta in-app trim/anual prorrateada).

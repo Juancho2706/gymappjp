@@ -1,6 +1,19 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
 /**
+ * Length-safe constant-time string compare. Guards unequal length first (timingSafeEqual
+ * throws on mismatched buffer lengths), then compares the equal-length UTF-8 buffers in
+ * constant time to avoid leaking the secret via early-exit timing. Mirrors the HMAC
+ * timingSafeEqual usage below (FIX-6).
+ */
+function constantTimeEquals(a: string, b: string): boolean {
+    const aBuf = Buffer.from(a, 'utf8')
+    const bBuf = Buffer.from(b, 'utf8')
+    if (aBuf.length !== bBuf.length) return false
+    return timingSafeEqual(aBuf, bBuf)
+}
+
+/**
  * Mercado Pago notification id from JSON body or query string (MP sends both shapes).
  */
 export function extractMercadoPagoNotificationId(request: Request, parsedBody: unknown): string | null {
@@ -30,7 +43,8 @@ export function isPaymentsWebhookTokenValid(request: Request): boolean {
 
     const url = new URL(request.url)
     const candidate = url.searchParams.get('token') ?? request.headers.get('x-webhook-token')
-    return candidate === expectedToken
+    if (!candidate) return false
+    return constantTimeEquals(candidate, expectedToken)
 }
 
 /**
@@ -54,7 +68,9 @@ export function verifyMercadoPagoSignatureIfConfigured(request: Request, dataId:
 
     const ts = tsMatch[1]
     const v1 = v1Match[1]
-    const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`
+    // MP lowercases the alphanumeric portion of data.id before signing the manifest. Match it,
+    // otherwise prod webhooks with alphanumeric ids fail signature verification (P0-D).
+    const manifest = `id:${dataId.toLowerCase()};request-id:${requestId};ts:${ts};`
     const hmac = createHmac('sha256', secret).update(manifest).digest('hex')
 
     try {

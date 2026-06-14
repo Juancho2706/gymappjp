@@ -272,3 +272,43 @@ export function getRecommendedTier(clientCount: number): SubscriptionTier {
     // Solo recomendamos tiers a la venta. "Más de elite" lo maneja la UI con el puente Teams, no un tier.
     return SALE_TIERS.find(t => TIER_CONFIG[t].maxClients >= clientCount) ?? 'elite'
 }
+
+// ── Dirección del cambio de plan (upgrade/downgrade) ──────────────────────────
+//
+// Orden total de los tiers para decidir la dirección de un cambio de plan (plan
+// estrategia 06 — comportamiento de cambio de plan decidido por el dueño). Cubre los
+// 6 tiers (incluidos los LEGACY growth/scale) para que un coach grandfathered nunca
+// produzca rank `undefined` al comparar contra un tier a la venta.
+
+/** Orden total de tiers (precio/capacidad creciente). free < starter < pro < elite < growth < scale. */
+export const TIER_RANK: Record<SubscriptionTier, number> = {
+    free: 0,
+    starter: 1,
+    pro: 2,
+    elite: 3,
+    // LEGACY — fuera de venta, grandfathered. Rango definido para no quedar undefined al comparar.
+    growth: 4,
+    // LEGACY — fuera de venta, grandfathered. Rango definido para no quedar undefined al comparar.
+    scale: 5,
+}
+
+export function getTierRank(tier: SubscriptionTier): number {
+    return TIER_RANK[tier]
+}
+
+/**
+ * Dirección de un cambio de plan según el orden total de tiers:
+ *   - `'upgrade'`   → el tier destino es mayor (rank next > current).
+ *   - `'downgrade'` → el tier destino es menor (rank next < current).
+ *   - `'same'`      → mismo tier (un cambio de ciclo se trata aparte por el llamador).
+ */
+export function comparePlanDirection(
+    current: SubscriptionTier,
+    next: SubscriptionTier
+): 'upgrade' | 'downgrade' | 'same' {
+    const c = getTierRank(current)
+    const n = getTierRank(next)
+    if (n > c) return 'upgrade'
+    if (n < c) return 'downgrade'
+    return 'same'
+}

@@ -6,6 +6,7 @@ import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 import { rateLimitPayment, jsonRateLimited } from '@/lib/rate-limit'
 import { MODULE_KEYS } from '@/services/entitlements.service'
+import { SELF_SERVICE_ADDONS_ENABLED } from '@/lib/constants'
 import { requestAddonCancellation } from '@/services/billing/addons.service'
 import { buildAddonPaymentsPort } from '../_lib/payments-port'
 import {
@@ -39,6 +40,12 @@ export async function POST(request: Request) {
 
         if (!user?.id || !user.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        // El switch de lanzamiento gatea la RUTA, no solo la UI (espejo del alta): sin esto la baja
+        // self-service era alcanzable por API con el flag off, antes del flip de lanzamiento.
+        if (!SELF_SERVICE_ADDONS_ENABLED) {
+            return NextResponse.json({ error: 'Función no disponible.', code: 'FEATURE_DISABLED' }, { status: 403 })
         }
 
         const rl = await rateLimitPayment(user.id)

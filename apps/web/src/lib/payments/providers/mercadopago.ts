@@ -1,4 +1,10 @@
-import { BILLING_CYCLE_CONFIG } from '@/lib/constants'
+import {
+    BILLING_CYCLE_CONFIG,
+    TIER_CONFIG,
+    isBillingCycleAllowedForTier,
+    type BillingCycle,
+    type SubscriptionTier,
+} from '@/lib/constants'
 import { parseCheckoutExternalReference } from '@/lib/payments/checkout-external-reference'
 import { MODULE_KEYS, type ModuleKey } from '@/services/entitlements.service'
 import type {
@@ -9,6 +15,8 @@ import type {
     OneShotAddonRef,
     PaymentsProvider,
     ProviderCheckoutSnapshot,
+    ProviderPaymentSnapshot,
+    TierUpgradeRef,
     WebhookProcessResult,
 } from '@/lib/payments/types'
 
@@ -27,7 +35,7 @@ const MODULE_KEY_SET = new Set<string>(MODULE_KEYS)
  * (que arranca con el uuid del coach) → el parser de suscripción no lo confunde. Devuelve null
  * si no coincide el formato o la clave de módulo no es válida.
  */
-function parseOneShotAddonReference(reference?: string | null): OneShotAddonRef | null {
+export function parseOneShotAddonReference(reference?: string | null): OneShotAddonRef | null {
     if (!reference) return null
     const parts = reference.split('|')
     if (parts[0]?.trim() !== 'addon_oneshot') return null
@@ -37,6 +45,45 @@ function parseOneShotAddonReference(reference?: string | null): OneShotAddonRef 
     if (!coachId || !moduleKey || !termsVersion) return null
     if (!MODULE_KEY_SET.has(moduleKey)) return null
     return { coachId, moduleKey: moduleKey as ModuleKey, termsVersion }
+}
+
+const TIER_UPGRADE_CYCLES = new Set<string>(['monthly', 'quarterly', 'annual'])
+
+/**
+ * `external_reference` dedicado del one-shot de upgrade de tier (FUNDACION F4):
+ * `tier_upgrade|coachId|newTier|cycle`. La 1ª parte literal `tier_upgrade` lo distingue
+ * tanto del one-shot de add-on (`addon_oneshot|...`) como del reference de suscripción
+ * (arranca con el uuid del coach) → precedencia de parse en el webhook:
+ * oneShotAddon → tierUpgrade → checkoutRef.
+ */
+export function buildTierUpgradeExternalReference(
+    coachId: string,
+    newTier: SubscriptionTier,
+    cycle: BillingCycle
+): string {
+    return `tier_upgrade|${coachId}|${newTier}|${cycle}`
+}
+
+/**
+ * Parsea el `external_reference` del one-shot de upgrade de tier (`tier_upgrade|...`,
+ * FUNDACION F4). Valida que `newTier` exista en `TIER_CONFIG`, que `cycle` sea un
+ * BillingCycle válido y que el ciclo esté permitido para ese tier
+ * (`isBillingCycleAllowedForTier`). Devuelve null si no coincide el formato o no validan.
+ */
+export function parseTierUpgradeReference(reference?: string | null): TierUpgradeRef | null {
+    if (!reference) return null
+    const parts = reference.split('|')
+    if (parts[0]?.trim() !== 'tier_upgrade') return null
+    const coachId = parts[1]?.trim()
+    const newTier = parts[2]?.trim()
+    const cycle = parts[3]?.trim()
+    if (!coachId || !newTier || !cycle) return null
+    if (!(newTier in TIER_CONFIG)) return null
+    if (!TIER_UPGRADE_CYCLES.has(cycle)) return null
+    const tier = newTier as SubscriptionTier
+    const billingCycle = cycle as BillingCycle
+    if (!isBillingCycleAllowedForTier(tier, billingCycle)) return null
+    return { coachId, newTier: tier, cycle: billingCycle }
 }
 
 function getMpAccessToken() {
@@ -96,14 +143,30 @@ function resolvePayerEmail(coachEmail: string) {
     return coachEmail
 }
 
+/**
+ * Construye el `external_reference` recurrente de suscripción `coachId|tier|cycle[|addon1+addon2]`
+ * (round-trip idempotente con `parseCheckoutExternalReference`). La 4ª parte (add-ons) es opcional:
+ * solo módulos válidos, deduplicados, orden estable; sin add-ons ⇒ reference de 3 partes (backward
+ * compatible con preapprovals vivos).
+ *
+ * Exportado para que el camino de upgrade (confirm-upgrade / webhook tierUpgrade) reescriba el
+ * `external_reference` del preapproval al NUEVO tier|cycle al activar (P0-1 stale-ref revert), de
+ * modo que el siguiente evento `preapproval` ya no re-derive el tier viejo.
+ */
+export function buildCheckoutExternalReference(
+    coachId: string,
+    tier: SubscriptionTier,
+    cycle: BillingCycle,
+    addons?: ModuleKey[]
+): string {
+    const base = `${coachId}|${tier}|${cycle}`
+    const liveAddons = [...new Set((addons ?? []).filter((k) => MODULE_KEY_SET.has(k)))]
+    if (liveAddons.length === 0) return base
+    return `${base}|${liveAddons.join('+')}`
+}
+
 function buildExternalReference(input: CreateCheckoutInput) {
-    const base = `${input.coachId}|${input.tier}|${input.billingCycle}`
-    // 4ª parte opcional `addon1+addon2` (plan 05 F2/F3.3). Solo módulos válidos; orden estable
-    // (dedup + filtro contra MODULE_KEYS) para que el round-trip con parseCheckoutExternalReference
-    // sea idempotente. Sin add-ons ⇒ reference de 3 partes (backward compatible con preapprovals vivos).
-    const addons = [...new Set((input.addons ?? []).filter((k) => MODULE_KEY_SET.has(k)))]
-    if (addons.length === 0) return base
-    return `${base}|${addons.join('+')}`
+    return buildCheckoutExternalReference(input.coachId, input.tier, input.billingCycle, input.addons)
 }
 
 async function mpRequest(path: string) {
@@ -151,13 +214,18 @@ async function mpPostJson(path: string, body: Record<string, unknown>) {
 
 function toSnapshot(preapproval: Record<string, unknown>, fallbackId: string): ProviderCheckoutSnapshot {
     const ar = preapproval.auto_recurring as
-        | { end_date?: string | null; transaction_amount?: number | null }
+        | { end_date?: string | null; transaction_amount?: number | null; start_date?: string | null }
         | undefined
+    // `start_date` es la señal de "agendado al corte" del early-slash guard (SLASH-EARLY). MP
+    // devuelve el inicio efectivo bajo `auto_recurring.start_date` (load-bearing — el que
+    // `createCheckout` envía); el top-level se copia defensivamente. Sin esto el snapshot lo
+    // dropea → el guard nunca dispara → un downgrade-al-corte degrada tier/max_clients YA.
     return {
         id: String(preapproval.id ?? fallbackId),
         external_reference: (preapproval.external_reference as string | null | undefined) ?? null,
         status: (preapproval.status as string | null | undefined) ?? null,
         next_payment_date: (preapproval.next_payment_date as string | null | undefined) ?? null,
+        start_date: (preapproval.start_date as string | null | undefined) ?? null,
         auto_recurring: ar,
     }
 }
@@ -177,8 +245,13 @@ export class MercadoPagoProvider implements PaymentsProvider {
         const payerEmail = resolvePayerEmail(input.coachEmail)
         const externalReference = buildExternalReference(input)
         const cycle = BILLING_CYCLE_CONFIG[input.billingCycle]
-        // Use provided startDate (mid-cycle upgrades) or default to 60s from now
-        const startDate = input.startDate ?? new Date(Date.now() + 60_000).toISOString()
+        // Use provided startDate (downgrade/cambio de ciclo al corte) or default to 60s from now.
+        // NORMALIZAMOS con .toISOString(): el corte viene de current_period_end del DB como
+        // '2026-06-28T00:00:00+00:00' (sin milisegundos) y MP rechaza ese formato con 400
+        // "Invalid format in auto_recurring.start_date". El default ya usaba .toISOString().
+        const startDate = input.startDate
+            ? new Date(input.startDate).toISOString()
+            : new Date(Date.now() + 60_000).toISOString()
         const endDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 365 * 5).toISOString()
 
         const response = await fetch('https://api.mercadopago.com/preapproval', {
@@ -254,10 +327,12 @@ export class MercadoPagoProvider implements PaymentsProvider {
 
         const payment = await mpRequest(`/v1/payments/${eventId}`)
         const extRef = typeof payment.external_reference === 'string' ? payment.external_reference : null
-        // Un cobro one-shot de add-on trae el reference dedicado `addon_oneshot|...`; un cobro
-        // recurrente trae el reference de suscripción `coachId|tier|cycle[|addons]`.
+        // Precedencia de parse (FUNDACION F4): el one-shot de add-on trae `addon_oneshot|...`;
+        // el one-shot de upgrade de tier trae `tier_upgrade|...`; un cobro recurrente trae el
+        // reference de suscripción `coachId|tier|cycle[|addons]`. Cada uno excluye a los siguientes.
         const oneShotAddon = parseOneShotAddonReference(extRef)
-        const parsed = oneShotAddon ? null : parseCheckoutExternalReference(extRef)
+        const tierUpgrade = oneShotAddon ? null : parseTierUpgradeReference(extRef)
+        const parsed = oneShotAddon || tierUpgrade ? null : parseCheckoutExternalReference(extRef)
 
         // ⚠️ payment.order.id ≠ preapproval id (Riesgo 2). El match robusto del cobro recurrente
         // contra el preapproval del coach se hace en el webhook por coachId (del external_reference);
@@ -269,12 +344,24 @@ export class MercadoPagoProvider implements PaymentsProvider {
                   ? payment.date_created
                   : null
 
+        // Fallback de refund/chargeback (P1-1): una notificación de refund de MP a veces OMITE el
+        // external_reference → sin coachId el webhook retorna antes y el refund se PIERDE en silencio.
+        // Exponemos el id del preapproval (de metadata.preapproval_id o, defensivamente, del campo
+        // top-level) para que el webhook recupere al coach por subscription_mp_id. payment.metadata
+        // puede venir undefined → guardas de tipo en cada acceso.
+        const preapprovalId =
+            (typeof payment.metadata?.preapproval_id === 'string'
+                ? payment.metadata.preapproval_id
+                : null) ??
+            (typeof payment.preapproval_id === 'string' ? payment.preapproval_id : null) ??
+            null
+
         return {
             accepted: true,
             eventId,
             eventKind: 'payment',
             providerStatus: payment.status ?? undefined,
-            coachId: oneShotAddon?.coachId ?? parsed?.coachId,
+            coachId: oneShotAddon?.coachId ?? tierUpgrade?.coachId ?? parsed?.coachId,
             providerCheckoutId: payment.order?.id ? String(payment.order.id) : undefined,
             providerPaymentId: payment.id != null ? String(payment.id) : eventId,
             paidAt,
@@ -283,6 +370,8 @@ export class MercadoPagoProvider implements PaymentsProvider {
             billingCycle: parsed?.billingCycle ?? undefined,
             addons: parsed?.addons ?? [],
             oneShotAddon,
+            tierUpgrade,
+            preapprovalId,
         }
     }
 
@@ -290,6 +379,22 @@ export class MercadoPagoProvider implements PaymentsProvider {
         const encoded = encodeURIComponent(checkoutId)
         const preapproval = (await mpRequest(`/preapproval/${encoded}`)) as Record<string, unknown>
         return toSnapshot(preapproval, checkoutId)
+    }
+
+    /**
+     * GET /v1/payments/{id}: estado actual de un pago one-shot. Lo usa `confirm-addon` (camino
+     * síncrono del add-on prorrateado) para materializar la fila al volver del checkout, sin
+     * depender del webhook (que sigue como backstop e idempotente). El `external_reference` trae
+     * el reference dedicado `addon_oneshot|coachId|moduleKey|termsVersion`.
+     */
+    async fetchPaymentSnapshot(paymentId: string): Promise<ProviderPaymentSnapshot> {
+        const encoded = encodeURIComponent(paymentId)
+        const payment = (await mpRequest(`/v1/payments/${encoded}`)) as Record<string, unknown>
+        return {
+            id: String(payment.id ?? paymentId),
+            status: (payment.status as string | null | undefined) ?? null,
+            external_reference: (payment.external_reference as string | null | undefined) ?? null,
+        }
     }
 
     async cancelCheckoutAtProvider(checkoutId: string): Promise<void> {
@@ -313,6 +418,32 @@ export class MercadoPagoProvider implements PaymentsProvider {
                 transaction_amount: amountClp,
                 currency_id: 'CLP',
             },
+        })
+    }
+
+    /**
+     * PUT /preapproval/{id}: como `updateCheckoutAmount` pero ADEMÁS reescribe el
+     * `external_reference` del preapproval (MP PUT /preapproval/{id} acepta `external_reference`).
+     *
+     * Lo usa el camino de upgrade de tier (confirm-upgrade / webhook tierUpgrade) para subir el
+     * monto del próximo cobro al NUEVO compuesto Y dejar el reference apuntando al nuevo tier|cycle
+     * (P0-1 stale-ref revert): sin esto, el siguiente evento `preapproval` re-derivaría el tier
+     * VIEJO del reference y revertiría el upgrade. Construir `externalReference` con
+     * `buildCheckoutExternalReference`. Mismo manejo de error que `updateCheckoutAmount`
+     * (preapproval `paused`/`cancelled` puede fallar el PUT).
+     */
+    async updateCheckoutAmountAndRef(
+        checkoutId: string,
+        amountClp: number,
+        externalReference: string
+    ): Promise<void> {
+        const encoded = encodeURIComponent(checkoutId)
+        await mpPutJson(`/preapproval/${encoded}`, {
+            auto_recurring: {
+                transaction_amount: amountClp,
+                currency_id: 'CLP',
+            },
+            external_reference: externalReference,
         })
     }
 
