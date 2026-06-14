@@ -1,6 +1,16 @@
 # NEXT STEPS — Prioridades actuales
 
-> Leer al inicio de cada sesión (referenciado en `CLAUDE.md`). Última actualización: 2026-06-13 (plan 05 billing add-ons self-service ejecutado — motor de cobro compuesto + override CEO write-through + métricas admin; pendiente gate + sandbox MP).
+> Leer al inicio de cada sesión (referenciado en `CLAUDE.md`). Última actualización: 2026-06-14 (billing add-ons + cambio de plan: auditoría money-safety + UI/UX + sweep pre-merge en `preview/addons-test` — LISTO PARA MERGE, ver bloque abajo).
+
+### Estado 2026-06-14 — Billing add-ons self-service + cambio de plan: LISTO PARA MERGE (rama `preview/addons-test`)
+
+QA de pago real en sandbox MP + 3 auditorías adversariales multi-agente (money-safety, UI/UX, sweep pre-merge). Commits: normalización start_date, 5 defectos money-safety, UI/UX, flag→env var fail-closed.
+
+- **Money-safety (cerrados + verificados):** SLASH-EARLY (el guard scheduled-at-cut leía `start_date` que `toSnapshot` no poblaba → un downgrade bajaba tier/cupo antes del corte pagado), TOCTOU del candado de upgrade (DELETE+INSERT → compare-and-swap atómico), P0-1 reescritura del `external_reference` al nuevo tier, P0-2 cancelar preapproval viejo en downgrade, P0-3 cancelar superseded en cancel-subscription, P0-4 candado in-flight + clear/release, P1 cross-cycle/fail-closed-403/replay. **Coaches recurrentes ya activos: NO afectados** (todos los guards disparan solo en cambio de plan / alta de add-on; renovación simple intacta).
+- **UI/UX de `/coach/subscription`:** copy del modal de upgrade corregido (activa ahora + diferencia prorrateada, no el precio completo), feedback post-checkout (`?addon`/`?upgrade`), estado "agendado al corte" (sin falso timeout), modales con dialog semantics + scroll, banners light/dark, targets táctiles ≥44px, focus rings, tarjeta bloqueada accesible.
+- **Flag de lanzamiento:** `SELF_SERVICE_ADDONS_ENABLED` ahora se lee de `NEXT_PUBLIC_SELF_SERVICE_ADDONS_ENABLED` (default false = fail-closed) → el código se mergea a master con el feature APAGADO. Combo de `create-preference` ahora también gateado (un POST crafted ya no embebe add-ons con el flag off). Cobertura nueva del camino OFF.
+- **Schema en prod ya presente** (verificado): `coach_addons`, `billing_snapshots`, `coaches.superseded_mp_preapproval_id`/`billing_cycle`, CHECK con `tier_upgrade_proration`, UNIQUE del candado. Mergear no rompe billing existente por schema faltante.
+- **Estado:** typecheck limpio, build prod OK, suite **988/988**. Pendiente: (1) merge a master con OK del dueño, (2) setear `NEXT_PUBLIC_SELF_SERVICE_ADDONS_ENABLED='true'` SOLO en Vercel Preview (prod queda OFF), (3) 1 prueba live controlada (add-on más barato, reversible) antes del flip de prod, (4) revisar la 1 fila viva de `coach_addons` en prod (source/status/price) antes del flip. Decisión de producto diferida: colapsar las 2 superficies de add-on (catálogo vs combo).
 
 ### Estado 2026-06-12 — Plan 02 landing Teams-first EJECUTADO (solo UI de la landing)
 
