@@ -293,7 +293,8 @@ describe('buildAcceptedRulesPayload', () => {
         const p = buildAcceptedRulesPayload('monthly')
         expect(p.version).toBe(ADDON_PAYMENT_RULES.version)
         expect(p.rules).toHaveLength(5)
-        expect(p.rules[1].text).toContain('cortesía')
+        // mensual ahora prorratea como trim/anual: la regla 2 describe el pago único inmediato
+        expect(p.rules[1].text).toContain('pago único')
     })
 
     it('trim/anual → la regla 2 usa la variante de pago único prorrateado', () => {

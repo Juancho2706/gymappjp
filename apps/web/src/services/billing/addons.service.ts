@@ -35,9 +35,9 @@ type DB = SupabaseClient<Database>
  *   → puerto de pagos (`AddonPaymentsPort`, inyectado — desacopla de la implementación MP de F3).
  *
  * Decisiones del dueño congeladas (2026-06-11, NO re-litigar): $9.990/mes UNIFORME los 4
- * módulos; descuento por ciclo (trim −10%, anual −20%); cortesía-hasta-corte SOLO mensual;
- * trim/anual = one-shot prorrateado inmediato + PUT desde la renovación; compromiso mínimo
- * 1 ciclo; starter NO compra nutrition_exchanges (Pro+).
+ * módulos; descuento por ciclo (trim −10%, anual −20%); TODOS los ciclos (incluido mensual)
+ * = one-shot prorrateado inmediato + PUT del valor completo desde la renovación; compromiso
+ * mínimo 1 ciclo; starter NO compra nutrition_exchanges (Pro+).
  */
 
 // ── Puerto de pagos: SOLO las ops que este service necesita (F3 implementa en MP) ──
@@ -77,13 +77,12 @@ export function getAddonCycleAmountClp(priceClpMensual: number, cycle: BillingCy
 }
 
 /**
- * One-shot prorrateado (regla 2 trim/anual): fracción restante del ciclo
+ * One-shot prorrateado (regla 2, TODOS los ciclos): fracción restante del ciclo
  * (días entre `now` y el corte / días del ciclo) × monto-por-ciclo, entero CLP, alineado al
- * corte real del preapproval.
+ * corte real del preapproval. Mensual también la usa (totalDays = 1 mes × 30 = 30 días).
  *
  * Bordes:
  *   - alta el día del corte (o `now` >= corte) → mínimo 1 día (nunca $0: cubre el compromiso mínimo).
- *   - mensual NO usa esta función (su fracción restante es cortesía).
  */
 export function getAddonProrationClp(
     priceClpMensual: number,
@@ -170,7 +169,7 @@ export function canPurchaseAddon(
     return { allowed: true }
 }
 
-// ── Alta: BIFURCA por ciclo (D4) ────────────────────────────────────────────────
+// ── Alta: one-shot prorrateado, TODOS los ciclos (D4) ────────────────────────────
 
 export type ActivateAddonContext = {
     coachId: string
@@ -179,18 +178,18 @@ export type ActivateAddonContext = {
     cycle: BillingCycle
     /** id del preapproval MP del coach (para el PUT de monto). */
     subscriptionMpId: string
-    /** Corte actual del preapproval (para alinear el prorrateo trim/anual). */
+    /** Corte actual del preapproval (para alinear el prorrateo). */
     currentPeriodEnd: Date
     now?: Date
 }
 
 /**
- * Alta in-app de un suscriptor activo — BIFURCA por ciclo (D4):
- *   - MENSUAL: INSERT (service-role) + PUT del monto compuesto, con REVERSIÓN D5 (si el PUT
- *     falla se borra la fila recién insertada en el mismo request y se relanza el error).
- *   - TRIM/ANUAL: crea la preference de pago one-shot (monto de `getAddonProrationClp`) y
- *     devuelve la URL de checkout SIN crear fila — la fila la materializa el webhook al
- *     aprobarse el pago (`materializeAddonFromOneShot`). Cero filas en checkout abandonado.
+ * Alta in-app de un suscriptor activo — one-shot prorrateado para TODOS los ciclos (D4):
+ * crea la preference de pago one-shot (monto de `getAddonProrationClp` por la fracción que
+ * resta del período actual) y devuelve la URL de checkout SIN crear fila — la fila la
+ * materializa el webhook al aprobarse el pago (`materializeAddonFromOneShot`), que también
+ * hace el PUT del valor completo del add-on al preapproval DESDE la renovación. Cero filas en
+ * checkout abandonado. Mensual ya no es cortesía: prorratea igual que trim/anual.
  *
  * `db` debe ser service-role (escribe coach_addons). El monto SIEMPRE lo calcula el server.
  */
@@ -203,33 +202,7 @@ export async function activateAddonForCoach(
 ): Promise<ActivateAddonResult> {
     const priceClpMensual = getAddonMonthlyPriceClp(key)
 
-    if (ctx.cycle === 'monthly') {
-        // DB primero, PUT después (D5). Reversión inmediata si el PUT falla.
-        const addon = await insertAddon(db, {
-            coachId: ctx.coachId,
-            moduleKey: key,
-            source: 'self_service',
-            priceClpMensual,
-            termsVersion,
-            firstChargedAt: null, // cortesía hasta el corte: el webhook lo setea al 1er cobro
-        })
-        const live = await listLive(db, ctx.coachId)
-        const newCompositeAmountClp = getCompositeAmountClp(
-            ctx.tier,
-            ctx.cycle,
-            toBillableAddons(live)
-        )
-        try {
-            await payments.updateCheckoutAmount(ctx.subscriptionMpId, newCompositeAmountClp)
-        } catch (err) {
-            // Reversión D5: borrar la fila recién insertada (trigger D1 apaga el módulo) y relanzar.
-            await db.from('coach_addons').delete().eq('id', addon.id)
-            throw err
-        }
-        return { kind: 'monthly_activated', addon, newCompositeAmountClp }
-    }
-
-    // Trimestral / anual: one-shot prorrateado inmediato; la fila la crea el webhook.
+    // One-shot prorrateado inmediato (mensual/trim/anual); la fila la crea el webhook.
     const now = ctx.now ?? new Date()
     const prorationClp = getAddonProrationClp(priceClpMensual, ctx.cycle, now, ctx.currentPeriodEnd)
     const cycleAmountClp = getAddonCycleAmountClp(priceClpMensual, ctx.cycle)

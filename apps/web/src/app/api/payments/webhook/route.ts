@@ -4,6 +4,8 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
 import { mapProviderStatus, resolveCurrentPeriodEnd, resolveTerminalEvent } from '@/lib/payments/subscription-state'
 import {
+    ADDON_CONFIG,
+    BILLING_CYCLE_CONFIG,
     getTierMaxClients,
     isBillingCycleAllowedForTier,
     type BillingCycle,
@@ -16,11 +18,14 @@ import {
 } from '@/lib/payments/webhook-authorization'
 import { cancelAllForCoach, listLive } from '@/infrastructure/db/coach-addons.repository'
 import {
+    getAddonProrationClp,
     getCompositeAmountClp,
     materializeAddonFromOneShot,
     toBillableAddons,
     type AddonPaymentsPort,
 } from '@/services/billing/addons.service'
+import { sendTransactionalEmail } from '@/lib/email/send-email'
+import { buildAddonActivationReceiptEmail } from '@/lib/email/addon-receipt-templates'
 import {
     applyFirstChargeToAddons,
     buildAcceptedRulesPayload,
@@ -214,6 +219,72 @@ async function handleWebhook(request: Request, rawBody: string) {
             await admin
                 .from('subscription_events')
                 .upsert(altaEvent, { onConflict: 'provider_event_id' })
+
+            // Recibo de alta — fire-and-forget. TODOS los one-shots (mensual/trim/anual desde la
+            // convergencia D4) emiten recibo; un fallo de Resend se LOGUEA pero NUNCA tumba el
+            // webhook (la materialización y el cobro ya quedaron consistentes). Evidencia SERNAC.
+            try {
+                // El email no está en `coaches` (vive en auth.users); coach.id === auth uid.
+                const { data: authUser } = await admin.auth.admin.getUserById(coach.id)
+                const to = authUser?.user?.email ?? null
+                if (to) {
+                    const breakdown = buildAddonBreakdown([addon], cycleForAddon)
+                    const baseClp = tierBaseClp(tierForAddon, cycleForAddon)
+                    const addonsClp = breakdown.reduce((s, l) => s + l.cycle_amount_clp, 0)
+                    // oneShotClp = la fracción REALMENTE cobrada hoy (re-computada del corte vigente);
+                    // el monto MP es opaco, así que se deriva igual que en el alta (server-computed).
+                    const periodEnd = coach.current_period_end
+                    const oneShotClp = periodEnd
+                        ? getAddonProrationClp(
+                              addon.priceClpMensual,
+                              cycleForAddon,
+                              new Date(paidAt),
+                              new Date(periodEnd)
+                          )
+                        : addonsClp
+                    const acceptedRules = buildAcceptedRulesPayload(cycleForAddon)
+                    const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+                    const { subject, html } = buildAddonActivationReceiptEmail({
+                        coachName: to.split('@')[0] ?? 'coach',
+                        addonLabel: ADDON_CONFIG[moduleKey].label,
+                        cycleLabel: BILLING_CYCLE_CONFIG[cycleForAddon].label,
+                        baseClp,
+                        addonLines: breakdown.map((l) => ({
+                            label: ADDON_CONFIG[l.module_key].label,
+                            cycleAmountClp: l.cycle_amount_clp,
+                        })),
+                        totalClp: baseClp + addonsClp,
+                        oneShotClp,
+                        nextChargeDate: periodEnd
+                            ? new Date(periodEnd).toLocaleDateString('es-CL', {
+                                  day: 'numeric',
+                                  month: 'long',
+                                  year: 'numeric',
+                              })
+                            : null,
+                        acceptedRules: acceptedRules.rules,
+                        termsVersion: acceptedRules.version,
+                        subscriptionUrl: `${appUrl}/coach/subscription`,
+                    })
+                    const res = await sendTransactionalEmail({ to, subject, html })
+                    if (!res.ok) {
+                        console.error('[payments.webhook] one-shot addon receipt email failed', {
+                            traceId,
+                            coachId: coach.id,
+                            moduleKey,
+                            error: res.error,
+                        })
+                    }
+                }
+            } catch (receiptErr) {
+                console.error('[payments.webhook] one-shot addon receipt email threw', {
+                    traceId,
+                    coachId: coach.id,
+                    moduleKey,
+                    message:
+                        receiptErr instanceof Error ? receiptErr.message : String(receiptErr),
+                })
+            }
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
             console.error('[payments.webhook] one-shot addon materialization failed', {

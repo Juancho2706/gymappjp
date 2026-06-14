@@ -63,11 +63,6 @@ vi.mock('./_lib/coach-context', async (orig) => {
     }
 })
 
-const sendTransactionalEmail = vi.fn().mockResolvedValue({ ok: true, providerMessageId: 'm1' })
-vi.mock('@/lib/email/send-email', () => ({
-    sendTransactionalEmail: (...a: unknown[]) => sendTransactionalEmail(...a),
-}))
-
 import { POST } from './route'
 import { ADDON_PAYMENT_RULES } from '@/lib/constants'
 
@@ -177,23 +172,22 @@ describe('POST /api/payments/addons — guards de compra (D8)', () => {
 })
 
 describe('POST /api/payments/addons — respuesta bifurcada (D4)', () => {
-    it('MENSUAL → fila + billing compuesto + evento de historial', async () => {
+    it('MENSUAL → { checkoutUrl } del one-shot, sin evento (lo crea el webhook, converge con trim/anual)', async () => {
         activateAddonForCoach.mockResolvedValue({
-            kind: 'monthly_activated',
-            addon: { id: 'addon-x', moduleKey: 'cardio', status: 'active' },
-            newCompositeAmountClp: 39980,
+            kind: 'one_shot_checkout',
+            checkoutUrl: 'https://mp.test/checkout/abc',
+            prorationClp: 5161,
+            cycleAmountClp: 9990,
         })
         const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
         expect(res.status).toBe(200)
         const json = await res.json()
-        expect(json.kind).toBe('monthly_activated')
-        expect(json.billing).toEqual({ baseClp: 29990, addonsClp: 9990, totalClp: 39980 })
-        // evento de historial insertado (con texto de reglas en el payload)
-        expect(fakeAdmin.from).toHaveBeenCalledWith('subscription_events')
-        const inserted = adminInsert.mock.calls[0][0]
-        expect(inserted.provider_event_id).toBe('addon:addon-x:activate')
-        expect(inserted.payload.accepted_rules).toHaveLength(5)
-        expect(inserted.payload.terms_version).toBe(VERSION)
+        expect(json.kind).toBe('one_shot_checkout')
+        expect(json.checkoutUrl).toBe('https://mp.test/checkout/abc')
+        expect(json.prorationClp).toBe(5161)
+        expect(json.cycleAmountClp).toBe(9990)
+        // el evento/recibo llegan por webhook → el endpoint no inserta nada
+        expect(adminInsert).not.toHaveBeenCalled()
     })
 
     it('TRIMESTRAL → { checkoutUrl } del one-shot, sin evento (lo crea el webhook)', async () => {
@@ -212,16 +206,5 @@ describe('POST /api/payments/addons — respuesta bifurcada (D4)', () => {
         expect(json.prorationClp).toBe(13487)
         // el evento/recibo llegan por webhook → el endpoint no inserta nada
         expect(adminInsert).not.toHaveBeenCalled()
-    })
-
-    it('el recibo email es fire-and-forget: si falla no rompe la respuesta mensual', async () => {
-        activateAddonForCoach.mockResolvedValue({
-            kind: 'monthly_activated',
-            addon: { id: 'addon-x', moduleKey: 'cardio', status: 'active' },
-            newCompositeAmountClp: 39980,
-        })
-        sendTransactionalEmail.mockResolvedValue({ ok: false, error: 'Resend 500' })
-        const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
-        expect(res.status).toBe(200)
     })
 })

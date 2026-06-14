@@ -177,12 +177,14 @@ export const ADDON_MODULE_KEYS = MODULE_KEYS
  * El checkbox de aceptación persiste `terms_version` + `terms_accepted_at`, y el
  * evento de alta guarda el TEXTO ÍNTEGRO de la variante aceptada (plan 05 F3.4).
  *
- * Reglas 1-3 BIFURCAN por ciclo (decisión final del dueño, 2026-06-11): la cortesía
- * hasta el corte aplica SOLO al ciclo mensual; en trimestral/anual la alta cobra de
- * inmediato un pago único prorrateado por la fracción restante del ciclo (alineado al
- * corte) y el compromiso mínimo queda cubierto por ese cobro. Ambas variantes viven
- * bajo la MISMA versión (`terms_version`); la UI muestra la que corresponde al ciclo
- * del coach.
+ * Reglas 1-3 conservan variantes por ciclo (decisión final del dueño, 2026-06-12): TODOS
+ * los ciclos —mensual incluido— cobran de inmediato un pago único prorrateado por la
+ * fracción restante del ciclo actual (alineado al corte) y desde la siguiente renovación
+ * suman el valor completo del módulo al cobro habitual; el compromiso mínimo queda
+ * cubierto por ese cobro inicial. El texto mensual usa fraseo "mes/mensual" y el de
+ * trimestral/anual "ciclo", pero ambos describen el MISMO modelo de cobro inmediato
+ * prorrateado. Las variantes viven bajo la MISMA versión (`terms_version`); la UI
+ * muestra la que corresponde al ciclo del coach.
  *
  * CERO mención de IVA (decisión D5 del dueño). Español latam neutro.
  */
@@ -204,13 +206,13 @@ export const ADDON_PAYMENT_RULES: {
     version: string
     rules: readonly AddonPaymentRule[]
 } = {
-    version: 'v1-2026-06',
+    version: 'v2-2026-06',
     rules: [
         {
             number: 1,
             title: 'Activación inmediata',
             monthly:
-                'El módulo se activa de inmediato al confirmar. Queda disponible en tu cuenta apenas aceptas estas condiciones.',
+                'El módulo se activa apenas se aprueba el pago inicial prorrateado. Queda disponible en tu cuenta una vez confirmado ese pago.',
             quarterlyAnnual:
                 'El módulo se activa apenas se aprueba el pago inicial prorrateado. Queda disponible en tu cuenta una vez confirmado ese pago.',
         },
@@ -218,7 +220,7 @@ export const ADDON_PAYMENT_RULES: {
             number: 2,
             title: 'Cobro y prorrateo',
             monthly:
-                'Se cobra el valor completo del módulo desde tu próximo cobro mensual. La fracción que resta del período actual es cortesía: no se te cobra por ella.',
+                'Al activar el módulo se cobra de inmediato un pago único por la fracción que resta del mes actual (proporcional a los días restantes). Desde tu próxima renovación mensual, el valor completo del módulo se suma a tu cobro habitual.',
             quarterlyAnnual:
                 'Al activar el módulo se cobra de inmediato un pago único por la fracción que resta de tu ciclo actual (proporcional a los días restantes, con el mismo descuento de tu ciclo). Desde la siguiente renovación, el valor del módulo se suma a tu cobro habitual.',
         },
@@ -226,7 +228,7 @@ export const ADDON_PAYMENT_RULES: {
             number: 3,
             title: 'Compromiso mínimo de 1 ciclo',
             monthly:
-                'Al activar el módulo te comprometes a un ciclo cobrado como mínimo. Si lo cancelas antes de tu primer cobro, ese primer cobro incluirá igualmente el módulo; recién después se programa su término.',
+                'El compromiso mínimo de un ciclo queda cubierto por el pago inicial prorrateado que ya realizaste al activar el módulo.',
             quarterlyAnnual:
                 'El compromiso mínimo de un ciclo queda cubierto por el pago inicial prorrateado que ya realizaste al activar el módulo.',
         },

@@ -312,16 +312,13 @@ export default function CoachSubscriptionPage() {
             })
             const payload = await response.json()
             if (!response.ok) throw new Error(payload.error ?? 'No se pudo agregar el módulo.')
-            // Trimestral/anual: el endpoint devuelve la URL del one-shot prorrateado → redirige a MP.
+            // Todos los ciclos: el endpoint devuelve la URL del one-shot prorrateado → redirige a MP.
             if (payload.kind === 'one_shot_checkout' && payload.checkoutUrl) {
                 captureAddonFunnel('addon_oneshot_redirected', { module_key: key, billing_cycle: coachCycle, tier: coachTier })
                 window.location.href = payload.checkoutUrl
                 return
             }
-            // Mensual: módulo activado al instante; refrescar estado + total compuesto.
-            setAddonModalKey(null)
-            setSuccessMessage('Módulo agregado. Ya está disponible en tu cuenta.')
-            await refreshStatus()
+            throw new Error('No se pudo iniciar el pago del módulo.')
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error inesperado')
         } finally {
@@ -835,7 +832,6 @@ export default function CoachSubscriptionPage() {
             {addonModalKey && (() => {
                 const cfg = ADDON_CONFIG[addonModalKey]
                 const rules = getAddonPaymentRulesForCycle(coachCycle)
-                const isMonthly = coachCycle === 'monthly'
                 return (
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
                         <div className="w-full max-w-lg rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-6 shadow-2xl max-h-[90dvh] overflow-y-auto">
@@ -852,17 +848,11 @@ export default function CoachSubscriptionPage() {
                                     <span>{cfg.label}</span>
                                     <span className="text-foreground">${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes</span>
                                 </div>
-                                {isMonthly ? (
-                                    <p className="pt-1 text-xs text-muted-foreground">
-                                        Se sumará a tu próximo cobro mensual. La fracción que resta de este período es cortesía.
-                                    </p>
-                                ) : (
-                                    <p className="pt-1 text-xs text-muted-foreground">
-                                        Pagas ahora un monto único prorrateado por los días que restan de tu ciclo.
-                                        Desde la renovación, el valor del módulo se suma a tu cobro habitual. El monto exacto
-                                        del pago inicial se calcula en el checkout seguro de Mercado Pago.
-                                    </p>
-                                )}
+                                <p className="pt-1 text-xs text-muted-foreground">
+                                    Pagas ahora un monto único prorrateado por los días que restan de tu ciclo.
+                                    Desde la renovación, el valor del módulo se suma a tu cobro habitual. El monto exacto
+                                    del pago inicial se calcula en el checkout seguro de Mercado Pago.
+                                </p>
                             </div>
 
                             {/* Las 5 reglas textuales (variante por ciclo) */}
@@ -907,7 +897,7 @@ export default function CoachSubscriptionPage() {
                                     disabled={!addonTermsAccepted || addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
                                     className="flex-1 h-10 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
                                 >
-                                    {addonSaving ? 'Procesando...' : isMonthly ? 'Activar módulo' : 'Ir a pagar'}
+                                    {addonSaving ? 'Procesando...' : 'Ir a pagar'}
                                 </button>
                             </div>
                         </div>

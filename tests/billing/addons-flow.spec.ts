@@ -167,16 +167,17 @@ test.describe('add-ons — alta con modal (requiere SELF_SERVICE_ADDONS_ENABLED)
         test.skip(!SELF_SERVICE_ADDONS_ENABLED, 'Switch de lanzamiento OFF — CTA de alta deshabilitado por diseño')
     })
 
-    test('alta mensual: el CTA está deshabilitado sin aceptar el checkbox y se habilita al aceptar', async ({ page }) => {
+    test('alta mensual: el CTA está deshabilitado sin aceptar el checkbox y redirige al one-shot al aceptar', async ({ page }) => {
         await mockSubscriptionStatus(page, { billingCycle: 'monthly' })
         await page.route('**/api/payments/addons', async (route) => {
             await route.fulfill({
                 status: 200,
                 contentType: 'application/json',
                 body: JSON.stringify({
-                    kind: 'monthly_activated',
-                    addon: { id: 'new', moduleKey: CARDIO },
-                    billing: { baseClp: 79990, addonsClp: 9990, totalClp: 89980 },
+                    kind: 'one_shot_checkout',
+                    checkoutUrl: '/coach/subscription?addon_oneshot=mock',
+                    prorationClp: 9657,
+                    cycleAmountClp: 9990,
                 }),
             })
         })
@@ -186,19 +187,17 @@ test.describe('add-ons — alta con modal (requiere SELF_SERVICE_ADDONS_ENABLED)
         const section = page.locator('#addons')
         await section.getByRole('button', { name: 'Agregar' }).first().click()
 
-        // Las 5 reglas visibles + total en vivo (desglose con base y módulo).
-        const modal = page.getByRole('heading', { name: /Agregar/ }).locator('..')
+        // Las 5 reglas visibles (variante mensual ya prorrateada como trim/anual).
         await expect(page.getByText(FIRST_RULE_TITLE)).toBeVisible()
 
-        const cta = page.getByRole('button', { name: 'Activar módulo' })
+        const cta = page.getByRole('button', { name: 'Ir a pagar' })
         await expect(cta).toBeDisabled()
 
         await page.getByRole('checkbox').last().check()
         await expect(cta).toBeEnabled()
 
         await cta.click()
-        await expect(page.getByText('Módulo agregado. Ya está disponible en tu cuenta.')).toBeVisible()
-        void modal
+        await expect(page).toHaveURL(/addon_oneshot=mock/)
     })
 
     test('alta trimestral/anual: el modal muestra el one-shot y redirige al checkout (mock)', async ({ page }) => {

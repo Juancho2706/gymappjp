@@ -59,7 +59,7 @@ function makeAddon(over: Partial<CoachAddon> = {}): CoachAddon {
         status: 'active',
         source: 'self_service',
         priceClpMensual: 9990,
-        termsVersion: 'v1-2026-06',
+        termsVersion: 'v2-2026-06',
         termsAcceptedAt: '2026-06-01T00:00:00.000Z',
         activatedAt: '2026-06-01T00:00:00.000Z',
         firstChargedAt: null,
@@ -280,49 +280,36 @@ describe('activateAddonForCoach — bifurcación por ciclo (D4)', () => {
         now: new Date('2026-06-16T00:00:00.000Z'),
     }
 
-    it('MENSUAL → INSERT + PUT del compuesto (sin checkout)', async () => {
+    it('MENSUAL → preference one-shot prorrateado SIN crear fila (converge con trim/anual)', async () => {
         const { db } = makeDbStub()
         const payments = makePaymentsStub()
-        const inserted = makeAddon({ id: 'addon-x', moduleKey: 'cardio' })
-        insertAddon.mockResolvedValue(inserted)
-        listLive.mockResolvedValue([inserted])
 
         const result = await activateAddonForCoach(
             db,
             payments,
             { ...baseCtx, cycle: 'monthly' },
             'cardio',
-            'v1-2026-06'
+            'v2-2026-06'
         )
 
-        expect(result.kind).toBe('monthly_activated')
-        expect(insertAddon).toHaveBeenCalledOnce()
-        // first_charged_at null en mensual (cortesía hasta el corte)
-        expect(insertAddon.mock.calls[0][1]).toMatchObject({
-            moduleKey: 'cardio',
-            source: 'self_service',
-            firstChargedAt: null,
-        })
-        const expected = getCompositeAmountClp('pro', 'monthly', [
-            { moduleKey: 'cardio', priceClpMensual: 9990 },
-        ])
-        expect(payments.updateCheckoutAmount).toHaveBeenCalledWith('preapproval-1', expected)
-        expect(payments.createOneShotPayment).not.toHaveBeenCalled()
-    })
-
-    it('MENSUAL: si el PUT falla → revierte la fila (delete) y relanza (D5)', async () => {
-        const { db, del } = makeDbStub()
-        const payments = makePaymentsStub({
-            updateCheckoutAmount: vi.fn().mockRejectedValue(new Error('PUT 500')),
-        })
-        const inserted = makeAddon({ id: 'addon-x', moduleKey: 'cardio' })
-        insertAddon.mockResolvedValue(inserted)
-        listLive.mockResolvedValue([inserted])
-
-        await expect(
-            activateAddonForCoach(db, payments, { ...baseCtx, cycle: 'monthly' }, 'cardio', 'v1-2026-06')
-        ).rejects.toThrow('PUT 500')
-        expect(del).toHaveBeenCalledOnce() // reversión D5
+        expect(result.kind).toBe('one_shot_checkout')
+        if (result.kind === 'one_shot_checkout') {
+            expect(result.checkoutUrl).toBe('https://mp.test/checkout/abc')
+            // prorrateo mensual usa getAddonProrationClp (totalDays = 30)
+            expect(result.prorationClp).toBe(
+                getAddonProrationClp(9990, 'monthly', baseCtx.now, baseCtx.currentPeriodEnd)
+            )
+            expect(result.cycleAmountClp).toBe(getAddonCycleAmountClp(9990, 'monthly'))
+        }
+        // la fila la crea el webhook al aprobarse el pago (no se inserta en el alta)
+        expect(insertAddon).not.toHaveBeenCalled()
+        expect(payments.createOneShotPayment).toHaveBeenCalledOnce()
+        // sin PUT en el alta: el compuesto se aplica desde la próxima renovación
+        expect(payments.updateCheckoutAmount).not.toHaveBeenCalled()
+        // external_reference dedicado addon_oneshot|...
+        expect(vi.mocked(payments.createOneShotPayment).mock.calls[0][0].externalReference).toBe(
+            'addon_oneshot|coach-1|cardio|v2-2026-06'
+        )
     })
 
     it('TRIMESTRAL → preference one-shot SIN crear fila', async () => {
@@ -334,7 +321,7 @@ describe('activateAddonForCoach — bifurcación por ciclo (D4)', () => {
             payments,
             { ...baseCtx, cycle: 'quarterly' },
             'cardio',
-            'v1-2026-06'
+            'v2-2026-06'
         )
 
         expect(result.kind).toBe('one_shot_checkout')
@@ -349,7 +336,7 @@ describe('activateAddonForCoach — bifurcación por ciclo (D4)', () => {
         expect(payments.createOneShotPayment).toHaveBeenCalledOnce()
         // external_reference dedicado addon_oneshot|...
         expect(vi.mocked(payments.createOneShotPayment).mock.calls[0][0].externalReference).toBe(
-            'addon_oneshot|coach-1|cardio|v1-2026-06'
+            'addon_oneshot|coach-1|cardio|v2-2026-06'
         )
     })
 
@@ -362,7 +349,7 @@ describe('activateAddonForCoach — bifurcación por ciclo (D4)', () => {
             payments,
             { ...baseCtx, cycle: 'annual' },
             'cardio',
-            'v1-2026-06'
+            'v2-2026-06'
         )
         expect(result.kind).toBe('one_shot_checkout')
         if (result.kind === 'one_shot_checkout') {
@@ -399,7 +386,7 @@ describe('materializeAddonFromOneShot', () => {
             payments,
             ctx,
             'cardio',
-            'v1-2026-06',
+            'v2-2026-06',
             '2026-06-20T00:00:00.000Z'
         )
 
@@ -425,7 +412,7 @@ describe('materializeAddonFromOneShot', () => {
             payments,
             ctx,
             'cardio',
-            'v1-2026-06',
+            'v2-2026-06',
             '2026-06-21T00:00:00.000Z'
         )
 
