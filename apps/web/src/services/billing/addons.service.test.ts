@@ -277,6 +277,10 @@ describe('activateAddonForCoach — bifurcación por ciclo (D4)', () => {
         tier: 'pro' as const,
         subscriptionMpId: 'preapproval-1',
         currentPeriodEnd: new Date('2026-07-01T00:00:00.000Z'),
+        successUrl: 'https://app.test/coach/subscription?addon=success',
+        failureUrl: 'https://app.test/coach/subscription?addon=failure',
+        pendingUrl: 'https://app.test/coach/subscription?addon=pending',
+        webhookUrl: 'https://app.test/api/payments/webhook?token=t',
         now: new Date('2026-06-16T00:00:00.000Z'),
     }
 

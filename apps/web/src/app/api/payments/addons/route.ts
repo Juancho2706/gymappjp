@@ -108,8 +108,20 @@ export async function POST(request: Request) {
             )
         }
 
+        // URLs del one-shot (back_urls + webhook) desde NEXT_PUBLIC_SITE_URL — mismo patrón que
+        // create-preference. MP exige back_urls.success cuando se manda auto_return.
+        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+        const webhookToken = process.env.MERCADOPAGO_WEBHOOK_TOKEN
+        const webhookUrl = webhookToken
+            ? `${appUrl}/api/payments/webhook?token=${webhookToken}`
+            : `${appUrl}/api/payments/webhook`
         // buildActivateContext normaliza el ciclo y deriva el corte para el prorrateo del service.
-        const ctx = buildActivateContext(coach, user.email)
+        const ctx = buildActivateContext(coach, user.email, {
+            successUrl: `${appUrl}/coach/subscription?addon=success`,
+            failureUrl: `${appUrl}/coach/subscription?addon=failure`,
+            pendingUrl: `${appUrl}/coach/subscription?addon=pending`,
+            webhookUrl,
+        })
         const payments = buildAddonPaymentsPort()
 
         let result

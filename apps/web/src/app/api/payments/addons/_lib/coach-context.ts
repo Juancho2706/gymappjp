@@ -60,7 +60,8 @@ export function normalizeCycle(raw: string | null): BillingCycle {
 /** Construye el contexto de alta del service (incl. el corte para el prorrateo trim/anual). */
 export function buildActivateContext(
     row: CoachBillingRow,
-    coachEmail: string
+    coachEmail: string,
+    urls: { successUrl: string; failureUrl: string; pendingUrl: string; webhookUrl: string }
 ): ActivateAddonContext {
     return {
         coachId: row.id,
@@ -69,6 +70,10 @@ export function buildActivateContext(
         cycle: normalizeCycle(row.billing_cycle),
         subscriptionMpId: row.subscription_mp_id ?? '',
         currentPeriodEnd: row.current_period_end ? new Date(row.current_period_end) : new Date(),
+        successUrl: urls.successUrl,
+        failureUrl: urls.failureUrl,
+        pendingUrl: urls.pendingUrl,
+        webhookUrl: urls.webhookUrl,
     }
 }
 

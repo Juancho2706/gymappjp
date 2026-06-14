@@ -53,6 +53,10 @@ export interface AddonPaymentsPort {
         amountClp: number
         description: string
         externalReference: string
+        successUrl: string
+        failureUrl: string
+        pendingUrl: string
+        webhookUrl: string
     }): Promise<{ checkoutUrl: string }>
 }
 
@@ -180,6 +184,11 @@ export type ActivateAddonContext = {
     subscriptionMpId: string
     /** Corte actual del preapproval (para alinear el prorrateo). */
     currentPeriodEnd: Date
+    /** URLs del checkout one-shot (back_urls + notification) — el route las deriva de NEXT_PUBLIC_SITE_URL. */
+    successUrl: string
+    failureUrl: string
+    pendingUrl: string
+    webhookUrl: string
     now?: Date
 }
 
@@ -213,6 +222,10 @@ export async function activateAddonForCoach(
         amountClp: prorationClp,
         description: `Activación prorrateada — ${ADDON_CONFIG[key].label}`,
         externalReference,
+        successUrl: ctx.successUrl,
+        failureUrl: ctx.failureUrl,
+        pendingUrl: ctx.pendingUrl,
+        webhookUrl: ctx.webhookUrl,
     })
     return { kind: 'one_shot_checkout', checkoutUrl, prorationClp, cycleAmountClp }
 }
