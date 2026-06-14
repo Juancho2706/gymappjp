@@ -105,6 +105,8 @@ export default function CoachSubscriptionPage() {
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    // Motivo visible cuando el coach clickea una card de plan bloqueada (cupo / nutrición).
+    const [blockedMsg, setBlockedMsg] = useState<string | null>(null)
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
     const [reason, setReason] = useState('')
     const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('starter')
@@ -667,10 +669,13 @@ export default function CoachSubscriptionPage() {
                             <button
                                 key={tier}
                                 type="button"
-                                disabled={isBlocked}
                                 aria-disabled={isBlocked}
                                 title={blockTooltip}
-                                onClick={() => { if (!isBlocked) setSelectedTier(tier) }}
+                                onClick={() => {
+                                    if (isBlocked) { setBlockedMsg(blockTooltip ?? 'No puedes seleccionar este plan.'); return }
+                                    setBlockedMsg(null)
+                                    setSelectedTier(tier)
+                                }}
                                 className={`relative rounded-2xl border p-4 text-left transition-all ${
                                     isBlocked
                                         ? 'cursor-not-allowed border-border opacity-50'
@@ -734,6 +739,13 @@ export default function CoachSubscriptionPage() {
                         )
                     })}
                 </div>
+
+                {blockedMsg && (
+                    <div role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-600 dark:text-amber-300">
+                        <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>{blockedMsg}</span>
+                    </div>
+                )}
 
                 {/* Combo plan + add-ons (plan 05): elegí módulos para pagarlos JUNTO al plan en un
                     solo checkout. Visible solo con el flag de lanzamiento (en prod oculto). */}
