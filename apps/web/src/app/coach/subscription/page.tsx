@@ -295,8 +295,9 @@ export default function CoachSubscriptionPage() {
         (coach?.subscription_status === 'active' || coach?.subscription_status === 'trialing')
     // P1-3: ¿el coach tiene un add-on de nutrición por intercambios VIVO? Bloquea bajar a un tier
     // sin nutrición (Starter) hasta quitarlo — espejo del 409 NUTRITION_ADDON_ON_DOWNGRADE del server.
+    // Solo ACTIVE bloquea: si ya dio de baja la nutrición (cancel_pending) el downgrade se permite.
     const hasLiveNutrition = addons.some(
-        (a) => a.moduleKey === 'nutrition_exchanges' && (a.status === 'active' || a.status === 'cancel_pending')
+        (a) => a.moduleKey === 'nutrition_exchanges' && a.status === 'active'
     )
     // No-op: el tier y ciclo elegidos son idénticos al plan actual → no hay nada que cobrar ni
     // cambiar. Deshabilita "Continuar" (si llegara al server, devuelve 400/no-op igualmente).

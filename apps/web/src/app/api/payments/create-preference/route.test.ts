@@ -325,12 +325,12 @@ describe('POST /api/payments/create-preference — DOWNGRADE con add-on de nutri
         expect(lastUpdatePayload()).toBeUndefined()
     })
 
-    it('add-on de nutrición en cancel_pending (aún vivo) también bloquea (listLive lo incluye)', async () => {
+    it('add-on de nutrición en cancel_pending (ya dado de baja) NO bloquea: el downgrade procede (ambos al corte)', async () => {
         listLive.mockResolvedValue([liveNutritionAddon('cancel_pending')])
         const res = await POST(makeRequest({ tier: 'starter', billingCycle: 'monthly' }))
-        expect(res.status).toBe(409)
-        expect((await res.json()).code).toBe('NUTRITION_ADDON_ON_DOWNGRADE')
-        expect(createCheckout).not.toHaveBeenCalled()
+        // Solo nutrición ACTIVE bloquea; cancel_pending expira al corte, igual que arranca el plan nuevo.
+        expect(res.status).toBe(200)
+        expect(createCheckout).toHaveBeenCalledOnce()
     })
 
     it('cortesía del CEO (admin_grant) de nutrición viva también bloquea el downgrade', async () => {

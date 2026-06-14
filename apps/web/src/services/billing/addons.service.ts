@@ -374,12 +374,26 @@ export async function requestAddonCancellation(
         // update y recomputar (el add-on en cancel_pending YA cobrado deja de ser facturable).
         const liveAfter = await listLive(db, ctx.coachId)
         const newComposite = getCompositeAmountClp(ctx.tier, ctx.cycle, toBillableAddons(liveAfter))
-        await payments.updateCheckoutAmount(ctx.subscriptionMpId, newComposite)
+        // La fila YA quedó cancel_pending (requestCancel arriba). Si el PUT que baja el monto del
+        // preapproval falla (preapproval pausado / MP caído / id inválido), NO tumbamos la baja: el
+        // reconcile diario detecta el drift y reintenta. Devolver error dejaría la baja aplicada en DB
+        // pero al usuario con un 500 (y el over-bill ocurriría igual hasta el reconcile).
+        let putApplied = false
+        try {
+            await payments.updateCheckoutAmount(ctx.subscriptionMpId, newComposite)
+            putApplied = true
+        } catch (err) {
+            console.error('[addons.cancel] PUT del monto falló — baja igual aplicada, reconcile reintenta', {
+                coachId: ctx.coachId,
+                moduleKey: key,
+                message: err instanceof Error ? err.message : String(err),
+            })
+        }
         return {
             moduleKey: key,
             status: updated?.status ?? 'cancel_pending',
             effectiveAt: expiresAt,
-            putApplied: true,
+            putApplied,
         }
     }
 

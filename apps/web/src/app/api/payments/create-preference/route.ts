@@ -209,11 +209,14 @@ export async function POST(request: Request) {
                 // NUTRITION_ADDON_ON_DOWNGRADE: si el tier destino no admite nutrición (Starter) y el
                 // coach tiene un add-on de nutrición por intercambios VIVO, se BLOQUEA con 409 y CERO
                 // efectos colaterales (no toca el coach ni crea checkout). Espejo del guard OVER_CAPACITY:
-                // el coach debe quitar el módulo antes de bajar a un plan sin nutrición. listLive ya
-                // filtra a estados vivos (active/cancel_pending), self_service o admin_grant.
+                // el coach debe quitar el módulo antes de bajar a un plan sin nutrición. Solo cuenta
+                // nutrición ACTIVE: si ya la dio de baja (cancel_pending) el downgrade se PERMITE — la
+                // nutrición expira al corte y el plan nuevo arranca al corte (timing consistente).
                 if (!getTierCapabilities(tier).canUseNutrition) {
                     const live = await listLive(admin, user.id)
-                    const hasLiveNutrition = live.some((a) => a.moduleKey === 'nutrition_exchanges')
+                    const hasLiveNutrition = live.some(
+                        (a) => a.moduleKey === 'nutrition_exchanges' && a.status === 'active'
+                    )
                     if (hasLiveNutrition) {
                         return NextResponse.json(
                             {
