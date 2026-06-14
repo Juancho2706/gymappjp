@@ -54,16 +54,31 @@ vi.mock('@/lib/rate-limit', () => ({
 }))
 
 // createCheckout = preapproval recurrente (free→paid / reactivación / downgrade-at-cut);
-// createOneShotPayment = one-shot prorrateado del UPGRADE mid-cycle (plan estrategia 06 C1).
+// createOneShotPayment = one-shot prorrateado del UPGRADE mid-cycle (plan estrategia 06 C1);
+// cancelCheckoutAtProvider = cancelar el preapproval VIEJO de inmediato en un downgrade/cambio de
+// ciclo al corte (P0-2, desacoplado del pago).
 const createCheckout = vi.fn()
 const createOneShotPayment = vi.fn()
+const cancelCheckoutAtProvider = vi.fn().mockResolvedValue(undefined)
 const getPaymentsProvider = vi.fn(() => ({
     name: 'mercadopago' as const,
     createCheckout: (...a: unknown[]) => createCheckout(...a),
     createOneShotPayment: (...a: unknown[]) => createOneShotPayment(...a),
+    cancelCheckoutAtProvider: (...a: unknown[]) => cancelCheckoutAtProvider(...a),
 }))
 vi.mock('@/lib/payments/provider', () => ({
     getPaymentsProvider: () => getPaymentsProvider(),
+}))
+
+// P0-4 (TOCTOU hardening): candado in-flight de UPGRADE reclamado ATÓMICAMENTE (plan-change-lock).
+// claimUpgradeInFlight reemplaza el par check(isUpgradeInFlight)→set(setUpgradeInFlight): default
+// true (reclama OK). Un test lo fuerza a false (segundo upgrade simultáneo → 409). clearUpgradeInFlight
+// se asevera cuando la creación del one-shot falla (libera el candado para no trabar al coach 30 min).
+const claimUpgradeInFlight = vi.fn().mockResolvedValue(true)
+const clearUpgradeInFlight = vi.fn().mockResolvedValue(undefined)
+vi.mock('@/services/billing/plan-change-lock', () => ({
+    claimUpgradeInFlight: (...a: unknown[]) => claimUpgradeInFlight(...a),
+    clearUpgradeInFlight: (...a: unknown[]) => clearUpgradeInFlight(...a),
 }))
 
 // Live add-ons of the coach (composite amount) — default none.
@@ -85,6 +100,7 @@ import {
 } from '@/services/billing/addons.service'
 import { buildTierUpgradeExternalReference } from '@/lib/payments/providers/mercadopago'
 import { TIER_CONFIG } from '@/lib/constants'
+import type { BillingCycle, SubscriptionTier } from '@/lib/constants'
 
 function makeRequest(body: unknown): Request {
     return new Request('http://localhost/api/payments/create-preference', {
@@ -113,6 +129,9 @@ beforeEach(() => {
     currentCoachMaybeSingle.mockResolvedValue({ data: null, error: null })
     listLive.mockResolvedValue([])
     countActiveStandaloneClients.mockResolvedValue(0)
+    cancelCheckoutAtProvider.mockResolvedValue(undefined)
+    claimUpgradeInFlight.mockResolvedValue(true)
+    clearUpgradeInFlight.mockResolvedValue(undefined)
     createCheckout.mockResolvedValue({
         checkoutId: 'preapproval-NEW',
         checkoutUrl: 'https://mp/checkout',
@@ -218,6 +237,20 @@ describe('POST /api/payments/create-preference — UPGRADE mid-cycle (one-shot p
         expect(oneShotArg.pendingUrl).toContain('upgrade=pending')
         // sanity de que el monto es el prorrateo (no la base completa del tier nuevo)
         expect(typeof expectedProration).toBe('number')
+
+        // P0-4 (TOCTOU): el candado se RECLAMA atómicamente (no hay un set posterior). En el camino
+        // feliz no se libera (lo limpian confirm-upgrade/webhook al activar el tier).
+        expect(claimUpgradeInFlight).toHaveBeenCalledOnce()
+        expect(claimUpgradeInFlight.mock.calls[0][1]).toBe('coach-1')
+        expect(clearUpgradeInFlight).not.toHaveBeenCalled()
+    })
+
+    it('P0-4 (TOCTOU): RECLAMA el candado ANTES de construir el one-shot (claim-first)', async () => {
+        await POST(makeRequest({ tier: 'elite', billingCycle: 'monthly' }))
+        // El reclamo claimUpgradeInFlight corre antes de crear el checkout one-shot.
+        expect(claimUpgradeInFlight).toHaveBeenCalledOnce()
+        expect(claimUpgradeInFlight.mock.calls[0][1]).toBe('coach-1')
+        expect(createOneShotPayment).toHaveBeenCalledOnce()
     })
 
     it('UPGRADE no crea un preapproval nuevo, no marca superseded y NO muta tier/max_clients/status', async () => {
@@ -373,7 +406,7 @@ describe('POST /api/payments/create-preference — DOWNGRADE bajo capacidad (pro
         countActiveStandaloneClients.mockResolvedValue(5)
     })
 
-    it('elite→pro con 5 alumnos: nuevo preapproval al corte y updatePayload OMITE tier/max_clients/billing_cycle', async () => {
+    it('elite→pro con 5 alumnos: nuevo preapproval al corte, CANCELA el viejo de inmediato (P0-2) y OMITE tier/max_clients/billing_cycle', async () => {
         const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly' }))
         expect(res.status).toBe(200)
         // Se crea el preapproval recurrente nuevo (al corte, startDate=current_period_end).
@@ -382,15 +415,19 @@ describe('POST /api/payments/create-preference — DOWNGRADE bajo capacidad (pro
         expect(checkoutArg.startDate).toBe(ACTIVE_PRO_COACH.current_period_end)
         // No es un upgrade → no se construye el one-shot.
         expect(createOneShotPayment).not.toHaveBeenCalled()
+        // P0-2: el preapproval VIEJO se cancela de inmediato (no espera al pago) para que no dispare
+        // su cobro futuro coexistiendo con el nuevo → doble cobro.
+        expect(cancelCheckoutAtProvider).toHaveBeenCalledOnce()
+        expect(cancelCheckoutAtProvider).toHaveBeenCalledWith('preapproval-OLD')
         // updatePayload del downgrade NO degrada el plan ahora (fix audit P1):
         const payload = lastUpdatePayload()
         expect(payload).toBeTruthy()
         expect(payload).not.toHaveProperty('subscription_tier')
         expect(payload).not.toHaveProperty('max_clients')
         expect(payload).not.toHaveProperty('billing_cycle')
-        // sí marca superseded + el id del nuevo preapproval (los fija el webhook al corte).
         expect(payload).toHaveProperty('subscription_mp_id', 'preapproval-NEW')
-        expect(payload).toHaveProperty('superseded_mp_preapproval_id', 'preapproval-OLD')
+        // P0-2: con el cancel EXITOSO NO se persiste superseded (ya está cancelado en MP).
+        expect(payload).toHaveProperty('superseded_mp_preapproval_id', null)
     })
 })
 
@@ -419,5 +456,155 @@ describe('POST /api/payments/create-preference — cambio de CICLO (mismo tier) 
         expect(createCheckout).not.toHaveBeenCalled()
         expect(createOneShotPayment).not.toHaveBeenCalled()
         expect(lastUpdatePayload()).toBeUndefined()
+    })
+
+    it('cambio de ciclo (pro mensual→pro anual): CANCELA el viejo de inmediato (P0-2) y NO persiste superseded', async () => {
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'annual' }))
+        expect(res.status).toBe(200)
+        // P0-2 aplica también al cambio de ciclo (scheduleAtCutOnly = downgrade || same).
+        expect(cancelCheckoutAtProvider).toHaveBeenCalledOnce()
+        expect(cancelCheckoutAtProvider).toHaveBeenCalledWith('preapproval-OLD')
+        const payload = lastUpdatePayload()
+        expect(payload).toHaveProperty('superseded_mp_preapproval_id', null)
+    })
+})
+
+// ════════════════════════════════════════════════════════════════════════════════════
+// P0-2 — backstop cuando el cancel del preapproval VIEJO FALLA. El cancel está desacoplado del
+// pago; si MP rechaza el PUT de cancelación, NO se tumba el cambio: se persiste
+// superseded_mp_preapproval_id = previousMpId para que webhook/cancel-subscription/cron lo
+// reintenten. El coach conserva acceso por DB hasta current_period_end igual.
+// ════════════════════════════════════════════════════════════════════════════════════
+describe('POST /api/payments/create-preference — P0-2 cancel del viejo FALLA → persiste superseded como backstop', () => {
+    beforeEach(() => {
+        currentCoachMaybeSingle.mockResolvedValue({
+            data: { ...ACTIVE_PRO_COACH, subscription_tier: 'elite' },
+            error: null,
+        })
+        countActiveStandaloneClients.mockResolvedValue(5) // cabe en pro → downgrade procede
+    })
+
+    it('downgrade elite→pro con el cancel del viejo fallando: 200, intentó cancelar, y persiste superseded=preapproval-OLD', async () => {
+        cancelCheckoutAtProvider.mockRejectedValue(new Error('MercadoPago PUT failed (404)'))
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly' }))
+        // El fallo del cancel NO tumba el cambio (está desacoplado del pago).
+        expect(res.status).toBe(200)
+        expect(cancelCheckoutAtProvider).toHaveBeenCalledOnce()
+        expect(cancelCheckoutAtProvider).toHaveBeenCalledWith('preapproval-OLD')
+        // Backstop: se persiste el viejo para que otro camino lo reintente.
+        const payload = lastUpdatePayload()
+        expect(payload).toHaveProperty('superseded_mp_preapproval_id', 'preapproval-OLD')
+    })
+})
+
+// ════════════════════════════════════════════════════════════════════════════════════
+// P0-4 (TOCTOU hardening) — candado in-flight de UPGRADE reclamado ATÓMICAMENTE. Entre "creé el
+// one-shot" y "activé el tier" un segundo upgrade recomputaría el compuesto sobre el tier viejo y
+// plegaría el pago pendiente dos veces. claimUpgradeInFlight cierra el TOCTOU del check→set: dos
+// upgrades simultáneos del MISMO coach ya no pueden ambos crear un one-shot (solo uno reclama el
+// UNIQUE). El segundo recibe claim=false → 409 UPGRADE_IN_FLIGHT y CERO efectos.
+// ════════════════════════════════════════════════════════════════════════════════════
+describe('POST /api/payments/create-preference — P0-4 segundo upgrade simultáneo (claim→false → 409 UPGRADE_IN_FLIGHT)', () => {
+    beforeEach(() => {
+        currentCoachMaybeSingle.mockResolvedValue({ data: ACTIVE_PRO_COACH, error: null })
+    })
+
+    it('upgrade pro→elite cuando claimUpgradeInFlight→false (otro reclamó): 409 UPGRADE_IN_FLIGHT, CERO efectos', async () => {
+        claimUpgradeInFlight.mockResolvedValue(false)
+        const res = await POST(makeRequest({ tier: 'elite', billingCycle: 'monthly' }))
+        expect(res.status).toBe(409)
+        const json = await res.json()
+        expect(json.code).toBe('UPGRADE_IN_FLIGHT')
+        expect(typeof json.error).toBe('string')
+        // CERO efectos: ni one-shot, ni UPDATE. Y como NUNCA reclamó, NO libera el candado del otro.
+        expect(createOneShotPayment).not.toHaveBeenCalled()
+        expect(clearUpgradeInFlight).not.toHaveBeenCalled()
+        expect(createCheckout).not.toHaveBeenCalled()
+        expect(lastUpdatePayload()).toBeUndefined()
+    })
+
+    it('si la creación del one-shot LANZA, se LIBERA el candado (clearUpgradeInFlight) y el error propaga (500)', async () => {
+        claimUpgradeInFlight.mockResolvedValue(true) // reclama OK…
+        createOneShotPayment.mockRejectedValue(new Error('MercadoPago one-shot create failed')) // …pero el checkout falla
+        const res = await POST(makeRequest({ tier: 'elite', billingCycle: 'monthly' }))
+        // El error se surfacea como 500 (catch externo del route).
+        expect(res.status).toBe(500)
+        expect((await res.json()).error).toContain('MercadoPago one-shot create failed')
+        // Reclamó y, ante el fallo, LIBERÓ el candado para no trabar al coach 30 min.
+        expect(claimUpgradeInFlight).toHaveBeenCalledOnce()
+        expect(clearUpgradeInFlight).toHaveBeenCalledOnce()
+        expect(clearUpgradeInFlight.mock.calls[0][1]).toBe('coach-1')
+        // No se persiste nada del coach (el upgrade no llegó a tocar coaches.update).
+        expect(lastUpdatePayload()).toBeUndefined()
+    })
+
+    it('el candado NO afecta a un DOWNGRADE (solo a la rama upgrade): ni reclama ni libera', async () => {
+        // Coach en elite: un downgrade a pro NO pasa por el candado (exclusivo de direction==='upgrade').
+        currentCoachMaybeSingle.mockResolvedValue({
+            data: { ...ACTIVE_PRO_COACH, subscription_tier: 'elite' },
+            error: null,
+        })
+        countActiveStandaloneClients.mockResolvedValue(5)
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly' }))
+        expect(res.status).toBe(200)
+        expect(createCheckout).toHaveBeenCalledOnce()
+        expect(claimUpgradeInFlight).not.toHaveBeenCalled()
+        expect(clearUpgradeInFlight).not.toHaveBeenCalled()
+    })
+})
+
+// ════════════════════════════════════════════════════════════════════════════════════
+// P1 — CROSS-CYCLE UPGRADE: el nuevo tier se activa sobre el CICLO VIGENTE del coach. Si el coach
+// pidió OTRO ciclo en el mismo gesto, se IGNORA (un cambio de ciclo es una acción aparte al corte).
+// El prorrateo Y el external_reference del one-shot se fijan a currentCycle, no a billingCycle.
+// ════════════════════════════════════════════════════════════════════════════════════
+describe('POST /api/payments/create-preference — P1 cross-cycle upgrade fija currentCycle', () => {
+    // Coach pago activo en pro ANUAL: un upgrade a elite pidiendo MENSUAL debe prorratearse y
+    // referenciarse sobre el ciclo VIGENTE (annual), no sobre el mensual solicitado.
+    const ACTIVE_PRO_ANNUAL = {
+        ...ACTIVE_PRO_COACH,
+        billing_cycle: 'annual' as BillingCycle,
+    }
+
+    beforeEach(() => {
+        currentCoachMaybeSingle.mockResolvedValue({ data: ACTIVE_PRO_ANNUAL, error: null })
+    })
+
+    it('pro ANUAL → elite pidiendo MENSUAL: el one-shot usa el ciclo VIGENTE (annual) en proración y ref', async () => {
+        const res = await POST(makeRequest({ tier: 'elite', billingCycle: 'monthly' }))
+        expect(res.status).toBe(200)
+        const json = await res.json()
+        expect(json.kind).toBe('tier_upgrade_oneshot')
+
+        // (a) proración server-side fijada al ciclo VIGENTE (annual), no al mensual solicitado.
+        const expectedAnnualProration = getTierUpgradeProrationClp(
+            'pro' as SubscriptionTier,
+            'elite' as SubscriptionTier,
+            'annual' as BillingCycle,
+            new Date(),
+            new Date(ACTIVE_PRO_ANNUAL.current_period_end)
+        )
+        // El monto del one-shot = proración del ciclo VIGENTE (annual). Comparamos contra el del body.
+        expect(json.prorationClp).toBe(expectedAnnualProration)
+        const oneShotArg = createOneShotPayment.mock.calls[0][0] as {
+            amountClp: number
+            externalReference: string
+        }
+        expect(oneShotArg.amountClp).toBe(expectedAnnualProration)
+
+        // (b) external_reference del upgrade fijado a annual (NO monthly).
+        expect(oneShotArg.externalReference).toBe(
+            buildTierUpgradeExternalReference('coach-1', 'elite', 'annual')
+        )
+        expect(oneShotArg.externalReference).not.toContain('monthly')
+    })
+
+    it('upgrade respetando el ciclo vigente (pro mensual → elite mensual): el ref usa monthly', async () => {
+        currentCoachMaybeSingle.mockResolvedValue({ data: ACTIVE_PRO_COACH, error: null })
+        await POST(makeRequest({ tier: 'elite', billingCycle: 'monthly' }))
+        const oneShotArg = createOneShotPayment.mock.calls[0][0] as { externalReference: string }
+        expect(oneShotArg.externalReference).toBe(
+            buildTierUpgradeExternalReference('coach-1', 'elite', 'monthly')
+        )
     })
 })

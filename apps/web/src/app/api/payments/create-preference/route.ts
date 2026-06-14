@@ -26,6 +26,7 @@ import {
     toBillableAddons,
 } from '@/services/billing/addons.service'
 import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
+import { claimUpgradeInFlight, clearUpgradeInFlight } from '@/services/billing/plan-change-lock'
 import type { BillableAddon } from '@/domain/billing/types'
 
 // El checkout solo acepta los tiers EN VENTA (SALE_TIERS sin free): starter/pro/elite.
@@ -154,38 +155,73 @@ export async function POST(request: Request) {
             // activa al confirmar el pago (confirm-upgrade/webhook) y el preapproval pasa al
             // compuesto completo DESDE la siguiente renovación. Cualquier otro camino = doble cobro.
             if (direction === 'upgrade') {
-                const prorationClp = getTierUpgradeProrationClp(
-                    currentTier,
-                    tier,
-                    currentCycle,
-                    new Date(),
-                    new Date(currentCoach!.current_period_end!)
-                )
-                // El one-shot solo se construye con monto > 0 y dirección upgrade verificada
-                // (invariante del diseño): si no hay diferencia a cobrar, no hay nada que prorratear.
-                if (prorationClp <= 0) {
+                // P0-4 (TOCTOU hardening): candado in-flight RECLAMADO ATÓMICAMENTE antes de construir el
+                // one-shot. Entre "creé el one-shot" y "activé el tier" (confirm-upgrade o webhook) hay una
+                // ventana donde un segundo upgrade, un alta de add-on o un cambio de ciclo recomputarían el
+                // compuesto sobre el tier viejo y plegarían el pago dos veces. El check-then-set previo NO
+                // era atómico: dos upgrades simultáneos del MISMO coach podían ambos pasar el check y ambos
+                // crear un one-shot. claimUpgradeInFlight apoya la atomicidad en el UNIQUE de
+                // provider_event_id (solo un INSERT gana). Si NO logra reclamar (candado vivo, TTL 30 min
+                // auto-recupera si se abandona) → 409.
+                if (!(await claimUpgradeInFlight(admin, user.id))) {
                     return NextResponse.json(
-                        { error: 'El cambio de plan no tiene una diferencia a cobrar.' },
-                        { status: 400 }
+                        {
+                            code: 'UPGRADE_IN_FLIGHT',
+                            error: 'Ya tienes un cambio de plan en proceso. Espera unos minutos o completa el pago pendiente.',
+                        },
+                        { status: 409 }
                     )
                 }
-                const upgradeQuery = `tier=${encodeURIComponent(tier)}&cycle=${encodeURIComponent(billingCycle)}`
-                const { checkoutUrl } = await provider.createOneShotPayment({
-                    coachId: user.id,
-                    coachEmail: user.email,
-                    amountClp: prorationClp,
-                    description: `Upgrade a ${TIER_CONFIG[tier].label} (diferencia prorrateada)`,
-                    externalReference: buildTierUpgradeExternalReference(user.id, tier, billingCycle),
-                    successUrl: `${appUrl}/coach/subscription/upgrade-processing?${upgradeQuery}`,
-                    failureUrl: `${appUrl}/coach/subscription?upgrade=failure`,
-                    pendingUrl: `${appUrl}/coach/subscription?upgrade=pending`,
-                    webhookUrl,
-                })
-                return NextResponse.json({
-                    kind: 'tier_upgrade_oneshot',
-                    checkoutUrl,
-                    prorationClp,
-                })
+
+                // Reclamado el candado, construir el one-shot bajo try/catch: si la creación del checkout
+                // (o el cálculo del monto) falla, se LIBERA el candado (clearUpgradeInFlight) antes de
+                // relanzar, para que un checkout fallido NO deje al coach trabado 30 min.
+                try {
+                    // P1 cross-cycle: el nuevo tier se activa sobre el CICLO VIGENTE del coach. Un cambio de
+                    // ciclo es una acción aparte (al corte). Por eso el prorrateo Y el external_reference se
+                    // fijan a `currentCycle`, NO al `billingCycle` solicitado: si el coach pidió otro ciclo en
+                    // el mismo gesto, se ignora aquí y deberá cambiarlo por separado. Así el monto prorrateado
+                    // y el ref que el webhook/confirm-upgrade re-derivan quedan coherentes con lo activado.
+                    const prorationClp = getTierUpgradeProrationClp(
+                        currentTier,
+                        tier,
+                        currentCycle,
+                        new Date(),
+                        new Date(currentCoach!.current_period_end!)
+                    )
+                    // El one-shot solo se construye con monto > 0 y dirección upgrade verificada
+                    // (invariante del diseño): si no hay diferencia a cobrar, no hay nada que prorratear.
+                    if (prorationClp <= 0) {
+                        // Sin diferencia a cobrar: liberar el candado reclamado y responder 400.
+                        await clearUpgradeInFlight(admin, user.id)
+                        return NextResponse.json(
+                            { error: 'El cambio de plan no tiene una diferencia a cobrar.' },
+                            { status: 400 }
+                        )
+                    }
+                    const upgradeQuery = `tier=${encodeURIComponent(tier)}&cycle=${encodeURIComponent(currentCycle)}`
+                    const { checkoutUrl } = await provider.createOneShotPayment({
+                        coachId: user.id,
+                        coachEmail: user.email,
+                        amountClp: prorationClp,
+                        description: `Upgrade a ${TIER_CONFIG[tier].label} (diferencia prorrateada)`,
+                        externalReference: buildTierUpgradeExternalReference(user.id, tier, currentCycle),
+                        successUrl: `${appUrl}/coach/subscription/upgrade-processing?${upgradeQuery}`,
+                        failureUrl: `${appUrl}/coach/subscription?upgrade=failure`,
+                        pendingUrl: `${appUrl}/coach/subscription?upgrade=pending`,
+                        webhookUrl,
+                    })
+                    return NextResponse.json({
+                        kind: 'tier_upgrade_oneshot',
+                        checkoutUrl,
+                        prorationClp,
+                    })
+                } catch (oneShotError) {
+                    // La creación del one-shot falló: liberar el candado para no trabar al coach 30 min y
+                    // relanzar (el catch externo lo surfacea como 500).
+                    await clearUpgradeInFlight(admin, user.id)
+                    throw oneShotError
+                }
             }
 
             // DOWNGRADE: si el tier destino no admite los alumnos activos actuales, se BLOQUEA
@@ -288,6 +324,28 @@ export async function POST(request: Request) {
         const supersededMpPreapprovalId =
             previousMpId && previousMpId !== newMpId ? previousMpId : null
 
+        // P0-2 (downgrade / cambio de ciclo al corte): cancelar el preapproval VIEJO de inmediato,
+        // desacoplado del pago. El coach conserva acceso por DB hasta current_period_end (este UPDATE
+        // no toca tier/entitlements ni el periodo); cancelar el MP viejo solo evita que dispare su
+        // cobro futuro (al corte), que de otro modo coexistiría con el preapproval nuevo → doble cobro.
+        // Si el cancel tiene ÉXITO no se persiste superseded_mp_preapproval_id (ya está cancelado). Si
+        // FALLA, se persiste como backstop para que webhook/cancel-subscription/cron lo reintenten.
+        let supersededForUpdate = supersededMpPreapprovalId
+        if (scheduleAtCutOnly && supersededMpPreapprovalId) {
+            try {
+                await provider.cancelCheckoutAtProvider(supersededMpPreapprovalId)
+                supersededForUpdate = null
+                console.info(
+                    `[create-preference] P0-2 cancelled old preapproval ${supersededMpPreapprovalId} for coach ${user.id} (scheduleAtCutOnly)`
+                )
+            } catch (cancelError) {
+                const msg = cancelError instanceof Error ? cancelError.message : String(cancelError)
+                console.error(
+                    `[create-preference] P0-2 cancel of old preapproval ${supersededMpPreapprovalId} FAILED for coach ${user.id}; persisting superseded as backstop: ${msg}`
+                )
+            }
+        }
+
         // Free coaches: only store the MP subscription ID and provider.
         // Status/tier/max_clients stay as free+active so the coach can keep using the app
         // if they abandon the checkout. The webhook upgrades them when payment is confirmed.
@@ -311,7 +369,7 @@ export async function POST(request: Request) {
             ? {
                 payment_provider: provider.name,
                 subscription_mp_id: checkout.checkoutId,
-                superseded_mp_preapproval_id: supersededMpPreapprovalId,
+                superseded_mp_preapproval_id: supersededForUpdate,
             }
             : {
                 subscription_tier: tier,
@@ -320,7 +378,7 @@ export async function POST(request: Request) {
                 max_clients: getTierMaxClients(tier),
                 payment_provider: provider.name,
                 subscription_mp_id: checkout.checkoutId,
-                superseded_mp_preapproval_id: supersededMpPreapprovalId,
+                superseded_mp_preapproval_id: supersededForUpdate,
             }
 
         // El UPDATE de columnas de billing va por service-role (patrón de

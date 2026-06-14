@@ -122,7 +122,14 @@ export type ProviderCheckoutSnapshot = {
     external_reference?: string | null
     status?: string | null
     next_payment_date?: string | null
-    auto_recurring?: { end_date?: string | null; transaction_amount?: number | null }
+    /**
+     * Fecha de INICIO efectivo del preapproval (señal de "agendado al corte"). En MP la fuente
+     * load-bearing es `auto_recurring.start_date` (la que el provider devuelve); el top-level se
+     * incluye defensivamente. El early-slash guard de confirm-subscription la lee para NO degradar
+     * entitlements de un cambio agendado a futuro (SLASH-EARLY).
+     */
+    start_date?: string | null
+    auto_recurring?: { end_date?: string | null; transaction_amount?: number | null; start_date?: string | null }
 }
 
 /**
@@ -156,6 +163,19 @@ export interface PaymentsProvider {
      * validar en sandbox (item 1): ¿cuándo aplica?, ¿genera cargo inmediato?, ¿email al pagador?
      */
     updateCheckoutAmount(checkoutId: string, amountClp: number): Promise<void>
+    /**
+     * Como `updateCheckoutAmount` pero ADEMÁS reescribe el `external_reference` del preapproval
+     * (PUT /preapproval/{id} acepta `external_reference`). Lo usa el upgrade de tier
+     * (confirm-upgrade / webhook tierUpgrade) para subir el monto del próximo cobro al nuevo
+     * compuesto Y dejar el reference apuntando al NUEVO tier|cycle, evitando que el siguiente
+     * evento `preapproval` re-derive el tier viejo y revierta el upgrade (P0-1 stale-ref revert).
+     * Construir `externalReference` con `buildCheckoutExternalReference`.
+     */
+    updateCheckoutAmountAndRef(
+        checkoutId: string,
+        amountClp: number,
+        externalReference: string
+    ): Promise<void>
     /**
      * Crea un pago one-shot (Checkout Pro clásico, NO preapproval) y devuelve la URL de
      * checkout (plan 05 F3.2 — alta in-app trim/anual prorrateada).

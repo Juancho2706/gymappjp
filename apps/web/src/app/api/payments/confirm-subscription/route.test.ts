@@ -313,3 +313,136 @@ describe('POST /api/payments/confirm-subscription — addons materializados (P0-
         expect(materializeAddonsFromPreapproval).toHaveBeenCalledOnce()
     })
 })
+
+// ════════════════════════════════════════════════════════════════════════════════════
+// P1 — EARLY-SLASH GUARD: confirm-subscription NO debe degradar entitlements de un cambio AGENDADO
+// al corte. Un downgrade activo / cambio de ciclo crea un preapproval con start_date FUTURO; MP lo
+// deja paid-like pero su inicio efectivo es a futuro. Si bajáramos tier/max_clients/cycle/period AHORA,
+// el coach perdería entitlements ANTES del corte (y antes del fin del ciclo que pagó). Detectamos
+// start_date > now y respondemos { ok, scheduled:true } sin mutar nada — el webhook aplica al corte.
+// CRÍTICO: la señal es SOLO start_date / auto_recurring.start_date, NUNCA next_payment_date (que en
+// un alta normal SIEMPRE es futuro → bloquearía la primera activación legítima, regresión del
+// plain-renewal path).
+// ════════════════════════════════════════════════════════════════════════════════════
+describe('POST /api/payments/confirm-subscription — P1 scheduled-at-cut NO degrada entitlements', () => {
+    const FUTURE = '2999-01-01T00:00:00.000Z'
+    const PAST = '2020-01-01T00:00:00.000Z'
+
+    it('preapproval paid-like con start_date FUTURO (downgrade al corte) → { scheduled:true } y CERO coaches.update', async () => {
+        // El coach pidió un downgrade: nuevo preapproval ya authorized pero start_date en el corte.
+        coachRow!.subscription_status = 'active'
+        fetchCheckoutSnapshot.mockResolvedValue({
+            id: 'preapproval-NEW',
+            status: 'authorized', // paid-like
+            external_reference: 'coach-1|starter|monthly', // tier menor (downgrade)
+            start_date: FUTURE,
+            next_payment_date: FUTURE,
+        })
+        const res = await POST(makeRequest({ preapprovalId: 'preapproval-NEW' }))
+        expect(res.status).toBe(200)
+        const json = await res.json()
+        expect(json.ok).toBe(true)
+        expect(json.scheduled).toBe(true)
+        // Devuelve el status VIGENTE del coach (no lo degrada).
+        expect(json.subscriptionStatus).toBe('active')
+        // CRÍTICO: ni un coaches.update — el webhook aplica el cambio al corte.
+        expect(updateCalls.find((c) => c.table === 'coaches')).toBeFalsy()
+    })
+
+    it('start_date FUTURO en auto_recurring.start_date (no top-level) → mismo skip', async () => {
+        fetchCheckoutSnapshot.mockResolvedValue({
+            id: 'preapproval-NEW',
+            status: 'authorized',
+            external_reference: 'coach-1|pro|annual',
+            auto_recurring: { start_date: FUTURE, end_date: null },
+            next_payment_date: FUTURE,
+        })
+        const res = await POST(makeRequest({ preapprovalId: 'preapproval-NEW' }))
+        expect(res.status).toBe(200)
+        expect((await res.json()).scheduled).toBe(true)
+        expect(updateCalls.find((c) => c.table === 'coaches')).toBeFalsy()
+    })
+
+    it('alta NORMAL con start_date PASADO (creado now+60s, ya vencido) pero next_payment_date futuro → SÍ activa (no regresa el plain-renewal)', async () => {
+        // El invariante: un alta fresca trae start_date ~ahora/pasado y next_payment_date futuro (el
+        // próximo ciclo). NO debe confundirse con un cambio-al-corte: se activa normalmente.
+        fetchCheckoutSnapshot.mockResolvedValue({
+            id: 'preapproval-NEW',
+            status: 'approved',
+            external_reference: 'coach-1|pro|monthly',
+            start_date: PAST,
+            next_payment_date: FUTURE, // futuro SIEMPRE en un alta → no es señal de "agendado"
+        })
+        const res = await POST(makeRequest({ preapprovalId: 'preapproval-NEW' }))
+        expect(res.status).toBe(200)
+        const json = await res.json()
+        expect(json.scheduled).toBeUndefined()
+        expect(json.subscriptionStatus).toBe('active')
+        // SÍ muta el coach (plain activation).
+        expect(updateCalls.find((c) => c.table === 'coaches')).toBeTruthy()
+    })
+
+    it('SIN start_date (solo next_payment_date futuro) → SÍ activa (next_payment_date no es señal)', async () => {
+        fetchCheckoutSnapshot.mockResolvedValue({
+            id: 'preapproval-NEW',
+            status: 'approved',
+            external_reference: 'coach-1|pro|monthly',
+            next_payment_date: '2999-01-01T00:00:00.000Z',
+            auto_recurring: { end_date: null },
+        })
+        const res = await POST(makeRequest({ preapprovalId: 'preapproval-NEW' }))
+        expect(res.status).toBe(200)
+        expect((await res.json()).scheduled).toBeUndefined()
+        expect(updateCalls.find((c) => c.table === 'coaches')).toBeTruthy()
+    })
+})
+
+// ════════════════════════════════════════════════════════════════════════════════════
+// P1 — FAIL-CLOSED 403 REGRESSION: el guard fail-closed para un preapprovalId EXPLÍCITO no debe
+// 403ear un preapproval legacy cuyo external_reference es null/no-parseable. Dos caminos:
+//   - parsedRef TIENE coachId → debe coincidir con user.id (si no, 403 — ya cubierto).
+//   - parsedRef es null/sin coachId → se cae al ownership por id: el preapprovalId explícito DEBE
+//     ser el subscription_mp_id ya guardado del coach. Coincide → procede; no coincide → 403.
+// ════════════════════════════════════════════════════════════════════════════════════
+describe('POST /api/payments/confirm-subscription — P1 fail-closed 403 cae al ownership por mp_id', () => {
+    it('ref NULL pero el preapprovalId explícito ES el subscription_mp_id del coach → procede (no 403)', async () => {
+        coachRow!.subscription_mp_id = 'preapproval-LEGACY'
+        fetchCheckoutSnapshot.mockResolvedValue({
+            id: 'preapproval-LEGACY',
+            status: 'approved',
+            external_reference: null, // legacy: sin reference parseable
+            next_payment_date: '2026-07-01T00:00:00.000Z',
+        })
+        const res = await POST(makeRequest({ preapprovalId: 'preapproval-LEGACY' }))
+        // Coincide con el mp_id guardado → es suyo → procede a activar (no 403).
+        expect(res.status).toBe(200)
+        expect((await res.json()).subscriptionStatus).toBe('active')
+        expect(updateCalls.find((c) => c.table === 'coaches')).toBeTruthy()
+    })
+
+    it('ref NULL y el preapprovalId explícito NO coincide con el mp_id del coach → 403', async () => {
+        coachRow!.subscription_mp_id = 'preapproval-MIO'
+        fetchCheckoutSnapshot.mockResolvedValue({
+            id: 'preapproval-AJENO',
+            status: 'approved',
+            external_reference: null,
+            next_payment_date: '2026-07-01T00:00:00.000Z',
+        })
+        const res = await POST(makeRequest({ preapprovalId: 'preapproval-AJENO' }))
+        expect(res.status).toBe(403)
+        // No se mutó nada.
+        expect(updateCalls.find((c) => c.table === 'coaches')).toBeFalsy()
+    })
+
+    it('ref con coachId de OTRO coach (parseable) → 403 (anti escalada, camino ya existente)', async () => {
+        fetchCheckoutSnapshot.mockResolvedValue({
+            id: 'preapproval-NEW',
+            status: 'approved',
+            external_reference: 'someone-else|pro|monthly',
+            next_payment_date: '2026-07-01T00:00:00.000Z',
+        })
+        const res = await POST(makeRequest({ preapprovalId: 'preapproval-NEW' }))
+        expect(res.status).toBe(403)
+        expect(updateCalls.find((c) => c.table === 'coaches')).toBeFalsy()
+    })
+})

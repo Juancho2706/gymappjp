@@ -143,14 +143,30 @@ function resolvePayerEmail(coachEmail: string) {
     return coachEmail
 }
 
+/**
+ * Construye el `external_reference` recurrente de suscripción `coachId|tier|cycle[|addon1+addon2]`
+ * (round-trip idempotente con `parseCheckoutExternalReference`). La 4ª parte (add-ons) es opcional:
+ * solo módulos válidos, deduplicados, orden estable; sin add-ons ⇒ reference de 3 partes (backward
+ * compatible con preapprovals vivos).
+ *
+ * Exportado para que el camino de upgrade (confirm-upgrade / webhook tierUpgrade) reescriba el
+ * `external_reference` del preapproval al NUEVO tier|cycle al activar (P0-1 stale-ref revert), de
+ * modo que el siguiente evento `preapproval` ya no re-derive el tier viejo.
+ */
+export function buildCheckoutExternalReference(
+    coachId: string,
+    tier: SubscriptionTier,
+    cycle: BillingCycle,
+    addons?: ModuleKey[]
+): string {
+    const base = `${coachId}|${tier}|${cycle}`
+    const liveAddons = [...new Set((addons ?? []).filter((k) => MODULE_KEY_SET.has(k)))]
+    if (liveAddons.length === 0) return base
+    return `${base}|${liveAddons.join('+')}`
+}
+
 function buildExternalReference(input: CreateCheckoutInput) {
-    const base = `${input.coachId}|${input.tier}|${input.billingCycle}`
-    // 4ª parte opcional `addon1+addon2` (plan 05 F2/F3.3). Solo módulos válidos; orden estable
-    // (dedup + filtro contra MODULE_KEYS) para que el round-trip con parseCheckoutExternalReference
-    // sea idempotente. Sin add-ons ⇒ reference de 3 partes (backward compatible con preapprovals vivos).
-    const addons = [...new Set((input.addons ?? []).filter((k) => MODULE_KEY_SET.has(k)))]
-    if (addons.length === 0) return base
-    return `${base}|${addons.join('+')}`
+    return buildCheckoutExternalReference(input.coachId, input.tier, input.billingCycle, input.addons)
 }
 
 async function mpRequest(path: string) {
@@ -198,13 +214,18 @@ async function mpPostJson(path: string, body: Record<string, unknown>) {
 
 function toSnapshot(preapproval: Record<string, unknown>, fallbackId: string): ProviderCheckoutSnapshot {
     const ar = preapproval.auto_recurring as
-        | { end_date?: string | null; transaction_amount?: number | null }
+        | { end_date?: string | null; transaction_amount?: number | null; start_date?: string | null }
         | undefined
+    // `start_date` es la señal de "agendado al corte" del early-slash guard (SLASH-EARLY). MP
+    // devuelve el inicio efectivo bajo `auto_recurring.start_date` (load-bearing — el que
+    // `createCheckout` envía); el top-level se copia defensivamente. Sin esto el snapshot lo
+    // dropea → el guard nunca dispara → un downgrade-al-corte degrada tier/max_clients YA.
     return {
         id: String(preapproval.id ?? fallbackId),
         external_reference: (preapproval.external_reference as string | null | undefined) ?? null,
         status: (preapproval.status as string | null | undefined) ?? null,
         next_payment_date: (preapproval.next_payment_date as string | null | undefined) ?? null,
+        start_date: (preapproval.start_date as string | null | undefined) ?? null,
         auto_recurring: ar,
     }
 }
@@ -397,6 +418,32 @@ export class MercadoPagoProvider implements PaymentsProvider {
                 transaction_amount: amountClp,
                 currency_id: 'CLP',
             },
+        })
+    }
+
+    /**
+     * PUT /preapproval/{id}: como `updateCheckoutAmount` pero ADEMÁS reescribe el
+     * `external_reference` del preapproval (MP PUT /preapproval/{id} acepta `external_reference`).
+     *
+     * Lo usa el camino de upgrade de tier (confirm-upgrade / webhook tierUpgrade) para subir el
+     * monto del próximo cobro al NUEVO compuesto Y dejar el reference apuntando al nuevo tier|cycle
+     * (P0-1 stale-ref revert): sin esto, el siguiente evento `preapproval` re-derivaría el tier
+     * VIEJO del reference y revertiría el upgrade. Construir `externalReference` con
+     * `buildCheckoutExternalReference`. Mismo manejo de error que `updateCheckoutAmount`
+     * (preapproval `paused`/`cancelled` puede fallar el PUT).
+     */
+    async updateCheckoutAmountAndRef(
+        checkoutId: string,
+        amountClp: number,
+        externalReference: string
+    ): Promise<void> {
+        const encoded = encodeURIComponent(checkoutId)
+        await mpPutJson(`/preapproval/${encoded}`, {
+            auto_recurring: {
+                transaction_amount: amountClp,
+                currency_id: 'CLP',
+            },
+            external_reference: externalReference,
         })
     }
 

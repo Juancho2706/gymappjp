@@ -8,6 +8,7 @@ import { rateLimitPayment, jsonRateLimited } from '@/lib/rate-limit'
 import { MODULE_KEYS } from '@/services/entitlements.service'
 import { ADDON_PAYMENT_RULES, SELF_SERVICE_ADDONS_ENABLED } from '@/lib/constants'
 import { activateAddonForCoach, canPurchaseAddon } from '@/services/billing/addons.service'
+import { isUpgradeInFlight } from '@/services/billing/plan-change-lock'
 import { listLive } from '@/infrastructure/db/coach-addons.repository'
 import { getPaymentsProvider } from '@/lib/payments/provider'
 import { parseCheckoutExternalReference } from '@/lib/payments/checkout-external-reference'
@@ -178,12 +179,27 @@ export async function POST(request: Request) {
             }
         }
 
+        // ── Guard P0-4b: alta de add-on mientras un UPGRADE de plan está en vuelo ─────────────
+        // El upgrade es un one-shot prorrateado que se confirma async (confirm-upgrade/webhook) y, al
+        // activarse, recomputa el compuesto desde listLive → plegaría ESTE add-on nuevo dos veces
+        // (una en el compuesto del upgrade, otra en su propio one-shot). Bloqueamos hasta que el
+        // upgrade en vuelo se resuelva (o el TTL del candado lo libere). db service-role.
+        if (await isUpgradeInFlight(admin, user.id)) {
+            return NextResponse.json(
+                {
+                    error: 'No puedes agregar un modulo mientras un cambio de plan esta en proceso.',
+                    code: 'UPGRADE_IN_FLIGHT',
+                },
+                { status: 409 }
+            )
+        }
+
         // URLs del one-shot (back_urls + webhook) desde NEXT_PUBLIC_SITE_URL — mismo patrón que
         // create-preference. MP exige back_urls.success cuando se manda auto_return.
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
         const webhookToken = process.env.MERCADOPAGO_WEBHOOK_TOKEN
         const webhookUrl = webhookToken
-            ? `${appUrl}/api/payments/webhook?token=${webhookToken}`
+            ? `${appUrl}/api/payments/webhook?token=${encodeURIComponent(webhookToken)}`
             : `${appUrl}/api/payments/webhook`
         // buildActivateContext normaliza el ciclo y deriva el corte para el prorrateo del service.
         // success → pantalla de procesamiento síncrono (confirm-addon): MP auto-agrega

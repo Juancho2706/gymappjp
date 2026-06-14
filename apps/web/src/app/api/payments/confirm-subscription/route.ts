@@ -98,11 +98,20 @@ export async function POST(request: Request) {
         if (parsedRef?.coachId && parsedRef.coachId !== user.id) {
             return NextResponse.json({ error: 'Subscription does not belong to current user.' }, { status: 403 })
         }
-        // Fail-CLOSED para un id EXPLÍCITO del body: el external_reference DEBE confirmar coachId ===
-        // user.id. Sin coachId parseable → rechazar (evita auto-activarse con un preapproval ajeno
-        // cuyo external_reference no parsea). El id propio guardado (sin explicit) se confía.
-        if (explicitPreapprovalId && parsedRef?.coachId !== user.id) {
-            return NextResponse.json({ error: 'Subscription does not belong to current user.' }, { status: 403 })
+        // Fail-CLOSED para un id EXPLÍCITO del body, PERO sin 403 espurio a un preapproval legacy
+        // cuyo external_reference es null/no-parseable (P1 fail-closed-403 regression). Dos casos:
+        //   - parsedRef TIENE coachId → debe coincidir con user.id (ya cubierto arriba; si no coincide
+        //     ya retornó 403). Si coincide, OK.
+        //   - parsedRef es null o sin coachId → no podemos atar el preapproval al coach por el ref, así
+        //     que caemos al ownership por id: el preapprovalId explícito DEBE ser el subscription_mp_id
+        //     ya guardado del coach. Si coincide, es suyo → proceder; si no, rechazar.
+        if (explicitPreapprovalId && !parsedRef?.coachId) {
+            if (explicitPreapprovalId !== coach.subscription_mp_id) {
+                return NextResponse.json(
+                    { error: 'Subscription does not belong to current user.' },
+                    { status: 403 }
+                )
+            }
         }
 
         let tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
@@ -144,6 +153,39 @@ export async function POST(request: Request) {
                 subscriptionStatus: status,
                 providerStatus: snapshot.status ?? null,
             })
+        }
+
+        // ── Early-slash guard (P1) — NO mutar tier/entitlements de un cambio AGENDADO al corte ──────
+        // Un downgrade activo o cambio de ciclo crea un NUEVO preapproval con `start_date` futuro
+        // (toma efecto recién al corte). MP deja ese preapproval ya `authorized` (paid-like) pero su
+        // inicio efectivo es a futuro. Si bajamos tier/max_clients/cycle/current_period_end AHORA, el
+        // coach perdería entitlements ANTES de que el cambio deba aplicar (y antes del fin del ciclo
+        // que ya pagó). Detectamos la fecha de INICIO futura y, si es > ahora, NO tocamos al coach: el
+        // webhook aplica el cambio al corte. Solo mutamos cuando el preapproval está activo Y su inicio
+        // es ahora/pasado.
+        //
+        // CRÍTICO — usamos SOLO `start_date` / `auto_recurring.start_date` como señal de "agendado". NO
+        // usamos `next_payment_date`: en un alta/renovación normal el próximo cobro SIEMPRE es futuro
+        // (el ciclo siguiente), así que tomarlo como señal bloquearía la primera activación legítima y
+        // regresaría el plain-renewal path (invariante). Un alta fresca trae `start_date` ~ahora/pasado
+        // (creado now+60s, ya vencido al confirmar); un cambio-al-corte trae `start_date` = corte (futuro).
+        const startSignal = snapshot.start_date ?? snapshot.auto_recurring?.start_date ?? null
+        if (startSignal) {
+            const startMs = new Date(startSignal).getTime()
+            if (Number.isFinite(startMs) && startMs > Date.now()) {
+                console.info('[payments.confirm-subscription] scheduled-at-cut — no entitlement mutation', {
+                    traceId,
+                    coachId: user.id,
+                    preapprovalId,
+                    startDate: startSignal,
+                    providerStatus: snapshot.status ?? null,
+                })
+                return NextResponse.json({
+                    ok: true,
+                    scheduled: true,
+                    subscriptionStatus: coach.subscription_status,
+                })
+            }
         }
 
         const nextPeriodEnd = resolveCurrentPeriodEnd({

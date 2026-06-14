@@ -7,10 +7,13 @@ import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 import { rateLimitPayment, jsonRateLimited } from '@/lib/rate-limit'
 import { mapProviderStatus } from '@/lib/payments/subscription-state'
 import { getPaymentsProvider } from '@/lib/payments/provider'
-import { parseTierUpgradeReference } from '@/lib/payments/providers/mercadopago'
+import {
+    buildCheckoutExternalReference,
+    parseTierUpgradeReference,
+} from '@/lib/payments/providers/mercadopago'
 import { getCompositeAmountClp, toBillableAddons } from '@/services/billing/addons.service'
 import { listLive } from '@/infrastructure/db/coach-addons.repository'
-import { buildAddonPaymentsPort } from '../addons/_lib/payments-port'
+import { clearUpgradeInFlight } from '@/services/billing/plan-change-lock'
 import { fetchCoachBillingRow } from '../addons/_lib/coach-context'
 import { getTierMaxClients, getTierRank, type SubscriptionTier } from '@/lib/constants'
 
@@ -113,6 +116,29 @@ export async function POST(request: Request) {
             )
         }
 
+        // P1 REPLAY GUARD: si el evento de dedup `tier_upgrade:${paymentId}` YA existe, este
+        // paymentId aprobado ya activó su upgrade (este camino o el webhook). Re-activar acá
+        // permitiría re-jugar un paymentId viejo para re-otorgar un tier GRATIS después de un
+        // downgrade posterior. Salimos sin re-activar ni re-PUTear el preapproval.
+        const { data: alreadyUpgraded } = await admin
+            .from('subscription_events')
+            .select('id')
+            .eq('provider_event_id', `tier_upgrade:${paymentId}`)
+            .maybeSingle()
+        if (alreadyUpgraded) {
+            console.info('[payments.confirm-upgrade] replay, already processed', {
+                traceId,
+                coachId: user.id,
+                paymentId,
+            })
+            return NextResponse.json({
+                ok: true,
+                status: 'active',
+                tier: coach.subscription_tier,
+                alreadyProcessed: true,
+            })
+        }
+
         const currentTier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
 
         // Activación idempotente con RANK-GUARD: solo subimos tier/max_clients/cycle si el tier
@@ -135,10 +161,18 @@ export async function POST(request: Request) {
         // PUT del preapproval al nuevo compuesto (tier nuevo + add-ons vivos facturables) DESDE la
         // renovación — sin cargo inmediato (MP solo cambia el próximo cobro). Idempotente: el monto
         // es determinístico, correrlo dos veces (este camino + el webhook) deja el mismo valor.
+        //
+        // P0-1 STALE-REF REVERT: además del monto, reescribimos el `external_reference` del
+        // preapproval al NUEVO tier|cycle (más los add-ons vivos). Sin esto, el siguiente evento
+        // `preapproval` re-derivaría el tier VIEJO del reference y revertiría el upgrade.
         const live = await listLive(admin, user.id)
+        const liveAddonKeys = live.map((a) => a.moduleKey)
         const newComposite = getCompositeAmountClp(ref.newTier, ref.cycle, toBillableAddons(live))
-        const payments = buildAddonPaymentsPort()
-        await payments.updateCheckoutAmount(coach.subscription_mp_id, newComposite)
+        await provider.updateCheckoutAmountAndRef(
+            coach.subscription_mp_id,
+            newComposite,
+            buildCheckoutExternalReference(user.id, ref.newTier, ref.cycle, liveAddonKeys)
+        )
 
         // Evento de historial deduplicado por `tier_upgrade:${paymentId}` (idempotente con el
         // webhook, que escribe el snapshot pero esta key garantiza que la activación quede trazada).
@@ -159,6 +193,10 @@ export async function POST(request: Request) {
             },
             { onConflict: 'provider_event_id' }
         )
+
+        // P0-4: el upgrade quedó activado → limpiamos el candado in-flight (idempotente: si el
+        // webhook ya lo limpió, no-op). Libera al coach para iniciar un nuevo cambio de plan.
+        await clearUpgradeInFlight(admin, user.id)
 
         console.info('[payments.confirm-upgrade] activated', {
             traceId,

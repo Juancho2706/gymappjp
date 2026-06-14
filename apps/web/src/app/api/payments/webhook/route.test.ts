@@ -32,6 +32,9 @@ vi.mock('@/lib/payments/webhook-authorization', () => ({
 //    dedup store), records coaches.update patches, and records admin_audit_logs inserts. ──
 type EventRow = { provider_event_id: string; [k: string]: unknown }
 const subscriptionEvents = new Map<string, EventRow>()
+// P0-4: provider_event_id de cada DELETE de subscription_events (clearUpgradeInFlight tras activar
+// el tier-upgrade). Permite aseverar que el webhook libera el candado in-flight del coach.
+const subscriptionEventDeletes: string[] = []
 const coachUpdates: Array<Record<string, unknown>> = []
 const auditLogInserts: Array<Record<string, unknown>> = []
 // billing_snapshots upserts deduped by provider_payment_id (tier_upgrade_proration path).
@@ -56,12 +59,23 @@ function makeAdmin() {
                                     ? { data: { id: value }, error: null }
                                     : { data: null, error: null }
                             ),
+                            // isUpgradeInFlight (no usado por estas ramas, pero el chain debe existir).
+                            gt: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: null, error: null })) })),
                         })),
                     })),
                     upsert: vi.fn(async (row: EventRow) => {
                         if (row?.provider_event_id) subscriptionEvents.set(row.provider_event_id, row)
                         return { error: null }
                     }),
+                    // clearUpgradeInFlight (P0-4): delete().eq('provider_event_id', key) — tras activar
+                    // un tier-upgrade el webhook (backstop) limpia el candado in-flight del coach.
+                    delete: vi.fn(() => ({
+                        eq: vi.fn(async (_col: string, value: string) => {
+                            subscriptionEventDeletes.push(value)
+                            subscriptionEvents.delete(value)
+                            return { error: null }
+                        }),
+                    })),
                 }
             }
             if (table === 'coaches') {
@@ -116,10 +130,14 @@ vi.mock('@/lib/supabase/admin-client', () => ({
 //    add-on PUT port methods are present but unused by these branches. ──
 const processWebhook = vi.fn()
 const updateCheckoutAmount = vi.fn().mockResolvedValue(undefined)
+// P0-1: el tier-upgrade del webhook reescribe monto + external_reference del preapproval (al nuevo
+// tier|cycle) vía updateCheckoutAmountAndRef — no por updateCheckoutAmount.
+const updateCheckoutAmountAndRef = vi.fn().mockResolvedValue(undefined)
 const getPaymentsProvider = vi.fn(() => ({
     name: 'mercadopago' as const,
     processWebhook: (...a: unknown[]) => processWebhook(...a),
     updateCheckoutAmount: (...a: unknown[]) => updateCheckoutAmount(...a),
+    updateCheckoutAmountAndRef: (...a: unknown[]) => updateCheckoutAmountAndRef(...a),
     cancelCheckoutAtProvider: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock('@/lib/payments/provider', () => ({
@@ -188,6 +206,7 @@ const PAID_COACH = {
 beforeEach(() => {
     vi.clearAllMocks()
     subscriptionEvents.clear()
+    subscriptionEventDeletes.length = 0
     billingSnapshots.clear()
     coachByPreapproval.clear()
     coachUpdates.length = 0
@@ -494,7 +513,7 @@ describe('POST /api/payments/webhook — tier-upgrade one-shot (idempotente con 
         }
     }
 
-    it('approved + rank menor (pro→elite): activa tier+max_clients+cycle, hace el PUT y escribe el snapshot', async () => {
+    it('approved + rank menor (pro→elite): activa tier+max_clients+cycle, hace el PUT con ref reescrito (P0-1), snapshot, y limpia el candado (P0-4)', async () => {
         coachRow = { ...PAID_COACH } // pro, mp_id presente
         processWebhook.mockResolvedValue(tierUpgradeResult())
         const res = await POST(makeRequest())
@@ -507,9 +526,15 @@ describe('POST /api/payments/webhook — tier-upgrade one-shot (idempotente con 
         expect(activate!.billing_cycle).toBe('monthly')
         expect(activate).not.toHaveProperty('subscription_status') // status intacto
 
-        // (b) PUT del preapproval al nuevo compuesto (sin cargo inmediato).
-        expect(updateCheckoutAmount).toHaveBeenCalledOnce()
-        expect(updateCheckoutAmount.mock.calls[0][0]).toBe('preapproval-1')
+        // (b) P0-1: PUT del preapproval al nuevo compuesto Y reescritura del external_reference al
+        //     NUEVO tier|cycle — vía updateCheckoutAmountAndRef, NO updateCheckoutAmount. Sin esto el
+        //     siguiente evento preapproval re-derivaría el tier VIEJO y revertiría el upgrade.
+        expect(updateCheckoutAmount).not.toHaveBeenCalled()
+        expect(updateCheckoutAmountAndRef).toHaveBeenCalledOnce()
+        expect(updateCheckoutAmountAndRef.mock.calls[0][0]).toBe('preapproval-1')
+        const refArg = updateCheckoutAmountAndRef.mock.calls[0][2] as string
+        expect(refArg).toContain('elite') // ref apunta al NUEVO tier
+        expect(refArg).not.toContain('|pro|')
 
         // (c) snapshot kind='tier_upgrade_proration' deduped por provider_payment_id.
         const snap = billingSnapshots.get('pay-upg-1')
@@ -519,17 +544,20 @@ describe('POST /api/payments/webhook — tier-upgrade one-shot (idempotente con 
 
         // (d) evento de historial keyed `tier_upgrade:${paymentId}` (misma key que confirm-upgrade).
         expect(subscriptionEvents.has('tier_upgrade:pay-upg-1')).toBe(true)
+
+        // (e) P0-4: el candado in-flight del coach se limpia (DELETE keyed por tier_upgrade_pending).
+        expect(subscriptionEventDeletes).toContain('tier_upgrade_pending:coach-1')
     })
 
-    it('coach YA en elite (confirm-upgrade activó primero): rank-guard no-op del write, igual PUT + snapshot', async () => {
+    it('coach YA en elite (confirm-upgrade activó primero): rank-guard no-op del write, igual PUT(ref) + snapshot', async () => {
         coachRow = { ...PAID_COACH, subscription_tier: 'elite' }
         processWebhook.mockResolvedValue(tierUpgradeResult())
         const res = await POST(makeRequest())
         expect(res.status).toBe(200)
         // Rank-guard: elite no es < elite → NO hay coaches.update que setee tier.
         expect(coachUpdates.find((p) => p.subscription_tier === 'elite')).toBeFalsy()
-        // El PUT y el snapshot igual corren (idempotentes/determinísticos).
-        expect(updateCheckoutAmount).toHaveBeenCalledOnce()
+        // El PUT (con ref) y el snapshot igual corren (idempotentes/determinísticos).
+        expect(updateCheckoutAmountAndRef).toHaveBeenCalledOnce()
         expect(billingSnapshots.get('pay-upg-1')).toBeTruthy()
     })
 
@@ -554,7 +582,7 @@ describe('POST /api/payments/webhook — tier-upgrade one-shot (idempotente con 
         const res = await POST(makeRequest())
         expect(res.status).toBe(200)
         expect(coachUpdates.find((p) => p.subscription_tier === 'elite')).toBeFalsy()
-        expect(updateCheckoutAmount).not.toHaveBeenCalled()
+        expect(updateCheckoutAmountAndRef).not.toHaveBeenCalled()
         expect(billingSnapshots.size).toBe(0)
     })
 
@@ -563,7 +591,7 @@ describe('POST /api/payments/webhook — tier-upgrade one-shot (idempotente con 
         processWebhook.mockResolvedValue(tierUpgradeResult())
         const res = await POST(makeRequest())
         expect(res.status).toBe(200)
-        expect(updateCheckoutAmount).not.toHaveBeenCalled()
+        expect(updateCheckoutAmountAndRef).not.toHaveBeenCalled()
         expect(coachUpdates.find((p) => p.subscription_tier === 'elite')).toBeFalsy()
     })
 })

@@ -18,6 +18,8 @@ import {
     verifyMercadoPagoSignatureIfConfigured,
 } from '@/lib/payments/webhook-authorization'
 import { cancelAllForCoach, listLive } from '@/infrastructure/db/coach-addons.repository'
+import { buildCheckoutExternalReference } from '@/lib/payments/providers/mercadopago'
+import { clearUpgradeInFlight } from '@/services/billing/plan-change-lock'
 import {
     getAddonProrationClp,
     getCompositeAmountClp,
@@ -425,9 +427,20 @@ async function handleWebhook(request: Request, rawBody: string) {
 
             // PUT del preapproval al nuevo compuesto (tier nuevo + add-ons vivos) DESDE la renovación
             // — sin cargo inmediato. Determinístico: correrlo dos veces deja el mismo valor.
+            //
+            // P0-1 STALE-REF REVERT: además del monto, reescribimos el `external_reference` del
+            // preapproval al NUEVO tier|cycle (+ add-ons vivos) para que el siguiente evento
+            // `preapproval` no re-derive el tier VIEJO y revierta el upgrade. NO agregamos un guard
+            // de "nunca bajar tier" acá: el downgrade-al-corte legítimo crea un preapproval nuevo
+            // cuyo reference (menor) SÍ es autoritativo y debe poder aplicar.
             const live = await listLive(admin, coach.id)
+            const liveAddonKeys = live.map((a) => a.moduleKey)
             const newComposite = getCompositeAmountClp(newTier, cycle, toBillableAddons(live))
-            await addonPayments.updateCheckoutAmount(mpId, newComposite)
+            await provider.updateCheckoutAmountAndRef(
+                mpId,
+                newComposite,
+                buildCheckoutExternalReference(coach.id, newTier, cycle, liveAddonKeys)
+            )
 
             // Snapshot del cobro one-shot del upgrade (kind='tier_upgrade_proration') — idempotente
             // por provider_payment_id. base_clp=0: el one-shot es SOLO la diferencia prorrateada de
@@ -490,6 +503,10 @@ async function handleWebhook(request: Request, rawBody: string) {
                     .from('subscription_events')
                     .upsert(dedupEvent, { onConflict: 'provider_event_id' })
             }
+
+            // P0-4: el upgrade quedó activado (este backstop o confirm-upgrade) → limpiamos el
+            // candado in-flight. Idempotente: si confirm-upgrade ya lo limpió, no-op.
+            await clearUpgradeInFlight(admin, coach.id)
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err)
             console.error('[payments.webhook] tier-upgrade activation failed', {

@@ -5,18 +5,25 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 // provider de pagos (fetchPaymentSnapshot del PAGO one-shot) y los helpers de billing. El camino
 // SÍNCRONO confirm-upgrade ACTIVA el nuevo tier al volver del checkout SIN esperar el webhook (que
 // sigue de backstop idempotente). La activación es rank-guarded: solo sube si el tier vigente es de
-// rango menor; el PUT del preapproval va al nuevo compuesto; el snapshot lo escribe SOLO el webhook.
+// rango menor; el PUT del preapproval va al nuevo compuesto y reescribe el external_reference al
+// NUEVO tier|cycle (P0-1 stale-ref revert) vía updateCheckoutAmountAndRef; el snapshot lo escribe
+// SOLO el webhook. Tras activar, se limpia el candado in-flight (P0-4) y se dedup-guarda contra
+// replays (P1).
 const getUser = vi.fn()
 vi.mock('@/lib/supabase/server', () => ({
     createClient: vi.fn(async () => ({ auth: { getUser } })),
 }))
 
 // Service-role admin con estado: registra coaches.update (rank-guarded), subscription_events.upsert
-// y NUNCA debe tocar billing_snapshots (eso es del webhook). El builder rastrea por tabla.
+// y NUNCA debe tocar billing_snapshots (eso es del webhook). El builder rastrea por tabla. El
+// select de subscription_events sirve el guard de replay P1 (tier_upgrade:${paymentId}).
 const coachUpdates: Array<Record<string, unknown>> = []
 const subscriptionEventUpserts: Array<Record<string, unknown>> = []
+const subscriptionEventDeletes: string[] = []
 const billingSnapshotUpserts: Array<Record<string, unknown>> = []
 let coachUpdateError: { message: string } | null = null
+// Guard de replay P1: provider_event_id → existe (ya procesado). Cada test lo setea.
+const existingUpgradeEvents = new Set<string>()
 
 function makeAdmin() {
     return {
@@ -31,10 +38,29 @@ function makeAdmin() {
             }
             if (table === 'subscription_events') {
                 return {
+                    // P1 replay guard: select('id').eq('provider_event_id', key).maybeSingle()
+                    select: vi.fn(() => ({
+                        eq: vi.fn((_col: string, value: string) => ({
+                            maybeSingle: vi.fn(async () =>
+                                existingUpgradeEvents.has(value)
+                                    ? { data: { id: value }, error: null }
+                                    : { data: null, error: null }
+                            ),
+                            // clearUpgradeInFlight: delete().eq('provider_event_id', key) — gt no se usa acá.
+                            gt: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: null, error: null })) })),
+                        })),
+                    })),
                     upsert: vi.fn(async (row: Record<string, unknown>) => {
                         subscriptionEventUpserts.push(row)
                         return { error: null }
                     }),
+                    // clearUpgradeInFlight (P0-4): delete().eq('provider_event_id', key)
+                    delete: vi.fn(() => ({
+                        eq: vi.fn(async (_col: string, value: string) => {
+                            subscriptionEventDeletes.push(value)
+                            return { error: null }
+                        }),
+                    })),
                 }
             }
             if (table === 'billing_snapshots') {
@@ -74,17 +100,22 @@ vi.mock('@/lib/rate-limit', () => ({
         }),
 }))
 
-// Provider: el camino síncrono lee el snapshot del PAGO one-shot (no del preapproval) + el PUT.
+// Provider: el camino síncrono lee el snapshot del PAGO one-shot (no del preapproval) + el PUT con
+// reescritura del reference (updateCheckoutAmountAndRef — P0-1 stale-ref revert).
 const fetchPaymentSnapshot = vi.fn()
+const updateCheckoutAmountAndRef = vi.fn().mockResolvedValue(undefined)
 const getPaymentsProvider = vi.fn(() => ({
     name: 'mercadopago' as const,
     fetchPaymentSnapshot: (...a: unknown[]) => fetchPaymentSnapshot(...a),
+    updateCheckoutAmountAndRef: (...a: unknown[]) => updateCheckoutAmountAndRef(...a),
 }))
 vi.mock('@/lib/payments/provider', () => ({
     getPaymentsProvider: () => getPaymentsProvider(),
 }))
 
 // parseTierUpgradeReference: parser único del formato `tier_upgrade|...` (re-exportado del provider).
+// buildCheckoutExternalReference: builder REAL del reference recurrente (no mockeado) — el route lo
+// usa para reescribir el ref del preapproval al nuevo tier|cycle.
 const parseTierUpgradeReference = vi.fn()
 vi.mock('@/lib/payments/providers/mercadopago', async (orig) => {
     const actual = await orig<typeof import('@/lib/payments/providers/mercadopago')>()
@@ -101,16 +132,6 @@ vi.mock('@/infrastructure/db/coach-addons.repository', async (orig) => {
     return { ...actual, listLive: (...a: unknown[]) => listLive(...a) }
 })
 
-// El PUT del preapproval al nuevo compuesto va por este puerto (createOneShotPayment NO se usa acá).
-const updateCheckoutAmount = vi.fn().mockResolvedValue(undefined)
-const buildAddonPaymentsPort = vi.fn(() => ({
-    updateCheckoutAmount: (...a: unknown[]) => updateCheckoutAmount(...a),
-    createOneShotPayment: vi.fn(),
-}))
-vi.mock('../addons/_lib/payments-port', () => ({
-    buildAddonPaymentsPort: () => buildAddonPaymentsPort(),
-}))
-
 const fetchCoachBillingRow = vi.fn()
 vi.mock('../addons/_lib/coach-context', async (orig) => {
     const actual = await orig<typeof import('../addons/_lib/coach-context')>()
@@ -122,7 +143,9 @@ vi.mock('../addons/_lib/coach-context', async (orig) => {
 
 import { POST } from './route'
 import { getCompositeAmountClp } from '@/services/billing/addons.service'
+import { buildCheckoutExternalReference } from '@/lib/payments/providers/mercadopago'
 import { getTierMaxClients } from '@/lib/constants'
+import { upgradeInFlightKey } from '@/services/billing/plan-change-lock'
 
 function makeRequest(body: unknown): Request {
     return new Request('http://localhost/api/payments/confirm-upgrade', {
@@ -148,7 +171,9 @@ beforeEach(() => {
     vi.clearAllMocks()
     coachUpdates.length = 0
     subscriptionEventUpserts.length = 0
+    subscriptionEventDeletes.length = 0
     billingSnapshotUpserts.length = 0
+    existingUpgradeEvents.clear()
     coachUpdateError = null
     fakeAdmin = makeAdmin()
     getUser.mockResolvedValue({ data: { user: { id: 'coach-1', email: 'juan@evatest.cl' } } })
@@ -205,7 +230,7 @@ describe('POST /api/payments/confirm-upgrade — auth + rate limit + payload', (
 })
 
 describe('POST /api/payments/confirm-upgrade — activación rank-guarded (pago aprobado)', () => {
-    it('approved + rank menor → activa tier+max_clients+cycle, hace el PUT al compuesto, NO escribe snapshot', async () => {
+    it('approved + rank menor → activa tier+max_clients+cycle, hace el PUT con reescritura de ref (P0-1), NO escribe snapshot', async () => {
         const res = await POST(makeRequest({ paymentId: 'pay-1' }))
         expect(res.status).toBe(200)
         const json = await res.json()
@@ -223,11 +248,14 @@ describe('POST /api/payments/confirm-upgrade — activación rank-guarded (pago 
         // status NO se toca (sigue 'active').
         expect(coachUpdates[0]).not.toHaveProperty('subscription_status')
 
-        // (b) PUT del preapproval al nuevo compuesto determinístico (elite + add-ons vivos = ninguno).
-        expect(updateCheckoutAmount).toHaveBeenCalledOnce()
-        expect(updateCheckoutAmount).toHaveBeenCalledWith(
+        // (b) P0-1: PUT del preapproval al nuevo compuesto Y reescritura del external_reference al
+        //     NUEVO tier|cycle (+ add-ons vivos = ninguno). Sin esto el siguiente preapproval webhook
+        //     re-derivaría el tier VIEJO y revertiría el upgrade.
+        expect(updateCheckoutAmountAndRef).toHaveBeenCalledOnce()
+        expect(updateCheckoutAmountAndRef).toHaveBeenCalledWith(
             'preapproval-1',
-            getCompositeAmountClp('elite', 'monthly', [])
+            getCompositeAmountClp('elite', 'monthly', []),
+            buildCheckoutExternalReference('coach-1', 'elite', 'monthly', [])
         )
 
         // (c) el snapshot lo escribe SOLO el webhook — confirm-upgrade jamás toca billing_snapshots.
@@ -240,7 +268,15 @@ describe('POST /api/payments/confirm-upgrade — activación rank-guarded (pago 
         expect(ev).toBeTruthy()
     })
 
-    it('PUT del compuesto arrastra los add-ons vivos facturables (elite + 1 add-on)', async () => {
+    it('el ref reescrito (P0-1) usa el NUEVO tier, no el viejo: nunca apunta a `pro`', async () => {
+        await POST(makeRequest({ paymentId: 'pay-1' }))
+        const refArg = updateCheckoutAmountAndRef.mock.calls[0][2] as string
+        // El reference recurrente del preapproval ahora dice elite — no revierte a pro.
+        expect(refArg).toContain('elite')
+        expect(refArg).not.toContain('|pro|')
+    })
+
+    it('PUT del compuesto arrastra los add-ons vivos facturables y los embebe en el ref (elite + 1 add-on)', async () => {
         listLive.mockResolvedValue([
             {
                 id: 'a1',
@@ -261,30 +297,23 @@ describe('POST /api/payments/confirm-upgrade — activación rank-guarded (pago 
             },
         ])
         await POST(makeRequest({ paymentId: 'pay-1' }))
-        expect(updateCheckoutAmount).toHaveBeenCalledWith(
+        expect(updateCheckoutAmountAndRef).toHaveBeenCalledWith(
             'preapproval-1',
             getCompositeAmountClp('elite', 'monthly', [
                 { moduleKey: 'cardio', priceClpMensual: 9990 },
-            ])
+            ]),
+            buildCheckoutExternalReference('coach-1', 'elite', 'monthly', ['cardio'])
         )
+    })
+
+    it('P0-4: tras activar, LIMPIA el candado in-flight (DELETE de tier_upgrade_pending:${coachId})', async () => {
+        await POST(makeRequest({ paymentId: 'pay-1' }))
+        // clearUpgradeInFlight borra la fila keyed por el candado del coach.
+        expect(subscriptionEventDeletes).toContain(upgradeInFlightKey('coach-1'))
     })
 })
 
 describe('POST /api/payments/confirm-upgrade — idempotencia (rank-guard) + orden con el webhook', () => {
-    it('doble llamada con el mismo pago → 200 active ambas, segunda NO re-escribe tier (ya en elite)', async () => {
-        const first = await POST(makeRequest({ paymentId: 'pay-1' }))
-        expect(first.status).toBe(200)
-        expect(coachUpdates).toHaveLength(1)
-
-        // 2ª llamada: el coach ya está en elite (rank no menor) → no-op de la activación.
-        fetchCoachBillingRow.mockResolvedValue({ ...PRO_COACH, subscription_tier: 'elite' })
-        const second = await POST(makeRequest({ paymentId: 'pay-1' }))
-        expect(second.status).toBe(200)
-        expect((await second.json()).status).toBe('active')
-        // No hubo un segundo coaches.update (rank-guard: elite no es < elite).
-        expect(coachUpdates).toHaveLength(1)
-    })
-
     it('coach YA en elite (webhook activó primero): no-op del write, igual hace el PUT determinístico y responde active', async () => {
         fetchCoachBillingRow.mockResolvedValue({ ...PRO_COACH, subscription_tier: 'elite' })
         const res = await POST(makeRequest({ paymentId: 'pay-1' }))
@@ -292,8 +321,41 @@ describe('POST /api/payments/confirm-upgrade — idempotencia (rank-guard) + ord
         expect((await res.json()).status).toBe('active')
         // Rank-guard: elite no es < elite → cero writes de coaches.
         expect(coachUpdates).toHaveLength(0)
-        // El PUT igual corre (idempotente: monto determinístico).
-        expect(updateCheckoutAmount).toHaveBeenCalledOnce()
+        // El PUT igual corre (idempotente: monto + ref determinísticos).
+        expect(updateCheckoutAmountAndRef).toHaveBeenCalledOnce()
+    })
+})
+
+describe('POST /api/payments/confirm-upgrade — P1 REPLAY GUARD (tier_upgrade:${paymentId} ya existe)', () => {
+    it('replay de un paymentId ya procesado → 200 alreadyProcessed, SIN re-activar ni re-PUTear', async () => {
+        // El evento de dedup del upgrade ya existe (este pago activó antes — confirm-upgrade o webhook).
+        existingUpgradeEvents.add('tier_upgrade:pay-1')
+        // Aunque el coach esté en un tier MENOR (p.ej. tras un downgrade posterior), NO se re-otorga.
+        fetchCoachBillingRow.mockResolvedValue({ ...PRO_COACH, subscription_tier: 'pro' })
+
+        const res = await POST(makeRequest({ paymentId: 'pay-1' }))
+        expect(res.status).toBe(200)
+        const json = await res.json()
+        expect(json.ok).toBe(true)
+        expect(json.status).toBe('active')
+        expect(json.alreadyProcessed).toBe(true)
+        // El tier reportado es el VIGENTE del coach, no se re-escala a elite.
+        expect(json.tier).toBe('pro')
+
+        // CRÍTICO: ni activación ni PUT — re-jugar un pago viejo no debe re-otorgar un tier gratis.
+        expect(coachUpdates).toHaveLength(0)
+        expect(updateCheckoutAmountAndRef).not.toHaveBeenCalled()
+        // Tampoco se vuelve a upsertear el evento de historial.
+        expect(subscriptionEventUpserts).toHaveLength(0)
+    })
+
+    it('primera vez (sin evento previo) → SÍ activa (el guard de replay no aplica)', async () => {
+        // existingUpgradeEvents vacío → el guard deja pasar.
+        const res = await POST(makeRequest({ paymentId: 'pay-1' }))
+        expect(res.status).toBe(200)
+        expect((await res.json()).alreadyProcessed).toBeUndefined()
+        expect(coachUpdates).toHaveLength(1)
+        expect(updateCheckoutAmountAndRef).toHaveBeenCalledOnce()
     })
 })
 
@@ -310,7 +372,7 @@ describe('POST /api/payments/confirm-upgrade — pago no aprobado: NO activa', (
         expect(json.ok).toBe(true)
         expect(json.status).not.toBe('active')
         expect(coachUpdates).toHaveLength(0)
-        expect(updateCheckoutAmount).not.toHaveBeenCalled()
+        expect(updateCheckoutAmountAndRef).not.toHaveBeenCalled()
         // No se llega siquiera a parsear el reference (el guard de estado corta antes).
         expect(parseTierUpgradeReference).not.toHaveBeenCalled()
     })
@@ -337,7 +399,7 @@ describe('POST /api/payments/confirm-upgrade — anti escalada + reference invá
         const res = await POST(makeRequest({ paymentId: 'pay-1' }))
         expect(res.status).toBe(403)
         expect(coachUpdates).toHaveLength(0)
-        expect(updateCheckoutAmount).not.toHaveBeenCalled()
+        expect(updateCheckoutAmountAndRef).not.toHaveBeenCalled()
     })
 
     it('400 si el reference no es un upgrade de tier (parse → null)', async () => {

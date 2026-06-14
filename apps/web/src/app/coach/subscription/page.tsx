@@ -149,7 +149,12 @@ export default function CoachSubscriptionPage() {
                 const payload = await response.json()
                 if (!response.ok) throw new Error(payload.error ?? 'No se pudo cargar la suscripción')
                 if (!isMounted) return
-                if (payload.coach?.subscription_status === 'org_managed') {
+                // Coaches gestionados por una org O por un team (pool plano) no tienen billing
+                // self-service: su plan/módulos los fija el contrato. Redirigimos ambos al dashboard.
+                if (
+                    payload.coach?.subscription_status === 'org_managed' ||
+                    payload.coach?.subscription_status === 'team_managed'
+                ) {
                     router.replace('/coach/dashboard')
                     return
                 }

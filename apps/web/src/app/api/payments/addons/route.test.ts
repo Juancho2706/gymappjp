@@ -66,6 +66,13 @@ vi.mock('@/infrastructure/db/coach-addons.repository', async (orig) => {
     return { ...actual, listLive: (...a: unknown[]) => listLive(...a) }
 })
 
+// P0-4b: guard de alta de add-on mientras un UPGRADE de plan está en vuelo. Default: no hay upgrade
+// en vuelo → el alta procede. El test del guard lo sobreescribe.
+const isUpgradeInFlight = vi.fn().mockResolvedValue(false)
+vi.mock('@/services/billing/plan-change-lock', () => ({
+    isUpgradeInFlight: (...a: unknown[]) => isUpgradeInFlight(...a),
+}))
+
 // Provider: el guard P0-A lee el external_reference del preapproval VIGENTE del coach para
 // bloquear comprar un módulo que la recurrente ya carga (doble cobro top "Agregar" vs combo).
 const fetchCheckoutSnapshot = vi.fn()
@@ -120,6 +127,7 @@ beforeEach(() => {
     fetchCoachBillingRow.mockResolvedValue(PAID_COACH)
     canPurchaseAddon.mockReturnValue({ allowed: true })
     listLive.mockResolvedValue([]) // default: sin add-ons vivos → el live-row check pasa
+    isUpgradeInFlight.mockResolvedValue(false) // default: sin upgrade en vuelo → el alta procede
     // Default: no hay upgrade en curso (superseded null) y el preapproval vigente NO trae el módulo
     // embebido (reference de 3 partes) → el guard P0-A pasa. Cada test del guard sobreescribe.
     scopeMaybeSingle.mockResolvedValue({ data: { superseded_mp_preapproval_id: null }, error: null })
@@ -315,5 +323,37 @@ describe('POST /api/payments/addons — guard P0-A (ALREADY_BILLED)', () => {
         const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
         expect(res.status).toBe(200)
         expect(activateAddonForCoach).toHaveBeenCalledOnce()
+    })
+})
+
+// ── Guard P0-4b: alta de add-on mientras un UPGRADE de plan está en vuelo ────────────────────
+// El upgrade es un one-shot prorrateado que se confirma async (confirm-upgrade/webhook) y, al
+// activarse, recomputa el compuesto desde listLive → plegaría ESTE add-on nuevo dos veces (una en
+// el compuesto del upgrade, otra en su propio one-shot). Bloqueamos con 409 UPGRADE_IN_FLIGHT hasta
+// que el upgrade en vuelo se resuelva (o el TTL del candado lo libere).
+describe('POST /api/payments/addons — guard P0-4b (UPGRADE_IN_FLIGHT)', () => {
+    it('409 UPGRADE_IN_FLIGHT si hay un upgrade de plan en vuelo: no inicia el cobro del add-on', async () => {
+        isUpgradeInFlight.mockResolvedValue(true)
+        const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
+        expect(res.status).toBe(409)
+        const json = await res.json()
+        expect(json.code).toBe('UPGRADE_IN_FLIGHT')
+        expect(typeof json.error).toBe('string')
+        // CERO efectos: jamás se llega a iniciar el one-shot del módulo.
+        expect(activateAddonForCoach).not.toHaveBeenCalled()
+    })
+
+    it('el guard se chequea por user.id (de la sesión)', async () => {
+        isUpgradeInFlight.mockResolvedValue(false)
+        activateAddonForCoach.mockResolvedValue({
+            kind: 'one_shot_checkout',
+            checkoutUrl: 'https://mp.test/checkout/abc',
+            prorationClp: 5161,
+            cycleAmountClp: 9990,
+        })
+        const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
+        expect(res.status).toBe(200)
+        expect(isUpgradeInFlight).toHaveBeenCalled()
+        expect(isUpgradeInFlight.mock.calls[0][1]).toBe('coach-1')
     })
 })
