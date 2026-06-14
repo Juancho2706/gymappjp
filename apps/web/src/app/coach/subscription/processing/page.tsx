@@ -146,6 +146,12 @@ export default function SubscriptionProcessingPage() {
         setStatusText('Esperando confirmación de tu pago...')
         pollStartRef.current = Date.now()
 
+        // Poll RE-CALLS confirm-subscription (idempotent) every 5s — NOT subscription-status (the
+        // coach ROW only advances via webhook, which the MP test sandbox never delivers). This makes
+        // the base plan activate SYNCHRONOUSLY once MP authorizes the preapproval, mirroring the
+        // add-on path — no webhook needed. 5s (not 3s) keeps it comfortably under any rate budget;
+        // confirm-subscription is intentionally NOT rate-limited (its brute-force vector is closed by
+        // the fail-closed ownership guard).
         pollRef.current = setInterval(async () => {
             // Timeout: if polling too long, stop and show error
             if (Date.now() - pollStartRef.current > POLL_TIMEOUT_MS) {
@@ -179,13 +185,16 @@ export default function SubscriptionProcessingPage() {
             }
 
             try {
-                const response = await fetch('/api/payments/subscription-status')
+                const response = await fetch('/api/payments/confirm-subscription', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(preapprovalId ? { preapprovalId } : {}),
+                })
                 const raw = await response.text()
                 const payload = raw ? JSON.parse(raw) : {}
                 if (!alive || !response.ok) return
 
-                const currentStatus = payload?.coach?.subscription_status
-                if (currentStatus === 'active') {
+                if (payload.subscriptionStatus === 'active') {
                     if (pollRef.current) {
                         clearInterval(pollRef.current)
                         pollRef.current = null
@@ -195,7 +204,7 @@ export default function SubscriptionProcessingPage() {
             } catch {
                 // Keep polling — transient network error
             }
-        }, 3000)
+        }, 5000)
 
         return () => {
             alive = false

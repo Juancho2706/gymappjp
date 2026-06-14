@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
 import { getPaymentsProvider } from '@/lib/payments/provider'
+import { rateLimitPayment, jsonRateLimited } from '@/lib/rate-limit'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 
@@ -19,6 +20,11 @@ export async function POST(request: Request) {
 
         if (!user) {
             return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+        }
+
+        const rl = await rateLimitPayment(user.id)
+        if (!rl.ok) {
+            return jsonRateLimited(rl.retryAfter)
         }
 
         const workspace = await resolvePreferredWorkspace(supabase, user.id)

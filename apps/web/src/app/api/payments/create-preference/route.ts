@@ -13,6 +13,7 @@ import {
     type SubscriptionTier,
 } from '@/lib/constants'
 import { getPaymentsProvider } from '@/lib/payments/provider'
+import { rateLimitPayment, jsonRateLimited } from '@/lib/rate-limit'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 import { MODULE_KEYS, type ModuleKey } from '@/services/entitlements.service'
@@ -46,6 +47,11 @@ export async function POST(request: Request) {
 
         if (!user?.id || !user.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const rl = await rateLimitPayment(user.id)
+        if (!rl.ok) {
+            return jsonRateLimited(rl.retryAfter)
         }
 
         const workspace = await resolvePreferredWorkspace(supabase, user.id)

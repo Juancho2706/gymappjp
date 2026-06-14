@@ -131,6 +131,87 @@ describe('POST /api/payments/confirm-subscription — guards', () => {
     })
 })
 
+describe('POST /api/payments/confirm-subscription — FIX-1: solo muta el coach si quedó paid-like', () => {
+    // El sandbox de MP NO entrega webhooks; al volver del redirect el preapproval suele estar
+    // 'pending'. ANTES el route escribía subscription_status = mapProviderStatus(...) SIEMPRE, así
+    // que un 'pending' dejaba al coach en 'pending_payment' (status BLOQUEADO) + current_period_end
+    // null, bloqueándolo y (audit P1) pisando un upgrade activo en curso. FIX-1: cuando el status
+    // resuelto NO es paid-like ('active'|'trialing') NO se toca el coach — se responde
+    // { ok:true, subscriptionStatus: status } y la processing page sigue polleando sin bloquear.
+
+    it("approved → SÍ muta el coach a 'active' y responde subscriptionStatus 'active'", async () => {
+        const res = await POST(makeRequest({ preapprovalId: 'preapproval-NEW' }))
+        expect(res.status).toBe(200)
+        const json = await res.json()
+        expect(json.ok).toBe(true)
+        expect(json.subscriptionStatus).toBe('active')
+        // Hubo un coaches.update que escribió subscription_status = 'active'.
+        const activated = updateCalls.find(
+            (c) =>
+                c.table === 'coaches' &&
+                (c.patch as Record<string, unknown>).subscription_status === 'active'
+        )
+        expect(activated).toBeTruthy()
+    })
+
+    it("pending → NO muta el coach (cero coaches.update) y responde subscriptionStatus 'pending_payment'", async () => {
+        fetchCheckoutSnapshot.mockResolvedValue({
+            id: 'preapproval-NEW',
+            status: 'pending',
+            external_reference: 'coach-1|pro|monthly',
+        })
+        const res = await POST(makeRequest({ preapprovalId: 'preapproval-NEW' }))
+        expect(res.status).toBe(200)
+        const json = await res.json()
+        expect(json.ok).toBe(true)
+        expect(json.subscriptionStatus).toBe('pending_payment')
+        // CRÍTICO: ni un solo update sobre coaches (no se bloquea ni se pisa el upgrade en curso).
+        const anyCoachUpdate = updateCalls.find((c) => c.table === 'coaches')
+        expect(anyCoachUpdate).toBeFalsy()
+    })
+
+    it('in_process → NO muta el coach (cualquier no-paid-like deja la fila intacta)', async () => {
+        fetchCheckoutSnapshot.mockResolvedValue({
+            id: 'preapproval-NEW',
+            status: 'in_process',
+            external_reference: 'coach-1|pro|monthly',
+        })
+        const res = await POST(makeRequest({ preapprovalId: 'preapproval-NEW' }))
+        expect(res.status).toBe(200)
+        expect((await res.json()).subscriptionStatus).toBe('pending_payment')
+        expect(updateCalls.find((c) => c.table === 'coaches')).toBeFalsy()
+    })
+
+    it('pending con upgrade EN CURSO (superseded marcado) → NO cancela, NO limpia el marcador, NO muta', async () => {
+        // El audit P1: un confirm pending NO debe tocar un upgrade activo en vuelo. Sin mutación,
+        // el marcador superseded sobrevive para que el webhook/confirm posterior (ya active) lo cierre.
+        coachRow!.subscription_status = 'active'
+        coachRow!.superseded_mp_preapproval_id = 'preapproval-OLD'
+        fetchCheckoutSnapshot.mockResolvedValue({
+            id: 'preapproval-NEW',
+            status: 'pending',
+            external_reference: 'coach-1|pro|monthly',
+        })
+        const res = await POST(makeRequest({ preapprovalId: 'preapproval-NEW' }))
+        expect(res.status).toBe(200)
+        expect(cancelCheckoutAtProvider).not.toHaveBeenCalled()
+        expect(updateCalls.find((c) => c.table === 'coaches')).toBeFalsy()
+        expect((await res.json()).subscriptionStatus).toBe('pending_payment')
+    })
+
+    it('pending → tampoco materializa add-ons embebidos (no hay grant sin pago confirmado)', async () => {
+        fetchCheckoutSnapshot.mockResolvedValue({
+            id: 'preapproval-NEW',
+            status: 'pending',
+            external_reference: 'coach-1|pro|monthly|cardio',
+        })
+        const res = await POST(makeRequest({ preapprovalId: 'preapproval-NEW' }))
+        expect(res.status).toBe(200)
+        expect(materializeAddonsFromPreapproval).not.toHaveBeenCalled()
+        expect(updateCalls.find((c) => c.table === 'coaches')).toBeFalsy()
+    })
+})
+
 describe('POST /api/payments/confirm-subscription — supersede cancel (P0-B)', () => {
     it('cancela el preapproval superseded una sola vez y limpia el marcador', async () => {
         coachRow!.superseded_mp_preapproval_id = 'preapproval-OLD'

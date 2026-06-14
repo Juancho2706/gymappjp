@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
@@ -16,7 +17,13 @@ function isAuthorized(req: Request) {
     const expected = process.env.CRON_SECRET
     if (!expected) return false
     const auth = req.headers.get('authorization') ?? ''
-    return auth === `Bearer ${expected}`
+    // Constant-time compare to avoid leaking the secret via early-exit timing (FIX-6).
+    // timingSafeEqual throws on unequal-length buffers, so guard length first.
+    const expectedHeader = `Bearer ${expected}`
+    const authBuf = Buffer.from(auth, 'utf8')
+    const expectedBuf = Buffer.from(expectedHeader, 'utf8')
+    if (authBuf.length !== expectedBuf.length) return false
+    return timingSafeEqual(authBuf, expectedBuf)
 }
 
 // Días por defecto de las alertas semiautomáticas (mejora F3.5). Fijados en RUNBOOK.

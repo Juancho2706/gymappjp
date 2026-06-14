@@ -57,6 +57,47 @@ describe('isPaymentsWebhookTokenValid', () => {
         const r = new Request('https://example.com/webhook')
         expect(isPaymentsWebhookTokenValid(r)).toBe(true)
     })
+
+    // ── FIX-6: the token compare is now constant-time (timingSafeEqual on equal-length
+    // buffers, length-guarded first). These assert the CONTRACT survives the swap from
+    // `candidate === expectedToken`: the exact token still authorizes, a wrong/short/long
+    // token (and a missing candidate) is rejected — regardless of timing implementation.
+    it('rejects a WRONG query token of the same length (constant-time compare still discriminates)', () => {
+        vi.stubEnv('NODE_ENV', 'production')
+        vi.stubEnv('MERCADOPAGO_WEBHOOK_TOKEN', 'mytoken')
+        const r = new Request('https://example.com/webhook?token=wrongne') // same length (7), different bytes
+        expect(isPaymentsWebhookTokenValid(r)).toBe(false)
+    })
+
+    it('rejects a token of a DIFFERENT length (length guard before timingSafeEqual)', () => {
+        vi.stubEnv('NODE_ENV', 'production')
+        vi.stubEnv('MERCADOPAGO_WEBHOOK_TOKEN', 'mytoken')
+        const r = new Request('https://example.com/webhook?token=mytoken-extra-suffix')
+        expect(isPaymentsWebhookTokenValid(r)).toBe(false)
+    })
+
+    it('rejects when no candidate token is supplied at all (null candidate ≠ expected)', () => {
+        vi.stubEnv('NODE_ENV', 'production')
+        vi.stubEnv('MERCADOPAGO_WEBHOOK_TOKEN', 'mytoken')
+        const r = new Request('https://example.com/webhook')
+        expect(isPaymentsWebhookTokenValid(r)).toBe(false)
+    })
+
+    it('rejects a WRONG x-webhook-token header even when the same length', () => {
+        vi.stubEnv('NODE_ENV', 'production')
+        vi.stubEnv('MERCADOPAGO_WEBHOOK_TOKEN', 'mytoken')
+        const r = new Request('https://example.com/webhook', {
+            headers: { 'x-webhook-token': 'badtokn' }, // length 7, wrong bytes
+        })
+        expect(isPaymentsWebhookTokenValid(r)).toBe(false)
+    })
+
+    it('accepts the EXACT token (the right secret still authorizes after the swap)', () => {
+        vi.stubEnv('NODE_ENV', 'production')
+        vi.stubEnv('MERCADOPAGO_WEBHOOK_TOKEN', 'a-longer-secret-value-123')
+        const r = new Request('https://example.com/webhook?token=a-longer-secret-value-123')
+        expect(isPaymentsWebhookTokenValid(r)).toBe(true)
+    })
 })
 
 describe('verifyMercadoPagoSignatureIfConfigured', () => {

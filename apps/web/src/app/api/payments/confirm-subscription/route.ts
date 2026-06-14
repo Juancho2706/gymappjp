@@ -122,6 +122,30 @@ export async function POST(request: Request) {
         }
 
         const status = mapProviderStatus(snapshot.status ?? null)
+
+        // ── Paid-like gate (FIX-1 / audit P1) ───────────────────────────────────────────
+        // Only mutate the coach when the resolved status is paid-like ('active'|'trialing').
+        // The MP test sandbox (and late prod webhooks) leave the preapproval 'pending' at redirect:
+        // writing subscription_status='pending_payment' + current_period_end=null here would BLOCK the
+        // coach AND overwrite an active in-flight upgrade (P1). So when NON-active we mutate nothing and
+        // return the status — the processing page keeps polling (re-calling this endpoint) without
+        // blocking, and converges once MP authorizes the preapproval (or the webhook backstop lands).
+        const isPaidLike = status === 'active' || status === 'trialing'
+        if (!isPaidLike) {
+            console.info('[payments.confirm-subscription] non-active — no coach mutation', {
+                traceId,
+                coachId: user.id,
+                preapprovalId,
+                providerStatus: snapshot.status ?? null,
+                internalStatus: status,
+            })
+            return NextResponse.json({
+                ok: true,
+                subscriptionStatus: status,
+                providerStatus: snapshot.status ?? null,
+            })
+        }
+
         const nextPeriodEnd = resolveCurrentPeriodEnd({
             status,
             billingCycle,
@@ -149,12 +173,11 @@ export async function POST(request: Request) {
         // ── Sync-path mirror of the webhook hooks (idempotent backstop convergence) ──────
         // The webhook (payments/webhook/route.ts) is the canonical async path, but the MP test
         // sandbox does NOT auto-deliver webhooks and prod webhooks can arrive late/missing. So we
-        // re-run the two state-critical hooks here, synchronously, when the confirmed preapproval is
-        // active/paid-like. Both are idempotent with the webhook (no double cancel, no double
+        // re-run the two state-critical hooks here, synchronously, now that the confirmed preapproval
+        // is active/paid-like. Both are idempotent with the webhook (no double cancel, no double
         // materialize): the supersede id is cleared once, and coach_addons rows dedup via the partial
         // unique index. Failures are logged but do NOT fail the confirm (the coach row already updated).
-        const isPaidLike = status === 'active' || status === 'trialing'
-        if (isPaidLike) {
+        {
             // (a) SUPERSEDE CANCEL (P0-B): cancel the old preapproval an in-flight upgrade replaced,
             //     then clear the marker (service-role). Mirrors webhook/route.ts ~421-440.
             const superseded = coach.superseded_mp_preapproval_id?.trim()

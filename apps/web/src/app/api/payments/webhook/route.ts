@@ -168,6 +168,27 @@ async function handleWebhook(request: Request, rawBody: string) {
             })
             return NextResponse.json({ ok: true })
         }
+        // FIX-5: the top-level replay guard dedups by provider_event_id === notificationId, but the
+        // one-shot history row below is keyed `addon:<id>:oneshot` (never the notificationId), so a
+        // REDELIVERED one-shot payment notification would reprocess and re-send the activation receipt
+        // every time. Short-circuit here if we already wrote a notificationId-keyed marker for this
+        // exact notification: materialization is idempotent (unique partial index), but the receipt
+        // email + side-effects are NOT, so skip the whole branch on redelivery.
+        if (notificationId) {
+            const { data: oneShotAlready } = await admin
+                .from('subscription_events')
+                .select('id')
+                .eq('provider_event_id', notificationId)
+                .maybeSingle()
+            if (oneShotAlready) {
+                console.info('[payments.webhook] duplicate one-shot notification, skipping receipt', {
+                    traceId,
+                    coachId: coach.id,
+                    notificationId,
+                })
+                return NextResponse.json({ ok: true })
+            }
+        }
         const tierForAddon = (coach.subscription_tier ?? 'starter') as SubscriptionTier
         const cycleForAddon = (coach.billing_cycle ?? 'monthly') as BillingCycle
         const paidAt = result.paidAt ?? new Date().toISOString()
@@ -219,6 +240,27 @@ async function handleWebhook(request: Request, rawBody: string) {
             await admin
                 .from('subscription_events')
                 .upsert(altaEvent, { onConflict: 'provider_event_id' })
+
+            // FIX-5: also write a notificationId-keyed marker so a redelivery of THIS notification
+            // short-circuits at the dedup check above (the history row above is keyed by addon id,
+            // not the notificationId, so it would not catch the replay). Idempotent on conflict.
+            if (notificationId) {
+                const dedupEvent: TablesInsert<'subscription_events'> = {
+                    coach_id: coach.id,
+                    provider: provider.name,
+                    provider_event_id: notificationId,
+                    provider_checkout_id: result.providerPaymentId ?? null,
+                    provider_status: result.providerStatus ?? 'approved',
+                    payload: toJsonPayload({
+                        action: 'addon_oneshot_notification_dedup',
+                        addon_id: addon.id,
+                        module_key: moduleKey,
+                    }),
+                }
+                await admin
+                    .from('subscription_events')
+                    .upsert(dedupEvent, { onConflict: 'provider_event_id' })
+            }
 
             // Recibo de alta — fire-and-forget. TODOS los one-shots (mensual/trim/anual desde la
             // convergencia D4) emiten recibo; un fallo de Resend se LOGUEA pero NUNCA tumba el
@@ -367,6 +409,66 @@ async function handleWebhook(request: Request, rawBody: string) {
                     traceId,
                     coachId: coach.id,
                     message: chargeErr instanceof Error ? chargeErr.message : String(chargeErr),
+                })
+            }
+        }
+
+        // FIX-7: REFUND / CHARGEBACK (first-pass, money-safety). A payment event with RAW status
+        // refunded/charged_back lands here on the recurring/stale-checkout branch where today NOTHING
+        // runs — the coach stays active and the billing_snapshot is never reversed. Minimal handler:
+        // cancel all add-ons (trigger D1 turns off the modules), block the coach
+        // (subscription_status='expired'), and annotate an audit row. We do NOT physically reverse the
+        // billing_snapshot — just record it via the audit log for SERNAC evidence. Idempotent:
+        // cancelAllForCoach is a no-op once cancelled, and the coach update is repeated-safe.
+        //
+        // ⚠️ Trigger es el ESTADO CRUDO refunded/charged_back, NO mapProviderStatus==='expired':
+        // mapProviderStatus colapsa rejected/refunded/charged_back a 'expired', y un cobro recurrente
+        // 'rejected' (decline transitorio / reintento de dunning de MP) NO debe expirar+bloquear a un
+        // coach con período pagado vigente (eso lo maneja la rama terminal con resolveTerminalEvent).
+        // LIMITACIÓN conocida (follow-up): si la notificación de refund NO trae external_reference, no
+        // hay coachId y el webhook retorna antes (accepted-without-coachId) → ese refund se pierde;
+        // el fallback (match por metadata.preapproval_id) queda pendiente.
+        if (
+            result.eventKind === 'payment' &&
+            !result.oneShotAddon &&
+            (result.providerStatus === 'refunded' || result.providerStatus === 'charged_back')
+        ) {
+            try {
+                const cancelled = await cancelAllForCoach(admin, coach.id, new Date().toISOString())
+                const { error: blockErr } = await admin
+                    .from('coaches')
+                    .update({ subscription_status: 'expired', current_period_end: null, subscription_mp_id: null })
+                    .eq('id', coach.id)
+                if (blockErr) {
+                    console.error('[payments.webhook] failed to block coach on refund/chargeback', {
+                        traceId,
+                        coachId: coach.id,
+                        message: blockErr.message,
+                    })
+                }
+                await admin.from('admin_audit_logs').insert({
+                    admin_email: 'webhook',
+                    action: 'coach.payment_refunded_or_chargeback',
+                    target_table: 'coaches',
+                    target_id: coach.id,
+                    payload: {
+                        provider_payment_id: result.providerPaymentId ?? null,
+                        provider_status: result.providerStatus ?? null,
+                        addons_cancelled: cancelled,
+                        triggered_by: 'payments/webhook',
+                    },
+                })
+                console.warn('[payments.webhook] coach blocked on refund/chargeback', {
+                    traceId,
+                    coachId: coach.id,
+                    providerPaymentId: result.providerPaymentId ?? null,
+                    addonsCancelled: cancelled,
+                })
+            } catch (refundErr) {
+                console.error('[payments.webhook] refund/chargeback handler failed (stale branch)', {
+                    traceId,
+                    coachId: coach.id,
+                    message: refundErr instanceof Error ? refundErr.message : String(refundErr),
                 })
             }
         }
