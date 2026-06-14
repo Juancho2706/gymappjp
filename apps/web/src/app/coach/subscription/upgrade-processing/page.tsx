@@ -121,22 +121,24 @@ export default function UpgradeProcessingPage() {
     }, [paymentId])
 
     return (
-        <main className="flex min-h-dvh items-center justify-center px-4 py-12 bg-background">
+        <main className="flex min-h-dvh items-center justify-center px-4 py-12 pt-safe pb-safe bg-background">
             <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-xl">
                 {!error && (
                     <div className="mx-auto mb-6 h-12 w-12 animate-spin rounded-full border-[3px] border-primary border-t-transparent" />
                 )}
 
-                <h1 className="text-xl font-bold text-foreground">
-                    {error ? 'Problema al procesar' : 'Activando tu nuevo plan'}
-                </h1>
-                <p className="mt-2 text-sm text-muted-foreground">{error ?? statusText}</p>
+                <div role="status" aria-live="polite">
+                    <h1 className="text-xl font-bold text-foreground">
+                        {error ? 'Problema al procesar' : 'Activando tu nuevo plan'}
+                    </h1>
+                    <p className="mt-2 text-sm text-muted-foreground">{error ?? statusText}</p>
 
-                {!error && (
-                    <p className="mt-3 text-xs text-muted-foreground/60">
-                        Te llevaremos de vuelta a tu suscripción cuando tu nuevo plan esté activo.
-                    </p>
-                )}
+                    {!error && (
+                        <p className="mt-3 text-xs text-muted-foreground">
+                            Te llevaremos de vuelta a tu suscripción cuando tu nuevo plan esté activo.
+                        </p>
+                    )}
+                </div>
 
                 {canRetry && (
                     <div className="mt-6 flex flex-col gap-3">
