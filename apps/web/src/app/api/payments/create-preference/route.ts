@@ -9,6 +9,7 @@ import {
     getTierCapabilities,
     getTierMaxClients,
     isBillingCycleAllowedForTier,
+    SELF_SERVICE_ADDONS_ENABLED,
     TIER_CONFIG,
     type BillingCycle,
     type SubscriptionTier,
@@ -84,9 +85,16 @@ export async function POST(request: Request) {
         // Add-ons solicitados (signup/supersede). Dedup + filtro contra MODULE_KEYS (defensa extra
         // sobre el Zod). D8: coherencia contra el tier SOLICITADO del body — NO confiar en que la UI
         // del registro lo filtró. starter + nutrition_exchanges → 400 (cobrar algo inusable).
-        const requestedAddons = [
-            ...new Set((parsed.data.addons ?? []).filter((k): k is ModuleKey => MODULE_KEYS.includes(k))),
-        ]
+        //
+        // FAIL-CLOSED del switch de lanzamiento: con SELF_SERVICE_ADDONS_ENABLED OFF, se IGNORAN los
+        // add-ons NUEVOS del body (tratados como []). Las superficies dedicadas (/addons, /addons/cancel,
+        // /confirm-addon) ya devuelven 403; sin esto, un POST crafted a create-preference con addons:[...]
+        // podría embeber un módulo pago en el preapproval y cobrarlo con el feature apagado. NO afecta a
+        // los add-ons YA VIVOS del coach (liveAddons, más abajo): esos son entitlements ya pagados y se
+        // arrastran a través del cambio de plan sin importar el flag.
+        const requestedAddons = SELF_SERVICE_ADDONS_ENABLED
+            ? [...new Set((parsed.data.addons ?? []).filter((k): k is ModuleKey => MODULE_KEYS.includes(k)))]
+            : []
         if (
             requestedAddons.includes('nutrition_exchanges') &&
             !getTierCapabilities(tier).canUseNutrition

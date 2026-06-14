@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
 // ── Mocks de infraestructura (auth, DB, pagos, email) ────────────────────────────
 const getUser = vi.fn()
@@ -140,6 +140,29 @@ beforeEach(() => {
         addonLines: [{ label: 'Cardio', cycleAmountClp: 9990 }],
         addonsClp: 9990,
         totalClp: 39980,
+    })
+})
+
+// ── Switch de lanzamiento OFF (fail-closed) ──────────────────────────────────────────────────────
+// La suite corre con el flag ON (vitest.config env). Acá lo APAGAMOS re-evaluando el módulo con la
+// env sobreescrita: el endpoint DEBE cortar con 403 FEATURE_DISABLED ANTES de rate-limit/servicios.
+// Cierra la historia fail-closed que el sweep pre-merge señaló sin cobertura.
+describe('POST /api/payments/addons — flag de lanzamiento OFF', () => {
+    afterEach(() => {
+        vi.unstubAllEnvs()
+        vi.resetModules()
+    })
+
+    it('SELF_SERVICE_ADDONS_ENABLED off → 403 FEATURE_DISABLED, sin tocar rate-limit ni el alta', async () => {
+        vi.stubEnv('NEXT_PUBLIC_SELF_SERVICE_ADDONS_ENABLED', '')
+        vi.resetModules()
+        const { POST: PostOff } = await import('./route')
+        const res = await PostOff(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
+        expect(res.status).toBe(403)
+        expect((await res.json()).code).toBe('FEATURE_DISABLED')
+        // El gate es lo primero tras leer al user: ni rate-limit ni el alta se ejecutan.
+        expect(rateLimitPayment).not.toHaveBeenCalled()
+        expect(activateAddonForCoach).not.toHaveBeenCalled()
     })
 })
 

@@ -101,11 +101,17 @@ export const SUBSCRIPTION_BLOCKED_STATUSES = [
 // esa sección la construye el plan 05, que prende esta constante y activa el link.
 // Una sola constante evita un deploy coordinado entre planes (D4).
 //
-// ⚠️ DEJAR EN false. Prenderla es el SWITCH DE LANZAMIENTO de los add-ons
-// self-service (plan 05): la UI y los endpoints se construyen detrás de esta
-// lógica, pero el lanzamiento es MANUAL y solo ocurre POST-gate + sandbox MP
-// verde + hardening RLS del plan 03 confirmado en prod (doc fuente §2.2).
-export const SELF_SERVICE_ADDONS_ENABLED = true // ⚠️ PREVIEW-ONLY (rama preview/addons-test, QA de pago real). NO mergear a master — en master DEBE quedar false hasta el flip de lanzamiento.
+// SWITCH DE LANZAMIENTO de los add-ons self-service (plan 05). Gobernado por env var
+// (NEXT_PUBLIC_ → vale en cliente Y servidor): UNSET o != 'true' ⇒ false (fail-closed, el
+// default seguro). Así el código se mergea a master con el feature APAGADO sin tocar nada:
+//   · Vercel Preview → NEXT_PUBLIC_SELF_SERVICE_ADDONS_ENABLED='true' (QA de pago real).
+//   · Vercel Prod    → sin setear (false) hasta el flip de lanzamiento; ahí se setea 'true' + redeploy.
+// El gate de DINERO es server-side (rutas /api/payments/addons*, /confirm-addon): aunque la UI
+// quedara con un valor stale, ningún cobro ocurre sin el gate del servidor. Es build-time inlined
+// (NEXT_PUBLIC), por lo que el flip exige redeploy — aceptable para un switch de lanzamiento.
+// Lanzamiento MANUAL: solo POST-gate + sandbox MP verde + hardening RLS del plan 03 en prod (§2.2).
+export const SELF_SERVICE_ADDONS_ENABLED =
+    process.env.NEXT_PUBLIC_SELF_SERVICE_ADDONS_ENABLED === 'true'
 
 // ── Add-ons: catálogo de precios + reglas de pago (plan estrategia 05, F0) ────
 // MODULE_KEYS / ModuleKey vienen de entitlements.service (import al tope del módulo,

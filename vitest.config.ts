@@ -10,6 +10,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
+    // El switch de lanzamiento de add-ons (SELF_SERVICE_ADDONS_ENABLED) ahora se lee de env var
+    // (fail-closed por default). La suite ejercita los flujos de add-on, así que lo prendemos en test
+    // para mantener cobertura; el default seguro (false) se valida en los tests de gating del flag.
+    env: { NEXT_PUBLIC_SELF_SERVICE_ADDONS_ENABLED: 'true' },
     alias: {
       '@': path.resolve(__dirname, './apps/web/src'),
       '@eva/brand-kit': path.resolve(__dirname, './packages/brand-kit/index.ts'),
