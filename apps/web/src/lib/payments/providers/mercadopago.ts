@@ -224,8 +224,13 @@ export class MercadoPagoProvider implements PaymentsProvider {
         const payerEmail = resolvePayerEmail(input.coachEmail)
         const externalReference = buildExternalReference(input)
         const cycle = BILLING_CYCLE_CONFIG[input.billingCycle]
-        // Use provided startDate (mid-cycle upgrades) or default to 60s from now
-        const startDate = input.startDate ?? new Date(Date.now() + 60_000).toISOString()
+        // Use provided startDate (downgrade/cambio de ciclo al corte) or default to 60s from now.
+        // NORMALIZAMOS con .toISOString(): el corte viene de current_period_end del DB como
+        // '2026-06-28T00:00:00+00:00' (sin milisegundos) y MP rechaza ese formato con 400
+        // "Invalid format in auto_recurring.start_date". El default ya usaba .toISOString().
+        const startDate = input.startDate
+            ? new Date(input.startDate).toISOString()
+            : new Date(Date.now() + 60_000).toISOString()
         const endDate = new Date(Date.now() + 1000 * 60 * 60 * 24 * 365 * 5).toISOString()
 
         const response = await fetch('https://api.mercadopago.com/preapproval', {
