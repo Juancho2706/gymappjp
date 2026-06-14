@@ -100,12 +100,29 @@ export type ProviderCheckoutSnapshot = {
     auto_recurring?: { end_date?: string | null; transaction_amount?: number | null }
 }
 
+/**
+ * Snapshot mínimo de un pago one-shot (Mercado Pago `/v1/payments/{id}`) — lo usa el camino
+ * síncrono `confirm-addon` para confirmar el pago del add-on sin esperar el webhook. El
+ * `external_reference` trae el reference dedicado `addon_oneshot|...`.
+ */
+export type ProviderPaymentSnapshot = {
+    id: string
+    status?: string | null
+    external_reference?: string | null
+}
+
 export interface PaymentsProvider {
     name: 'mercadopago' | 'stripe'
     createCheckout(input: CreateCheckoutInput): Promise<CreateCheckoutResult>
     processWebhook(payload: unknown): Promise<WebhookProcessResult>
     /** Fetch current state of a recurring checkout / preapproval by provider id. */
     fetchCheckoutSnapshot(checkoutId: string): Promise<ProviderCheckoutSnapshot>
+    /**
+     * Fetch current state of a one-shot payment by provider payment id (MP `/v1/payments/{id}`).
+     * Usado por el camino síncrono `confirm-addon` (plan 05) para materializar el add-on al volver
+     * del checkout sin depender del webhook (que sigue como backstop). Devuelve estado + reference.
+     */
+    fetchPaymentSnapshot(paymentId: string): Promise<ProviderPaymentSnapshot>
     /** Cancel recurring billing at the provider (e.g. MP preapproval cancelled). */
     cancelCheckoutAtProvider(checkoutId: string): Promise<void>
     /**

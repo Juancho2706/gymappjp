@@ -54,7 +54,9 @@ export function verifyMercadoPagoSignatureIfConfigured(request: Request, dataId:
 
     const ts = tsMatch[1]
     const v1 = v1Match[1]
-    const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`
+    // MP lowercases the alphanumeric portion of data.id before signing the manifest. Match it,
+    // otherwise prod webhooks with alphanumeric ids fail signature verification (P0-D).
+    const manifest = `id:${dataId.toLowerCase()};request-id:${requestId};ts:${ts};`
     const hmac = createHmac('sha256', secret).update(manifest).digest('hex')
 
     try {

@@ -264,16 +264,28 @@ export async function materializeAddonFromOneShot(
     const existing = (await listLive(db, ctx.coachId)).find(
         (a) => a.moduleKey === key && a.source === 'self_service'
     )
-    const addon =
-        existing ??
-        (await insertAddon(db, {
-            coachId: ctx.coachId,
-            moduleKey: key,
-            source: 'self_service',
-            priceClpMensual: getAddonMonthlyPriceClp(key),
-            termsVersion,
-            firstChargedAt: paidAt, // one-shot ya cobrado: compromiso mínimo cubierto
-        }))
+    let addon = existing
+    if (!addon) {
+        try {
+            addon = await insertAddon(db, {
+                coachId: ctx.coachId,
+                moduleKey: key,
+                source: 'self_service',
+                priceClpMensual: getAddonMonthlyPriceClp(key),
+                termsVersion,
+                firstChargedAt: paidAt, // one-shot ya cobrado: compromiso mínimo cubierto
+            })
+        } catch (err) {
+            // Carrera confirm-addon <-> webhook: la fila se creó entremedio (índice único parcial)
+            // -> re-leer la fila viva en vez de propagar la violación (evita un 500 espurio).
+            const msg = err instanceof Error ? err.message : String(err)
+            if (!/one_live_per_module|duplicate key|unique constraint/i.test(msg)) throw err
+            addon = (await listLive(db, ctx.coachId)).find(
+                (a) => a.moduleKey === key && a.source === 'self_service'
+            )
+            if (!addon) throw err
+        }
+    }
     const live = await listLive(db, ctx.coachId)
     const newCompositeAmountClp = getCompositeAmountClp(ctx.tier, ctx.cycle, toBillableAddons(live))
     // PUT: suma el add-on al monto del preapproval DESDE la renovación.

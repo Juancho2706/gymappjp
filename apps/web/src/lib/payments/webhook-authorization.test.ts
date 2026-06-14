@@ -102,4 +102,40 @@ describe('verifyMercadoPagoSignatureIfConfigured', () => {
         })
         expect(verifyMercadoPagoSignatureIfConfigured(r, '100')).toBe(false)
     })
+
+    // ── P0-D: MP lowercases the alphanumeric data.id before signing the manifest ──────────
+    it('lowercases an alphanumeric data.id in the manifest (P0-D)', () => {
+        vi.stubEnv('MERCADOPAGO_WEBHOOK_SIGNING_SECRET', 'shh')
+        const dataId = 'AbC123XyZ' // alphanumeric, mixed-case
+        const ts = '1700000000'
+        const requestId = 'req-xyz'
+        // MP signs the LOWERCASED id; the verifier must rebuild the manifest with .toLowerCase().
+        const manifest = `id:${dataId.toLowerCase()};request-id:${requestId};ts:${ts};`
+        const v1 = createHmac('sha256', 'shh').update(manifest).digest('hex')
+        const r = new Request('https://example.com/webhook', {
+            headers: {
+                'x-signature': `ts=${ts},v1=${v1}`,
+                'x-request-id': requestId,
+            },
+        })
+        // Passing the ORIGINAL (mixed-case) id must still verify, because the manifest is lowercased.
+        expect(verifyMercadoPagoSignatureIfConfigured(r, dataId)).toBe(true)
+    })
+
+    it('rejects a manifest built from the RAW (mixed-case) alphanumeric data.id', () => {
+        vi.stubEnv('MERCADOPAGO_WEBHOOK_SIGNING_SECRET', 'shh')
+        const dataId = 'AbC123XyZ'
+        const ts = '1700000000'
+        const requestId = 'req-xyz'
+        // A v1 computed over the RAW (NOT lowercased) id must FAIL — proves the verifier lowercases.
+        const rawManifest = `id:${dataId};request-id:${requestId};ts:${ts};`
+        const v1Raw = createHmac('sha256', 'shh').update(rawManifest).digest('hex')
+        const r = new Request('https://example.com/webhook', {
+            headers: {
+                'x-signature': `ts=${ts},v1=${v1Raw}`,
+                'x-request-id': requestId,
+            },
+        })
+        expect(verifyMercadoPagoSignatureIfConfigured(r, dataId)).toBe(false)
+    })
 })

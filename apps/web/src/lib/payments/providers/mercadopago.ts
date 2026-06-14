@@ -9,6 +9,7 @@ import type {
     OneShotAddonRef,
     PaymentsProvider,
     ProviderCheckoutSnapshot,
+    ProviderPaymentSnapshot,
     WebhookProcessResult,
 } from '@/lib/payments/types'
 
@@ -27,7 +28,7 @@ const MODULE_KEY_SET = new Set<string>(MODULE_KEYS)
  * (que arranca con el uuid del coach) → el parser de suscripción no lo confunde. Devuelve null
  * si no coincide el formato o la clave de módulo no es válida.
  */
-function parseOneShotAddonReference(reference?: string | null): OneShotAddonRef | null {
+export function parseOneShotAddonReference(reference?: string | null): OneShotAddonRef | null {
     if (!reference) return null
     const parts = reference.split('|')
     if (parts[0]?.trim() !== 'addon_oneshot') return null
@@ -290,6 +291,22 @@ export class MercadoPagoProvider implements PaymentsProvider {
         const encoded = encodeURIComponent(checkoutId)
         const preapproval = (await mpRequest(`/preapproval/${encoded}`)) as Record<string, unknown>
         return toSnapshot(preapproval, checkoutId)
+    }
+
+    /**
+     * GET /v1/payments/{id}: estado actual de un pago one-shot. Lo usa `confirm-addon` (camino
+     * síncrono del add-on prorrateado) para materializar la fila al volver del checkout, sin
+     * depender del webhook (que sigue como backstop e idempotente). El `external_reference` trae
+     * el reference dedicado `addon_oneshot|coachId|moduleKey|termsVersion`.
+     */
+    async fetchPaymentSnapshot(paymentId: string): Promise<ProviderPaymentSnapshot> {
+        const encoded = encodeURIComponent(paymentId)
+        const payment = (await mpRequest(`/v1/payments/${encoded}`)) as Record<string, unknown>
+        return {
+            id: String(payment.id ?? paymentId),
+            status: (payment.status as string | null | undefined) ?? null,
+            external_reference: (payment.external_reference as string | null | undefined) ?? null,
+        }
     }
 
     async cancelCheckoutAtProvider(checkoutId: string): Promise<void> {

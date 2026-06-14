@@ -6,8 +6,11 @@ import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 import { rateLimitPayment, jsonRateLimited } from '@/lib/rate-limit'
 import { MODULE_KEYS } from '@/services/entitlements.service'
-import { ADDON_PAYMENT_RULES } from '@/lib/constants'
+import { ADDON_PAYMENT_RULES, SELF_SERVICE_ADDONS_ENABLED } from '@/lib/constants'
 import { activateAddonForCoach, canPurchaseAddon } from '@/services/billing/addons.service'
+import { listLive } from '@/infrastructure/db/coach-addons.repository'
+import { getPaymentsProvider } from '@/lib/payments/provider'
+import { parseCheckoutExternalReference } from '@/lib/payments/checkout-external-reference'
 import { buildAddonPaymentsPort } from './_lib/payments-port'
 import { buildActivateContext, fetchCoachBillingRow } from './_lib/coach-context'
 
@@ -56,6 +59,12 @@ export async function POST(request: Request) {
 
         if (!user?.id || !user.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        // El switch de lanzamiento gatea la RUTA, no solo la UI: sin esto el endpoint de compra era
+        // alcanzable por API aun con el flag off (modulo "tomable" sin pasar por el lanzamiento).
+        if (!SELF_SERVICE_ADDONS_ENABLED) {
+            return NextResponse.json({ error: 'Función no disponible.', code: 'FEATURE_DISABLED' }, { status: 403 })
         }
 
         const rl = await rateLimitPayment(user.id)
@@ -108,6 +117,67 @@ export async function POST(request: Request) {
             )
         }
 
+        // ── Guard P0-A (i): el coach YA tiene una fila viva de este módulo ──────────────────
+        // El one-shot NO inserta fila en el alta (la crean el webhook/confirm al aprobarse), así que
+        // el índice único parcial no dispara hasta entonces; sin este check, re-comprar un módulo ya
+        // activo cobraría una 2ª proración. Cubre cualquier source (self_service o admin_grant).
+        const liveAddons = await listLive(admin, user.id)
+        if (liveAddons.some((a) => a.moduleKey === moduleKey)) {
+            return NextResponse.json(
+                { error: 'Ya tienes este módulo activo.', code: 'ALREADY_ACTIVE' },
+                { status: 409 }
+            )
+        }
+
+        // ── Guard P0-A: doble cobro entre las dos superficies de add-on ─────────────────────
+        // El one-shot prorrateado de ESTE endpoint y el combo de create-preference (que embebe el
+        // módulo en un preapproval compuesto nuevo) no se reconcilian: comprar el mismo módulo por
+        // ambos lo cobra DOS veces. El índice único parcial bloquea filas duplicadas, no plata
+        // duplicada. Bloqueo:
+        //   (i)  fila viva ya existe → lo cubre isAlreadyActiveError/409 (más abajo).
+        //   (ii) el módulo YA viaja en el preapproval recurrente vigente del coach (combo ya pagado),
+        //        o hay un cambio de plan en vuelo (superseded_*) que puede embeberlo → 409 ALREADY_BILLED.
+        // Fail-open SOLO si el fetch del snapshot lanza (no bloqueamos por error del provider); pero
+        // SÍ bloqueamos ante un embed confirmado.
+        const { data: scopeRow } = await admin
+            .from('coaches')
+            .select('superseded_mp_preapproval_id')
+            .eq('id', user.id)
+            .maybeSingle()
+        if (scopeRow?.superseded_mp_preapproval_id) {
+            return NextResponse.json(
+                {
+                    error: 'Ese modulo ya esta incluido en tu plan o en un cambio en curso.',
+                    code: 'ALREADY_BILLED',
+                },
+                { status: 409 }
+            )
+        }
+        if (coach.subscription_mp_id) {
+            try {
+                const provider = getPaymentsProvider()
+                const snapshot = await provider.fetchCheckoutSnapshot(coach.subscription_mp_id)
+                const embedded = parseCheckoutExternalReference(snapshot.external_reference ?? null)
+                if (embedded?.addons.includes(moduleKey)) {
+                    return NextResponse.json(
+                        {
+                            error: 'Ese modulo ya esta incluido en tu plan o en un cambio en curso.',
+                            code: 'ALREADY_BILLED',
+                        },
+                        { status: 409 }
+                    )
+                }
+            } catch (snapshotErr) {
+                // Error del provider: fail-open (no bloqueamos la compra por un fallo de red/MP).
+                const msg = snapshotErr instanceof Error ? snapshotErr.message : String(snapshotErr)
+                console.warn('[payments.addons] no se pudo leer el preapproval para el guard P0-A', {
+                    coachId: user.id,
+                    moduleKey,
+                    message: msg,
+                })
+            }
+        }
+
         // URLs del one-shot (back_urls + webhook) desde NEXT_PUBLIC_SITE_URL — mismo patrón que
         // create-preference. MP exige back_urls.success cuando se manda auto_return.
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
@@ -116,8 +186,11 @@ export async function POST(request: Request) {
             ? `${appUrl}/api/payments/webhook?token=${webhookToken}`
             : `${appUrl}/api/payments/webhook`
         // buildActivateContext normaliza el ciclo y deriva el corte para el prorrateo del service.
+        // success → pantalla de procesamiento síncrono (confirm-addon): MP auto-agrega
+        // payment_id/collection_id/status al volver. Ya no es un landing no-op: la pantalla
+        // confirma el pago sin esperar el webhook (que sigue como backstop idempotente).
         const ctx = buildActivateContext(coach, user.email, {
-            successUrl: `${appUrl}/coach/subscription?addon=success`,
+            successUrl: `${appUrl}/coach/subscription/addon-processing`,
             failureUrl: `${appUrl}/coach/subscription?addon=failure`,
             pendingUrl: `${appUrl}/coach/subscription?addon=pending`,
             webhookUrl,
