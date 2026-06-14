@@ -606,6 +606,11 @@ export default function CoachSubscriptionPage() {
                 </section>
             ) : null}
 
+            {/* Gateado en `coach` cargado: sin esto la sección renderiza con coachTier='starter'
+                default (coach=null) y los bloqueos (cupo/nutrición) no aplican → Starter clickeable
+                unos segundos hasta que carga subscription-status. coach se setea junto a addons +
+                activeClientCount en el mismo fetch → al aparecer la sección, la data está completa. */}
+            {coach && (
             <section className="mt-6 rounded-2xl border border-border bg-card p-5 space-y-5">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                     <h2 className="text-lg font-semibold text-foreground">Cambiar plan</h2>
@@ -825,6 +830,7 @@ export default function CoachSubscriptionPage() {
                     </button>
                 </div>
             </section>
+            )}
 
             {/* Upgrade confirmation modal */}
             {showUpgradeConfirm && (
