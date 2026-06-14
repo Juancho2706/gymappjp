@@ -318,6 +318,18 @@ export class MercadoPagoProvider implements PaymentsProvider {
                   ? payment.date_created
                   : null
 
+        // Fallback de refund/chargeback (P1-1): una notificación de refund de MP a veces OMITE el
+        // external_reference → sin coachId el webhook retorna antes y el refund se PIERDE en silencio.
+        // Exponemos el id del preapproval (de metadata.preapproval_id o, defensivamente, del campo
+        // top-level) para que el webhook recupere al coach por subscription_mp_id. payment.metadata
+        // puede venir undefined → guardas de tipo en cada acceso.
+        const preapprovalId =
+            (typeof payment.metadata?.preapproval_id === 'string'
+                ? payment.metadata.preapproval_id
+                : null) ??
+            (typeof payment.preapproval_id === 'string' ? payment.preapproval_id : null) ??
+            null
+
         return {
             accepted: true,
             eventId,
@@ -333,6 +345,7 @@ export class MercadoPagoProvider implements PaymentsProvider {
             addons: parsed?.addons ?? [],
             oneShotAddon,
             tierUpgrade,
+            preapprovalId,
         }
     }
 

@@ -108,6 +108,35 @@ async function handleWebhook(request: Request, rawBody: string) {
     }
 
     if (!result.coachId) {
+        // P1-1 fallback (money-safety): una notificación de REFUND/CHARGEBACK de MP a veces OMITE el
+        // external_reference → no hay coachId y este early-return descartaría el refund en silencio
+        // (el coach queda activo, sin fila de auditoría). Recuperamos al coach por el preapproval id
+        // expuesto en el pago (metadata.preapproval_id) matcheando subscription_mp_id, y si existe lo
+        // tratamos como coachId efectivo para CONTINUAR el flujo normal (FIX-7 corre el refund). Si no
+        // hay match, seguimos al early-return de siempre. FIX-7 es inalterado e idempotente.
+        if (
+            result.eventKind === 'payment' &&
+            (result.providerStatus === 'refunded' || result.providerStatus === 'charged_back') &&
+            result.preapprovalId
+        ) {
+            const { data: byPreapproval } = await admin
+                .from('coaches')
+                .select('id')
+                .eq('subscription_mp_id', result.preapprovalId)
+                .maybeSingle()
+            if (byPreapproval) {
+                console.info('[payments.webhook] refund recovered coach by preapproval id', {
+                    traceId,
+                    coachId: byPreapproval.id,
+                    preapprovalId: result.preapprovalId,
+                    providerStatus: result.providerStatus,
+                })
+                result.coachId = byPreapproval.id
+            }
+        }
+    }
+
+    if (!result.coachId) {
         console.info('[payments.webhook] accepted without coachId', {
             traceId,
             eventId: result.eventId ?? null,

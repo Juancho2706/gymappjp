@@ -229,6 +229,14 @@ export default function CoachSubscriptionPage() {
                             `Ese plan permite hasta ${payload.maxClients ?? '—'} alumnos y tienes ${payload.activeClients ?? activeClientCount}. Archiva alumnos antes de bajar de plan.`
                     )
                 }
+                // 409 NUTRITION_ADDON_ON_DOWNGRADE: el server bloquea bajar a un tier sin nutrición
+                // mientras haya un add-on de nutrición vivo. Mostramos su mensaje en el banner.
+                if (payload.code === 'NUTRITION_ADDON_ON_DOWNGRADE') {
+                    throw new Error(
+                        payload.error ??
+                            'Quita el modulo de Nutricion por intercambios antes de bajar a este plan.'
+                    )
+                }
                 throw new Error(payload.error ?? 'No se pudo iniciar el cambio de plan')
             }
             if (!payload.checkoutUrl) throw new Error('No se recibió URL de checkout')
@@ -283,6 +291,11 @@ export default function CoachSubscriptionPage() {
     const hasActivePaidPlan =
         coachTier !== 'free' &&
         (coach?.subscription_status === 'active' || coach?.subscription_status === 'trialing')
+    // P1-3: ¿el coach tiene un add-on de nutrición por intercambios VIVO? Bloquea bajar a un tier
+    // sin nutrición (Starter) hasta quitarlo — espejo del 409 NUTRITION_ADDON_ON_DOWNGRADE del server.
+    const hasLiveNutrition = addons.some(
+        (a) => a.moduleKey === 'nutrition_exchanges' && (a.status === 'active' || a.status === 'cancel_pending')
+    )
     // No-op: el tier y ciclo elegidos son idénticos al plan actual → no hay nada que cobrar ni
     // cambiar. Deshabilita "Continuar" (si llegara al server, devuelve 400/no-op igualmente).
     const isNoOpChange = selectedTier === coachTier && selectedCycle === coachCycle
@@ -638,33 +651,42 @@ export default function CoachSubscriptionPage() {
                         const wouldExceed =
                             comparePlanDirection(coachTier, tier) === 'downgrade' &&
                             tierMaxClients < activeClientCount
-                        const exceedTooltip = wouldExceed
+                        // P1-3: bajar a un tier sin nutrición (Starter) con un add-on de nutrición vivo.
+                        // Se bloquea (mismo guard que el 409 NUTRITION_ADDON_ON_DOWNGRADE del server).
+                        const nutritionBlocks =
+                            comparePlanDirection(coachTier, tier) === 'downgrade' &&
+                            !getTierCapabilities(tier).canUseNutrition &&
+                            hasLiveNutrition
+                        const isBlocked = wouldExceed || nutritionBlocks
+                        const blockTooltip = wouldExceed
                             ? `Este plan permite hasta ${tierMaxClients} alumnos y tienes ${activeClientCount} activos. Archiva alumnos para poder bajar a este plan.`
+                            : nutritionBlocks
+                            ? 'Quita el modulo de Nutricion para bajar a este plan.'
                             : undefined
                         return (
                             <button
                                 key={tier}
                                 type="button"
-                                disabled={wouldExceed}
-                                aria-disabled={wouldExceed}
-                                title={exceedTooltip}
-                                onClick={() => { if (!wouldExceed) setSelectedTier(tier) }}
+                                disabled={isBlocked}
+                                aria-disabled={isBlocked}
+                                title={blockTooltip}
+                                onClick={() => { if (!isBlocked) setSelectedTier(tier) }}
                                 className={`relative rounded-2xl border p-4 text-left transition-all ${
-                                    wouldExceed
+                                    isBlocked
                                         ? 'cursor-not-allowed border-border opacity-50'
                                         : isSelected
                                         ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30'
                                         : 'border-border hover:border-border/80 hover:bg-secondary/30'
                                 }`}
                             >
-                                {badge && !wouldExceed && (
+                                {badge && !isBlocked && (
                                     <span className={`absolute right-3 top-3 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${badge.cls}`}>
                                         {badge.label}
                                     </span>
                                 )}
-                                {wouldExceed && (
+                                {isBlocked && (
                                     <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                                        <Lock className="h-3 w-3" /> Sin cupo
+                                        <Lock className="h-3 w-3" /> {wouldExceed ? 'Sin cupo' : 'Nutrición'}
                                     </span>
                                 )}
 

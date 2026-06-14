@@ -37,6 +37,9 @@ const auditLogInserts: Array<Record<string, unknown>> = []
 // billing_snapshots upserts deduped by provider_payment_id (tier_upgrade_proration path).
 const billingSnapshots = new Map<string, Record<string, unknown>>()
 let coachRow: Record<string, unknown> | null
+// P1-1 fallback: coach recovered by `subscription_mp_id === preapprovalId` when the refund
+// notification omitted external_reference. Keyed by the preapproval id the route looks up.
+const coachByPreapproval = new Map<string, { id: string }>()
 
 const getUserById = vi.fn(async () => ({ data: { user: { email: 'juan@evatest.cl' } } }))
 
@@ -63,8 +66,17 @@ function makeAdmin() {
             }
             if (table === 'coaches') {
                 return {
+                    // Column-aware: the P1-1 fallback selects `id` by `subscription_mp_id` (coach
+                    // recovered from the preapproval id) — served from `coachByPreapproval`; every
+                    // other lookup (the main flow's `.eq('id', coachId)`) returns the full `coachRow`.
                     select: vi.fn(() => ({
-                        eq: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: coachRow, error: null })) })),
+                        eq: vi.fn((col: string, value: string) => ({
+                            maybeSingle: vi.fn(async () =>
+                                col === 'subscription_mp_id'
+                                    ? { data: coachByPreapproval.get(value) ?? null, error: null }
+                                    : { data: coachRow, error: null }
+                            ),
+                        })),
                     })),
                     update: vi.fn((patch: Record<string, unknown>) => {
                         coachUpdates.push(patch)
@@ -177,6 +189,7 @@ beforeEach(() => {
     vi.clearAllMocks()
     subscriptionEvents.clear()
     billingSnapshots.clear()
+    coachByPreapproval.clear()
     coachUpdates.length = 0
     auditLogInserts.length = 0
     fakeAdmin = makeAdmin()
@@ -345,6 +358,119 @@ describe('POST /api/payments/webhook — FIX-7: refund/chargeback handler', () =
             (r) => r.action === 'coach.payment_refunded_or_chargeback'
         ).length
         expect(secondAuditCount).toBe(1)
+    })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────────────
+// P1-1: REFUND FALLBACK by preapproval id (money-safety). MP sometimes OMITS external_reference
+// on a refund/chargeback PAYMENT notification → processWebhook yields NO coachId. Before the fix
+// the route returned at 'accepted without coachId' and the refund was SILENTLY MISSED (coach stays
+// active, no audit row). Now: if eventKind='payment' + status refunded/charged_back + preapprovalId,
+// the route recovers the coach by `subscription_mp_id === preapprovalId` and CONTINUES into FIX-7.
+// ─────────────────────────────────────────────────────────────────────────────────────
+describe('POST /api/payments/webhook — P1-1: refund fallback by preapproval id (no external_reference)', () => {
+    // A refund PAYMENT with NO coachId (external_reference dropped) but a metadata.preapproval_id.
+    function refundNoCoachId(providerStatus: string, preapprovalId: string | null) {
+        return {
+            accepted: true,
+            // coachId ABSENT (external_reference omitted by MP) — this is the whole point of the fix.
+            coachId: undefined,
+            eventKind: 'payment' as const,
+            providerStatus, // refunded | charged_back
+            providerPaymentId: 'pay-refund-fallback-1',
+            paidAt: '2026-06-13T12:00:00.000Z',
+            providerCheckoutId: 'order-777', // order id ≠ preapproval id (recurring payment shape)
+            oneShotAddon: null,
+            preapprovalId, // metadata.preapproval_id surfaced by processWebhook (P1-1)
+        }
+    }
+
+    it("refunded sin coachId pero con preapproval_id que matchea subscription_mp_id → recupera al coach y CORRE FIX-7 (cancela add-ons, bloquea, audita)", async () => {
+        // El preapproval del pago apunta al mp_id del coach → el fallback lo recupera.
+        coachByPreapproval.set('preapproval-1', { id: 'coach-1' })
+        coachRow = { ...PAID_COACH } // subscription_mp_id: 'preapproval-1'
+        cancelAllForCoach.mockResolvedValue(2)
+        processWebhook.mockResolvedValue(refundNoCoachId('refunded', 'preapproval-1'))
+
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+
+        // (a) add-ons cancelados para el coach recuperado
+        expect(cancelAllForCoach).toHaveBeenCalledOnce()
+        expect(cancelAllForCoach.mock.calls[0][1]).toBe('coach-1')
+
+        // (b) coach bloqueado (status='expired')
+        expect(coachUpdates.find((p) => p.subscription_status === 'expired')).toBeTruthy()
+
+        // (c) fila de auditoría con la acción + el provider_payment_id
+        const audit = auditLogInserts.find(
+            (r) => r.action === 'coach.payment_refunded_or_chargeback'
+        )
+        expect(audit).toBeTruthy()
+        expect(audit!.target_id).toBe('coach-1')
+        expect((audit!.payload as Record<string, unknown>).provider_payment_id).toBe(
+            'pay-refund-fallback-1'
+        )
+    })
+
+    it("charged_back sin coachId pero con preapproval_id matcheable → mismo fallback + FIX-7", async () => {
+        coachByPreapproval.set('preapproval-1', { id: 'coach-1' })
+        coachRow = { ...PAID_COACH }
+        cancelAllForCoach.mockResolvedValue(1)
+        processWebhook.mockResolvedValue(refundNoCoachId('charged_back', 'preapproval-1'))
+
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        expect(cancelAllForCoach).toHaveBeenCalledOnce()
+        expect(coachUpdates.find((p) => p.subscription_status === 'expired')).toBeTruthy()
+        expect(
+            auditLogInserts.find((r) => r.action === 'coach.payment_refunded_or_chargeback')
+        ).toBeTruthy()
+    })
+
+    it("refunded con preapproval_id que NO matchea ningún coach → early return, CERO mutaciones", async () => {
+        // El preapproval del pago no existe en coaches → el fallback no recupera coachId.
+        // (coachByPreapproval vacío)
+        processWebhook.mockResolvedValue(refundNoCoachId('refunded', 'preapproval-DESCONOCIDO'))
+
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        // Nada: ni cancelación, ni bloqueo, ni auditoría (el refund queda sin coach al que aplicar).
+        expect(cancelAllForCoach).not.toHaveBeenCalled()
+        expect(coachUpdates.find((p) => p.subscription_status === 'expired')).toBeFalsy()
+        expect(
+            auditLogInserts.find((r) => r.action === 'coach.payment_refunded_or_chargeback')
+        ).toBeFalsy()
+    })
+
+    it("refunded SIN coachId y SIN preapprovalId → el fallback ni se intenta: early return, CERO mutaciones", async () => {
+        processWebhook.mockResolvedValue(refundNoCoachId('refunded', null))
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        expect(cancelAllForCoach).not.toHaveBeenCalled()
+        expect(coachUpdates.find((p) => p.subscription_status === 'expired')).toBeFalsy()
+        expect(
+            auditLogInserts.find((r) => r.action === 'coach.payment_refunded_or_chargeback')
+        ).toBeFalsy()
+    })
+
+    it("un PAGO APROBADO (no refund) sin coachId pero con preapproval_id → el fallback NO aplica (solo refund/chargeback)", async () => {
+        // El fallback solo recupera coach para refunded/charged_back: un approved sin coachId NO debe
+        // recuperar al coach por preapproval (no es el caso de money-safety que motiva el fallback).
+        coachByPreapproval.set('preapproval-1', { id: 'coach-1' })
+        coachRow = { ...PAID_COACH }
+        processWebhook.mockResolvedValue({
+            ...refundNoCoachId('approved', 'preapproval-1'),
+            providerPaymentId: 'pay-ok-no-coach',
+        })
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        // Ni se intentó cancelar/auditar: el approved sin coachId cae al early-return de siempre.
+        expect(cancelAllForCoach).not.toHaveBeenCalled()
+        expect(
+            auditLogInserts.find((r) => r.action === 'coach.payment_refunded_or_chargeback')
+        ).toBeFalsy()
+        expect(coachUpdates.find((p) => p.subscription_status === 'expired')).toBeFalsy()
     })
 })
 

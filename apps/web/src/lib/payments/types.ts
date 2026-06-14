@@ -107,6 +107,13 @@ export type WebhookProcessResult = {
      * de tier+max_clients+cycle + PUT al nuevo compuesto) y escribe el `billing_snapshot`.
      */
     tierUpgrade?: TierUpgradeRef | null
+    /**
+     * id del preapproval extraído del pago (`metadata.preapproval_id` o campo top-level). Fallback de
+     * refund/chargeback (P1-1): cuando una notificación de refund OMITE el external_reference no hay
+     * coachId; el webhook recupera al coach por `subscription_mp_id === preapprovalId` para no perder
+     * el refund en silencio. Null si el pago no expone preapproval.
+     */
+    preapprovalId?: string | null
 }
 
 /** Normalized preapproval / recurring checkout snapshot (Mercado Pago preapproval shape). */

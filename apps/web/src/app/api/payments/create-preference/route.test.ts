@@ -84,6 +84,7 @@ import {
     getTierUpgradeProrationClp,
 } from '@/services/billing/addons.service'
 import { buildTierUpgradeExternalReference } from '@/lib/payments/providers/mercadopago'
+import { TIER_CONFIG } from '@/lib/constants'
 
 function makeRequest(body: unknown): Request {
     return new Request('http://localhost/api/payments/create-preference', {
@@ -271,6 +272,94 @@ describe('POST /api/payments/create-preference — DOWNGRADE sobre capacidad (OV
         expect(createCheckout).not.toHaveBeenCalled()
         expect(createOneShotPayment).not.toHaveBeenCalled()
         expect(lastUpdatePayload()).toBeUndefined()
+    })
+})
+
+// ════════════════════════════════════════════════════════════════════════════════════
+// P1-3: BLOQUEAR el downgrade a un tier SIN nutrición mientras un add-on de nutrición por
+// intercambios está VIVO (decisión owner = BLOCK). Espejo del guard OVER_CAPACITY: el coach
+// debe quitar el módulo antes de bajar a Starter. starter/free → canUseNutrition=false; pro/elite
+// → true. Detección vía listLive(admin, user.id) buscando moduleKey==='nutrition_exchanges'.
+// ════════════════════════════════════════════════════════════════════════════════════
+function liveNutritionAddon(status: 'active' | 'cancel_pending' = 'active', source: 'self_service' | 'admin_grant' = 'self_service') {
+    // listLive ya devuelve solo filas vivas (active/cancel_pending); el route solo mira moduleKey.
+    return {
+        id: 'addon-nut-1',
+        coachId: 'coach-1',
+        moduleKey: 'nutrition_exchanges' as const,
+        status,
+        source,
+        priceClpMensual: 9990,
+        termsVersion: 'v2-2026-06',
+        termsAcceptedAt: '2026-06-01T00:00:00.000Z',
+        activatedAt: '2026-06-01T00:00:00.000Z',
+        firstChargedAt: '2026-06-01T00:00:00.000Z',
+        cancelRequestedAt: null,
+        expiresAt: null,
+        cancelledAt: null,
+        createdAt: '2026-06-01T00:00:00.000Z',
+        updatedAt: '2026-06-01T00:00:00.000Z',
+    }
+}
+
+describe('POST /api/payments/create-preference — DOWNGRADE con add-on de nutrición VIVO (NUTRITION_ADDON_ON_DOWNGRADE 409)', () => {
+    beforeEach(() => {
+        // Coach en pro (tiene nutrición) con add-on de nutrición vivo; bajar a starter (sin nutrición).
+        currentCoachMaybeSingle.mockResolvedValue({ data: ACTIVE_PRO_COACH, error: null })
+        // Bajo capacidad: el OVER_CAPACITY no aplica, aislamos el guard de nutrición.
+        countActiveStandaloneClients.mockResolvedValue(0)
+    })
+
+    it('pro→starter con nutrición viva: 409 NUTRITION_ADDON_ON_DOWNGRADE y CERO efectos', async () => {
+        listLive.mockResolvedValue([liveNutritionAddon('active')])
+        const res = await POST(makeRequest({ tier: 'starter', billingCycle: 'monthly' }))
+        expect(res.status).toBe(409)
+        const json = await res.json()
+        expect(json.code).toBe('NUTRITION_ADDON_ON_DOWNGRADE')
+        expect(typeof json.error).toBe('string')
+        // El copy menciona el plan destino (label de Starter).
+        expect(json.error).toContain(TIER_CONFIG.starter.label)
+        // CERO efectos colaterales: ni checkout, ni one-shot, ni UPDATE del coach.
+        expect(createCheckout).not.toHaveBeenCalled()
+        expect(createOneShotPayment).not.toHaveBeenCalled()
+        expect(lastUpdatePayload()).toBeUndefined()
+    })
+
+    it('add-on de nutrición en cancel_pending (aún vivo) también bloquea (listLive lo incluye)', async () => {
+        listLive.mockResolvedValue([liveNutritionAddon('cancel_pending')])
+        const res = await POST(makeRequest({ tier: 'starter', billingCycle: 'monthly' }))
+        expect(res.status).toBe(409)
+        expect((await res.json()).code).toBe('NUTRITION_ADDON_ON_DOWNGRADE')
+        expect(createCheckout).not.toHaveBeenCalled()
+    })
+
+    it('cortesía del CEO (admin_grant) de nutrición viva también bloquea el downgrade', async () => {
+        listLive.mockResolvedValue([liveNutritionAddon('active', 'admin_grant')])
+        const res = await POST(makeRequest({ tier: 'starter', billingCycle: 'monthly' }))
+        expect(res.status).toBe(409)
+        expect((await res.json()).code).toBe('NUTRITION_ADDON_ON_DOWNGRADE')
+    })
+
+    it('pro→starter SIN add-on de nutrición vivo: NO bloquea por esta regla (procede el downgrade al corte)', async () => {
+        listLive.mockResolvedValue([]) // ningún add-on vivo
+        const res = await POST(makeRequest({ tier: 'starter', billingCycle: 'monthly' }))
+        expect(res.status).toBe(200)
+        // El downgrade a starter procede: preapproval nuevo al corte (no es upgrade → sin one-shot).
+        expect(createCheckout).toHaveBeenCalledOnce()
+        expect(createOneShotPayment).not.toHaveBeenCalled()
+    })
+
+    it('downgrade a un tier QUE SÍ tiene nutrición (elite→pro) NO lo bloquea esta regla, aunque haya add-on vivo', async () => {
+        // Coach en elite con add-on de nutrición vivo, baja a pro (pro tiene nutrición → canUseNutrition).
+        currentCoachMaybeSingle.mockResolvedValue({
+            data: { ...ACTIVE_PRO_COACH, subscription_tier: 'elite' },
+            error: null,
+        })
+        listLive.mockResolvedValue([liveNutritionAddon('active')])
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly' }))
+        expect(res.status).toBe(200)
+        expect(createCheckout).toHaveBeenCalledOnce()
+        expect(createOneShotPayment).not.toHaveBeenCalled()
     })
 })
 
