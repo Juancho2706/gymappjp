@@ -34,6 +34,8 @@ type EventRow = { provider_event_id: string; [k: string]: unknown }
 const subscriptionEvents = new Map<string, EventRow>()
 const coachUpdates: Array<Record<string, unknown>> = []
 const auditLogInserts: Array<Record<string, unknown>> = []
+// billing_snapshots upserts deduped by provider_payment_id (tier_upgrade_proration path).
+const billingSnapshots = new Map<string, Record<string, unknown>>()
 let coachRow: Record<string, unknown> | null
 
 const getUserById = vi.fn(async () => ({ data: { user: { email: 'juan@evatest.cl' } } }))
@@ -72,6 +74,22 @@ function makeAdmin() {
             }
             if (table === 'admin_audit_logs') {
                 return { insert: vi.fn(async (row: Record<string, unknown>) => { auditLogInserts.push(row); return { error: null } }) }
+            }
+            if (table === 'billing_snapshots') {
+                // Espeja el CHECK billing_snapshots_kind_check de la DB: un kind fuera del allowlist
+                // devuelve error (antes el mock lo aceptaba → enmascaraba el 23514 de prod).
+                const ALLOWED_SNAPSHOT_KINDS = new Set(['recurring', 'addon_proration', 'tier_upgrade_proration'])
+                return {
+                    upsert: vi.fn(async (row: Record<string, unknown>) => {
+                        if (!ALLOWED_SNAPSHOT_KINDS.has(String(row.kind))) {
+                            return { error: { message: `billing_snapshots_kind_check: ${String(row.kind)}` } }
+                        }
+                        // dedup por provider_payment_id (ignoreDuplicates en el route).
+                        const key = String(row.provider_payment_id)
+                        if (!billingSnapshots.has(key)) billingSnapshots.set(key, row)
+                        return { error: null }
+                    }),
+                }
             }
             return { select: vi.fn(), update: vi.fn(), insert: vi.fn(async () => ({ error: null })), upsert: vi.fn(async () => ({ error: null })) }
         }),
@@ -158,6 +176,7 @@ const PAID_COACH = {
 beforeEach(() => {
     vi.clearAllMocks()
     subscriptionEvents.clear()
+    billingSnapshots.clear()
     coachUpdates.length = 0
     auditLogInserts.length = 0
     fakeAdmin = makeAdmin()
@@ -326,5 +345,99 @@ describe('POST /api/payments/webhook — FIX-7: refund/chargeback handler', () =
             (r) => r.action === 'coach.payment_refunded_or_chargeback'
         ).length
         expect(secondAuditCount).toBe(1)
+    })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────────────
+// tier-upgrade one-shot (plan estrategia 06, C4): backstop idempotente de confirm-upgrade.
+// El webhook corre la MISMA activación rank-guarded (tier+max_clients+cycle) + PUT al nuevo
+// compuesto y escribe el snapshot kind='tier_upgrade_proration' deduped por provider_payment_id.
+// Seguro en cualquier orden respecto a confirm-upgrade (ambos rank-guarded + snapshot/event dedup).
+// ─────────────────────────────────────────────────────────────────────────────────────
+describe('POST /api/payments/webhook — tier-upgrade one-shot (idempotente con confirm-upgrade)', () => {
+    function tierUpgradeResult() {
+        return {
+            accepted: true,
+            coachId: 'coach-1',
+            eventKind: 'payment' as const,
+            providerStatus: 'approved',
+            providerPaymentId: 'pay-upg-1',
+            paidAt: '2026-06-13T12:00:00.000Z',
+            tierUpgrade: { coachId: 'coach-1', newTier: 'elite' as const, cycle: 'monthly' as const },
+            oneShotAddon: null,
+        }
+    }
+
+    it('approved + rank menor (pro→elite): activa tier+max_clients+cycle, hace el PUT y escribe el snapshot', async () => {
+        coachRow = { ...PAID_COACH } // pro, mp_id presente
+        processWebhook.mockResolvedValue(tierUpgradeResult())
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+
+        // (a) activación rank-guarded: coaches.update al destino completo.
+        const activate = coachUpdates.find((p) => p.subscription_tier === 'elite')
+        expect(activate).toBeTruthy()
+        expect(activate!.max_clients).toBe(100) // elite
+        expect(activate!.billing_cycle).toBe('monthly')
+        expect(activate).not.toHaveProperty('subscription_status') // status intacto
+
+        // (b) PUT del preapproval al nuevo compuesto (sin cargo inmediato).
+        expect(updateCheckoutAmount).toHaveBeenCalledOnce()
+        expect(updateCheckoutAmount.mock.calls[0][0]).toBe('preapproval-1')
+
+        // (c) snapshot kind='tier_upgrade_proration' deduped por provider_payment_id.
+        const snap = billingSnapshots.get('pay-upg-1')
+        expect(snap).toBeTruthy()
+        expect(snap!.kind).toBe('tier_upgrade_proration')
+        expect(snap!.tier).toBe('elite')
+
+        // (d) evento de historial keyed `tier_upgrade:${paymentId}` (misma key que confirm-upgrade).
+        expect(subscriptionEvents.has('tier_upgrade:pay-upg-1')).toBe(true)
+    })
+
+    it('coach YA en elite (confirm-upgrade activó primero): rank-guard no-op del write, igual PUT + snapshot', async () => {
+        coachRow = { ...PAID_COACH, subscription_tier: 'elite' }
+        processWebhook.mockResolvedValue(tierUpgradeResult())
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        // Rank-guard: elite no es < elite → NO hay coaches.update que setee tier.
+        expect(coachUpdates.find((p) => p.subscription_tier === 'elite')).toBeFalsy()
+        // El PUT y el snapshot igual corren (idempotentes/determinísticos).
+        expect(updateCheckoutAmount).toHaveBeenCalledOnce()
+        expect(billingSnapshots.get('pay-upg-1')).toBeTruthy()
+    })
+
+    it('REDELIVERY (mismo notificationId) es idempotente: ni segunda activación ni snapshot duplicado', async () => {
+        coachRow = { ...PAID_COACH }
+        processWebhook.mockResolvedValue(tierUpgradeResult())
+        // 1ª entrega: activa + snapshot + escribe el marker keyed por notificationId.
+        await POST(makeRequest())
+        const updatesAfterFirst = coachUpdates.length
+        expect(billingSnapshots.size).toBe(1)
+
+        // 2ª entrega de la MISMA notificación → el dedup top-level corta antes de reprocesar.
+        const res2 = await POST(makeRequest())
+        expect(res2.status).toBe(200)
+        expect(coachUpdates.length).toBe(updatesAfterFirst) // sin segunda activación
+        expect(billingSnapshots.size).toBe(1) // snapshot deduped por provider_payment_id
+    })
+
+    it('pending → NO activa (tier intacto, cero PUT, cero snapshot)', async () => {
+        coachRow = { ...PAID_COACH }
+        processWebhook.mockResolvedValue({ ...tierUpgradeResult(), providerStatus: 'pending' })
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        expect(coachUpdates.find((p) => p.subscription_tier === 'elite')).toBeFalsy()
+        expect(updateCheckoutAmount).not.toHaveBeenCalled()
+        expect(billingSnapshots.size).toBe(0)
+    })
+
+    it('coach sin preapproval (mp_id null): no hay dónde aplicar el PUT → no activa ni hace PUT', async () => {
+        coachRow = { ...PAID_COACH, subscription_mp_id: null }
+        processWebhook.mockResolvedValue(tierUpgradeResult())
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        expect(updateCheckoutAmount).not.toHaveBeenCalled()
+        expect(coachUpdates.find((p) => p.subscription_tier === 'elite')).toBeFalsy()
     })
 })

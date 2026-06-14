@@ -5,6 +5,7 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import {
     ADDON_MONTHLY_PRICE_CLP,
     BILLING_CYCLE_CONFIG,
+    comparePlanDirection,
     getTierCapabilities,
     getTierMaxClients,
     isBillingCycleAllowedForTier,
@@ -13,6 +14,7 @@ import {
     type SubscriptionTier,
 } from '@/lib/constants'
 import { getPaymentsProvider } from '@/lib/payments/provider'
+import { buildTierUpgradeExternalReference } from '@/lib/payments/providers/mercadopago'
 import { rateLimitPayment, jsonRateLimited } from '@/lib/rate-limit'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
@@ -20,8 +22,10 @@ import { MODULE_KEYS, type ModuleKey } from '@/services/entitlements.service'
 import { listLive } from '@/infrastructure/db/coach-addons.repository'
 import {
     getCompositeAmountClp,
+    getTierUpgradeProrationClp,
     toBillableAddons,
 } from '@/services/billing/addons.service'
+import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
 import type { BillableAddon } from '@/domain/billing/types'
 
 // El checkout solo acepta los tiers EN VENTA (SALE_TIERS sin free): starter/pro/elite.
@@ -91,10 +95,12 @@ export async function POST(request: Request) {
                 { status: 400 }
             )
         }
-        // Check if this is a mid-cycle upgrade (coach already active)
+        // Check if this is a mid-cycle plan change (coach already active)
         const { data: currentCoach } = await supabase
             .from('coaches')
-            .select('subscription_status, subscription_tier, current_period_end, subscription_mp_id')
+            .select(
+                'subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id'
+            )
             .eq('id', user.id)
             .maybeSingle()
 
@@ -106,6 +112,14 @@ export async function POST(request: Request) {
             currentCoach?.subscription_status === 'active' &&
             currentCoach.current_period_end != null &&
             new Date(currentCoach.current_period_end).getTime() > Date.now()
+
+        // Dirección del cambio de plan respecto del tier vigente (TIER_RANK). Solo se ramifica
+        // cuando el coach es un suscriptor pago ACTIVO (isActiveUpgrade): para free→paid (primera
+        // compra) y reactivación (canceled/expired) el camino sigue siendo el preapproval compuesto
+        // completo de siempre — esos SÍ fijan tier+max_clients ahora.
+        const currentTier = (currentCoach?.subscription_tier ?? 'free') as SubscriptionTier
+        const currentCycle = (currentCoach?.billing_cycle ?? billingCycle) as BillingCycle
+        const direction = comparePlanDirection(currentTier, tier)
 
         // For mid-cycle upgrades, schedule the new plan to start at the end of the current period
         const upgradeStartDate = isActiveUpgrade ? currentCoach!.current_period_end! : undefined
@@ -122,6 +136,92 @@ export async function POST(request: Request) {
 
         // El UPDATE de columnas de billing + la lectura de add-ons facturables van por service-role.
         const admin = createServiceRoleClient()
+
+        const provider = getPaymentsProvider()
+        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+        const webhookToken = process.env.MERCADOPAGO_WEBHOOK_TOKEN
+        const webhookUrl = webhookToken
+            ? `${appUrl}/api/payments/webhook?token=${encodeURIComponent(webhookToken)}`
+            : `${appUrl}/api/payments/webhook`
+
+        // ── Cambio de plan de un suscriptor pago ACTIVO (plan estrategia 06 C1) ──────────────
+        // Solo se ramifica por dirección cuando el coach ya es un pago activo. free→paid y
+        // reactivación (canceled/expired) NO entran aquí: caen al camino compuesto completo de
+        // abajo, que SÍ fija tier+max_clients ahora (son altas legítimas, no cambios mid-cycle).
+        if (isActiveUpgrade) {
+            // UPGRADE: prorrateo inmediato de la DIFERENCIA de tier (one-shot). NO se crea un
+            // preapproval nuevo, NO se marca superseded, NO se muta el coach: el nuevo tier se
+            // activa al confirmar el pago (confirm-upgrade/webhook) y el preapproval pasa al
+            // compuesto completo DESDE la siguiente renovación. Cualquier otro camino = doble cobro.
+            if (direction === 'upgrade') {
+                const prorationClp = getTierUpgradeProrationClp(
+                    currentTier,
+                    tier,
+                    currentCycle,
+                    new Date(),
+                    new Date(currentCoach!.current_period_end!)
+                )
+                // El one-shot solo se construye con monto > 0 y dirección upgrade verificada
+                // (invariante del diseño): si no hay diferencia a cobrar, no hay nada que prorratear.
+                if (prorationClp <= 0) {
+                    return NextResponse.json(
+                        { error: 'El cambio de plan no tiene una diferencia a cobrar.' },
+                        { status: 400 }
+                    )
+                }
+                const upgradeQuery = `tier=${encodeURIComponent(tier)}&cycle=${encodeURIComponent(billingCycle)}`
+                const { checkoutUrl } = await provider.createOneShotPayment({
+                    coachId: user.id,
+                    coachEmail: user.email,
+                    amountClp: prorationClp,
+                    description: `Upgrade a ${TIER_CONFIG[tier].label} (diferencia prorrateada)`,
+                    externalReference: buildTierUpgradeExternalReference(user.id, tier, billingCycle),
+                    successUrl: `${appUrl}/coach/subscription/upgrade-processing?${upgradeQuery}`,
+                    failureUrl: `${appUrl}/coach/subscription?upgrade=failure`,
+                    pendingUrl: `${appUrl}/coach/subscription?upgrade=pending`,
+                    webhookUrl,
+                })
+                return NextResponse.json({
+                    kind: 'tier_upgrade_oneshot',
+                    checkoutUrl,
+                    prorationClp,
+                })
+            }
+
+            // DOWNGRADE: si el tier destino no admite los alumnos activos actuales, se BLOQUEA
+            // con 409 OVER_CAPACITY y CERO efectos colaterales (no toca el coach ni crea checkout).
+            // El conteo usa el filtro canónico standalone (is_archived=false + org_id IS NULL).
+            if (direction === 'downgrade') {
+                const activeClients = await countActiveStandaloneClients(admin, user.id)
+                const maxClients = getTierMaxClients(tier)
+                if (maxClients < activeClients) {
+                    return NextResponse.json(
+                        {
+                            code: 'OVER_CAPACITY',
+                            error: `El plan ${TIER_CONFIG[tier].label} permite hasta ${maxClients} alumnos y tienes ${activeClients}. Archiva alumnos antes de bajar de plan.`,
+                            maxClients,
+                            activeClients,
+                        },
+                        { status: 409 }
+                    )
+                }
+            }
+
+            // Mismo tier + mismo ciclo = no-op (la UI deshabilita Continuar). Si llega aquí, 400.
+            if (direction === 'same' && currentCycle === billingCycle) {
+                return NextResponse.json(
+                    { error: 'Ese ya es tu plan y ciclo de facturación actuales.' },
+                    { status: 400 }
+                )
+            }
+        }
+
+        // ¿Este cambio programa el nuevo preapproval al CORTE sin tocar las columnas de
+        // entitlement ahora? — DOWNGRADE permitido y cambio de ciclo (mismo tier) de un pago
+        // activo. El webhook fija subscription_tier/max_clients/billing_cycle al corte desde el
+        // external_reference del preapproval (fix audit P1: no degradar el plan antes del corte).
+        const scheduleAtCutOnly =
+            isActiveUpgrade && (direction === 'downgrade' || direction === 'same')
 
         // Monto COMPUESTO (plan 05 F3.3): base del tier + Σ add-ons facturables. La fuente son las
         // filas vivas de coach_addons (service-role) UNIDAS a los add-ons solicitados en el signup
@@ -144,12 +244,6 @@ export async function POST(request: Request) {
         const amountClp = getCompositeAmountClp(tier, billingCycle, billableAddons)
         const cycle = BILLING_CYCLE_CONFIG[billingCycle]
         const addonSuffix = checkoutAddons.length > 0 ? ` + ${checkoutAddons.length} add-on(s)` : ''
-        const provider = getPaymentsProvider()
-        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
-        const webhookToken = process.env.MERCADOPAGO_WEBHOOK_TOKEN
-        const webhookUrl = webhookToken
-            ? `${appUrl}/api/payments/webhook?token=${encodeURIComponent(webhookToken)}`
-            : `${appUrl}/api/payments/webhook`
         const retryQuery = `tier=${encodeURIComponent(tier)}&cycle=${encodeURIComponent(billingCycle)}`
 
         const checkout = await provider.createCheckout({
@@ -180,10 +274,22 @@ export async function POST(request: Request) {
         // New/reactivating paid coaches: set 'pending_payment' as usual.
         const newStatus = isActiveUpgrade ? 'active' : 'pending_payment'
 
+        // DOWNGRADE permitido / cambio de ciclo (mismo tier) de un pago activo: el preapproval
+        // nuevo arranca al CORTE (startDate=current_period_end) y se OMITEN
+        // subscription_tier/max_clients/billing_cycle — el webhook las fija al corte desde el
+        // external_reference del preapproval (fix audit P1). Tampoco cambia subscription_status
+        // (sigue 'active' el plan vigente hasta el corte). NO se reusa el payload completo de
+        // abajo, que pisaría el plan vigente con el destino antes de tiempo.
         const updatePayload = isFreeTierCoach
             ? {
                 payment_provider: provider.name,
                 subscription_mp_id: checkout.checkoutId,
+            }
+            : scheduleAtCutOnly
+            ? {
+                payment_provider: provider.name,
+                subscription_mp_id: checkout.checkoutId,
+                superseded_mp_preapproval_id: supersededMpPreapprovalId,
             }
             : {
                 subscription_tier: tier,

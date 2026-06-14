@@ -103,6 +103,39 @@ export function getAddonProrationClp(
     return Math.max(1, Math.round(cycleAmount * fraction))
 }
 
+// ── Prorrateo de upgrade de tier (plan estrategia 06) ─────────────────────────
+
+/**
+ * One-shot prorrateado del UPGRADE de tier (espejo EXACTO de `getAddonProrationClp`): cobra
+ * inmediato la DIFERENCIA de precio entre el tier nuevo y el actual, por la fracción que resta
+ * del ciclo ACTUAL del coach (alineado al corte real del preapproval). El nuevo tier se activa
+ * al confirmar el pago y el preapproval pasa al compuesto completo DESDE la siguiente renovación
+ * (sin cobro inmediato del valor completo). Los add-ons NO entran en este one-shot.
+ *
+ * `diffCycleClp` es la diferencia sobre el CICLO ACTUAL del coach (mismo descuento de su ciclo).
+ * Si la diferencia es <= 0 (no es un upgrade real de precio) devuelve 0 — el llamador exige > 0
+ * antes de construir el one-shot.
+ *
+ * Bordes (idénticos a getAddonProrationClp):
+ *   - upgrade el día del corte (o `now` >= corte) → mínimo 1 día (nunca $0).
+ */
+export function getTierUpgradeProrationClp(
+    currentTier: SubscriptionTier,
+    newTier: SubscriptionTier,
+    cycle: BillingCycle,
+    now: Date,
+    currentPeriodEnd: Date
+): number {
+    const diffCycleClp = getTierPriceClp(newTier, cycle) - getTierPriceClp(currentTier, cycle)
+    if (diffCycleClp <= 0) return 0
+    const totalDays = BILLING_CYCLE_CONFIG[cycle].months * 30 // base de prorrateo: meses × 30 días
+    const rawRemainingDays = Math.ceil((currentPeriodEnd.getTime() - now.getTime()) / DAY_MS)
+    // Mínimo 1 día (nunca $0); tope al ciclo completo (upgrade justo al inicio del período).
+    const remainingDays = Math.min(Math.max(rawRemainingDays, 1), totalDays)
+    const fraction = remainingDays / totalDays
+    return Math.max(1, Math.round(diffCycleClp * fraction))
+}
+
 // ── Facturabilidad + monto compuesto ──────────────────────────────────────────
 
 /**

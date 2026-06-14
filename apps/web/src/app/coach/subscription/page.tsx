@@ -7,11 +7,13 @@ import {
     ADDON_MODULE_KEYS,
     ADDON_PAYMENT_RULES,
     BILLING_CYCLE_CONFIG,
+    comparePlanDirection,
     getAddonPaymentRulesForCycle,
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
     getTierBillingCycleSummary,
     getTierCapabilities,
+    getTierMaxClients,
     getTierNutritionSummary,
     getTierPriceClp,
     isBillingCycleAllowedForTier,
@@ -109,6 +111,8 @@ export default function CoachSubscriptionPage() {
     const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly')
     const [events, setEvents] = useState<SubscriptionEvent[]>([])
     const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false)
+    // Alumnos activos standalone (del endpoint) — bloquea downgrades que no caben (OVER_CAPACITY).
+    const [activeClientCount, setActiveClientCount] = useState(0)
 
     // ── Add-ons (plan 05 F5) ──────────────────────────────────────────────────
     const [addons, setAddons] = useState<CoachAddonView[]>([])
@@ -151,6 +155,7 @@ export default function CoachSubscriptionPage() {
                 setEvents(Array.isArray(payload.events) ? payload.events : [])
                 setAddons(Array.isArray(payload.addons) ? payload.addons : [])
                 setBilling(payload.billing ?? null)
+                setActiveClientCount(typeof payload.activeClientCount === 'number' ? payload.activeClientCount : 0)
                 const tier = payload.coach.subscription_tier as SubscriptionTier
                 const cycle = payload.coach.billing_cycle as BillingCycle
                 // Pre-seleccion para la lista de venta (starter/pro/elite):
@@ -215,7 +220,17 @@ export default function CoachSubscriptionPage() {
                 body: JSON.stringify({ tier: selectedTier, billingCycle: selectedCycle, addons: upgradeAddons }),
             })
             const payload = await response.json()
-            if (!response.ok) throw new Error(payload.error ?? 'No se pudo iniciar el cambio de plan')
+            if (!response.ok) {
+                // 409 OVER_CAPACITY: el server bloquea bajar a un tier con menos cupo que tus
+                // alumnos activos. Mostramos su mensaje (incluye los números N/M) en el banner.
+                if (payload.code === 'OVER_CAPACITY') {
+                    throw new Error(
+                        payload.error ??
+                            `Ese plan permite hasta ${payload.maxClients ?? '—'} alumnos y tienes ${payload.activeClients ?? activeClientCount}. Archiva alumnos antes de bajar de plan.`
+                    )
+                }
+                throw new Error(payload.error ?? 'No se pudo iniciar el cambio de plan')
+            }
             if (!payload.checkoutUrl) throw new Error('No se recibió URL de checkout')
             window.location.href = payload.checkoutUrl
         } catch (err) {
@@ -268,6 +283,9 @@ export default function CoachSubscriptionPage() {
     const hasActivePaidPlan =
         coachTier !== 'free' &&
         (coach?.subscription_status === 'active' || coach?.subscription_status === 'trialing')
+    // No-op: el tier y ciclo elegidos son idénticos al plan actual → no hay nada que cobrar ni
+    // cambiar. Deshabilita "Continuar" (si llegara al server, devuelve 400/no-op igualmente).
+    const isNoOpChange = selectedTier === coachTier && selectedCycle === coachCycle
 
     // ── Add-ons: estado de cada módulo a partir de las filas vivas del endpoint ──
     function addonForKey(key: ModuleKey): CoachAddonView | undefined {
@@ -286,6 +304,7 @@ export default function CoachSubscriptionPage() {
             setEvents(Array.isArray(payload.events) ? payload.events : [])
             setAddons(Array.isArray(payload.addons) ? payload.addons : [])
             setBilling(payload.billing ?? null)
+            setActiveClientCount(typeof payload.activeClientCount === 'number' ? payload.activeClientCount : 0)
         } catch {
             /* transient — el estado previo sigue visible */
         }
@@ -613,20 +632,39 @@ export default function CoachSubscriptionPage() {
                         const badge = TIER_BADGE[tier]
                         const hasNutrition = !getTierNutritionSummary(tier).startsWith('Sin')
                         const features = TIER_CONFIG[tier].features.slice(0, 3)
+                        // Downgrade que no cabe: bajar a un tier con menos cupo que tus alumnos
+                        // activos. Se bloquea (mismo guard que el 409 OVER_CAPACITY del server).
+                        const tierMaxClients = getTierMaxClients(tier)
+                        const wouldExceed =
+                            comparePlanDirection(coachTier, tier) === 'downgrade' &&
+                            tierMaxClients < activeClientCount
+                        const exceedTooltip = wouldExceed
+                            ? `Este plan permite hasta ${tierMaxClients} alumnos y tienes ${activeClientCount} activos. Archiva alumnos para poder bajar a este plan.`
+                            : undefined
                         return (
                             <button
                                 key={tier}
                                 type="button"
-                                onClick={() => setSelectedTier(tier)}
+                                disabled={wouldExceed}
+                                aria-disabled={wouldExceed}
+                                title={exceedTooltip}
+                                onClick={() => { if (!wouldExceed) setSelectedTier(tier) }}
                                 className={`relative rounded-2xl border p-4 text-left transition-all ${
-                                    isSelected
+                                    wouldExceed
+                                        ? 'cursor-not-allowed border-border opacity-50'
+                                        : isSelected
                                         ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30'
                                         : 'border-border hover:border-border/80 hover:bg-secondary/30'
                                 }`}
                             >
-                                {badge && (
+                                {badge && !wouldExceed && (
                                     <span className={`absolute right-3 top-3 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${badge.cls}`}>
                                         {badge.label}
+                                    </span>
+                                )}
+                                {wouldExceed && (
+                                    <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                        <Lock className="h-3 w-3" /> Sin cupo
                                     </span>
                                 )}
 
@@ -744,7 +782,8 @@ export default function CoachSubscriptionPage() {
                     <button
                         type="button"
                         onClick={() => setShowUpgradeConfirm(true)}
-                        disabled={saving}
+                        disabled={saving || isNoOpChange}
+                        title={isNoOpChange ? 'Ya tienes este plan y ciclo. Elige un plan o ciclo distinto.' : undefined}
                         className="shrink-0 h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-white hover:bg-primary/90 transition-colors disabled:opacity-60"
                     >
                         Continuar →

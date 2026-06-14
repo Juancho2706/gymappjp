@@ -79,6 +79,8 @@ export {
     getTierBillingCycleSummary,
     getTierNutritionSummary,
     getRecommendedTier,
+    getTierRank,
+    comparePlanDirection,
 } from '@eva/tiers'
 
 

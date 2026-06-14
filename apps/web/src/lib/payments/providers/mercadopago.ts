@@ -1,4 +1,10 @@
-import { BILLING_CYCLE_CONFIG } from '@/lib/constants'
+import {
+    BILLING_CYCLE_CONFIG,
+    TIER_CONFIG,
+    isBillingCycleAllowedForTier,
+    type BillingCycle,
+    type SubscriptionTier,
+} from '@/lib/constants'
 import { parseCheckoutExternalReference } from '@/lib/payments/checkout-external-reference'
 import { MODULE_KEYS, type ModuleKey } from '@/services/entitlements.service'
 import type {
@@ -10,6 +16,7 @@ import type {
     PaymentsProvider,
     ProviderCheckoutSnapshot,
     ProviderPaymentSnapshot,
+    TierUpgradeRef,
     WebhookProcessResult,
 } from '@/lib/payments/types'
 
@@ -38,6 +45,45 @@ export function parseOneShotAddonReference(reference?: string | null): OneShotAd
     if (!coachId || !moduleKey || !termsVersion) return null
     if (!MODULE_KEY_SET.has(moduleKey)) return null
     return { coachId, moduleKey: moduleKey as ModuleKey, termsVersion }
+}
+
+const TIER_UPGRADE_CYCLES = new Set<string>(['monthly', 'quarterly', 'annual'])
+
+/**
+ * `external_reference` dedicado del one-shot de upgrade de tier (FUNDACION F4):
+ * `tier_upgrade|coachId|newTier|cycle`. La 1ª parte literal `tier_upgrade` lo distingue
+ * tanto del one-shot de add-on (`addon_oneshot|...`) como del reference de suscripción
+ * (arranca con el uuid del coach) → precedencia de parse en el webhook:
+ * oneShotAddon → tierUpgrade → checkoutRef.
+ */
+export function buildTierUpgradeExternalReference(
+    coachId: string,
+    newTier: SubscriptionTier,
+    cycle: BillingCycle
+): string {
+    return `tier_upgrade|${coachId}|${newTier}|${cycle}`
+}
+
+/**
+ * Parsea el `external_reference` del one-shot de upgrade de tier (`tier_upgrade|...`,
+ * FUNDACION F4). Valida que `newTier` exista en `TIER_CONFIG`, que `cycle` sea un
+ * BillingCycle válido y que el ciclo esté permitido para ese tier
+ * (`isBillingCycleAllowedForTier`). Devuelve null si no coincide el formato o no validan.
+ */
+export function parseTierUpgradeReference(reference?: string | null): TierUpgradeRef | null {
+    if (!reference) return null
+    const parts = reference.split('|')
+    if (parts[0]?.trim() !== 'tier_upgrade') return null
+    const coachId = parts[1]?.trim()
+    const newTier = parts[2]?.trim()
+    const cycle = parts[3]?.trim()
+    if (!coachId || !newTier || !cycle) return null
+    if (!(newTier in TIER_CONFIG)) return null
+    if (!TIER_UPGRADE_CYCLES.has(cycle)) return null
+    const tier = newTier as SubscriptionTier
+    const billingCycle = cycle as BillingCycle
+    if (!isBillingCycleAllowedForTier(tier, billingCycle)) return null
+    return { coachId, newTier: tier, cycle: billingCycle }
 }
 
 function getMpAccessToken() {
@@ -255,10 +301,12 @@ export class MercadoPagoProvider implements PaymentsProvider {
 
         const payment = await mpRequest(`/v1/payments/${eventId}`)
         const extRef = typeof payment.external_reference === 'string' ? payment.external_reference : null
-        // Un cobro one-shot de add-on trae el reference dedicado `addon_oneshot|...`; un cobro
-        // recurrente trae el reference de suscripción `coachId|tier|cycle[|addons]`.
+        // Precedencia de parse (FUNDACION F4): el one-shot de add-on trae `addon_oneshot|...`;
+        // el one-shot de upgrade de tier trae `tier_upgrade|...`; un cobro recurrente trae el
+        // reference de suscripción `coachId|tier|cycle[|addons]`. Cada uno excluye a los siguientes.
         const oneShotAddon = parseOneShotAddonReference(extRef)
-        const parsed = oneShotAddon ? null : parseCheckoutExternalReference(extRef)
+        const tierUpgrade = oneShotAddon ? null : parseTierUpgradeReference(extRef)
+        const parsed = oneShotAddon || tierUpgrade ? null : parseCheckoutExternalReference(extRef)
 
         // ⚠️ payment.order.id ≠ preapproval id (Riesgo 2). El match robusto del cobro recurrente
         // contra el preapproval del coach se hace en el webhook por coachId (del external_reference);
@@ -275,7 +323,7 @@ export class MercadoPagoProvider implements PaymentsProvider {
             eventId,
             eventKind: 'payment',
             providerStatus: payment.status ?? undefined,
-            coachId: oneShotAddon?.coachId ?? parsed?.coachId,
+            coachId: oneShotAddon?.coachId ?? tierUpgrade?.coachId ?? parsed?.coachId,
             providerCheckoutId: payment.order?.id ? String(payment.order.id) : undefined,
             providerPaymentId: payment.id != null ? String(payment.id) : eventId,
             paidAt,
@@ -284,6 +332,7 @@ export class MercadoPagoProvider implements PaymentsProvider {
             billingCycle: parsed?.billingCycle ?? undefined,
             addons: parsed?.addons ?? [],
             oneShotAddon,
+            tierUpgrade,
         }
     }
 

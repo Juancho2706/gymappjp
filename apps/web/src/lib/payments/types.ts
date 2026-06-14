@@ -62,6 +62,18 @@ export type OneShotAddonRef = {
     termsVersion: string
 }
 
+/**
+ * Datos del one-shot de upgrade de tier parseados del `external_reference`
+ * `tier_upgrade|coachId|newTier|cycle` (FUNDACION F4). El monto del one-shot es la
+ * DIFERENCIA de tier prorrateada al ciclo vigente del coach; la activación del nuevo
+ * tier + el PUT del preapproval al nuevo compuesto los hace el confirm-upgrade/webhook.
+ */
+export type TierUpgradeRef = {
+    coachId: string
+    newTier: SubscriptionTier
+    cycle: BillingCycle
+}
+
 export type WebhookProcessResult = {
     accepted: boolean
     eventId?: string
@@ -89,6 +101,12 @@ export type WebhookProcessResult = {
     paidAt?: string | null
     /** Si el evento es un pago one-shot de add-on (reference `addon_oneshot|...`), sus datos. */
     oneShotAddon?: OneShotAddonRef | null
+    /**
+     * Si el evento es un pago one-shot de upgrade de tier (reference `tier_upgrade|...`,
+     * FUNDACION F4), sus datos. El webhook corre la activación idempotente (write rank-guarded
+     * de tier+max_clients+cycle + PUT al nuevo compuesto) y escribe el `billing_snapshot`.
+     */
+    tierUpgrade?: TierUpgradeRef | null
 }
 
 /** Normalized preapproval / recurring checkout snapshot (Mercado Pago preapproval shape). */

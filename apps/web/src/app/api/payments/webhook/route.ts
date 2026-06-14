@@ -7,6 +7,7 @@ import {
     ADDON_CONFIG,
     BILLING_CYCLE_CONFIG,
     getTierMaxClients,
+    getTierRank,
     isBillingCycleAllowedForTier,
     type BillingCycle,
     type SubscriptionTier,
@@ -342,6 +343,139 @@ async function handleWebhook(request: Request, rawBody: string) {
             traceId,
             coachId: coach.id,
             moduleKey,
+        })
+        return NextResponse.json({ ok: true })
+    }
+
+    // ── Pago ONE-SHOT de UPGRADE de tier (plan estrategia 06, C4) ─────────────────────
+    // Llega como PAYMENT con external_reference dedicado `tier_upgrade|...`. Backstop idempotente
+    // de confirm-upgrade: corre la MISMA activación rank-guarded (tier+max_clients+cycle) + PUT al
+    // nuevo compuesto y escribe el snapshot kind='tier_upgrade_proration' (dedup por
+    // provider_payment_id). NO toca el preapproval como un cobro recurrente: es un pago único, se
+    // procesa aparte y retorna. Seguro en cualquier orden respecto a confirm-upgrade.
+    if (result.eventKind === 'payment' && result.tierUpgrade) {
+        const isApproved = mapProviderStatus(result.providerStatus) === 'active'
+        if (!isApproved) {
+            // Pendiente/rechazado: nada que activar (abandono = tier intacto).
+            console.info('[payments.webhook] tier-upgrade payment not approved, skipping', {
+                traceId,
+                coachId: coach.id,
+                status: result.providerStatus,
+            })
+            return NextResponse.json({ ok: true })
+        }
+        const mpId = coach.subscription_mp_id?.trim()
+        if (!mpId) {
+            console.warn('[payments.webhook] tier-upgrade but coach has no preapproval — cannot PUT', {
+                traceId,
+                coachId: coach.id,
+            })
+            return NextResponse.json({ ok: true })
+        }
+        const newTier = result.tierUpgrade.newTier
+        const cycle = result.tierUpgrade.cycle
+        const currentTier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+        const paidAt = result.paidAt ?? new Date().toISOString()
+        try {
+            // Activación idempotente con RANK-GUARD: solo subimos tier/max_clients/cycle si el tier
+            // vigente es de rango MENOR (si ya activó —confirm-upgrade o un reintento—, no-op).
+            if (getTierRank(currentTier) < getTierRank(newTier)) {
+                const { error: activateErr } = await admin
+                    .from('coaches')
+                    .update({
+                        subscription_tier: newTier,
+                        max_clients: getTierMaxClients(newTier),
+                        billing_cycle: cycle,
+                        // status se mantiene (el upgrade no cambia el estado de la suscripción).
+                    })
+                    .eq('id', coach.id)
+                if (activateErr) {
+                    throw new Error(activateErr.message)
+                }
+            }
+
+            // PUT del preapproval al nuevo compuesto (tier nuevo + add-ons vivos) DESDE la renovación
+            // — sin cargo inmediato. Determinístico: correrlo dos veces deja el mismo valor.
+            const live = await listLive(admin, coach.id)
+            const newComposite = getCompositeAmountClp(newTier, cycle, toBillableAddons(live))
+            await addonPayments.updateCheckoutAmount(mpId, newComposite)
+
+            // Snapshot del cobro one-shot del upgrade (kind='tier_upgrade_proration') — idempotente
+            // por provider_payment_id. base_clp=0: el one-shot es SOLO la diferencia prorrateada de
+            // tier, no la base; el desglose de add-ons no entra en este cobro.
+            if (result.providerPaymentId) {
+                const snapshotRow: TablesInsert<'billing_snapshots'> = {
+                    coach_id: coach.id,
+                    provider_payment_id: result.providerPaymentId,
+                    charged_at: paidAt,
+                    tier: newTier,
+                    billing_cycle: cycle,
+                    kind: 'tier_upgrade_proration',
+                    base_clp: 0,
+                    addons: [],
+                    total_clp: 0,
+                }
+                const { error: snapErr } = await admin
+                    .from('billing_snapshots')
+                    .upsert(snapshotRow, { onConflict: 'provider_payment_id', ignoreDuplicates: true })
+                if (snapErr) throw new Error(snapErr.message)
+            }
+
+            // Evento de historial deduplicado por `tier_upgrade:${paymentId}` (misma key que
+            // confirm-upgrade → seguro en cualquier orden, no duplica).
+            if (result.providerPaymentId) {
+                const upgradeEvent: TablesInsert<'subscription_events'> = {
+                    coach_id: coach.id,
+                    provider: provider.name,
+                    provider_event_id: `tier_upgrade:${result.providerPaymentId}`,
+                    provider_checkout_id: mpId,
+                    provider_status: result.providerStatus ?? 'approved',
+                    payload: toJsonPayload({
+                        action: 'tier_upgrade_confirmed',
+                        new_tier: newTier,
+                        billing_cycle: cycle,
+                        first_charged_at: paidAt,
+                    }),
+                }
+                await admin
+                    .from('subscription_events')
+                    .upsert(upgradeEvent, { onConflict: 'provider_event_id' })
+            }
+
+            // Marker keyed por notificationId para que una reentrega de ESTA notificación corte en
+            // el guard de dedup superior (el evento de arriba va keyed por payment id, no por la
+            // notificationId, así que no atraparía el replay). Idempotente on conflict.
+            if (notificationId) {
+                const dedupEvent: TablesInsert<'subscription_events'> = {
+                    coach_id: coach.id,
+                    provider: provider.name,
+                    provider_event_id: notificationId,
+                    provider_checkout_id: mpId,
+                    provider_status: result.providerStatus ?? 'approved',
+                    payload: toJsonPayload({
+                        action: 'tier_upgrade_notification_dedup',
+                        new_tier: newTier,
+                    }),
+                }
+                await admin
+                    .from('subscription_events')
+                    .upsert(dedupEvent, { onConflict: 'provider_event_id' })
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            console.error('[payments.webhook] tier-upgrade activation failed', {
+                traceId,
+                coachId: coach.id,
+                newTier,
+                message,
+            })
+            return NextResponse.json({ ok: false, error: message }, { status: 500 })
+        }
+        console.info('[payments.webhook] tier-upgrade activated', {
+            traceId,
+            coachId: coach.id,
+            newTier,
+            cycle,
         })
         return NextResponse.json({ ok: true })
     }
