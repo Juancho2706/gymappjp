@@ -9,6 +9,7 @@ import { getCoachOrgContext } from '@/lib/coach-context'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { normalizeYoutubeEmbedUrl } from '@/lib/youtube'
 import { deleteExerciseMediaByUrlAction } from './exercise-media.actions'
+import { mirrorAndSaveExerciseThumbnail, clearExerciseThumbnail } from '@/lib/exercises/thumbnail-mirror'
 
 const SUPABASE_MEDIA_PREFIX = `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''}/storage/v1/object/public/exercise-media/`
 
@@ -286,6 +287,11 @@ export async function createExerciseAction(
         return { error: 'Error al guardar el ejercicio.' }
     }
 
+    // Mirror del thumbnail de YouTube a Storage (durabilidad). Best-effort: nunca bloquea el save.
+    if (parsed.data.media_kind === 'youtube' && media.video_url) {
+        await mirrorAndSaveExerciseThumbnail(exercise.id, media.video_url)
+    }
+
     revalidatePath('/coach/exercises')
     revalidatePath('/coach/builder')
     return { success: true, exerciseId: exercise.id }
@@ -354,6 +360,13 @@ export async function updateExerciseAction(
     if (error) {
         console.error('updateExerciseAction error:', error)
         return { error: 'Error al actualizar el ejercicio.' }
+    }
+
+    // Sincronizar el mirror del thumbnail (durabilidad). Best-effort: nunca bloquea.
+    if (parsed.data.media_kind === 'youtube' && media.video_url) {
+        await mirrorAndSaveExerciseThumbnail(exerciseId, media.video_url)
+    } else {
+        await clearExerciseThumbnail(exerciseId)
     }
 
     // Cleanup old storage files

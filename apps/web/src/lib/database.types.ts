@@ -1882,6 +1882,8 @@ export type Database = {
           secondary_muscles: string[] | null
           source: string | null
           team_id: string | null
+          thumbnail_checked_at: string | null
+          thumbnail_url: string | null
           video_url: string | null
         }
         Insert: {
@@ -1903,6 +1905,8 @@ export type Database = {
           secondary_muscles?: string[] | null
           source?: string | null
           team_id?: string | null
+          thumbnail_checked_at?: string | null
+          thumbnail_url?: string | null
           video_url?: string | null
         }
         Update: {
@@ -1924,6 +1928,8 @@ export type Database = {
           secondary_muscles?: string[] | null
           source?: string | null
           team_id?: string | null
+          thumbnail_checked_at?: string | null
+          thumbnail_url?: string | null
           video_url?: string | null
         }
         Relationships: [

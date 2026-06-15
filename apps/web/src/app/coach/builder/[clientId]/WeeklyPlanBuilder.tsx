@@ -82,6 +82,7 @@ type EmbeddedExercise = {
     muscle_group?: string | null
     gif_url?: string | null
     video_url?: string | null
+    thumbnail_url?: string | null
     exercise_type?: string | null
 }
 
@@ -112,6 +113,7 @@ function mapDbBlockToBuilderBlock(
         muscle_group: exRel?.muscle_group || cat?.muscle_group || 'Unknown',
         gif_url: (exRel?.gif_url || cat?.gif_url) || undefined,
         video_url: (exRel?.video_url || cat?.video_url) || undefined,
+        thumbnail_url: (exRel?.thumbnail_url || cat?.thumbnail_url) || undefined,
         sets: b.sets,
         reps: b.reps,
         target_weight_kg: b.target_weight_kg?.toString() || '',
@@ -156,6 +158,7 @@ function enrichDaysWithExerciseMedia(days: DayState[], exerciseById: Map<string,
                 ...blk,
                 gif_url: blk.gif_url || (cat.gif_url || undefined),
                 video_url: blk.video_url || (cat.video_url || undefined),
+                thumbnail_url: blk.thumbnail_url || (cat.thumbnail_url || undefined),
             }
         }),
     }))
@@ -170,6 +173,7 @@ function createDefaultBlock(exercise: Exercise): BuilderBlock {
         muscle_group: exercise.muscle_group,
         gif_url: exercise.gif_url ?? undefined,
         video_url: exercise.video_url ?? undefined,
+        thumbnail_url: exercise.thumbnail_url ?? undefined,
         sets: 3,
         reps: '8-12',
         target_weight_kg: '',

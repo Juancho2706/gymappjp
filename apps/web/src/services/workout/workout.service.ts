@@ -1094,7 +1094,7 @@ export async function loadTemplateForBuilderAction(templateId: string): Promise<
                     is_unilateral, side_mode, reps_value, reps_unit, load_type, load_value, load_unit,
                     distance_value, distance_unit, duration_sec, target_pace_sec_per_km, hr_zone,
                     instructions, exercise_type_override, interval_config, extra_targets,
-                    exercises ( name, muscle_group, gif_url, video_url, exercise_type )
+                    exercises ( name, muscle_group, gif_url, video_url, thumbnail_url, exercise_type )
                 )
             )
         `)

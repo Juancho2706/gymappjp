@@ -26,6 +26,7 @@ export interface BuilderBlock {
     muscle_group: string
     gif_url?: string
     video_url?: string
+    thumbnail_url?: string
     dayId?: number
     sets?: number
     reps?: string

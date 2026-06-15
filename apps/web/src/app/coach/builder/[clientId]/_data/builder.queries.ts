@@ -88,7 +88,7 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
                     *,
                     workout_blocks (
                         *,
-                        exercises ( name, muscle_group, gif_url, video_url, exercise_type )
+                        exercises ( name, muscle_group, gif_url, video_url, thumbnail_url, exercise_type )
                     )
                 )
             `)

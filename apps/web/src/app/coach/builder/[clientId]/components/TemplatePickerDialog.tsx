@@ -89,6 +89,7 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
                         muscle_group: b.exercises?.muscle_group || '',
                         gif_url: b.exercises?.gif_url ?? undefined,
                         video_url: b.exercises?.video_url ?? undefined,
+                        thumbnail_url: b.exercises?.thumbnail_url ?? undefined,
                         sets: b.sets,
                         reps: b.reps,
                         target_weight_kg: b.target_weight_kg?.toString() || '',

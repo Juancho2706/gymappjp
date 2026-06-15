@@ -128,13 +128,15 @@ export function getYoutubeThumbnailUrl(
  * del alumno y no mostrar vacío/roto cuando el ejercicio solo tiene video de YouTube.
  */
 export function exerciseThumbnailUrl(
-  ex: { gif_url?: string | null; image_url?: string | null; video_url?: string | null },
+  ex: { thumbnail_url?: string | null; gif_url?: string | null; image_url?: string | null; video_url?: string | null },
 ): string | null {
   if (ex.gif_url) return ex.gif_url
   if (ex.image_url) return ex.image_url
+  // Espejo durable del thumbnail de YouTube en Storage (sobrevive al borrado del video upstream).
+  if (ex.thumbnail_url) return ex.thumbnail_url
   if (ex.video_url) {
     const id = extractYoutubeVideoId(ex.video_url)
-    if (id) return `https://img.youtube.com/vi/${id}/mqdefault.jpg`
+    if (id) return `https://img.youtube.com/vi/${id}/mqdefault.jpg` // fallback hotlink si no hay espejo
     return ex.video_url // media directa no-YouTube (gif/mp4 de ExerciseDB)
   }
   return null
