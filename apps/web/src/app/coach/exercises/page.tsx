@@ -9,6 +9,10 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Ejercicios | EVA' }
 
+// Next 16: la ruta usa cookies (auth via createClient). Sin esto, el re-render del server
+// action intenta render estático y cookies() tira DynamicServerError -> 500 ("Oops") al crear.
+export const dynamic = 'force-dynamic'
+
 export default async function CoachExercisesPage() {
   try {
     const coach = await getCoach()
