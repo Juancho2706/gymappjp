@@ -30,10 +30,14 @@
 -- Seguridad/forma: se conserva LANGUAGE sql STABLE, SET search_path, OWNER postgres.
 -- A diferencia de los RPCs originales (SECURITY INVOKER), estos PASAN A SECURITY
 -- DEFINER porque ahora leen `auth.users` (no accesible para INVOKER). El callsite es
--- el admin con service-role (finanzas.queries.ts); los GRANTs no cambian. El JOIN a
+-- el admin con service-role (finanzas.queries.ts:42 + admin.queries.ts:46). El JOIN a
 -- auth.users es de solo lectura del email y no expone filas nuevas (el agregado sigue
 -- devolviendo el mismo shape: ym/cycle/tier × mrr_clp × coach_count).
 -- search_path incluye `auth` para resolver `auth.users` bajo SECURITY DEFINER.
+-- ⚠️ GRANTS RESTRINGIDOS (ver final del archivo): como ahora son DEFINER y devuelven el MRR de
+-- TODA la plataforma, se REVOCA EXECUTE a anon/authenticated (un coach leería finanzas globales) y
+-- se deja SOLO service_role — el caller admin. Esto difiere de los RPCs originales (INVOKER), que
+-- eran RLS-safe aun ejecutables por authenticated.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -155,11 +159,14 @@ $$;
 
 ALTER FUNCTION "public"."get_platform_revenue_by_tier"() OWNER TO "postgres";
 
--- Grants espejo de los RPCs platform existentes del baseline (authenticated/service_role).
--- (idempotente: GRANT es no-op si ya estaba). El caller real es el admin con service-role.
-GRANT EXECUTE ON FUNCTION "public"."get_platform_mrr_12_months"() TO "authenticated";
+-- SEGURIDAD (CRÍTICO): estos RPCs ahora son SECURITY DEFINER (corren como postgres, bypass RLS) y
+-- devuelven el MRR/ingreso de TODA la plataforma. Por eso NO pueden ser ejecutables por anon/
+-- authenticated — un coach autenticado leería las finanzas globales. El único caller real es el
+-- panel admin con service-role (finanzas.queries.ts:42 + admin.queries.ts:46). Se revoca a todos
+-- menos service_role. (idempotente: REVOKE/GRANT re-ejecutables sin efecto distinto.)
+REVOKE EXECUTE ON FUNCTION "public"."get_platform_mrr_12_months"() FROM PUBLIC, "anon", "authenticated";
+REVOKE EXECUTE ON FUNCTION "public"."get_platform_revenue_by_cycle"() FROM PUBLIC, "anon", "authenticated";
+REVOKE EXECUTE ON FUNCTION "public"."get_platform_revenue_by_tier"() FROM PUBLIC, "anon", "authenticated";
 GRANT EXECUTE ON FUNCTION "public"."get_platform_mrr_12_months"() TO "service_role";
-GRANT EXECUTE ON FUNCTION "public"."get_platform_revenue_by_cycle"() TO "authenticated";
 GRANT EXECUTE ON FUNCTION "public"."get_platform_revenue_by_cycle"() TO "service_role";
-GRANT EXECUTE ON FUNCTION "public"."get_platform_revenue_by_tier"() TO "authenticated";
 GRANT EXECUTE ON FUNCTION "public"."get_platform_revenue_by_tier"() TO "service_role";
