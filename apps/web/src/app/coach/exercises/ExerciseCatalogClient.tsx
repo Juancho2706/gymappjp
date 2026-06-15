@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { filterExercises, cn } from '@/lib/utils'
-import { extractYoutubeVideoId } from '@/lib/youtube'
+import { extractYoutubeVideoId, exerciseThumbnailUrl } from '@/lib/youtube'
 import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ExerciseCreateButton } from './_components/ExerciseCreateButton'
@@ -347,7 +347,7 @@ function ExercisePreviewModal({
                                 {ytId ? (
                                     <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-black/5 dark:bg-black/20">
                                         <Image
-                                            src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
+                                            src={exerciseThumbnailUrl(exercise) ?? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
                                             alt={exercise.name}
                                             fill
                                             className="object-cover"
