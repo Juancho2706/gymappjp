@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { filterExercises } from '@/lib/utils'
+import { exerciseEmbedUrl } from '@/lib/youtube'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ExerciseCreateButton } from './_components/ExerciseCreateButton'
 
@@ -212,11 +213,6 @@ function ExercisePreviewModal({
     // rawVideoUrl: video_url that is not YouTube (e.g. ExerciseDB GIF URLs)
     const rawVideoUrl = !directMedia && !ytId && exercise.video_url ? exercise.video_url : null
 
-    const getEmbedUrl = () => {
-        if (!ytId) return ''
-        return `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1`
-    }
-
     return (
         <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
             <DialogContent 
@@ -228,10 +224,9 @@ function ExercisePreviewModal({
                     {ytId ? (
                         <iframe
                             className="w-full h-full"
-                            src={getEmbedUrl()}
+                            src={exerciseEmbedUrl(ytId) ?? undefined}
                             title={exercise.name}
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                            allowFullScreen
                         />
                     ) : (directMedia || rawVideoUrl) ? (
                         // eslint-disable-next-line @next/next/no-img-element

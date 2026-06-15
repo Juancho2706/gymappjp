@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  exerciseEmbedUrl,
   extractYoutubeVideoId,
   getYoutubeThumbnailUrl,
   isYoutubeUrl,
@@ -105,6 +106,35 @@ describe('youtube — normalizeYoutubeEmbedUrl', () => {
 
   it('returns null for invalid URL', () => {
     expect(normalizeYoutubeEmbedUrl('https://example.com')).toBeNull()
+  })
+})
+
+describe('youtube — exerciseEmbedUrl (regla global: TODO video de ejercicio sin controles + sin sonido)', () => {
+  it('SIEMPRE sin controles (controls=0) y sin sonido (mute=1)', () => {
+    const url = exerciseEmbedUrl('https://youtube.com/shorts/dQw4w9WgXcQ')!
+    expect(url).toContain('controls=0')
+    expect(url).toContain('mute=1')
+    expect(url).not.toContain('controls=1')
+  })
+
+  it('se comporta como GIF: autoplay + loop (playlist=<id>) + youtube-nocookie + sin fullscreen', () => {
+    const url = exerciseEmbedUrl('dQw4w9WgXcQ')!
+    expect(url.startsWith('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?')).toBe(true)
+    expect(url).toContain('autoplay=1')
+    expect(url).toContain('loop=1')
+    expect(url).toContain('playlist=dQw4w9WgXcQ')
+    expect(url).toContain('fs=0')
+  })
+
+  it('acepta id de 11 chars o cualquier URL de YouTube; null si es inválido', () => {
+    expect(exerciseEmbedUrl('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toContain('/embed/dQw4w9WgXcQ?')
+    expect(exerciseEmbedUrl('https://example.com')).toBeNull()
+  })
+
+  it('pasa start/end cuando se proveen', () => {
+    const url = exerciseEmbedUrl('dQw4w9WgXcQ', { start: 5, end: 12 })!
+    expect(url).toContain('start=5')
+    expect(url).toContain('end=12')
   })
 })
 

@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { toast } from 'sonner'
 import { FileImage, Image as ImageIcon, Loader2, Play, Upload, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { normalizeYoutubeEmbedUrl } from '@/lib/youtube'
+import { exerciseEmbedUrl } from '@/lib/youtube'
 import {
     getSignedUploadUrlAction,
     confirmExerciseMediaUploadAction,
@@ -111,7 +111,7 @@ export function ExerciseMediaPicker({ value, onChange, error }: Props) {
 // ─── YouTube Tab ──────────────────────────────────────────────────────────────
 
 function YoutubePanel({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-    const embedUrl = value ? normalizeYoutubeEmbedUrl(value) : null
+    const embedUrl = value ? exerciseEmbedUrl(value) : null
 
     return (
         <div className="space-y-3">

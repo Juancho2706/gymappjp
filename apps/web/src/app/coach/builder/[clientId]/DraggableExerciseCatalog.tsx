@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { MUSCLE_GROUPS } from '@/lib/constants'
 import { filterExercises, cn } from '@/lib/utils'
+import { exerciseEmbedUrl } from '@/lib/youtube'
 import type { Tables } from '@/lib/database.types'
 import { getMuscleColor } from './muscle-colors'
 
@@ -308,10 +309,9 @@ export function DraggableExerciseCatalog({
                         <div className="aspect-video relative rounded-xl overflow-hidden bg-muted mt-4 border border-border flex items-center justify-center">
                             <iframe
                                 className="w-full h-full"
-                                src={`https://www.youtube-nocookie.com/embed/${previewExercise.video_url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)?.[1]}?autoplay=1&mute=1&loop=1&playlist=${previewExercise.video_url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)?.[1]}&modestbranding=1&rel=0&showinfo=0&controls=1`}
+                                src={exerciseEmbedUrl(previewExercise.video_url) ?? undefined}
                                 title={previewExercise.name}
                                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                allowFullScreen
                             />
                         </div>
                     ) : (

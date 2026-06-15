@@ -12,6 +12,7 @@ import {
 import { Dumbbell, Search, X, Info, Loader2 } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
 import { filterExercises } from "@/lib/utils";
+import { exerciseEmbedUrl } from "@/lib/youtube";
 import { getExerciseInstructions } from "./_actions/exercises.actions";
 
 type Exercise = Tables<"exercises">;
@@ -272,11 +273,12 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                 if (isYouTube) {
                   const ytId = getYouTubeId(url!);
                   const ex = selectedExercise as any
-                  const embedUrl = ytId ? `https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1${
-                    ex.video_start_time ? `&start=${ex.video_start_time}` : ''
-                  }${
-                    ex.video_end_time ? `&end=${ex.video_end_time}` : ''
-                  }` : '';
+                  const embedUrl = ytId
+                    ? exerciseEmbedUrl(ytId, {
+                        start: ex.video_start_time,
+                        end: ex.video_end_time,
+                      }) ?? ''
+                    : '';
 
                   return ytId ? (
                     <div className="sticky top-0 z-10 relative w-full h-48 md:h-64 shrink-0 bg-black/5 dark:bg-black/20 flex items-center justify-center border-b border-border/50">
@@ -285,7 +287,6 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                         src={embedUrl}
                         title={selectedExercise.name}
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowFullScreen
                       />
                     </div>
                   ) : null;

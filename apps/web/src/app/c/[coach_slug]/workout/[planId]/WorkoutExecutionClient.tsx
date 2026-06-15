@@ -28,6 +28,7 @@ import type { IntervalConfig, WorkoutArea, ExerciseType as WorkoutKind } from '@
 import { effectiveExerciseType, compactDistance, compactDuration } from '@/lib/workout-exercise-type'
 import { isTimeableInterval } from '@/lib/workout-interval'
 import { formatPace } from '@/domain/cardio/pace'
+import { exerciseEmbedUrl } from '@/lib/youtube'
 import type { ClientCardioView } from './_data/workout-execution.queries'
 
 interface ExerciseType {
@@ -807,10 +808,9 @@ export function WorkoutExecutionClient({
                                     <div className="relative w-full h-48 md:h-64 shrink-0 bg-black/5 dark:bg-black/20 flex items-center justify-center">
                                         <iframe
                                             className="w-full h-full"
-                                            src={`https://www.youtube-nocookie.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&modestbranding=1&rel=0&showinfo=0&controls=1`}
+                                            src={exerciseEmbedUrl(ytId) ?? undefined}
                                             title={exercise.name}
                                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                            allowFullScreen
                                         />
                                     </div>
                                 );
