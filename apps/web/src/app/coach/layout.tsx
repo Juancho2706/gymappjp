@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation'
-import { connection } from 'next/server'
 import { CoachSidebar } from '@/components/coach/CoachSidebar'
 import { CoachMainWrapper } from '@/components/coach/CoachMainWrapper'
 import { CoachSuccessAnimationLazy } from '@/components/coach/CoachSuccessAnimationLazy'
@@ -30,10 +29,7 @@ export const metadata: Metadata = {
     },
 }
 
-// Next 16: el layout lee cookies (auth) para TODO /coach. Sin esto, el re-render de un server
-// action trata el segmento como estatico y cookies() tira DynamicServerError -> 500 ("Oops") al
-// ejecutar acciones (ej. crear ejercicio). force-dynamic solo en la page no alcanza: el throw
-// viene del layout durante la serializacion del RSC.
+// Dashboard autenticado: el layout lee cookies (sesion) para TODO /coach ⇒ render dinamico.
 export const dynamic = 'force-dynamic'
 
 /**
@@ -47,11 +43,6 @@ export default async function CoachLayout({
 }: {
     children: React.ReactNode
 }) {
-    // Next 16: re-bindea el async-context de cookies en ESTE call stack antes de los reads
-    // cacheados (getCoach via React.cache). Sin esto, el re-render del server action pierde el
-    // contexto -> DynamicServerError ("used cookies") en la serializacion del RSC. force-dynamic
-    // solo no alcanza para esta variante (async-context perdido).
-    await connection()
     const coach = await getCoach()
 
     if (!coach) {

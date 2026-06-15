@@ -9,6 +9,7 @@ import { getCoachOrgContext } from '@/lib/coach-context'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { normalizeYoutubeEmbedUrl } from '@/lib/youtube'
 import { deleteExerciseMediaByUrlAction } from './exercise-media.actions'
+import { mirrorAndSaveExerciseThumbnail, clearExerciseThumbnail } from '@/lib/exercises/thumbnail-mirror'
 
 const SUPABASE_MEDIA_PREFIX = `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''}/storage/v1/object/public/exercise-media/`
 
@@ -46,7 +47,13 @@ const exerciseSchema = z.object({
             (v) => !v || v.startsWith(SUPABASE_MEDIA_PREFIX),
             'URL de imagen no permitida.'
         ),
-})
+    // Recorte del video (YouTube). Segundos enteros. El player loopea [start, end].
+    video_start_time: z.coerce.number().int().min(0).optional(),
+    video_end_time: z.coerce.number().int().min(0).optional(),
+}).refine(
+    (d) => d.video_start_time == null || d.video_end_time == null || d.video_end_time > d.video_start_time,
+    { message: 'El tiempo de fin debe ser mayor que el de inicio.', path: ['video_end_time'] }
+)
 
 export type ExerciseActionState = {
     error?: string
@@ -74,6 +81,8 @@ function parseExerciseFormData(formData: FormData) {
         video_url: (formData.get('video_url') as string) || undefined,
         gif_url: (formData.get('gif_url') as string) || undefined,
         image_url: (formData.get('image_url') as string) || undefined,
+        video_start_time: (formData.get('video_start_time') as string) || undefined,
+        video_end_time: (formData.get('video_end_time') as string) || undefined,
     }
 }
 
@@ -259,6 +268,10 @@ export async function createExerciseAction(
     }
 
     const media = resolveMediaFields(parsed.data)
+    // start/end solo aplican al recorte de YouTube; con otra media van NULL.
+    const isYoutube = parsed.data.media_kind === 'youtube' && !!media.video_url
+    const videoStart = isYoutube ? (parsed.data.video_start_time ?? null) : null
+    const videoEnd = isYoutube ? (parsed.data.video_end_time ?? null) : null
 
     const { data: exercise, error } = await supabase
         .from('exercises')
@@ -276,6 +289,8 @@ export async function createExerciseAction(
             video_url: media.video_url,
             gif_url: media.gif_url,
             image_url: media.image_url,
+            video_start_time: videoStart,
+            video_end_time: videoEnd,
             source: owner.orgId ? 'org' : owner.teamId ? 'team' : 'coach',
         })
         .select('id')
@@ -285,6 +300,9 @@ export async function createExerciseAction(
         console.error('createExerciseAction error:', error)
         return { error: 'Error al guardar el ejercicio.' }
     }
+
+    // Mirror del thumbnail de YouTube a Storage (durabilidad). Best-effort: nunca tira.
+    if (media.video_url) await mirrorAndSaveExerciseThumbnail(exercise.id, media.video_url)
 
     revalidatePath('/coach/exercises')
     revalidatePath('/coach/builder')
@@ -332,6 +350,9 @@ export async function updateExerciseAction(
         .maybeSingle()
 
     const media = resolveMediaFields(parsed.data)
+    const isYoutube = parsed.data.media_kind === 'youtube' && !!media.video_url
+    const videoStart = isYoutube ? (parsed.data.video_start_time ?? null) : null
+    const videoEnd = isYoutube ? (parsed.data.video_end_time ?? null) : null
 
     const updateQuery = supabase
         .from('exercises')
@@ -346,6 +367,8 @@ export async function updateExerciseAction(
             video_url: media.video_url,
             gif_url: media.gif_url,
             image_url: media.image_url,
+            video_start_time: videoStart,
+            video_end_time: videoEnd,
         })
         .eq('id', exerciseId)
     applyExerciseOwnerScope(updateQuery, owner)
@@ -355,6 +378,10 @@ export async function updateExerciseAction(
         console.error('updateExerciseAction error:', error)
         return { error: 'Error al actualizar el ejercicio.' }
     }
+
+    // Mirror/limpia el thumbnail segun la media nueva (best-effort, nunca tira).
+    if (media.video_url) await mirrorAndSaveExerciseThumbnail(exerciseId, media.video_url)
+    else await clearExerciseThumbnail(exerciseId)
 
     // Cleanup old storage files
     if (existing) {

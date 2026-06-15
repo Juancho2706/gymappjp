@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation'
-import { connection } from 'next/server'
 import { ExerciseCatalogClient } from './ExerciseCatalogClient'
 import { getCoach } from '@/lib/coach/get-coach'
 import { getCoachOrgContext } from '@/lib/coach-context'
@@ -10,14 +9,10 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Ejercicios | EVA' }
 
-// Next 16: la ruta usa cookies (auth via createClient). force-dynamic la opta a render dinamico
-// (nunca estatico) para que el re-render del server action no tire DynamicServerError. NO envolver
-// los reads de cookies (getCoach) en try/catch: rompe el async-context que Next usa para detectar
-// el uso dinamico y convierte el DynamicServerError interno en un 500 real.
+// Dashboard autenticado: lee cookies (sesion) ⇒ render dinamico. Explicito por claridad.
 export const dynamic = 'force-dynamic'
 
 export default async function CoachExercisesPage() {
-    await connection()
     const coach = await getCoach()
     if (!coach) redirect('/login')
 
