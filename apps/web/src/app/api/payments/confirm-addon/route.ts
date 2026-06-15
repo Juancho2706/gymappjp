@@ -105,7 +105,11 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'Coach no encontrado' }, { status: 404 })
         }
         if (!coach.subscription_mp_id) {
-            // Sin preapproval no hay dónde aplicar el PUT del valor completo desde la renovación.
+            // Backstop defensivo: el alta (POST /api/payments/addons) ya bloquea con 409
+            // NO_ACTIVE_SUBSCRIPTION ANTES de cobrar cuando no hay preapproval, así que este camino es
+            // rara vez alcanzable. Se conserva porque sin preapproval no hay dónde aplicar el PUT del
+            // valor completo desde la renovación. NO cambiar su comportamiento (no es el punto de
+            // prevención del charged-and-fail: ese vive en el alta, antes de tomar el dinero).
             return NextResponse.json(
                 { error: 'No hay una suscripción activa donde sumar el módulo.' },
                 { status: 409 }

@@ -194,6 +194,24 @@ export async function POST(request: Request) {
             )
         }
 
+        // ── Guard money-safety: NO cobrar si no hay suscripción recurrente donde sumar el módulo ──
+        // Un add-on self-service viaja sobre el preapproval recurrente vigente (la renovación aplica
+        // el valor completo vía PUT). Sin `subscription_mp_id` no hay dónde anclarlo: si dejáramos
+        // pasar el one-shot, MP cobraría la proración y luego confirm-addon rechazaría la activación
+        // (charged-and-fail → plata tomada, módulo no entregado). Lo bloqueamos ACÁ, antes de crear
+        // el checkout, para no tomar dinero que no podemos cumplir. (confirm-addon mantiene el mismo
+        // 409 como backstop defensivo, ya rara vez alcanzable.) Coaches reales de lanzamiento siempre
+        // tienen preapproval; esto solo blinda cuentas sin recurrente/manuales/de test.
+        if (!coach.subscription_mp_id) {
+            return NextResponse.json(
+                {
+                    error: 'Necesitás una suscripción recurrente activa para sumar módulos.',
+                    code: 'NO_ACTIVE_SUBSCRIPTION',
+                },
+                { status: 409 }
+            )
+        }
+
         // URLs del one-shot (back_urls + webhook) desde NEXT_PUBLIC_SITE_URL — mismo patrón que
         // create-preference. MP exige back_urls.success cuando se manda auto_return.
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'

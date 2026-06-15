@@ -3,6 +3,7 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { TIER_CONFIG } from '@/lib/constants'
 import { isAddonBillable } from '@/services/billing/addons.service'
 import { MODULE_KEYS, type ModuleKey } from '@/services/entitlements.service'
+import { getTestCoachIds } from '@/lib/test-accounts'
 import { MODULE_LABELS } from '../../_components/module-labels'
 
 export interface FinanzasData {
@@ -48,6 +49,7 @@ export const getFinanzasData = cache(
             revByTierRes,
             legacyTierCountsRes,
             eventsRes,
+            testIds,
         ] = await Promise.all([
             admin.from('coaches')
                 .select('id, full_name, brand_name, subscription_tier')
@@ -64,9 +66,13 @@ export const getFinanzasData = cache(
                 .select('id, coach_id, provider, provider_event_id, provider_status, payload, created_at')
                 .order('created_at', { ascending: false })
                 .limit(50),
+            // Cuentas de prueba a excluir de las métricas agregadas en TS (los RPCs de MRR
+            // se filtran en SQL con el mismo predicado — ver migración exclude_test_coaches).
+            getTestCoachIds(admin),
         ])
 
-        const paidCoaches = paidCoachesRes.data ?? []
+        // Excluir cuentas de prueba del cálculo TS de MRR/ARPC (los RPCs ya las excluyen en SQL).
+        const paidCoaches = (paidCoachesRes.data ?? []).filter((c) => !testIds.has(c.id))
         const mrrEstimate = paidCoaches.reduce((sum, c) => sum + (TIER_PRICES[c.subscription_tier ?? ''] ?? 0), 0)
         const paidCoachCount = paidCoaches.length
         const arpc = paidCoachCount > 0 ? Math.round(mrrEstimate / paidCoachCount) : 0
@@ -148,19 +154,22 @@ export const getAddonMetrics = cache(async (): Promise<AddonMetrics> => {
     const admin = createServiceRoleClient()
 
     // Filas vivas (active|cancel_pending) — facturabilidad se filtra en TS con isAddonBillable.
-    const [liveRes, churnRes] = await Promise.all([
+    // testIds: cuentas de prueba a excluir del MRR/adopción/churn de add-ons (mismo predicado
+    // que finanzas y los RPCs de MRR).
+    const [liveRes, churnRes, testIds] = await Promise.all([
         admin
             .from('coach_addons')
             .select('coach_id, module_key, status, source, price_clp, first_charged_at')
             .in('status', ['active', 'cancel_pending']),
         admin
             .from('coach_addons')
-            .select('cancelled_at')
+            .select('coach_id, cancelled_at')
             .eq('source', 'self_service')
             .eq('status', 'cancelled')
             .not('cancelled_at', 'is', null)
             .order('cancelled_at', { ascending: false })
             .limit(2000),
+        getTestCoachIds(admin),
     ])
 
     const liveRows = (liveRes.data ?? []) as Array<{
@@ -183,6 +192,7 @@ export const getAddonMetrics = cache(async (): Promise<AddonMetrics> => {
     }
 
     for (const row of liveRows) {
+        if (testIds.has(row.coach_id)) continue // cuenta de prueba — no contamina MRR/adopción
         if (!(row.module_key in payingByModule)) continue // módulo desconocido — defensivo
         if (row.source === 'admin_grant') {
             grantedByModule[row.module_key].add(row.coach_id)
@@ -209,7 +219,8 @@ export const getAddonMetrics = cache(async (): Promise<AddonMetrics> => {
 
     // Churn por mes (bajas self_service: cancelled_at agrupado YYYY-MM).
     const churnMap = new Map<string, number>()
-    for (const row of (churnRes.data ?? []) as Array<{ cancelled_at: string | null }>) {
+    for (const row of (churnRes.data ?? []) as Array<{ coach_id: string; cancelled_at: string | null }>) {
+        if (testIds.has(row.coach_id)) continue // cuenta de prueba — no contamina churn
         if (!row.cancelled_at) continue
         const ym = row.cancelled_at.slice(0, 7)
         churnMap.set(ym, (churnMap.get(ym) ?? 0) + 1)

@@ -349,6 +349,24 @@ describe('POST /api/payments/addons — guard P0-A (ALREADY_BILLED)', () => {
     })
 })
 
+// ── Guard money-safety: NO cobrar si el coach no tiene suscripción recurrente activa ─────────
+// Un add-on self-service viaja sobre el preapproval recurrente vigente. Sin `subscription_mp_id`
+// no hay dónde anclarlo: el one-shot cobraría y luego confirm-addon rechazaría la activación
+// (charged-and-fail). El alta lo bloquea ANTES de tomar el dinero. Coaches reales de lanzamiento
+// siempre tienen preapproval; esto blinda cuentas sin recurrente/manuales/de test.
+describe('POST /api/payments/addons — guard money-safety (NO_ACTIVE_SUBSCRIPTION)', () => {
+    it('409 NO_ACTIVE_SUBSCRIPTION si el coach no tiene preapproval recurrente: no inicia el cobro', async () => {
+        fetchCoachBillingRow.mockResolvedValue({ ...PAID_COACH, subscription_mp_id: null })
+        const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
+        expect(res.status).toBe(409)
+        const json = await res.json()
+        expect(json.code).toBe('NO_ACTIVE_SUBSCRIPTION')
+        expect(typeof json.error).toBe('string')
+        // CERO efectos: jamás se llega a crear el checkout / iniciar el one-shot del módulo.
+        expect(activateAddonForCoach).not.toHaveBeenCalled()
+    })
+})
+
 // ── Guard P0-4b: alta de add-on mientras un UPGRADE de plan está en vuelo ────────────────────
 // El upgrade es un one-shot prorrateado que se confirma async (confirm-upgrade/webhook) y, al
 // activarse, recomputa el compuesto desde listLive → plegaría ESTE add-on nuevo dos veces (una en
