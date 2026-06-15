@@ -12,7 +12,7 @@ import {
 import { Dumbbell, Search, X, Info, Loader2 } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
 import { filterExercises } from "@/lib/utils";
-import { exerciseEmbedUrl } from "@/lib/youtube";
+import { exerciseEmbedUrl, extractYoutubeVideoId } from "@/lib/youtube";
 import { getExerciseInstructions } from "./_actions/exercises.actions";
 
 type Exercise = Tables<"exercises">;
@@ -60,25 +60,19 @@ function ExerciseCard({
     }
 
     const url = ex.video_url;
-    const isYouTube = url?.includes("youtube.com") || url?.includes("youtu.be");
-    const getYouTubeId = (u: string) => {
-      const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
-      return match ? match[1] : null;
-    };
+    const ytId = url ? extractYoutubeVideoId(url) : null;
 
-    if (isYouTube) {
-      const ytId = getYouTubeId(url!);
-      return ytId ? (
+    if (ytId) {
+      return (
         <FadeImage
           src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
           alt={ex.name}
         />
-      ) : (
-        <Dumbbell className="w-6 h-6 text-muted-foreground/50" />
       );
     }
 
-    if (url) {
+    const isYouTube = url?.includes("youtube.com") || url?.includes("youtu.be");
+    if (url && !isYouTube) {
       return <FadeImage src={url} alt={ex.name} />;
     }
 
@@ -265,13 +259,8 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
 
                 const url = selectedExercise.video_url;
                 const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be');
-                const getYouTubeId = (u: string) => {
-                  const match = u.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
-                  return match ? match[1] : null;
-                };
-
                 if (isYouTube) {
-                  const ytId = getYouTubeId(url!);
+                  const ytId = extractYoutubeVideoId(url!);
                   const ex = selectedExercise as any
                   const embedUrl = ytId
                     ? exerciseEmbedUrl(ytId, {

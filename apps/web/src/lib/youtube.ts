@@ -114,7 +114,7 @@ export function getYoutubeThumbnailUrl(
 ): string | null {
   const id = extractYoutubeVideoId(url)
   if (!id) return null
-  return `https://i.ytimg.com/vi/${id}/${THUMBNAIL_FILENAMES[quality]}`
+  return `https://img.youtube.com/vi/${id}/${THUMBNAIL_FILENAMES[quality]}`
 }
 
 /**

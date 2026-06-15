@@ -163,13 +163,13 @@ describe('youtube — isYoutubeUrl', () => {
 describe('youtube — getYoutubeThumbnailUrl', () => {
   it('returns mqdefault by default', () => {
     expect(getYoutubeThumbnailUrl('https://youtu.be/dQw4w9WgXcQ')).toBe(
-      'https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
+      'https://img.youtube.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
     )
   })
 
   it('respects maxres quality', () => {
     expect(getYoutubeThumbnailUrl('https://youtu.be/dQw4w9WgXcQ', 'maxres')).toBe(
-      'https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
+      'https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg',
     )
   })
 

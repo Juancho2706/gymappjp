@@ -146,7 +146,7 @@ function ExerciseBlockInner({
                             src={thumb}
                             alt={block.exercise_name}
                             loading="lazy"
-                            className="w-full h-full object-cover mix-blend-multiply dark:mix-blend-screen opacity-90 group-hover:opacity-100 transition-opacity"
+                            className={`w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity ${thumb.includes('img.youtube.com') ? '' : 'mix-blend-multiply dark:mix-blend-screen'}`}
                         />
                     ) : (
                         <div className="w-full h-full opacity-20 bg-current"></div>

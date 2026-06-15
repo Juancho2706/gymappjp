@@ -28,7 +28,7 @@ import type { IntervalConfig, WorkoutArea, ExerciseType as WorkoutKind } from '@
 import { effectiveExerciseType, compactDistance, compactDuration } from '@/lib/workout-exercise-type'
 import { isTimeableInterval } from '@/lib/workout-interval'
 import { formatPace } from '@/domain/cardio/pace'
-import { exerciseEmbedUrl } from '@/lib/youtube'
+import { exerciseEmbedUrl, extractYoutubeVideoId } from '@/lib/youtube'
 import type { ClientCardioView } from './_data/workout-execution.queries'
 
 interface ExerciseType {
@@ -796,12 +796,7 @@ export function WorkoutExecutionClient({
                             if (!exercise) return null
                             const isYouTube = exercise.video_url?.includes('youtube.com') || exercise.video_url?.includes('youtu.be');
                             
-                            const getYouTubeId = (url: string) => {
-                                const match = url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/);
-                                return match ? match[1] : null;
-                            };
-                            
-                            const ytId = isYouTube && exercise.video_url ? getYouTubeId(exercise.video_url) : null;
+                            const ytId = exercise.video_url ? extractYoutubeVideoId(exercise.video_url) : null;
                             
                             if (isYouTube && ytId) {
                                 return (

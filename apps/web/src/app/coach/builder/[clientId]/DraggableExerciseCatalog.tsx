@@ -60,7 +60,7 @@ function DraggableExerciseItem({ exercise, onSelect, onPreview, onTapAdd }: Drag
                                 src={thumb}
                                 alt={exercise.name}
                                 loading="lazy"
-                                className="w-full h-full object-cover mix-blend-multiply dark:mix-blend-normal"
+                                className={`w-full h-full object-cover ${thumb.includes('img.youtube.com') ? '' : 'mix-blend-multiply dark:mix-blend-normal'}`}
                             />
                         ) : (
                             <Activity className="w-5 h-5 opacity-50" style={{ color: getMuscleColor(exercise.muscle_group) }} />
