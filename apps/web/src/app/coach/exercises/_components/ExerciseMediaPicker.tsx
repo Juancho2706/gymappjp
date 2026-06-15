@@ -5,7 +5,8 @@ import Image from 'next/image'
 import { toast } from 'sonner'
 import { FileImage, Image as ImageIcon, Loader2, Play, Upload, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { exerciseEmbedUrl } from '@/lib/youtube'
+import { extractYoutubeVideoId } from '@/lib/youtube'
+import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import {
     getSignedUploadUrlAction,
     confirmExerciseMediaUploadAction,
@@ -25,6 +26,8 @@ interface Props {
     onChange: (next: MediaValue) => void
     /** Para mostrar errores de Zod del campo asociado. */
     error?: string
+    /** Reporta la duración real del video de YouTube (segundos) para validar el recorte. */
+    onDuration?: (seconds: number) => void
 }
 
 const TABS: { kind: MediaKind; label: string; icon: typeof Play }[] = [
@@ -33,7 +36,7 @@ const TABS: { kind: MediaKind; label: string; icon: typeof Play }[] = [
     { kind: 'image', label: 'Imagen', icon: ImageIcon },
 ]
 
-export function ExerciseMediaPicker({ value, onChange, error }: Props) {
+export function ExerciseMediaPicker({ value, onChange, error, onDuration }: Props) {
     const [activeTab, setActiveTab] = useState<MediaKind>(value.kind)
 
     useEffect(() => {
@@ -81,6 +84,7 @@ export function ExerciseMediaPicker({ value, onChange, error }: Props) {
                     <YoutubePanel
                         value={value.kind === 'youtube' ? value.value : ''}
                         onChange={(v) => onChange({ kind: 'youtube', value: v })}
+                        onDuration={onDuration}
                     />
                 )}
                 {activeTab === 'gif' && (
@@ -110,8 +114,8 @@ export function ExerciseMediaPicker({ value, onChange, error }: Props) {
 
 // ─── YouTube Tab ──────────────────────────────────────────────────────────────
 
-function YoutubePanel({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-    const embedUrl = value ? exerciseEmbedUrl(value) : null
+function YoutubePanel({ value, onChange, onDuration }: { value: string; onChange: (v: string) => void; onDuration?: (seconds: number) => void }) {
+    const videoId = value ? extractYoutubeVideoId(value) : null
 
     return (
         <div className="space-y-3">
@@ -129,20 +133,17 @@ function YoutubePanel({ value, onChange }: { value: string; onChange: (v: string
                     Pegá el link. Asegurate que el video sea <strong>Unlisted</strong> o Público en YouTube.
                 </p>
             </div>
-            {embedUrl && (
+            {videoId && (
                 <div className="rounded-xl overflow-hidden border border-border aspect-video bg-black">
-                    <iframe
-                        src={embedUrl}
+                    <ExerciseVideo
+                        videoId={videoId}
                         className="w-full h-full"
-                        sandbox="allow-scripts allow-same-origin allow-presentation"
-                        loading="lazy"
-                        referrerPolicy="strict-origin-when-cross-origin"
-                        allow="encrypted-media; picture-in-picture"
                         title="Preview del video"
+                        onDuration={onDuration}
                     />
                 </div>
             )}
-            {value && !embedUrl && (
+            {value && !videoId && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
                     URL inválida. Usá un link de youtube.com o youtu.be.
                 </p>

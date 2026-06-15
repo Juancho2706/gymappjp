@@ -96,6 +96,9 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
     const [instructions, setInstructions] = useState(exercise?.instructions?.join('\n') ?? '')
     const [videoStart, setVideoStart] = useState(secondsToMmss((exercise as Record<string, unknown>)?.video_start_time as number | null | undefined))
     const [videoEnd, setVideoEnd] = useState(secondsToMmss((exercise as Record<string, unknown>)?.video_end_time as number | null | undefined))
+    // Duración real del video (la reporta el player del preview) para validar el recorte.
+    const [videoDuration, setVideoDuration] = useState<number | null>(null)
+    const [durationError, setDurationError] = useState<string | null>(null)
     const [exerciseType, setExerciseType] = useState((exercise as Record<string, unknown> | undefined)?.exercise_type as string ?? 'strength')
     const [difficulty, setDifficulty] = useState(exercise?.difficulty ?? '')
 
@@ -124,6 +127,12 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
         const isYt = media.kind === 'youtube' && !!media.value
         const startSec = isYt ? mmssToSeconds(videoStart) : null
         const endSec = isYt ? mmssToSeconds(videoEnd) : null
+        // Validación client-side: el fin no puede superar la duración real del video.
+        if (endSec != null && videoDuration != null && endSec > videoDuration) {
+            setDurationError(`El video dura ${secondsToMmss(Math.floor(videoDuration))}. El tiempo de fin no puede superarlo.`)
+            return
+        }
+        setDurationError(null)
         formData.set('video_start_time', startSec != null ? String(startSec) : '')
         formData.set('video_end_time', endSec != null ? String(endSec) : '')
         startTransition(() => {
@@ -246,6 +255,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                         <ExerciseMediaPicker
                             value={media}
                             onChange={setMedia}
+                            onDuration={setVideoDuration}
                             error={
                                 state.fieldErrors?.video_url?.[0] ??
                                 state.fieldErrors?.gif_url?.[0] ??
@@ -279,7 +289,11 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                             </div>
                             <p className="text-xs text-muted-foreground">
                                 El video loopea ese tramo (salta intro/charla). Vacío = video completo.
+                                {videoDuration != null && ` El video dura ${secondsToMmss(Math.floor(videoDuration))}.`}
                             </p>
+                            {durationError && (
+                                <p className="text-xs text-destructive">{durationError}</p>
+                            )}
                             {state.fieldErrors?.video_end_time && (
                                 <p className="text-xs text-destructive">{state.fieldErrors.video_end_time[0]}</p>
                             )}
