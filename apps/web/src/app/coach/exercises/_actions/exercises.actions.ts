@@ -9,8 +9,9 @@ import { getCoachOrgContext } from '@/lib/coach-context'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { normalizeYoutubeEmbedUrl } from '@/lib/youtube'
 import { deleteExerciseMediaByUrlAction } from './exercise-media.actions'
-import { mirrorAndSaveExerciseThumbnail, clearExerciseThumbnail } from '@/lib/exercises/thumbnail-mirror'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+// thumbnail-mirror se importa DINÁMICO en los call sites (tiene 'server-only'); evita que su
+// carga afecte el module-load del server action.
 
 // DIAGNÓSTICO temporal: log a admin_audit_logs (service-role) para cazar el error de create.
 // TODO: quitar una vez resuelto el "Oops" al crear ejercicio.
@@ -332,6 +333,7 @@ export async function createExerciseAction(
         // Mirror del thumbnail de YouTube a Storage (durabilidad). Best-effort: NUNCA bloquea el save.
         if (parsed.data.media_kind === 'youtube' && media.video_url) {
             try {
+                const { mirrorAndSaveExerciseThumbnail } = await import('@/lib/exercises/thumbnail-mirror')
                 await mirrorAndSaveExerciseThumbnail(exercise.id, media.video_url)
             } catch (mirrorErr) {
                 console.error('createExerciseAction mirror fail (ignorado):', mirrorErr)
@@ -421,6 +423,7 @@ export async function updateExerciseAction(
 
         // Sincronizar el mirror del thumbnail (durabilidad). Best-effort: NUNCA bloquea.
         try {
+            const { mirrorAndSaveExerciseThumbnail, clearExerciseThumbnail } = await import('@/lib/exercises/thumbnail-mirror')
             if (parsed.data.media_kind === 'youtube' && media.video_url) {
                 await mirrorAndSaveExerciseThumbnail(exerciseId, media.video_url)
             } else {
