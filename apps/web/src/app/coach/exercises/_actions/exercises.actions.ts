@@ -47,7 +47,14 @@ const exerciseSchema = z.object({
             (v) => !v || v.startsWith(SUPABASE_MEDIA_PREFIX),
             'URL de imagen no permitida.'
         ),
+    // Recorte del video de YouTube (segundos). El player loopea [start, end].
+    video_start_time: z.number().int().min(0).optional(),
+    video_end_time: z.number().int().min(0).optional(),
 })
+    .refine(
+        (d) => d.video_start_time == null || d.video_end_time == null || d.video_end_time > d.video_start_time,
+        { message: 'El fin debe ser mayor que el inicio.', path: ['video_end_time'] },
+    )
 
 export type ExerciseActionState = {
     error?: string
@@ -75,6 +82,8 @@ function parseExerciseFormData(formData: FormData) {
         video_url: (formData.get('video_url') as string) || undefined,
         gif_url: (formData.get('gif_url') as string) || undefined,
         image_url: (formData.get('image_url') as string) || undefined,
+        video_start_time: formData.get('video_start_time') ? Number(formData.get('video_start_time')) : undefined,
+        video_end_time: formData.get('video_end_time') ? Number(formData.get('video_end_time')) : undefined,
     }
 }
 
@@ -277,6 +286,8 @@ export async function createExerciseAction(
             video_url: media.video_url,
             gif_url: media.gif_url,
             image_url: media.image_url,
+            video_start_time: parsed.data.media_kind === 'youtube' ? (parsed.data.video_start_time ?? null) : null,
+            video_end_time: parsed.data.media_kind === 'youtube' ? (parsed.data.video_end_time ?? null) : null,
             source: owner.orgId ? 'org' : owner.teamId ? 'team' : 'coach',
         })
         .select('id')
@@ -352,6 +363,8 @@ export async function updateExerciseAction(
             video_url: media.video_url,
             gif_url: media.gif_url,
             image_url: media.image_url,
+            video_start_time: parsed.data.media_kind === 'youtube' ? (parsed.data.video_start_time ?? null) : null,
+            video_end_time: parsed.data.media_kind === 'youtube' ? (parsed.data.video_end_time ?? null) : null,
         })
         .eq('id', exerciseId)
     applyExerciseOwnerScope(updateQuery, owner)

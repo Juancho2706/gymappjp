@@ -25,6 +25,29 @@ import {
 import type { ExerciseCatalogRow } from '../_data/exercises.queries'
 import { ExerciseMediaPicker, type MediaValue } from './ExerciseMediaPicker'
 
+/** Segundos → "m:ss" para los inputs de recorte de video (vacío si null). */
+function secondsToMmss(sec: number | null | undefined): string {
+    if (sec == null) return ''
+    const m = Math.floor(sec / 60)
+    const s = sec % 60
+    return `${m}:${String(s).padStart(2, '0')}`
+}
+
+/** "m:ss" o segundos sueltos → número de segundos (null si vacío/ inválido). */
+function mmssToSeconds(str: string): number | null {
+    const t = str.trim()
+    if (!t) return null
+    if (t.includes(':')) {
+        const [m, s] = t.split(':')
+        const mi = parseInt(m, 10)
+        const se = parseInt(s, 10)
+        if (isNaN(mi) || isNaN(se)) return null
+        return mi * 60 + se
+    }
+    const n = parseInt(t, 10)
+    return isNaN(n) ? null : n
+}
+
 const EQUIPMENT_OPTIONS = [
     'Peso libre',
     'Máquina',
@@ -71,12 +94,16 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
     const [name, setName] = useState(exercise?.name ?? '')
     const [secondaryMuscles, setSecondaryMuscles] = useState(exercise?.secondary_muscles?.join(', ') ?? '')
     const [instructions, setInstructions] = useState(exercise?.instructions?.join('\n') ?? '')
+    const [videoStart, setVideoStart] = useState(secondsToMmss((exercise as Record<string, unknown>)?.video_start_time as number | null | undefined))
+    const [videoEnd, setVideoEnd] = useState(secondsToMmss((exercise as Record<string, unknown>)?.video_end_time as number | null | undefined))
 
     useEffect(() => {
         setMedia(initialMedia(exercise))
         setName(exercise?.name ?? '')
         setSecondaryMuscles(exercise?.secondary_muscles?.join(', ') ?? '')
         setInstructions(exercise?.instructions?.join('\n') ?? '')
+        setVideoStart(secondsToMmss((exercise as Record<string, unknown>)?.video_start_time as number | null | undefined))
+        setVideoEnd(secondsToMmss((exercise as Record<string, unknown>)?.video_end_time as number | null | undefined))
     }, [exercise])
 
     const action = exercise
@@ -90,6 +117,11 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
         formData.set('video_url', media.kind === 'youtube' ? media.value : '')
         formData.set('gif_url', media.kind === 'gif' ? media.value : '')
         formData.set('image_url', media.kind === 'image' ? media.value : '')
+        const isYt = media.kind === 'youtube' && !!media.value
+        const startSec = isYt ? mmssToSeconds(videoStart) : null
+        const endSec = isYt ? mmssToSeconds(videoEnd) : null
+        formData.set('video_start_time', startSec != null ? String(startSec) : '')
+        formData.set('video_end_time', endSec != null ? String(endSec) : '')
         startTransition(() => {
             formAction(formData)
         })
@@ -212,6 +244,38 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                             }
                         />
                     </div>
+
+                    {/* Recorte del video de YouTube (start/end) — loopea el tramo (salta intro) */}
+                    {media.kind === 'youtube' && media.value && (
+                        <div className="space-y-1.5">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium text-foreground">Empieza en (m:ss)</label>
+                                    <Input
+                                        value={videoStart}
+                                        onChange={(e) => setVideoStart(e.target.value)}
+                                        placeholder="0:20"
+                                        inputMode="numeric"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium text-foreground">Termina en (opcional)</label>
+                                    <Input
+                                        value={videoEnd}
+                                        onChange={(e) => setVideoEnd(e.target.value)}
+                                        placeholder="1:30"
+                                        inputMode="numeric"
+                                    />
+                                </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                El video loopea ese tramo (salta intro/charla). Vacío = video completo.
+                            </p>
+                            {state.fieldErrors?.video_end_time && (
+                                <p className="text-xs text-destructive">{state.fieldErrors.video_end_time[0]}</p>
+                            )}
+                        </div>
+                    )}
 
                     {/* Músculos secundarios */}
                     <div className="space-y-1.5">
