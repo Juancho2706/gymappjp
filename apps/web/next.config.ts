@@ -23,6 +23,17 @@ const nextConfig: NextConfig = {
       },
     ]
   },
+  // Enterprise archivado comercialmente (2026-06): la pagina de marketing /enterprise del dominio
+  // principal redirige PERMANENTE a /pricing (Teams). permanent:true = 308 → Google des-indexa el
+  // viejo /enterprise. El SUBDOMINIO enterprise.eva-app.cl lo redirige Vercel a nivel de dominio (308).
+  // Los redirects de next.config corren ANTES del middleware (proxy.ts), asi que /enterprise nunca
+  // llega a la pagina ni al proxy. Ver docs/plans/estrategia/01-PLAN-archivado-enterprise.md (F6).
+  async redirects() {
+    return [
+      { source: '/enterprise', destination: '/pricing', permanent: true },
+      { source: '/enterprise/:path*', destination: '/pricing', permanent: true },
+    ]
+  },
   // Proxy PostHog through our domain to bypass adblockers.
   // Path /ph/* maps to the PostHog ingestion endpoint.
   async rewrites() {
