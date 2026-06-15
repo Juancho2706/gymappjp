@@ -26,12 +26,15 @@ export async function GET(req: Request) {
     const admin = createServiceRoleClient()
     const cutoff = new Date(Date.now() - RETRY_AFTER_DAYS * 86_400_000).toISOString()
 
+    // Filtrar a YouTube en el SELECT (no en el loop): el catálogo de ExerciseDB tiene ~800 filas
+    // con un GIF en video_url + thumbnail_url NULL. Sin este filtro inundaban el batch de 30, el
+    // loop las descartaba (no-YouTube) y los ejercicios de YouTube nunca entraban al batch.
     const { data: rows, error } = await admin
         .from('exercises')
         .select('id, video_url')
         .is('thumbnail_url', null)
         .is('deleted_at', null)
-        .not('video_url', 'is', null)
+        .ilike('video_url', '%youtu%')
         .or(`thumbnail_checked_at.is.null,thumbnail_checked_at.lt.${cutoff}`)
         .limit(BATCH)
 
