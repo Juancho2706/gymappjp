@@ -23,7 +23,8 @@ export const MUSCLE_GROUPS = [
     'Espalda Alta',
     'Isquiotibiales',
     'Pectorales',
-    'Trapecios'
+    'Trapecios',
+    'Movilidad'
 ] as const;
 
 export type MuscleGroup = typeof MUSCLE_GROUPS[number];
