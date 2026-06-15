@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { connection } from 'next/server'
 import { ExerciseCatalogClient } from './ExerciseCatalogClient'
 import { getCoach } from '@/lib/coach/get-coach'
 import { getCoachOrgContext } from '@/lib/coach-context'
@@ -15,6 +16,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function CoachExercisesPage() {
   try {
+    await connection()
     const coach = await getCoach()
     if (!coach) redirect('/login')
 

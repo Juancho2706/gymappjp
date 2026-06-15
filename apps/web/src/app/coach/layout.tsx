@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { connection } from 'next/server'
 import { CoachSidebar } from '@/components/coach/CoachSidebar'
 import { CoachMainWrapper } from '@/components/coach/CoachMainWrapper'
 import { CoachSuccessAnimationLazy } from '@/components/coach/CoachSuccessAnimationLazy'
@@ -46,6 +47,11 @@ export default async function CoachLayout({
 }: {
     children: React.ReactNode
 }) {
+    // Next 16: re-bindea el async-context de cookies en ESTE call stack antes de los reads
+    // cacheados (getCoach via React.cache). Sin esto, el re-render del server action pierde el
+    // contexto -> DynamicServerError ("used cookies") en la serializacion del RSC. force-dynamic
+    // solo no alcanza para esta variante (async-context perdido).
+    await connection()
     const coach = await getCoach()
 
     if (!coach) {
