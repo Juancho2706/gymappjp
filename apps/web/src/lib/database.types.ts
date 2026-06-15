@@ -1884,6 +1884,8 @@ export type Database = {
           team_id: string | null
           thumbnail_checked_at: string | null
           thumbnail_url: string | null
+          video_end_time: number | null
+          video_start_time: number | null
           video_url: string | null
         }
         Insert: {
@@ -1907,6 +1909,8 @@ export type Database = {
           team_id?: string | null
           thumbnail_checked_at?: string | null
           thumbnail_url?: string | null
+          video_end_time?: number | null
+          video_start_time?: number | null
           video_url?: string | null
         }
         Update: {
@@ -1930,6 +1934,8 @@ export type Database = {
           team_id?: string | null
           thumbnail_checked_at?: string | null
           thumbnail_url?: string | null
+          video_end_time?: number | null
+          video_start_time?: number | null
           video_url?: string | null
         }
         Relationships: [

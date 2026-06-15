@@ -13,6 +13,8 @@ export interface ExerciseType {
     name: string
     muscle_group: string
     video_url: string | null
+    video_start_time: number | null
+    video_end_time: number | null
     gif_url: string | null
     instructions: string[] | null
     /** Tipo del catálogo (strength|cardio|mobility|roller); null en snapshots legacy. */
@@ -94,7 +96,7 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
                 exercise_type_override, side_mode, reps_value, reps_unit, load_value, load_unit,
                 distance_value, distance_unit, duration_sec, target_pace_sec_per_km, hr_zone,
                 instructions, interval_config,
-                exercises ( id, name, muscle_group, video_url, gif_url, instructions, exercise_type )
+                exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, instructions, exercise_type )
             )
         `)
         .eq('id', planId)

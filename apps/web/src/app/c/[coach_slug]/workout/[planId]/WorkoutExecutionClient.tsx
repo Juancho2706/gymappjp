@@ -28,7 +28,8 @@ import type { IntervalConfig, WorkoutArea, ExerciseType as WorkoutKind } from '@
 import { effectiveExerciseType, compactDistance, compactDuration } from '@/lib/workout-exercise-type'
 import { isTimeableInterval } from '@/lib/workout-interval'
 import { formatPace } from '@/domain/cardio/pace'
-import { exerciseEmbedUrl, extractYoutubeVideoId } from '@/lib/youtube'
+import { extractYoutubeVideoId } from '@/lib/youtube'
+import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import type { ClientCardioView } from './_data/workout-execution.queries'
 
 interface ExerciseType {
@@ -36,6 +37,8 @@ interface ExerciseType {
     name: string
     muscle_group: string
     video_url: string | null
+    video_start_time: number | null
+    video_end_time: number | null
     gif_url: string | null
     instructions: string[] | null
     exercise_type?: string | null
@@ -801,12 +804,12 @@ export function WorkoutExecutionClient({
                             if (isYouTube && ytId) {
                                 return (
                                     <div className="relative w-full h-48 md:h-64 shrink-0 bg-black/5 dark:bg-black/20 flex items-center justify-center">
-                                        <iframe
+                                        <ExerciseVideo
+                                            videoId={ytId}
+                                            start={exercise.video_start_time}
+                                            end={exercise.video_end_time}
                                             className="w-full h-full"
-                                            src={exerciseEmbedUrl(ytId) ?? undefined}
                                             title={exercise.name}
-                                            referrerPolicy="strict-origin-when-cross-origin"
-                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                                         />
                                     </div>
                                 );

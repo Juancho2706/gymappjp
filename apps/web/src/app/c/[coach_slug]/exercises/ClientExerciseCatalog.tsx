@@ -12,7 +12,8 @@ import {
 import { Dumbbell, Search, X, Info, Loader2 } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
 import { filterExercises } from "@/lib/utils";
-import { exerciseEmbedUrl, extractYoutubeVideoId } from "@/lib/youtube";
+import { extractYoutubeVideoId } from "@/lib/youtube";
+import { ExerciseVideo } from "@/components/exercise/ExerciseVideo";
 import { getExerciseInstructions } from "./_actions/exercises.actions";
 
 type Exercise = Tables<"exercises">;
@@ -262,21 +263,14 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                 if (isYouTube) {
                   const ytId = extractYoutubeVideoId(url!);
                   const ex = selectedExercise as any
-                  const embedUrl = ytId
-                    ? exerciseEmbedUrl(ytId, {
-                        start: ex.video_start_time,
-                        end: ex.video_end_time,
-                      }) ?? ''
-                    : '';
-
                   return ytId ? (
                     <div className="sticky top-0 z-10 relative w-full h-48 md:h-64 shrink-0 bg-black/5 dark:bg-black/20 flex items-center justify-center border-b border-border/50">
-                      <iframe
+                      <ExerciseVideo
+                        videoId={ytId}
+                        start={ex.video_start_time}
+                        end={ex.video_end_time}
                         className="w-full h-full"
-                        src={embedUrl}
                         title={selectedExercise.name}
-                        referrerPolicy="strict-origin-when-cross-origin"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                       />
                     </div>
                   ) : null;

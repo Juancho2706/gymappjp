@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { MUSCLE_GROUPS } from '@/lib/constants'
 import { filterExercises, cn } from '@/lib/utils'
-import { exerciseEmbedUrl, exerciseThumbnailUrl, extractYoutubeVideoId } from '@/lib/youtube'
+import { exerciseThumbnailUrl, extractYoutubeVideoId } from '@/lib/youtube'
+import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import type { Tables } from '@/lib/database.types'
 import { getMuscleColor } from './muscle-colors'
 
@@ -317,12 +318,12 @@ export function DraggableExerciseCatalog({
                         if (youtubeId) {
                             return (
                                 <div className="aspect-video relative rounded-xl overflow-hidden bg-muted mt-4 border border-border flex items-center justify-center">
-                                    <iframe
+                                    <ExerciseVideo
+                                        videoId={youtubeId}
+                                        start={previewExercise?.video_start_time}
+                                        end={previewExercise?.video_end_time}
                                         className="w-full h-full"
-                                        src={exerciseEmbedUrl(youtubeId) ?? undefined}
                                         title={previewExercise?.name}
-                                        referrerPolicy="strict-origin-when-cross-origin"
-                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                                     />
                                 </div>
                             )

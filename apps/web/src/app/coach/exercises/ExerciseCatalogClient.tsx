@@ -16,7 +16,8 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { filterExercises } from '@/lib/utils'
-import { exerciseEmbedUrl, extractYoutubeVideoId } from '@/lib/youtube'
+import { extractYoutubeVideoId } from '@/lib/youtube'
+import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ExerciseCreateButton } from './_components/ExerciseCreateButton'
 
@@ -218,12 +219,12 @@ function ExercisePreviewModal({
                 {/* Media demonstration area */}
                 <div className="sticky top-0 relative w-full bg-white flex items-center justify-center border-b border-border h-56 md:h-72 shrink-0 overflow-hidden z-10">
                     {ytId ? (
-                        <iframe
+                        <ExerciseVideo
+                            videoId={ytId}
+                            start={exercise.video_start_time}
+                            end={exercise.video_end_time}
                             className="w-full h-full"
-                            src={exerciseEmbedUrl(ytId) ?? undefined}
                             title={exercise.name}
-                            referrerPolicy="strict-origin-when-cross-origin"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                         />
                     ) : (directMedia || rawVideoUrl) ? (
                         // eslint-disable-next-line @next/next/no-img-element
