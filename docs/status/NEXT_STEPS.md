@@ -1,6 +1,16 @@
 # NEXT STEPS — Prioridades actuales
 
-> Leer al inicio de cada sesión (referenciado en `CLAUDE.md`). Última actualización: 2026-06-14 (billing add-ons + cambio de plan: auditoría money-safety + UI/UX + sweep pre-merge en `preview/addons-test` — LISTO PARA MERGE, ver bloque abajo).
+> Leer al inicio de cada sesión (referenciado en `CLAUDE.md`). Última actualización: 2026-06-15 (media de ejercicios: mirror de thumbnails + recorte de video + player con API JS de YouTube + catálogo Movilidad/cardio — EN PROD, ver bloque abajo).
+
+### Estado 2026-06-15 — Media de ejercicios (thumbnails durables + recorte de video) EN PROD (master)
+
+Todo mergeado a master y aplicado en prod (2 migraciones aditivas).
+
+- **DB (`exercises`, 2 migraciones aditivas/idempotentes/forward-only):** `20260615010000_exercises_thumbnail_url.sql` agrega `thumbnail_url` + `thumbnail_checked_at` (CHECK host-restringido al bucket `exercise-media`, NOT VALID; escritura solo service-role). `20260615020000_exercises_video_trim.sql` agrega `video_start_time` + `video_end_time` (segundos enteros, CHECK `end > start`; user-editable — `exercises` no tiene grant de columna que restrinja).
+- **Mirror de thumbnails de YouTube → Storage (durabilidad):** `lib/exercises/thumbnail-mirror.ts` (service-role, best-effort, descarga `mqdefault.jpg` → `sharp` → webp → bucket `exercise-media`, path `yt/<id>.webp` dedup por video). Corre sincrónico al crear/editar el ejercicio + cron diario de backfill/reintento `/api/cron/mirror-exercise-thumbnails` (`0 4 * * *` en `vercel.json`, cursor `thumbnail_url IS NULL`, reintento cada 7d vía `thumbnail_checked_at`). Razón: si el canal borra/privatiza el video, `img.youtube.com` devuelve un JPEG gris 404 decodable (degradación invisible). El render (`exerciseThumbnailUrl` en `lib/youtube.ts`) prioriza `thumbnail_url` sobre el hotlink.
+- **Player `ExerciseVideo`** (`components/exercise/ExerciseVideo.tsx`): API JS de YouTube (`youtube-nocookie`), comportamiento "GIF" (silencioso, sin controles, loop) que honra el recorte `[start, end]` con `seekTo(start)` al terminar/cruzar `end`. Reemplaza el iframe simple en `WorkoutExecutionClient`, `ClientExerciseCatalog`, `ExerciseCatalogClient`, `DraggableExerciseCatalog`. CSP (`vercel.json`): `https://www.youtube.com` en `script-src` + `youtube-nocookie`/`youtube` en `frame-src`.
+- **Form de ejercicio** (`ExerciseFormModal`): campo de recorte start/end (m:ss) visible cuando la media es YouTube; cableado a `createExerciseAction`/`updateExerciseAction` (columnas `video_start_time`/`video_end_time`).
+- **Catálogo:** categoría **"Movilidad"** agregada a `MUSCLE_GROUPS` (`lib/constants.ts`); los 13 ejercicios de movilidad/roller reclasificados a `muscle_group='Movilidad'`. **8 ejercicios de cardio globales** seedeados (`scripts/seed-cardio-exercises.mjs`) para que el módulo cardio sirva out-of-the-box.
 
 ### Estado 2026-06-14 — Billing add-ons self-service + cambio de plan: LISTO PARA MERGE (rama `preview/addons-test`)
 

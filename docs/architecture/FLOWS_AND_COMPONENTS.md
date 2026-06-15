@@ -1,6 +1,6 @@
 # Flows and Component Map
 
-Ultima modificacion: 2026-06-13 (plan estrategia 05 — cobro compuesto de add-ons + override CEO write-through)
+Ultima modificacion: 2026-06-15 (media de ejercicios — mirror de thumbnails + recorte de video + player ExerciseVideo)
 
 ## Zonas de producto
 
@@ -106,6 +106,19 @@ El coach standalone tiene **un solo preapproval MercadoPago** cuyo monto = base 
 | Baja | `POST /api/payments/addons/cancel` → `requestAddonCancellation` | regla 4 (ya cobrado) → `cancel_pending` + PUT que baja el monto YA + `expires_at` al corte; regla 3 (mensual sin cobrar, compromiso minimo) → `cancel_pending` SIN PUT (el corte lo cobra igual), `expires_at` diferido al 1er cobro |
 | Webhook | `app/api/payments/webhook/route.ts` | materializa filas del `external_reference` (preapproval `authorized` + one-shot aprobado); `markFirstCharged` (set-once, mensual); snapshot `billing_snapshots` por cada cobro; evento `updated` = confirmacion del PUT (alerta drift si difiere); rama `expire` → `cancelAllForCoach` |
 | Reconcile diario | `app/api/cron/mp-reconcile/route.ts` (`0 10 * * *`) | expira `cancel_pending` vencidos; alerta drift de monto, kill-switch prolongado (`EVA_DISABLED_MODULES` > N dias sobre add-on facturable) y `paused` prolongado (dunning > N dias) |
+
+## Flujo: media de ejercicios (thumbnails durables + recorte de video)
+
+El video de un ejercicio (YouTube) se reproduce en modo "GIF" (silencioso, sin controles, en loop) y honra un recorte opcional `[start, end]`. El thumbnail de la biblioteca se espeja a Storage para durabilidad. Columnas en `exercises`: `thumbnail_url`/`thumbnail_checked_at` (mirror, service-role) + `video_start_time`/`video_end_time` (recorte, user-editable).
+
+| Paso | Ruta/archivo principal | Detalle |
+|---|---|---|
+| Reproducir video | `components/exercise/ExerciseVideo.tsx` | API JS de YouTube (`youtube-nocookie`); loop del tramo `[start, end]` con `seekTo(start)`. UNICA superficie de reproduccion — reemplaza el iframe a mano en `WorkoutExecutionClient`, `ClientExerciseCatalog`, `ExerciseCatalogClient`, `DraggableExerciseCatalog`. CSP (`vercel.json`): `www.youtube.com` en `script-src` + `youtube-nocookie`/`youtube` en `frame-src` |
+| Editar recorte | `app/coach/exercises/_components/ExerciseFormModal.tsx` | campo start/end (m:ss) visible solo si la media es YouTube; cableado a `createExerciseAction`/`updateExerciseAction` (`video_start_time`/`video_end_time`) |
+| Render del thumbnail | `lib/youtube.ts` → `exerciseThumbnailUrl` | prioriza `thumbnail_url` (espejo en Storage) sobre el hotlink `img.youtube.com` |
+| Mirror del thumbnail | `lib/exercises/thumbnail-mirror.ts` (service-role, best-effort) | descarga `mqdefault.jpg` → `sharp` → webp → bucket `exercise-media` (path `yt/<id>.webp`, dedup por video). Corre sincronico al crear/editar el ejercicio. Evita la degradacion invisible (404 = JPEG gris decodable) si el video upstream se borra/privatiza |
+| Backfill / reintento | `app/api/cron/mirror-exercise-thumbnails/route.ts` (`0 4 * * *`) | espeja existentes y reintenta los que fallaron; cursor `thumbnail_url IS NULL`, reintento cada 7d via `thumbnail_checked_at` |
+| Catalogo | `lib/constants.ts` (`MUSCLE_GROUPS`) | categoria "Movilidad" agregada (13 ejercicios de movilidad/roller reclasificados); 8 ejercicios de cardio globales seedeados (`scripts/seed-cardio-exercises.mjs`) para el modulo cardio out-of-the-box |
 
 ## Como mantener este mapa
 
