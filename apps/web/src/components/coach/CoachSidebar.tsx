@@ -236,7 +236,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                 )}
 
                 {/* Navigation Links */}
-                <div className="relative flex-none overflow-hidden md:flex-1 md:overflow-visible">
+                <div className="relative flex-none overflow-hidden md:flex-1 md:min-h-0 md:overflow-visible">
                 {canScrollLeft && (
                     <div className="md:hidden pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center bg-gradient-to-r from-sidebar/90 to-transparent w-10">
                         <motion.div
@@ -259,7 +259,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                         </motion.div>
                     </div>
                 )}
-                <nav ref={navRef} className="flex max-w-full flex-none flex-row flex-nowrap justify-start gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 py-2 [-webkit-overflow-scrolling:touch] md:max-w-none md:flex-1 md:flex-col md:justify-start md:gap-2 md:space-y-2 md:overflow-x-hidden md:overflow-y-auto md:px-4 md:py-6 custom-scrollbar">
+                <nav ref={navRef} className="flex max-w-full flex-none flex-row flex-nowrap justify-start gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 py-2 [-webkit-overflow-scrolling:touch] md:max-w-none md:flex-1 md:min-h-0 md:flex-col md:justify-start md:gap-2 md:space-y-2 md:overflow-x-hidden md:overflow-y-auto md:px-4 md:py-6 custom-scrollbar">
                     {enterpriseContext && isOrgAdmin && (
                         <Link
                             href={`/org/${enterpriseContext.orgSlug}`}

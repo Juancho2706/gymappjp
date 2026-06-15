@@ -96,6 +96,8 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
     const [instructions, setInstructions] = useState(exercise?.instructions?.join('\n') ?? '')
     const [videoStart, setVideoStart] = useState(secondsToMmss((exercise as Record<string, unknown>)?.video_start_time as number | null | undefined))
     const [videoEnd, setVideoEnd] = useState(secondsToMmss((exercise as Record<string, unknown>)?.video_end_time as number | null | undefined))
+    const [exerciseType, setExerciseType] = useState((exercise as Record<string, unknown> | undefined)?.exercise_type as string ?? 'strength')
+    const [difficulty, setDifficulty] = useState(exercise?.difficulty ?? '')
 
     useEffect(() => {
         setMedia(initialMedia(exercise))
@@ -104,6 +106,8 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
         setInstructions(exercise?.instructions?.join('\n') ?? '')
         setVideoStart(secondsToMmss((exercise as Record<string, unknown>)?.video_start_time as number | null | undefined))
         setVideoEnd(secondsToMmss((exercise as Record<string, unknown>)?.video_end_time as number | null | undefined))
+        setExerciseType((exercise as Record<string, unknown> | undefined)?.exercise_type as string ?? 'strength')
+        setDifficulty(exercise?.difficulty ?? '')
     }, [exercise])
 
     const action = exercise
@@ -185,10 +189,13 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                         <label className="text-sm font-medium text-foreground">Tipo de ejercicio</label>
                         <Select
                             name="exercise_type"
-                            defaultValue={(exercise as Record<string, unknown> | undefined)?.exercise_type as string ?? 'strength'}
+                            value={exerciseType}
+                            onValueChange={(v) => setExerciseType(v ?? 'strength')}
                         >
                             <SelectTrigger>
-                                <SelectValue placeholder="Fuerza (series × reps)" />
+                                <SelectValue placeholder="Fuerza (series × reps)">
+                                    {EXERCISE_TYPE_OPTIONS.find((o) => o.value === exerciseType)?.label ?? exerciseType}
+                                </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                                 {EXERCISE_TYPE_OPTIONS.map(({ value, label }) => (
@@ -218,9 +225,11 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium text-foreground">Dificultad</label>
-                            <Select name="difficulty" defaultValue={exercise?.difficulty ?? ''}>
+                            <Select name="difficulty" value={difficulty} onValueChange={(v) => setDifficulty(v ?? '')}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Seleccioná dificultad" />
+                                    <SelectValue placeholder="Seleccioná dificultad">
+                                        {difficulty ? (DIFFICULTY_OPTIONS.find((o) => o.value === difficulty)?.label ?? difficulty) : null}
+                                    </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
                                     {DIFFICULTY_OPTIONS.map(({ value, label }) => (
