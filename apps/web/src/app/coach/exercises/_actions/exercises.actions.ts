@@ -241,71 +241,80 @@ export async function createExerciseAction(
     _prev: ExerciseActionState,
     formData: FormData
 ): Promise<ExerciseActionState> {
-    const supabase = await createClient()
-    const owner = await resolveExerciseOwner(supabase)
-    if (!owner.ok) return { error: owner.error }
+    try {
+        const supabase = await createClient()
+        const owner = await resolveExerciseOwner(supabase)
+        if (!owner.ok) return { error: owner.error }
 
-    const caps = getTierCapabilities(owner.tier)
-    if (!caps.canCreateCustomExercises) return { error: 'upgrade_required' }
+        const caps = getTierCapabilities(owner.tier)
+        if (!caps.canCreateCustomExercises) return { error: 'upgrade_required' }
 
-    const raw = parseExerciseFormData(formData)
-    const parsed = exerciseSchema.safeParse(raw)
-    if (!parsed.success) {
-        return { fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> }
-    }
+        const raw = parseExerciseFormData(formData)
+        const parsed = exerciseSchema.safeParse(raw)
+        if (!parsed.success) {
+            return { fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> }
+        }
 
-    // Duplicate name check (scoped to owner — en team, por team_id: el catálogo es del pool)
-    const nameQuery = applyExerciseOwnerScope(
-        supabase
+        // Duplicate name check (scoped to owner — en team, por team_id: el catálogo es del pool)
+        const nameQuery = applyExerciseOwnerScope(
+            supabase
+                .from('exercises')
+                .select('id', { count: 'exact', head: true })
+                .ilike('name', parsed.data.name),
+            owner
+        )
+
+        const { count: nameCount } = await nameQuery
+        if ((nameCount ?? 0) > 0) {
+            return { fieldErrors: { name: ['Ya existe un ejercicio con ese nombre.'] } }
+        }
+
+        const media = resolveMediaFields(parsed.data)
+
+        const { data: exercise, error } = await supabase
             .from('exercises')
-            .select('id', { count: 'exact', head: true })
-            .ilike('name', parsed.data.name),
-        owner
-    )
+            .insert({
+                coach_id: owner.coachId,
+                org_id: owner.orgId,
+                team_id: owner.teamId,
+                name: parsed.data.name,
+                muscle_group: parsed.data.muscle_group,
+                exercise_type: parsed.data.exercise_type,
+                equipment: parsed.data.equipment ?? null,
+                difficulty: parsed.data.difficulty ?? null,
+                secondary_muscles: parsed.data.secondary_muscles ?? [],
+                instructions: parsed.data.instructions ?? [],
+                video_url: media.video_url,
+                gif_url: media.gif_url,
+                image_url: media.image_url,
+                video_start_time: parsed.data.media_kind === 'youtube' ? (parsed.data.video_start_time ?? null) : null,
+                video_end_time: parsed.data.media_kind === 'youtube' ? (parsed.data.video_end_time ?? null) : null,
+                source: owner.orgId ? 'org' : owner.teamId ? 'team' : 'coach',
+            })
+            .select('id')
+            .single()
 
-    const { count: nameCount } = await nameQuery
-    if ((nameCount ?? 0) > 0) {
-        return { fieldErrors: { name: ['Ya existe un ejercicio con ese nombre.'] } }
+        if (error) {
+            console.error('createExerciseAction error:', error)
+            return { error: 'Error al guardar el ejercicio.' }
+        }
+
+        // Mirror del thumbnail de YouTube a Storage (durabilidad). Best-effort: NUNCA bloquea el save.
+        if (parsed.data.media_kind === 'youtube' && media.video_url) {
+            try {
+                await mirrorAndSaveExerciseThumbnail(exercise.id, media.video_url)
+            } catch (mirrorErr) {
+                console.error('createExerciseAction mirror fail (ignorado):', mirrorErr)
+            }
+        }
+
+        revalidatePath('/coach/exercises')
+        revalidatePath('/coach/builder')
+        return { success: true, exerciseId: exercise.id }
+    } catch (e) {
+        console.error('createExerciseAction unhandled:', e)
+        return { error: `No se pudo crear el ejercicio: ${e instanceof Error ? e.message : 'error inesperado'}` }
     }
-
-    const media = resolveMediaFields(parsed.data)
-
-    const { data: exercise, error } = await supabase
-        .from('exercises')
-        .insert({
-            coach_id: owner.coachId,
-            org_id: owner.orgId,
-            team_id: owner.teamId,
-            name: parsed.data.name,
-            muscle_group: parsed.data.muscle_group,
-            exercise_type: parsed.data.exercise_type,
-            equipment: parsed.data.equipment ?? null,
-            difficulty: parsed.data.difficulty ?? null,
-            secondary_muscles: parsed.data.secondary_muscles ?? [],
-            instructions: parsed.data.instructions ?? [],
-            video_url: media.video_url,
-            gif_url: media.gif_url,
-            image_url: media.image_url,
-            video_start_time: parsed.data.media_kind === 'youtube' ? (parsed.data.video_start_time ?? null) : null,
-            video_end_time: parsed.data.media_kind === 'youtube' ? (parsed.data.video_end_time ?? null) : null,
-            source: owner.orgId ? 'org' : owner.teamId ? 'team' : 'coach',
-        })
-        .select('id')
-        .single()
-
-    if (error) {
-        console.error('createExerciseAction error:', error)
-        return { error: 'Error al guardar el ejercicio.' }
-    }
-
-    // Mirror del thumbnail de YouTube a Storage (durabilidad). Best-effort: nunca bloquea el save.
-    if (parsed.data.media_kind === 'youtube' && media.video_url) {
-        await mirrorAndSaveExerciseThumbnail(exercise.id, media.video_url)
-    }
-
-    revalidatePath('/coach/exercises')
-    revalidatePath('/coach/builder')
-    return { success: true, exerciseId: exercise.id }
 }
 
 export async function updateExerciseAction(
@@ -313,89 +322,98 @@ export async function updateExerciseAction(
     _prev: ExerciseActionState,
     formData: FormData
 ): Promise<ExerciseActionState> {
-    const supabase = await createClient()
-    const owner = await resolveExerciseOwner(supabase)
-    if (!owner.ok) return { error: owner.error }
+    try {
+        const supabase = await createClient()
+        const owner = await resolveExerciseOwner(supabase)
+        if (!owner.ok) return { error: owner.error }
 
-    const caps = getTierCapabilities(owner.tier)
-    if (!caps.canCreateCustomExercises) return { error: 'upgrade_required' }
+        const caps = getTierCapabilities(owner.tier)
+        if (!caps.canCreateCustomExercises) return { error: 'upgrade_required' }
 
-    const raw = parseExerciseFormData(formData)
-    const parsed = exerciseSchema.safeParse(raw)
-    if (!parsed.success) {
-        return { fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> }
-    }
+        const raw = parseExerciseFormData(formData)
+        const parsed = exerciseSchema.safeParse(raw)
+        if (!parsed.success) {
+            return { fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> }
+        }
 
-    // Duplicate name check (exclude self; en team, scoped por team_id)
-    const nameQuery = applyExerciseOwnerScope(
-        supabase
+        // Duplicate name check (exclude self; en team, scoped por team_id)
+        const nameQuery = applyExerciseOwnerScope(
+            supabase
+                .from('exercises')
+                .select('id', { count: 'exact', head: true })
+                .ilike('name', parsed.data.name)
+                .neq('id', exerciseId),
+            owner
+        )
+
+        const { count: nameCount } = await nameQuery
+        if ((nameCount ?? 0) > 0) {
+            return { fieldErrors: { name: ['Ya existe un ejercicio con ese nombre.'] } }
+        }
+
+        // Load old URLs for storage cleanup
+        const { data: existing } = await supabase
             .from('exercises')
-            .select('id', { count: 'exact', head: true })
-            .ilike('name', parsed.data.name)
-            .neq('id', exerciseId),
-        owner
-    )
+            .select('gif_url, image_url')
+            .eq('id', exerciseId)
+            .maybeSingle()
 
-    const { count: nameCount } = await nameQuery
-    if ((nameCount ?? 0) > 0) {
-        return { fieldErrors: { name: ['Ya existe un ejercicio con ese nombre.'] } }
-    }
+        const media = resolveMediaFields(parsed.data)
 
-    // Load old URLs for storage cleanup
-    const { data: existing } = await supabase
-        .from('exercises')
-        .select('gif_url, image_url')
-        .eq('id', exerciseId)
-        .maybeSingle()
+        const updateQuery = supabase
+            .from('exercises')
+            .update({
+                name: parsed.data.name,
+                muscle_group: parsed.data.muscle_group,
+                exercise_type: parsed.data.exercise_type,
+                equipment: parsed.data.equipment ?? null,
+                difficulty: parsed.data.difficulty ?? null,
+                secondary_muscles: parsed.data.secondary_muscles ?? [],
+                instructions: parsed.data.instructions ?? [],
+                video_url: media.video_url,
+                gif_url: media.gif_url,
+                image_url: media.image_url,
+                video_start_time: parsed.data.media_kind === 'youtube' ? (parsed.data.video_start_time ?? null) : null,
+                video_end_time: parsed.data.media_kind === 'youtube' ? (parsed.data.video_end_time ?? null) : null,
+            })
+            .eq('id', exerciseId)
+        applyExerciseOwnerScope(updateQuery, owner)
 
-    const media = resolveMediaFields(parsed.data)
+        const { error } = await updateQuery
+        if (error) {
+            console.error('updateExerciseAction error:', error)
+            return { error: 'Error al actualizar el ejercicio.' }
+        }
 
-    const updateQuery = supabase
-        .from('exercises')
-        .update({
-            name: parsed.data.name,
-            muscle_group: parsed.data.muscle_group,
-            exercise_type: parsed.data.exercise_type,
-            equipment: parsed.data.equipment ?? null,
-            difficulty: parsed.data.difficulty ?? null,
-            secondary_muscles: parsed.data.secondary_muscles ?? [],
-            instructions: parsed.data.instructions ?? [],
-            video_url: media.video_url,
-            gif_url: media.gif_url,
-            image_url: media.image_url,
-            video_start_time: parsed.data.media_kind === 'youtube' ? (parsed.data.video_start_time ?? null) : null,
-            video_end_time: parsed.data.media_kind === 'youtube' ? (parsed.data.video_end_time ?? null) : null,
-        })
-        .eq('id', exerciseId)
-    applyExerciseOwnerScope(updateQuery, owner)
+        // Sincronizar el mirror del thumbnail (durabilidad). Best-effort: NUNCA bloquea.
+        try {
+            if (parsed.data.media_kind === 'youtube' && media.video_url) {
+                await mirrorAndSaveExerciseThumbnail(exerciseId, media.video_url)
+            } else {
+                await clearExerciseThumbnail(exerciseId)
+            }
+        } catch (mirrorErr) {
+            console.error('updateExerciseAction mirror fail (ignorado):', mirrorErr)
+        }
 
-    const { error } = await updateQuery
-    if (error) {
-        console.error('updateExerciseAction error:', error)
-        return { error: 'Error al actualizar el ejercicio.' }
-    }
-
-    // Sincronizar el mirror del thumbnail (durabilidad). Best-effort: nunca bloquea.
-    if (parsed.data.media_kind === 'youtube' && media.video_url) {
-        await mirrorAndSaveExerciseThumbnail(exerciseId, media.video_url)
-    } else {
-        await clearExerciseThumbnail(exerciseId)
-    }
-
-    // Cleanup old storage files
-    if (existing) {
-        const oldUrls = [existing.gif_url, existing.image_url].filter(Boolean) as string[]
-        const newUrls = [media.gif_url, media.image_url].filter(Boolean) as string[]
-        for (const old of oldUrls) {
-            if (!newUrls.includes(old)) {
-                deleteExerciseMediaByUrlAction(old).catch(() => undefined)
+        // Cleanup old storage files
+        if (existing) {
+            const oldUrls = [existing.gif_url, existing.image_url].filter(Boolean) as string[]
+            const newUrls = [media.gif_url, media.image_url].filter(Boolean) as string[]
+            for (const old of oldUrls) {
+                if (!newUrls.includes(old)) {
+                    deleteExerciseMediaByUrlAction(old).catch(() => undefined)
+                }
             }
         }
-    }
 
-    revalidatePath('/coach/exercises')
-    revalidatePath('/coach/builder')
-    return { success: true, exerciseId }
+        revalidatePath('/coach/exercises')
+        revalidatePath('/coach/builder')
+        return { success: true, exerciseId }
+    } catch (e) {
+        console.error('updateExerciseAction unhandled:', e)
+        return { error: `No se pudo actualizar el ejercicio: ${e instanceof Error ? e.message : 'error inesperado'}` }
+    }
 }
 
 export async function softDeleteExerciseAction(exerciseId: string): Promise<ExerciseActionState> {

@@ -34,13 +34,13 @@ export async function mirrorAndSaveExerciseThumbnail(
     exerciseId: string,
     videoUrl: string | null,
 ): Promise<string | null> {
-    const admin = createServiceRoleClient()
-    const markChecked = async () => {
-        try {
-            await admin.from('exercises').update({ thumbnail_checked_at: new Date().toISOString() }).eq('id', exerciseId)
-        } catch { /* noop */ }
-    }
     try {
+        const admin = createServiceRoleClient()
+        const markChecked = async () => {
+            try {
+                await admin.from('exercises').update({ thumbnail_checked_at: new Date().toISOString() }).eq('id', exerciseId)
+            } catch { /* noop */ }
+        }
         const videoId = videoUrl ? extractYoutubeVideoId(videoUrl) : null
         if (!videoId || !YT_ID_RE.test(videoId)) { await markChecked(); return null }
 
@@ -80,7 +80,6 @@ export async function mirrorAndSaveExerciseThumbnail(
         return pub.publicUrl
     } catch (err) {
         console.warn('[thumbnail-mirror] best-effort fail:', err)
-        await markChecked()
         return null
     }
 }
