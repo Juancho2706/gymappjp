@@ -1,14 +1,19 @@
-import { getAddonMetrics, getFinanzasData } from './_data/finanzas.queries'
+import { getAddonMetrics, getCoachAddonsDetail, getFinanzasData } from './_data/finanzas.queries'
 import { FinanzasKpis } from './_components/FinanzasKpis'
 import { FinanzasCharts } from './_components/FinanzasCharts'
 import { RevenueTable } from './_components/RevenueTable'
 import { LegacyTierCard } from './_components/LegacyTierCard'
 import { AddonMetricsSection } from './_components/AddonMetricsSection'
+import { AddonsByCoachSection } from './_components/AddonsByCoachSection'
 
 export const metadata = { title: 'Finanzas' }
 
 export default async function AdminFinanzasPage() {
-    const [data, addonMetrics] = await Promise.all([getFinanzasData(), getAddonMetrics()])
+    const [data, addonMetrics, coachAddons] = await Promise.all([
+        getFinanzasData(),
+        getAddonMetrics(),
+        getCoachAddonsDetail(),
+    ])
 
     return (
         <div className="space-y-6">
@@ -32,6 +37,8 @@ export default async function AdminFinanzasPage() {
             />
 
             <AddonMetricsSection metrics={addonMetrics} />
+
+            <AddonsByCoachSection rows={coachAddons} />
 
             <LegacyTierCard rows={data.legacyTierCounts} />
 

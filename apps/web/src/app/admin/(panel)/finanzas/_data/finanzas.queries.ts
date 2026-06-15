@@ -238,3 +238,93 @@ export const getAddonMetrics = cache(async (): Promise<AddonMetrics> => {
         churnSeries,
     }
 })
+
+// ── Detalle de add-ons por coach (monitoreo del lanzamiento) ──────────────────────
+// Vista read-only para el CEO: quién tiene cada add-on, con qué origen (pago vs cortesía),
+// estado y si hay evidencia de cobro. Detecta anomalías ("alguien se salta el pago" o tiene
+// un problema): self_service cobrado SIN billing_snapshot, o activo sin primer cobro. Marca
+// las cuentas de prueba (no son clientes reales). NO excluye cuentas de prueba — el CEO quiere
+// ver TODO acá (a diferencia del MRR, que sí las excluye).
+
+export interface CoachAddonDetailRow {
+    coachId: string
+    coachLabel: string
+    moduleKey: string
+    moduleLabel: string
+    source: string
+    status: string
+    priceClp: number
+    firstChargedAt: string | null
+    expiresAt: string | null
+    isTest: boolean
+    /** Anomalía a revisar (null = sin alertas). */
+    flag: string | null
+}
+
+export const getCoachAddonsDetail = cache(async (): Promise<CoachAddonDetailRow[]> => {
+    const admin = createServiceRoleClient()
+    const [rowsRes, snapRes, testIds] = await Promise.all([
+        admin
+            .from('coach_addons')
+            .select('coach_id, module_key, source, status, price_clp, first_charged_at, expires_at, created_at')
+            .in('status', ['active', 'cancel_pending'])
+            .order('created_at', { ascending: false })
+            .limit(500),
+        admin.from('billing_snapshots').select('coach_id'),
+        getTestCoachIds(admin),
+    ])
+
+    const rows = (rowsRes.data ?? []) as Array<{
+        coach_id: string
+        module_key: string
+        source: string
+        status: string
+        price_clp: number
+        first_charged_at: string | null
+        expires_at: string | null
+    }>
+    if (rows.length === 0) return []
+
+    const coachesWithSnapshot = new Set(
+        ((snapRes.data ?? []) as Array<{ coach_id: string }>).map((r) => r.coach_id)
+    )
+
+    // Etiqueta del coach en un solo fetch por los ids presentes (brand_name || full_name || slug).
+    const coachIds = [...new Set(rows.map((r) => r.coach_id))]
+    const { data: coachRows } = await admin
+        .from('coaches')
+        .select('id, full_name, brand_name, slug')
+        .in('id', coachIds)
+    const coachById = new Map(
+        ((coachRows ?? []) as Array<{
+            id: string
+            full_name: string | null
+            brand_name: string | null
+            slug: string | null
+        }>).map((c) => [c.id, c])
+    )
+
+    return rows.map((r) => {
+        const c = coachById.get(r.coach_id)
+        const coachLabel = c?.brand_name || c?.full_name || c?.slug || r.coach_id
+        let flag: string | null = null
+        if (r.source === 'self_service' && r.first_charged_at && !coachesWithSnapshot.has(r.coach_id)) {
+            flag = 'Pago sin evidencia (sin billing_snapshot)'
+        } else if (r.source === 'self_service' && r.status === 'active' && !r.first_charged_at) {
+            flag = 'Activo sin primer cobro'
+        }
+        return {
+            coachId: r.coach_id,
+            coachLabel,
+            moduleKey: r.module_key,
+            moduleLabel: (MODULE_LABELS as Record<string, string>)[r.module_key] ?? r.module_key,
+            source: r.source,
+            status: r.status,
+            priceClp: r.price_clp,
+            firstChargedAt: r.first_charged_at,
+            expiresAt: r.expires_at,
+            isTest: testIds.has(r.coach_id),
+            flag,
+        }
+    })
+})
