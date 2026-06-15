@@ -44,10 +44,7 @@ const nextConfig: NextConfig = {
     ]
   },
   skipTrailingSlashRedirect: true,
-  // DIAGNOSTICO: reactCompiler amplifica el DynamicServerError de cookies en el re-render del
-  // server action (Next 16). Desactivado temporalmente para aislar. Si arregla el crash al crear
-  // ejercicio, se evalua dejarlo off o targeted 'use no memo'.
-  reactCompiler: false,
+  reactCompiler: true,
   experimental: {
     serverActions: {
       bodySizeLimit: '10mb',

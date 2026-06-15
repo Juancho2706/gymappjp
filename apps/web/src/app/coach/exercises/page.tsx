@@ -10,12 +10,13 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = { title: 'Ejercicios | EVA' }
 
-// Next 16: la ruta usa cookies (auth via createClient). Sin esto, el re-render del server
-// action intenta render estático y cookies() tira DynamicServerError -> 500 ("Oops") al crear.
+// Next 16: la ruta usa cookies (auth via createClient). force-dynamic la opta a render dinamico
+// (nunca estatico) para que el re-render del server action no tire DynamicServerError. NO envolver
+// los reads de cookies (getCoach) en try/catch: rompe el async-context que Next usa para detectar
+// el uso dinamico y convierte el DynamicServerError interno en un 500 real.
 export const dynamic = 'force-dynamic'
 
 export default async function CoachExercisesPage() {
-  try {
     await connection()
     const coach = await getCoach()
     if (!coach) redirect('/login')
@@ -57,17 +58,4 @@ export default async function CoachExercisesPage() {
             </div>
         </div>
     )
-  } catch (e) {
-    const digest = (e as { digest?: string })?.digest
-    if (typeof digest === 'string' && (digest.startsWith('NEXT_REDIRECT') || digest.startsWith('NEXT_HTTP') || digest === 'NEXT_NOT_FOUND')) throw e
-    try {
-      const { createClient: sbAdmin } = await import('@supabase/supabase-js')
-      const admin = sbAdmin(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } })
-      await admin.from('admin_audit_logs').insert({
-        admin_email: 'DIAG-exercisesPage', action: 'page.render.error', target_table: 'exercises', target_id: null,
-        payload: { message: e instanceof Error ? e.message : String(e), stack: e instanceof Error ? (e.stack ?? '').slice(0, 4000) : '' },
-      })
-    } catch { /* noop */ }
-    throw e
-  }
 }
