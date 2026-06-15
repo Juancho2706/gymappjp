@@ -45,7 +45,11 @@ console.log(`[seed-cardio-exercises] objetivo: ${URL} (${isLocal ? 'local' : 'RE
 // id determinístico: namespace 0ca0 (= cardio) + índice.
 const oid = (n) => `00000000-0000-0000-0ca0-${String(n).padStart(12, '0')}`
 
-/** Campos comunes: global (sin dueño), sistema, categoría Cardio, multimedia vacía. */
+/**
+ * Campos comunes: global (sin dueño), sistema, categoría Cardio.
+ * NO incluye media: si se cargan videos a estos ejercicios después, re-correr el seed los preserva
+ * (un upsert solo actualiza las columnas del payload; incluir video_url:null las pisaría).
+ */
 const COMMON = {
     muscle_group: 'Cardio',
     exercise_type: 'cardio',
@@ -54,9 +58,6 @@ const COMMON = {
     coach_id: null,
     org_id: null,
     team_id: null,
-    video_url: null,
-    gif_url: null,
-    image_url: null,
     deleted_at: null,
 }
 

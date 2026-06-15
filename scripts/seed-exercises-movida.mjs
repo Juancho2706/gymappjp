@@ -3,8 +3,13 @@
  *
  * 13 ejercicios correctivos/movilidad (foam roller + movilidad articular, lenguaje FMS/SFMA)
  * tomados de un template real de coach. Se cargan como librería del SISTEMA (ownership NULL =
- * visibles para TODO coach/alumno de EVA). Multimedia VACÍA (image/gif/video NULL) hasta que se
- * decida el formato. Cierra el F8 del plan 02 (movida-entrenamiento) para los tipos no-fuerza.
+ * visibles para TODO coach/alumno de EVA). Cierra el F8 del plan 02 (movida-entrenamiento) para
+ * los tipos no-fuerza. La media (videos + recortes) se cargó después y se maneja aparte: el seed
+ * NO la toca (ver COMMON).
+ *
+ * muscle_group = 'Movilidad' para los 13 (categoría del catálogo). El tipo real (roller/mobility)
+ * vive en exercise_type y maneja los campos del builder; muscle_group es solo la categoría con la
+ * que el coach los encuentra en el catálogo (igual que Hombros/Pecho/Cardio).
  *
  * IDEMPOTENTE: upsert por `id` determinístico (onConflict 'id' → re-correr re-aplica traducciones,
  * cero duplicados). NUNCA borra. Aditivo.
@@ -45,16 +50,20 @@ console.log(`[seed-exercises-movida] objetivo: ${URL} (${isLocal ? 'local' : 'RE
 // id determinístico: namespace 0f80 (= F8) + índice. Postgres uuid acepta cualquier valor de 128 bits.
 const oid = (n) => `00000000-0000-0000-0f80-${String(n).padStart(12, '0')}`
 
-/** Campos comunes a todos: global (sin dueño), sistema, multimedia vacía. */
+/**
+ * Campos comunes a todos: global (sin dueño), sistema, categoría Movilidad.
+ * NO incluye media (video_url/gif_url/image_url/thumbnail_url/video_start_time): los videos +
+ * recortes se cargaron DESPUÉS del seed y se manejan aparte. Al omitirlos del upsert, re-correr
+ * el seed PRESERVA la media de prod (un upsert solo actualiza las columnas presentes en el payload;
+ * incluir video_url:null la pisaría). El seed gobierna metadata del catálogo, no la media.
+ */
 const COMMON = {
+    muscle_group: 'Movilidad',
     gender_focus: 'Neutro',
     source: 'system',
     coach_id: null,
     org_id: null,
     team_id: null,
-    video_url: null,
-    gif_url: null,
-    image_url: null,
     deleted_at: null,
 }
 
@@ -62,7 +71,6 @@ const EXERCISES = [
     {
         id: oid(1),
         name: 'Foam roller – Dorsal (espalda media)',
-        muscle_group: 'Dorsal',
         exercise_type: 'roller',
         equipment: 'Foam roller',
         difficulty: 'Principiante',
@@ -75,7 +83,6 @@ const EXERCISES = [
     {
         id: oid(2),
         name: 'Foam roller – Glúteos',
-        muscle_group: 'Glúteos',
         exercise_type: 'roller',
         equipment: 'Foam roller',
         difficulty: 'Principiante',
@@ -88,7 +95,6 @@ const EXERCISES = [
     {
         id: oid(3),
         name: 'Foam roller – Isquiotibiales',
-        muscle_group: 'Isquiotibiales',
         exercise_type: 'roller',
         equipment: 'Foam roller',
         difficulty: 'Principiante',
@@ -101,7 +107,6 @@ const EXERCISES = [
     {
         id: oid(4),
         name: 'Foam roller – Pantorrilla (gemelos)',
-        muscle_group: 'Pantorrilla',
         exercise_type: 'roller',
         equipment: 'Foam roller',
         difficulty: 'Principiante',
@@ -114,7 +119,6 @@ const EXERCISES = [
     {
         id: oid(5),
         name: 'Descenso de pierna asistido con banda',
-        muscle_group: 'Cadera',
         exercise_type: 'mobility',
         equipment: 'Banda elástica + Foam roller',
         difficulty: 'Intermedio',
@@ -128,7 +132,6 @@ const EXERCISES = [
     {
         id: oid(6),
         name: 'Estiramiento de pierna recta asistido con banda',
-        muscle_group: 'Cadena posterior',
         exercise_type: 'mobility',
         equipment: 'Banda elástica',
         difficulty: 'Principiante',
@@ -142,7 +145,6 @@ const EXERCISES = [
     {
         id: oid(7),
         name: 'Rotación torácica en cuadrupedia (lumbar bloqueada)',
-        muscle_group: 'Columna torácica',
         exercise_type: 'mobility',
         equipment: 'Ninguno',
         difficulty: 'Principiante',
@@ -156,7 +158,6 @@ const EXERCISES = [
     {
         id: oid(8),
         name: 'Rotación con estabilidad de tronco (rodillas flexionadas)',
-        muscle_group: 'Tronco',
         exercise_type: 'mobility',
         equipment: 'Foam roller o toalla',
         difficulty: 'Intermedio',
@@ -170,7 +171,6 @@ const EXERCISES = [
     {
         id: oid(9),
         name: 'Cat/Camel',
-        muscle_group: 'Columna',
         exercise_type: 'mobility',
         equipment: 'Ninguno',
         difficulty: 'Principiante',
@@ -184,7 +184,6 @@ const EXERCISES = [
     {
         id: oid(10),
         name: 'Dorsiflexión en media rodilla con bastón',
-        muscle_group: 'Tobillo',
         exercise_type: 'mobility',
         equipment: 'Bastón',
         difficulty: 'Principiante',
@@ -197,7 +196,6 @@ const EXERCISES = [
     {
         id: oid(11),
         name: 'Rotación en media rodilla con bastón',
-        muscle_group: 'Cadera / Columna',
         exercise_type: 'mobility',
         equipment: 'Bastón',
         difficulty: 'Principiante',
@@ -210,7 +208,6 @@ const EXERCISES = [
     {
         id: oid(12),
         name: 'Brettzel 2.0',
-        muscle_group: 'Cadena posterior',
         exercise_type: 'mobility',
         equipment: 'Ninguno',
         difficulty: 'Intermedio',
@@ -224,7 +221,6 @@ const EXERCISES = [
     {
         id: oid(14),
         name: 'Sentadilla con toque de puntas (toe touch squat)',
-        muscle_group: 'Tren inferior',
         exercise_type: 'mobility',
         equipment: 'BOSU / Step / Balón',
         difficulty: 'Intermedio',
@@ -245,7 +241,7 @@ async function main() {
         console.error('[seed-exercises-movida] error:', error.message)
         process.exit(1)
     }
-    console.log(`[seed-exercises-movida] OK — ${rows.length} ejercicios globales upserted (roller + mobility, multimedia vacía).`)
+    console.log(`[seed-exercises-movida] OK — ${rows.length} ejercicios globales upserted (roller + mobility, categoría Movilidad, multimedia vacía).`)
 }
 
 main()
