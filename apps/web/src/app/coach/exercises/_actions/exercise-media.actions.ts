@@ -6,7 +6,6 @@ import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
 import {
     EXERCISE_MEDIA_LIMITS,
     EXERCISE_MEDIA_MIME,
-    KIND_TO_EXT,
     validateImageMagicBytes,
     type ExerciseMediaKind,
 } from '@/lib/uploads/image-validation'
@@ -194,7 +193,3 @@ export async function deleteExerciseMediaByUrlAction(
     }
     return { success: true }
 }
-
-// Keep unused type export for compatibility with ExerciseMediaKind consumers
-export type { ExerciseMediaKind }
-export { KIND_TO_EXT }
