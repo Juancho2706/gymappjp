@@ -16,6 +16,7 @@ export default function ErrorPage({
   useEffect(() => {
     // Log the error to an error reporting service
     console.error('Page error:', error)
+    console.error('Page error detail [diag]:', { message: error.message, digest: error.digest, stack: error.stack })
   }, [error])
  
   return (
@@ -33,7 +34,8 @@ export default function ErrorPage({
             <CardContent>
                 {error.digest && (
                      <div className="p-3 bg-secondary/50 rounded-lg text-xs font-mono text-muted-foreground break-words border border-border">
-                         <span className="font-semibold text-foreground/70">Error ID:</span> {error.digest}
+                         <span className="font-semibold text-foreground/70">Error ID·diag2:</span> {error.digest}
+                         {error.message && <div className="mt-2 text-foreground/60 break-words">{error.message}</div>}
                      </div>
                 )}
             </CardContent>
