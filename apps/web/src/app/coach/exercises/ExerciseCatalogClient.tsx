@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { filterExercises } from '@/lib/utils'
-import { exerciseEmbedUrl } from '@/lib/youtube'
+import { exerciseEmbedUrl, extractYoutubeVideoId } from '@/lib/youtube'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ExerciseCreateButton } from './_components/ExerciseCreateButton'
 
@@ -204,12 +204,8 @@ function ExercisePreviewModal({
     const directMedia = (exercise as Record<string, unknown>).gif_url as string | null
         ?? (exercise as Record<string, unknown>).image_url as string | null
         ?? null
-    // ytId only if no direct media
-    const getYouTubeId = (url: string) => {
-        const match = url.match(/(?:v=|\/)([a-zA-Z0-9_-]{11})/)
-        return match ? match[1] : null
-    }
-    const ytId = !directMedia && exercise.video_url ? getYouTubeId(exercise.video_url) : null
+    // ytId only if no direct media — extractor robusto (maneja watch?v=, youtu.be, /shorts/, /embed/, /live/)
+    const ytId = !directMedia && exercise.video_url ? extractYoutubeVideoId(exercise.video_url) : null
     // rawVideoUrl: video_url that is not YouTube (e.g. ExerciseDB GIF URLs)
     const rawVideoUrl = !directMedia && !ytId && exercise.video_url ? exercise.video_url : null
 

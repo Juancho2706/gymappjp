@@ -11,6 +11,7 @@ import { getExerciseHistoryAction } from '../_actions/builder.actions'
 import type { BuilderBlock, BuilderCardioContext } from '../types'
 import type { ExerciseType, IntervalConfig, SideMode } from '@/domain/workout/types'
 import { EXERCISE_TYPE_LABEL, effectiveExerciseType } from '@/lib/workout-exercise-type'
+import { exerciseThumbnailUrl } from '@/lib/youtube'
 import { INTERVAL_TEMPLATES } from '@/lib/workout-interval'
 import { HR_ZONES } from '@/domain/cardio/zones'
 
@@ -473,6 +474,11 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
     const distanceNumber = parseFloat((block.distance_value || '').replace(',', '.'))
     const hasDistance = Number.isFinite(distanceNumber) && distanceNumber > 0
 
+    // Thumbnail del ejercicio (gif > imagen > thumbnail de YouTube > media directa). Iguala la app
+    // del alumno: un ejercicio solo-YouTube ya no muestra la inicial. img.youtube.com está en
+    // next.config remotePatterns; `unoptimized` para servir gif/mp4 externos tal cual (igual que antes).
+    const thumb = exerciseThumbnailUrl(block)
+
     const blockIsValid = (() => {
         if (effectiveType === 'cardio') {
             return (block.duration_sec ?? 0) > 0 || hasDistance || !!block.interval_config
@@ -497,9 +503,9 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                 <SheetHeader className="border-b border-border bg-muted/20 pb-6 pl-6 pr-14 pt-[max(1.5rem,env(safe-area-inset-top))]">
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden border border-border shrink-0 relative">
-                            {block.gif_url || (block.video_url && !block.video_url.includes('youtube') && !block.video_url.includes('youtu.be')) ? (
+                            {thumb ? (
                                 <Image
-                                    src={block.gif_url || block.video_url!}
+                                    src={thumb}
                                     alt={block.exercise_name}
                                     fill
                                     sizes="64px"

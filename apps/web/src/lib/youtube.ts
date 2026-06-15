@@ -116,3 +116,26 @@ export function getYoutubeThumbnailUrl(
   if (!id) return null
   return `https://i.ytimg.com/vi/${id}/${THUMBNAIL_FILENAMES[quality]}`
 }
+
+/**
+ * URL de THUMBNAIL (imagen estática) de un ejercicio para tarjetas/listas/iconos. Orden de
+ * preferencia: gif_url → image_url → thumbnail de YouTube (img.youtube.com, que funciona SIEMPRE
+ * aunque el video tenga el EMBED bloqueado por su dueño) → media directa no-YouTube → null.
+ * Si devuelve null, el sitio muestra su ícono de fallback. Usa el extractor robusto (maneja shorts).
+ *
+ * `img.youtube.com` está en next.config remotePatterns (apto para <Image> de Next). USAR ESTE helper
+ * en TODA tarjeta/icono de ejercicio del coach (builder, biblioteca, bloques) para igualar a la app
+ * del alumno y no mostrar vacío/roto cuando el ejercicio solo tiene video de YouTube.
+ */
+export function exerciseThumbnailUrl(
+  ex: { gif_url?: string | null; image_url?: string | null; video_url?: string | null },
+): string | null {
+  if (ex.gif_url) return ex.gif_url
+  if (ex.image_url) return ex.image_url
+  if (ex.video_url) {
+    const id = extractYoutubeVideoId(ex.video_url)
+    if (id) return `https://img.youtube.com/vi/${id}/mqdefault.jpg`
+    return ex.video_url // media directa no-YouTube (gif/mp4 de ExerciseDB)
+  }
+  return null
+}

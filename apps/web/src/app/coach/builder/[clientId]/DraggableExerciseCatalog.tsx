@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { MUSCLE_GROUPS } from '@/lib/constants'
 import { filterExercises, cn } from '@/lib/utils'
-import { exerciseEmbedUrl } from '@/lib/youtube'
+import { exerciseEmbedUrl, exerciseThumbnailUrl, extractYoutubeVideoId } from '@/lib/youtube'
 import type { Tables } from '@/lib/database.types'
 import { getMuscleColor } from './muscle-colors'
 
@@ -53,16 +53,19 @@ function DraggableExerciseItem({ exercise, onSelect, onPreview, onTapAdd }: Drag
                     className="w-10 h-10 rounded-lg flex items-center justify-center border border-border overflow-hidden shrink-0 group-hover:shadow-md transition-all relative"
                     style={{ backgroundColor: `color-mix(in srgb, ${getMuscleColor(exercise.muscle_group)} 15%, transparent)` }}
                 >
-                    {exercise.gif_url || (exercise.video_url && !exercise.video_url.includes('youtube') && !exercise.video_url.includes('youtu.be')) ? (
-                        <img
-                            src={exercise.gif_url || exercise.video_url!}
-                            alt={exercise.name}
-                            loading="lazy"
-                            className="w-full h-full object-cover mix-blend-multiply dark:mix-blend-normal"
-                        />
-                    ) : (
-                        <Activity className="w-5 h-5 opacity-50" style={{ color: getMuscleColor(exercise.muscle_group) }} />
-                    )}
+                    {(() => {
+                        const thumb = exerciseThumbnailUrl(exercise)
+                        return thumb ? (
+                            <img
+                                src={thumb}
+                                alt={exercise.name}
+                                loading="lazy"
+                                className="w-full h-full object-cover mix-blend-multiply dark:mix-blend-normal"
+                            />
+                        ) : (
+                            <Activity className="w-5 h-5 opacity-50" style={{ color: getMuscleColor(exercise.muscle_group) }} />
+                        )
+                    })()}
                 </div>
                 <div className="flex-1 min-w-0 pr-8">
                     <p className="text-sm font-semibold leading-tight group-hover:text-primary transition-colors truncate">{exercise.name}</p>
@@ -297,28 +300,38 @@ export function DraggableExerciseCatalog({
                             {previewExercise?.muscle_group}
                         </p>
                     </DialogHeader>
-                    {previewExercise?.gif_url || (previewExercise?.video_url && !previewExercise.video_url.includes('youtube') && !previewExercise.video_url.includes('youtu.be')) ? (
-                        <div className="aspect-video relative rounded-xl overflow-hidden bg-white mt-4 border border-border flex items-center justify-center">
-                            <img
-                                src={previewExercise.gif_url || previewExercise.video_url!}
-                                alt={previewExercise.name}
-                                className="w-full h-full object-contain"
-                            />
-                        </div>
-                    ) : previewExercise?.video_url && (previewExercise.video_url.includes('youtube') || previewExercise.video_url.includes('youtu.be')) ? (
-                        <div className="aspect-video relative rounded-xl overflow-hidden bg-muted mt-4 border border-border flex items-center justify-center">
-                            <iframe
-                                className="w-full h-full"
-                                src={exerciseEmbedUrl(previewExercise.video_url) ?? undefined}
-                                title={previewExercise.name}
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                            />
-                        </div>
-                    ) : (
-                        <div className="aspect-video flex items-center justify-center rounded-xl bg-muted mt-4 border border-border">
-                            <Dumbbell className="w-12 h-12 text-muted-foreground opacity-20" />
-                        </div>
-                    )}
+                    {(() => {
+                        const youtubeId = previewExercise?.video_url ? extractYoutubeVideoId(previewExercise.video_url) : null
+                        const directMedia = previewExercise?.gif_url || (previewExercise?.video_url && !youtubeId ? previewExercise.video_url : null)
+                        if (directMedia) {
+                            return (
+                                <div className="aspect-video relative rounded-xl overflow-hidden bg-white mt-4 border border-border flex items-center justify-center">
+                                    <img
+                                        src={directMedia}
+                                        alt={previewExercise?.name}
+                                        className="w-full h-full object-contain"
+                                    />
+                                </div>
+                            )
+                        }
+                        if (youtubeId) {
+                            return (
+                                <div className="aspect-video relative rounded-xl overflow-hidden bg-muted mt-4 border border-border flex items-center justify-center">
+                                    <iframe
+                                        className="w-full h-full"
+                                        src={exerciseEmbedUrl(youtubeId) ?? undefined}
+                                        title={previewExercise?.name}
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                    />
+                                </div>
+                            )
+                        }
+                        return (
+                            <div className="aspect-video flex items-center justify-center rounded-xl bg-muted mt-4 border border-border">
+                                <Dumbbell className="w-12 h-12 text-muted-foreground opacity-20" />
+                            </div>
+                        )
+                    })()}
                 </DialogContent>
             </Dialog>
         </div>

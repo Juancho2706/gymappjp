@@ -11,6 +11,7 @@ import { getMuscleColor } from '../muscle-colors'
 import { buildAreaVMs, type BuilderAreaVM } from '../area-ui'
 import { effectiveAreaKey } from '@/lib/workout-areas'
 import { EXERCISE_TYPE_LABEL, effectiveExerciseType, typedBlockSummary } from '@/lib/workout-exercise-type'
+import { exerciseThumbnailUrl } from '@/lib/youtube'
 import type { BuilderBlock } from '../types'
 
 interface ExerciseBlockProps {
@@ -75,6 +76,11 @@ function ExerciseBlockInner({
 
     const muscleColor = getMuscleColor(block.muscle_group)
 
+    // Thumbnail del ejercicio (gif > imagen > thumbnail de YouTube > media directa). Iguala la
+    // app del alumno: un ejercicio solo-YouTube ya no muestra el cuadrito vacío. img.youtube.com
+    // está permitido en next.config; aquí usamos <img> simple igual que el resto del bloque.
+    const thumb = useMemo(() => exerciseThumbnailUrl(block), [block])
+
     // Resumen por tipo (specs/movida-entrenamiento): null en bloques strength ⇒ el chip
     // legacy "sets × reps" se renderiza EXACTAMENTE igual que hoy (AC3).
     const blockType = effectiveExerciseType(block, { exercise_type: block.exercise_type })
@@ -135,9 +141,9 @@ function ExerciseBlockInner({
                     className="w-10 h-10 rounded-md shrink-0 flex items-center justify-center overflow-hidden bg-muted relative border border-border"
                     style={{ backgroundColor: `color-mix(in srgb, ${muscleColor} 15%, transparent)` }}
                 >
-                    {block.gif_url || (block.video_url && !block.video_url.includes('youtube') && !block.video_url.includes('youtu.be')) ? (
+                    {thumb ? (
                         <img
-                            src={block.gif_url || block.video_url!}
+                            src={thumb}
                             alt={block.exercise_name}
                             loading="lazy"
                             className="w-full h-full object-cover mix-blend-multiply dark:mix-blend-screen opacity-90 group-hover:opacity-100 transition-opacity"
