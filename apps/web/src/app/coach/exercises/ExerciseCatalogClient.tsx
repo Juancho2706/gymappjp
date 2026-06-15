@@ -222,6 +222,7 @@ function ExercisePreviewModal({
                             className="w-full h-full"
                             src={exerciseEmbedUrl(ytId) ?? undefined}
                             title={exercise.name}
+                            referrerPolicy="strict-origin-when-cross-origin"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                         />
                     ) : (directMedia || rawVideoUrl) ? (

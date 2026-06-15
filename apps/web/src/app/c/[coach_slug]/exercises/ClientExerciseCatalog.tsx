@@ -286,6 +286,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                         className="w-full h-full"
                         src={embedUrl}
                         title={selectedExercise.name}
+                        referrerPolicy="strict-origin-when-cross-origin"
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                       />
                     </div>

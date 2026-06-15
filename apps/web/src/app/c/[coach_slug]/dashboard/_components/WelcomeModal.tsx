@@ -100,6 +100,7 @@ export function WelcomeModal({
                                     src={`https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3`}
                                     title="Video de bienvenida"
                                     className="w-full h-full"
+                                    referrerPolicy="strict-origin-when-cross-origin"
                                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                 />
                             ) : (

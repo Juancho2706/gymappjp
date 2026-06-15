@@ -321,6 +321,7 @@ export function DraggableExerciseCatalog({
                                         className="w-full h-full"
                                         src={exerciseEmbedUrl(youtubeId) ?? undefined}
                                         title={previewExercise?.name}
+                                        referrerPolicy="strict-origin-when-cross-origin"
                                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                                     />
                                 </div>
