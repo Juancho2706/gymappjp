@@ -17,7 +17,7 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 async function diagLog(action: string, payload: Record<string, unknown>) {
     try {
         await createServiceRoleClient().from('admin_audit_logs').insert({
-            admin_email: 'DIAG-createExercise', action, target_table: 'exercises', target_id: null, payload,
+            admin_email: 'DIAG-createExercise', action, target_table: 'exercises', target_id: null, payload: payload as never,
         })
     } catch { /* noop */ }
 }
