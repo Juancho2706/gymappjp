@@ -51,7 +51,10 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
         const base = customOnly ? customExercises : allExercises
         let result = filterExercises(base, search, muscleFilter)
         if (withVideoOnly) {
-            result = result.filter(ex => !!(ex.video_url || ex.gif_url))
+            // "Con video" = video de YouTube (player real). OJO: ~800 del catálogo global tienen un
+            // GIF de ExerciseDB guardado en video_url (no es un "video"), por eso NO filtramos por
+            // "tiene video_url" (incluiría casi todos) sino por ID de YouTube válido.
+            result = result.filter(ex => !!ex.video_url && extractYoutubeVideoId(ex.video_url) != null)
         }
         return result
     }, [allExercises, customExercises, search, muscleFilter, customOnly, withVideoOnly])
