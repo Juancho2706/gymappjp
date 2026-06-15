@@ -113,7 +113,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                 href={item.href}
                 title={item.label}
                 className={cn(
-                    'flex shrink-0 flex-col items-center gap-1 rounded-xl border border-transparent px-2 py-2 text-[10px] font-semibold transition-all duration-300 group md:w-full md:flex-none md:flex-row md:gap-3 md:px-4 md:py-3 md:text-sm',
+                    'flex shrink-0 flex-col items-center gap-1 rounded-xl border border-transparent px-2 py-2 text-[10px] font-semibold transition-all duration-300 group md:w-full md:flex-none md:flex-row md:gap-3 md:px-4 md:py-2 md:text-sm',
                     'min-w-[3.5rem] max-w-[5.25rem] md:min-w-0 md:max-w-none',
                     isCollapsed ? 'md:justify-center md:px-0' : 'md:justify-start',
                     isActive
@@ -194,7 +194,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
             )}>
                 
                 {/* Logo area (Desktop only) */}
-                <div className={cn("hidden md:flex py-8 border-b border-sidebar-border items-center", isCollapsed ? "px-0 justify-center flex-col gap-4" : "px-6 justify-between")}>
+                <div className={cn("hidden md:flex py-5 border-b border-sidebar-border items-center", isCollapsed ? "px-0 justify-center flex-col gap-4" : "px-6 justify-between")}>
                     <div className={cn("flex min-w-0 items-center gap-3", isCollapsed && "justify-center")}>
                         <EvaBrandIcon
                             className={cn('h-10 w-10 flex-shrink-0', isCollapsed && 'h-9 w-9')}
@@ -259,7 +259,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                         </motion.div>
                     </div>
                 )}
-                <nav ref={navRef} className="flex max-w-full flex-none flex-row flex-nowrap justify-start gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 py-2 [-webkit-overflow-scrolling:touch] md:max-w-none md:flex-1 md:min-h-0 md:flex-col md:justify-start md:gap-2 md:space-y-2 md:overflow-x-hidden md:overflow-y-auto md:px-4 md:py-6 custom-scrollbar">
+                <nav ref={navRef} className="flex max-w-full flex-none flex-row flex-nowrap justify-start gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 py-2 [-webkit-overflow-scrolling:touch] md:max-w-none md:flex-1 md:min-h-0 md:flex-col md:justify-start md:gap-1 md:space-y-1 md:overflow-x-hidden md:overflow-y-auto md:px-4 md:py-3 custom-scrollbar">
                     {enterpriseContext && isOrgAdmin && (
                         <Link
                             href={`/org/${enterpriseContext.orgSlug}`}
@@ -287,7 +287,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                                 aria-hidden="true"
                                 data-testid="nav-modules-divider"
                                 className={cn(
-                                    'hidden md:flex shrink-0 select-none flex-col gap-2 pt-3',
+                                    'hidden md:flex shrink-0 select-none flex-col gap-1 pt-2',
                                     isCollapsed ? 'items-center' : 'px-4'
                                 )}
                             >
@@ -305,7 +305,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                 </div>
 
                 {/* Bottom area (Desktop only) */}
-                <div className={cn("hidden md:flex flex-col border-t border-sidebar-border bg-sidebar-accent/50 dark:bg-black/50 backdrop-blur-xl", isCollapsed ? "p-4 space-y-6 items-center" : "px-4 py-6 space-y-4")}>
+                <div className={cn("hidden md:flex flex-col border-t border-sidebar-border bg-sidebar-accent/50 dark:bg-black/50 backdrop-blur-xl", isCollapsed ? "p-4 space-y-6 items-center" : "px-4 py-3 space-y-2")}>
                     <div className={cn("flex items-center", isCollapsed ? "justify-center gap-4" : "justify-between px-2")}>
                         {!isCollapsed && (
                             <div className="flex flex-col">
