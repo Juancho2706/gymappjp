@@ -29,6 +29,12 @@ export const metadata: Metadata = {
     },
 }
 
+// Next 16: el layout lee cookies (auth) para TODO /coach. Sin esto, el re-render de un server
+// action trata el segmento como estatico y cookies() tira DynamicServerError -> 500 ("Oops") al
+// ejecutar acciones (ej. crear ejercicio). force-dynamic solo en la page no alcanza: el throw
+// viene del layout durante la serializacion del RSC.
+export const dynamic = 'force-dynamic'
+
 /**
  * Consola: "cleaning up async info that was not on the parent Suspense boundary" con stack
  * `chrome-extension://…/installHook.js` → hook de **React Developer Tools** (no es tu bundle).
