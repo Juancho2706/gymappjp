@@ -10,6 +10,17 @@ import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { normalizeYoutubeEmbedUrl } from '@/lib/youtube'
 import { deleteExerciseMediaByUrlAction } from './exercise-media.actions'
 import { mirrorAndSaveExerciseThumbnail, clearExerciseThumbnail } from '@/lib/exercises/thumbnail-mirror'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+
+// DIAGNÓSTICO temporal: log a admin_audit_logs (service-role) para cazar el error de create.
+// TODO: quitar una vez resuelto el "Oops" al crear ejercicio.
+async function diagLog(action: string, payload: Record<string, unknown>) {
+    try {
+        await createServiceRoleClient().from('admin_audit_logs').insert({
+            admin_email: 'DIAG-createExercise', action, target_table: 'exercises', target_id: null, payload,
+        })
+    } catch { /* noop */ }
+}
 
 const SUPABASE_MEDIA_PREFIX = `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''}/storage/v1/object/public/exercise-media/`
 
@@ -242,6 +253,16 @@ export async function createExerciseAction(
     formData: FormData
 ): Promise<ExerciseActionState> {
     try {
+        await diagLog('create.start', {
+            name: String(formData.get('name') ?? ''),
+            muscle_group: String(formData.get('muscle_group') ?? ''),
+            exercise_type: String(formData.get('exercise_type') ?? ''),
+            media_kind: String(formData.get('media_kind') ?? ''),
+            video_url: String(formData.get('video_url') ?? '').slice(0, 140),
+            video_start_time: String(formData.get('video_start_time') ?? ''),
+            video_end_time: String(formData.get('video_end_time') ?? ''),
+            difficulty: String(formData.get('difficulty') ?? ''),
+        })
         const supabase = await createClient()
         const owner = await resolveExerciseOwner(supabase)
         if (!owner.ok) return { error: owner.error }
@@ -252,6 +273,7 @@ export async function createExerciseAction(
         const raw = parseExerciseFormData(formData)
         const parsed = exerciseSchema.safeParse(raw)
         if (!parsed.success) {
+            await diagLog('create.zodFail', { fieldErrors: parsed.error.flatten().fieldErrors })
             return { fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]> }
         }
 
@@ -296,8 +318,16 @@ export async function createExerciseAction(
 
         if (error) {
             console.error('createExerciseAction error:', error)
+            await diagLog('create.insertError', {
+                message: error.message,
+                code: (error as { code?: string }).code ?? '',
+                details: (error as { details?: string }).details ?? '',
+                hint: (error as { hint?: string }).hint ?? '',
+            })
             return { error: 'Error al guardar el ejercicio.' }
         }
+
+        await diagLog('create.inserted', { id: exercise.id })
 
         // Mirror del thumbnail de YouTube a Storage (durabilidad). Best-effort: NUNCA bloquea el save.
         if (parsed.data.media_kind === 'youtube' && media.video_url) {
@@ -313,6 +343,10 @@ export async function createExerciseAction(
         return { success: true, exerciseId: exercise.id }
     } catch (e) {
         console.error('createExerciseAction unhandled:', e)
+        await diagLog('create.error', {
+            message: e instanceof Error ? e.message : String(e),
+            stack: e instanceof Error ? (e.stack ?? '').slice(0, 1800) : '',
+        })
         return { error: `No se pudo crear el ejercicio: ${e instanceof Error ? e.message : 'error inesperado'}` }
     }
 }
