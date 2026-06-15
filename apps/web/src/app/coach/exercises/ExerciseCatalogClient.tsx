@@ -15,7 +15,7 @@ import { MUSCLE_GROUPS } from '@/lib/constants'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { filterExercises } from '@/lib/utils'
+import { filterExercises, cn } from '@/lib/utils'
 import { extractYoutubeVideoId } from '@/lib/youtube'
 import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -34,6 +34,8 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
     const [selected, setSelected] = useState<Exercise | null>(null)
     const [search, setSearch] = useState('')
     const [muscleFilter, setMuscleFilter] = useState<string>('Todos')
+    const [customOnly, setCustomOnly] = useState(false)
+    const [withVideoOnly, setWithVideoOnly] = useState(false)
     const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
 
     const toggleGroup = (muscle: string) => {
@@ -46,8 +48,13 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
     const allExercises = useMemo(() => [...globalExercises, ...customExercises], [globalExercises, customExercises])
 
     const filteredExercises = useMemo(() => {
-        return filterExercises(allExercises, search, muscleFilter)
-    }, [allExercises, search, muscleFilter])
+        const base = customOnly ? customExercises : allExercises
+        let result = filterExercises(base, search, muscleFilter)
+        if (withVideoOnly) {
+            result = result.filter(ex => !!(ex.video_url || ex.gif_url))
+        }
+        return result
+    }, [allExercises, customExercises, search, muscleFilter, customOnly, withVideoOnly])
 
     const groupedByMuscle = useMemo(() => {
         const groups: Record<string, Exercise[]> = {}
@@ -97,6 +104,37 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                             ))}
                         </SelectContent>
                     </Select>
+                </div>
+                {/* Toggles: solo personalizados / solo con video */}
+                <div className="flex gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setCustomOnly(v => !v)}
+                        aria-pressed={customOnly}
+                        className={cn(
+                            'inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all whitespace-nowrap',
+                            customOnly
+                                ? 'bg-primary/10 text-primary border-primary/30'
+                                : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                        )}
+                    >
+                        <User className="w-4 h-4" />
+                        Personalizados
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setWithVideoOnly(v => !v)}
+                        aria-pressed={withVideoOnly}
+                        className={cn(
+                            'inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all whitespace-nowrap',
+                            withVideoOnly
+                                ? 'bg-primary/10 text-primary border-primary/30'
+                                : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                        )}
+                    >
+                        <Play className="w-4 h-4" />
+                        Con video
+                    </button>
                 </div>
             </div>
 
@@ -166,8 +204,8 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                     <div className="py-20 text-center bg-card border border-dashed border-border rounded-2xl">
                         <Dumbbell className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
                         <p className="text-muted-foreground font-medium">No se encontraron ejercicios</p>
-                        <button 
-                            onClick={() => { setSearch(''); setMuscleFilter('Todos'); }}
+                        <button
+                            onClick={() => { setSearch(''); setMuscleFilter('Todos'); setCustomOnly(false); setWithVideoOnly(false); }}
                             className="mt-4 text-xs text-primary hover:underline font-bold"
                         >
                             Limpiar filtros
