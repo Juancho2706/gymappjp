@@ -34,7 +34,7 @@ export default function ErrorPage({
             <CardContent>
                 {error.digest && (
                      <div className="p-3 bg-secondary/50 rounded-lg text-xs font-mono text-muted-foreground break-words border border-border">
-                         <span className="font-semibold text-foreground/70">Error ID·diag2:</span> {error.digest}
+                         <span className="font-semibold text-foreground/70">Error ID·diag3:</span> {error.digest}
                          {error.message && <div className="mt-2 text-foreground/60 break-words">{error.message}</div>}
                      </div>
                 )}
