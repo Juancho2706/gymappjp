@@ -596,9 +596,10 @@ export default function CoachSubscriptionPage() {
                                     Sin fecha de vencimiento · <span className="text-foreground font-semibold">Gratis para siempre</span>
                                 </p>
                             ) : null}
-                            {/* Cambiar tarjeta (Modalidad A) — solo con el flag ON y sub activa/en prueba. */}
+                            {/* Cambiar tarjeta (Modalidad A) — flag ON + sub activa/en prueba o en dunning
+                                (paused/past_due): cambiar la tarjeta es la recuperación del cobro fallido (P0-3b). */}
                             {changeCardEnabled &&
-                                (coach.subscription_status === 'active' || coach.subscription_status === 'trialing') && (
+                                ['active', 'trialing', 'paused', 'past_due'].includes(coach.subscription_status) && (
                                     <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                                         {coach.card_last4 ? (
                                             <span className="text-muted-foreground">

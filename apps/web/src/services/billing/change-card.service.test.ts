@@ -107,13 +107,26 @@ describe('changeCardForCoach — guards', () => {
         }
     })
 
-    it('estado paused (dunning = fase 2) → INVALID_STATUS', async () => {
+    it('estado pending_payment (nunca confirmado, NO dunning) → INVALID_STATUS', async () => {
+        const r = await changeCardForCoach(
+            fakeDb(coachWith({ subscription_status: 'pending_payment' })) as never,
+            provider,
+            { ...baseInput, coachId: 'c1' }
+        )
+        expect(r).toMatchObject({ ok: false, code: 'INVALID_STATUS' })
+    })
+
+    it('estado paused (dunning) → YA NO bloquea: pasa los guards y procede (P0-3b)', async () => {
+        // paused ahora está en PUT_ALLOWED: el guard de estado lo deja pasar. Con el provider stub (sin
+        // fetchCheckoutSnapshot) la lectura pre-PUT falla → GATEWAY_ERROR, NO INVALID_STATUS. Lo que
+        // importa: ya no se bloquea por estado (el CTA de dunning deja de ser callejón sin salida).
         const r = await changeCardForCoach(
             fakeDb(coachWith({ subscription_status: 'paused' })) as never,
             provider,
             { ...baseInput, coachId: 'c1' }
         )
-        expect(r).toMatchObject({ ok: false, code: 'INVALID_STATUS' })
+        expect(r.ok).toBe(false)
+        if (!r.ok) expect(r.code).not.toBe('INVALID_STATUS')
     })
 })
 

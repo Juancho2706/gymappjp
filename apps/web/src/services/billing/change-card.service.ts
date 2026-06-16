@@ -55,10 +55,12 @@ export type ChangeCardResult =
 /** Estados terminales: no se puede PUTear un preapproval cancelado/vencido → ruta a reactivate. */
 const TERMINAL_STATUSES = new Set(['canceled', 'cancelled', 'expired'])
 /**
- * Estados donde el swap in-place aplica en v1. `paused`/`pending_payment`/`past_due` (dunning) son
- * recuperación de pago fallido = FASE 2 (Q10 sin validar si MP acepta el PUT en paused) → INVALID_STATUS.
+ * Estados donde el swap in-place aplica. Incluye los de DUNNING (`paused`/`past_due`): cambiar la
+ * tarjeta es JUSTO la recuperación de un cobro fallido (P0-3b) — sin esto el CTA del email de dunning
+ * sería un callejón sin salida. Si MP rechaza el PUT en `paused` (Q10 a validar en sandbox), la ruta
+ * devuelve GATEWAY_ERROR amable, no rompe. `pending_payment` queda fuera (es "nunca confirmado", no dunning).
  */
-const PUT_ALLOWED_STATUSES = new Set(['active', 'trialing'])
+const PUT_ALLOWED_STATUSES = new Set(['active', 'trialing', 'paused', 'past_due'])
 
 /**
  * Idempotency key del PUT (header X-Idempotency-Key): determinística y SIN timestamp para que un
