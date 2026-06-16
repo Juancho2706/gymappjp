@@ -332,24 +332,27 @@ export async function POST(request: Request) {
         const supersededMpPreapprovalId =
             previousMpId && previousMpId !== newMpId ? previousMpId : null
 
-        // P0-2 (downgrade / cambio de ciclo al corte): cancelar el preapproval VIEJO de inmediato,
-        // desacoplado del pago. El coach conserva acceso por DB hasta current_period_end (este UPDATE
-        // no toca tier/entitlements ni el periodo); cancelar el MP viejo solo evita que dispare su
-        // cobro futuro (al corte), que de otro modo coexistiría con el preapproval nuevo → doble cobro.
-        // Si el cancel tiene ÉXITO no se persiste superseded_mp_preapproval_id (ya está cancelado). Si
-        // FALLA, se persiste como backstop para que webhook/cancel-subscription/cron lo reintenten.
+        // P0-2 + P1-6: cancelar el preapproval VIEJO de inmediato SIEMPRE que exista uno distinto al
+        // nuevo — no solo en downgrade/cambio-de-ciclo (scheduleAtCutOnly). Antes el cancel SOLO corría
+        // bajo scheduleAtCutOnly → en una PRIMERA COMPRA / reactivación con REINTENTO (el coach refresca
+        // o reaprieta el checkout) el preapproval anterior `pending` quedaba VIVO junto al nuevo →
+        // múltiples preapprovals del mismo coach → riesgo de DOBLE COBRO si ambos se autorizan (P1-6).
+        // El coach conserva acceso por DB (este UPDATE no toca tier/entitlements ni el período); cancelar
+        // el MP viejo solo evita su cobro futuro. Best-effort: si el cancel tiene ÉXITO no se persiste
+        // superseded; si FALLA, se persiste como backstop para que webhook/cancel-subscription/cron lo
+        // reintenten. (El upgrade activo NO llega acá: retorna antes con el one-shot, sin preapproval nuevo.)
         let supersededForUpdate = supersededMpPreapprovalId
-        if (scheduleAtCutOnly && supersededMpPreapprovalId) {
+        if (supersededMpPreapprovalId) {
             try {
                 await provider.cancelCheckoutAtProvider(supersededMpPreapprovalId)
                 supersededForUpdate = null
                 console.info(
-                    `[create-preference] P0-2 cancelled old preapproval ${supersededMpPreapprovalId} for coach ${user.id} (scheduleAtCutOnly)`
+                    `[create-preference] cancelled old preapproval ${supersededMpPreapprovalId} for coach ${user.id} (P0-2/P1-6)`
                 )
             } catch (cancelError) {
                 const msg = cancelError instanceof Error ? cancelError.message : String(cancelError)
                 console.error(
-                    `[create-preference] P0-2 cancel of old preapproval ${supersededMpPreapprovalId} FAILED for coach ${user.id}; persisting superseded as backstop: ${msg}`
+                    `[create-preference] cancel of old preapproval ${supersededMpPreapprovalId} FAILED for coach ${user.id}; persisting superseded as backstop: ${msg}`
                 )
             }
         }
@@ -372,6 +375,8 @@ export async function POST(request: Request) {
             ? {
                 payment_provider: provider.name,
                 subscription_mp_id: checkout.checkoutId,
+                // P1-6: backstop si el cancel del preapproval viejo falló (free con reintento de checkout).
+                superseded_mp_preapproval_id: supersededForUpdate,
             }
             : scheduleAtCutOnly
             ? {
