@@ -49,6 +49,19 @@ const TIER_BADGE: Partial<Record<SubscriptionTier, { label: string; cls: string 
     growth: { label: 'Nuevo',       cls: 'bg-emerald-500/15 text-emerald-400' },
 }
 
+// Etiqueta legible de la marca a partir del payment_method_id de MercadoPago (P1-8): 'debvisa' es un id
+// de máquina, no una marca. Fallback: el id capitalizado.
+const MP_BRAND_LABEL: Record<string, string> = {
+    visa: 'Visa', debvisa: 'Visa débito',
+    master: 'Mastercard', debmaster: 'Mastercard débito',
+    amex: 'American Express', diners: 'Diners',
+    maestro: 'Maestro', magna: 'Magna', naranja: 'Naranja', cabal: 'Cabal',
+}
+function mpBrandLabel(pmid: string | null | undefined): string {
+    if (!pmid) return ''
+    return MP_BRAND_LABEL[pmid.toLowerCase()] ?? pmid.charAt(0).toUpperCase() + pmid.slice(1)
+}
+
 type CoachSubscription = {
     id: string
     subscription_tier: string
@@ -605,7 +618,7 @@ export default function CoachSubscriptionPage() {
                                             <span className="text-muted-foreground">
                                                 Tarjeta:{' '}
                                                 <span className="font-medium text-foreground">
-                                                    {coach.card_brand ? `${coach.card_brand} ` : ''}···· {coach.card_last4}
+                                                    {coach.card_brand ? `${mpBrandLabel(coach.card_brand)} ` : ''}···· {coach.card_last4}
                                                 </span>
                                             </span>
                                         ) : (

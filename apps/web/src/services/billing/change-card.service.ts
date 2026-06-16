@@ -247,7 +247,16 @@ export async function changeCardForCoach(
         const after = await provider.fetchCheckoutSnapshot(mpId)
         const afterNextPaymentDate = after.next_payment_date ?? null
         const afterAmount = after.auto_recurring?.transaction_amount ?? null
-        if (beforeNextPaymentDate !== afterNextPaymentDate || beforeAmount !== afterAmount) {
+        // P1-8: comparar next_payment_date como INSTANTE, no como string crudo — dos GETs alrededor del
+        // PUT pueden serializar el mismo instante distinto ('…Z' vs '…+00:00') → CYCLE_DRIFT espurio
+        // sobre un swap exitoso. Si las strings difieren, parseamos; unparseable → conservador (movido).
+        const beforeTs = beforeNextPaymentDate ? Date.parse(beforeNextPaymentDate) : NaN
+        const afterTs = afterNextPaymentDate ? Date.parse(afterNextPaymentDate) : NaN
+        const movedDate =
+            beforeNextPaymentDate === afterNextPaymentDate
+                ? false
+                : Number.isNaN(beforeTs) || Number.isNaN(afterTs) || beforeTs !== afterTs
+        if (movedDate || beforeAmount !== afterAmount) {
             const drift: TablesInsert<'subscription_events'> = {
                 coach_id: coachId,
                 provider: provider.name,

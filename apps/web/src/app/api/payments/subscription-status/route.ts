@@ -90,6 +90,8 @@ export async function GET() {
         billing: { baseClp, addonsClp, totalClp },
         activeClientCount,
         // Flag server-only del cambio de tarjeta (la página es client → no puede leer process.env).
-        changeCardEnabled: CHANGE_CARD_ENABLED,
+        // P1-8: gateamos TAMBIÉN en que exista NEXT_PUBLIC_MP_PUBLIC_KEY — sin la public key el tokenizer
+        // (Secure Fields) no monta y el botón llevaría a un formulario muerto (gotcha NEXT_PUBLIC+Sensitive).
+        changeCardEnabled: CHANGE_CARD_ENABLED && (process.env.NEXT_PUBLIC_MP_PUBLIC_KEY ?? '').trim().length > 0,
     })
 }

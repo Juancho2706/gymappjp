@@ -305,7 +305,8 @@ export const CARD_CHANGE_DISCLOSURE: {
     version: string
     points: readonly CardChangeDisclosurePoint[]
 } = {
-    version: 'v1-2026-06-DRAFT',
+    // JP (rep legal) firmó el consentimiento + el delta de T&C/privacidad (2026-06-16) → sin -DRAFT.
+    version: 'v1-2026-06',
     points: [
         {
             number: 1,
