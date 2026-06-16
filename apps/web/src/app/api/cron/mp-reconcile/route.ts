@@ -38,9 +38,12 @@ type MpPreapproval = {
 }
 
 async function fetchMpPreapproval(preapprovalId: string, accessToken: string) {
-    const res = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-    })
+    // P1-5: con token TEST- hay que mandar `X-scope: stage` (igual que buildMpHeaders del provider),
+    // si no el GET en Preview vuelve null/stale → el reconcile cuenta errors y queda CIEGO en test (es
+    // la única red de seguridad cuando MP no entrega webhooks en modo test).
+    const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` }
+    if (accessToken.startsWith('TEST-')) headers['X-scope'] = 'stage'
+    const res = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, { headers })
     if (!res.ok) return null
     return res.json() as Promise<MpPreapproval>
 }

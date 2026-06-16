@@ -772,6 +772,23 @@ async function handleWebhook(request: Request, rawBody: string) {
             (result.providerStatus === 'refunded' || result.providerStatus === 'charged_back')
         ) {
             try {
+                // P1-3: ANTES de nulear subscription_mp_id, CANCELAR el preapproval en MP. Sin esto el
+                // preapproval sigue `authorized` y reintenta cobrar — y como dejamos mp_id en null, ese
+                // cobro futuro ya no se puede re-matchear (re-cobro silencioso tras refund/chargeback).
+                // Best-effort: un fallo/already-cancelled no debe impedir bloquear al coach.
+                const mpIdToCancel = coach.subscription_mp_id?.trim()
+                if (mpIdToCancel) {
+                    try {
+                        await provider.cancelCheckoutAtProvider(mpIdToCancel)
+                    } catch (cancelErr) {
+                        console.error('[payments.webhook] failed to cancel preapproval on refund/chargeback', {
+                            traceId,
+                            coachId: coach.id,
+                            mpId: mpIdToCancel,
+                            message: cancelErr instanceof Error ? cancelErr.message : String(cancelErr),
+                        })
+                    }
+                }
                 const cancelled = await cancelAllForCoach(admin, coach.id, new Date().toISOString())
                 const { error: blockErr } = await admin
                     .from('coaches')
