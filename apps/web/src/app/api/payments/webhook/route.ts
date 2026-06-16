@@ -551,6 +551,16 @@ async function handleWebhook(request: Request, rawBody: string) {
             })
             return NextResponse.json({ ok: true })
         }
+        // P0-4: no resucitar una suscripción cancelada/vencida. Si el coach canceló entre que inició el
+        // upgrade y que se aprobó el one-shot, NO re-activamos el tier sobre un coach muerto.
+        if (coach.subscription_status === 'canceled' || coach.subscription_status === 'expired') {
+            console.warn('[payments.webhook] tier-upgrade on canceled/expired coach — skipping activation', {
+                traceId,
+                coachId: coach.id,
+                status: coach.subscription_status,
+            })
+            return NextResponse.json({ ok: true })
+        }
         const newTier = result.tierUpgrade.newTier
         const cycle = result.tierUpgrade.cycle
         const currentTier = (coach.subscription_tier ?? 'starter') as SubscriptionTier

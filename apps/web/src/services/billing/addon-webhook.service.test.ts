@@ -168,9 +168,7 @@ describe('applyFirstChargeToAddons', () => {
 
         const result = await applyFirstChargeToAddons(db, payments, ctx, '2026-07-01T00:00:00.000Z')
 
-        expect(markFirstCharged).toHaveBeenCalledWith(db, 'coach-1', '2026-07-01T00:00:00.000Z', {
-            activatedBefore: '2026-07-01T00:00:00.000Z',
-        })
+        expect(markFirstCharged).toHaveBeenCalledWith(db, 'coach-1', '2026-07-01T00:00:00.000Z')
         expect(result.markedIds).toEqual(['addon-1'])
         expect(result.putApplied).toBe(false)
         expect(payments.updateCheckoutAmount).not.toHaveBeenCalled()

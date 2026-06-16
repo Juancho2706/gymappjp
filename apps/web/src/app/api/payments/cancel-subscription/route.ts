@@ -6,6 +6,7 @@ import { getPaymentsProvider } from '@/lib/payments/provider'
 import { rateLimitPayment, jsonRateLimited } from '@/lib/rate-limit'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
+import { clearUpgradeInFlight } from '@/services/billing/plan-change-lock'
 
 function isAlreadyCanceledError(message: string) {
     return /already|cancelled|canceled|cancelado|invalid status|not authorized|cannot be modified/i.test(message)
@@ -120,6 +121,19 @@ export async function POST(request: Request) {
 
         if (updateError) {
             return NextResponse.json({ error: updateError.message }, { status: 500 })
+        }
+
+        // P0-4: limpiar el candado de upgrade in-flight. Si el coach cancela mientras un upgrade está en
+        // vuelo (one-shot creado, sin confirmar), el marker `tier_upgrade_pending` quedaba hasta el TTL
+        // (30 min) bloqueando altas de add-on / cambios de plan con 409. Idempotente: no-op si no hay
+        // marker. (El guard canceled/expired de confirm-upgrade y del webhook evita re-activar el tier.)
+        try {
+            await clearUpgradeInFlight(admin, user.id)
+        } catch (lockErr) {
+            console.error('[payments.cancel-subscription] failed to clear upgrade lock', {
+                coachId: user.id,
+                message: lockErr instanceof Error ? lockErr.message : String(lockErr),
+            })
         }
 
         // Add-ons (plan 05 F3.4): el coach conserva acceso al plan base hasta current_period_end (la

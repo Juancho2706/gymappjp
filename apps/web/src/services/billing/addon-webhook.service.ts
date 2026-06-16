@@ -159,9 +159,7 @@ export async function applyFirstChargeToAddons(
     },
     chargedAt: string
 ): Promise<{ markedIds: string[]; putApplied: boolean }> {
-    const marked = await markFirstCharged(db, ctx.coachId, chargedAt, {
-        activatedBefore: chargedAt,
-    })
+    const marked = await markFirstCharged(db, ctx.coachId, chargedAt)
     if (marked.length === 0) return { markedIds: [], putApplied: false }
 
     // Si alguna recién-cobrada estaba en cancel_pending (baja antes del 1er cobro, regla 3 mensual),

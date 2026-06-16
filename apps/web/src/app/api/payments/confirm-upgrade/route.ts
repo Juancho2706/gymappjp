@@ -115,6 +115,20 @@ export async function POST(request: Request) {
                 { status: 409 }
             )
         }
+        // P0-4: no resucitar una suscripción cancelada/vencida. Si el coach canceló entre iniciar el
+        // upgrade y pagar el one-shot, NO re-activamos el tier sobre un coach muerto.
+        if (coach.subscription_status === 'canceled' || coach.subscription_status === 'expired') {
+            console.warn('[payments.confirm-upgrade] coach canceled/expired — skipping tier activation', {
+                traceId,
+                coachId: user.id,
+                status: coach.subscription_status,
+            })
+            return NextResponse.json({
+                ok: true,
+                status: coach.subscription_status,
+                skipped: 'canceled_or_expired',
+            })
+        }
 
         // P1 REPLAY GUARD: si el evento de dedup `tier_upgrade:${paymentId}` YA existe, este
         // paymentId aprobado ya activó su upgrade (este camino o el webhook). Re-activar acá

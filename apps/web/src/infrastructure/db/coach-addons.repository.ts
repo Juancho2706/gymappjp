@@ -118,20 +118,20 @@ export async function insertAddon(db: DB, input: InsertAddonInput): Promise<Coac
 export async function markFirstCharged(
     db: DB,
     coachId: string,
-    chargedAt: string,
-    options?: { activatedBefore?: string }
+    chargedAt: string
 ): Promise<CoachAddon[]> {
-    let query = db
+    // P0-6: set-once por `first_charged_at IS NULL` (idempotente). Antes había un guard
+    // `.lt('activated_at', chargedAt)` que, en el alta combo, EXCLUÍA un add-on recién activado cuyo
+    // `activated_at` era ≥ el `date_approved` del primer cobro → first_charged_at quedaba null → más
+    // tarde una baja regla-3 sobre-cobraba un ciclo. Quitado: el set-once ya garantiza idempotencia.
+    const { data, error } = await db
         .from('coach_addons')
         .update({ first_charged_at: chargedAt })
         .eq('coach_id', coachId)
         .eq('source', 'self_service')
         .is('first_charged_at', null)
         .in('status', ['active', 'cancel_pending'])
-    if (options?.activatedBefore) {
-        query = query.lt('activated_at', options.activatedBefore)
-    }
-    const { data, error } = await query.select(COACH_ADDON_COLUMNS)
+        .select(COACH_ADDON_COLUMNS)
     if (error) throw new Error(`markFirstCharged: ${error.message}`)
     return (data ?? []).map((r) => coachAddonFromRow(r as CoachAddonRow))
 }
