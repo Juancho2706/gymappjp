@@ -280,6 +280,42 @@ export async function rateLimitOrgCreation(
     }
 }
 
+let cardChangeRatelimit: Ratelimit | null | undefined
+
+function getCardChangeRatelimit(): Ratelimit | null {
+    if (cardChangeRatelimit !== undefined) return cardChangeRatelimit
+    const redis = redisFromEnv()
+    if (!redis) { cardChangeRatelimit = null; return null }
+    cardChangeRatelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(5, '1 h'),
+        prefix: 'ratelimit:card-change',
+    })
+    return cardChangeRatelimit
+}
+
+/**
+ * fail-CLOSED: bloquea si Redis no responde. El endpoint de cambio de tarjeta opera sobre
+ * el instrumento de pago de una suscripción → blanco de token-grinding/enumeración; preferimos
+ * negar antes que dejar pasar por una caída de Redis (a diferencia de rateLimitPayment, que es
+ * fail-open). 5/hora por coach: ventana generosa para el reintento legítimo de un coach con la
+ * tarjeta vencida (plan P0-5). Espeja rateLimitInviteAccept.
+ */
+export async function rateLimitCardChange(
+    identifier: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const limiter = getCardChangeRatelimit()
+    if (!limiter) return { ok: false, retryAfter: 3600 }
+    try {
+        const res = await limiter.limit(`card-change:${identifier}`)
+        await res.pending.catch(() => undefined)
+        if (res.success) return { ok: true }
+        return { ok: false, retryAfter: Math.max(1, Math.ceil((res.reset - Date.now()) / 1000)) }
+    } catch {
+        return { ok: false, retryAfter: 3600 }
+    }
+}
+
 export function jsonRateLimited(retryAfter: number) {
     return NextResponse.json(
         { error: 'Too many requests', code: 'RATE_LIMIT' },

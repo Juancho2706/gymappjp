@@ -182,11 +182,15 @@ async function mpRequest(path: string) {
     return response.json()
 }
 
-async function mpPutJson(path: string, body: Record<string, unknown>) {
+async function mpPutJson(path: string, body: Record<string, unknown>, idempotencyKey?: string) {
     const accessToken = getMpAccessToken()
+    const headers = buildMpHeaders(accessToken)
+    // X-Idempotency-Key es mandatorio en MP para mutaciones desde 2024-09; solo lo seteamos cuando
+    // el llamador lo provee → los callers existentes (updateCheckoutAmount/AndRef, cancel) no cambian.
+    if (idempotencyKey) headers['X-Idempotency-Key'] = idempotencyKey
     const response = await fetch(`https://api.mercadopago.com${path}`, {
         method: 'PUT',
-        headers: buildMpHeaders(accessToken),
+        headers,
         body: JSON.stringify(body),
     })
     if (!response.ok) {
@@ -506,6 +510,37 @@ export class MercadoPagoProvider implements PaymentsProvider {
             },
             external_reference: externalReference,
         })
+    }
+
+    /**
+     * PUT /preapproval/{id} { card_token_id } — swap de tarjeta IN-PLACE sobre el preapproval
+     * existente (Modalidad A, feat/coach-change-card). El body lleva UNA sola key A PROPÓSITO:
+     * nada de auto_recurring/status/external_reference/back_url, que moverían el ciclo/monto
+     * (re-facturación silenciosa = exposición SERNAC; plan P0-1). `idempotencyKey` → header
+     * X-Idempotency-Key (dedup de doble-submit; key sin timestamp). El token es single-use 7d,
+     * minteado client-side por Secure Fields (el PAN nunca toca el server).
+     *
+     * validar en sandbox (Q1): el PUT NO debe mover next_payment_date/transaction_amount/status
+     * (la ruta lo verifica con un GET post-PUT). (Q10): comportamiento con preapproval paused.
+     */
+    async updateCardAtProvider(
+        checkoutId: string,
+        cardTokenId: string,
+        idempotencyKey: string
+    ): Promise<void> {
+        const encoded = encodeURIComponent(checkoutId)
+        await mpPutJson(`/preapproval/${encoded}`, { card_token_id: cardTokenId }, idempotencyKey)
+    }
+
+    /**
+     * GET /v1/card_tokens/{id}: last_four_digits AUTORITATIVO del token (plan P0-10). El GET no
+     * consume el token. Display-only/best-effort — el service cae al last4 del body si esto lanza.
+     */
+    async fetchCardTokenSummary(cardTokenId: string): Promise<{ last4: string | null }> {
+        const encoded = encodeURIComponent(cardTokenId)
+        const token = (await mpRequest(`/v1/card_tokens/${encoded}`)) as Record<string, unknown>
+        const last4 = typeof token.last_four_digits === 'string' ? token.last_four_digits : null
+        return { last4 }
     }
 
     /**

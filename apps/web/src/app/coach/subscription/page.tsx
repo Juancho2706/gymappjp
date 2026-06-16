@@ -49,6 +49,19 @@ const TIER_BADGE: Partial<Record<SubscriptionTier, { label: string; cls: string 
     growth: { label: 'Nuevo',       cls: 'bg-emerald-500/15 text-emerald-400' },
 }
 
+// Etiqueta legible de la marca a partir del payment_method_id de MercadoPago (P1-8): 'debvisa' es un id
+// de máquina, no una marca. Fallback: el id capitalizado.
+const MP_BRAND_LABEL: Record<string, string> = {
+    visa: 'Visa', debvisa: 'Visa débito',
+    master: 'Mastercard', debmaster: 'Mastercard débito',
+    amex: 'American Express', diners: 'Diners',
+    maestro: 'Maestro', magna: 'Magna', naranja: 'Naranja', cabal: 'Cabal',
+}
+function mpBrandLabel(pmid: string | null | undefined): string {
+    if (!pmid) return ''
+    return MP_BRAND_LABEL[pmid.toLowerCase()] ?? pmid.charAt(0).toUpperCase() + pmid.slice(1)
+}
+
 type CoachSubscription = {
     id: string
     subscription_tier: string
@@ -57,6 +70,8 @@ type CoachSubscription = {
     billing_cycle: string
     current_period_end: string | null
     payment_provider: string
+    card_last4?: string | null
+    card_brand?: string | null
 }
 type SubscriptionEvent = {
     id: string
@@ -112,6 +127,8 @@ export default function CoachSubscriptionPage() {
     // Restaurar el foco al disparador del modal al cerrarlo (a11y de diálogo).
     const modalTriggerRef = useRef<HTMLElement | null>(null)
     const [coach, setCoach] = useState<CoachSubscription | null>(null)
+    // Flag server-only del cambio de tarjeta — llega del endpoint subscription-status (no NEXT_PUBLIC).
+    const [changeCardEnabled, setChangeCardEnabled] = useState(false)
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -179,6 +196,7 @@ export default function CoachSubscriptionPage() {
                     return
                 }
                 setCoach(payload.coach)
+                setChangeCardEnabled(payload.changeCardEnabled === true)
                 setEvents(Array.isArray(payload.events) ? payload.events : [])
                 setAddons(Array.isArray(payload.addons) ? payload.addons : [])
                 setBilling(payload.billing ?? null)
@@ -439,6 +457,7 @@ export default function CoachSubscriptionPage() {
             const payload = await response.json()
             if (!response.ok) return
             setCoach(payload.coach)
+            setChangeCardEnabled(payload.changeCardEnabled === true)
             setEvents(Array.isArray(payload.events) ? payload.events : [])
             setAddons(Array.isArray(payload.addons) ? payload.addons : [])
             setBilling(payload.billing ?? null)
@@ -590,6 +609,30 @@ export default function CoachSubscriptionPage() {
                                     Sin fecha de vencimiento · <span className="text-foreground font-semibold">Gratis para siempre</span>
                                 </p>
                             ) : null}
+                            {/* Cambiar tarjeta (Modalidad A) — flag ON + sub activa/en prueba o en dunning
+                                (paused/past_due): cambiar la tarjeta es la recuperación del cobro fallido (P0-3b). */}
+                            {changeCardEnabled &&
+                                ['active', 'trialing', 'paused', 'past_due'].includes(coach.subscription_status) && (
+                                    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                                        {coach.card_last4 ? (
+                                            <span className="text-muted-foreground">
+                                                Tarjeta:{' '}
+                                                <span className="font-medium text-foreground">
+                                                    {coach.card_brand ? `${mpBrandLabel(coach.card_brand)} ` : ''}···· {coach.card_last4}
+                                                </span>
+                                            </span>
+                                        ) : (
+                                            <span className="text-muted-foreground">Sin tarjeta registrada</span>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => router.push('/coach/subscription/update-card')}
+                                            className="font-medium text-[#007AFF] hover:underline"
+                                        >
+                                            Cambiar tarjeta
+                                        </button>
+                                    </div>
+                                )}
                             {/* Desglose compuesto (base + add-ons) — solo si hay add-ons facturables */}
                             {coach.subscription_status === 'active' && billing && billing.addonsClp > 0 && (
                                 <div className="mt-2 rounded-lg border border-border bg-secondary/30 px-3 py-2 text-xs">

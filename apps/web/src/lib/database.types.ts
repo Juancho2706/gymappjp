@@ -1565,6 +1565,9 @@ export type Database = {
           registration_ip: string | null
           slug: string
           slug_changed_at: string | null
+          card_brand: string | null
+          card_last4: string | null
+          card_payment_method_id: string | null
           subscription_mp_id: string | null
           subscription_status: string
           subscription_tier: string
@@ -1609,6 +1612,9 @@ export type Database = {
           registration_ip?: string | null
           slug: string
           slug_changed_at?: string | null
+          card_brand?: string | null
+          card_last4?: string | null
+          card_payment_method_id?: string | null
           subscription_mp_id?: string | null
           subscription_status?: string
           subscription_tier?: string
@@ -1653,6 +1659,9 @@ export type Database = {
           registration_ip?: string | null
           slug?: string
           slug_changed_at?: string | null
+          card_brand?: string | null
+          card_last4?: string | null
+          card_payment_method_id?: string | null
           subscription_mp_id?: string | null
           subscription_status?: string
           subscription_tier?: string

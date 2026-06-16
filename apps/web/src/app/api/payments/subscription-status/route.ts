@@ -9,7 +9,7 @@ import {
     toBillableAddons,
 } from '@/services/billing/addons.service'
 import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
-import { getTierPriceClp, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
+import { CHANGE_CARD_ENABLED, getTierPriceClp, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
 
 function normalizeCycle(raw: string | null): BillingCycle {
     if (raw === 'monthly' || raw === 'quarterly' || raw === 'annual') return raw
@@ -34,7 +34,7 @@ export async function GET() {
     const { data: coach, error } = await supabase
         .from('coaches')
         .select(
-            'id, subscription_tier, subscription_status, max_clients, billing_cycle, current_period_end, payment_provider, subscription_mp_id, superseded_mp_preapproval_id'
+            'id, subscription_tier, subscription_status, max_clients, billing_cycle, current_period_end, payment_provider, subscription_mp_id, superseded_mp_preapproval_id, card_last4, card_brand'
         )
         .eq('id', user.id)
         .maybeSingle()
@@ -89,5 +89,9 @@ export async function GET() {
         addons,
         billing: { baseClp, addonsClp, totalClp },
         activeClientCount,
+        // Flag server-only del cambio de tarjeta (la página es client → no puede leer process.env).
+        // P1-8: gateamos TAMBIÉN en que exista NEXT_PUBLIC_MP_PUBLIC_KEY — sin la public key el tokenizer
+        // (Secure Fields) no monta y el botón llevaría a un formulario muerto (gotcha NEXT_PUBLIC+Sensitive).
+        changeCardEnabled: CHANGE_CARD_ENABLED && (process.env.NEXT_PUBLIC_MP_PUBLIC_KEY ?? '').trim().length > 0,
     })
 }
