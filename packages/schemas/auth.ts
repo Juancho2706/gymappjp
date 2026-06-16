@@ -28,7 +28,10 @@ export type LoginInput = CoachLoginInput
 
 export const ForgotPasswordSchema = z.object({
     email: z.string().trim().toLowerCase().email('Email inválido'),
-    team_slug: z.string().optional(),
+    // `.nullish()` (no `.optional()`): formData.get('team_slug') devuelve NULL — no undefined —
+    // cuando el form se abre sin team_slug (coach/alumno standalone). `.optional()` rechazaba ese
+    // null con "expected string, received null" y rompia el reset para todo usuario no-team.
+    team_slug: z.string().nullish(),
 })
 export type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>
 

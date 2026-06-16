@@ -94,7 +94,11 @@ const optionalEnum = <T extends readonly [string, ...string[]]>(values: T) =>
     z.union([z.enum(values), z.null()]).optional()
 
 export const WorkoutBlockSchema = z.object({
-    exercise_id: z.string().uuid(),
+    // z.guid(), NO z.uuid(): los ejercicios seed de cardio/mobility/roller usan UUIDs
+    // deterministas (00000000-0000-0000-0ca0-*, version/variante 0) que NO cumplen RFC 9562;
+    // el .uuid() estricto de Zod 4 los rechaza ("Invalid UUID") y rompe el save de cualquier
+    // plan que incluya un bloque cardio/movilidad/roller (mismo caso que section_template_id).
+    exercise_id: z.guid(),
     sets: z.preprocess(preprocessSets, z.number().int().min(1, 'Mínimo 1 serie').max(20, 'Máximo 20 series')),
     reps: z.string().min(1, 'Las repeticiones son obligatorias').max(20, 'Máximo 20 caracteres en repeticiones'),
     target_weight_kg: z.preprocess(preprocessOptionalFiniteKg, optionalKg),
