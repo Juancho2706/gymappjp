@@ -29,12 +29,6 @@ type Props = {
 
 type FieldStyle = Record<string, string>
 
-const FIELD_STYLE: FieldStyle = {
-    height: '100%',
-    'font-size': '16px',
-    'font-family': 'inherit',
-}
-
 /** Las clases del contenedor donde Secure Fields monta su iframe (alto fijo, look de input). */
 const FIELD_BOX =
     'h-11 rounded-md border border-neutral-300 bg-white px-3 dark:border-neutral-700 dark:bg-neutral-900'
@@ -62,9 +56,20 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
         try {
             const mp = new Ctor(publicKey, { locale: 'es-CL' })
             mpRef.current = mp
-            mp.fields.create('cardNumber', { placeholder: '1234 1234 1234 1234', style: FIELD_STYLE }).mount('mp-card-number')
-            mp.fields.create('expirationDate', { placeholder: 'MM/AA', style: FIELD_STYLE }).mount('mp-card-expiration')
-            mp.fields.create('securityCode', { placeholder: 'CVV', style: FIELD_STYLE }).mount('mp-card-security')
+            // El iframe de Secure Fields NO hereda los estilos de la página → si no le pasamos el color
+            // del texto, en dark mode sale negro sobre fondo oscuro (ilegible). Lo derivamos del modo.
+            const isDark =
+                typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+            const fieldStyle: FieldStyle = {
+                height: '100%',
+                'font-size': '16px',
+                'font-family': 'inherit',
+                color: isDark ? '#fafafa' : '#0a0a0a',
+                placeholderColor: isDark ? '#6b7280' : '#9ca3af',
+            }
+            mp.fields.create('cardNumber', { placeholder: '1234 1234 1234 1234', style: fieldStyle }).mount('mp-card-number')
+            mp.fields.create('expirationDate', { placeholder: 'MM/AA', style: fieldStyle }).mount('mp-card-expiration')
+            mp.fields.create('securityCode', { placeholder: 'CVV', style: fieldStyle }).mount('mp-card-security')
             mountedRef.current = true
             setFieldsReady(true)
         } catch {
