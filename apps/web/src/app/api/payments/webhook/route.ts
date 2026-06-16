@@ -286,11 +286,14 @@ async function handleWebhook(request: Request, rawBody: string) {
                     message: chargeErr instanceof Error ? chargeErr.message : String(chargeErr),
                 })
             }
-        } else {
-            // P0-2: cobro recurrente RECHAZADO (dunning). Marcamos `past_due` CONSERVANDO
-            // current_period_end (gracia: hasEffectiveAccess da acceso hasta esa fecha — P0-3a) y
-            // avisamos al coach. Solo si está en un estado VIVO (no resucitar canceled/expired). MP
-            // reintenta; si recupera, el evento aprobado lo vuelve a active + email de recuperación.
+        } else if (result.providerStatus === 'rejected' || result.providerStatus === 'recycling') {
+            // P0-2: cobro recurrente RECHAZADO o en RECYCLING (MP reintenta tras un decline) = dunning
+            // REAL. ⚠️ La authorized_payment llega PRIMERO como `scheduled` (cobro programado, aún NO
+            // cobrado) y recién después como `approved` — confirmado con la renovación real de un coach
+            // en prod. Por eso NO tratamos `scheduled`/`pending`/`processed` como rechazo (sería dunning
+            // FALSO sobre un cobro en camino). Marcamos `past_due` CONSERVANDO current_period_end (gracia
+            // P0-3a) + avisamos. Solo si el coach está VIVO (no resucitar canceled/expired). Si recupera,
+            // el evento `approved` lo vuelve a active + email de recuperación.
             const liveStatuses = new Set(['active', 'trialing', 'paused', 'past_due'])
             if (liveStatuses.has(coach.subscription_status ?? '')) {
                 const { error: dunErr } = await admin
@@ -305,12 +308,20 @@ async function handleWebhook(request: Request, rawBody: string) {
                     })
                 }
             }
-            console.warn('[payments.webhook] recurring authorized_payment RECHAZADO (dunning)', {
+            console.warn('[payments.webhook] recurring authorized_payment RECHAZADO/recycling (dunning)', {
                 traceId,
                 coachId: coach.id,
                 status: result.providerStatus,
             })
             await sendDunningEmail(admin, coach.id, dunningCoachName, 'failed', dunningSubscriptionUrl, dunningAccessUntil)
+        } else {
+            // `scheduled`/`pending`/`in_process`/`processed`: el cobro está EN CAMINO, NO rechazado. No
+            // marcamos dunning (el evento `approved` lo confirma aparte). Solo log + el upsert de abajo.
+            console.info('[payments.webhook] recurring authorized_payment pendiente/programado — sin dunning', {
+                traceId,
+                coachId: coach.id,
+                status: result.providerStatus,
+            })
         }
         const recurringEventRow: TablesInsert<'subscription_events'> = {
             coach_id: coach.id,
