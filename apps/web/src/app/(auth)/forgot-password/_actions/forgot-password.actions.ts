@@ -13,10 +13,12 @@ export async function forgotPasswordAction(
     _prev: ForgotPasswordState,
     formData: FormData
 ): Promise<ForgotPasswordState> {
+    // formData.get() devuelve null cuando el campo no esta en el form (sin coach/team slug en la
+    // URL). Normalizamos null -> undefined para no chocar con la validacion de string del schema.
     const raw = {
         email: formData.get('email') as string,
-        coach_slug: formData.get('coach_slug') as string | null,
-        team_slug: formData.get('team_slug') as string | null,
+        coach_slug: (formData.get('coach_slug') as string | null) ?? undefined,
+        team_slug: (formData.get('team_slug') as string | null) ?? undefined,
     }
     const parsed = ForgotPasswordSchema.safeParse(raw)
 

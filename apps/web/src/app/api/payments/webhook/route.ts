@@ -177,6 +177,92 @@ async function handleWebhook(request: Request, rawBody: string) {
         },
     }
 
+    // ── P0-1: COBRO RECURRENTE de suscripción (`subscription_authorized_payment`) ──────────────────
+    // Rama AUTOCONTENIDA e IDEMPOTENTE (no toca las ramas de payment/preapproval de abajo). El coach ya
+    // quedó resuelto (por external_reference o por preapproval_id). Aprobado → snapshot recurrente
+    // (dedup por payment id) + first-charge de add-ons (set-once) + avanzar período al next_payment_date
+    // fresco + reconfirmar active. Rechazado/pendiente → log (el dunning completo —email + estado— es
+    // P0-2); NO bloqueamos acá porque MP reintenta. Re-entrega = no duplica (snapshot/first-charge/upsert).
+    if (result.isRecurringAuthorizedPayment) {
+        const recurringStatus = mapProviderStatus(result.providerStatus)
+        if (recurringStatus === 'active') {
+            try {
+                const tierForCharge = (coach.subscription_tier ?? 'starter') as SubscriptionTier
+                const cycleForCharge = (coach.billing_cycle ?? 'monthly') as BillingCycle
+                const paidAt = result.paidAt ?? new Date().toISOString()
+                const mpId = coach.subscription_mp_id?.trim() ?? null
+                if (mpId) {
+                    await applyFirstChargeToAddons(
+                        admin,
+                        addonPayments,
+                        {
+                            coachId: coach.id,
+                            tier: tierForCharge,
+                            cycle: cycleForCharge,
+                            subscriptionMpId: mpId,
+                            currentPeriodEnd: coach.current_period_end,
+                        },
+                        paidAt
+                    )
+                }
+                if (result.providerPaymentId) {
+                    const liveForSnap = await listLive(admin, coach.id)
+                    const breakdown = buildAddonBreakdown(liveForSnap, cycleForCharge)
+                    const baseClp = tierBaseClp(tierForCharge, cycleForCharge)
+                    await insertBillingSnapshot(admin, {
+                        coachId: coach.id,
+                        providerPaymentId: result.providerPaymentId,
+                        chargedAt: paidAt,
+                        tier: tierForCharge,
+                        billingCycle: cycleForCharge,
+                        kind: 'recurring',
+                        baseClp,
+                        addons: breakdown,
+                        totalClp: baseClp + breakdown.reduce((s, l) => s + l.cycle_amount_clp, 0),
+                    })
+                }
+                const recurringUpdate: Record<string, unknown> = {
+                    subscription_status: 'active',
+                    payment_provider: provider.name,
+                }
+                if (result.currentPeriodEnd) recurringUpdate.current_period_end = result.currentPeriodEnd
+                const { error: recErr } = await admin.from('coaches').update(recurringUpdate).eq('id', coach.id)
+                if (recErr) {
+                    console.error('[payments.webhook] recurring charge: coach update failed', {
+                        traceId,
+                        coachId: coach.id,
+                        message: recErr.message,
+                    })
+                }
+            } catch (chargeErr) {
+                console.error('[payments.webhook] recurring authorized_payment (approved) hooks failed', {
+                    traceId,
+                    coachId: coach.id,
+                    message: chargeErr instanceof Error ? chargeErr.message : String(chargeErr),
+                })
+            }
+        } else {
+            // Rechazado/pendiente (dunning). MP reintenta; el bloqueo lo decide el flujo de pausa/terminal.
+            // Dunning completo (email pago-fallido + estado) = P0-2 (siguiente). Acá solo dejamos rastro.
+            console.warn('[payments.webhook] recurring authorized_payment NOT approved (dunning) — P0-2 pendiente', {
+                traceId,
+                coachId: coach.id,
+                status: result.providerStatus,
+            })
+        }
+        const recurringEventRow: TablesInsert<'subscription_events'> = {
+            coach_id: coach.id,
+            provider: provider.name,
+            provider_event_id:
+                result.eventId ?? `${provider.name}:authpay:${result.providerPaymentId ?? 'unknown'}`,
+            provider_checkout_id: coach.subscription_mp_id ?? null,
+            provider_status: result.providerStatus ?? null,
+            payload: toJsonPayload(payload),
+        }
+        await admin.from('subscription_events').upsert(recurringEventRow, { onConflict: 'provider_event_id' })
+        return NextResponse.json({ ok: true })
+    }
+
     // ── Pago ONE-SHOT de add-on (alta in-app trim/anual, D4/F3.2) ─────────────────────
     // Llega como PAYMENT con external_reference dedicado `addon_oneshot|...`. NO toca el estado de
     // la suscripción (es un pago único, no el preapproval): se procesa aparte y se retorna. NO pasa

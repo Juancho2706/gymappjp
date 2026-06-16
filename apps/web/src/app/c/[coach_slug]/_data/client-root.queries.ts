@@ -60,7 +60,8 @@ export const getStudentBodyCompositionNavEnabled = cache(async () => {
 
 export const getSuspendedCoachData = cache(async (coachSlug: string) => {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // Reuse the shared auth root (cache()-deduped) instead of a second getUser() round-trip.
+    const user = await getClientRootUser()
     if (!user) return { user: null, coach: null, isTeam: false }
 
     // Pool/team: la suspensión la gestiona el DUEÑO del team, no el coach asignado. Nunca

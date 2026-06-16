@@ -52,6 +52,25 @@ describe('WorkoutBlockSchema.section_template_id', () => {
     })
 })
 
+describe('WorkoutBlockSchema.exercise_id', () => {
+    // Ejercicios seed de cardio/mobility/roller usan UUIDs deterministas
+    // (00000000-0000-0000-0ca0-*, version/variante 0) que NO cumplen RFC 9562.
+    // Con .uuid() estricto el save de cualquier plan con un bloque de esos tipos
+    // tiraba "Invalid UUID". Este test fija que .guid() los acepta.
+    it.each([
+        '00000000-0000-0000-0ca0-000000000001', // cardio
+        '00000000-0000-0000-0f80-000000000001', // mobility/roller
+    ])('acepta el UUID seed no-RFC %s', id => {
+        const result = WorkoutBlockSchema.safeParse({ ...baseBlock, exercise_id: id })
+        expect(result.success).toBe(true)
+    })
+
+    it('rechaza un exercise_id que no es GUID', () => {
+        const result = WorkoutBlockSchema.safeParse({ ...baseBlock, exercise_id: 'not-a-uuid' })
+        expect(result.success).toBe(false)
+    })
+})
+
 // ─── Polimórfico (specs/movida-entrenamiento, F2) ────────────────────────────
 // Baseline anti-regresión (AC3): el payload clásico de hoy valida idéntico y
 // NO gana campos nuevos; los campos polimórficos hacen round-trip.

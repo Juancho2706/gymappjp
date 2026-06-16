@@ -10,6 +10,8 @@ import {
     type DirectoryPulseRow,
 } from '@/services/dashboard.service'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { resolveCheckinPhotoUrl } from '@/lib/storage/checkin-photos'
 import type { DbClient } from '@/infrastructure/db/interfaces'
 
 const FLAG_LABELS: Record<AttentionFlag, string> = {
@@ -287,7 +289,7 @@ async function getCoachDashboardDataInner(
         applyOrgScope(
             supabase
                 .from('check_ins')
-                .select('id, created_at, photos, clients!inner(id, full_name, coach_id, org_id)')
+                .select('id, created_at, front_photo_url, side_photo_url, back_photo_url, clients!inner(id, full_name, coach_id, org_id)')
                 .eq('clients.coach_id', userId),
             'clients.org_id',
             orgId
@@ -368,7 +370,19 @@ async function getCoachDashboardDataInner(
             : 0
 
     const rawRecentClients = recentClientsRaw || []
-    const rawRecentCheckins = (recentCheckinsRaw.data as { id: string; created_at: string; photos: string[] | null; clients: { id: string; full_name: string } }[] | null) || []
+    const rawRecentCheckins = (recentCheckinsRaw.data as { id: string; created_at: string; front_photo_url: string | null; side_photo_url: string | null; back_photo_url: string | null; clients: { id: string; full_name: string } }[] | null) || []
+    // Firma el thumbnail del check-in (primer foto disponible: front -> side -> back) para que el
+    // feed de actividad sobreviva al bucket `checkins` pasando a privado (resolveCheckinPhotoUrl
+    // dual-lee URL publica legacy y path). Service-role: el coach no tiene policy de SELECT en
+    // storage; las filas ya estan scoped por coach_id arriba. Mismo patron que client-detail.service.
+    const checkinPhotoAdmin = createServiceRoleClient()
+    const signedCheckinPhotos = new Map<string, string | null>()
+    await Promise.all(
+        rawRecentCheckins.map(async (c) => {
+            const first = c.front_photo_url || c.side_photo_url || c.back_photo_url || null
+            signedCheckinPhotos.set(c.id, first ? await resolveCheckinPhotoUrl(checkinPhotoAdmin, first) : null)
+        })
+    )
     const rawExpiringPrograms = (expiringProgramsRaw.data as any[] | null) || []
     let signupsRows =
         signupsByMonthRaw.error || !signupsByMonthRaw.data
@@ -444,7 +458,6 @@ async function getCoachDashboardDataInner(
     })
 
     rawRecentCheckins.forEach((c) => {
-        const firstPhoto = Array.isArray(c.photos) && c.photos.length > 0 ? c.photos[0] : null
         activities.push({
             id: `checkin-${c.id}`,
             type: 'check-in',
@@ -452,7 +465,7 @@ async function getCoachDashboardDataInner(
             subtitle: 'Revisa su progreso semanal',
             date: c.created_at,
             href: `/coach/clients/${c.clients.id}`,
-            photoUrl: firstPhoto,
+            photoUrl: signedCheckinPhotos.get(c.id) ?? null,
         })
     })
 
