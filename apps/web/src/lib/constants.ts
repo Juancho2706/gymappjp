@@ -114,6 +114,16 @@ export const SUBSCRIPTION_BLOCKED_STATUSES = [
 export const SELF_SERVICE_ADDONS_ENABLED =
     process.env.NEXT_PUBLIC_SELF_SERVICE_ADDONS_ENABLED === 'true'
 
+// ── Cambio de tarjeta self-service (feat/coach-change-card, Modalidad A) ──────
+// Gate de LANZAMIENTO del cambio de tarjeta in-place. SERVER-ONLY a propósito (NO NEXT_PUBLIC):
+// el gate de dinero de /api/payments/change-card debe ser legible en el servidor y NO inlinearse
+// al bundle del cliente — una NEXT_PUBLIC marcada "Sensitive" en Vercel llega como undefined →
+// false fantasma (gotcha conocido). En el cliente evalúa SIEMPRE false (fail-closed) por diseño;
+// el gateo real lo hacen la ruta (server) y la página RSC (server), que leen el valor real.
+//   · Vercel Preview → CHANGE_CARD_ENABLED='true' (QA con sandbox MP).
+//   · Vercel Prod    → sin setear (false) hasta gates verdes (Q1/Q6/Q9 + firma legal).
+export const CHANGE_CARD_ENABLED = process.env.CHANGE_CARD_ENABLED === 'true'
+
 // ── Add-ons: catálogo de precios + reglas de pago (plan estrategia 05, F0) ────
 // MODULE_KEYS / ModuleKey vienen de entitlements.service (import al tope del módulo,
 // junto al resto de re-exports) — mismo patrón que admin/_components/module-labels.ts.
@@ -273,3 +283,54 @@ export function getAddonPaymentRulesForCycle(
         })),
     }
 }
+
+/**
+ * CARD_CHANGE_DISCLOSURE — consentimiento informado DEDICADO para el cambio del medio de
+ * pago de una suscripción recurrente (feat/coach-change-card, plan P0-8).
+ *
+ * NO reutiliza ADDON_PAYMENT_RULES (esas son reglas de COMPRA de módulo): forzar ese checkbox
+ * para cambiar la tarjeta es un non-sequitur legal. La Ley 19.496 / 21.398 (SERNAC) exige
+ * consentimiento expreso para MODIFICAR el instrumento de pago de un contrato de adhesión. La
+ * ruta /api/payments/change-card exige `acceptedTermsVersion === CARD_CHANGE_DISCLOSURE.version`
+ * y persiste el texto aceptado en `subscription_events.payload` (evidencia). CERO mención de IVA.
+ * Español latam neutro.
+ *
+ * ⚠️ Texto BORRADOR: pendiente de firma del rep. legal (Jean-Pierre Letelier) + delta de
+ * T&C/privacidad que autorice modificar el instrumento de pago almacenado y liste last4/marca,
+ * ANTES del flip a prod (el sufijo `-DRAFT` de la versión lo marca).
+ */
+export type CardChangeDisclosurePoint = { number: number; title: string; text: string }
+
+export const CARD_CHANGE_DISCLOSURE: {
+    version: string
+    points: readonly CardChangeDisclosurePoint[]
+} = {
+    version: 'v1-2026-06-DRAFT',
+    points: [
+        {
+            number: 1,
+            title: 'Para tus próximos cobros',
+            text: 'La tarjeta que ingreses reemplaza a la actual y se usará para los próximos cobros recurrentes de tu suscripción.',
+        },
+        {
+            number: 2,
+            title: 'No cambia tu plan ni tu fecha',
+            text: 'El monto, el ciclo y la fecha de tu próximo cobro no cambian: solo se actualiza el medio de pago.',
+        },
+        {
+            number: 3,
+            title: 'No se cobra hoy',
+            text: 'Cambiar la tarjeta no genera ningún cobro en este momento. El siguiente cobro ocurrirá en tu fecha de renovación habitual.',
+        },
+        {
+            number: 4,
+            title: 'Procesado por Mercado Pago',
+            text: 'El procesamiento de la tarjeta lo hace Mercado Pago de forma segura; EVA no almacena el número de tu tarjeta. Mercado Pago puede notificar al titular por correo.',
+        },
+        {
+            number: 5,
+            title: 'Puedes cancelar cuando quieras',
+            text: 'Puedes cancelar tu suscripción en cualquier momento desde la configuración de tu cuenta; conservas el acceso hasta el final del período ya pagado.',
+        },
+    ],
+} as const

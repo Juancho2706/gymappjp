@@ -177,6 +177,28 @@ export interface PaymentsProvider {
         externalReference: string
     ): Promise<void>
     /**
+     * PUT /preapproval/{id} { card_token_id } — cambia la tarjeta del preapproval EXISTENTE sin
+     * cancelar ni re-autorizar al pagador (Modalidad A, feat/coach-change-card). El body lleva
+     * EXCLUSIVAMENTE `card_token_id`: NUNCA auto_recurring/status/external_reference/back_url —
+     * tocar cualquier otro campo del MISMO PUT podría mover `next_payment_date`/el ciclo (re-
+     * facturación silenciosa = exposición SERNAC; plan P0-1/Q1). El `cardTokenId` es single-use
+     * (7 días), tokenizado client-side con Secure Fields → el PAN nunca toca el server (PCI SAQ-A).
+     * `idempotencyKey` viaja como header `X-Idempotency-Key` (mandatorio en MP; key determinística
+     * SIN timestamp — `card_change:{coachId}:{tokenHash}` — para dedup de doble-submit).
+     * validar en sandbox (Q1: ¿preserva el ciclo? · Q9: ¿emite webhook/micro-cobro? · Q10: ¿acepta paused?).
+     */
+    updateCardAtProvider(
+        checkoutId: string,
+        cardTokenId: string,
+        idempotencyKey: string
+    ): Promise<void>
+    /**
+     * GET /v1/card_tokens/{id}: lee el `last_four_digits` AUTORITATIVO del token server-side (no
+     * confiar en el last4 que manda el cliente — plan P0-10). Display-only y best-effort: el llamador
+     * cae al valor del body si esto falla. Un GET NO consume el token (lo consume el PUT del swap).
+     */
+    fetchCardTokenSummary(cardTokenId: string): Promise<{ last4: string | null }>
+    /**
      * Crea un pago one-shot (Checkout Pro clásico, NO preapproval) y devuelve la URL de
      * checkout (plan 05 F3.2 — alta in-app trim/anual prorrateada).
      */

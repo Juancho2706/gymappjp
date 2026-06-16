@@ -667,6 +667,44 @@ async function handleWebhook(request: Request, rawBody: string) {
         return NextResponse.json({ ok: true })
     }
 
+    // ── P0-7: no-op de un cambio de tarjeta (card-only swap) iniciado por nosotros ─────────────
+    // Un PUT { card_token_id } (change-card.service) hace que MP emita un `preapproval updated` SIN
+    // cambiar tier/ciclo/monto/fecha. El bloque de abajo recomputaría current_period_end desde
+    // next_payment_date y —si MP lo devolviera corrido/null— podría re-fechar o EXPIRAR al coach en un
+    // cambio de tarjeta EXITOSO (re-facturación / cobro en fecha distinta = exposición SERNAC). Si hay
+    // un marcador `card_change_pending` reciente (lo escribe change-card.service ANTES del PUT, vía
+    // service-role), reconocemos el swap y retornamos sin tocar NADA del estado de la suscripción. El
+    // marcador acota el no-op a swaps que NOSOTROS iniciamos → cero falsos positivos en renovaciones
+    // (que llegan como `payment`) o upgrades (que cambian el monto). Ver plan P0-7 + sign-off Legal.
+    if (result.eventKind === 'preapproval' && mapProviderStatus(result.providerStatus) === 'active') {
+        const sinceIso = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+        const { data: cardSwapMarker } = await admin
+            .from('subscription_events')
+            .select('id')
+            .eq('provider_event_id', `card_change_pending:${coach.id}`)
+            .gt('created_at', sinceIso)
+            .maybeSingle()
+        if (cardSwapMarker) {
+            console.info('[payments.webhook] card-only swap detectado → no-op (período preservado)', {
+                traceId,
+                coachId: coach.id,
+            })
+            const swapEventRow: TablesInsert<'subscription_events'> = {
+                coach_id: coach.id,
+                provider: provider.name,
+                provider_event_id:
+                    result.eventId ?? `${provider.name}:card-swap:${checkoutId}:${result.providerStatus ?? 'updated'}`,
+                provider_checkout_id: checkoutId,
+                provider_status: result.providerStatus ?? 'card_changed',
+                payload: toJsonPayload(payload),
+            }
+            await admin
+                .from('subscription_events')
+                .upsert(swapEventRow, { onConflict: 'provider_event_id' })
+            return NextResponse.json({ ok: true })
+        }
+    }
+
     const status = mapProviderStatus(result.providerStatus)
     let tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
     let billingCycle = (coach.billing_cycle ?? 'monthly') as BillingCycle

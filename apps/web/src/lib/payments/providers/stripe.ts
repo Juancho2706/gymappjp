@@ -44,6 +44,18 @@ export class StripeProvider implements PaymentsProvider {
         throw new Error('Stripe provider is not implemented yet. Configure PAYMENT_PROVIDER=mercadopago.')
     }
 
+    async updateCardAtProvider(
+        _checkoutId: string,
+        _cardTokenId: string,
+        _idempotencyKey: string
+    ): Promise<void> {
+        throw new Error('Stripe provider is not implemented yet. Configure PAYMENT_PROVIDER=mercadopago.')
+    }
+
+    async fetchCardTokenSummary(_cardTokenId: string): Promise<{ last4: string | null }> {
+        throw new Error('Stripe provider is not implemented yet. Configure PAYMENT_PROVIDER=mercadopago.')
+    }
+
     async createOneShotPayment(_input: CreateOneShotInput): Promise<CreateOneShotResult> {
         throw new Error('Stripe provider is not implemented yet. Configure PAYMENT_PROVIDER=mercadopago.')
     }
