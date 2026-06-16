@@ -5,6 +5,7 @@ import type { Tables } from '@/lib/database.types'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import { measureServer } from '@/lib/perf/measure-server'
 import { findDashboardClientById } from '@/infrastructure/db'
+import { getClientRootUser } from '../../_data/client-root.queries'
 
 type CoachBrand = Pick<Tables<'coaches'>, 'brand_name' | 'primary_color' | 'logo_url' | 'welcome_message' | 'welcome_modal_enabled' | 'welcome_modal_content' | 'welcome_modal_type' | 'welcome_modal_version'>
 
@@ -12,11 +13,10 @@ export type DashboardClient = Pick<Tables<'clients'>, 'id' | 'full_name' | 'coac
     coaches: CoachBrand | CoachBrand[] | null
 }
 
-export const getClientDashboardUser = cache(async () => {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    return user
-})
+// Reuse the shared cache()-deduped auth root (same /c request) so one client render makes a
+// SINGLE getUser() round-trip instead of one here + one in the nav. Same function identity =
+// shared React.cache entry. (DB-perf audit 2026-06-16: removes ~1 /user hit per dashboard render.)
+export const getClientDashboardUser = getClientRootUser
 
 export const getClientProfile = cache(async (userId: string) => {
     const supabase = await createClient()
