@@ -20,15 +20,25 @@ export function hasEffectiveAccess(
 ): boolean {
     if (isManagedSubscription(subscriptionStatus)) return true
     const status = subscriptionStatus ?? ''
-    const blocked = new Set<string>(SUBSCRIPTION_BLOCKED_STATUSES as readonly string[])
 
-    if (blocked.has(status)) return false
-
-    // 'canceled' and 'trialing' coaches retain access only until current_period_end
-    if (status === 'canceled' || status === 'trialing') {
+    // Gracia hasta current_period_end: cancel voluntario, trial, y dunning INVOLUNTARIO (paused/past_due).
+    // P0-3a: un decline de cobro recurrente (sin fondos) NO debe botar al coach al instante en mitad de
+    // un período YA pagado — sería una asimetría con el cancel voluntario, que sí conserva acceso. MP
+    // reintenta el cobro durante el ciclo; el coach conserva acceso hasta el corte y AHÍ sí se bloquea
+    // (el flujo terminal lo pasa a expired al vencer). Sin esto, paused/past_due bloqueaban al instante.
+    if (
+        status === 'canceled' ||
+        status === 'trialing' ||
+        status === 'paused' ||
+        status === 'past_due'
+    ) {
         if (!currentPeriodEnd) return false
         return new Date(currentPeriodEnd).getTime() > Date.now()
     }
+
+    // Estados duros SIN gracia (pending_payment, expired): bloqueo inmediato.
+    const blocked = new Set<string>(SUBSCRIPTION_BLOCKED_STATUSES as readonly string[])
+    if (blocked.has(status)) return false
 
     return true
 }

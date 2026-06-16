@@ -29,6 +29,7 @@ import {
 } from '@/services/billing/addons.service'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildAddonActivationReceiptEmail } from '@/lib/email/addon-receipt-templates'
+import { buildPaymentFailedEmail, buildPaymentRecoveredEmail } from '@/lib/email/payment-dunning-templates'
 import {
     applyFirstChargeToAddons,
     buildAcceptedRulesPayload,
@@ -38,6 +39,36 @@ import {
     reconcilePreapprovalAmount,
     tierBaseClp,
 } from '@/services/billing/addon-webhook.service'
+
+/**
+ * P0-2: email de dunning (pago fallido / recuperado), fire-and-forget. NUNCA bloquea la mutación de
+ * cobro: si Resend falla, se loggea y sigue. `subscriptionUrl` apunta a /coach/subscription.
+ */
+async function sendDunningEmail(
+    adminClient: ReturnType<typeof createServiceRoleClient>,
+    coachId: string,
+    coachName: string,
+    kind: 'failed' | 'recovered',
+    subscriptionUrl: string,
+    accessUntil: string | null
+): Promise<void> {
+    try {
+        const { data } = await adminClient.auth.admin.getUserById(coachId)
+        const email = data?.user?.email
+        if (!email) return
+        const { subject, html } =
+            kind === 'failed'
+                ? buildPaymentFailedEmail({ coachName, accessUntil, subscriptionUrl })
+                : buildPaymentRecoveredEmail({ coachName, subscriptionUrl })
+        await sendTransactionalEmail({ to: email, subject, html })
+    } catch (err) {
+        console.error('[payments.webhook] dunning email failed (fire-and-forget)', {
+            coachId,
+            kind,
+            message: err instanceof Error ? err.message : String(err),
+        })
+    }
+}
 
 function buildPayload(request: Request, body: unknown) {
     if (body && typeof body === 'object') return body
@@ -150,7 +181,7 @@ async function handleWebhook(request: Request, rawBody: string) {
     const { data: coach } = await admin
         .from('coaches')
         .select(
-            'id, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, superseded_mp_preapproval_id'
+            'id, full_name, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, superseded_mp_preapproval_id'
         )
         .eq('id', result.coachId)
         .maybeSingle()
@@ -185,6 +216,16 @@ async function handleWebhook(request: Request, rawBody: string) {
     // P0-2); NO bloqueamos acá porque MP reintenta. Re-entrega = no duplica (snapshot/first-charge/upsert).
     if (result.isRecurringAuthorizedPayment) {
         const recurringStatus = mapProviderStatus(result.providerStatus)
+        const wasPastDue = coach.subscription_status === 'past_due'
+        const dunningCoachName = coach.full_name?.trim() || 'Coach'
+        const dunningSubscriptionUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/coach/subscription`
+        const dunningAccessUntil = coach.current_period_end
+            ? new Date(coach.current_period_end).toLocaleDateString('es-CL', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+              })
+            : null
         if (recurringStatus === 'active') {
             try {
                 const tierForCharge = (coach.subscription_tier ?? 'starter') as SubscriptionTier
@@ -234,6 +275,10 @@ async function handleWebhook(request: Request, rawBody: string) {
                         message: recErr.message,
                     })
                 }
+                // P0-2: si el coach venía de dunning (past_due), avisar que el pago se recuperó.
+                if (wasPastDue) {
+                    await sendDunningEmail(admin, coach.id, dunningCoachName, 'recovered', dunningSubscriptionUrl, null)
+                }
             } catch (chargeErr) {
                 console.error('[payments.webhook] recurring authorized_payment (approved) hooks failed', {
                     traceId,
@@ -242,13 +287,30 @@ async function handleWebhook(request: Request, rawBody: string) {
                 })
             }
         } else {
-            // Rechazado/pendiente (dunning). MP reintenta; el bloqueo lo decide el flujo de pausa/terminal.
-            // Dunning completo (email pago-fallido + estado) = P0-2 (siguiente). Acá solo dejamos rastro.
-            console.warn('[payments.webhook] recurring authorized_payment NOT approved (dunning) — P0-2 pendiente', {
+            // P0-2: cobro recurrente RECHAZADO (dunning). Marcamos `past_due` CONSERVANDO
+            // current_period_end (gracia: hasEffectiveAccess da acceso hasta esa fecha — P0-3a) y
+            // avisamos al coach. Solo si está en un estado VIVO (no resucitar canceled/expired). MP
+            // reintenta; si recupera, el evento aprobado lo vuelve a active + email de recuperación.
+            const liveStatuses = new Set(['active', 'trialing', 'paused', 'past_due'])
+            if (liveStatuses.has(coach.subscription_status ?? '')) {
+                const { error: dunErr } = await admin
+                    .from('coaches')
+                    .update({ subscription_status: 'past_due' })
+                    .eq('id', coach.id)
+                if (dunErr) {
+                    console.error('[payments.webhook] dunning: no se pudo marcar past_due', {
+                        traceId,
+                        coachId: coach.id,
+                        message: dunErr.message,
+                    })
+                }
+            }
+            console.warn('[payments.webhook] recurring authorized_payment RECHAZADO (dunning)', {
                 traceId,
                 coachId: coach.id,
                 status: result.providerStatus,
             })
+            await sendDunningEmail(admin, coach.id, dunningCoachName, 'failed', dunningSubscriptionUrl, dunningAccessUntil)
         }
         const recurringEventRow: TablesInsert<'subscription_events'> = {
             coach_id: coach.id,
