@@ -298,6 +298,67 @@ export class MercadoPagoProvider implements PaymentsProvider {
         if (!eventId) return { accepted: true }
 
         const eventType = body.type ?? body.topic ?? body.action ?? ''
+
+        // ── P0-1: COBRO RECURRENTE de suscripción (`subscription_authorized_payment`) ──────────────
+        // DEBE interceptarse ANTES del check `includes('subscription')` de abajo: si no, se trata como
+        // preapproval → `GET /preapproval/{authpay_id}` → 404 → throw → 502, y la renovación NUNCA se
+        // confirma (sin billing_snapshot; un decline queda invisible). Es un PAGO recurrente:
+        // `GET /authorized_payments/{id}` trae `payment.{id,status}`, `preapproval_id` y
+        // `external_reference`. Mapeamos a un payment idempotente; el match contra el coach va por
+        // `preapproval_id` (no por order.id). Validar con el Simulador de Notificaciones de MP.
+        if (eventType.includes('authorized_payment')) {
+            const ap = await mpRequest(`/authorized_payments/${eventId}`)
+            const apExtRef = typeof ap.external_reference === 'string' ? ap.external_reference : null
+            const parsedAp = parseCheckoutExternalReference(apExtRef)
+            const apPreapprovalId =
+                typeof ap.preapproval_id === 'string'
+                    ? ap.preapproval_id
+                    : ap.preapproval_id != null
+                      ? String(ap.preapproval_id)
+                      : null
+            const apPayment = (ap.payment ?? {}) as { id?: unknown; status?: unknown }
+            const apPaymentId = apPayment.id != null ? String(apPayment.id) : eventId
+            const apStatus =
+                typeof apPayment.status === 'string'
+                    ? apPayment.status
+                    : typeof ap.status === 'string'
+                      ? ap.status
+                      : undefined
+            const apPaidAt =
+                typeof ap.last_modified === 'string'
+                    ? ap.last_modified
+                    : typeof ap.date_created === 'string'
+                      ? ap.date_created
+                      : null
+            // Período fresco: tras un cobro aprobado el preapproval ya avanzó `next_payment_date`.
+            // Best-effort: si el GET falla, no rompe el cobro (el período queda como estaba).
+            let nextPeriodEnd: string | null = null
+            if (apPreapprovalId) {
+                try {
+                    const pre = await mpRequest(`/preapproval/${encodeURIComponent(apPreapprovalId)}`)
+                    nextPeriodEnd = typeof pre.next_payment_date === 'string' ? pre.next_payment_date : null
+                } catch {
+                    nextPeriodEnd = null
+                }
+            }
+            return {
+                accepted: true,
+                eventId,
+                eventKind: 'payment',
+                isRecurringAuthorizedPayment: true,
+                providerStatus: apStatus,
+                coachId: parsedAp?.coachId,
+                providerPaymentId: apPaymentId,
+                preapprovalId: apPreapprovalId,
+                currentPeriodEnd: nextPeriodEnd,
+                paidAt: apPaidAt,
+                externalReference: apExtRef,
+                subscriptionTier: parsedAp?.tier ?? undefined,
+                billingCycle: parsedAp?.billingCycle ?? undefined,
+                addons: parsedAp?.addons ?? [],
+            }
+        }
+
         const isPreapprovalEvent = eventType.includes('preapproval') || eventType.includes('subscription')
         if (isPreapprovalEvent) {
             const preapproval = await mpRequest(`/preapproval/${eventId}`)

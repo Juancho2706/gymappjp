@@ -114,6 +114,13 @@ export type WebhookProcessResult = {
      * el refund en silencio. Null si el pago no expone preapproval.
      */
     preapprovalId?: string | null
+    /**
+     * true si el evento es un COBRO RECURRENTE de suscripción (MP `subscription_authorized_payment`,
+     * P0-1). Antes caía mal ruteado (includes('subscription') → GET /preapproval → 404 → 502) y la
+     * renovación nunca se confirmaba. El webhook lo procesa en una rama AUTOCONTENIDA e idempotente
+     * (snapshot recurrente + first-charge de add-ons + avance de período), separada de los one-shot.
+     */
+    isRecurringAuthorizedPayment?: boolean
 }
 
 /** Normalized preapproval / recurring checkout snapshot (Mercado Pago preapproval shape). */
