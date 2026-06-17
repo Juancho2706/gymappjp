@@ -20,10 +20,15 @@ async function getTeamBrandContext() {
     return { isTeam, teamBrandName: isTeam ? h.get('x-coach-brand-name') : null }
 }
 
-export const getClientRootUser = cache(async () => {
+export const getClientRootUser = cache(async (): Promise<{ id: string; email: string | null } | null> => {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    return user
+    // getClaims(): verificación LOCAL del JWT (llaves asimétricas ES256 + JWKS cacheado), sin
+    // round-trip a GoTrue /user. Raíz de auth de LECTURA para el nav/guards del alumno; getUser se
+    // mantiene en mutaciones (check-in, etc.). El proxy ya validó/refrescó la sesión antes del render.
+    const { data } = await supabase.auth.getClaims()
+    const c = data?.claims
+    if (!c?.sub) return null
+    return { id: c.sub, email: typeof c.email === 'string' ? c.email : null }
 })
 
 /**
