@@ -1,5 +1,7 @@
 # 00 · DIRECTOR — "Movida powered by EVA"
 
+> **⛔ DEAL MOVIDA CANCELADO (2026-06-16)** — Movida **no adoptará EVA** (el trato no se cierra). Este documento queda como **historial archivado** del esfuerzo, NO trabajo en curso. El **modo `team`** construido acá (pool plano de coaches, aislado de enterprise) **PERMANECE como feature permanente de EVA** — código vivo en prod (tabla `teams`, rutas `/t/[team_slug]/*`, `/admin/teams`), desacoplado del deal. Todo lo de abajo es histórico.
+>
 > Documento director. Es el **índice + decisiones + bitácora** de todo el esfuerzo Movida. Leer al iniciar cada sesión. Enlaza los 3 planes y guarda el historial.
 
 - **Branch de trabajo:** `feat/movida-platform` (nunca trabajar en `master`).
