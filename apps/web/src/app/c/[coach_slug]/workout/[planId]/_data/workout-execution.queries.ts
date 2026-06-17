@@ -233,11 +233,16 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
     const blockIdsSet = new Set(plan.workout_blocks.map((b) => b.id))
     const exerciseMaxes: Record<string, number> = {}
 
-    const { data: maxData } = await supabase
+    // Acotar a los ejercicios de ESTE plan (no todo el historial de pesos del alumno) + cap defensivo.
+    // Antes: select sin .in() ni .limit() -> traía TODO el historial y crecía O(n) sin techo. El max
+    // all-time de los ejercicios relevantes se preserva (solo filtra ejercicios que no están en el plan).
+    const { data: maxData } = exerciseIds.length === 0 ? { data: [] } : await supabase
         .from('workout_logs')
         .select('block_id, weight_kg, workout_blocks!inner(exercise_id)')
         .eq('client_id', user.id)
         .not('weight_kg', 'is', null)
+        .in('workout_blocks.exercise_id', exerciseIds)
+        .limit(5000)
 
     maxData?.forEach((log: { block_id: string; weight_kg: number | null; workout_blocks: { exercise_id: string } | null }) => {
         if (blockIdsSet.has(log.block_id)) return
