@@ -23,7 +23,9 @@ export default async function TeamPerfilPage({ params }: Props) {
     if (!team) redirect(`/t/${team_slug}/login`)
 
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó la sesión.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) redirect(`/t/${team_slug}/login`)
 
     // Estado del consentimiento de pool del alumno (activo = revoked_at IS NULL).

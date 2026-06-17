@@ -15,7 +15,9 @@ export const metadata = { title: 'Mi Equipo' }
 export default async function CoachTeamPage() {
     // Módulo EXCLUSIVO del contexto team: fuera de él, el módulo no existe (separación de flujos).
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó la sesión.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) redirect('/login')
     const workspace = await resolvePreferredWorkspace(supabase, user.id)
     if (workspace?.type !== 'coach_team') redirect('/coach/dashboard')

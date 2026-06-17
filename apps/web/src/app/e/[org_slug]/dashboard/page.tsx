@@ -22,7 +22,9 @@ export default async function EnterpriseDashboardPage({ params }: Props) {
     if (!org) redirect(`/e/${org_slug}/login`)
 
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó la sesión.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) redirect(`/e/${org_slug}/login`)
 
     const admin = createServiceRoleClient()
