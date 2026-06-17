@@ -113,6 +113,14 @@ export async function proxy(request: NextRequest) {
         }
     }
 
+    // API routes authenticate themselves (own getUser / Bearer token / CRON_SECRET) and return JSON,
+    // not redirects — they don't need the middleware session validation + routing below. Skipping it
+    // removes a redundant GoTrue /user round-trip per API request (mobile, cron, status polling, etc.).
+    // Rate limits for payment/admin POSTs above already ran; the webhook is handled earlier.
+    if (pathname.startsWith('/api/')) {
+        return NextResponse.next({ request })
+    }
+
     // B-6: Enterprise subdomain rewrite — enterprise.eva-app.cl → /org/*
     if (host === getEnterpriseDomain()) {
         const url = request.nextUrl.clone()
