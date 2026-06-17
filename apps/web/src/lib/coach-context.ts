@@ -9,10 +9,14 @@ export type { CoachOrgContext } from '@/domain/coach/types'
  */
 export const getCoachOrgContext = cache(async (): Promise<CoachOrgContext | null> => {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return null
+    // getClaims(): verificación LOCAL del JWT (llaves asimétricas ES256), sin round-trip a GoTrue
+    // /user. Esto es contexto de routing/entitlement (lectura), no un boundary de mutación.
+    const { data } = await supabase.auth.getClaims()
+    const jwt = data?.claims
+    if (!jwt?.sub) return null
+    const userId = jwt.sub
 
-    const claims = user.app_metadata as {
+    const claims = ((jwt as { app_metadata?: Record<string, unknown> }).app_metadata ?? {}) as {
         coach_id?: string
         org_id?: string
         org_role?: string
@@ -48,7 +52,7 @@ export const getCoachOrgContext = cache(async (): Promise<CoachOrgContext | null
     const { data: coach } = await supabase
         .from('coaches')
         .select('id, active_org_id')
-        .eq('id', user.id)
+        .eq('id', userId)
         .maybeSingle()
 
     if (!coach) return null

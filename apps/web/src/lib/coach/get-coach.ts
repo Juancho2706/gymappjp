@@ -29,13 +29,14 @@ export type CoachSession = Pick<
  */
 export const getCoach = cache(async (): Promise<CoachSession | null> => {
     const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    // getClaims(): verificación LOCAL del JWT (llaves asimétricas ES256 + JWKS cacheado), sin
+    // round-trip a GoTrue /user. Solo necesitamos el id del coach para el lookup — es lectura de
+    // página, no un boundary de mutación, así que no requiere accuracy de revocación.
+    const { data } = await supabase.auth.getClaims()
+    const userId = data?.claims?.sub
+    if (!userId) {
         return null
     }
 
-    return (await findCoachById(supabase, user.id)) as CoachSession | null
+    return (await findCoachById(supabase, userId)) as CoachSession | null
 })
