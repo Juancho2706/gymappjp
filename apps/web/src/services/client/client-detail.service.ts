@@ -81,10 +81,12 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .order('created_at', { ascending: false })
         .limit(2)
 
-    // Fetch nutrition plans
+    // Fetch nutrition plans — el resultado solo se usa para filtrar is_active y .map(p => p.id)
+    // (activeNutritionPlanIds), así que basta 'id, is_active' (el plan completo con meals lo trae
+    // activeNutritionPlanPromise aparte). Antes era select('*') innecesario.
     const nutritionPromise = supabase
         .from('nutrition_plans')
-        .select('*')
+        .select('id, is_active')
         .eq('client_id', clientId)
         .eq('is_active', true)
         .order('created_at', { ascending: false })
