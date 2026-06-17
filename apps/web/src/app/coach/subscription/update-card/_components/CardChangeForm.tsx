@@ -5,13 +5,21 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 // ── Tipos mínimos del SDK MercadoPago.js v2 (Secure Fields) — el SDK no trae tipos ────────────
-type MpField = { mount: (containerId: string) => MpField; unmount?: () => void }
+type MpField = {
+    mount: (containerId: string) => MpField
+    unmount?: () => void
+    on?: (event: string, cb: (data: { bin?: string }) => void) => void
+}
 type MpCardToken = { id: string; last_four_digits?: string; payment_method_id?: string }
 type MpFields = {
     create: (type: string, opts?: Record<string, unknown>) => MpField
     createCardToken: (data: Record<string, unknown>) => Promise<MpCardToken>
 }
-type MpInstance = { fields: MpFields }
+type MpPaymentMethods = { results?: Array<{ id?: string }> }
+type MpInstance = {
+    fields: MpFields
+    getPaymentMethods?: (opts: { bin: string }) => Promise<MpPaymentMethods>
+}
 type MpCtor = new (publicKey: string, opts?: Record<string, unknown>) => MpInstance
 declare global {
     interface Window {
@@ -42,6 +50,8 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
     const [accepted, setAccepted] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    // Medio de pago (visa/master/debvisa/…) resuelto del BIN — DISPLAY-ONLY (ícono/marca). No gatea nada.
+    const [paymentMethodId, setPaymentMethodId] = useState<string | null>(null)
 
     const missingKey = publicKey.trim().length === 0
 
@@ -67,7 +77,25 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
                 color: isDark ? '#fafafa' : '#0a0a0a',
                 placeholderColor: isDark ? '#6b7280' : '#9ca3af',
             }
-            mp.fields.create('cardNumber', { placeholder: '1234 1234 1234 1234', style: fieldStyle }).mount('mp-card-number')
+            // Secure Fields no expone el BIN al JS de la página (vive en el iframe) y `createCardToken`
+            // NO devuelve `payment_method_id` → escuchamos `binChange` y resolvemos el medio de pago con
+            // el BIN (`mp.getPaymentMethods`). Best-effort: la marca es DISPLAY-ONLY (no gatea el swap);
+            // si falla, la tarjeta queda sin ícono pero el cambio funciona igual.
+            const cardNumber = mp.fields.create('cardNumber', { placeholder: '1234 1234 1234 1234', style: fieldStyle })
+            cardNumber.on?.('binChange', async (data) => {
+                const bin = data?.bin
+                if (!bin) {
+                    setPaymentMethodId(null)
+                    return
+                }
+                try {
+                    const methods = await mp.getPaymentMethods?.({ bin })
+                    setPaymentMethodId(methods?.results?.[0]?.id ?? null)
+                } catch {
+                    // cosmético: sin marca, el swap sigue válido
+                }
+            })
+            cardNumber.mount('mp-card-number')
             mp.fields.create('expirationDate', { placeholder: 'MM/AA', style: fieldStyle }).mount('mp-card-expiration')
             mp.fields.create('securityCode', { placeholder: 'CVV', style: fieldStyle }).mount('mp-card-security')
             mountedRef.current = true
@@ -123,8 +151,9 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
                         cardToken: token.id,
                         acceptedTermsVersion: termsVersion,
                         last4: token.last_four_digits,
-                        brand: token.payment_method_id,
-                        paymentMethodId: token.payment_method_id,
+                        // brand/pmid resueltos por `binChange` (createCardToken no los trae). Display-only.
+                        brand: paymentMethodId ?? token.payment_method_id,
+                        paymentMethodId: paymentMethodId ?? token.payment_method_id,
                     }),
                 })
                 const data = (await res.json().catch(() => ({}))) as {
@@ -149,7 +178,7 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
                 setSubmitting(false)
             }
         },
-        [accepted, cardholderName, fieldsReady, termsVersion, router]
+        [accepted, cardholderName, fieldsReady, termsVersion, paymentMethodId, router]
     )
 
     if (missingKey) {
