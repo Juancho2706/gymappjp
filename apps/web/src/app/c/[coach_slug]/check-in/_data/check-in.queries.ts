@@ -3,7 +3,9 @@ import { createClient } from '@/lib/supabase/server'
 
 export const getCheckInPageData = cache(async (coachSlug: string) => {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) return { user: null, coachPrimaryColor: null, lastCheckIn: null }
 
     const { data: client } = await supabase

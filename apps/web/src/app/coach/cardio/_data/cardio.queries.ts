@@ -24,7 +24,9 @@ export type CardioPageData =
  */
 export const getCardioPageData = cache(async (): Promise<CardioPageData> => {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) return { status: 'unauthenticated' }
 
     const workspace = await resolvePreferredWorkspace(supabase, user.id)
@@ -54,7 +56,9 @@ export type CardioClientData =
 /** Perfil cardio de UN alumno para el editor del coach (mismo gating + scope 3-vías). */
 export const getCardioClientData = cache(async (clientId: string): Promise<CardioClientData> => {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) return { status: 'unauthenticated' }
 
     const workspace = await resolvePreferredWorkspace(supabase, user.id)

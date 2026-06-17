@@ -26,7 +26,9 @@ export type MovementHubResult =
  */
 export const getMovementHub = cache(async (): Promise<MovementHubResult> => {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) return { status: 'unauthenticated' }
 
     const workspace = await resolvePreferredWorkspace(supabase, user.id)
@@ -54,7 +56,9 @@ export const getMovementHub = cache(async (): Promise<MovementHubResult> => {
 
 export const getMovementClientReport = cache(async (clientId: string) => {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) return null
     try {
         return await getClientMovementDetail(supabase, user.id, clientId)
@@ -65,7 +69,9 @@ export const getMovementClientReport = cache(async (clientId: string) => {
 
 export const getMovementWizard = cache(async (clientId: string) => {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) return null
     try {
         const data = await getMovementWizardData(supabase, user.id, clientId)
@@ -77,7 +83,9 @@ export const getMovementWizard = cache(async (clientId: string) => {
 
 export const getMovementPrint = cache(async (clientId: string, assessmentId: string) => {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) return null
     try {
         return await getMovementPrintData(supabase, user.id, clientId, assessmentId)

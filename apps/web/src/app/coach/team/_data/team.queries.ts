@@ -42,7 +42,9 @@ export type TeamOverview = {
  */
 export const getCoachTeamOverview = cache(async (activeTeamId: string): Promise<{ userId: string | null; teams: TeamOverview[] }> => {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) return { userId: null, teams: [] }
 
     const { data: teams } = await supabase

@@ -12,7 +12,9 @@ import { getStudentMovementView } from '@/services/assessment/movement-assessmen
  */
 export const getStudentMovement = cache(async () => {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) return { user: null, view: null }
     try {
         const view = await getStudentMovementView(supabase, createServiceRoleClient(), user.id)

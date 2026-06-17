@@ -38,9 +38,9 @@ export type BodyCompositionResult =
 export const getClientBodyComposition = cache(
     async (clientId: string): Promise<BodyCompositionResult> => {
         const supabase = await createClient()
-        const {
-            data: { user },
-        } = await supabase.auth.getUser()
+        // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó la sesión.
+        const { data: __cl } = await supabase.auth.getClaims()
+        const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
         if (!user) return { status: 'not_found' }
 
         // Kill-switch de plataforma + entitlement ANTES del acceso (SPEC AC5b: falla server-side).

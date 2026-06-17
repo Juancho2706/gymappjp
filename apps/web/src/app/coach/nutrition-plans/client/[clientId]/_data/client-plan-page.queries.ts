@@ -4,7 +4,9 @@ import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 
 export const getClientNutritionPlanPageAuthData = cache(async (clientId: string) => {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) return { user: null, client: null, intake: null, orgId: null, activeTeamId: null }
     const workspace = await resolvePreferredWorkspace(supabase, user.id)
     const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
