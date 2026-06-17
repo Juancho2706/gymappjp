@@ -32,7 +32,7 @@ const schema = z.object({
         .optional(),
     brand: z
         .string()
-        .regex(/^[a-zA-Z _-]{1,40}$/)
+        .regex(/^[a-zA-Z0-9 _-]{1,40}$/)
         .optional(),
     paymentMethodId: z
         .string()
