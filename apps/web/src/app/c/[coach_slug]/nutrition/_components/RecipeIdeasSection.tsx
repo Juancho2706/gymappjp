@@ -57,6 +57,7 @@ export function RecipeIdeasSection({ recipes }: Props) {
                       fill
                       sizes="56px"
                       className="object-cover"
+                      unoptimized
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-muted-foreground/50">
@@ -114,6 +115,7 @@ export function RecipeIdeasSection({ recipes }: Props) {
                     fill
                     sizes="(max-width: 512px) 100vw, 512px"
                     className="object-cover"
+                    unoptimized
                   />
                 </div>
               )}
