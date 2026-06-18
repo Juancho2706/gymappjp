@@ -6,7 +6,8 @@ import type { Database, Tables } from '@/lib/database.types'
 import type { EnterpriseStaffRole, WorkspaceSummary } from '@/domain/auth/types'
 import { resolveCoachSubscriptionRedirect } from '@/lib/coach-subscription-gate'
 import { resolvePostLoginRedirect } from '@/lib/auth/post-login-redirect.server'
-import { listUserWorkspaces, resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { listUserWorkspaces, pickPreferredWorkspace } from '@/services/auth/workspace.service'
+import { findWorkspacePreference } from '@/infrastructure/db/workspace.repository'
 import { canAccessWorkspacePath, defaultWorkspaceHome } from '@/services/auth/workspace-route-guard.service'
 import { BRAND_APP_ICON, BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import {
@@ -22,6 +23,21 @@ import { ENTERPRISE_STAFF_ROLES } from '@/domain/org/permissions'
 
 type Coach = Tables<'coaches'>
 type Client = Tables<'clients'>
+
+/**
+ * Phase 2: ¿es un PREFETCH de Next.js (RSC speculativo) y no una navegacion real?
+ * Next setea `next-router-prefetch`; los browsers `purpose: prefetch` / `Sec-Purpose: ...prefetch`.
+ * Capa secundaria al `missing` del matcher (en Next 16 estos headers a veces faltan): se usa para
+ * saltar SOLO efectos colaterales (touch_coach_activity), nunca la logica de auth/redirect.
+ */
+function isPrefetchRequest(request: NextRequest): boolean {
+    const h = request.headers
+    return (
+        h.get('next-router-prefetch') === '1' ||
+        h.get('purpose') === 'prefetch' ||
+        (h.get('sec-purpose')?.includes('prefetch') ?? false)
+    )
+}
 
 /**
  * F2/B-9: answer "is this coach an active member of this org?" from the proxy. The alumno's
@@ -417,8 +433,12 @@ export async function proxy(request: NextRequest) {
             return NextResponse.redirect(redirectUrl)
         }
 
-        // Debounced in DB (no-op if <5min since last update), so await is safe
-        await supabase.rpc('touch_coach_activity', { p_coach_id: user.id })
+        // Debounced in DB (no-op if <5min since last update), so await is safe.
+        // Phase 2: en prefetch el request a PostgREST viaja igual aunque el SQL sea no-op — una
+        // visita real lo toca de todos modos. Saltarlo no afecta auth/routing.
+        if (!isPrefetchRequest(request)) {
+            await supabase.rpc('touch_coach_activity', { p_coach_id: user.id })
+        }
 
         return supabaseResponse
     }
@@ -992,10 +1012,17 @@ async function resolveCoachRouteWorkspace(
     supabase: SupabaseClient<Database>,
     userId: string
 ): Promise<WorkspaceSummary | 'select' | null> {
-    const preferred = await resolvePreferredWorkspace(supabase, userId)
+    // Phase 1: traer preferencia + workspaces UNA vez y decidir con la pura pickPreferredWorkspace.
+    // Antes: resolvePreferredWorkspace ya corria listUserWorkspaces, y este fallback lo corria
+    // OTRA vez (segundo bundle de 6-7 queries por request /coach/*). Semantica identica.
+    const [preference, workspaces] = await Promise.all([
+        findWorkspacePreference(supabase, userId),
+        listUserWorkspaces(supabase, userId),
+    ])
+
+    const preferred = pickPreferredWorkspace(workspaces, preference)
     if (preferred) return preferred
 
-    const workspaces = await listUserWorkspaces(supabase, userId)
     if (workspaces.length > 1) return 'select'
     return workspaces[0] ?? null
 }
