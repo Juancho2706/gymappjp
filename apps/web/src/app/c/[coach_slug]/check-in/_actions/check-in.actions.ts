@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { revalidatePath } from 'next/cache'
 import { CheckInSchema } from '@eva/schemas'
+import { compressImageToWebp } from '@/lib/storage/image-compress'
 
 export type CheckinState = {
     error?: string
@@ -17,8 +18,13 @@ async function uploadToCheckinsBucket(
     variant: 'front' | 'back'
 ): Promise<{ ok: true; path: string } | { ok: false; message: string }> {
     const timestamp = Date.now()
-    const extension = file.name.split('.').pop()
     const rand = Math.random().toString(36).substring(7)
+
+    // Compresión best-effort a WebP 1080px. Si falla (HEIC/corrupto/OOM) -> sube el original,
+    // NUNCA aborta el check-in (UX one-shot del alumno). Las filas viejas (.jpg/.png) no se tocan.
+    const compressed = await compressImageToWebp(file)
+    const extension = compressed ? compressed.ext : (file.name.split('.').pop() || 'jpg')
+    const body: Buffer | File = compressed ? compressed.buffer : file
     const filePath =
         variant === 'back'
             ? `${userId}/${timestamp}-back-${rand}.${extension}`
@@ -26,7 +32,12 @@ async function uploadToCheckinsBucket(
 
     const { error: uploadError, data: uploadData } = await adminDb.storage
         .from('checkins')
-        .upload(filePath, file, { cacheControl: '3600', upsert: false })
+        .upload(filePath, body, {
+            cacheControl: '3600',
+            upsert: false, // fotos únicas por alumno+timestamp; jamás pisar
+            // contentType OBLIGATORIO con Buffer (sin él se guarda como application/json y rompe el render)
+            ...(compressed ? { contentType: compressed.contentType } : {}),
+        })
 
     if (uploadError) {
         return { ok: false, message: 'Error al subir la imagen de progreso.' }
