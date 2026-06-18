@@ -13,7 +13,7 @@ export async function getGastos(): Promise<Gasto[]> {
     const client = createServiceRoleClient()
     const { data, error } = await client
         .from('personal_gastos')
-        .select('*')
+        .select('id, nombre, cantidad, costo, pagador, created_at')
         .order('created_at', { ascending: false })
 
     if (error) throw error
