@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { Database } from '@/lib/database.types';
+import { reconcileMeals } from './nutrition-propagation.reconcile';
 
 type TemplateData = {
     name: string;
@@ -89,6 +90,53 @@ export class NutritionService {
             }
         }
         return flatItems
+    }
+
+    private foodRowsFor(mealId: string, items: TemplateSavedMealItem[]) {
+        return items.map((it) => ({
+            meal_id: mealId,
+            food_id: it.food_id,
+            quantity: it.quantity,
+            unit: it.unit,
+            swap_options: (it.swap_options ?? []) as unknown as Database['public']['Tables']['food_items']['Insert']['swap_options'],
+        }))
+    }
+
+    /**
+     * Inserta un conjunto de comidas (con sus food_items) en un plan, BATCHEADO:
+     * 1 INSERT para todas las comidas + 1 INSERT para todos los food_items
+     * (vs. el N+1 previo de 2 queries por comida). Mapea food_items -> meal por
+     * order_index (único dentro de un plan). RLS-scoped (corre como el usuario, no
+     * service-role) -> el aislamiento por coach/org lo sigue gateando la policy.
+     */
+    private async insertMealsForPlan(planId: string, templateMeals: TemplateMealWithGroups[]) {
+        if (templateMeals.length === 0) return
+        const { data: inserted } = await this.supabase
+            .from('nutrition_meals')
+            .insert(
+                templateMeals.map((t) => ({
+                    plan_id: planId,
+                    name: t.name,
+                    description: (t as { description?: string }).description ?? '',
+                    order_index: t.order_index,
+                    day_of_week: (t as { day_of_week?: number | null }).day_of_week ?? null,
+                })) as any
+            )
+            .select('id, order_index');
+
+        const idByIndex = new Map<number, string>(
+            (inserted ?? []).map((m: any) => [m.order_index as number, m.id as string])
+        );
+        const foodRows: ReturnType<typeof this.foodRowsFor> = [];
+        for (const t of templateMeals) {
+            const mealId = idByIndex.get(t.order_index as number);
+            if (!mealId) continue;
+            const items = this.getTemplateMealItems(t);
+            if (items.length > 0) foodRows.push(...this.foodRowsFor(mealId, items));
+        }
+        if (foodRows.length > 0) {
+            await this.supabase.from('food_items').insert(foodRows as any);
+        }
     }
 
     private assertTemplateMealsAreComplete(templateMeals: TemplateMealWithGroups[]) {
@@ -263,21 +311,29 @@ export class NutritionService {
             throw new Error('Uno o mas alumnos no pertenecen al workspace activo.');
         }
 
+        // Pre-fetch BATCHEADO de planes SYNCED existentes para TODOS los clientes (1 query en
+        // vez de 1 por alumno). RLS-scoped -> solo trae los planes visibles al usuario actual.
+        let existingPlansQuery = this.supabase
+            .from('nutrition_plans')
+            .select('id, client_id')
+            .in('client_id', [...allClientIds])
+            .eq('template_id', templateId)
+            .eq('is_active', true)
+            .eq('is_custom', false)
+        existingPlansQuery = this.applyOrgScope(existingPlansQuery, orgId)
+        const { data: existingPlanRows } = await existingPlansQuery as any;
+        const existingPlanByClient = new Map<string, string>(
+            (existingPlanRows ?? []).map((r: any) => [r.client_id as string, r.id as string])
+        );
+
+        // Best-effort por-cliente (NO transaccional: PostgREST autocommit). Si falla a mitad,
+        // re-ejecutar la propagación reconcilia (UPDATE in-place por order_index = idempotente).
         for (const clientId of allClientIds) {
-            // Buscar plan SYNCED existente para este cliente+plantilla
-            let existingPlanQuery = this.supabase
-                .from('nutrition_plans')
-                .select('id')
-                .eq('client_id', clientId)
-                .eq('template_id', templateId)
-                .eq('is_active', true)
-                .eq('is_custom', false)
-            existingPlanQuery = this.applyOrgScope(existingPlanQuery, orgId)
-            const { data: existingPlan } = await existingPlanQuery.maybeSingle() as any;
+            const existingPlanId = existingPlanByClient.get(clientId);
 
             let planId: string;
 
-            if (existingPlan) {
+            if (existingPlanId) {
                 // UPDATE in-place: el plan_id NO cambia → daily_nutrition_logs siguen válidos
                 let updatePlanQuery = this.supabase
                     .from('nutrition_plans')
@@ -289,101 +345,94 @@ export class NutritionService {
                         fats_g: template.fats_g,
                         instructions: template.instructions,
                     } as any)
-                    .eq('id', existingPlan.id)
+                    .eq('id', existingPlanId)
                     .eq('coach_id', coachId)
                 updatePlanQuery = this.applyOrgScope(updatePlanQuery, orgId)
                 await updatePlanQuery;
 
-                planId = existingPlan.id;
+                planId = existingPlanId;
 
-                // Fetch existing meals to match by order_index (preserves IDs → nutrition_meal_logs survive)
+                // Comidas existentes -> match por order_index (preserva IDs → nutrition_meal_logs sobreviven)
                 const { data: existingMeals } = await this.supabase
                     .from('nutrition_meals')
-                    .select('id, order_index, day_of_week')
-                    .eq('plan_id', existingPlan.id)
+                    .select('id, order_index')
+                    .eq('plan_id', existingPlanId)
                     .order('order_index', { ascending: true });
 
-                const existingByIndex = new Map<number, string>(
-                    (existingMeals ?? []).map((m: any) => [m.order_index as number, m.id as string])
-                );
                 const templateMealsSorted = [...template.template_meals].sort(
                     (a: any, b: any) => a.order_index - b.order_index
                 );
-                const newIndices = new Set(templateMealsSorted.map((m: any) => m.order_index as number));
 
+                // Cascade-safety (CRÍTICO): nutrition_meal_logs.meal_id -> nutrition_meals es ON DELETE
+                // CASCADE; borrar una comida con historial elimina la adherencia del alumno. Averiguar
+                // cuáles comidas huérfanas tienen logs ANTES de decidir qué borrar.
+                const newIndices = new Set(templateMealsSorted.map((m: any) => m.order_index as number));
                 const removalCandidates = (existingMeals ?? [])
                     .filter((m: any) => !newIndices.has(m.order_index as number))
                     .map((m: any) => m.id as string);
-
-                // Cascade-safety (CRÍTICO): nutrition_meal_logs.meal_id -> nutrition_meals es ON DELETE
-                // CASCADE, así que borrar un meal ELIMINA en cascada el historial de adherencia del alumno
-                // (qué comió, % consumido, satisfaction). Por eso solo borramos los meals SIN logs; los que
-                // tienen historial se CONSERVAN (quedan en el plan del alumno con su data intacta).
-                let toDelete = removalCandidates;
+                let loggedMealIds = new Set<string>();
                 if (removalCandidates.length) {
                     const { data: loggedRows } = await this.supabase
                         .from('nutrition_meal_logs')
                         .select('meal_id')
                         .in('meal_id', removalCandidates);
-                    const logged = new Set((loggedRows ?? []).map((r: any) => r.meal_id as string));
-                    toDelete = removalCandidates.filter((id) => !logged.has(id));
+                    loggedMealIds = new Set((loggedRows ?? []).map((r: any) => r.meal_id as string));
                 }
 
-                if (toDelete.length) {
-                    await this.supabase.from('food_items').delete().in('meal_id', toDelete);
-                    await this.supabase.from('nutrition_meals').delete().in('id', toDelete);
+                const recon = reconcileMeals(
+                    (existingMeals ?? []).map((m: any) => ({
+                        id: m.id as string,
+                        order_index: m.order_index as number,
+                    })),
+                    templateMealsSorted.map((t: any) => ({
+                        order_index: t.order_index as number,
+                        name: t.name as string,
+                        description: (t as { description?: string }).description ?? '',
+                        day_of_week: (t as { day_of_week?: number | null }).day_of_week ?? null,
+                    })),
+                    loggedMealIds
+                );
+
+                // BORRAR huérfanas sin logs (batcheado; las que tienen logs se conservan)
+                if (recon.toDelete.length) {
+                    await this.supabase.from('food_items').delete().in('meal_id', recon.toDelete);
+                    await this.supabase.from('nutrition_meals').delete().in('id', recon.toDelete);
                 }
 
-                for (const tMeal of templateMealsSorted) {
-                    const items = this.getTemplateMealItems(tMeal as TemplateMealWithGroups);
-                    const existingId = existingByIndex.get(tMeal.order_index as number);
-
-                    if (existingId) {
-                        await this.supabase
-                            .from('nutrition_meals')
-                            .update({
-                                name: tMeal.name,
-                                description: (tMeal as { description?: string }).description ?? '',
-                                order_index: tMeal.order_index,
-                                day_of_week: (tMeal as { day_of_week?: number | null }).day_of_week ?? null,
-                            })
-                            .eq('id', existingId);
-                        await this.supabase.from('food_items').delete().eq('meal_id', existingId);
-                        if (items.length > 0) {
-                            await this.supabase.from('food_items').insert(
-                                items.map((it: any) => ({
-                                    meal_id: existingId,
-                                    food_id: it.food_id,
-                                    quantity: it.quantity,
-                                    unit: it.unit,
-                                    swap_options: it.swap_options ?? [],
-                                }))
-                            );
-                        }
-                    } else {
-                        const { data: newMeal } = await this.supabase
-                            .from('nutrition_meals')
-                            .insert({
-                                plan_id: planId,
-                                name: tMeal.name,
-                                description: (tMeal as { description?: string }).description ?? '',
-                                order_index: tMeal.order_index,
-                                day_of_week: (tMeal as { day_of_week?: number | null }).day_of_week ?? null,
-                            })
-                            .select('id')
-                            .single();
-                        if (newMeal && items.length > 0) {
-                            await this.supabase.from('food_items').insert(
-                                items.map((it: any) => ({
-                                    meal_id: newMeal.id,
-                                    food_id: it.food_id,
-                                    quantity: it.quantity,
-                                    unit: it.unit,
-                                    swap_options: it.swap_options ?? [],
-                                }))
-                            );
-                        }
+                // UPDATE in-place de comidas matcheadas (valores distintos por id → 1 update c/u)
+                for (const u of recon.toUpdate) {
+                    await this.supabase
+                        .from('nutrition_meals')
+                        .update({
+                            name: u.name,
+                            description: u.description,
+                            order_index: u.order_index,
+                            day_of_week: u.day_of_week,
+                        })
+                        .eq('id', u.id);
+                }
+                // food_items de las comidas updateadas: 1 DELETE + 1 INSERT batcheados (antes 2/comida)
+                if (recon.toUpdate.length) {
+                    const updatedIds = recon.toUpdate.map((u) => u.id);
+                    await this.supabase.from('food_items').delete().in('meal_id', updatedIds);
+                    const idByIndex = new Map<number, string>(recon.toUpdate.map((u) => [u.order_index, u.id]));
+                    const foodRows: ReturnType<typeof this.foodRowsFor> = [];
+                    for (const tMeal of templateMealsSorted) {
+                        const mealId = idByIndex.get(tMeal.order_index as number);
+                        if (!mealId) continue;
+                        const items = this.getTemplateMealItems(tMeal as TemplateMealWithGroups);
+                        if (items.length > 0) foodRows.push(...this.foodRowsFor(mealId, items));
                     }
+                    if (foodRows.length > 0) await this.supabase.from('food_items').insert(foodRows as any);
+                }
+
+                // INSERTAR comidas nuevas (índices de plantilla sin comida existente), batcheado
+                if (recon.toInsert.length) {
+                    const insertIndices = new Set(recon.toInsert.map((t) => t.order_index));
+                    const toInsertMeals = templateMealsSorted.filter((t: any) =>
+                        insertIndices.has(t.order_index as number)
+                    ) as TemplateMealWithGroups[];
+                    await this.insertMealsForPlan(planId, toInsertMeals);
                 }
 
                 continue; // meals already handled above
@@ -420,36 +469,9 @@ export class NutritionService {
 
                 if (!newPlan) continue;
                 planId = newPlan.id;
-            }
 
-            // Re-insertar meals y food_items para el plan
-            for (const tMeal of template.template_meals) {
-                const { data: newMeal } = await this.supabase
-                    .from('nutrition_meals')
-                    .insert({
-                        plan_id: planId,
-                        name: tMeal.name,
-                        description: (tMeal as { description?: string }).description ?? '',
-                        order_index: tMeal.order_index,
-                        day_of_week: (tMeal as { day_of_week?: number | null }).day_of_week ?? null,
-                    })
-                    .select('id')
-                    .single();
-
-                if (!newMeal) continue;
-
-                const items = this.getTemplateMealItems(tMeal as TemplateMealWithGroups);
-                if (items.length > 0) {
-                    await this.supabase.from('food_items').insert(
-                        items.map((it: any) => ({
-                            meal_id: newMeal.id,
-                            food_id: it.food_id,
-                            quantity: it.quantity,
-                            unit: it.unit,
-                            swap_options: it.swap_options ?? [],
-                        }))
-                    );
-                }
+                // Cliente nuevo: insertar TODAS las comidas de la plantilla (batcheado, N exactas).
+                await this.insertMealsForPlan(planId, template.template_meals as TemplateMealWithGroups[]);
             }
         }
     }
