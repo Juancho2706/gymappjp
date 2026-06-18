@@ -24,7 +24,6 @@ export interface ExpiringProgramItem {
     endDate: string
     clientId: string | undefined
     clientName: string | undefined
-    clientSlug: string | undefined
     daysLeft: number
 }
 

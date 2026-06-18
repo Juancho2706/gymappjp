@@ -111,6 +111,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
             <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 title={item.label}
                 className={cn(
                     'flex shrink-0 flex-col items-center gap-1 rounded-xl border border-transparent px-2 py-2 text-[10px] font-semibold transition-all duration-300 group md:w-full md:flex-none md:flex-row md:gap-3 md:px-4 md:py-2 md:text-sm',
@@ -263,6 +264,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                     {enterpriseContext && isOrgAdmin && (
                         <Link
                             href={`/org/${enterpriseContext.orgSlug}`}
+                            prefetch={false}
                             title="Panel empresa"
                             className={cn(
                                 'hidden shrink-0 items-center gap-3 rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-semibold text-sidebar-foreground transition-all duration-300 hover:bg-primary/15 md:flex',

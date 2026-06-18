@@ -972,7 +972,19 @@ export const config = {
     // si no, en el host enterprise el rewrite /org prefijaba p.ej. /lottie/*.json
     // → /org/lottie/*.json → 404 (animaciones Lottie del landing no cargaban).
     matcher: [
-        '/((?!_next/static|_next/image|favicon.ico|api/manifest/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp|json|webmanifest|woff|woff2|ttf|otf|mp4|webm|mp3|txt|xml|lottie)$).*)',
+        {
+            // Path matcher idéntico (byte a byte) al anterior. `missing` excluye del middleware
+            // los requests de PREFETCH de Next.js (RSC speculativo) — cada <Link> prefetcheado
+            // re-ejecutaba todo el bundle de auth/workspace/suscripción. Saltar el middleware en
+            // prefetch es seguro: la respuesta nunca se muestra; el click real es una navegación
+            // fresca SIN estos headers, así que el middleware corre completo. Capa secundaria a
+            // `prefetch={false}` del nav del coach (en Next 16 estos headers a veces faltan).
+            source: '/((?!_next/static|_next/image|favicon.ico|api/manifest/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp|json|webmanifest|woff|woff2|ttf|otf|mp4|webm|mp3|txt|xml|lottie)$).*)',
+            missing: [
+                { type: 'header', key: 'next-router-prefetch' },
+                { type: 'header', key: 'purpose', value: 'prefetch' },
+            ],
+        },
     ],
 }
 

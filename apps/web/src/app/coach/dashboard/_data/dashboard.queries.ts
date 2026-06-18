@@ -313,7 +313,7 @@ async function getCoachDashboardDataInner(
         applyOrgScope(
             supabase
                 .from('workout_programs')
-                .select('id, name, end_date, client_id, clients:client_id (id, full_name, slug)')
+                .select('id, name, end_date, client_id, clients:client_id (id, full_name)')
                 .eq('coach_id', userId)
                 .eq('is_active', true),
             'org_id',
@@ -511,7 +511,6 @@ async function getCoachDashboardDataInner(
                 endDate: p.end_date,
                 clientId: p.clients?.id,
                 clientName: p.clients?.full_name,
-                clientSlug: p.clients?.slug,
                 daysLeft: diffDays,
             }
         })
