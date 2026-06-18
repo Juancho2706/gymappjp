@@ -397,11 +397,27 @@ export async function proxy(request: NextRequest) {
         }
 
         if (pathname === '/coach/dashboard') {
-            const redirectPath = await resolvePostLoginRedirect(supabase, user.id)
-            if (redirectPath.startsWith('/org/')) {
-                const redirectUrl = request.nextUrl.clone()
-                redirectUrl.pathname = redirectPath
-                return NextResponse.redirect(redirectUrl)
+            // Phase 3: este bloque solo existe para mandar a un enterprise_staff a /org/[slug].
+            // activeWorkspace YA esta resuelto arriba (y aqui nunca es 'select' — eso redirige
+            // antes). Cuando es un WorkspaceSummary concreto, pickPreferredWorkspace lo devolvio
+            // != null, asi que resolvePostLoginRedirect daria exactamente defaultWorkspaceHome(ese
+            // workspace) -> derivable sin re-correr el bundle (resolvePreferredWorkspace +
+            // listUserWorkspaces + queries de org). Solo /org/ proviene de enterprise_staff.
+            if (activeWorkspace) {
+                if (activeWorkspace.type === 'enterprise_staff') {
+                    const redirectUrl = request.nextUrl.clone()
+                    redirectUrl.pathname = defaultWorkspaceHome(activeWorkspace)
+                    return NextResponse.redirect(redirectUrl)
+                }
+            } else {
+                // activeWorkspace === null (coach sin workspace resoluble): conservar el fallback
+                // original — resolvePostLoginRedirect mira coaches.active_org_id por membership.
+                const redirectPath = await resolvePostLoginRedirect(supabase, user.id)
+                if (redirectPath.startsWith('/org/')) {
+                    const redirectUrl = request.nextUrl.clone()
+                    redirectUrl.pathname = redirectPath
+                    return NextResponse.redirect(redirectUrl)
+                }
             }
         }
 
