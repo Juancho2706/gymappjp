@@ -3,7 +3,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { useState } from 'react'
 import Link from 'next/link'
-import { LayoutTemplate, Users, Apple, Plus, HelpCircle } from 'lucide-react'
+import { LayoutTemplate, Users, Apple, Plus, HelpCircle, ChefHat } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { AppOnlyBadge } from '@/components/AppOnlyBadge'
@@ -14,6 +14,8 @@ import { FoodLibrary } from './FoodLibrary'
 import type { AssignModalClient } from './AssignModal'
 import { NutritionOnboarding } from './NutritionOnboarding'
 import { CoachNutritionGuideDialog } from './CoachNutritionGuideDialog'
+import { RecipeLibrary } from './recipes/RecipeLibrary'
+import type { RecipeRow } from '@/services/nutrition-recipes.service'
 
 type FoodLib = {
   foods: {
@@ -37,6 +39,7 @@ type Props = {
   assignClients: AssignModalClient[]
   clientsWithoutPlan: { id: string; full_name: string }[]
   foods: FoodLib
+  recipes: RecipeRow[]
   coachId: string
 }
 
@@ -46,6 +49,7 @@ export function NutritionHub({
   assignClients,
   clientsWithoutPlan,
   foods,
+  recipes,
   coachId,
 }: Props) {
   const [hubTab, setHubTab] = useState('templates')
@@ -177,6 +181,13 @@ export function NutritionHub({
               <Apple className="w-3.5 h-3.5" />
               Alimentos
             </TabsTrigger>
+            <TabsTrigger
+              value="recipes"
+              className="flex-1 h-12 rounded-xl data-[state=active]:bg-background data-[state=active]:text-[var(--theme-primary)] data-[state=active]:shadow-lg transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
+            >
+              <ChefHat className="w-3.5 h-3.5" />
+              Recetas
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -209,6 +220,13 @@ export function NutritionHub({
           <div className="space-y-6">
             <SectionHeading icon={<Apple className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />} title="Biblioteca nutricional" />
             <FoodLibrary initialFoods={foods.foods} totalFoods={foods.total} coachId={coachId} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="recipes" className="mt-0 focus-visible:outline-none">
+          <div className="space-y-6">
+            <SectionHeading icon={<ChefHat className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />} title="Recetas" />
+            <RecipeLibrary recipes={recipes} clients={assignClients} />
           </div>
         </TabsContent>
       </Tabs>

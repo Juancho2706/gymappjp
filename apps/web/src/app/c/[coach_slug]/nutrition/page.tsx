@@ -16,6 +16,8 @@ import { NutritionNoPlanFromServer } from './_components/NutritionNoPlanFromServ
 import { PushNotificationBanner } from './_components/PushNotificationBanner'
 import { getClientNutritionUser } from './_data/nutrition-auth.queries'
 import { getStudentExchangeData } from './_data/nutrition-exchanges.queries'
+import { getAssignedRecipesForClient } from './_data/recipes.queries'
+import { RecipeIdeasSection } from './_components/RecipeIdeasSection'
 import { pdfBrandFromProxyHeaders } from '@/lib/nutrition-pdf-brand'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
@@ -39,7 +41,7 @@ export default async function ClientNutritionPage({ params }: Props) {
   }
 
   const { iso: today } = getTodayInSantiago()
-  const [todayLog, adherence, heroBundle, exchange, headersList] = await Promise.all([
+  const [todayLog, adherence, heroBundle, exchange, recipes, headersList] = await Promise.all([
     getNutritionLogForDate(user.id, plan.id, today),
     getNutritionAdherence30d(user.id, plan.id),
     getHeroComplianceBundle(user.id, coach_slug),
@@ -50,6 +52,8 @@ export default async function ClientNutritionPage({ params }: Props) {
       planCoachId: plan.coach_id ?? null,
       planMode: (plan as { plan_mode?: string | null }).plan_mode,
     }),
+    // Feature L: recetas-idea asignadas por el coach (inspiración, solo lectura).
+    getAssignedRecipesForClient(user.id),
     headers(),
   ])
   const hasTodayWorkout = heroBundle.hero.hasWorkout
@@ -109,6 +113,8 @@ export default async function ClientNutritionPage({ params }: Props) {
           pdfBrand={pdfBrand}
           brandLogoUrl={brandLogoUrl}
         />
+
+        <RecipeIdeasSection recipes={recipes} />
       </main>
     </div>
   )

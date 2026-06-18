@@ -31,6 +31,21 @@ export {
   type NutritionProgressZoneProps,
 } from './NutritionProgressZone'
 export {
+  NutrientRangeBar,
+  nutrientStatus,
+  nutrientRangeAriaText,
+  type NutrientRangeBarProps,
+  type NutrientIntent,
+  type NutrientStatus,
+} from './NutrientRangeBar'
+export {
+  ProportionPlate,
+  plateAriaLabel,
+  type ProportionPlateProps,
+  type PlateProportion,
+  type PlateSegmentKey,
+} from './ProportionPlate'
+export {
   MACRO_META,
   MACRO_OVER_COLOR,
   MACRO_GOAL_COLOR,

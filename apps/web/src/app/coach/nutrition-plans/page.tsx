@@ -12,6 +12,7 @@ import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 import { getNutritionPlansPageCoach, getCoachOrgNutritionTemplates } from './_data/nutrition-page.queries'
 import { OrgTemplatesSection } from './_components/OrgTemplatesSection'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
+import { getCoachRecipes } from './_data/recipes.queries'
 
 type NutritionPlanRow = { id: string; name: string; is_active: boolean | null }
 
@@ -130,12 +131,13 @@ export default async function NutritionPlansPage() {
   const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
   const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
   const scope = { orgId, activeTeamId }
-  const [templates, activePlans, coachClientsRaw, foodLib, orgTemplates] = await Promise.all([
+  const [templates, activePlans, coachClientsRaw, foodLib, orgTemplates, recipes] = await Promise.all([
     getCoachTemplates(coachId, orgId),
     getActivePlansBoardData(coachId, scope),
     getCoachClients(coachId, scope),
     getFoodLibrary(coachId, { page: 0, pageSize: 120, orgId }),
     orgId ? getCoachOrgNutritionTemplates(orgId) : Promise.resolve([]),
+    getCoachRecipes({ coachId, teamId: activeTeamId }),
   ])
 
   const assignClients = coachClientsRaw.map((c) => {
@@ -169,6 +171,7 @@ export default async function NutritionPlansPage() {
         assignClients={assignClients}
         clientsWithoutPlan={clientsWithoutPlan}
         foods={foodLib}
+        recipes={recipes}
       />
     </div>
   )

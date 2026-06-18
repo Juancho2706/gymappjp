@@ -8,3 +8,5 @@
 
 export * from './macros'
 export * from './adherence'
+export * from './micros'
+export * from './tdee'
