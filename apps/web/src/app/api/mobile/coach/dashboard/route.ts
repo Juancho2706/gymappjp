@@ -5,6 +5,7 @@ import type { SubscriptionTier } from '@/lib/constants'
 import { isValidInviteCode } from '@/lib/coach/invite-code'
 import type { Json } from '@/lib/database.types'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { verifyMobileBearer } from '@/lib/mobile-auth'
 
 function bearerToken(request: NextRequest): string | null {
     const auth = request.headers.get('authorization') || request.headers.get('Authorization')
@@ -26,18 +27,19 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized', code: 'MISSING_TOKEN' }, { status: 401 })
     }
 
-    const admin = createServiceRoleClient()
-    const { data: userData, error: userError } = await admin.auth.getUser(token)
-    const user = userData.user
-
-    if (userError || !user) {
+    // GET read-only: verificación LOCAL del JWT (jose) con fallback a getUser ante JWKS caído.
+    // Los POST/mutaciones de abajo NO se migran (revocation-sensitive) -> siguen con getUser.
+    const auth = await verifyMobileBearer(token)
+    if (!auth.ok) {
         return NextResponse.json({ error: 'Unauthorized', code: 'INVALID_TOKEN' }, { status: 401 })
     }
+    const userId = auth.userId
+    const admin = createServiceRoleClient()
 
     const { data: coach, error: coachError } = await admin
         .from('coaches')
         .select('id, full_name, brand_name, slug, invite_code, primary_color, logo_url, subscription_status, subscription_tier, current_period_end, trial_ends_at, max_clients, onboarding_guide')
-        .eq('id', user.id)
+        .eq('id', userId)
         .maybeSingle()
 
     if (coachError) {
@@ -48,13 +50,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Coach no encontrado.', code: 'COACH_NOT_FOUND' }, { status: 404 })
     }
 
-    const workspace = await resolvePreferredWorkspace(admin, user.id)
+    const workspace = await resolvePreferredWorkspace(admin, userId)
     if (!workspace || (workspace.type !== 'coach_standalone' && workspace.type !== 'enterprise_coach')) {
         return NextResponse.json({ error: 'Workspace no autorizado para dashboard coach.', code: 'WORKSPACE_NOT_ALLOWED' }, { status: 403 })
     }
     const orgId = workspace.type === 'enterprise_coach' ? workspace.orgId : null
 
-    const dashboard = await getCoachDashboardDataV2WithClient(user.id, admin, orgId)
+    const dashboard = await getCoachDashboardDataV2WithClient(userId, admin, orgId)
     const onboardingGuide =
         coach.onboarding_guide != null &&
         typeof coach.onboarding_guide === 'object' &&
