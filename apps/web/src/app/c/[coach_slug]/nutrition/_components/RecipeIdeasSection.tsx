@@ -99,7 +99,7 @@ export function RecipeIdeasSection({ recipes }: Props) {
               role="dialog"
               aria-modal="true"
               aria-label={active.name}
-              className="fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] overflow-hidden rounded-t-3xl border-t border-border bg-background pb-safe"
+              className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-lg max-h-[85dvh] overflow-hidden rounded-t-3xl border-t border-border bg-background pb-safe md:bottom-4 md:rounded-3xl md:border"
               initial={{ y: reduceMotion ? 0 : '100%' }}
               animate={{ y: 0 }}
               exit={{ y: reduceMotion ? 0 : '100%' }}
