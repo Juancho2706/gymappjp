@@ -1008,13 +1008,25 @@ export const config = {
     // si no, en el host enterprise el rewrite /org prefijaba p.ej. /lottie/*.json
     // → /org/lottie/*.json → 404 (animaciones Lottie del landing no cargaban).
     matcher: [
+        // Árboles white-label del alumno (/c, /e, /t): el layout depende de headers que SOLO
+        // inyecta este proxy (x-coach-id, x-client-base-path, branding). /e y /t además se sirven
+        // por REWRITE desde acá. SIN este entry, un PREFETCH de Next se saltaba el middleware
+        // (por el `missing` de abajo) → sin x-coach-id → app/c/[coach_slug]/layout.tsx hacía
+        // redirect('/not-found') → 404 de TODO el árbol del alumno (regresión Phase 0, fbe8d09:
+        // el `missing` se agregó pensando solo en /coach, pero atrapó también a /c|/e|/t).
+        // Por eso estas rutas corren SIEMPRE el middleware, incluido prefetch (sin `missing`).
+        // Las matches son OR: que matchee este entry basta para correr el proxy. El proxy NO muta
+        // nada en el branch /c (solo SELECTs/RPCs de lectura; touch_coach_activity vive en /coach
+        // y ya está guardado por isPrefetchRequest), así que correrlo en prefetch es seguro.
+        { source: '/(c|e|t)/:path*' },
         {
-            // Path matcher idéntico (byte a byte) al anterior. `missing` excluye del middleware
-            // los requests de PREFETCH de Next.js (RSC speculativo) — cada <Link> prefetcheado
-            // re-ejecutaba todo el bundle de auth/workspace/suscripción. Saltar el middleware en
-            // prefetch es seguro: la respuesta nunca se muestra; el click real es una navegación
-            // fresca SIN estos headers, así que el middleware corre completo. Capa secundaria a
-            // `prefetch={false}` del nav del coach (en Next 16 estos headers a veces faltan).
+            // Resto del app. `missing` excluye del middleware los requests de PREFETCH de Next.js
+            // (RSC speculativo) — cada <Link> prefetcheado re-ejecutaba todo el bundle de
+            // auth/workspace/suscripción. Saltar el middleware en prefetch es seguro acá porque
+            // estas rutas (/coach, /, etc.) NO dependen de headers inyectados por el proxy para
+            // renderizar: el click real es una navegación fresca que corre el middleware completo.
+            // Capa secundaria a `prefetch={false}` del nav del coach (en Next 16 estos headers a
+            // veces faltan). El árbol white-label (/c|/e|/t) queda cubierto por el entry de arriba.
             source: '/((?!_next/static|_next/image|favicon.ico|api/manifest/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp|json|webmanifest|woff|woff2|ttf|otf|mp4|webm|mp3|txt|xml|lottie)$).*)',
             missing: [
                 { type: 'header', key: 'next-router-prefetch' },

@@ -77,6 +77,10 @@ export function LandingStickyBrandingCard() {
                                 </h4>
                                 <Link
                                     href={`/c/${coach.slug}/login`}
+                                    // prefetch={false}: el matcher fuerza el proxy en TODO /c (incluido prefetch);
+                                    // sin esto, cada render de esta card pública prefetchearía /c/[slug]/login y
+                                    // correría el bundle de auth/branding del proxy en una superficie de alto tráfico.
+                                    prefetch={false}
                                     className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold px-4 py-2 rounded-full transition-all group/btn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
                                     {t('landing.sticky.cta')}
