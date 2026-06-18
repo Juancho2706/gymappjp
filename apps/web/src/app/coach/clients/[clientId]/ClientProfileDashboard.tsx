@@ -305,6 +305,21 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
         })
     }
 
+    // Deep-link a la Zona A (Progreso) del hogar único de nutrición. NO recomputa
+    // ningún número: los entry points leen los valores ya calculados (compliance/
+    // motor de adherencia) y solo navegan a la pestaña Nutrición.
+    const goToNutritionProgress = () => {
+        handleTabChange('nutrition')
+        requestAnimationFrame(() => {
+            document
+                .getElementById('nutrition-zone-a-progreso')
+                ?.scrollIntoView({
+                    behavior: reduceMotion ? 'auto' : 'smooth',
+                    block: 'start',
+                })
+        })
+    }
+
     const tabEase = [0.25, 0.46, 0.45, 0.94] as const
     const tabMotion = {
         initial: { opacity: 0, y: reduceMotion ? 0 : 8 } as const,
@@ -350,6 +365,7 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                 workoutHistory={data.workoutHistory || []}
                                 checkIns={checkIns || []}
                                 compliance={compliance}
+                                onViewNutrition={goToNutritionProgress}
                             />
 
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -357,6 +373,7 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                     activeProgram={data.activeProgram}
                                     compliance={compliance}
                                     isNutritionAtRisk={isNutritionAtRisk}
+                                    onViewNutrition={goToNutritionProgress}
                                 />
                                 <ProfileCheckInSnapshot
                                     checkIn={lastCheckIn}

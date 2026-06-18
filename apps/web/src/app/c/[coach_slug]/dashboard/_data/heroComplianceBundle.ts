@@ -3,11 +3,23 @@ import {
     getActiveProgram,
     getCheckInHistory30Days,
     getClientWorkoutPlans,
+    getNutritionAdherenceInputs30d,
     getNutritionLogDays30,
     getRecentWorkoutLogs,
     getWorkoutPlanBlocksForHero,
 } from './dashboard.queries'
-import { getSantiagoIsoYmdForUtcInstant, getTodayInSantiago } from '@/lib/date-utils'
+import {
+    getNutritionDayOfWeekFromIsoYmdInSantiago,
+    getSantiagoIsoYmdForUtcInstant,
+    getTodayInSantiago,
+} from '@/lib/date-utils'
+import {
+    computeNutritionAdherence,
+    normalizeMealForMacros,
+    type AdherenceMeal,
+    type MacroTarget,
+    type MealLogRow,
+} from '@eva/nutrition-engine'
 import {
     programWeekIndex1Based,
     resolveActiveWeekVariantForDisplay,
@@ -34,7 +46,17 @@ export type HeroComplianceBundle = {
     }
     scores: {
         workoutScore: number
-        nutritionScore: number
+        /**
+         * ENGAGEMENT de registro: días con `daily_nutrition_log` / 30 * 100.
+         * NO es cumplimiento de comidas — mide cuántos días el alumno registró algo.
+         */
+        nutritionEngagementScore: number
+        /**
+         * CUMPLIMIENTO real de comidas (motor canónico `computeNutritionAdherence`):
+         * sum(comidas completadas) / sum(comidas aplicables) en 30d. `null` cuando el
+         * alumno no tiene plan activo (no se puede calcular adherencia sin plan).
+         */
+        nutritionComplianceScore: number | null
         checkInScore: number
         /** §10: sin `daily_nutrition_logs` en 30d → anillo gris "Sin datos". */
         nutritionHasLogs: boolean
@@ -42,12 +64,13 @@ export type HeroComplianceBundle = {
 }
 
 export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: string): Promise<HeroComplianceBundle> => {
-    const [program, allPlans, logs, checkInHistory, nutritionDays] = await Promise.all([
+    const [program, allPlans, logs, checkInHistory, nutritionDays, nutritionAdherenceInputs] = await Promise.all([
         getActiveProgram(userId),
         getClientWorkoutPlans(userId),
         getRecentWorkoutLogs(userId),
         getCheckInHistory30Days(userId),
         getNutritionLogDays30(userId),
+        getNutritionAdherenceInputs30d(userId),
     ])
     const activePlans = allPlans.filter((p) => !p.program_id || p.program_id === program?.id)
 
@@ -139,7 +162,13 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
     const checkInScore = Math.min(100, Math.round((checkInsLast30 / 4) * 100))
 
     const nutritionHasLogs = nutritionDays > 0
-    const nutritionScore = nutritionHasLogs ? Math.min(100, Math.round((nutritionDays / 30) * 100)) : 0
+    // ENGAGEMENT de registro (días con log / 30) — NO es cumplimiento de comidas.
+    const nutritionEngagementScore = nutritionHasLogs
+        ? Math.min(100, Math.round((nutritionDays / 30) * 100))
+        : 0
+
+    // CUMPLIMIENTO real de comidas vía el motor canónico (sum done / sum aplicables).
+    const nutritionComplianceScore = computeNutritionComplianceScore(nutritionAdherenceInputs)
 
     return {
         hero: {
@@ -156,9 +185,66 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
         },
         scores: {
             workoutScore,
-            nutritionScore,
+            nutritionEngagementScore,
+            nutritionComplianceScore,
             checkInScore,
             nutritionHasLogs,
         },
     }
 })
+
+/**
+ * Cumplimiento real de comidas en 30d con el motor canónico `computeNutritionAdherence`.
+ * Devuelve `null` si el alumno no tiene plan activo (sin plan no hay adherencia que medir).
+ */
+function computeNutritionComplianceScore(
+    inputs: Awaited<ReturnType<typeof getNutritionAdherenceInputs30d>>
+): number | null {
+    if (!inputs) return null
+    const { plan, logs, startIso, endIso } = inputs
+
+    const meals: AdherenceMeal[] = (plan.nutrition_meals ?? []).map((m) => ({
+        ...normalizeMealForMacros(m),
+        day_of_week: m.day_of_week,
+    }))
+
+    const logsByDate = new Map<string, MealLogRow[]>()
+    for (const day of logs) {
+        const rows: MealLogRow[] = (day.nutrition_meal_logs ?? []).map((r) => ({
+            meal_id: r.meal_id,
+            is_completed: !!r.is_completed,
+            consumed_quantity: r.consumed_quantity,
+        }))
+        logsByDate.set(day.log_date, rows)
+    }
+
+    const liveTarget: MacroTarget = {
+        calories: plan.daily_calories ?? 0,
+        protein: plan.protein_g ?? 0,
+        carbs: plan.carbs_g ?? 0,
+        fats: plan.fats_g ?? 0,
+    }
+
+    const targetByDate = new Map<string, MacroTarget>()
+    for (const day of logs) {
+        if (day.target_calories_at_log != null) {
+            targetByDate.set(day.log_date, {
+                calories: day.target_calories_at_log ?? 0,
+                protein: day.target_protein_at_log ?? 0,
+                carbs: day.target_carbs_at_log ?? 0,
+                fats: day.target_fats_at_log ?? 0,
+            })
+        }
+    }
+
+    const { summary } = computeNutritionAdherence({
+        meals,
+        logsByDate,
+        targetByDate,
+        liveTarget,
+        range: { startIso, endIso },
+        dayOfWeekResolver: getNutritionDayOfWeekFromIsoYmdInSantiago,
+    })
+
+    return Math.min(100, Math.round(summary.compliancePct))
+}

@@ -1,0 +1,690 @@
+[
+  {
+    "area": "Nutrition data visualization — macro/calorie rings, bars, gauges, and weekly trend charts (2025-2026 best practices)",
+    "patterns": [
+      {
+        "name": "Single hero calorie ring + macro sub-bars (the 2026 default)",
+        "what": "One large primary ring (calories) as the focal element, with the three macros (protein/carbs/fat) shown BELOW as separate horizontal progress bars or a row of three small rings — NOT four concentric nested rings. Hero ring stroke-width ~14-18px on a ~140-180px diameter; rounded line caps (stroke-linecap:round); ~270-360deg sweep. Center holds the load-bearing number.",
+        "why": "Concentric multi-rings (Apple-style) distort value perception — outer ring circumference is longer so the same % looks bigger; inner ring needs >1/2 radius to read fairly. Separating calories (ring) from macros (bars) avoids that distortion and gives each macro a linear, comparable scale. MacroFactor and Yazio both lead with one prominent ring; Lifesum uses a single circular score.",
+        "exampleApp": "MacroFactor (hero calorie circle), Yazio (single colorful ring + macro bars), Lifesum (circular daily score)"
+      },
+      {
+        "name": "Center content = number-first, label-second",
+        "what": "Ring center stacks: BIG primary number (e.g. remaining kcal) in a heavy weight (600-700), a small dimmed unit/label above or below ('kcal', 'remaining'), and optionally a tiny secondary line ('1,840 / 2,200'). Primary number ~32-44px; label ~11-13px uppercase tracked, muted color (~60% opacity). Minimalist: one number dominates, ring is the subtle progress arc around it.",
+        "why": "Mobile space is scarce; the user's single most-asked question ('how much do I have left?') must be answerable in one glance. A minimalist large-number-in-ring is the dominant mobile pattern.",
+        "exampleApp": "Apple Activity/Fitness, MacroFactor, Yazio"
+      },
+      {
+        "name": "'Remaining' framing as default, 'consumed' as secondary",
+        "what": "Lead with calories REMAINING (goal − consumed) as the big center number when the user is under budget; flip to an over-budget treatment (number turns red/amber, shows '+320 over') when exceeded. Show consumed/goal as a small secondary line. Macros usually shown as consumed-toward-goal (e.g. '120 / 160 g') with the bar filling up.",
+        "why": "Remaining is action-oriented ('what can I still eat') and is the framing MyFitnessPal popularized and MacroFactor/Yazio retain. Calories use remaining (budget metaphor); macros use consumed-to-target (achievement metaphor) because protein especially is a floor to HIT, not a ceiling to stay under. Distinct semantics → distinct framing.",
+        "exampleApp": "MyFitnessPal, MacroFactor, Yazio"
+      },
+      {
+        "name": "Tabular (monospaced) numerals everywhere numbers update",
+        "what": "Apply font-variant-numeric: tabular-nums (font-feature-settings:'tnum' fallback) globally on any element whose digits change — the ring center counter, macro gram readouts, calorie totals, weekly table cells. Pair with a font that ships solid tnum + ideally slashed-zero: Inter, IBM Plex Sans, Roboto, or system-ui/SF.",
+        "why": "Proportional digits cause horizontal 'jitter' as a live calorie counter ticks (1 is narrower than 8), and break vertical decimal alignment in weekly tables. tnum forces a fixed-width grid so numbers don't dance. >96% browser support.",
+        "exampleApp": "Datawrapper guidance; standard in MacroFactor/Cronometer data tables"
+      },
+      {
+        "name": "Color-coded macros with semantic, consistent hues",
+        "what": "Fixed per-macro color used identically across ring, bars, legend, and weekly chart: typically protein=red/pink, carbs=amber/orange, fat=blue/purple (each app picks a palette but locks it app-wide). Calorie ring uses the brand/system accent. Over-target state overrides to red/amber regardless of macro hue. Always ship dark-mode variants.",
+        "why": "Color is the only way to map a bar/segment back to its macro without a label; inconsistency between the ring legend and the trend chart forces re-learning. Yazio explicitly 'gamifies intake with colourful rings.'",
+        "exampleApp": "Yazio, Lifesum, Cronometer"
+      },
+      {
+        "name": "Progress-ring SVG construction (stroke-dasharray technique)",
+        "what": "Each ring/arc = two stacked <circle> elements: a faint full-circle track (the goal, ~10-15% opacity of the fill color) and a foreground arc using stroke-dasharray = circumference and animated stroke-dashoffset to reveal the percentage. stroke-linecap:round for the iconic soft ends; rotate -90deg so fill starts at 12 o'clock. Common stroke-width ~12-32px depending on diameter. Track always visible so the unmet goal stays legible.",
+        "why": "This is the canonical, performant, framework-agnostic ring implementation (React+SVG, SwiftUI, plain CSS). The visible track communicates 'how far to goal' even at low completion.",
+        "exampleApp": "Apple Activity Rings, react-activity-rings, common CodePen implementations"
+      },
+      {
+        "name": "Weekly trend = bars for discrete totals, area/line for continuous trend",
+        "what": "Daily calorie totals over a week → vertical BAR chart (one bar per day, today highlighted, a dashed horizontal goal/target line across). Body-weight or adaptive-TDEE trend → smoothed LINE or soft AREA chart with a trend line through noisy daily dots. Inline sparklines (no axes, ~24-40px tall) for compact per-metric cards. Keep gridlines minimal; label only goal line + min/max.",
+        "why": "Bars read as 'separate days you can compare/judge against goal'; a continuous line implies an interpolated trend (correct for weight, wrong for discrete daily intake). MacroFactor's signature is the weight trend line vs noisy scale dots; sparklines give density without chart chrome.",
+        "exampleApp": "MacroFactor (weight/TDEE trend line), Cronometer (weekly nutrient bars), MacrosFirst (macro charting)"
+      },
+      {
+        "name": "Over/under-goal state encoding beyond color",
+        "what": "Don't rely on red alone for 'over budget' (accessibility). Combine: hue shift (red/amber), an explicit sign ('+320'), word ('over'), and optionally the ring overshooting/doubling its track. Under-goal protein can show an encouraging accent; hitting goal can trigger a subtle fill-complete state.",
+        "why": "WCAG — color must not be the only channel. Macro goals have asymmetric meaning (over carbs = caution, over protein = fine) so the visual state must carry direction + magnitude, not just 'bad'.",
+        "exampleApp": "MyFitnessPal over-budget red, Apple ring overshoot"
+      }
+    ],
+    "animations": [
+      {
+        "name": "Ring fill on load / value change",
+        "trigger": "Dashboard mount or after logging a meal (value updates)",
+        "spec": "Animate stroke-dashoffset from full (empty) to target offset. ~600-900ms, ease-out (cubic-bezier .22,1,.36,1). On incremental log, animate only the delta. Pair with the center number counting up (tween the displayed integer) using tabular-nums so width stays fixed.",
+        "reducedMotion": "Honor prefers-reduced-motion: render final ring offset and final number instantly, no count-up, no sweep."
+      },
+      {
+        "name": "Macro bar grow",
+        "trigger": "Dashboard mount / meal logged",
+        "spec": "Width/scaleX from 0 to fill%, ~400-600ms ease-out, stagger the 3 macros ~60-80ms each. CSS transform or Framer Motion.",
+        "reducedMotion": "Snap to final width, no stagger."
+      },
+      {
+        "name": "Over-goal pulse",
+        "trigger": "Consumed crosses goal threshold",
+        "spec": "One-shot subtle color cross-fade to red/amber + ~1.05 scale pulse (~250ms) on the affected ring/bar number; do not loop.",
+        "reducedMotion": "Static color change only, no scale pulse."
+      }
+    ],
+    "accessibility": "Color must never be the sole carrier of macro identity or over/under state — always pair hue with a text label, gram value, and sign (+/over). Maintain WCAG AA contrast for the large center number (it's the primary content) and for muted labels against ring backgrounds; muted labels should still clear 4.5:1 or be treated as decorative. Provide aria-label / accessible text on each ring and bar (e.g. 'Protein: 120 of 160 grams, 75 percent'). Ship dark-mode variants of every macro hue. Respect prefers-reduced-motion for all fill/count-up animations. Use tabular-nums so screen-magnifier users don't see reflowing digits.",
+    "desktopVsResponsive": "Mobile/PWA: single hero calorie ring with number-first center is the focal hero of the screen; macros as a compact 3-up row of small rings or stacked bars below; weekly view is a separate tab/scroll with a 7-bar chart or sparklines (no dense axes). Touch targets >=44px on any tappable ring/segment. Desktop: can afford a wider dashboard — ring on the left with macros AND a weekly trend chart side-by-side, larger axis labels and gridlines, hover tooltips on bars/line points (which don't exist on mobile, so mobile must surface the same values inline as text, not behind hover). Sparklines scale up to full bar/area charts with axes on desktop.",
+    "sources": [
+      "https://calorie-trackers.com/compare/cronometer-vs-macrofactor/ (2026)",
+      "https://www.calorietrackerlab.com/articles/macro-tracking-apps-comparison-2026/ (2026)",
+      "https://calorie-trackers.com/reviews/lifesum/ (2026)",
+      "https://mediatalky.com/lifesum-vs-yazio/ (2025)",
+      "https://www.domo.com/learn/charts/radial-bar-chart (2025)",
+      "https://www.domo.com/learn/charts/gauge-chart (2025)",
+      "https://think.design/services/data-visualization-data-design/circular-barplot/ (2025)",
+      "https://developer.apple.com/design/human-interface-guidelines/activity-rings (2025)",
+      "https://dev.to/wellallytech/activity-rings-build-your-own-health-dashboard-with-react-and-svg-49og (2025)",
+      "https://github.com/JonasDoesThings/react-activity-rings (2025)",
+      "https://loke.dev/blog/css-font-variant-numeric-tabular-nums (2025)",
+      "https://tailwindcss.com/docs/font-variant-numeric (2025)",
+      "https://www.datawrapper.de/blog/fonts-for-data-visualization (2025)",
+      "https://fontalternatives.com/blog/best-fonts-dense-dashboards/ (2025)",
+      "https://help.macrosfirst.com/en/articles/29-nutrition-charting (2025)",
+      "https://zthh.dev/blogs/dev-blog-simple-nutrition-macro-tracker-part-1-designing-views-in-figma (2025)"
+    ]
+  },
+  {
+    "area": "Animation & Motion Design for nutrition/health/fitness apps (2025-2026) — implementable with framer-motion 12 (now \"motion\"), react-circular-progressbar, recharts, canvas-confetti",
+    "patterns": [
+      {
+        "name": "Two-track motion: spring for physical, ease for visual",
+        "what": "Animate physical/spatial properties (x, y, scale, rotate, layout) with springs; animate visual properties (opacity, color, fill) with duration-based ease curves. This is the M3 'spatial vs effects' split and motion 12's default behavior.",
+        "why": "Springs on opacity/color produce muddy fades; ease on position feels robotic. Matching property to curve type is the highest-leverage motion decision. M3 codifies it as spatial spring tokens (overshoot allowed) vs effects spring tokens (no overshoot).",
+        "exampleApp": "Material Design 3 Expressive, Apple Fitness rings"
+      },
+      {
+        "name": "Ring-fill on data settle, not on mount-spam",
+        "what": "Animate calorie/macro rings from previous value to new value with a single eased or low-bounce spring tween (~600-900ms), once per meaningful data change — not on every re-render or tab focus.",
+        "why": "Apple Fitness-style rings earn delight by being rare and tied to real progress. Re-animating on every navigation trains users to ignore them. Use react-circular-progressbar AnimatedProgressProvider (valueStart/valueEnd/duration/easingFunction from d3-ease) with pathTransition:'none' to avoid double-animation.",
+        "exampleApp": "Apple Fitness, MyFitnessPal, Lifesum"
+      },
+      {
+        "name": "Number count-up synced to the ring",
+        "what": "Count the numeric label (e.g. '1,840 kcal') up in lockstep with the ring fill using the same duration and easing, driven by motion useMotionValue + animate() + useTransform rounding.",
+        "why": "A static number snapping to final value while the ring sweeps breaks the illusion they are one object. Sharing the motion value (or at minimum identical duration/easing) keeps them coupled.",
+        "exampleApp": "Apple Fitness, Cronometer"
+      },
+      {
+        "name": "Confetti reserved for genuine milestones",
+        "what": "Fire canvas-confetti only on rare, earned moments (daily goal hit, streak milestone, plan completion) — never on routine logging. Keep particle count <100 for 60fps, set disableForReducedMotion:true.",
+        "why": "Library authors stress 'use sparingly — save it for moments that truly deserve celebration.' Confetti on every meal log devalues it; on a 30-day streak it lands. Always respect reduced-motion via the built-in flag.",
+        "exampleApp": "Duolingo streak, Strava PR"
+      },
+      {
+        "name": "Meal-complete micro-interaction (check + scale + tint)",
+        "what": "On marking a meal/food logged: scale-pop the checkbox (spring, slight overshoot), draw the checkmark, tint the row toward success green — all under ~250ms, ideally via useOptimistic so it fires before server confirm.",
+        "why": "Immediate tactile feedback on the most-repeated action. Optimistic + fast spring makes logging feel instant; the green tint is persistent state confirmation without a toast.",
+        "exampleApp": "Lifesum, MacroFactor, Apple Reminders"
+      },
+      {
+        "name": "Shimmer/skeleton over spinners for data-bound screens",
+        "what": "Use shape-matched skeletons with a left-to-right shimmer sweep (linear, ~1.2-1.5s loop) for dashboard cards, ring placeholders, lists. Pair with the existing loading.tsx streaming skeleton pattern.",
+        "why": "Skeletons reduce perceived wait and prevent layout shift versus centered spinners. The shimmer's linear loop is the one acceptable use of linear easing (continuous indicator).",
+        "exampleApp": "Facebook, YouTube, most 2025 fitness dashboards"
+      },
+      {
+        "name": "Chart enter + update transitions (recharts)",
+        "what": "On first paint animate bars/areas/lines in with recharts isAnimationActive + animationDuration ~400-600ms and slight per-series stagger; on data update let recharts interpolate between datasets rather than remount.",
+        "why": "An instant chart reads as static decoration; a 400-600ms eased entrance signals 'this is your data, freshly computed.' Interpolated updates (not remount) preserve continuity when switching week/month ranges.",
+        "exampleApp": "MacroFactor weight trend, Whoop"
+      },
+      {
+        "name": "Bottom-sheet with spring + velocity-aware dismiss",
+        "what": "Present food-detail / add-entry sheets as draggable bottom sheets that spring up, follow the finger 1:1 while dragging, and dismiss on either a position threshold OR a high downward flick velocity (velocity from drag info). Add a subtle settle bounce at snap.",
+        "why": "Velocity-aware dismissal is what makes native sheets feel buttery — a slow short drag snaps back, a fast flick closes even if short. react-modal-sheet (built on motion) implements this; or motion drag + onDragEnd reading info.velocity into animate().",
+        "exampleApp": "Apple Maps/Music sheets, react-modal-sheet"
+      },
+      {
+        "name": "List reorder & enter/exit with layout animations",
+        "what": "Wrap food log / meal lists so add, remove, reorder animate: motion layout + AnimatePresence, stagger children on initial mount (~30-50ms), add layoutScroll to scrollable ancestors.",
+        "why": "When a logged item slides in and pushes neighbors smoothly, the user tracks what changed. Stagger on first load gives a polished cascade; without layoutScroll the offsets are mismeasured inside scroll containers.",
+        "exampleApp": "Things 3, Todoist, MacroFactor log"
+      },
+      {
+        "name": "Route/page transitions kept short and directional",
+        "what": "Cross-fade or short directional slide (12-20px) between routes at 200-300ms ease-out for enter, ease-in for exit. Avoid full-screen hero animations on frequent navigation; reserve 300-400ms for true modal/detail pushes.",
+        "why": "Frequent tab/route changes must feel instant — anything over 300ms on a daily path becomes friction. Directional slide communicates hierarchy (forward/back) without cost.",
+        "exampleApp": "Apple HIG navigation push/pop, Linear"
+      },
+      {
+        "name": "prefers-reduced-motion as a first-class branch, not a kill-switch",
+        "what": "Detect via useReducedMotion(); when true replace spring/slide/confetti with instant or simple opacity crossfades, keep ring/number as instant value sets, pass disableForReducedMotion to confetti. Keep functional feedback (green tint, check) but drop travel/overshoot.",
+        "why": "Accessibility requirement; respects vestibular disorders. Goal is 'remove motion, keep meaning' — the checkmark still appears, it just doesn't bounce. Build the reduced path alongside each animation, not as an afterthought.",
+        "exampleApp": "Apple HIG, WCAG 2.3.3"
+      }
+    ],
+    "animations": [
+      {
+        "name": "Calorie/macro ring fill",
+        "trigger": "Dashboard data settles (new total after a log, or first load with real data)",
+        "spec": "duration 700ms (~800-900ms if value jump is large), easing d3-ease easeQuadInOut (cubic-bezier(0.45,0,0.55,1)) OR low-bounce time-spring (bounce 0.1-0.2). Animates SVG stroke-dashoffset (ring sweep) only; color static or crossfades separately. Library: react-circular-progressbar with AnimatedProgressProvider (valueStart=prev, valueEnd=next, duration, easingFunction:easeQuadInOut) + styles pathTransition:'none'. Goal-reached state swaps stroke color via a 200ms color crossfade.",
+        "reducedMotion": "Set value instantly (valueStart=valueEnd); no sweep. Color/state still reflects goal reached."
+      },
+      {
+        "name": "Number count-up (kcal / grams)",
+        "trigger": "Same data-settle event as the ring; runs in lockstep",
+        "spec": "duration + easing IDENTICAL to the ring (700ms, easeQuadInOut). motion: useMotionValue(prev) + animate(mv, next, {duration:0.7, ease:[0.45,0,0.55,1]}) + useTransform(mv, v => Math.round(v).toLocaleString()). Avoid >1s — long counts read as slow. Library: motion (framer-motion 12).",
+        "reducedMotion": "Render final number directly, no tween."
+      },
+      {
+        "name": "Meal/food logged check-pop",
+        "trigger": "Tap to mark a meal item complete / log a food",
+        "spec": "checkbox scale 0.8→1.12→1 spring (stiffness 500, damping 22, mass 0.8) ~220ms; checkmark path draw via pathLength 0→1, 180ms ease-out; row background tint to success green over 200ms ease (color = duration-based, not spring). Fire OPTIMISTICALLY via useOptimistic before server confirm. Library: motion.",
+        "reducedMotion": "No scale/draw; instantly show checked state + green tint via opacity 0→1 at 120ms (or instant)."
+      },
+      {
+        "name": "Milestone confetti burst",
+        "trigger": "Daily goal achieved / streak milestone / plan completed — RARE only",
+        "spec": "canvas-confetti: particleCount 80-100, spread 70, originY 0.6, two opposite-angle bursts (55 + 125) for fullness, scalar 0.9, gravity ~1, ticks ~200, startVelocity 35. disableForReducedMotion:true. <100 particles for 60fps. Optional 1-shot scale-bounce on the milestone card behind it (spring stiffness 300 damping 18).",
+        "reducedMotion": "No confetti (disableForReducedMotion handles it). Replace with static success badge fade-in 200ms + haptic if available."
+      },
+      {
+        "name": "Chart bars/area enter",
+        "trigger": "Chart mounts or range tab (week/month) changes",
+        "spec": "recharts isAnimationActive=true, animationDuration 450ms, animationEasing 'ease-out' (cubic-bezier(0,0,0.2,1)); stagger multiple series via animationBegin offsets (0/80/160ms). Bars grow from baseline (scaleY). On data UPDATE keep component mounted so recharts interpolates rather than remounting.",
+        "reducedMotion": "isAnimationActive=false — bars/areas appear at final size instantly."
+      },
+      {
+        "name": "Bottom-sheet present",
+        "trigger": "Open food-detail / add-entry / quick-log sheet",
+        "spec": "enter: translateY 100%→0 spring stiffness 320, damping 34, mass 0.9 (~350-400ms perceived, minimal overshoot). Backdrop opacity 0→1, 200ms ease-out (duration-based). Drag follows finger 1:1. Library: react-modal-sheet (motion-based) or motion drag='y'.",
+        "reducedMotion": "translateY replaced by opacity 0→1 fade 200ms; no drag-spring, dismiss is plain fade-out."
+      },
+      {
+        "name": "Bottom-sheet velocity dismiss",
+        "trigger": "Drag-release on an open sheet",
+        "spec": "onDragEnd: if offset.y > 0.4*height OR info.velocity.y > 800 px/s → animate to closed with type:'inertia'/spring seeded by velocity (motion carries gesture velocity into the spring); else spring back to snap (stiffness 500, damping 40, slight settle). Threshold uses BOTH position and velocity so a fast short flick closes.",
+        "reducedMotion": "Threshold crossed → instant/200ms fade close; no inertial throw."
+      },
+      {
+        "name": "List item add / remove",
+        "trigger": "New food logged (insert) or item deleted",
+        "spec": "AnimatePresence: enter initial {opacity:0, height:0, y:-8} → {opacity:1, height:'auto', y:0} spring stiffness 400 damping 30; exit {opacity:0, height:0} 200ms ease-in. Neighbors reflow via layout prop. Add layoutScroll to the scroll container so offsets measure correctly. Library: motion.",
+        "reducedMotion": "opacity-only enter/exit 150ms; no height/y travel (set height instantly to avoid context-free layout jank)."
+      },
+      {
+        "name": "List initial stagger cascade",
+        "trigger": "Log/list first mounts with items",
+        "spec": "parent variants staggerChildren 0.035, delayChildren 0.05; child {opacity:0,y:12}→{opacity:1,y:0} spring stiffness 500 damping 32 (~250ms each). For long lists clamp stagger so last item starts <400ms in. Library: motion.",
+        "reducedMotion": "Disable stagger (staggerChildren:0); all items opacity 0→1 together at 150ms or instant."
+      },
+      {
+        "name": "Route transition",
+        "trigger": "Navigate between app routes/tabs",
+        "spec": "enter: opacity 0→1 + y 12→0, 240ms ease-out cubic-bezier(0,0,0.2,1); exit: opacity 1→0, 180ms ease-in cubic-bezier(0.4,0,1,1). Detail/modal push may use 320-380ms slide-from-right. Keep frequent paths ≤300ms. Library: motion AnimatePresence mode='wait' or 'popLayout'.",
+        "reducedMotion": "Crossfade only, opacity 0→1 at 150ms, no y travel, no directional slide."
+      },
+      {
+        "name": "Skeleton shimmer",
+        "trigger": "Data-bound screen loading (dashboard cards, ring placeholder, list)",
+        "spec": "linear-gradient highlight sweeping left→right, transform translateX(-100%→100%), duration 1.3s, ease linear, infinite loop. Shape-matched to final content to avoid layout shift. The ONLY acceptable linear easing (continuous indicator).",
+        "reducedMotion": "Static muted placeholder block, no sweep (or a slow ≤0.8Hz opacity pulse 0.5↔1)."
+      },
+      {
+        "name": "Button/toggle micro-tap",
+        "trigger": "Any primary button / toggle / segmented control tap",
+        "spec": "whileTap scale 0.96, spring stiffness 600 damping 30 (~120ms); toggle thumb travel spring stiffness 700 damping 35. Keep micro-interactions 80-150ms — they fire constantly so must feel instant. Library: motion whileTap.",
+        "reducedMotion": "Drop scale; rely on color/opacity state change only, instant or ≤100ms."
+      }
+    ],
+    "desktopVsResponsive": "Bottom sheets are mobile/PWA-only: on desktop the same content becomes a centered modal or right-side panel (scale 0.96->1 + opacity, ~200ms ease-out) with NO drag-dismiss — there is no touch flick gesture, so the velocity logic is dropped and dismiss is click-backdrop/Esc. Touch gestures (drag handles, swipe-to-delete on log rows) exist only at the touch breakpoint; on desktop expose explicit buttons. Springs can be marginally snappier/lower-bounce on desktop where pointer precision is higher; mobile benefits from slightly more travel for legibility on small screens. Confetti origin/spread should account for viewport — mobile fire from originY ~0.6 (above the thumb), desktop center. Respect the project mobile-viewport rules: drive any full-height motion containers with h-dvh, never h-screen/100vh outside md:. Gate gesture-heavy interactions on both reduced-motion AND coarse-pointer detection.",
+    "accessibility": "prefers-reduced-motion is mandatory and must be a real branch, not a global disable: every animation ships a reduced variant that preserves MEANING (the checkmark, green tint, final ring value, success badge) while removing TRAVEL and OVERSHOOT (no slide, no bounce, no confetti, no count-up sweep). Use motion useReducedMotion() to switch variants and pass disableForReducedMotion:true to canvas-confetti (it reads the OS setting). Never convey state through motion alone — pair every animated state change with a static cue (color, icon, text) so it survives reduced-motion. Keep contrast on success-green tints at WCAG AA against row backgrounds in both light and dark themes (project requires dark-mode variants on all new components). Avoid large-area flashing/strobe (confetti density capped, no >3 flashes/sec) per WCAG 2.3.1. Animated content must not block interaction: optimistic check-pop must not delay the actual tap handler. Skeleton shimmer reduces to a static or slow <=0.8Hz pulse under reduced-motion. When in doubt, the functional instant path is the safe default.",
+    "sources": [
+      "https://www.framer.com/motion/animation/ (2026-06-17)",
+      "https://motion.dev/docs/react-transitions (2026-06-17)",
+      "https://motion.dev/docs/react-use-spring (2026-06-17)",
+      "https://www.luxisdesign.io/blog/mastering-framer-motion-advanced-animation-techniques-for-2025 (2026-06-17)",
+      "https://m3.material.io/styles/motion/overview/how-it-works (2026-06-17)",
+      "https://m3.material.io/styles/motion/easing-and-duration/tokens-specs (2026-06-17)",
+      "https://www.appypie.com/blog/mobile-app-animation-guide (2026-06-17)",
+      "https://github.com/catdad/canvas-confetti (2026-06-17)",
+      "https://www.npmjs.com/package/canvas-confetti (2026-06-17)",
+      "https://www.npmjs.com/package/react-circular-progressbar (2026-06-17)",
+      "https://github.com/kevinsqi/react-circular-progressbar (2026-06-17)",
+      "https://github.com/Temzasse/react-modal-sheet (2026-06-17)",
+      "https://sinja.io/blog/framer-motion-drag-snap-points (2026-06-17)",
+      "https://blog.maximeheckel.com/posts/the-physics-behind-spring-animations/ (2026-06-17)",
+      "https://animations.dev/learn/animation-theory/spring-animations (2026-06-17)"
+    ]
+  },
+  {
+    "area": "Food-logging UX micro-interactions WITHOUT camera/AI — fast manual entry (quick-add, recents, favorites, copy-meal, swipe/tap-to-log, portion steppers, search-as-you-type, bottom-sheet flow, optimistic+undo, haptics, empty states). 2025-2026 patterns from MacroFactor, MyFitnessPal, Cronometer.",
+    "patterns": [
+      {
+        "name": "Pre-search surfaced lists (favorites + recents + hourly go-tos)",
+        "what": "Before the user types a single character, the search screen renders three stacked sources: horizontally-scrollable Favorites pinned at the very top, then 'hourly go-tos' (foods frequently logged at/near the current hour, ranked by recency+frequency), then a vertical 'Latest/Recents' list. Typing collapses these into ranked result groups (From History / Custom / Common / Branded).",
+        "why": "The single biggest friction killer: most logs are repeats. Surfacing the likely answer with zero keystrokes turns a multi-step search into a one-tap action. Time-of-day weighting means coffee+oatmeal appear together at 9am without searching.",
+        "exampleApp": "MacroFactor (Favorites top, hourly go-tos, Latest), MyFitnessPal (recents tab), Cronometer (saved favorites one-tap)"
+      },
+      {
+        "name": "Multi-add without leaving search (plate accumulator)",
+        "what": "Each food row has a small '+' on the right that adds the default/remembered serving straight to a persistent 'minified Plate' with NO intermediate detail screen. User taps '+' across several rows, then taps 'Log Foods' once to commit the whole meal.",
+        "why": "Decouples selection from confirmation. Logging a 5-item breakfast becomes 5 taps + 1 commit instead of 5 full search→detail→save round-trips. Batches the expensive write into a single optimistic commit.",
+        "exampleApp": "MacroFactor 'Multi-Add' to minified Plate"
+      },
+      {
+        "name": "Serving-size memory (last-used quantity)",
+        "what": "The app stores the exact unit+quantity you last logged for each food and pre-fills it on next add, so '+' logs '1 scoop' or '40g' directly. Favorites can pin a specific preferred serving.",
+        "why": "Portion entry is the slowest sub-step of logging. Remembering it removes the numeric-entry step entirely for staples, making the default-serving '+' tap correct ~most of the time.",
+        "exampleApp": "MacroFactor (remembers last serving + favorite-with-serving), MyFitnessPal remembered meals"
+      },
+      {
+        "name": "Copy-meal / copy-yesterday / swipe-to-bring-forward",
+        "what": "Reuse whole meals across days. MyFitnessPal: '•••' or 'Quick Tools' under a meal → Copy to/from recent or upcoming dates; and a swipe just below the meal name brings forward exactly what was logged under that meal yesterday — no search. 'Remembered Meals' saves a named bundle for one-tap re-logging.",
+        "why": "Diets are routine; people eat the same breakfast for weeks. Copy-yesterday converts an entire meal into a single gesture, the highest-leverage shortcut for habitual loggers.",
+        "exampleApp": "MyFitnessPal (copy meal, swipe-below-name copy-yesterday, remembered meals), Cronometer custom meals/recipes"
+      },
+      {
+        "name": "Quick Add (calories/macros only, no food)",
+        "what": "A 'Quick Add' entry lets users punch in raw calories (and macros for premium) attached to a meal slot without selecting any food item — for restaurant meals or meal kits where only the totals are known.",
+        "why": "Provides an escape hatch so 'I don't know the exact food' never blocks logging. Keeps the diary complete and the streak alive instead of forcing an abandoned search.",
+        "exampleApp": "MyFitnessPal Quick Add, MacroFactor Quick Add (cal/protein/fat/carb to Plate)"
+      },
+      {
+        "name": "Unified persistent Actions bottom-sheet",
+        "what": "A single bottom-sheet 'Actions Sheet' anchors all entry modes (Search, Barcode, Custom Food, Recipe, Quick Add) at the bottom of the screen and persists while the user navigates between them, with a drag-handle line and snap points (peek / half / full).",
+        "why": "Bottom sheets keep the diary context visible behind the entry surface, cut cognitive load and render faster than navigating to a new page, and keep the primary action in thumb reach. The visible drag handle signals resizability. NN/g + Material 3 + Apple HIG all converge on this for mobile.",
+        "exampleApp": "MacroFactor unified Actions Sheet; pattern endorsed by Material Design 3 / Apple HIG / NN/g 2025-26"
+      },
+      {
+        "name": "Search-as-you-type with debounce + grouped results",
+        "what": "Results filter live on each keystroke (debounced ~150-300ms to avoid querying every character), grouped by source with the most relevant 'From History' group first. Results are tappable rows showing name, brand, serving, and kcal/macros inline.",
+        "why": "Live feedback removes the explicit 'Search' button tap and lets users stop typing the instant they see the match. Debounce protects DB IO. History-first grouping exploits the repeat-log reality.",
+        "exampleApp": "MacroFactor (From History / Custom / Common / Branded groups), MyFitnessPal live search"
+      },
+      {
+        "name": "Portion entry: numeric field + unit picker, 3-6 step max wizard",
+        "what": "Serving editor pairs a numeric quantity field (with stepper +/- for fine nudge) and a unit dropdown (g / scoop / cup / piece). Any multi-screen entry stays within a 3-6 step wizard with free backward navigation so users can edit prior inputs without restarting.",
+        "why": "Steppers suit small discrete adjustments; a raw numeric field beats a slider for precise gram values (sliders are imprecise for nutrition). 2026 stepper guidance: never block back-nav — editing a copied/pre-filled quantity must be frictionless.",
+        "exampleApp": "MacroFactor serving screen; 2026 stepper UX guidance (Lollypop)"
+      },
+      {
+        "name": "Optimistic UI + guaranteed Undo toast",
+        "what": "On commit, the food appears in the diary and totals update instantly (optimistic), with a bottom toast 'Logged — Undo' that auto-dismisses ~3s. Undo silently reverts the optimistic state if the write fails or the user changes their mind. Outcome-first copy ('Logged 320 kcal') over generic 'Saved'.",
+        "why": "Flips confirm-then-act into act-then-undo: removes a decision point, makes the app feel instant even on slow networks, and the undo net replaces scary 'Are you sure?' dialogs. Aligns with EVA's existing useOptimistic on nutrition meal logs.",
+        "exampleApp": "Gmail archive-undo pattern; food apps' diary commit; UX Tigers / NN/g toast guidance"
+      },
+      {
+        "name": "Tap-to-log / swipe-to-action on diary & result rows",
+        "what": "Tap a recent/favorite row = log default serving immediately. Swipe-left on a logged diary item reveals destructive/secondary actions (delete, edit, move meal); swipe-right (or threshold drag) can complete/duplicate. Long-press opens quick context menu.",
+        "why": "Gestures replace visible buttons, saving screen space and feeling 'addictive/smooth'; swipe-to-reveal keeps the row clean while exposing power actions only on demand.",
+        "exampleApp": "MyFitnessPal swipe meal actions, Cronometer tap-to-add favorite; react-swipeable-list / Motion.dev swipe-actions"
+      },
+      {
+        "name": "Empty states that seed the first log",
+        "what": "An empty diary/meal slot shows an inviting prompt + the fastest path in (a big 'Add food' CTA, plus 'Copy yesterday' / suggested favorites) rather than a blank void. Onboarding seeds favorites/recents so the pre-search lists aren't empty on day one.",
+        "why": "The cold-start problem: surfaced-recents patterns are worthless with no history. A guiding empty state converts the first session and bootstraps the data that makes every later log one tap.",
+        "exampleApp": "MyFitnessPal new 'Today' tab home centering logging; Cronometer quick-add menu on empty Diary Group"
+      },
+      {
+        "name": "Haptic confirmation on key actions",
+        "what": "Light impact haptic on successful add/commit, a distinct success notification haptic on meal completion / goal hit, and a subtle tick when a swipe crosses its action threshold. Respect a reduced-haptics / system setting and never buzz on every keystroke.",
+        "why": "Tactile feedback confirms a tap/swipe 'worked' without the user watching the screen — critical for the heads-down, repetitive act of logging. Personalized/restrained haptics is a 2024-2026 trend; overuse desensitizes.",
+        "exampleApp": "expo-haptics / Web Vibration API; Android & Saropa 2025 haptics UX guidance"
+      }
+    ],
+    "animations": [
+      {
+        "name": "Add-to-plate fly / count-up totals",
+        "trigger": "Tap '+' on a search/favorite row (multi-add)",
+        "spec": "~200-260ms ease-out: row '+' briefly scales (1→1.15→1) while the minified Plate badge count-ups and its macro ring animates to the new value (number tween + arc fill). Library: Framer Motion (web) / Reanimated withTiming. Gives instant 'it landed' feedback without leaving search.",
+        "reducedMotion": "Skip the fly/scale; snap the count and ring to final value instantly (no tween)."
+      },
+      {
+        "name": "Swipe-to-reveal actions + threshold snap",
+        "trigger": "Horizontal drag on a diary/result row",
+        "spec": "Row follows finger 1:1; action buttons reveal underneath. On release past ~40% width it springs open to a snap point, else springs back. withSpring (stiffness ~300, damping ~30) or Framer Motion drag with dragConstraints + snap. Fire a light haptic exactly when the threshold is crossed.",
+        "reducedMotion": "Reduce spring overshoot to a linear 120ms settle; keep the snap but no bounce."
+      },
+      {
+        "name": "Optimistic insert + undo-toast slide",
+        "trigger": "Commit ('Log Foods')",
+        "spec": "New diary item slides/fades in from top (~180ms ease-out) with a brief highlight tint that fades over ~1s; simultaneously a toast slides up from bottom-safe-area, holds ~3s, then auto-slides out. Framer Motion AnimatePresence / layout animation. If undo tapped, item collapses (height→0, opacity→0, ~150ms).",
+        "reducedMotion": "Cross-fade only (no slide/height collapse); toast appears/disappears with opacity, no motion."
+      },
+      {
+        "name": "Bottom-sheet snap transitions",
+        "trigger": "Open entry sheet / drag handle between snap points",
+        "spec": "Sheet springs between peek/half/full snap points tracking the drag; backdrop scrim opacity interpolates with sheet height. withSpring (damping ~35) or vaul/Framer Motion sheet. Drag-handle line is the affordance.",
+        "reducedMotion": "Use a 200ms ease translate instead of spring; scrim fades linearly."
+      },
+      {
+        "name": "Success checkmark on meal complete",
+        "trigger": "Meal slot fully logged / daily goal reached",
+        "spec": "Small checkmark draws via SVG path stroke-dashoffset (~300ms) with a single spring pop (scale 0→1.1→1), paired with a success-notification haptic. Framer Motion pathLength or Reanimated. Celebratory but brief — no confetti spam.",
+        "reducedMotion": "Show the checkmark statically filled (no draw/pop), keep the haptic."
+      },
+      {
+        "name": "Search results live filter (debounced)",
+        "trigger": "Each keystroke in the search field",
+        "spec": "Results list re-renders ~150-300ms after last keypress; entering/leaving rows fade+slide ~120ms via AnimatePresence/layout so the list doesn't jump. Stale rows fade out as new ones fade in.",
+        "reducedMotion": "Instant list swap, no per-row fade/slide."
+      }
+    ],
+    "desktopVsResponsive": "On mobile/PWA the entry surface is a thumb-reach bottom sheet with drag-handle snap points, swipe-to-reveal row actions, and haptic confirmation (Web Vibration API); copy-yesterday is a swipe-below-the-meal-name gesture. On desktop the same flows surface as a 'Quick Tools' '•••' dropdown / right-rail panel or modal (no bottom sheet, no swipe, no haptics), copy-meal is an explicit menu item, and hover states replace long-press. Search-as-you-type, favorites/recents/hourly-go-tos pre-lists, multi-add '+', serving memory, and optimistic+undo are identical across both. Key constraint for EVA: h-dvh not h-screen for the sheet, pb-safe on the toast/sheet, and overflow-x:clip; gate haptics behind feature/reduced-motion detection since iOS Safari PWA haptic support is partial.",
+    "accessibility": "Provide non-gesture equivalents for every swipe (visible edit/delete buttons or a '•••' menu) so logging is operable without gestures. Respect prefers-reduced-motion (degrade all animations above) and any reduced-haptics setting; never rely on haptics or color alone to signal success — pair with a text toast ('Logged 320 kcal'). Toasts must be aria-live=polite and persist long enough (>=3s) plus be re-findable, since auto-dismiss can be missed by screen-reader and low-vision users; the Undo action needs a focusable button, not just the toast tap. Steppers/numeric portion fields need labels, type=number with inputmode=decimal, and large >=44px touch targets. Search-as-you-type results should announce result count via aria-live and keep keyboard focus in the input. Ensure 4.5:1 contrast on macro rings/highlight tints and don't trap focus inside the bottom sheet (Escape / drag-down closes, focus returns to trigger).",
+    "sources": [
+      "https://macrofactor.com/new-food-logger/ (fetched 2026-06-17)",
+      "https://help.macrofactorapp.com/en/articles/215-how-to-log-food-in-macrofactor (fetched 2026-06-17)",
+      "https://help.macrofactorapp.com/en/articles/257-favorite-foods (2026-06-17)",
+      "https://macrofactor.com/mm-may-2026/ (2026-06-17)",
+      "https://support.myfitnesspal.com/hc/en-us/articles/360032622131-How-do-I-copy-a-meal-from-one-day-to-another (2026-06-17)",
+      "https://support.myfitnesspal.com/hc/en-us/articles/360032272432-How-do-I-create-and-log-remembered-meals (2026-06-17)",
+      "https://support.myfitnesspal.com/hc/en-us/articles/39985611667341-Introducing-the-brand-new-Today-tab (2026-06-17)",
+      "https://blog.myfitnesspal.com/copy-and-remember-meals/ (2026-06-17)",
+      "https://cronometer.com/blog/log-food-fast/ (2026-06-17)",
+      "https://www.nngroup.com/articles/bottom-sheet/ (2026-06-17)",
+      "https://m3.material.io/components/bottom-sheets/guidelines (2026-06-17)",
+      "https://developer.apple.com/design/human-interface-guidelines/sheets (2026-06-17)",
+      "https://lollypop.design/blog/2026/february/beyond-the-progress-bar-the-art-of-stepper-ui-design/ (2026-06-17)",
+      "https://www.uxtigers.com/post/think-time-ux (2026-06-17)",
+      "https://saropa-contacts.medium.com/2025-guide-to-haptics-enhancing-mobile-ux-with-tactile-feedback-676dd5937774 (2026-06-17)",
+      "https://source.android.com/docs/core/interaction/haptics/haptics-ux-design (2026-06-17)",
+      "https://motion.dev/tutorials/react-swipe-actions (2026-06-17)",
+      "https://docs.expo.dev/versions/latest/sdk/haptics/ (2026-06-17)"
+    ]
+  },
+  {
+    "area": "Responsive + PWA + mobile-first design patterns (2025-2026) for data-dense health/nutrition apps — desktop↔mobile/PWA strategy for the SAME nutrition views",
+    "patterns": [
+      {
+        "name": "Single breakpoint switch at 768px: bottom-nav (mobile) ↔ persistent sidebar (desktop)",
+        "what": "Use one primary mobile/desktop boundary (~768px, Tailwind md:). Below it: fixed bottom tab bar (3-5 primary destinations: Today, Nutrition, Workout, Progress). At/above it: the bottom bar is replaced by a persistent left sidebar/side-rail; the SAME nutrition page reflows from one column into the sidebar+content shell. Avoid a hamburger for primary destinations on mobile — reserve the drawer only for secondary/account items.",
+        "why": "Late-2025 research: 75% of phone interactions are one-thumbed; the comfortable zone is the bottom third + the side curve. Primary actions must live where the thumb already is. 768px is the de-facto industry boundary where enough width exists for a persistent rail. Bottom-nav also survives the iOS PWA standalone chrome (no browser tab bar to compete with).",
+        "exampleApp": "MyFitnessPal, Cronometer, Lose It! (bottom-tab mobile → sidebar/top-nav web)"
+      },
+      {
+        "name": "Day navigator as a sticky, swipeable header (with tap + arrow fallback)",
+        "what": "Pin the date selector to the top (position: sticky; top: env(safe-area-inset-top)). Support horizontal swipe between days AND visible prev/next chevrons + a tappable date that opens a calendar bottom-sheet. On desktop, the same component becomes a wider inline date strip / mini-week selector since width is no longer scarce. Pair each day-swipe with a short slide/fade transition and (on capable devices) haptic feedback.",
+        "why": "2026 gesture guidance: compound gestures need a visible, tap-based fallback or you exclude motor-impaired users (WCAG). Swipe is the natural mental model for day-over-day logging but must never be the ONLY way to change days. Sticky keeps the current day anchored as the meal list scrolls.",
+        "exampleApp": "MacroFactor, Cronometer (swipe-between-days diary), Apple Health"
+      },
+      {
+        "name": "Card-stack meals on mobile → multi-column grid on desktop (same data model)",
+        "what": "Each meal/log entry is a card (MealCard) stacked single-column on mobile. On desktop, the identical cards flow into a 2-3 column CSS Grid (grid-template-columns: repeat(auto-fit, minmax(20rem,1fr))). Never render a horizontally-scrolling data table on mobile — rows become cards where each cell is a labeled key/value. Use container queries (cq) on the card itself so a card in a narrow desktop sidebar still renders its compact 1-column variant.",
+        "why": "Data-dense tables don't collapse gracefully; the proven pattern is row→card on narrow widths. Container queries (93%+ support Dec 2025, Safari 16+) let the card adapt to its OWN width, not the viewport — so the same component is correct in the mobile feed, the desktop grid, and a narrow rail without extra breakpoints.",
+        "exampleApp": "Cronometer diary, Stripe/Linear dashboards (table→card-stack)"
+      },
+      {
+        "name": "Macro rings/summary as a sticky condensed bar on scroll",
+        "what": "The daily macro summary (MacroRingSummary/AdherenceStrip) shows full rings at top of page, then collapses into a thin sticky progress strip (kcal + 3 macro bars) once scrolled past, so remaining targets stay visible while logging. On desktop, the full ring summary stays pinned in the sidebar/right rail instead of collapsing — width permits persistent display.",
+        "why": "Users logging meals need the 'remaining today' number constantly visible without scrolling back up; a collapsing sticky header is the standard data-dense solution. Desktop has the spatial budget to keep it fully expanded, so the SAME data renders differently by available space, not by hiding it.",
+        "exampleApp": "MacroFactor (collapsing macro header), MyFitnessPal remaining-calories bar"
+      },
+      {
+        "name": "Bottom sheets for secondary flows (food search, exchange equivalences, filters)",
+        "what": "Replace center modals with bottom sheets that rise from the thumb zone for: add/search food, exchange equivalences (ExchangeEquivalencesSheet), portion editing, nutrient breakdowns. Drag-to-dismiss + backdrop tap. On desktop the same content renders as a right-side slide-over panel or popover rather than a bottom sheet.",
+        "why": "2026 pattern: bottom sheets replace modal dialogs because they originate in the reachable bottom third and preserve context (the diary stays partially visible behind). The component's content is shared; only the container (sheet vs slide-over) swaps at the breakpoint.",
+        "exampleApp": "MacroFactor food search sheet, Notion/Linear slide-overs on desktop"
+      },
+      {
+        "name": "Safe-area + dvh viewport discipline for installed PWA",
+        "what": "viewport-fit=cover in the meta viewport; fixed top header uses padding-top: env(safe-area-inset-top), bottom nav uses padding-bottom: env(safe-area-inset-bottom). Use 100dvh / min-h-dvh for full-height shells (never 100vh on mobile — it ignores the dynamic browser/standalone chrome). Set overscroll-behavior-y: contain on scroll containers to kill accidental pull-to-refresh inside the diary; overscroll-behavior: none on the root to stop rubber-band bounce in standalone.",
+        "why": "Without viewport-fit=cover, all env(safe-area-inset-*) resolve to 0 and iOS letterboxes the PWA. dvh is the only height unit that accounts for the collapsing URL bar and the standalone Dynamic-Island layout. This matches the repo's existing rule (h-dvh / pl-safe utilities) — extend it to every sticky header and bottom nav in the nutrition views.",
+        "exampleApp": "firt.dev PWA power-tips reference; Apple Health / iOS standalone web apps"
+      },
+      {
+        "name": "Custom, deferred, dismissible install prompt (Android) + manual A2HS hint (iOS)",
+        "what": "Capture beforeinstallprompt, preventDefault(), stash the event, and surface a custom non-blocking install affordance (snackbar or a small banner like the repo's PushNotificationBanner) only AFTER a value moment — e.g., the user logs their first meal or completes a check-in. Show it only when display-mode: browser. On iOS (no beforeinstallprompt), detect Safari + non-standalone and show a one-time 'Add to Home Screen via Share' hint with the share-icon. Respect a dismiss cooldown; re-prompt only on a later beforeinstallprompt.",
+        "why": "Browsers fire the event once and re-firing is gated; prompting cold has low conversion. Deferring to an engaged moment (post-first-log) is the documented high-conversion pattern. iOS Chrome/Edge can't install at all — Safari manual A2HS is the only path, so the hint must be Safari-specific to avoid lying to users.",
+        "exampleApp": "web.dev customize-install guidance; Twitter/X PWA deferred install banner"
+      },
+      {
+        "name": "Optimistic logging with offline queue + lightweight sync indicator",
+        "what": "On 'log meal', update the UI instantly (useOptimistic, already in the repo's stack) and queue the mutation in IndexedDB. Show a per-item subtle pending state (clock/'syncing' dot) rather than a blocking spinner; clear it on confirm. A global, unobtrusive offline banner appears only when navigator.onLine is false. Use Background Sync where available (Chrome/Edge/Samsung) as progressive enhancement, with a foreground retry-on-reconnect fallback (Safari/Firefox have no Background Sync).",
+        "why": "The UI must never wait on the network for a log action — the 2026 offline-first baseline. Per-item optimistic indicators beat full-screen spinners for data-dense logging where users add many entries quickly. Background Sync is not on Safari/iOS, so it can only be an enhancement, never the sole retry mechanism — critical for a PWA whose iOS users are install-via-Safari.",
+        "exampleApp": "Cronometer/MyFitnessPal offline diary, Google Keep optimistic sync"
+      }
+    ],
+    "desktopVsResponsive": "The governing principle for 2025-2026 is ONE component, multiple containers — the same nutrition views (DayNavigator, MealCard, MacroRingSummary, AdherenceStrip, NutritionShell in this repo) reflow by AVAILABLE SPACE, not by hiding data. Concrete desktop-vs-mobile/PWA differences: (1) Navigation: mobile = fixed bottom tab bar in the thumb zone; desktop = persistent left sidebar/side-rail (single switch ~768px / Tailwind md:); the hamburger is mobile-only and for secondary items only. (2) Meal list: mobile = single-column card stack; desktop = 2-3 column auto-fit grid of the SAME cards; container queries (cq) keep each card correct even inside a narrow desktop rail. (3) Macro summary: mobile = full rings at top that COLLAPSE into a thin sticky kcal/macro strip on scroll; desktop = full rings stay PINNED in the sidebar (no collapse — width permits). (4) Day navigation: mobile = sticky swipeable header + calendar bottom-sheet; desktop = wider inline mini-week strip, swipe optional. (5) Secondary flows (food search, exchanges, filters): mobile = bottom sheet rising from thumb zone; desktop = right-side slide-over/popover — shared content, swapped container. (6) PWA-only concerns live almost entirely on mobile/standalone: viewport-fit=cover + env(safe-area-inset-*) on the top header and bottom nav, 100dvh shells, overscroll-behavior containment, the deferred custom install prompt (Android) / Safari A2HS hint (iOS), and optimistic-offline sync indicators. On desktop the browser chrome is stable, so safe-area insets resolve to 0, dvh≈vh, install is a one-click omnibox affordance, and offline is rarer — so the PWA-specific UI gracefully no-ops. Tailwind-mobile-first ordering (base = mobile, md:/lg: = desktop) plus container queries on the data cards is the implementation that makes the SAME view serve all three contexts (mobile web, installed PWA, desktop) without forked components.",
+    "animations": [
+      {
+        "name": "Day swipe transition",
+        "trigger": "Horizontal swipe or prev/next chevron on the sticky DayNavigator",
+        "spec": "Directional slide+fade of the meal-list container, ~200-250ms, ease-out (CSS transition or Framer Motion AnimatePresence with x: ±24px → 0). Pair with a light haptic tick on capable devices. Library: existing CSS transitions or framer-motion if already present.",
+        "reducedMotion": "Under prefers-reduced-motion: reduce, drop the x-translate and use an instant or sub-100ms crossfade only; date still updates."
+      },
+      {
+        "name": "Macro summary collapse on scroll",
+        "trigger": "Page scroll past the full ring summary",
+        "spec": "Full rings shrink/fade into the thin sticky strip over ~150-200ms, ease-in-out, driven by scroll position (IntersectionObserver sentinel, not per-frame scroll handler). Height + opacity interpolation only.",
+        "reducedMotion": "Snap between expanded and condensed states with no tween; keep the sticky strip functional."
+      },
+      {
+        "name": "Bottom sheet present/dismiss",
+        "trigger": "Open food search / exchange equivalences; drag-down or backdrop tap to dismiss",
+        "spec": "Translate-Y from 100% to rest with a spring (stiffness ~300, damping ~30) or ~250ms cubic-bezier ease-out; backdrop fades 0→0.4 opacity. Drag-to-dismiss follows the finger then settles. Library: @base-ui/react / Radix Dialog as a sheet, or framer-motion drag.",
+        "reducedMotion": "Replace the slide with a short opacity fade (~120ms); disable drag-follow inertia."
+      },
+      {
+        "name": "Optimistic log confirm",
+        "trigger": "Meal/item logged (useOptimistic) then server confirms",
+        "spec": "New card mounts instantly with a subtle 'pending' dot; on confirm, a ~180ms scale-in (0.97→1) + dot→check crossfade. Failure: gentle shake (~2px, 1 cycle) + retry affordance.",
+        "reducedMotion": "No scale or shake; swap pending-dot to check instantly, show inline text status."
+      },
+      {
+        "name": "Install / offline banner entry",
+        "trigger": "Deferred install moment, or navigator goes offline/online",
+        "spec": "Slide-down from top (or up from above bottom-nav) ~200ms ease-out; auto-dismiss or manual close. Non-blocking, above safe-area inset.",
+        "reducedMotion": "Instant show/hide with opacity only."
+      }
+    ],
+    "accessibility": "Every gesture needs a visible non-gesture fallback (WCAG 2.5.1 / dragging-movements 2.5.7): day-swipe must keep prev/next chevrons + a tappable date; swipe-to-delete/log a meal must have a tap (overflow menu or button) equivalent — otherwise motor-impaired and screen-reader users are excluded. Respect prefers-reduced-motion on ALL transitions above (slide→crossfade or instant). Maintain ≥44×44px tap targets in the bottom nav and on day chevrons. Bottom sheets and slide-overs must trap focus, be dismissible with Escape, and announce via role=dialog + aria-label. The collapsing macro strip must keep an accessible name and live-region announce 'remaining' updates politely. Ensure dark-mode (repo requirement) and light-mode both meet 4.5:1 contrast for macro numbers and adherence states; don't encode adherence by color alone — pair with icon/label. The install/offline banners must be reachable in DOM/focus order and not auto-steal focus. Honor safe-area insets so fixed controls aren't under the notch/home indicator where they'd be hard to hit.",
+    "sources": [
+      "https://www.browserstack.com/guide/responsive-design-breakpoints (2025)",
+      "https://lovable.dev/guides/responsive-web-design-techniques-that-work (2026)",
+      "https://www.rapiddoctools.com/blog/modern-responsive-breakpoints-2026-guide (2026)",
+      "https://www.uxpin.com/studio/blog/a-hands-on-guide-to-mobile-first-design/ (2026)",
+      "https://firt.dev/pwa-design-tips/ (accessed 2026-06-17)",
+      "https://www.magicbell.com/blog/pwa-ios-limitations-safari-support-complete-guide (2026)",
+      "https://mobileviewer.github.io/pwa-mobile-testing-checklist-2026 (2026)",
+      "https://web.dev/customize-install/ (accessed 2026-06-17)",
+      "https://web.dev/learn/pwa/installation-prompt/ (accessed 2026-06-17)",
+      "https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/How_to/Trigger_install_prompt (accessed 2026-06-17)",
+      "https://muz.li/blog/whats-changing-in-mobile-app-design-ui-patterns-that-matter-in-2026/ (2026)",
+      "https://www.sidekickinteractive.com/designing-your-app/gesture-navigation-in-mobile-apps-best-practices/ (2025)",
+      "https://medium.com/@Alekseidesign/gesture-based-navigation-the-future-of-mobile-interfaces-ae0759d24ad7 (2025)",
+      "https://devtoolbox.dedyn.io/blog/css-container-queries-guide (2026)",
+      "https://medium.com/design-bootcamp/designing-user-friendly-data-tables-for-mobile-devices-c470c82403ad (2025)",
+      "https://hidekazu-konishi.com/entry/pwa_advanced_implementation_guide.html (2026)",
+      "https://rishikc.com/articles/advanced-pwa-features-offline-push-background-sync/ (2026)"
+    ]
+  },
+  {
+    "area": "Coach/clinician dashboard UI/UX for reviewing a client's nutrition — desktop-dense, also responsive (2025-2026 patterns from Trainerize, Everfit, Nutrium, Healthie, Practice Better + dense-dashboard and motion research)",
+    "patterns": [
+      {
+        "name": "Roster compliance table with auto-tagged at-risk flags",
+        "what": "The default coach landing view is a scannable list/table of ALL clients, one row each, showing a weekly nutrition-compliance score (% of days the client hit all goals). Clients who fall below a coach-set threshold are auto-tagged 'low compliance' / at-risk so the coach can triage who to follow up with before opening anyone. The score is computed on a fixed weekly cadence (Trainerize recomputes Sunday midnight, client local time).",
+        "why": "Coaches manage many clients and cannot deep-read each one. A roster with a single derived KPI per row + an automatic at-risk flag turns 'review everyone' into 'review the flagged few'. This is the dominant triage pattern across Trainerize/Everfit coach views.",
+        "exampleApp": "ABC Trainerize (auto client tags, weekly nutrition compliance score), Everfit"
+      },
+      {
+        "name": "Compound daily compliance (all-or-nothing macro day)",
+        "what": "A 'compliant day' requires hitting EVERY target (calories + protein + carbs + fat); miss protein alone and the whole day is non-compliant. The weekly score is the count of fully-compliant days. Coach UI surfaces this as a small per-day grid/dots (7 cells = 7 days) so a glance shows the streak and which day broke.",
+        "why": "A single honest adherence number prevents 'looks fine on calories but ignored protein' false positives, and the 7-cell day strip gives at-a-glance pattern reading (weekends slipping, mid-week strong) without a chart.",
+        "exampleApp": "ABC Trainerize nutrition compliance"
+      },
+      {
+        "name": "KPI strip in the top-left hot zone, inverted-pyramid layout",
+        "what": "On the single-client deep-dive, put 3-5 primary numbers (avg calories vs target, protein adherence %, weekly compliance %, weight trend) as a horizontal KPI card strip across the top-left Z-scan path. Each card = big headline number + small delta + tiny sparkline. Secondary detail lives below or in a 'Details' tab.",
+        "why": "Eye-tracking Z/F-scan: critical numbers belong on the start of the scan path. Big type for the primary metric, restrained color, supporting stats below = fast comprehension on one laptop screen.",
+        "exampleApp": "DataCamp dashboard-design guidance; general analytics KPI strips"
+      },
+      {
+        "name": "Trend card = headline + sparkline + contextual delta vs prior week",
+        "what": "Each metric card layers three things: the current value (headline), a small trend visualization (sparkline/mini bar), and a contextual delta comparing to the prior period or the target ('protein 142g, +18g vs last week', up-arrow green). Always pair a KPI with a target OR a prior period OR a benchmark — never a bare number.",
+        "why": "A number without comparison is not actionable. The prior-week delta is exactly the 'is this client improving or sliding?' question a coach asks in a weekly review. The sparkline gives direction without a full chart.",
+        "exampleApp": "DataCamp pattern; Everfit macro report by day/week/month"
+      },
+      {
+        "name": "Macro report with period toggle (day / week / month)",
+        "what": "The nutrition deep-dive offers a single time-grain toggle (day | week | month) that re-scopes all charts and tables at once — calories and macro breakdowns plotted over the chosen window, plus an averages row.",
+        "why": "Coaches review at different altitudes: day-level when debugging a bad week, week/month for the check-in narrative. One toggle re-scoping the whole view keeps context stable.",
+        "exampleApp": "Everfit (macro report and journal by day, week, or month)"
+      },
+      {
+        "name": "Reserved-meaning color as signal, not decoration",
+        "what": "Fix a tiny palette: brand neutrals for chrome, ONE highlight color for 'pay attention', ONE reserved color for risk/alert (red/amber). Status flags and at-risk rows use only the reserved color; on-track uses neutral/green. Avoid rainbow per-metric coloring.",
+        "why": "When color has stable meaning, an at-risk row is detectable peripherally across a long roster. Rainbow palettes destroy that signal. This is the core dense-dashboard color rule.",
+        "exampleApp": "DataCamp / dense-dashboard guidance"
+      },
+      {
+        "name": "Progressive disclosure: roster summary → client → details tab",
+        "what": "Three altitudes. (1) Roster: one KPI + flag per client. (2) Client overview: KPI strip + trend cards on one screen. (3) Details/drill-down tab: per-meal logs, raw entries, photos, notes. Keep the core client view within one laptop screen; push fine detail to a secondary tab or drawer.",
+        "why": "Prevents overwhelming the coach while preserving access to raw data. Matches how coaches actually work: scan → assess → investigate only when a flag demands it.",
+        "exampleApp": "DataCamp progressive-disclosure; Practice Better / Healthie client portals"
+      },
+      {
+        "name": "Frozen identity column + sortable, sparkline-bearing rows",
+        "what": "In the roster table: freeze the client name/avatar column while metric columns scroll horizontally; make columns sortable with a visible directional arrow (sort by lowest compliance to float at-risk to the top); embed a row sparkline for the weekly trend; large click targets to open the client.",
+        "why": "Lets a coach sort the whole book by 'worst adherence first' and read each client's trajectory inline without opening them. Frozen identity keeps orientation during horizontal scroll.",
+        "exampleApp": "DataCamp operational-table guidance"
+      },
+      {
+        "name": "Weekly check-in review as the organizing unit",
+        "what": "The review surface is framed around the week: this-week vs last-week side by side, compliance %, weight delta, and a space for coach notes/feedback tied to that week's data. Engagement + compliance metrics are bundled so the coach sees both 'did they log' and 'did they hit targets' together.",
+        "why": "Coaching cadence is weekly; framing the dashboard as a weekly comparison matches the actual workflow (write feedback once a week) and makes 'better or worse than last week' the headline question.",
+        "exampleApp": "Trainerize weekly compliance + engagement metrics; Everfit"
+      }
+    ],
+    "animations": [
+      {
+        "name": "Sparkline / chart draw-on",
+        "trigger": "Card or chart enters viewport (client opened, or roster row expanded)",
+        "spec": "200-400ms line/bar draw-in with ease-out; only the trend path animates, axis/labels render static immediately. Library: Recharts/visx animate prop, or Framer Motion path length. Purpose is to direct attention to the trend, not decorate.",
+        "reducedMotion": "Under prefers-reduced-motion, render the final chart state instantly (no draw). Essential data must be present with motion disabled."
+      },
+      {
+        "name": "KPI delta count-up",
+        "trigger": "KPI strip mounts on client deep-dive",
+        "spec": "Short 300-500ms number count-up to the value, ease-out, with the up/down delta arrow fading in at the end. Keep to the small number of simultaneous changes rule — stagger cards ~40-60ms apart, not all at once.",
+        "reducedMotion": "Show final number immediately; no count-up."
+      },
+      {
+        "name": "At-risk flag pulse (one-shot)",
+        "trigger": "Roster loads and a client crosses the at-risk threshold",
+        "spec": "Single subtle 1x pulse/highlight (~600ms) on newly-flagged rows to draw the eye, then settle to the static reserved-color badge. Never loop — looping motion is distracting in analytics.",
+        "reducedMotion": "Static reserved-color badge only, no pulse."
+      },
+      {
+        "name": "Period-toggle crossfade",
+        "trigger": "Coach switches day/week/month grain",
+        "spec": "150-250ms crossfade + slight y-shift between the old and new chart data so the view feels continuous rather than flashing. Slow objects down, show few changes at once (per perceptual-capacity guidance).",
+        "reducedMotion": "Instant swap, no crossfade."
+      }
+    ],
+    "desktopVsResponsive": "Desktop-dense is the coach's primary surface: multi-column roster table with horizontal metric columns, KPI strip + 2-3 trend cards per row, side-by-side this-week/last-week comparison, sidebar nav preserving full width for the data. The sidebar-layout pattern is preferred when coaches switch clients and apply filters frequently. On mobile/PWA (coach checking on the go, per Trainerize's mobile coach dashboard): collapse the roster table into stacked client cards (avatar + compliance % + at-risk badge + one sparkline), KPI strip reflows to a 2-up or 1-up scrollable row, comparison stacks vertically (this week above last week) instead of side-by-side, and the details tab becomes a full-screen drill-down rather than an adjacent panel. Keep the at-risk flag and the single compliance number visible in the collapsed card so triage still works one-handed.",
+    "accessibility": "Never encode at-risk by color alone — pair the reserved color with a text label/badge ('At risk', 'Low compliance') and/or an icon so it survives color-blindness and grayscale. Maintain WCAG contrast for KPI headline numbers and small sparkline strokes (avoid thin low-contrast lines). Honor prefers-reduced-motion: every animation above must degrade to its final static state, and essential adherence data must be fully present with motion off. Roster table needs proper header/row semantics, sortable columns operable by keyboard with announced sort direction, and the frozen identity column must remain reachable. Provide a visible 'Reduce motion' fallback expectation even though it is OS-driven. Give charts text/table equivalents (the averages row and the per-day compliance grid double as the non-visual representation).",
+    "sources": [
+      "https://blog.everfit.io/top-nutrition-coaching-platforms (2026)",
+      "https://help.trainerize.com/hc/en-us/articles/360036911152-Setting-And-Monitoring-Client-Nutrition-Compliance (accessed 2026-06-17)",
+      "https://help.trainerize.com/hc/en-us/articles/360001219886-How-to-Measure-Workout-and-Nutrition-Compliance-with-Auto-Client-Tags (accessed 2026-06-17)",
+      "https://help.trainerize.com/hc/en-us/articles/360022256632-Measuring-Client-Engagement-and-Compliance (accessed 2026-06-17)",
+      "https://www.trainerize.com/blog/trainerize-update-drive-client-and-trainer-results-with-compliance-and-engagement-metrics/ (accessed 2026-06-17)",
+      "https://www.datacamp.com/tutorial/dashboard-design-tutorial (accessed 2026-06-17)",
+      "https://www.inetsoft.com/info/data-risk-analytic-dashboard/ (accessed 2026-06-17)",
+      "https://medium.com/design-bootcamp/motion-matters-how-animation-elevates-ux-in-2025-b181adca68a9 (2025)",
+      "https://www.toptal.com/designers/data-visualization/mobile-data-visualization (accessed 2026-06-17)",
+      "https://link.springer.com/article/10.1186/s41235-026-00724-y (2026, perceptual-capacity guidelines for animated dataviz)",
+      "https://zipdo.co/best/nutrition-coach-software/ (2026)"
+    ]
+  },
+  {
+    "area": "Accessibility, dark mode, and reduced-motion rules for animated nutrition data visualization (macro rings, calorie/number counters, weekly bar/line charts) — WCAG 2.2 AA baseline, 2025-2026 practice",
+    "patterns": [
+      {
+        "name": "Macro ring as role=progressbar with value + label fallback",
+        "what": "Each macro/calorie ring is a focusable element with role=\"progressbar\", aria-valuenow/aria-valuemin/aria-valuemax (e.g. valuemin=0, valuemax=goal grams, valuenow=consumed) plus aria-valuetext='Proteina: 92 de 140 g (66%)'. If the ring is purely decorative-with-a-number-inside, instead expose role=\"img\" on the SVG with aria-label carrying the same sentence, and mark the inner <svg> arcs aria-hidden. Never leave a bare SVG (invisible to AT).",
+        "why": "SVG/canvas arcs are invisible to screen readers unless semantics are added (WCAG 1.1.1, 4.1.2). aria-valuetext gives a human sentence instead of a raw number; progressbar communicates the goal relationship that the visual ring conveys.",
+        "exampleApp": "Apple Health activity rings (VoiceOver reads 'Move: 320 of 500 calories, 64%'); MyFitnessPal macro donut"
+      },
+      {
+        "name": "Redundant encoding — never color alone for macros",
+        "what": "Distinguish protein/carbs/fat by THREE encodings at once: distinct hue, distinct position/order, AND a text label or icon directly on/next to each segment (e.g. 'P 92g', 'C 180g', 'F 55g'). For over/under-goal status do not signal only by green-vs-red; add an icon (check / up-arrow) or word ('meta' / 'excedido').",
+        "why": "WCAG 1.4.1 (Use of Color) forbids color as the sole information carrier. ~8% of men have red-green CVD; a green=good/red=over scheme is the single most common nutrition-app failure.",
+        "exampleApp": "Cronometer (labels every macro segment with name+grams); Lose It! goal chips with text status"
+      },
+      {
+        "name": "Colorblind-safe macro palette (Wong/Okabe-Ito) over the cultural protein-red/carb-yellow/fat-blue",
+        "what": "Pick the 3-4 macro colors from the Wong palette so they survive deuteranopia/protanopia/tritanopia: blue #0072B2, orange #E69F00, bluish-green #009E73, reddish-purple #CC79A7, vermillion #D55E00. Blue+orange is the single safest 2-color pair. Avoid red+green adjacency and avoid red/orange/brown/green clusters. Run the final palette through a CVD simulator before shipping.",
+        "why": "Verified colorblind-safe set distinguishable across all three CVD types; removes the red-green confusion that the common nutrition convention (red protein / green veg) introduces.",
+        "exampleApp": "Tableau colorblind-safe palette; Datawrapper default qualitative set"
+      },
+      {
+        "name": "Keyboard + focus traversal of chart data points",
+        "what": "Tab moves focus to the chart region (the group), then Arrow keys move between bars/ring segments/days; each data point has tabindex and a visible focus ring (>=3:1 contrast against both fill and background, 2px+ offset). Preserve focus after filter/sort/period-switch instead of dumping to page top. Announce filter results via an aria-live=\"polite\" region ('Mostrando semana del 8 de junio').",
+        "why": "WCAG 2.1.1 (Keyboard), 2.4.7 (Focus Visible), 2.4.11 (Focus Not Obscured, new in 2.2), 4.1.3 (Status Messages). Roving-tabindex grouping avoids 31 tab stops on a 31-day chart.",
+        "exampleApp": "Highcharts accessibility module (region + arrow-key data navigation); Apple Health weekly bar chart focus"
+      },
+      {
+        "name": "Data table / text-summary equivalent for every chart",
+        "what": "Ship a real <table> (or a toggle 'Ver datos') alongside any non-trivial chart, plus a one-sentence text summary of the trend ('Promedio 1.840 kcal/dia, 12% bajo la meta esta semana'). The table is the machine-readable source of truth for AT and for users who can't parse the visual.",
+        "why": "WCAG 1.1.1 long-description requirement for complex images; the summary covers 1.4.1/cognitive load and is the most reliable thing a screen reader can consume.",
+        "exampleApp": "GOV.UK / European data viz guide (table-behind-chart pattern); Cronometer's tabular nutrient breakdown"
+      },
+      {
+        "name": "Non-text contrast >=3:1 on every chart element",
+        "what": "Bars, ring arcs, lines, the goal/target marker, axis lines and the focus indicator must each hit >=3:1 against ADJACENT colors and the background (WCAG 1.4.11). On-chart numeric labels and legend text hit >=4.5:1 (1.4.3). Don't rely on a 1px hairline gridline (sub-3:1) to separate segments — add gaps or contrasting strokes.",
+        "why": "1.4.11 Non-text Contrast applies to graphical objects required to understand the chart; the most-missed item is thin gridlines and pale 'remaining' ring tracks.",
+        "exampleApp": "XD.gov / US data design standards color tokens; Datawrapper auto-contrast enforcement"
+      }
+    ],
+    "animations": [
+      {
+        "name": "Ring fill (stroke-dashoffset sweep)",
+        "trigger": "On mount / when a meal is logged and the macro value changes",
+        "spec": "Animate stroke-dashoffset from full to target over 600-900ms, ease-out (cubic-bezier(0.22,1,0.36,1)) or a soft spring. CSS transition on stroke-dashoffset, or Framer Motion / Motion One for React. Counts as a 'progress indicator' so a short version is allowed even under reduced motion.",
+        "reducedMotion": "Under prefers-reduced-motion: reduce, set the dashoffset to the final value with no transition (or a <=200ms opacity fade in). Author base styles with NO animation, then add the sweep only inside @media (prefers-reduced-motion: no-preference) — opt-in, fail-safe default."
+      },
+      {
+        "name": "Calorie / macro number counter (count-up)",
+        "trigger": "On mount and on each value change",
+        "spec": "Tween the displayed integer from old->new over ~500-800ms (Motion React animate-number / a count-up tween). Pair with tabular-nums / font-variant-numeric: tabular-nums so digits don't reflow and jitter.",
+        "reducedMotion": "Reduced motion: render the FINAL number immediately, no count-up. Implement by gating the tween on the no-preference query (or matchMedia in JS) and writing the static value otherwise. The number is also the accessible name, so AT never depends on the animation."
+      },
+      {
+        "name": "Weekly bar / line chart entrance",
+        "trigger": "On chart load or period switch (week/month toggle)",
+        "spec": "Stagger bars growing from baseline ~40-60ms apart, 300-500ms each, ease-out; line charts draw the path via stroke-dashoffset. Keep total under ~1s so it doesn't block reading.",
+        "reducedMotion": "Reduced motion: no stagger/grow/draw — render the final chart in place, optionally a single <=200ms cross-fade. Remove any parallax, zoom-on-load, or auto-scrubbing entirely (these are vestibular triggers, not just 'fast')."
+      },
+      {
+        "name": "Goal-reached / celebration micro-interaction",
+        "trigger": "When a macro or calorie goal is hit",
+        "spec": "Small scale-pulse (1.0->1.06->1.0, ~250ms) or a brief confetti/glow. Keep displacement tiny and non-looping.",
+        "reducedMotion": "Reduced motion: replace with a static state change — a check icon + color/label change ('Meta alcanzada'), no pulse, no confetti, no infinite spin. Also announce via aria-live=\"polite\" so the achievement isn't motion-only."
+      }
+    ],
+    "accessibility": "BASELINE = WCAG 2.2 Level AA. Concrete rules: (1) Color is never the only carrier — every macro segment and every goal/over-budget state carries a text label or icon in addition to hue (SC 1.4.1). (2) Contrast: chart text & numbers >=4.5:1 (1.4.3); bars/arcs/lines/markers/axis/focus-ring >=3:1 vs adjacent colors and background (1.4.11). (3) Each ring = role=\\\"progressbar\\\" + aria-valuemin/now/max + aria-valuetext sentence, OR an <svg role=\\\"img\\\" aria-label=\\\"...\\\"> with arcs aria-hidden — never a bare SVG (1.1.1, 4.1.2). (4) Charts: region focusable, Arrow-key roving-tabindex between data points, focus visible (2.4.7) and not obscured (2.4.11, new in 2.2), focus preserved across sort/filter, filter results announced via aria-live=\\\"polite\\\" (4.1.3). (5) Provide a data-table or text-summary equivalent for every non-trivial chart (1.1.1). (6) Touch targets: AA minimum 24x24 CSS px with adequate spacing (SC 2.5.8); target 44x44 (Apple / AAA 2.5.5) or 48x48 (Material) for primary controls like 'log meal', period toggles, and tappable ring/segment hit-areas — the visible ring can be small if the hit-area is padded to >=44px. (7) Text scaling / Dynamic Type: layout must survive 200% zoom and large system font without clipping or horizontal scroll (1.4.4 Resize Text, 1.4.10 Reflow at 320 CSS px) — use rem/dvh, tabular-nums for counters, and let labels wrap; don't bake numbers into fixed-size SVG <text> that can't scale. (8) Motion: respect prefers-reduced-motion via opt-in (animate only under no-preference); reduced = final state instantly, only progress indicators / sub-200ms fades allowed, zero parallax/zoom/loop/confetti (2.3.3 AAA but treat as baseline). (9) Don't convey meaning through animation alone — the final value/state is always present statically and in the accessible name. (10) Test the real palette in a CVD simulator and the rings/charts with NVDA/VoiceOver before ship.",
+    "desktopVsResponsive": "Desktop/web: full keyboard model matters most — Tab to chart region, Arrow keys across data points, visible 2px focus ring, hover tooltips that ALSO appear on focus (not hover-only, SC 1.4.13); 24px target minimum is usually easy. Mobile / installed PWA: pointer accuracy drops, so bump primary controls (log-meal FAB, week/month toggle, segment tap zones) to 44-48px with >=8px spacing even though AA only mandates 24px; rings often shrink, so keep the numeric label and goal text outside/below the ring rather than only inside the arc, and pad an invisible >=44px hit-area around small segments. iOS PWA must honor Dynamic Type and Android the system font scale — test at the largest setting; use h-dvh not 100vh and tabular-nums so animated counters don't reflow the layout. prefers-reduced-motion is read identically across both (CSS media query / matchMedia), and iOS/Android both expose it from the OS Reduce Motion setting, so a single opt-in implementation covers desktop and PWA.",
+    "sources": [
+      "https://www.smashingmagazine.com/2024/02/accessibility-standards-empower-better-chart-visual-design/ (2024, accessed 2026-06-17)",
+      "https://blog.greeden.me/en/2025/09/01/the-complete-guide-to-accessible-graphs-data-visualization-designing-charts-everyone-can-understand-beyond-color-reliance/ (2025-09-01)",
+      "https://www.wellally.tech/blog/accessible-health-data-visualizations-wcag-guide (accessed 2026-06-17)",
+      "https://5of10.com/articles/wcag-checklist-data-visualization/ (accessed 2026-06-17)",
+      "https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/At-rules/@media/prefers-reduced-motion (accessed 2026-06-17)",
+      "https://www.cssshowcase.com/articles/animation/prefers-reduced-motion (accessed 2026-06-17)",
+      "https://css-tricks.com/animating-number-counters/ (accessed 2026-06-17)",
+      "https://motion.dev/docs/react-animate-number (accessed 2026-06-17)",
+      "https://conceptviz.app/blog/okabe-ito-palette-hex-codes-complete-reference (accessed 2026-06-17)",
+      "https://rgblind.com/blog/color-blindness-friendly-chart-colors (2026)",
+      "https://www.tableau.com/blog/examining-data-viz-rules-dont-use-red-green-together (accessed 2026-06-17)",
+      "https://www.cleanchart.app/blog/dark-mode-charts (accessed 2026-06-17)",
+      "https://data.europa.eu/apps/data-visualisation-guide/dark-mode (accessed 2026-06-17)",
+      "https://ananyadeka.medium.com/implementing-dark-mode-for-data-visualizations-design-considerations-66cd1ff2ab67 (accessed 2026-06-17)",
+      "https://testparty.ai/blog/wcag-target-size-guide (accessed 2026-06-17)",
+      "https://blog.logrocket.com/ux-design/all-accessible-touch-target-sizes/ (accessed 2026-06-17)",
+      "https://css-tricks.com/looking-at-wcag-2-5-5-for-better-target-sizes/ (accessed 2026-06-17)"
+    ]
+  }
+]

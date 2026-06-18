@@ -43,6 +43,9 @@ type ProfileOverviewB3Props = {
     workoutHistory: any[]
     checkIns: { created_at: string; weight?: number | null }[]
     compliance: ComplianceShape
+    /** Deep-link a la Zona A (Progreso) del hogar único de nutrición. No recomputa
+     *  el % — solo navega; el valor mostrado es el mismo de `compliance`. */
+    onViewNutrition?: () => void
 }
 
 const ringSize = 108
@@ -51,6 +54,7 @@ export function ProfileOverviewB3({
     workoutHistory,
     checkIns,
     compliance,
+    onViewNutrition,
 }: ProfileOverviewB3Props) {
     const { resolvedTheme } = useTheme()
     const [themeReady, setThemeReady] = useState(false)
@@ -175,6 +179,8 @@ export function ProfileOverviewB3({
                         pathColor={nutColor}
                         trailColor={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}
                         textColor={isDark ? '#fafafa' : '#111'}
+                        onClick={onViewNutrition}
+                        linkLabel="Ver nutrición →"
                     />
                     <ComplianceRing
                         label="Check-in"
@@ -226,6 +232,8 @@ function ComplianceRing({
     pathColor,
     trailColor,
     textColor,
+    onClick,
+    linkLabel,
 }: {
     label: string
     valueText: string
@@ -234,9 +242,20 @@ function ComplianceRing({
     pathColor: string
     trailColor: string
     textColor: string
+    onClick?: () => void
+    linkLabel?: string
 }) {
+    const Wrapper = onClick ? 'button' : 'div'
     return (
-        <div className="flex flex-col items-center gap-3 w-full max-w-[200px]">
+        <Wrapper
+            type={onClick ? 'button' : undefined}
+            onClick={onClick}
+            className={cn(
+                'flex flex-col items-center gap-3 w-full max-w-[200px]',
+                onClick &&
+                    'rounded-2xl p-1 transition-colors hover:bg-primary/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40'
+            )}
+        >
             <div style={{ width: ringSize, height: ringSize }}>
                 <CircularProgressbar
                     value={percentage}
@@ -264,7 +283,10 @@ function ComplianceRing({
                     {delta > 0 ? '↑' : delta < 0 ? '↓' : '—'} vs sem. anterior
                     {delta !== 0 ? ` (${delta > 0 ? '+' : ''}${delta} pts)` : ''}
                 </p>
+                {onClick && linkLabel ? (
+                    <p className="text-[10px] font-bold text-primary">{linkLabel}</p>
+                ) : null}
             </div>
-        </div>
+        </Wrapper>
     )
 }

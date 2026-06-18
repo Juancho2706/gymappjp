@@ -21,12 +21,16 @@ type ProfileProgramSummaryCardProps = {
     activeProgram: any | null | undefined
     compliance: ComplianceSlice
     isNutritionAtRisk?: boolean
+    /** Deep-link a la Zona A (Progreso) del hogar único de nutrición. La señal de
+     *  nutrición vive ahora FUERA de la tarjeta de entrenamiento. */
+    onViewNutrition?: () => void
 }
 
 export function ProfileProgramSummaryCard({
     activeProgram,
     compliance,
     isNutritionAtRisk = false,
+    onViewNutrition,
 }: ProfileProgramSummaryCardProps) {
     const phases = parseProgramPhases(activeProgram?.program_phases)
     const planCur = compliance.planCurrentWeek ?? 1
@@ -91,20 +95,56 @@ export function ProfileProgramSummaryCard({
                         <div
                             className={cn(
                                 'w-2 h-2 rounded-full',
-                                isNutritionAtRisk ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'
+                                daysLeft > 0 ? 'bg-emerald-500' : 'bg-amber-500'
                             )}
                         />
                         <span
                             className={cn(
                                 'text-[10px] font-bold uppercase tracking-widest',
-                                isNutritionAtRisk ? 'text-red-500' : 'text-emerald-500'
+                                daysLeft > 0 ? 'text-emerald-500' : 'text-amber-500'
                             )}
                         >
-                            {isNutritionAtRisk ? 'Nutri. en riesgo' : 'En track'}
+                            {daysLeft > 0 ? 'En track' : 'Ciclo vencido'}
                         </span>
                     </div>
                 </div>
             </div>
+
+            {/* Señal de nutrición — SEPARADA del entreno. Deep-link a Zona A; no
+                recomputa adherencia, solo navega al hogar de nutrición. */}
+            <button
+                type="button"
+                onClick={onViewNutrition}
+                disabled={!onViewNutrition}
+                className={cn(
+                    'relative z-10 flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors',
+                    isNutritionAtRisk
+                        ? 'border-red-500/30 bg-red-500/5 hover:bg-red-500/10'
+                        : 'border-emerald-500/25 bg-emerald-500/5 hover:bg-emerald-500/10',
+                    onViewNutrition && 'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+                    !onViewNutrition && 'cursor-default'
+                )}
+            >
+                <span className="flex items-center gap-2">
+                    <span
+                        className={cn(
+                            'w-2 h-2 rounded-full',
+                            isNutritionAtRisk ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'
+                        )}
+                    />
+                    <span
+                        className={cn(
+                            'text-[10px] font-bold uppercase tracking-widest',
+                            isNutritionAtRisk ? 'text-red-500' : 'text-emerald-500'
+                        )}
+                    >
+                        {isNutritionAtRisk ? 'Nutrición en riesgo' : 'Nutrición en track'}
+                    </span>
+                </span>
+                {onViewNutrition ? (
+                    <span className="text-[10px] font-bold text-primary">Ver nutrición →</span>
+                ) : null}
+            </button>
 
             {next && (
                 <div className="relative z-10 rounded-xl border border-border/60 dark:border-white/10 bg-secondary/20 dark:bg-white/[0.04] p-4 space-y-2">

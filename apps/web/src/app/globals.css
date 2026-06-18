@@ -53,6 +53,18 @@
   /* Custom Shadow for Glow Effect */
   --shadow-glow: 0 0 15px -3px rgba(0, 229, 255, 0.4);
   --shadow-glow-blue: 0 0 15px -3px rgba(0, 122, 255, 0.4);
+
+  /* Nutrition overhaul — canonical macro color tokens */
+  --color-macro-protein: #5E9FD6;
+  --color-macro-carbs: #FFB74D;
+  --color-macro-fats: #81C784;
+  --color-macro-over: #EF4444;
+  --color-macro-goal: #10B981;
+  --color-macro-protein-dark: #7FB3E0;
+  --color-macro-carbs-dark: #FFC97A;
+  --color-macro-fats-dark: #A0D6A3;
+  --ring-track: color-mix(in srgb, currentColor 12%, transparent);
+  --ring-track-strong: color-mix(in srgb, currentColor 20%, transparent);
 }
 
 /* ============================================================

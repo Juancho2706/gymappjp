@@ -2,7 +2,19 @@ import { SupabaseClient } from '@supabase/supabase-js';
 import { differenceInDays, subDays } from 'date-fns';
 import { Database } from '@/lib/database.types';
 import { measureServer } from '@/lib/perf/measure-server';
-import { nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils';
+import {
+    nutritionMealAppliesOnIsoYmdInSantiago,
+    getNutritionDayOfWeekFromIsoYmdInSantiago,
+    getTodayInSantiago,
+} from '@/lib/date-utils';
+import {
+    computeNutritionAdherence,
+    normalizeMealForMacros,
+    type AdherenceMeal,
+    type MacroTarget,
+    type MealLogRow,
+    type NutritionMealMacroSource,
+} from '@eva/nutrition-engine';
 
 // Check-ins mensuales: alertar solo si ya hubo al menos un check-in y pasaron >30 días desde el último.
 const CHECKIN_OVERDUE_AFTER_DAYS = 30
@@ -409,6 +421,7 @@ export class DashboardService {
         }
 
         const logDateCutoff = lastWeekStr.split('T')[0]!;
+        const nutritionEndIso = getTodayInSantiago(now).iso;
         const nutritionMap = new Map<string, any[]>();
         for (const id of clientIds) nutritionMap.set(id, []);
 
@@ -426,13 +439,17 @@ export class DashboardService {
                 target_carbs_at_log,
                 target_fats_at_log,
                 nutrition_meal_logs (
+                    meal_id,
                     is_completed,
                     consumed_quantity,
                     nutrition_meals (
+                        id,
                         day_of_week,
                         food_items (
                             quantity,
-                            foods ( calories, protein_g, carbs_g, fats_g, serving_size )
+                            unit,
+                            swap_options,
+                            foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )
                         )
                     )
                 )
@@ -569,49 +586,74 @@ export class DashboardService {
                 now
             );
 
+            // ─── Adherencia + macros consumidos via motor canónico ────────────
+            // El select de nutrición está DENORMALIZADO (cada `nutrition_meal_logs`
+            // trae anidada su `nutrition_meals` con `food_items`). Reconstruimos las
+            // entradas del motor (`meals` deduplicado por id, `logsByDate`,
+            // `targetByDate`) y delegamos macros + adherencia a
+            // computeNutritionAdherence, que maneja correctamente las unidades
+            // g/ml/un (vía calculateFoodItemMacros) — el cálculo manual previo las
+            // ignoraba (`q=(item.quantity/serving_size)*mult`).
             const dailyLogs = nutritionMap.get(id) || [];
-            const totalConsumed = { cal: 0, prot: 0, carb: 0, fat: 0 };
-            const totalTarget = { cal: 0, prot: 0, carb: 0, fat: 0 };
-            let mealsCompleted = 0;
-            let totalMeals = 0;
-            let lastPlanNutrition = 'Sin plan';
+            const mealsById = new Map<string, AdherenceMeal>();
+            const logsByDate = new Map<string, MealLogRow[]>();
+            const targetByDate = new Map<string, MacroTarget>();
+            const liveTarget: MacroTarget = { calories: 0, protein: 0, carbs: 0, fats: 0 };
 
             dailyLogs.forEach((log: any) => {
-                lastPlanNutrition = log.plan_name_at_log || lastPlanNutrition;
-                totalTarget.cal += log.target_calories_at_log || 0;
-                totalTarget.prot += log.target_protein_at_log || 0;
-                totalTarget.carb += log.target_carbs_at_log || 0;
-                totalTarget.fat += log.target_fats_at_log || 0;
+                const date = log.log_date as string;
 
+                targetByDate.set(date, {
+                    calories: Number(log.target_calories_at_log) || 0,
+                    protein: Number(log.target_protein_at_log) || 0,
+                    carbs: Number(log.target_carbs_at_log) || 0,
+                    fats: Number(log.target_fats_at_log) || 0,
+                });
+
+                const rows = logsByDate.get(date) ?? [];
                 log.nutrition_meal_logs?.forEach((mealLog: any) => {
                     const nm = mealLog.nutrition_meals;
-                    if (!nm || !nutritionMealAppliesOnIsoYmdInSantiago(nm, log.log_date as string)) return;
-                    totalMeals++;
-                    if (mealLog.is_completed) {
-                        mealsCompleted++;
-                        const mult =
-                            mealLog.consumed_quantity != null
-                                ? Math.min(
-                                      Math.max(Number(mealLog.consumed_quantity) / 100, 0),
-                                      1
-                                  )
-                                : 1;
-                        nm?.food_items?.forEach((item: any) => {
-                            const f = item.foods;
-                            if (f) {
-                                const q = ((item.quantity || 0) / (f.serving_size || 100)) * mult;
-                                totalConsumed.cal += (f.calories || 0) * q;
-                                totalConsumed.prot += (f.protein_g || 0) * q;
-                                totalConsumed.carb += (f.carbs_g || 0) * q;
-                                totalConsumed.fat += (f.fats_g || 0) * q;
-                            }
+                    const mealId = (mealLog.meal_id ?? nm?.id) as string | undefined;
+                    if (!nm || !mealId) return;
+                    if (!mealsById.has(mealId)) {
+                        mealsById.set(mealId, {
+                            ...normalizeMealForMacros(nm as NutritionMealMacroSource),
+                            day_of_week: nm.day_of_week ?? null,
                         });
                     }
+                    rows.push({
+                        meal_id: mealId,
+                        is_completed: !!mealLog.is_completed,
+                        consumed_quantity: mealLog.consumed_quantity ?? null,
+                    });
                 });
+                logsByDate.set(date, rows);
             });
 
-            const nutritionPercentage =
-                totalMeals > 0 ? Math.round((mealsCompleted / totalMeals) * 100) : 0;
+            const { summary: nutritionSummary } = computeNutritionAdherence({
+                meals: [...mealsById.values()],
+                logsByDate,
+                targetByDate,
+                liveTarget,
+                range: { startIso: logDateCutoff, endIso: nutritionEndIso },
+                dayOfWeekResolver: getNutritionDayOfWeekFromIsoYmdInSantiago,
+                mealAppliesOn: (meal, isoYmd) =>
+                    nutritionMealAppliesOnIsoYmdInSantiago(meal, isoYmd),
+            });
+
+            const totalConsumed = {
+                cal: nutritionSummary.consumedMacros.calories,
+                prot: nutritionSummary.consumedMacros.protein,
+                carb: nutritionSummary.consumedMacros.carbs,
+                fat: nutritionSummary.consumedMacros.fats,
+            };
+            const totalTarget = {
+                cal: nutritionSummary.targetMacros.calories,
+                prot: nutritionSummary.targetMacros.protein,
+                carb: nutritionSummary.targetMacros.carbs,
+                fat: nutritionSummary.targetMacros.fats,
+            };
+            const nutritionPercentage = Math.round(nutritionSummary.compliancePct);
 
             const latestEnergyLevel = sortedChecks[0]?.energy_level ?? null;
 

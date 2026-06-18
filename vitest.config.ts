@@ -23,6 +23,7 @@ export default defineConfig({
       '@eva/schemas': path.resolve(__dirname, './packages/schemas/index.ts'),
       '@eva/calc': path.resolve(__dirname, './packages/calc/index.ts'),
       '@eva/tiers': path.resolve(__dirname, './packages/tiers/index.ts'),
+      '@eva/nutrition-engine': path.resolve(__dirname, './packages/nutrition-engine/index.ts'),
       '@eva/module-catalog': path.resolve(__dirname, './packages/module-catalog/catalog.ts'),
       // `server-only` throws outside an RSC; neutralize it for unit tests that transitively
       // import server modules. Build-time boundary is still enforced by Next.js.

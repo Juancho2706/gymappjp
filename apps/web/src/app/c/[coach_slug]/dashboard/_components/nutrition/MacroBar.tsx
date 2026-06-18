@@ -35,7 +35,7 @@ export function MacroBar({ label, consumed, target, unit, colorClass, delayIndex
                     className={`h-full rounded-full ${over ? 'bg-red-500' : colorClass}`}
                     initial={{ width: '0%' }}
                     animate={inView ? { width: `${pct}%` } : { width: '0%' }}
-                    transition={{ ...springs.lazy, delay: delayIndex * 0.15 }}
+                    transition={{ ...springs.lazy, delay: delayIndex * 0.08 }}
                 />
             </div>
         </div>

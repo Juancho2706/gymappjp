@@ -81,6 +81,12 @@ export interface NutritionTimelineEntry {
   compliancePct: number
   targetCalories: number
   consumedCalories: number
+  targetProtein: number
+  consumedProtein: number
+  targetCarbs: number
+  consumedCarbs: number
+  targetFats: number
+  consumedFats: number
 }
 
 export interface FavoriteFoodEntry {
@@ -365,20 +371,36 @@ function buildNutritionTimeline(
     const total = logs.length || applicableMeals.length
     const done = logs.filter((log) => log.is_completed).length
     const completedMealIds = new Set(logs.filter((log) => log.is_completed).map((log) => log.meal_id))
+    // Snapshot-first target por día para TODOS los macros (espejo del motor canónico
+    // computeNutritionAdherence: targetMacros = snapshot del día si existe, si no liveTarget).
+    // Cada macro cae a su valor live SOLO si la columna del snapshot es null en ese día.
+    const dayTarget = {
+      calories: Number(row?.target_calories_at_log ?? goals.calories ?? 0),
+      protein: Number(row?.target_protein_at_log ?? goals.protein ?? 0),
+      carbs: Number(row?.target_carbs_at_log ?? goals.carbs ?? 0),
+      fats: Number(row?.target_fats_at_log ?? goals.fats ?? 0),
+    }
+    // El fallback de consumo (planes sin food_items) escala por el target DEL DÍA,
+    // no por el live → P/C/F históricos correctos.
     const consumed = calculateConsumedMacrosWithCompletionFallback(
       applicableMeals,
       completedMealIds,
-      goals,
+      dayTarget,
       portionPctMapFromMealLogs(logs)
     )
-    const targetCalories = Number(row?.target_calories_at_log ?? goals.calories ?? 0)
     out.push({
       date,
       mealsDone: done,
       mealsTotal: total,
       compliancePct: total > 0 ? Math.round((done / total) * 100) : 0,
-      targetCalories,
+      targetCalories: dayTarget.calories,
       consumedCalories: Math.round(consumed.calories),
+      targetProtein: dayTarget.protein,
+      consumedProtein: Math.round(consumed.protein),
+      targetCarbs: dayTarget.carbs,
+      consumedCarbs: Math.round(consumed.carbs),
+      targetFats: dayTarget.fats,
+      consumedFats: Math.round(consumed.fats),
     })
   }
   return out.reverse()

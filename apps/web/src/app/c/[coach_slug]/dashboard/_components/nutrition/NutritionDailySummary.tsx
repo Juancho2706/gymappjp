@@ -164,9 +164,9 @@ export async function NutritionDailySummary({ userId, coachSlug }: { userId: str
                     />
                 </div>
             </div>
-            <MacroBar label="Proteína" consumed={consumedP} target={tP} unit="g" colorClass="bg-rose-500" delayIndex={0} />
-            <MacroBar label="Carbos" consumed={consumedC} target={tC} unit="g" colorClass="bg-amber-500" delayIndex={1} />
-            <MacroBar label="Grasas" consumed={consumedF} target={tF} unit="g" colorClass="bg-emerald-500" delayIndex={2} />
+            <MacroBar label="Proteína" consumed={consumedP} target={tP} unit="g" colorClass="bg-[color:var(--color-macro-protein)]" delayIndex={0} />
+            <MacroBar label="Carbos" consumed={consumedC} target={tC} unit="g" colorClass="bg-[color:var(--color-macro-carbs)]" delayIndex={1} />
+            <MacroBar label="Grasas" consumed={consumedF} target={tF} unit="g" colorClass="bg-[color:var(--color-macro-fats)]" delayIndex={2} />
             <div className="space-y-2">
                 {mealsToday.map((m) => (
                     <MealCompletionRow

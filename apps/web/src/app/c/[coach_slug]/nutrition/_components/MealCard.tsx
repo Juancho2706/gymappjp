@@ -165,13 +165,13 @@ export function MealCard({
             </div>
           </div>
           <div className="flex gap-2 mt-1">
-            <span className="text-[10px] font-bold text-orange-500">
+            <span className="text-[10px] font-bold text-[color:var(--color-macro-protein)]">
               P {Math.round(mealMacros.protein * macroScale)}g
             </span>
-            <span className="text-[10px] font-bold text-blue-500">
+            <span className="text-[10px] font-bold text-[color:var(--color-macro-carbs)]">
               C {Math.round(mealMacros.carbs * macroScale)}g
             </span>
-            <span className="text-[10px] font-bold text-yellow-500">
+            <span className="text-[10px] font-bold text-[color:var(--color-macro-fats)]">
               G {Math.round(mealMacros.fats * macroScale)}g
             </span>
           </div>

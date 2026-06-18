@@ -2,6 +2,7 @@
 
 import { motion, useReducedMotion, type Transition } from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
+import { easings } from '@/lib/animation-presets'
 import { cn } from '@/lib/utils'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 
@@ -102,7 +103,7 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
   const reduceMotion = useReducedMotion()
   const ringTrans: Transition = reduceMotion
     ? { duration: 0 }
-    : { duration: 0.8, ease: [0.34, 1.56, 0.64, 1] }
+    : { duration: 0.8, ease: easings.ringFill }
   const barTrans: Transition = reduceMotion ? { duration: 0 } : { duration: 0.6, ease: 'easeOut' }
 
   const calPct = calories.target > 0 ? Math.min((calories.consumed / calories.target) * 100, 100) : 0
@@ -167,7 +168,7 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
           consumed={protein.consumed}
           target={protein.target}
           label="Proteína"
-          color="#f97316"
+          color="var(--color-macro-protein)"
           bgColor="#7c2d12"
           size={88}
           ringTransition={ringTrans}
@@ -177,7 +178,7 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
           consumed={carbs.consumed}
           target={carbs.target}
           label="Carbos"
-          color="#3b82f6"
+          color="var(--color-macro-carbs)"
           bgColor="#1e3a5f"
           size={88}
           ringTransition={ringTrans}
@@ -187,7 +188,7 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
           consumed={fats.consumed}
           target={fats.target}
           label="Grasas"
-          color="#eab308"
+          color="var(--color-macro-fats)"
           bgColor="#713f12"
           size={88}
           ringTransition={ringTrans}

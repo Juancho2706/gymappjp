@@ -70,12 +70,13 @@ export function ComplianceRing({ value, label, color, empty }: ComplianceRingPro
 
 export function ComplianceRingCluster({
     workoutScore,
-    nutritionScore,
+    nutritionEngagementScore,
     checkInScore,
     nutritionHasLogs,
 }: {
     workoutScore: number
-    nutritionScore: number
+    /** Engagement de registro (días con log / 30), NO cumplimiento de comidas. */
+    nutritionEngagementScore: number
     checkInScore: number
     nutritionHasLogs: boolean
 }) {
@@ -88,7 +89,7 @@ export function ComplianceRingCluster({
             </div>
             <div className="grid grid-cols-3 gap-2">
                 <ComplianceRing value={workoutScore} label="Entrenos" color="brand" />
-                <ComplianceRing value={nutritionScore} label="Nutrición" color="emerald" empty={!nutritionHasLogs} />
+                <ComplianceRing value={nutritionEngagementScore} label="Nutrición" color="emerald" empty={!nutritionHasLogs} />
                 <ComplianceRing value={checkInScore} label="Check-ins" color="violet" />
             </div>
         </GlassCard>

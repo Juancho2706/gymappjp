@@ -6,7 +6,7 @@ export async function ComplianceScoresCard({ userId, coachSlug }: { userId: stri
     return (
         <ComplianceRingCluster
             workoutScore={scores.workoutScore}
-            nutritionScore={scores.nutritionScore}
+            nutritionEngagementScore={scores.nutritionEngagementScore}
             checkInScore={scores.checkInScore}
             nutritionHasLogs={scores.nutritionHasLogs}
         />
