@@ -14,7 +14,7 @@ import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { generateBrandPalette } from '@/lib/color-utils'
 import { getCoachEnterpriseContext, getCoachTeamContext } from './_data/layout.queries'
 import { createClient } from '@/lib/supabase/server'
-import { resolvePreferredWorkspace, listUserWorkspaces } from '@/services/auth/workspace.service'
+import { getPreferredWorkspaceForRender, listUserWorkspacesForRender } from '@/services/auth/workspace-render-cache'
 import {
     applyOperatorKillSwitch,
     getCoachEnabledModules,
@@ -56,8 +56,8 @@ export default async function CoachLayout({
 
     const supabase = await createClient()
     const [activeWorkspace, workspaces] = await Promise.all([
-        resolvePreferredWorkspace(supabase, coach.id),
-        listUserWorkspaces(supabase, coach.id),
+        getPreferredWorkspaceForRender(coach.id),
+        listUserWorkspacesForRender(coach.id),
     ])
     const activeEnterpriseCoach = activeWorkspace?.type === 'enterprise_coach' ? activeWorkspace : null
     const activeTeamWorkspace = activeWorkspace?.type === 'coach_team' ? activeWorkspace : null

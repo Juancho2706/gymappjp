@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
-import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import { hasModule } from '@/services/entitlements.service'
 import { NUTRITION_EXCHANGES_MODULE } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
 import { ModuleOffNotice } from '@/components/coach/ModuleOffNotice'
@@ -24,7 +24,7 @@ export default async function NutritionExchangesPage() {
     const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) redirect('/login')
 
-    const workspace = await resolvePreferredWorkspace(supabase, user.id)
+    const workspace = await getPreferredWorkspaceForRender(user.id)
     if (workspace?.type === 'enterprise_coach') return <ModuleOffNotice moduleKey="nutrition_exchanges" />
     const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
 

@@ -4,7 +4,7 @@ import Image from 'next/image'
 import { Users, UserCheck, Package, Crown, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/server'
-import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import { getCoachTeamOverview } from './_data/team.queries'
 import TeamMembersManager from './_components/TeamMembersManager'
 import { TeamBrandStudio } from './_components/TeamBrandStudio'
@@ -19,7 +19,7 @@ export default async function CoachTeamPage() {
     const { data: __cl } = await supabase.auth.getClaims()
     const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) redirect('/login')
-    const workspace = await resolvePreferredWorkspace(supabase, user.id)
+    const workspace = await getPreferredWorkspaceForRender(user.id)
     if (workspace?.type !== 'coach_team') redirect('/coach/dashboard')
 
     const { userId, teams } = await getCoachTeamOverview(workspace.teamId)

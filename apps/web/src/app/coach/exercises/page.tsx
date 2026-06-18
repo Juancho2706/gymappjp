@@ -2,8 +2,7 @@ import { redirect } from 'next/navigation'
 import { ExerciseCatalogClient } from './ExerciseCatalogClient'
 import { getCoach } from '@/lib/coach/get-coach'
 import { getCoachOrgContext } from '@/lib/coach-context'
-import { createClient } from '@/lib/supabase/server'
-import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import { getExerciseCatalog } from './_data/exercises.queries'
 import type { Metadata } from 'next'
 
@@ -18,10 +17,9 @@ export default async function CoachExercisesPage() {
 
     // Workspace ACTIVO (AC6/AC11): en contexto team el catálogo es el del POOL (system + team)
     // y cualquier miembro activo puede crear — espejo de resolveExerciseOwner en las actions.
-    const supabase = await createClient()
     const [ctx, workspace] = await Promise.all([
         getCoachOrgContext(),
-        resolvePreferredWorkspace(supabase, coach.id),
+        getPreferredWorkspaceForRender(coach.id),
     ])
     const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
     const orgId = activeTeamId ? null : ctx?.orgId ?? null

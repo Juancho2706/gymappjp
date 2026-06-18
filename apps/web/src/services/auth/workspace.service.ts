@@ -187,18 +187,32 @@ export async function listClientWorkspaces(db: DB, userId: string): Promise<Work
     return dedupeWorkspaces(out)
 }
 
-export async function resolvePreferredWorkspace(db: DB, userId: string): Promise<WorkspaceSummary | null> {
-    const [preference, workspaces] = await Promise.all([
-        findWorkspacePreference(db, userId),
-        listUserWorkspaces(db, userId),
-    ])
-
+/**
+ * Decisión PURA: dado el set de workspaces y la preferencia, ¿cuál es el activo?
+ * Extraída para testear sin DB (el codebase testea funciones puras). Reglas:
+ *  - 0 workspaces -> null
+ *  - 1 workspace  -> ese (isLastUsed)
+ *  - N sin preferencia -> null (el caller muestra el selector)
+ *  - N con preferencia que matchea -> ese; si no matchea ninguno -> null
+ */
+export function pickPreferredWorkspace(
+    workspaces: WorkspaceSummary[],
+    preference: WorkspacePreferenceRow | null
+): WorkspaceSummary | null {
     if (workspaces.length === 0) return null
     if (workspaces.length === 1) return { ...workspaces[0], isLastUsed: true }
     if (!preference) return null
 
     const preferred = workspaces.find(workspace => workspaceMatchesPreference(workspace, preference))
     return preferred ? { ...preferred, isLastUsed: true } : null
+}
+
+export async function resolvePreferredWorkspace(db: DB, userId: string): Promise<WorkspaceSummary | null> {
+    const [preference, workspaces] = await Promise.all([
+        findWorkspacePreference(db, userId),
+        listUserWorkspaces(db, userId),
+    ])
+    return pickPreferredWorkspace(workspaces, preference)
 }
 
 export async function setLastWorkspace(db: DB, workspace: ActiveWorkspace): Promise<{ error?: string }> {
