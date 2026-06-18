@@ -311,9 +311,23 @@ export class NutritionService {
                 );
                 const newIndices = new Set(templateMealsSorted.map((m: any) => m.order_index as number));
 
-                const toDelete = (existingMeals ?? [])
+                const removalCandidates = (existingMeals ?? [])
                     .filter((m: any) => !newIndices.has(m.order_index as number))
                     .map((m: any) => m.id as string);
+
+                // Cascade-safety (CRÍTICO): nutrition_meal_logs.meal_id -> nutrition_meals es ON DELETE
+                // CASCADE, así que borrar un meal ELIMINA en cascada el historial de adherencia del alumno
+                // (qué comió, % consumido, satisfaction). Por eso solo borramos los meals SIN logs; los que
+                // tienen historial se CONSERVAN (quedan en el plan del alumno con su data intacta).
+                let toDelete = removalCandidates;
+                if (removalCandidates.length) {
+                    const { data: loggedRows } = await this.supabase
+                        .from('nutrition_meal_logs')
+                        .select('meal_id')
+                        .in('meal_id', removalCandidates);
+                    const logged = new Set((loggedRows ?? []).map((r: any) => r.meal_id as string));
+                    toDelete = removalCandidates.filter((id) => !logged.has(id));
+                }
 
                 if (toDelete.length) {
                     await this.supabase.from('food_items').delete().in('meal_id', toDelete);

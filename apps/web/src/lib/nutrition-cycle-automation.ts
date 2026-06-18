@@ -39,6 +39,23 @@ export async function runNutritionCyclesAutomation(
   let applied = 0
   let skipped = 0
 
+  // El scope (org_id) NO vive en nutrition_plan_cycles -> leerlo del alumno. Sin esto,
+  // propagateTemplateChanges recibe orgId=null y applyOrgScope fuerza is('org_id', null):
+  // para un alumno ORG su plan activo (org_id set) NO matchea -> se trata como "cliente nuevo"
+  // -> desactiva su plan y crea un plan_id nuevo (E1 violada + scope incorrecto). team/standalone
+  // tienen org_id null, asi que null es correcto para ellos.
+  const orgByClient = new Map<string, string | null>()
+  const clientIds = [...new Set(rows.map((r) => r.client_id))]
+  if (clientIds.length) {
+    const { data: clientRows } = await supabase
+      .from('clients')
+      .select('id, org_id')
+      .in('id', clientIds)
+    for (const cr of clientRows ?? []) {
+      orgByClient.set(cr.id as string, ((cr.org_id as string | null) ?? null))
+    }
+  }
+
   for (const c of rows) {
     const blocks = parseBlocks(c.blocks)
     const { weekIndex, block } = resolveNutritionCycleBlockForDate(c.start_date, blocks, todayIso)
@@ -51,7 +68,8 @@ export async function runNutritionCyclesAutomation(
       continue
     }
     const service = new NutritionService(supabase)
-    await service.propagateTemplateChanges(block.template_id, c.coach_id, JSON.stringify([c.client_id]))
+    const orgId = orgByClient.get(c.client_id) ?? null
+    await service.propagateTemplateChanges(block.template_id, c.coach_id, JSON.stringify([c.client_id]), orgId)
     await supabase
       .from('nutrition_plan_cycles')
       .update({
