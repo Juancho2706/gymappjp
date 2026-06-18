@@ -209,10 +209,46 @@ export async function proxy(request: NextRequest) {
         return !request.cookies.getAll().some(c => c.name.startsWith(`sb-${projectRef}-auth-token`))
     })()
 
-    // Refresh session — IMPORTANT: do not remove (skipped only on login page with no session)
-    const { data: { user } } = noSessionCookie
-        ? { data: { user: null } }
-        : await supabase.auth.getUser()
+    // Refresh session — IMPORTANT: do not remove (skipped only on login page with no session).
+    //
+    // Método de auth gobernado por PROXY_USE_GETCLAIMS (Edge Config, fail-CLOSED a getUser):
+    //  - flag OFF / Edge Config caído / token ambiguo / JWKS inalcanzable -> getUser (red, como hoy).
+    //  - flag ON -> getClaims(): verifica el JWT LOCALMENTE (ES256 + JWKS), SIN round-trip a GoTrue
+    //    /user. Es el grueso del flood de /user (prefetch de /c + navegación /coach). getClaims
+    //    TAMBIÉN refresca el token (margen 90s del lib) y dispara setAll -> la cookie se propaga igual.
+    //  - /admin y /org SIEMPRE getUser (needsFullUser): leen user.email / requires_password_change,
+    //    que NO viven en el JWT. Por eso quedan fuera del fast-path.
+    // CRÍTICO: getClaims re-lanza ante red/JWKS -> try/catch con fallback a getUser; nunca 500/401 masivo.
+    const needsFullUser = pathname.startsWith('/admin') || pathname.startsWith('/org/')
+
+    let useClaims = false
+    if (!noSessionCookie && !needsFullUser && process.env.EDGE_CONFIG) {
+        try {
+            const { get } = await import('@vercel/edge-config')
+            useClaims = (await get<boolean>('PROXY_USE_GETCLAIMS')) === true
+        } catch {
+            useClaims = false // fail-CLOSED: cualquier falla de Edge Config -> getUser
+        }
+    }
+
+    let user: { id: string; email?: string | null; app_metadata?: Record<string, unknown> } | null = null
+    if (noSessionCookie) {
+        user = null
+    } else if (useClaims) {
+        try {
+            const { data: claimsData, error: claimsError } = await supabase.auth.getClaims()
+            const sub = claimsData?.claims?.sub
+            if (claimsError || !sub) {
+                user = (await supabase.auth.getUser()).data.user // token raro -> red autoritativa
+            } else {
+                user = { id: sub as string } // coach/cliente solo usan user.id
+            }
+        } catch {
+            user = (await supabase.auth.getUser()).data.user // JWKS/red caído -> degradar
+        }
+    } else {
+        user = (await supabase.auth.getUser()).data.user
+    }
 
     // ============================================================
     // ADMIN ROUTE PROTECTION
