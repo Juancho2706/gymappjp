@@ -126,6 +126,8 @@ type NutritionTabB5Props = {
   coachPrivateNotes?: PrivateNoteRow[]
   /** Zona C (coach): hilo bidireccional de comentarios del día de hoy. */
   coachMealComments?: MealCommentRow[]
+  /** "Nutrición Pro" (nutrition_exchanges) ON ⇒ umbrales de micros avanzados (Zona C). */
+  nutritionProEnabled?: boolean
 }
 
 const MACRO_COLORS = {
@@ -315,6 +317,7 @@ export function NutritionTabB5({
   coachNutrientTargets = [],
   coachPrivateNotes = [],
   coachMealComments = [],
+  nutritionProEnabled = false,
 }: NutritionTabB5Props) {
   const reduceMotion = useReducedMotion()
   const [openMealId, setOpenMealId] = useState<string | null>(null)
@@ -980,8 +983,12 @@ export function NutritionTabB5({
         />
       </GlassCard>
 
-      {/* Umbrales de micros para este alumno (feature A-base). */}
-      <CoachNutrientTargetsEditor clientId={clientId} initial={coachNutrientTargets} />
+      {/* Umbrales de micros para este alumno (base + avanzados con Nutrición Pro). */}
+      <CoachNutrientTargetsEditor
+        clientId={clientId}
+        initial={coachNutrientTargets}
+        proEnabled={nutritionProEnabled}
+      />
 
       {/* Nota privada del coach — el alumno nunca la ve (feature E). */}
       <CoachPrivateNotesPanel clientId={clientId} notes={coachPrivateNotes} />

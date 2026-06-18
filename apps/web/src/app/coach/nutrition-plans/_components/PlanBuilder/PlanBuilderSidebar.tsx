@@ -14,13 +14,16 @@ import { cn } from '@/lib/utils'
 import {
   computeMifflinStJeor,
   computeTDEE,
+  computeKatchMcArdle,
+  computeCunningham,
+  leanBodyMassFromBodyFat,
   deriveCalorieTarget,
   deriveMacroTargets,
   type ActivityLevel,
   type Goal,
   type Sex,
 } from '@eva/nutrition-engine'
-import { AlertTriangle, ChevronDown, ChevronUp, Sparkles, Zap } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronUp, Lock, Sparkles, Zap } from 'lucide-react'
 
 interface Goals {
   calories: number
@@ -49,6 +52,12 @@ interface Props {
   onSave: () => void
   mode: 'template' | 'client-plan'
   clientProfile?: ClientProfileHint | null
+  /**
+   * Módulo Pro (`nutrition_exchanges`) ON para el workspace activo. Habilita el
+   * panel avanzado "Objetivos por composición corporal" (Katch-McArdle /
+   * Cunningham). Si está OFF, solo Mifflin-St Jeor (base).
+   */
+  proBodyComp?: boolean
 }
 
 // UI-facing keys → engine types (single source of truth: @eva/nutrition-engine)
@@ -94,6 +103,41 @@ function calcMacros(
   }
 }
 
+/** Fórmula avanzada (Pro) basada en masa magra. */
+type BodyCompFormula = 'katch' | 'cunningham'
+
+const BODYCOMP_LABELS: Record<BodyCompFormula, string> = {
+  katch: 'Katch-McArdle',
+  cunningham: 'Cunningham (atletas)',
+}
+
+/**
+ * Objetivos por composición corporal (Pro): BMR vía Katch-McArdle / Cunningham
+ * a partir de la masa magra (LBM), luego TDEE → calorías → macros. Delega 100%
+ * en @eva/nutrition-engine. La LBM puede venir de % de grasa o ingresarse cruda.
+ */
+function calcMacrosBodyComp(
+  leanBodyMassKg: number,
+  weightKg: number,
+  activity: ActivityKey,
+  goal: GoalKey,
+  formula: BodyCompFormula
+): Goals {
+  const bmr =
+    formula === 'cunningham'
+      ? computeCunningham(leanBodyMassKg)
+      : computeKatchMcArdle(leanBodyMassKg)
+  const tdee = computeTDEE(bmr, activity)
+  const calories = deriveCalorieTarget(tdee, goal)
+  const macros = deriveMacroTargets(calories, weightKg, goal)
+  return {
+    calories,
+    protein: macros.protein_g,
+    carbs: macros.carbs_g,
+    fats: macros.fats_g,
+  }
+}
+
 function overMacroMismatch(real: number, target: number) {
   if (target <= 0) return false
   return Math.abs((real - target) / target) * 100 > 5
@@ -114,12 +158,20 @@ export function PlanBuilderSidebar({
   onSave,
   mode,
   clientProfile,
+  proBodyComp = false,
 }: Props) {
   const [suggOpen, setSuggOpen] = useState(false)
   const [suggAge, setSuggAge] = useState('25')
   const [suggGender, setSuggGender] = useState<'M' | 'F'>('M')
   const [suggActivity, setSuggActivity] = useState<ActivityKey>('moderate')
   const [suggGoal, setSuggGoal] = useState<GoalKey>('maintain')
+
+  // ─── Avanzado (Pro): objetivos por composición corporal ───────────────────
+  const [bcOpen, setBcOpen] = useState(false)
+  const [bcFormula, setBcFormula] = useState<BodyCompFormula>('katch')
+  const [bcInputMode, setBcInputMode] = useState<'lbm' | 'bodyfat'>('bodyfat')
+  const [bcLbm, setBcLbm] = useState('') // masa magra cruda (kg)
+  const [bcBodyFat, setBcBodyFat] = useState('') // % grasa corporal
 
   const suggested = useMemo(() => {
     const w = clientProfile?.weight_kg
@@ -128,6 +180,24 @@ export function PlanBuilderSidebar({
     if (!w || !h || !Number.isFinite(age) || age < 10 || age > 99) return null
     return calcMacros(w, h, age, suggGender, suggActivity, suggGoal)
   }, [clientProfile, suggAge, suggGender, suggActivity, suggGoal])
+
+  // LBM resuelta desde el input manual (cruda o derivada de % grasa).
+  const bcLeanMass = useMemo(() => {
+    const w = clientProfile?.weight_kg
+    if (bcInputMode === 'lbm') {
+      const lbm = Number.parseFloat(bcLbm)
+      return Number.isFinite(lbm) && lbm > 0 && (!w || lbm <= w) ? lbm : null
+    }
+    const bf = Number.parseFloat(bcBodyFat)
+    if (!w || !Number.isFinite(bf) || bf < 3 || bf > 70) return null
+    return leanBodyMassFromBodyFat(w, bf)
+  }, [clientProfile, bcInputMode, bcLbm, bcBodyFat])
+
+  const bcSuggested = useMemo(() => {
+    const w = clientProfile?.weight_kg
+    if (!proBodyComp || !w || bcLeanMass == null) return null
+    return calcMacrosBodyComp(bcLeanMass, w, suggActivity, suggGoal, bcFormula)
+  }, [proBodyComp, clientProfile, bcLeanMass, suggActivity, suggGoal, bcFormula])
 
   const mismatch = useMemo(
     () =>
@@ -366,6 +436,196 @@ export function PlanBuilderSidebar({
                     Aplicar sugerencia
                   </Button>
                 </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Avanzado (Pro): Objetivos por composición corporal ─────────────── */}
+      {mode === 'client-plan' && clientProfile?.weight_kg && (
+        <div className="rounded-xl border border-indigo-500/25 bg-indigo-500/5">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setBcOpen((v) => !v)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setBcOpen((v) => !v)
+              }
+            }}
+            className="flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2.5 text-left"
+          >
+            <div className="flex items-center gap-1.5">
+              {proBodyComp ? (
+                <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
+              ) : (
+                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+              <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
+                Objetivos por composición corporal
+              </span>
+              <span className="rounded bg-indigo-500/15 px-1 py-0.5 text-[8px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-300">
+                Pro
+              </span>
+              <span onClick={(e) => e.stopPropagation()}>
+                <InfoTooltip
+                  content="Estima el gasto energético desde la masa magra (Katch-McArdle / Cunningham) en vez de solo peso y altura. Más preciso para alumnos con % de grasa medido (ISAK, DEXA, BIA). Requiere el módulo Pro de nutrición."
+                  iconClassName="w-3 h-3"
+                />
+              </span>
+            </div>
+            {bcOpen ? (
+              <ChevronUp className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+            )}
+          </div>
+
+          {bcOpen && (
+            <div className="border-t border-indigo-500/20 px-3 pb-3 pt-2 space-y-3">
+              {!proBodyComp ? (
+                <p className="rounded-lg bg-muted/40 px-2.5 py-2 text-[10px] leading-relaxed text-muted-foreground">
+                  Función <span className="font-bold">Pro</span>. Activa el módulo de
+                  nutrición avanzada para calcular objetivos desde la masa magra
+                  (Katch-McArdle / Cunningham).
+                </p>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] text-muted-foreground">Fórmula (BMR)</Label>
+                    <Select value={bcFormula} onValueChange={(v) => setBcFormula(v as BodyCompFormula)}>
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue>{BODYCOMP_LABELS[bcFormula]}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(Object.entries(BODYCOMP_LABELS) as [BodyCompFormula, string][]).map(
+                          ([k, label]) => (
+                            <SelectItem key={k} value={k}>{label}</SelectItem>
+                          )
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex gap-1 rounded-lg bg-muted/30 p-0.5">
+                    {(
+                      [
+                        ['bodyfat', '% Grasa'],
+                        ['lbm', 'Masa magra (kg)'],
+                      ] as const
+                    ).map(([k, label]) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setBcInputMode(k)}
+                        className={cn(
+                          'flex-1 rounded-md px-2 py-1 text-[10px] font-bold transition-colors',
+                          bcInputMode === k
+                            ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
+                            : 'text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {bcInputMode === 'bodyfat' ? (
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">% Grasa corporal</Label>
+                      <Input
+                        type="number"
+                        value={bcBodyFat}
+                        onChange={(e) => setBcBodyFat(e.target.value)}
+                        className="h-8 mt-0.5 text-sm"
+                        min={3}
+                        max={70}
+                        placeholder="Ej: 18"
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Masa magra (kg)</Label>
+                      <Input
+                        type="number"
+                        value={bcLbm}
+                        onChange={(e) => setBcLbm(e.target.value)}
+                        className="h-8 mt-0.5 text-sm"
+                        min={1}
+                        placeholder="Ej: 64"
+                      />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] text-muted-foreground">Actividad</Label>
+                      <Select value={suggActivity} onValueChange={(v) => setSuggActivity(v as ActivityKey)}>
+                        <SelectTrigger className="h-8 text-sm">
+                          <SelectValue>{ACTIVITY_LABELS[suggActivity]}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Object.entries(ACTIVITY_LABELS) as [ActivityKey, string][]).map(
+                            ([k, label]) => (
+                              <SelectItem key={k} value={k}>{label}</SelectItem>
+                            )
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] text-muted-foreground">Objetivo</Label>
+                      <Select value={suggGoal} onValueChange={(v) => setSuggGoal(v as GoalKey)}>
+                        <SelectTrigger className="h-8 text-sm">
+                          <SelectValue>{GOAL_LABELS[suggGoal]}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Object.entries(GOAL_LABELS) as [GoalKey, string][]).map(([k, label]) => (
+                            <SelectItem key={k} value={k}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {bcLeanMass != null && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Masa magra usada:{' '}
+                      <span className="font-bold tabular-nums text-indigo-600 dark:text-indigo-300">
+                        {bcLeanMass.toFixed(1)} kg
+                      </span>
+                    </p>
+                  )}
+
+                  {bcSuggested && (
+                    <div className="rounded-lg bg-indigo-500/10 border border-indigo-500/20 p-2.5 space-y-2">
+                      <div className="grid grid-cols-2 gap-1 text-[11px] font-bold">
+                        <span className="text-muted-foreground">kcal:</span>
+                        <span className="tabular-nums text-indigo-700 dark:text-indigo-300">{bcSuggested.calories}</span>
+                        <span className="text-muted-foreground">Proteína:</span>
+                        <span className="tabular-nums text-orange-600">{bcSuggested.protein}g</span>
+                        <span className="text-muted-foreground">Carbos:</span>
+                        <span className="tabular-nums text-blue-600">{bcSuggested.carbs}g</span>
+                        <span className="text-muted-foreground">Grasas:</span>
+                        <span className="tabular-nums text-yellow-600">{bcSuggested.fats}g</span>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="w-full h-7 text-[10px] font-bold border-indigo-500/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/10"
+                        onClick={() => {
+                          onGoalsChange(bcSuggested)
+                          if (autoSync) onAutoSyncToggle(false)
+                        }}
+                      >
+                        Aplicar sugerencia
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}

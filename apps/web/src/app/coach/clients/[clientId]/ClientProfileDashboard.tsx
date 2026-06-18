@@ -42,6 +42,8 @@ interface ClientProfileDashboardProps {
     coachNutrientTargets?: NutrientTargetRow[]
     coachPrivateNotes?: PrivateNoteRow[]
     coachMealComments?: MealCommentRow[]
+    /** "Nutrición Pro" (nutrition_exchanges) ON ⇒ umbrales de micros avanzados. */
+    nutritionProEnabled?: boolean
 }
 
 export function ClientProfileDashboard({
@@ -49,6 +51,7 @@ export function ClientProfileDashboard({
     coachNutrientTargets = [],
     coachPrivateNotes = [],
     coachMealComments = [],
+    nutritionProEnabled = false,
 }: ClientProfileDashboardProps) {
     const reduceMotion = useReducedMotion()
     const [activeTab, setActiveTab] = useState<ProfileMainTabId>('overview')
@@ -913,6 +916,7 @@ export function ClientProfileDashboard({
                             coachNutrientTargets={coachNutrientTargets}
                             coachPrivateNotes={coachPrivateNotes}
                             coachMealComments={coachMealComments}
+                            nutritionProEnabled={nutritionProEnabled}
                         />
                     </div>
                     </motion.div>

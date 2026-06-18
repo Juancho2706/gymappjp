@@ -107,10 +107,18 @@ interface Props {
   shoppingList?: ShoppingListData
   /** Alimentos del catálogo usados recientemente (quick-add off-plan). */
   offPlanRecents?: IntakeFoodRef[]
-  /** Micros del plan para el día (sodio + fibra). */
+  /** Micros del plan para el día (sodio + fibra + avanzados Pro). */
   dayMicros?: DayMicros
-  /** Topes/metas de micros definidos por el coach (sodio cap, fibra aimup). */
-  microTargets?: { sodium?: MicroTarget; fiber?: MicroTarget }
+  /** Topes/metas de micros definidos por el coach (base + avanzados Pro). */
+  microTargets?: {
+    sodium?: MicroTarget
+    fiber?: MicroTarget
+    sugar?: MicroTarget
+    saturatedFat?: MicroTarget
+    unsaturatedFat?: MicroTarget
+  }
+  /** "Nutrición Pro" (módulo nutrition_exchanges) ON ⇒ muestra micros avanzados. */
+  nutritionProEnabled?: boolean
   /** Proporción del plato (verduras/proteína/carbohidrato) derivada del plan. */
   plateProportion?: PlateProportion
 }
@@ -131,6 +139,7 @@ export function NutritionShell({
   offPlanRecents,
   dayMicros,
   microTargets,
+  nutritionProEnabled = false,
   plateProportion,
 }: Props) {
   const reduceMotion = useReducedMotion()
@@ -849,8 +858,15 @@ export function NutritionShell({
       <MicrosPanel
         sodiumMg={dayMicros?.sodiumMg ?? null}
         fiberG={dayMicros?.fiberG ?? null}
+        sugarG={dayMicros?.sugarG ?? null}
+        saturatedFatG={dayMicros?.saturatedFatG ?? null}
+        unsaturatedFatG={dayMicros?.unsaturatedFatG ?? null}
         sodiumTarget={microTargets?.sodium}
         fiberTarget={microTargets?.fiber}
+        sugarTarget={microTargets?.sugar}
+        saturatedFatTarget={microTargets?.saturatedFat}
+        unsaturatedFatTarget={microTargets?.unsaturatedFat}
+        proEnabled={nutritionProEnabled}
       />
 
       {plateProportion && <PlatePanel proportion={plateProportion} />}

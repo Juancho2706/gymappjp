@@ -19,10 +19,28 @@ export interface MicrosPanelProps {
   sodiumMg: number | null
   /** Fiber consumed today, in g. `null` when nothing logged. */
   fiberG: number | null
+  /** Sugar consumed today, in g (advanced, Pro). `null` when nothing logged. */
+  sugarG?: number | null
+  /** Saturated fat consumed today, in g (advanced, Pro). `null` when nothing logged. */
+  saturatedFatG?: number | null
+  /** Unsaturated fat consumed today, in g (advanced, Pro). `null` when nothing logged. */
+  unsaturatedFatG?: number | null
   /** Coach-defined sodium bounds (intent `cap`). Optional. */
   sodiumTarget?: MicroTarget
   /** Coach-defined fiber bounds (intent `aimup`). Optional. */
   fiberTarget?: MicroTarget
+  /** Coach-defined sugar bounds (intent `cap`, advanced). Optional. */
+  sugarTarget?: MicroTarget
+  /** Coach-defined saturated-fat bounds (intent `cap`, advanced). Optional. */
+  saturatedFatTarget?: MicroTarget
+  /** Coach-defined unsaturated-fat bounds (intent `aimup`, advanced). Optional. */
+  unsaturatedFatTarget?: MicroTarget
+  /**
+   * When `true`, render the advanced micro rows (azúcar, grasa saturada, grasa
+   * insaturada) in addition to the base sodio + fibra. Resolved SERVER-SIDE from
+   * the plan's `nutrition_exchanges` module ("Nutrición Pro"). Defaults `false`.
+   */
+  proEnabled?: boolean
   className?: string
 }
 
@@ -45,8 +63,15 @@ function roundish(n: number): number {
 export function MicrosPanel({
   sodiumMg,
   fiberG,
+  sugarG = null,
+  saturatedFatG = null,
+  unsaturatedFatG = null,
   sodiumTarget,
   fiberTarget,
+  sugarTarget,
+  saturatedFatTarget,
+  unsaturatedFatTarget,
+  proEnabled = false,
   className,
 }: MicrosPanelProps) {
   const reduce = useReducedMotion()
@@ -63,6 +88,14 @@ export function MicrosPanel({
     { key: 'sodio', label: 'Sodio', value: sodiumMg, unit: 'mg', intent: 'cap', target: sodiumTarget },
     { key: 'fibra', label: 'Fibra', value: fiberG, unit: 'g', intent: 'aimup', target: fiberTarget },
   ]
+
+  if (proEnabled) {
+    rows.push(
+      { key: 'azucar', label: 'Azúcar', value: sugarG, unit: 'g', intent: 'cap', target: sugarTarget },
+      { key: 'grasa-saturada', label: 'Grasa saturada', value: saturatedFatG, unit: 'g', intent: 'cap', target: saturatedFatTarget },
+      { key: 'grasa-insaturada', label: 'Grasa insaturada', value: unsaturatedFatG, unit: 'g', intent: 'aimup', target: unsaturatedFatTarget }
+    )
+  }
 
   return (
     <section
@@ -155,6 +188,12 @@ export function MicrosPanel({
                   />
                 )
               })}
+
+              {!proEnabled && (
+                <p className="pt-1 text-[10px] leading-snug text-muted-foreground/60">
+                  Nutrición Pro desbloquea más micros (azúcar, grasas).
+                </p>
+              )}
             </div>
           </motion.div>
         )}

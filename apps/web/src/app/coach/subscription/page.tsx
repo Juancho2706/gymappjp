@@ -369,7 +369,7 @@ export default function CoachSubscriptionPage() {
                 if (payload.code === 'NUTRITION_ADDON_ON_DOWNGRADE') {
                     throw new Error(
                         payload.error ??
-                            'Quita el modulo de Nutricion por intercambios antes de bajar a este plan.'
+                            'Quita el modulo de Nutricion Pro antes de bajar a este plan.'
                     )
                 }
                 throw new Error(payload.error ?? 'No se pudo iniciar el cambio de plan')

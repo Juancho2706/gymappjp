@@ -174,9 +174,9 @@ export const ADDON_CONFIG: Record<ModuleKey, AddonConfigEntry> = {
     },
     nutrition_exchanges: {
         priceClpMensual: ADDON_MONTHLY_PRICE_CLP,
-        label: 'Nutrición por intercambios',
+        label: 'Nutrición Pro',
         description:
-            'Pautas de nutrición por porciones de intercambio (método chileno) con equivalencias y PDF con tu marca. Requiere un plan con nutrición (Pro o superior).',
+            'El plan de nutrición a nivel profesional: pautas por porciones e intercambios (método chileno), plantillas reutilizables, micronutrientes avanzados, objetivos por composición corporal y PDF con tu marca. Requiere un plan con nutrición (Pro o superior).',
     },
 }
 

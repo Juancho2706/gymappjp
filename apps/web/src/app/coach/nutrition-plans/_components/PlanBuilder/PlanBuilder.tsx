@@ -635,6 +635,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
             onSave={handleSave}
             mode={mode}
             clientProfile={clientProfile}
+            proBodyComp={!!exchange}
           />
         </div>
 

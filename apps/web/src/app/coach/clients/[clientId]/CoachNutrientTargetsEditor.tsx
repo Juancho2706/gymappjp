@@ -40,7 +40,7 @@ type NutrientDef = {
   hint: string
 }
 
-/** Catálogo base (A). Ampliable en "Nutrición Pro" sin tocar esta UI. */
+/** Catálogo base (A). Disponible para todos los coaches. */
 const BASE_NUTRIENTS: NutrientDef[] = [
   {
     key: 'sodium_mg',
@@ -59,6 +59,37 @@ const BASE_NUTRIENTS: NutrientDef[] = [
     fields: ['floor', 'target'],
     previewValue: 18,
     hint: 'Meta diaria sugerida 25–30 g. Define el piso/meta a alcanzar.',
+  },
+]
+
+/** Catálogo avanzado — solo cuando "Nutrición Pro" (nutrition_exchanges) está ON. */
+const PRO_NUTRIENTS: NutrientDef[] = [
+  {
+    key: 'sugar_g',
+    label: 'Azúcar',
+    unit: 'g',
+    intent: 'cap',
+    fields: ['target', 'ceiling'],
+    previewValue: 30,
+    hint: 'Tope diario sugerido < 50 g (azúcares añadidos). Define el techo a no superar.',
+  },
+  {
+    key: 'saturated_fat_g',
+    label: 'Grasa saturada',
+    unit: 'g',
+    intent: 'cap',
+    fields: ['target', 'ceiling'],
+    previewValue: 15,
+    hint: 'Tope diario sugerido < 10% de las kcal. Define el techo a no superar.',
+  },
+  {
+    key: 'unsaturated_fat_g',
+    label: 'Grasa insaturada',
+    unit: 'g',
+    intent: 'aimup',
+    fields: ['floor', 'target'],
+    previewValue: 25,
+    hint: 'Prioriza grasas insaturadas (mono/poli). Define el piso/meta a alcanzar.',
   },
 ]
 
@@ -87,13 +118,23 @@ export type CoachNutrientTargetsEditorProps = {
   clientId: string
   /** Targets ya guardados para este alumno (incluye defaults del coach). */
   initial: NutrientTargetRow[]
+  /**
+   * "Nutrición Pro" (módulo nutrition_exchanges) ON ⇒ permite definir umbrales para
+   * los nutrientes avanzados (azúcar, grasas). Resuelto SERVER-SIDE. Default `false`.
+   */
+  proEnabled?: boolean
 }
 
 export function CoachNutrientTargetsEditor({
   clientId,
   initial,
+  proEnabled = false,
 }: CoachNutrientTargetsEditorProps) {
   const reduceMotion = useReducedMotion()
+  const nutrients = useMemo(
+    () => (proEnabled ? [...BASE_NUTRIENTS, ...PRO_NUTRIENTS] : BASE_NUTRIENTS),
+    [proEnabled]
+  )
 
   const initialByKey = useMemo(() => {
     const map = new Map<string, NutrientTargetRow>()
@@ -109,7 +150,7 @@ export function CoachNutrientTargetsEditor({
 
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() => {
     const out: Record<string, Draft> = {}
-    for (const n of BASE_NUTRIENTS) {
+    for (const n of [...BASE_NUTRIENTS, ...PRO_NUTRIENTS]) {
       out[n.key] = rowToDraft(initialByKey.get(n.key))
     }
     return out
@@ -162,7 +203,7 @@ export function CoachNutrientTargetsEditor({
       </div>
 
       <div className="space-y-6">
-        {BASE_NUTRIENTS.map((n, idx) => {
+        {nutrients.map((n, idx) => {
           const draft = drafts[n.key]
           const floor = n.fields.includes('floor') ? parseNum(draft.floor) : null
           const target = n.fields.includes('target') ? parseNum(draft.target) : null
@@ -252,6 +293,11 @@ export function CoachNutrientTargetsEditor({
           )
         })}
       </div>
+      {!proEnabled && (
+        <p className="mt-4 text-[10px] leading-snug text-muted-foreground/70">
+          Nutrición Pro desbloquea umbrales para más micros (azúcar, grasas).
+        </p>
+      )}
     </GlassCard>
   )
 }

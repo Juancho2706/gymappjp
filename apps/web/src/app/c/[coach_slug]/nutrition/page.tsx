@@ -25,6 +25,7 @@ import { getRecentIntakeFoods } from './_data/intake.queries'
 import {
   getPlanDayMicros,
   getMicroTargetsForClient,
+  getNutritionProEnabledForClient,
   platePropFromMacros,
 } from './_data/sections.queries'
 
@@ -61,6 +62,7 @@ export default async function ClientNutritionPage({ params }: Props) {
     offPlanRecents,
     dayMicros,
     microTargets,
+    nutritionProEnabled,
   ] = await Promise.all([
     getNutritionLogForDate(user.id, plan.id, today),
     getNutritionAdherence30d(user.id, plan.id),
@@ -81,6 +83,7 @@ export default async function ClientNutritionPage({ params }: Props) {
     getRecentIntakeFoods(10),
     getPlanDayMicros(user.id, plan.id, today),
     getMicroTargetsForClient(plan.coach_id ?? null, user.id),
+    getNutritionProEnabledForClient(plan.id),
   ])
 
   // Proporción del plato derivada del split de macros del plan (guía, no meta).
@@ -146,6 +149,7 @@ export default async function ClientNutritionPage({ params }: Props) {
           offPlanRecents={offPlanRecents}
           dayMicros={dayMicros}
           microTargets={microTargets}
+          nutritionProEnabled={nutritionProEnabled}
           plateProportion={plateProportion}
         />
 

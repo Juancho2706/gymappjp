@@ -48,12 +48,13 @@ async function ProfileContent({ clientId }: { clientId: string }) {
     // bidireccional de comentarios (anclado al día de hoy en Santiago). Se
     // resuelven server-side y se pasan al dashboard → NutritionTabB5.
     const nutritionTodayIso = (data.todayIso as string | undefined) ?? ''
-    const [coachNutrientTargets, coachPrivateNotes, coachMealComments] = await Promise.all([
+    const [coachNutrientTargets, coachPrivateNotes, coachMealComments, nutritionProEnabled] = await Promise.all([
         getCoachNutrientTargets(clientId),
         getCoachPrivateNotes(clientId),
         nutritionTodayIso
             ? getCoachMealComments(clientId, nutritionTodayIso)
             : Promise.resolve([]),
+        resolveNutritionProEnabled(clientId),
     ])
 
     const sortedCheckIns = [...(checkIns || [])].sort(
@@ -99,9 +100,28 @@ async function ProfileContent({ clientId }: { clientId: string }) {
                 coachNutrientTargets={coachNutrientTargets}
                 coachPrivateNotes={coachPrivateNotes}
                 coachMealComments={coachMealComments}
+                nutritionProEnabled={nutritionProEnabled}
             />
         </div>
     )
+}
+
+/**
+ * ¿"Nutrición Pro" (módulo nutrition_exchanges) ON para el contexto del recurso de
+ * este alumno? Gobierna los micros AVANZADOS del editor de umbrales (Zona C). Gate
+ * server-side por contexto del RECURSO (team del pool manda; si no, el coach). Espejo
+ * visual; el gate real de escritura sigue siendo server-side. Fail-closed.
+ */
+async function resolveNutritionProEnabled(clientId: string): Promise<boolean> {
+    const supabase = await createClient()
+    const { data: row } = await supabase
+        .from('clients')
+        .select('team_id, org_id, coach_id')
+        .eq('id', clientId)
+        .maybeSingle()
+    if (!row || row.org_id) return false
+    const ctx = row.team_id ? { teamId: row.team_id } : { coachId: row.coach_id }
+    return hasModule(supabase, 'nutrition_exchanges', ctx)
 }
 
 /**

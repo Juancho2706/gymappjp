@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { sumMealMicros, type FoodItemForMicros } from '@eva/nutrition-engine'
 import { nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 import { NutrientTargetsService } from '@/services/nutrient-targets.service'
+import { findPlanModuleContext } from '@/infrastructure/db/exchanges.repository'
+import { hasExchangesModuleForClientContext } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
 import type { MicroTarget } from '../_components/MicrosPanel'
 
 /**
@@ -44,6 +46,12 @@ export type DayMicros = {
   sodiumMg: number | null
   /** Fibra del plan para el día, en g. `null` cuando no hay datos. */
   fiberG: number | null
+  /** Azúcar del plan para el día, en g (avanzado/Pro). `null` cuando no hay datos. */
+  sugarG: number | null
+  /** Grasa saturada del plan para el día, en g (avanzado/Pro). `null` cuando no hay datos. */
+  saturatedFatG: number | null
+  /** Grasa insaturada del plan para el día, en g (avanzado/Pro). `null` cuando no hay datos. */
+  unsaturatedFatG: number | null
 }
 
 /** Coerce a single food row out of PostgREST's array|object embed. */
@@ -86,6 +94,9 @@ export const getPlanDayMicros = cache(
     let anyData = false
     let sodium = 0
     let fiber = 0
+    let sugar = 0
+    let saturatedFat = 0
+    let unsaturatedFat = 0
     for (const meal of todays) {
       const foodItems: FoodItemForMicros[] = []
       for (const fi of meal.food_items ?? []) {
@@ -123,11 +134,18 @@ export const getPlanDayMicros = cache(
       const m = sumMealMicros({ food_items: foodItems })
       sodium += m.sodium_mg
       fiber += m.fiber_g
+      sugar += m.sugar_g
+      saturatedFat += m.saturated_fat_g
+      unsaturatedFat += m.unsaturated_fat_g
     }
 
+    const round1 = (n: number) => Math.round(n * 10) / 10
     return {
       sodiumMg: anyData ? Math.round(sodium) : null,
-      fiberG: anyData ? Math.round(fiber * 10) / 10 : null,
+      fiberG: anyData ? round1(fiber) : null,
+      sugarG: anyData ? round1(sugar) : null,
+      saturatedFatG: anyData ? round1(saturatedFat) : null,
+      unsaturatedFatG: anyData ? round1(unsaturatedFat) : null,
     }
   }
 )
@@ -140,7 +158,13 @@ export const getMicroTargetsForClient = cache(
   async (
     coachId: string | null,
     clientId: string
-  ): Promise<{ sodium?: MicroTarget; fiber?: MicroTarget }> => {
+  ): Promise<{
+    sodium?: MicroTarget
+    fiber?: MicroTarget
+    sugar?: MicroTarget
+    saturatedFat?: MicroTarget
+    unsaturatedFat?: MicroTarget
+  }> => {
     if (!coachId) return {}
     const supabase = await createClient()
     const service = new NutrientTargetsService(supabase)
@@ -159,12 +183,44 @@ export const getMicroTargetsForClient = cache(
       return t.floor == null && t.target == null && t.ceiling == null ? undefined : t
     }
 
-    const out: { sodium?: MicroTarget; fiber?: MicroTarget } = {}
+    const out: {
+      sodium?: MicroTarget
+      fiber?: MicroTarget
+      sugar?: MicroTarget
+      saturatedFat?: MicroTarget
+      unsaturatedFat?: MicroTarget
+    } = {}
     const sodium = pick('sodium_mg')
     const fiber = pick('fiber_g')
+    const sugar = pick('sugar_g')
+    const saturatedFat = pick('saturated_fat_g')
+    const unsaturatedFat = pick('unsaturated_fat_g')
     if (sodium) out.sodium = sodium
     if (fiber) out.fiber = fiber
+    if (sugar) out.sugar = sugar
+    if (saturatedFat) out.saturatedFat = saturatedFat
+    if (unsaturatedFat) out.unsaturatedFat = unsaturatedFat
     return out
+  }
+)
+
+/**
+ * ¿"Nutrición Pro" (módulo `nutrition_exchanges`) habilitado para el contexto del
+ * recurso de este alumno? Gobierna los micros AVANZADOS del panel (azúcar/grasas),
+ * no el modo de la pauta — un plan en gramos también los muestra si el coach tiene Pro.
+ * Resuelto SERVER-SIDE por el contexto del RECURSO (team del pool manda; si no, el
+ * coach dueño del plan). Fail-closed. React.cache → dedupe por request.
+ */
+export const getNutritionProEnabledForClient = cache(
+  async (planId: string): Promise<boolean> => {
+    const supabase = await createClient()
+    const ctx = await findPlanModuleContext(supabase, planId)
+    if (!ctx) return false
+    return hasExchangesModuleForClientContext(supabase, {
+      clientTeamId: ctx.clientTeamId,
+      clientOrgId: ctx.clientOrgId,
+      planCoachId: ctx.coachId,
+    })
   }
 )
 

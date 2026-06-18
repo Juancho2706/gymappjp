@@ -70,11 +70,15 @@ export const MODULE_CATALOG: Record<ModuleKey, ModuleCatalogEntry> = {
         ],
     },
     nutrition_exchanges: {
-        label: 'Nutrición por intercambios',
+        label: 'Nutrición Pro',
         pitch:
-            'Pautas por porciones e intercambios — el método de los nutricionistas — dentro de tu plan nutricional, exportables a PDF con tu marca.',
+            'El plan de nutrición a nivel profesional: pautas por porciones e intercambios (el método de los nutricionistas), plantillas reutilizables, micronutrientes avanzados y objetivos por composición corporal. ' +
+            'Todo exportable a PDF con tu marca.',
         surfaces: [
             'Modo Intercambios dentro del plan nutricional',
+            'Plantillas de plan reutilizables',
+            'Micronutrientes avanzados en el plan',
+            'Objetivos por composición corporal',
             'PDF de pauta con tu marca',
         ],
     },
