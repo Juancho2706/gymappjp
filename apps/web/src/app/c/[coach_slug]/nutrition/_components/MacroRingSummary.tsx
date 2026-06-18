@@ -1,10 +1,48 @@
 'use client'
 
-import { motion, useReducedMotion, type Transition } from 'framer-motion'
+import { useEffect } from 'react'
+import {
+  motion,
+  useReducedMotion,
+  useMotionValue,
+  useTransform,
+  animate,
+  type Transition,
+} from 'framer-motion'
 import { AlertTriangle } from 'lucide-react'
 import { easings } from '@/lib/animation-presets'
 import { cn } from '@/lib/utils'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
+
+/**
+ * Número que cuenta hacia arriba acoplado al llenado del anillo/barra.
+ * Respeta reduced-motion mostrando el valor final al instante.
+ */
+function CountUp({
+  value,
+  duration,
+  reduce,
+  className,
+}: {
+  value: number
+  duration: number
+  reduce: boolean
+  className?: string
+}) {
+  const mv = useMotionValue(reduce ? value : 0)
+  const rounded = useTransform(mv, (v) => Math.round(v).toLocaleString('es-CL'))
+
+  useEffect(() => {
+    if (reduce) {
+      mv.set(value)
+      return
+    }
+    const controls = animate(mv, value, { duration, ease: easings.ringFill })
+    return () => controls.stop()
+  }, [value, duration, reduce, mv])
+
+  return <motion.span className={className}>{rounded}</motion.span>
+}
 
 interface MacroData {
   consumed: number
@@ -40,7 +78,9 @@ function MacroRing({
   tooltip,
   size = 80,
   ringTransition: ringTrans,
-}: MacroData & { size?: number; ringTransition: Transition }) {
+  reduce,
+  countDuration,
+}: MacroData & { size?: number; ringTransition: Transition; reduce: boolean; countDuration: number }) {
   const pct = target > 0 ? Math.min(consumed / target, 1.1) : 0
   const over = consumed > target && target > 0
   const radius = (size - 8) / 2
@@ -84,7 +124,12 @@ function MacroRing({
           {over ? (
             <AlertTriangle className="w-4 h-4 text-red-500" />
           ) : (
-            <span className="text-sm font-black tabular-nums leading-none">{Math.round(consumed)}</span>
+            <CountUp
+              value={consumed}
+              duration={countDuration}
+              reduce={reduce}
+              className="text-sm font-black tabular-nums leading-none"
+            />
           )}
         </div>
       </div>
@@ -101,10 +146,14 @@ function MacroRing({
 
 export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }: Props) {
   const reduceMotion = useReducedMotion()
-  const ringTrans: Transition = reduceMotion
+  const reduce = !!reduceMotion
+  const ringTrans: Transition = reduce
     ? { duration: 0 }
     : { duration: 0.8, ease: easings.ringFill }
-  const barTrans: Transition = reduceMotion ? { duration: 0 } : { duration: 0.6, ease: 'easeOut' }
+  const barTrans: Transition = reduce ? { duration: 0 } : { duration: 0.6, ease: 'easeOut' }
+  // Count-up acoplado al anillo (0.8s) y a la barra (0.6s) para que número y trazo lleguen juntos.
+  const ringCountDuration = 0.8
+  const barCountDuration = 0.6
 
   const calPct = calories.target > 0 ? Math.min((calories.consumed / calories.target) * 100, 100) : 0
   const calOver = calories.consumed > calories.target && calories.target > 0
@@ -126,17 +175,23 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
               <InfoTooltip content="Meta calórica diaria definida por tu coach. Si completaste todas tus comidas, estarás cerca del 100%." iconClassName="w-3 h-3" />
             </div>
             <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="text-4xl font-black tabular-nums tracking-tight">
-                {Math.round(calories.consumed)}
-              </span>
+              <CountUp
+                value={calories.consumed}
+                duration={barCountDuration}
+                reduce={reduce}
+                className="text-4xl font-black tabular-nums tracking-tight"
+              />
               <span className="text-sm font-bold text-muted-foreground/50">/ {calories.target} kcal</span>
             </div>
           </div>
           <div className="text-right">
             <span
-              className={cn('text-2xl font-black tabular-nums', calOver ? 'text-red-500' : 'text-emerald-500')}
+              className={cn(
+                'inline-flex items-baseline text-2xl font-black tabular-nums',
+                calOver ? 'text-red-500' : 'text-emerald-500'
+              )}
             >
-              {Math.round(calPct)}%
+              <CountUp value={calPct} duration={barCountDuration} reduce={reduce} />%
             </span>
           </div>
         </div>
@@ -172,6 +227,8 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
           bgColor="#7c2d12"
           size={88}
           ringTransition={ringTrans}
+          reduce={reduce}
+          countDuration={ringCountDuration}
           tooltip="La proteína ayuda a mantener y construir músculo. Tu meta diaria está definida en tu plan."
         />
         <MacroRing
@@ -182,6 +239,8 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
           bgColor="#1e3a5f"
           size={88}
           ringTransition={ringTrans}
+          reduce={reduce}
+          countDuration={ringCountDuration}
           tooltip="Los carbohidratos son tu fuente principal de energía. Son especialmente importantes en días de entrenamiento."
         />
         <MacroRing
@@ -192,6 +251,8 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
           bgColor="#713f12"
           size={88}
           ringTransition={ringTrans}
+          reduce={reduce}
+          countDuration={ringCountDuration}
           tooltip="Las grasas saludables son esenciales para el equilibrio hormonal y la absorción de vitaminas."
         />
       </div>

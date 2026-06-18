@@ -11,6 +11,15 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { cn } from '@/lib/utils'
+import {
+  computeMifflinStJeor,
+  computeTDEE,
+  deriveCalorieTarget,
+  deriveMacroTargets,
+  type ActivityLevel,
+  type Goal,
+  type Sex,
+} from '@eva/nutrition-engine'
 import { AlertTriangle, ChevronDown, ChevronUp, Sparkles, Zap } from 'lucide-react'
 
 interface Goals {
@@ -42,21 +51,14 @@ interface Props {
   clientProfile?: ClientProfileHint | null
 }
 
-type ActivityKey = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active'
-type GoalKey = 'cut' | 'maintain' | 'bulk'
+// UI-facing keys → engine types (single source of truth: @eva/nutrition-engine)
+type ActivityKey = ActivityLevel
+type GoalKey = Goal
 
-const ACTIVITY_MULTIPLIERS: Record<ActivityKey, number> = {
-  sedentary: 1.2,
-  light: 1.375,
-  moderate: 1.55,
-  active: 1.725,
-  very_active: 1.9,
-}
-
-const GOAL_ADJUSTMENTS: Record<GoalKey, { kcalDelta: number; proteinMultiplier: number; label: string }> = {
-  cut: { kcalDelta: -400, proteinMultiplier: 2.2, label: 'Déficit (bajar grasa)' },
-  maintain: { kcalDelta: 0, proteinMultiplier: 1.8, label: 'Mantención' },
-  bulk: { kcalDelta: 300, proteinMultiplier: 2.0, label: 'Volumen (ganar músculo)' },
+const GOAL_LABELS: Record<GoalKey, string> = {
+  lose: 'Déficit (bajar grasa)',
+  maintain: 'Mantención',
+  gain: 'Volumen (ganar músculo)',
 }
 
 const ACTIVITY_LABELS: Record<ActivityKey, string> = {
@@ -67,6 +69,10 @@ const ACTIVITY_LABELS: Record<ActivityKey, string> = {
   very_active: 'Muy activo (doble sesión)',
 }
 
+/**
+ * Objetivos Mifflin-St Jeor → TDEE → calorías → macros, delegando 100% en
+ * @eva/nutrition-engine (fuente de verdad única, compartida con mobile).
+ */
 function calcMacros(
   weightKg: number,
   heightCm: number,
@@ -75,18 +81,17 @@ function calcMacros(
   activity: ActivityKey,
   goal: GoalKey
 ): Goals {
-  const bmr =
-    gender === 'M'
-      ? 10 * weightKg + 6.25 * heightCm - 5 * ageYears + 5
-      : 10 * weightKg + 6.25 * heightCm - 5 * ageYears - 161
-  const tdee = bmr * ACTIVITY_MULTIPLIERS[activity]
-  const adj = GOAL_ADJUSTMENTS[goal]
-  const calories = Math.round(tdee + adj.kcalDelta)
-  const protein = Math.round(weightKg * adj.proteinMultiplier)
-  const fats = Math.round(weightKg * 0.9)
-  const carbsKcal = calories - protein * 4 - fats * 9
-  const carbs = Math.max(0, Math.round(carbsKcal / 4))
-  return { calories, protein, carbs, fats }
+  const sex: Sex = gender === 'M' ? 'male' : 'female'
+  const bmr = computeMifflinStJeor({ sex, weightKg, heightCm, age: ageYears })
+  const tdee = computeTDEE(bmr, activity)
+  const calories = deriveCalorieTarget(tdee, goal)
+  const macros = deriveMacroTargets(calories, weightKg, goal)
+  return {
+    calories,
+    protein: macros.protein_g,
+    carbs: macros.carbs_g,
+    fats: macros.fats_g,
+  }
 }
 
 function overMacroMismatch(real: number, target: number) {
@@ -326,11 +331,11 @@ export function PlanBuilderSidebar({
                 <Label className="text-[10px] text-muted-foreground">Objetivo</Label>
                 <Select value={suggGoal} onValueChange={(v) => setSuggGoal(v as GoalKey)}>
                   <SelectTrigger className="h-8 text-sm">
-                    <SelectValue>{GOAL_ADJUSTMENTS[suggGoal].label}</SelectValue>
+                    <SelectValue>{GOAL_LABELS[suggGoal]}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.entries(GOAL_ADJUSTMENTS).map(([k, v]) => (
-                      <SelectItem key={k} value={k}>{v.label}</SelectItem>
+                    {(Object.entries(GOAL_LABELS) as [GoalKey, string][]).map(([k, label]) => (
+                      <SelectItem key={k} value={k}>{label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

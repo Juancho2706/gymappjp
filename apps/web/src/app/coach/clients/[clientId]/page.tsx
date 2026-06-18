@@ -7,6 +7,8 @@ import { ClientProfileDashboard } from './ClientProfileDashboard'
 import { ClientProfileHero } from './ClientProfileHero'
 import { createClient } from '@/lib/supabase/server'
 import { hasModule } from '@/services/entitlements.service'
+import { getCoachNutrientTargets } from './_data/nutrient-targets.queries'
+import { getCoachPrivateNotes, getCoachMealComments } from './_data/nutrition-notes.queries'
 
 export default async function ClientProfilePage({ params }: { params: Promise<{ clientId: string }> }) {
     const { clientId } = await params
@@ -41,6 +43,18 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
 async function ProfileContent({ clientId }: { clientId: string }) {
     const data = await getClientProfileData(clientId)
     const { client, nutritionPlans, checkIns, compliance } = data
+
+    // Zona C (coach) de Nutrición: umbrales de micros, nota privada y el hilo
+    // bidireccional de comentarios (anclado al día de hoy en Santiago). Se
+    // resuelven server-side y se pasan al dashboard → NutritionTabB5.
+    const nutritionTodayIso = (data.todayIso as string | undefined) ?? ''
+    const [coachNutrientTargets, coachPrivateNotes, coachMealComments] = await Promise.all([
+        getCoachNutrientTargets(clientId),
+        getCoachPrivateNotes(clientId),
+        nutritionTodayIso
+            ? getCoachMealComments(clientId, nutritionTodayIso)
+            : Promise.resolve([]),
+    ])
 
     const sortedCheckIns = [...(checkIns || [])].sort(
         (a, b) =>
@@ -80,7 +94,12 @@ async function ProfileContent({ clientId }: { clientId: string }) {
 
             <ModuleLinksRow clientId={clientId} />
 
-            <ClientProfileDashboard data={data} />
+            <ClientProfileDashboard
+                data={data}
+                coachNutrientTargets={coachNutrientTargets}
+                coachPrivateNotes={coachPrivateNotes}
+                coachMealComments={coachMealComments}
+            />
         </div>
     )
 }

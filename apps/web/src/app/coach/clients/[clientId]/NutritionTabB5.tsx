@@ -41,6 +41,7 @@ import {
   Minus,
   Heart,
   Droplets,
+  MessageCircle,
 } from 'lucide-react'
 import { AdherenceStrip, type DayAdherence } from '@/app/c/[coach_slug]/nutrition/_components/AdherenceStrip'
 import { MacroRingSummary } from '@/app/c/[coach_slug]/nutrition/_components/MacroRingSummary'
@@ -61,6 +62,12 @@ import {
   type NutritionHistoryEntryLite,
 } from './NutritionCycleHistorySection'
 import { ConsumedVsTarget, NutritionProgressZone } from '@/components/nutrition'
+import { NotesThread, type NotesThreadComment } from '@/components/nutrition/NotesThread'
+import { CoachNutrientTargetsEditor } from './CoachNutrientTargetsEditor'
+import { CoachPrivateNotesPanel } from './CoachPrivateNotesPanel'
+import { addCoachMealComment } from './_actions/nutrition-notes.actions'
+import type { NutrientTargetRow } from '@/services/nutrient-targets.service'
+import type { PrivateNoteRow, MealCommentRow } from '@/services/nutrition-notes.service'
 
 export type NutritionTimelineRow = {
   date: string
@@ -113,6 +120,12 @@ type NutritionTabB5Props = {
   nutritionPlanCycles?: NutritionCycleRow[]
   nutritionTemplatesLite?: { id: string; name: string }[]
   nutritionPlanHistoryEntries?: NutritionHistoryEntryLite[]
+  /** Zona C (coach): umbrales de micros del alumno (+ defaults del coach). */
+  coachNutrientTargets?: NutrientTargetRow[]
+  /** Zona C (coach): notas privadas del coach sobre el alumno. */
+  coachPrivateNotes?: PrivateNoteRow[]
+  /** Zona C (coach): hilo bidireccional de comentarios del día de hoy. */
+  coachMealComments?: MealCommentRow[]
 }
 
 const MACRO_COLORS = {
@@ -299,6 +312,9 @@ export function NutritionTabB5({
   nutritionPlanCycles = [],
   nutritionTemplatesLite = [],
   nutritionPlanHistoryEntries = [],
+  coachNutrientTargets = [],
+  coachPrivateNotes = [],
+  coachMealComments = [],
 }: NutritionTabB5Props) {
   const reduceMotion = useReducedMotion()
   const [openMealId, setOpenMealId] = useState<string | null>(null)
@@ -907,6 +923,32 @@ export function NutritionTabB5({
     </div>
   )
 
+  // ── Hilo bidireccional de comentarios (coach ⇄ alumno) ─────────────────────
+  // Mapea las filas del día de hoy a la forma que consume NotesThread. El coach
+  // responde vía la server action coach-scoped (author_role='coach', anclada al
+  // día de hoy en Santiago).
+  const notesThreadComments = useMemo<NotesThreadComment[]>(
+    () =>
+      coachMealComments.map((c) => ({
+        id: c.id,
+        author_role: c.author_role === 'coach' ? 'coach' : 'client',
+        body: c.body,
+        created_at: c.created_at,
+      })),
+    [coachMealComments]
+  )
+
+  const handleCoachReply = async (body: string) => {
+    const res = await addCoachMealComment({
+      clientId,
+      logDate: santiagoTodayIso,
+      body,
+    })
+    if (!res.ok) {
+      toast.error(res.error)
+    }
+  }
+
   // ── ZONE C · Alertas y contexto ────────────────────────────────────────────
   const zoneCContexto = (
     <section aria-label="Zona C · Alertas y contexto" className="space-y-4">
@@ -920,6 +962,29 @@ export function NutritionTabB5({
         recentCheckIns={recentCheckIns}
         nutritionWeeklyAvgPct={nutritionWeeklyAvgPct}
       />
+
+      {/* Hilo bidireccional: el coach responde los comentarios del alumno. */}
+      <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
+        <div className="mb-3 flex items-center gap-1.5">
+          <MessageCircle className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <h3 className="text-xs font-black uppercase tracking-widest text-primary">
+            Conversación de nutrición · hoy
+          </h3>
+          <InfoTooltip content="Hilo visible para el alumno: responde sus comentarios del día. Para notas que el alumno no ve, usa la nota privada más abajo." iconClassName="w-3 h-3" />
+        </div>
+        <NotesThread
+          comments={notesThreadComments}
+          currentRole="coach"
+          onSubmit={handleCoachReply}
+          emptyHint="Sin comentarios del alumno hoy. Puedes escribirle una nota."
+        />
+      </GlassCard>
+
+      {/* Umbrales de micros para este alumno (feature A-base). */}
+      <CoachNutrientTargetsEditor clientId={clientId} initial={coachNutrientTargets} />
+
+      {/* Nota privada del coach — el alumno nunca la ve (feature E). */}
+      <CoachPrivateNotesPanel clientId={clientId} notes={coachPrivateNotes} />
       <NutritionCycleHistorySection
         coachId={coachId}
         clientId={clientId}

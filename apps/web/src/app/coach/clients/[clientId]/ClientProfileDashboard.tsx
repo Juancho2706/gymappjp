@@ -33,12 +33,23 @@ import {
 } from '@/lib/workout/programWeekVariant'
 import { effectiveWorkoutSection } from '@/lib/workout-block-grouping'
 import { updateClientGoalWeight } from './_actions/client-detail.actions'
+import type { NutrientTargetRow } from '@/services/nutrient-targets.service'
+import type { PrivateNoteRow, MealCommentRow } from '@/services/nutrition-notes.service'
 
 interface ClientProfileDashboardProps {
     data: any // using any temporarily to save time on type definitions
+    /** Zona C (coach) de Nutrición — resueltos server-side en page.tsx. */
+    coachNutrientTargets?: NutrientTargetRow[]
+    coachPrivateNotes?: PrivateNoteRow[]
+    coachMealComments?: MealCommentRow[]
 }
 
-export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
+export function ClientProfileDashboard({
+    data,
+    coachNutrientTargets = [],
+    coachPrivateNotes = [],
+    coachMealComments = [],
+}: ClientProfileDashboardProps) {
     const reduceMotion = useReducedMotion()
     const [activeTab, setActiveTab] = useState<ProfileMainTabId>('overview')
     const [isPending, startTransition] = useTransition()
@@ -899,6 +910,9 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                             nutritionPlanCycles={data.nutritionPlanCycles ?? []}
                             nutritionTemplatesLite={data.nutritionTemplatesLite ?? []}
                             nutritionPlanHistoryEntries={data.nutritionPlanHistoryEntries ?? []}
+                            coachNutrientTargets={coachNutrientTargets}
+                            coachPrivateNotes={coachPrivateNotes}
+                            coachMealComments={coachMealComments}
                         />
                     </div>
                     </motion.div>

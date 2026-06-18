@@ -9,6 +9,8 @@ import { AssignRecipeModal, type RecipeAssignClient } from './AssignRecipeModal'
 import { deleteRecipeAction } from '../../_actions/recipes.actions'
 import type { RecipeRow } from '@/services/nutrition-recipes.service'
 import { toast } from 'sonner'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { TierBadge } from '@/components/nutrition/TierBadge'
 
 type Props = {
   recipes: RecipeRow[]
@@ -36,9 +38,15 @@ export function RecipeLibrary({ recipes, clients }: Props) {
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row gap-3 md:items-center justify-between">
-        <p className="text-xs text-muted-foreground leading-relaxed max-w-md">
-          Ideas de recetas — inspiración para tus alumnos. No afectan macros ni adherencia.
-        </p>
+        <div className="space-y-1.5 max-w-md">
+          <div className="flex items-center gap-1.5">
+            <TierBadge tier="base" />
+            <InfoTooltip content="Ideas de recetas para inspirar a tus alumnos. Viene incluido en el módulo de nutrición (Base). No afectan macros ni adherencia." />
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Ideas de recetas — inspiración para tus alumnos. No afectan macros ni adherencia.
+          </p>
+        </div>
         <CreateRecipeDialog />
       </div>
 

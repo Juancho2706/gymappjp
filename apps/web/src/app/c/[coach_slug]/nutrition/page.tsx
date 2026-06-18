@@ -19,6 +19,14 @@ import { getStudentExchangeData } from './_data/nutrition-exchanges.queries'
 import { getAssignedRecipesForClient } from './_data/recipes.queries'
 import { RecipeIdeasSection } from './_components/RecipeIdeasSection'
 import { pdfBrandFromProxyHeaders } from '@/lib/nutrition-pdf-brand'
+import { getClientMealComments } from './_data/nutrition-notes.queries'
+import { getShoppingList } from './_data/shopping.queries'
+import { getRecentIntakeFoods } from './_data/intake.queries'
+import {
+  getPlanDayMicros,
+  getMicroTargetsForClient,
+  platePropFromMacros,
+} from './_data/sections.queries'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
 
@@ -41,7 +49,19 @@ export default async function ClientNutritionPage({ params }: Props) {
   }
 
   const { iso: today } = getTodayInSantiago()
-  const [todayLog, adherence, heroBundle, exchange, recipes, headersList] = await Promise.all([
+  const [
+    todayLog,
+    adherence,
+    heroBundle,
+    exchange,
+    recipes,
+    headersList,
+    notes,
+    shoppingList,
+    offPlanRecents,
+    dayMicros,
+    microTargets,
+  ] = await Promise.all([
     getNutritionLogForDate(user.id, plan.id, today),
     getNutritionAdherence30d(user.id, plan.id),
     getHeroComplianceBundle(user.id, coach_slug),
@@ -55,7 +75,16 @@ export default async function ClientNutritionPage({ params }: Props) {
     // Feature L: recetas-idea asignadas por el coach (inspiración, solo lectura).
     getAssignedRecipesForClient(user.id),
     headers(),
+    // Overhaul (base tier): notas del día, lista de compras, recientes off-plan, micros.
+    getClientMealComments(today),
+    getShoppingList(user.id),
+    getRecentIntakeFoods(10),
+    getPlanDayMicros(user.id, plan.id, today),
+    getMicroTargetsForClient(plan.coach_id ?? null, user.id),
   ])
+
+  // Proporción del plato derivada del split de macros del plan (guía, no meta).
+  const plateProportion = platePropFromMacros(plan.protein_g ?? 0, plan.carbs_g ?? 0)
   const hasTodayWorkout = heroBundle.hero.hasWorkout
   // Marca del tenant resuelta SERVER-SIDE desde headers del proxy (free tier ⇒ EVA, AC4).
   const pdfBrand = pdfBrandFromProxyHeaders(headersList)
@@ -112,6 +141,12 @@ export default async function ClientNutritionPage({ params }: Props) {
           exchange={exchange}
           pdfBrand={pdfBrand}
           brandLogoUrl={brandLogoUrl}
+          notes={notes}
+          shoppingList={shoppingList}
+          offPlanRecents={offPlanRecents}
+          dayMicros={dayMicros}
+          microTargets={microTargets}
+          plateProportion={plateProportion}
         />
 
         <RecipeIdeasSection recipes={recipes} />

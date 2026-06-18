@@ -16,6 +16,8 @@ import { NutritionOnboarding } from './NutritionOnboarding'
 import { CoachNutritionGuideDialog } from './CoachNutritionGuideDialog'
 import { RecipeLibrary } from './recipes/RecipeLibrary'
 import type { RecipeRow } from '@/services/nutrition-recipes.service'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { TierBadge } from '@/components/nutrition/TierBadge'
 
 type FoodLib = {
   foods: {
@@ -225,7 +227,16 @@ export function NutritionHub({
 
         <TabsContent value="recipes" className="mt-0 focus-visible:outline-none">
           <div className="space-y-6">
-            <SectionHeading icon={<ChefHat className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />} title="Recetas" />
+            <SectionHeading
+              icon={<ChefHat className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />}
+              title="Recetas"
+              trailing={
+                <>
+                  <TierBadge tier="base" />
+                  <InfoTooltip content="Ideas de recetas para inspirar a tus alumnos. Viene incluido en el módulo de nutrición (Base). No afectan macros ni adherencia." />
+                </>
+              }
+            />
             <RecipeLibrary recipes={recipes} clients={assignClients} />
           </div>
         </TabsContent>
@@ -234,7 +245,7 @@ export function NutritionHub({
   )
 }
 
-function SectionHeading({ icon, title }: { icon: ReactNode; title: string }) {
+function SectionHeading({ icon, title, trailing }: { icon: ReactNode; title: string; trailing?: ReactNode }) {
   return (
     <div
       className="flex items-center gap-4 pb-2 border-b-2"
@@ -247,6 +258,7 @@ function SectionHeading({ icon, title }: { icon: ReactNode; title: string }) {
         {icon}
       </div>
       <h2 className="text-xl font-black uppercase tracking-tight font-display">{title}</h2>
+      {trailing ? <div className="flex items-center gap-1.5">{trailing}</div> : null}
     </div>
   )
 }
