@@ -28,7 +28,8 @@ import {
 } from '@/lib/constants'
 import type { ModuleKey } from '@/services/entitlements.service'
 import { useCaptureAddonFunnel } from '@/lib/posthog/events'
-import { Zap, Crown, Rocket, TrendingUp, Building2, Check, Leaf, HelpCircle, Puzzle, Lock, Gift, type LucideIcon } from 'lucide-react'
+import Link from 'next/link'
+import { Zap, Crown, Rocket, TrendingUp, Building2, Check, Leaf, HelpCircle, Puzzle, Lock, Gift, ArrowLeft, type LucideIcon } from 'lucide-react'
 
 // growth/scale: LEGACY (fuera de venta). Se mantienen en los mapas de display porque el PLAN
 // ACTUAL de un coach grandfathered puede ser legacy y debe renderizar su icono/color correcto.
@@ -528,6 +529,12 @@ export default function CoachSubscriptionPage() {
 
     return (
         <main className="mx-auto max-w-4xl px-4 py-8">
+            <Link
+                href="/coach/settings"
+                className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+            >
+                <ArrowLeft className="h-4 w-4" /> Opciones
+            </Link>
             <h1 className="text-2xl font-extrabold text-foreground">Mi Suscripción</h1>
             <p className="mt-1 text-sm text-muted-foreground">
                 Gestioná tu plan, frecuencia de cobro y cancelación.

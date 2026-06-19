@@ -49,20 +49,9 @@ export default async function CoachFuncionesPage() {
             </div>
 
             {ctx.scope === 'team' ? (
-                <FeaturePrefsPanel
-                    scope="team"
-                    teamId={ctx.teamId!}
-                    initialPreset={ctx.preset}
-                    initialSections={ctx.sections}
-                    entitledByModule={ctx.entitledByModule}
-                />
+                <FeaturePrefsPanel scope="team" teamId={ctx.teamId!} domains={ctx.domains} />
             ) : (
-                <FeaturePrefsPanel
-                    scope="coach"
-                    initialPreset={ctx.preset}
-                    initialSections={ctx.sections}
-                    entitledByModule={ctx.entitledByModule}
-                />
+                <FeaturePrefsPanel scope="coach" domains={ctx.domains} />
             )}
         </div>
     )

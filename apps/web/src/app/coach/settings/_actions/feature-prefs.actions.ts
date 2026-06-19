@@ -22,7 +22,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { NUTRITION_SECTIONS, PRESETS } from '@eva/feature-prefs'
+import { FEATURE_DOMAINS, PRESETS, DOMAIN_ENABLED_KEY } from '@eva/feature-prefs'
 
 export type FeaturePrefsResult =
     | { success: true }
@@ -30,8 +30,14 @@ export type FeaturePrefsResult =
 
 // ── Zod v4 schemas ───────────────────────────────────────────────────────────
 
-/** Keys validas de seccion del dominio nutricion (espejo de `NutritionSectionKey`, plan §4.3). */
-const NUTRITION_SECTION_KEYS = NUTRITION_SECTIONS.map((s) => s.key) as [string, ...string[]]
+/**
+ * Keys validas: TODA section key de cualquier dominio (nutrition hoy; training/planes a futuro)
+ * + la key reservada `_enabled` (master switch del dominio). Keys desconocidas se rechazan.
+ */
+const SECTION_PREF_KEYS = [
+    DOMAIN_ENABLED_KEY,
+    ...new Set(Object.values(FEATURE_DOMAINS).flat().map((s) => s.key)),
+] as [string, ...string[]]
 
 /** preset ∈ {basico,intermedio,profesional}. La migracion dropeo el CHECK → la app valida (plan §4.4). */
 const presetSchema = z.enum(PRESETS)
@@ -42,7 +48,7 @@ const domainSchema = z.string().trim().min(1, 'domain requerido')
  * `sections`: record de booleans keyed por `NutritionSectionKey`. Keys desconocidas se rechazan
  * (no se persiste basura), valores no-boolean se rechazan.
  */
-const sectionsSchema = z.record(z.enum(NUTRITION_SECTION_KEYS), z.boolean())
+const sectionsSchema = z.record(z.enum(SECTION_PREF_KEYS), z.boolean())
 
 const coachPrefsSchema = z.object({
     domain: domainSchema,
