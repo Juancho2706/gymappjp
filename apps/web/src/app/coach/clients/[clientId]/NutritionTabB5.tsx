@@ -68,6 +68,7 @@ import { CoachPrivateNotesPanel } from './CoachPrivateNotesPanel'
 import { addCoachMealComment } from './_actions/nutrition-notes.actions'
 import type { NutrientTargetRow } from '@/services/nutrient-targets.service'
 import type { PrivateNoteRow, MealCommentRow } from '@/services/nutrition-notes.service'
+import type { NutritionSectionKey } from '@eva/feature-prefs'
 
 export type NutritionTimelineRow = {
   date: string
@@ -128,6 +129,19 @@ type NutritionTabB5Props = {
   coachMealComments?: MealCommentRow[]
   /** "Nutrición Pro" (nutrition_exchanges) ON ⇒ umbrales de micros avanzados (Zona C). */
   nutritionProEnabled?: boolean
+  /**
+   * Master switch del dominio Nutrición resuelto para ESTE alumno. `false` ⇒ el coach
+   * apagó la nutrición para este alumno: se oculta toda la tab y se muestra una nota
+   * compacta. Gating = solo render; el historial nunca se borra.
+   */
+  nutritionDomainEnabled?: boolean
+  /**
+   * Visibilidad por sección resuelta para ESTE alumno (`entitled AND wants`). El coach ve
+   * lo que ve el alumno: las opcionales (micros, plate, recetas, notas, hábitos, etc.) se
+   * muestran por flag; las core (plan/macros/adherencia) van siempre. `undefined`
+   * (flag global OFF / sin resolver) ⇒ comportamiento de HOY: mostrar todo.
+   */
+  nutritionSectionFlags?: Record<NutritionSectionKey, boolean>
 }
 
 const MACRO_COLORS = {
@@ -318,8 +332,17 @@ export function NutritionTabB5({
   coachPrivateNotes = [],
   coachMealComments = [],
   nutritionProEnabled = false,
+  nutritionDomainEnabled = true,
+  nutritionSectionFlags,
 }: NutritionTabB5Props) {
   const reduceMotion = useReducedMotion()
+  // Helper de visibilidad por sección: `undefined` (flag global OFF / sin resolver) =>
+  // mostrar todo (comportamiento de HOY). Las core nunca llaman acá: van siempre.
+  const showSection = (key: NutritionSectionKey): boolean =>
+    nutritionSectionFlags ? nutritionSectionFlags[key] === true : true
+  // Micros (Zona C): el editor de umbrales cae bajo micros_base (umbrales base) y se
+  // enriquece con micros_advanced (Nutrición Pro). Visible si cualquiera está prendida.
+  const showMicros = showSection('micros_base') || showSection('micros_advanced')
   const [openMealId, setOpenMealId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [historyDate, setHistoryDate] = useState(santiagoTodayIso)
@@ -966,29 +989,35 @@ export function NutritionTabB5({
         nutritionWeeklyAvgPct={nutritionWeeklyAvgPct}
       />
 
-      {/* Hilo bidireccional: el coach responde los comentarios del alumno. */}
-      <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
-        <div className="mb-3 flex items-center gap-1.5">
-          <MessageCircle className="h-3.5 w-3.5 shrink-0 text-primary" />
-          <h3 className="text-xs font-black uppercase tracking-widest text-primary">
-            Conversación de nutrición · hoy
-          </h3>
-          <InfoTooltip content="Hilo visible para el alumno: responde sus comentarios del día. Para notas que el alumno no ve, usa la nota privada más abajo." iconClassName="w-3 h-3" />
-        </div>
-        <NotesThread
-          comments={notesThreadComments}
-          currentRole="coach"
-          onSubmit={handleCoachReply}
-          emptyHint="Sin comentarios del alumno hoy. Puedes escribirle una nota."
-        />
-      </GlassCard>
+      {/* Hilo bidireccional: el coach responde los comentarios del alumno. Gateado por
+          `notes` (la superficie de notas/comentarios del alumno). */}
+      {showSection('notes') && (
+        <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
+          <div className="mb-3 flex items-center gap-1.5">
+            <MessageCircle className="h-3.5 w-3.5 shrink-0 text-primary" />
+            <h3 className="text-xs font-black uppercase tracking-widest text-primary">
+              Conversación de nutrición · hoy
+            </h3>
+            <InfoTooltip content="Hilo visible para el alumno: responde sus comentarios del día. Para notas que el alumno no ve, usa la nota privada más abajo." iconClassName="w-3 h-3" />
+          </div>
+          <NotesThread
+            comments={notesThreadComments}
+            currentRole="coach"
+            onSubmit={handleCoachReply}
+            emptyHint="Sin comentarios del alumno hoy. Puedes escribirle una nota."
+          />
+        </GlassCard>
+      )}
 
-      {/* Umbrales de micros para este alumno (base + avanzados con Nutrición Pro). */}
-      <CoachNutrientTargetsEditor
-        clientId={clientId}
-        initial={coachNutrientTargets}
-        proEnabled={nutritionProEnabled}
-      />
+      {/* Umbrales de micros para este alumno (base + avanzados con Nutrición Pro).
+          Gateado por micros_base/micros_advanced (espejo de lo que ve el alumno). */}
+      {showMicros && (
+        <CoachNutrientTargetsEditor
+          clientId={clientId}
+          initial={coachNutrientTargets}
+          proEnabled={nutritionProEnabled}
+        />
+      )}
 
       {/* Nota privada del coach — el alumno nunca la ve (feature E). */}
       <CoachPrivateNotesPanel clientId={clientId} notes={coachPrivateNotes} />
@@ -1001,7 +1030,7 @@ export function NutritionTabB5({
         templates={nutritionTemplatesLite}
         historyEntries={nutritionPlanHistoryEntries}
       />
-      {habitsForDate && (habitsForDate.water_ml != null || habitsForDate.steps != null || habitsForDate.sleep_hours != null || habitsForDate.fasting_hours != null || (habitsForDate.supplements?.length ?? 0) > 0) && (
+      {showSection('habits') && habitsForDate && (habitsForDate.water_ml != null || habitsForDate.steps != null || habitsForDate.sleep_hours != null || habitsForDate.fasting_hours != null || (habitsForDate.supplements?.length ?? 0) > 0) && (
         <GlassCard className="border-dashed border-sky-500/20 bg-sky-500/[0.02] p-4 dark:border-sky-500/15">
           <h3 className="mb-3 flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-sky-600 dark:text-sky-400">
             <Droplets className="h-3.5 w-3.5" />
@@ -1489,6 +1518,24 @@ export function NutritionTabB5({
       </GlassCard>
     </>
   )
+
+  // Dominio Nutrición apagado para ESTE alumno: el coach apagó la nutrición en sus
+  // preferencias. Mostrar una nota compacta en vez de la tab completa. Gating = render:
+  // el plan, el historial y la adherencia siguen en la DB intactos.
+  if (!nutritionDomainEnabled) {
+    return (
+      <GlassCard className="border-dashed border-border/50 p-8 text-center dark:border-white/10">
+        <Utensils className="mx-auto mb-3 h-6 w-6 text-muted-foreground" />
+        <h3 className="text-sm font-black uppercase tracking-widest text-foreground">
+          Nutrición desactivada para este alumno
+        </h3>
+        <p className="mx-auto mt-2 max-w-md text-xs font-medium text-muted-foreground">
+          Apagaste el módulo de nutrición para este alumno en tus preferencias. Sus datos se
+          conservan; vuelve a activarlo para ver plan, macros y adherencia.
+        </p>
+      </GlassCard>
+    )
+  }
 
   return (
     <div className="space-y-8">

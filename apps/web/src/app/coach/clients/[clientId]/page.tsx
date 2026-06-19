@@ -7,6 +7,10 @@ import { ClientProfileDashboard } from './ClientProfileDashboard'
 import { ClientProfileHero } from './ClientProfileHero'
 import { createClient } from '@/lib/supabase/server'
 import { hasModule } from '@/services/entitlements.service'
+import {
+    resolveFeaturePrefs,
+    resolveNutritionDomainEnabled,
+} from '@/services/feature-prefs.service'
 import { getCoachNutrientTargets } from './_data/nutrient-targets.queries'
 import { getCoachPrivateNotes, getCoachMealComments } from './_data/nutrition-notes.queries'
 
@@ -48,13 +52,48 @@ async function ProfileContent({ clientId }: { clientId: string }) {
     // bidireccional de comentarios (anclado al día de hoy en Santiago). Se
     // resuelven server-side y se pasan al dashboard → NutritionTabB5.
     const nutritionTodayIso = (data.todayIso as string | undefined) ?? ''
-    const [coachNutrientTargets, coachPrivateNotes, coachMealComments, nutritionProEnabled] = await Promise.all([
+
+    // Prefs RESUELTAS para ESTE alumno: el coach debe ver lo que ve el alumno
+    // (base coach/team + override del cliente). El resolver gobierna que zonas
+    // opcionales se muestran; las core (plan/macros/adherencia) van siempre.
+    // El contexto (coach/team/org/plan) sale de la fila del alumno + plan activo
+    // para que entitlement (pool-wins + kill-switch) + preferencia coincidan con
+    // la vista del alumno.
+    const nutritionClient = client as {
+        coach_id?: string | null
+        team_id?: string | null
+        org_id?: string | null
+    }
+    const nutritionCoachId = nutritionClient.coach_id ?? ''
+    const activeNutritionPlanId =
+        (data.activeNutritionPlanWithMeals as { id?: string } | null | undefined)?.id ?? null
+    const featurePrefsInput = {
+        coachId: nutritionCoachId,
+        clientId,
+        clientTeamId: nutritionClient.team_id ?? null,
+        clientOrgId: nutritionClient.org_id ?? null,
+    }
+
+    const [
+        coachNutrientTargets,
+        coachPrivateNotes,
+        coachMealComments,
+        nutritionProEnabled,
+        nutritionDomainEnabled,
+        nutritionSectionFlags,
+    ] = await Promise.all([
         getCoachNutrientTargets(clientId),
         getCoachPrivateNotes(clientId),
         nutritionTodayIso
             ? getCoachMealComments(clientId, nutritionTodayIso)
             : Promise.resolve([]),
         resolveNutritionProEnabled(clientId),
+        resolveNutritionDomainEnabled(featurePrefsInput),
+        resolveFeaturePrefs({
+            domain: 'nutrition',
+            ...featurePrefsInput,
+            planId: activeNutritionPlanId,
+        }),
     ])
 
     const sortedCheckIns = [...(checkIns || [])].sort(
@@ -101,6 +140,8 @@ async function ProfileContent({ clientId }: { clientId: string }) {
                 coachPrivateNotes={coachPrivateNotes}
                 coachMealComments={coachMealComments}
                 nutritionProEnabled={nutritionProEnabled}
+                nutritionDomainEnabled={nutritionDomainEnabled}
+                nutritionSectionFlags={nutritionSectionFlags}
             />
         </div>
     )

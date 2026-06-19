@@ -35,6 +35,7 @@ import { effectiveWorkoutSection } from '@/lib/workout-block-grouping'
 import { updateClientGoalWeight } from './_actions/client-detail.actions'
 import type { NutrientTargetRow } from '@/services/nutrient-targets.service'
 import type { PrivateNoteRow, MealCommentRow } from '@/services/nutrition-notes.service'
+import type { NutritionSectionKey } from '@eva/feature-prefs'
 
 interface ClientProfileDashboardProps {
     data: any // using any temporarily to save time on type definitions
@@ -44,6 +45,10 @@ interface ClientProfileDashboardProps {
     coachMealComments?: MealCommentRow[]
     /** "Nutrición Pro" (nutrition_exchanges) ON ⇒ umbrales de micros avanzados. */
     nutritionProEnabled?: boolean
+    /** Master switch del dominio Nutrición resuelto para ESTE alumno (false ⇒ ocultar todo). */
+    nutritionDomainEnabled?: boolean
+    /** Visibilidad por sección resuelta para ESTE alumno (entitled AND wants). */
+    nutritionSectionFlags?: Record<NutritionSectionKey, boolean>
 }
 
 export function ClientProfileDashboard({
@@ -52,6 +57,8 @@ export function ClientProfileDashboard({
     coachPrivateNotes = [],
     coachMealComments = [],
     nutritionProEnabled = false,
+    nutritionDomainEnabled = true,
+    nutritionSectionFlags,
 }: ClientProfileDashboardProps) {
     const reduceMotion = useReducedMotion()
     const [activeTab, setActiveTab] = useState<ProfileMainTabId>('overview')
@@ -917,6 +924,8 @@ export function ClientProfileDashboard({
                             coachPrivateNotes={coachPrivateNotes}
                             coachMealComments={coachMealComments}
                             nutritionProEnabled={nutritionProEnabled}
+                            nutritionDomainEnabled={nutritionDomainEnabled}
+                            nutritionSectionFlags={nutritionSectionFlags}
                         />
                     </div>
                     </motion.div>

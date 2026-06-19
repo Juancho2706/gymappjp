@@ -1,4 +1,6 @@
 import { cache } from 'react'
+import { createClient } from '@/lib/supabase/server'
+import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
 import {
     getActiveProgram,
     getCheckInHistory30Days,
@@ -248,3 +250,34 @@ function computeNutritionComplianceScore(
 
     return Math.min(100, Math.round(summary.compliancePct))
 }
+
+/**
+ * ¿Esta PRENDIDO el dominio Nutricion para este alumno en el DASHBOARD? Espejo exacto del gate
+ * de la pagina `/c/[coach_slug]/nutrition` (master switch `_enabled`, plan §4.8): cuando el coach
+ * apaga el dominio, las superficies de nutricion del dashboard (anillo de cumplimiento + resumen
+ * diario) se ocultan limpio — nunca un esqueleto roto (NN/g pitfall).
+ *
+ * Resuelve el scope (coach/team/org) desde la fila `clients` del propio alumno (RLS techo:
+ * `clients.id = auth.uid()`), igual que `getClientScope` de la pagina de nutricion. Usar el scope
+ * del alumno (no el `coach_id` del plan) cubre el caso "sin plan": el dominio puede estar apagado
+ * aunque todavia no exista un plan nutricional.
+ *
+ * React.cache => una sola lectura por request aunque el sidebar se monte 2x (mobile + desktop) y
+ * el anillo + el resumen llamen ambos. Fail-OPEN del flag `FEATURE_PREFS_ENABLED` viene heredado
+ * de `resolveNutritionDomainEnabled` (flag OFF => `true` = comportamiento de HOY, nada se oculta).
+ */
+export const getDashboardNutritionDomainEnabled = cache(async (userId: string): Promise<boolean> => {
+    const supabase = await createClient()
+    const { data } = await supabase
+        .from('clients')
+        .select('coach_id, team_id, org_id')
+        .eq('id', userId)
+        .maybeSingle()
+
+    return resolveNutritionDomainEnabled({
+        coachId: (data?.coach_id ?? '') as string,
+        clientId: userId,
+        clientTeamId: (data?.team_id ?? null) as string | null,
+        clientOrgId: (data?.org_id ?? null) as string | null,
+    })
+})

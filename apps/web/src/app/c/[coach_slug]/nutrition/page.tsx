@@ -28,6 +28,12 @@ import {
   getNutritionProEnabledForClient,
   platePropFromMacros,
 } from './_data/sections.queries'
+import { getClientScope } from './_data/client-scope.queries'
+import {
+  resolveFeaturePrefs,
+  resolveNutritionDomainEnabled,
+} from '@/services/feature-prefs.service'
+import { NutritionDomainOff } from './_components/NutritionDomainOff'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
 
@@ -50,6 +56,16 @@ export default async function ClientNutritionPage({ params }: Props) {
   }
 
   const { iso: today } = getTodayInSantiago()
+  // Scope del alumno (team/org) — alimenta el resolver de feature-prefs (capa base = team en §4.9).
+  const clientScope = await getClientScope(user.id)
+  const prefsInput = {
+    domain: 'nutrition' as const,
+    coachId: plan.coach_id ?? '',
+    clientId: user.id,
+    planId: plan.id,
+    clientTeamId: clientScope.teamId,
+    clientOrgId: clientScope.orgId,
+  }
   const [
     todayLog,
     adherence,
@@ -63,6 +79,8 @@ export default async function ClientNutritionPage({ params }: Props) {
     dayMicros,
     microTargets,
     nutritionProEnabled,
+    domainEnabled,
+    sectionFlags,
   ] = await Promise.all([
     getNutritionLogForDate(user.id, plan.id, today),
     getNutritionAdherence30d(user.id, plan.id),
@@ -84,7 +102,20 @@ export default async function ClientNutritionPage({ params }: Props) {
     getPlanDayMicros(user.id, plan.id, today),
     getMicroTargetsForClient(plan.coach_id ?? null, user.id),
     getNutritionProEnabledForClient(plan.id),
+    // Master switch del dominio + visibilidad por seccion (fail-OPEN con flag OFF, §4.4).
+    resolveNutritionDomainEnabled({
+      coachId: plan.coach_id ?? '',
+      clientId: user.id,
+      clientTeamId: clientScope.teamId,
+      clientOrgId: clientScope.orgId,
+    }),
+    resolveFeaturePrefs(prefsInput),
   ])
+
+  // Dominio apagado por el coach => ocultar TODA la nutricion (menu + contenido), nunca blanco.
+  if (!domainEnabled) {
+    return <NutritionDomainOff coachSlug={coach_slug} />
+  }
 
   // Proporción del plato derivada del split de macros del plan (guía, no meta).
   const plateProportion = platePropFromMacros(plan.protein_g ?? 0, plan.carbs_g ?? 0)
@@ -151,9 +182,10 @@ export default async function ClientNutritionPage({ params }: Props) {
           microTargets={microTargets}
           nutritionProEnabled={nutritionProEnabled}
           plateProportion={plateProportion}
+          sectionFlags={sectionFlags}
         />
 
-        <RecipeIdeasSection recipes={recipes} />
+        {sectionFlags.recipes && <RecipeIdeasSection recipes={recipes} />}
       </main>
     </div>
   )

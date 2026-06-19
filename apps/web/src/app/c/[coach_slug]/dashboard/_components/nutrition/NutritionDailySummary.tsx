@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Apple } from 'lucide-react'
 import { GlassCard } from '@/components/ui/glass-card'
 import { getActiveNutritionPlan, getTodayNutritionBundle } from '../../_data/dashboard.queries'
+import { getDashboardNutritionDomainEnabled } from '../../_data/heroComplianceBundle'
 import { getTodayInSantiago, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 import {
   applyMealFoodSwaps,
@@ -15,6 +16,11 @@ import { MealCompletionRow } from './MealCompletionRow'
 import { getClientBasePath } from '@/lib/client/base-path'
 
 export async function NutritionDailySummary({ userId, coachSlug }: { userId: string; coachSlug: string }) {
+    // Master switch del dominio Nutricion (plan §4.8): si el coach lo apago para este alumno,
+    // no renderizamos el resumen diario — se oculta limpio (sin esqueleto roto, NN/g pitfall).
+    const nutritionEnabled = await getDashboardNutritionDomainEnabled(userId)
+    if (!nutritionEnabled) return null
+
     const base = await getClientBasePath(coachSlug)
     const plan = await getActiveNutritionPlan(userId)
     const { iso: today } = getTodayInSantiago()
