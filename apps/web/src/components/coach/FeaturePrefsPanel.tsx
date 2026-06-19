@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
-import { Apple, ChevronDown, Lock, Sparkles } from 'lucide-react'
+import { Apple, ChevronDown, Lock, Sparkles, Save } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
     DOMAIN_ENABLED_KEY,
@@ -139,6 +139,10 @@ function DomainFuncionesGroup({
 
     const [preset, setPreset] = useState<Preset>(normalizePreset(config.preset))
     const [sections, setSections] = useState<SectionPrefs>(config.sectionPrefs)
+    const [saved, setSaved] = useState<{ preset: Preset; sections: SectionPrefs }>({
+        preset: normalizePreset(config.preset),
+        sections: config.sectionPrefs,
+    })
     const [adjustOpen, setAdjustOpen] = useState(false)
     const [areaOpen, setAreaOpen] = useState(defaultOpen)
 
@@ -147,65 +151,57 @@ function DomainFuncionesGroup({
 
     // `_enabled` ausente => dominio prendido (no rompe coaches backfilleados).
     const domainEnabled = sections[DOMAIN_ENABLED_KEY] ?? true
+    const dirty =
+        preset !== saved.preset || JSON.stringify(sections) !== JSON.stringify(saved.sections)
 
-    /** Persiste el snapshot dado para ESTE dominio; revierte al previo si la action falla. */
-    function persist(
-        nextPreset: Preset,
-        nextSections: SectionPrefs,
-        prev: { preset: Preset; sections: SectionPrefs },
-    ) {
+    // Los cambios son SOLO borrador local (no persisten por toggle -> no re-renderiza a cada rato).
+    // Se commitean UNA vez con "Guardar configuracion".
+    function applyPreset(next: Preset) {
+        if (next === preset) return
+        // Cambiar de preset re-siembra las secciones a su default, preservando el master switch.
+        setPreset(next)
+        setSections({
+            ...sectionsForPreset(toggleableSections, next),
+            [DOMAIN_ENABLED_KEY]: domainEnabled,
+        })
+    }
+
+    function toggleDomain(nextEnabled: boolean) {
+        setSections((s) => ({ ...s, [DOMAIN_ENABLED_KEY]: nextEnabled }))
+    }
+
+    function toggleSection(key: string, nextOn: boolean) {
+        setSections((s) => ({ ...s, [key]: nextOn }))
+    }
+
+    /** Commit del borrador (una sola escritura). En error NO revierte (el coach reintenta). */
+    function save() {
         startTransition(async () => {
             const result: FeaturePrefsResult =
                 scope === 'team'
                     ? await setTeamFeaturePrefs({
                           teamId: teamId!,
                           domain: config.domain,
-                          preset: nextPreset,
-                          sections: nextSections as Record<string, boolean>,
+                          preset,
+                          sections: sections as Record<string, boolean>,
                       })
                     : await setCoachFeaturePrefs({
                           domain: config.domain,
-                          preset: nextPreset,
-                          sections: nextSections as Record<string, boolean>,
+                          preset,
+                          sections: sections as Record<string, boolean>,
                       })
-
             if ('error' in result) {
-                // Revertir optimismo.
-                setPreset(prev.preset)
-                setSections(prev.sections)
                 toast.error(result.error || 'No se pudo guardar.')
                 return
             }
-            toast.success('Funciones actualizadas.')
+            setSaved({ preset, sections })
+            toast.success('Funciones guardadas.')
         })
     }
 
-    function applyPreset(next: Preset) {
-        if (next === preset) return
-        const prev = { preset, sections }
-        // Cambiar de preset re-siembra las secciones a su default del preset, preservando el
-        // master switch (`_enabled`) — el preset es de secciones, no del dominio entero.
-        const nextSections: SectionPrefs = {
-            ...sectionsForPreset(toggleableSections, next),
-            [DOMAIN_ENABLED_KEY]: domainEnabled,
-        }
-        setPreset(next)
-        setSections(nextSections)
-        persist(next, nextSections, prev)
-    }
-
-    function toggleDomain(nextEnabled: boolean) {
-        const prev = { preset, sections }
-        const nextSections: SectionPrefs = { ...sections, [DOMAIN_ENABLED_KEY]: nextEnabled }
-        setSections(nextSections)
-        persist(preset, nextSections, prev)
-    }
-
-    function toggleSection(key: string, nextOn: boolean) {
-        const prev = { preset, sections }
-        const nextSections: SectionPrefs = { ...sections, [key]: nextOn }
-        setSections(nextSections)
-        persist(preset, nextSections, prev)
+    function discard() {
+        setPreset(saved.preset)
+        setSections(saved.sections)
     }
 
     return (
@@ -428,6 +424,34 @@ function DomainFuncionesGroup({
                                         </motion.div>
                                     )}
                                 </AnimatePresence>
+                            </div>
+
+                            {/* Footer: descartar + guardar (borrador, una sola escritura) */}
+                            <div className="flex items-center justify-end gap-2 pt-1">
+                                {dirty && (
+                                    <button
+                                        type="button"
+                                        onClick={discard}
+                                        disabled={isPending}
+                                        className="inline-flex min-h-[40px] items-center rounded-xl px-3 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+                                    >
+                                        Descartar
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={save}
+                                    disabled={isPending || !dirty}
+                                    className={cn(
+                                        'inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-4 text-xs font-bold transition-colors',
+                                        dirty && !isPending
+                                            ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                                            : 'bg-muted text-muted-foreground',
+                                    )}
+                                >
+                                    <Save className="h-3.5 w-3.5" />{' '}
+                                    {isPending ? 'Guardando…' : 'Guardar configuración'}
+                                </button>
                             </div>
                         </div>
                     </motion.div>
