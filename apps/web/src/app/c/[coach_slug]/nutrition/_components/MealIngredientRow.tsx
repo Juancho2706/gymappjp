@@ -5,6 +5,7 @@ import { ArrowLeftRight, Heart, Flame } from 'lucide-react'
 import {
   calculateFoodItemMacros,
   coerceSwapOptionUnit,
+  gramsToHousehold,
   swapOptionIsLiquid,
   type FoodItemForMacros,
 } from '@/lib/nutrition-utils'
@@ -30,7 +31,13 @@ export function MealIngredientRow({
   onApplySwap,
 }: Props) {
   const macros = calculateFoodItemMacros(item)
-  const displayQty = `${item.quantity} ${item.unit || (item.quantity < 10 ? 'un' : 'g')}`
+  const resolvedUnit = item.unit || (item.quantity < 10 ? 'un' : 'g')
+  // Medidas caseras (C): en gramos, rotula "120 g (1 taza)" si el alimento tiene household_*;
+  // si no, gramsToHousehold degrada a solo la masa. Para 'un'/'ml' deja la cantidad cruda.
+  const displayQty =
+    resolvedUnit === 'g'
+      ? gramsToHousehold(item.foods, item.quantity)
+      : `${item.quantity} ${resolvedUnit}`
   const foodId = item.foods.id
   const [showSwaps, setShowSwaps] = useState(false)
   const swapOptions = item.swap_options ?? []

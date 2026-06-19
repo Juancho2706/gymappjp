@@ -25,6 +25,9 @@ export type FoodMacrosRow = {
   fats_g: number
   serving_size: number
   serving_unit: string | null
+  /** Porción casera (household) opcional — alimenta `gramsToHousehold` en la UI. */
+  household_grams?: number | null
+  household_label?: string | null
 }
 
 export type FoodItemForMacros = {

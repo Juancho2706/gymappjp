@@ -804,6 +804,11 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
     const servingSizeRaw = formData.get('serving_size') as string | null
     const servingParsed = parseFloat(servingSizeRaw ?? '')
     const serving_size = !isNaN(servingParsed) && servingParsed > 0 ? servingParsed : 100
+    // Medida casera (C) opcional — solo aplica a gramos (en 'un' la unidad ya es la medida).
+    const householdLabelRaw = (formData.get('household_label') as string | null)?.trim() || ''
+    const householdGramsParsed = parseFloat((formData.get('household_grams') as string | null) ?? '')
+    const hasHousehold =
+      serving_unit === 'g' && householdLabelRaw.length > 0 && householdGramsParsed > 0
 
     const parsed = CustomFoodSchema.safeParse({
       name,
@@ -814,6 +819,9 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
       serving_size,
       serving_unit,
       category,
+      ...(hasHousehold
+        ? { household_grams: householdGramsParsed, household_label: householdLabelRaw }
+        : {}),
     })
 
     if (!parsed.success) {
@@ -831,6 +839,8 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
       is_liquid,
       category: parsed.data.category,
       coach_id: coachId,
+      household_grams: parsed.data.household_grams ?? null,
+      household_label: parsed.data.household_label ?? null,
     })
 
     if (error) throw error

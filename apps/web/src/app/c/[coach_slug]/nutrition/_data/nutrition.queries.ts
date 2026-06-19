@@ -18,7 +18,7 @@ export const getActiveNutritionPlan = cache(async (userId: string) => {
         id, name, description, order_index, plan_id, day_of_week,
         food_items (
           id, meal_id, quantity, unit, swap_options,
-          foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )
+          foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, household_grams, household_label )
         )
       )
     `
