@@ -71,6 +71,21 @@ export default async function CoachSettingsPage() {
                     <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                 </Link>
 
+                {/* Funciones del equipo — visibilidad de nutrición (solo gestores; la query/RLS gatean) */}
+                <Link
+                    href="/coach/settings/funciones"
+                    className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
+                >
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+                        <SlidersHorizontal className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-foreground">Funciones del equipo</h3>
+                        <p className="text-xs text-muted-foreground">Qué tan a fondo trabaja el equipo la nutrición y qué secciones ven los alumnos</p>
+                    </div>
+                    <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </Link>
+
                 <DangerZone />
             </div>
         )
@@ -257,8 +272,18 @@ export default async function CoachSettingsPage() {
                         <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
                     </Link>
 
-                    {/* Zona "Funciones" (Fase C): aquí irán los toggles de visibilidad coach/alumno.
-                        Placeholder intencional — NO construir toggles en esta fase. */}
+                    {/* Funciones — toggles de visibilidad (qué se muestra de lo que tienes) */}
+                    <Link
+                        href="/coach/settings/funciones"
+                        className="group flex items-center gap-4 px-4 py-3.5 transition-colors hover:bg-card/60"
+                    >
+                        <SlidersHorizontal className="h-5 w-5 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                            <h4 className="text-sm font-medium text-foreground">Funciones</h4>
+                            <p className="text-xs text-muted-foreground">Qué tan a fondo trabajas la nutrición y qué secciones ven tus alumnos</p>
+                        </div>
+                        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                    </Link>
                 </div>
             </section>
 

@@ -75,6 +75,63 @@ describe('getVisibleNavItems — matriz por contexto', () => {
     })
 })
 
+describe('getVisibleNavItems — master switch de dominio (feature-prefs _enabled)', () => {
+    it('el registro marca la entrada "nutrition" con featureDomain "nutrition"', () => {
+        const nutrition = NAV_MODULES.find((m) => m.key === 'nutrition')!
+        expect(nutrition.featureDomain).toBe('nutrition')
+    })
+
+    it('Nutrición se OCULTA cuando el dominio está en disabledDomains', () => {
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'active',
+            disabledDomains: new Set(['nutrition']),
+        }))
+        expect(k).not.toContain('nutrition')
+        // El resto del nav permanece intacto (solo se filtra el dominio apagado).
+        expect(k).toEqual(['dashboard', 'clients', 'programs', 'options', 'support'])
+    })
+
+    it('Nutrición se MUESTRA cuando el dominio NO está en disabledDomains (set vacío)', () => {
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'active',
+            disabledDomains: new Set(),
+        }))
+        expect(k).toContain('nutrition')
+    })
+
+    it('Nutrición se MUESTRA cuando disabledDomains está ausente/null (fail-open = HOY)', () => {
+        for (const disabled of [undefined, null] as const) {
+            const k = keys(getVisibleNavItems({
+                activeWorkspaceType: 'coach_standalone',
+                subscriptionStatus: 'active',
+                disabledDomains: disabled,
+            }))
+            expect(k).toContain('nutrition')
+        }
+    })
+
+    it('el filtro de dominio aplica en team también (Nutrición existe en todos los contextos)', () => {
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_team',
+            subscriptionStatus: 'team_managed',
+            disabledDomains: new Set(['nutrition']),
+        }))
+        expect(k).not.toContain('nutrition')
+        expect(k).toEqual(['dashboard', 'clients', 'team', 'programs', 'settings_team', 'support'])
+    })
+
+    it('un dominio desconocido en disabledDomains no afecta ninguna entrada', () => {
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'active',
+            disabledDomains: new Set(['workouts', 'unknown']),
+        }))
+        expect(k).toEqual(['dashboard', 'clients', 'programs', 'nutrition', 'options', 'support'])
+    })
+})
+
 describe('getVisibleNavItems — módulos toggleables (entitlements, specs movida)', () => {
     it('sin enabledModules los items con entitlement quedan ocultos (default OFF)', () => {
         const k = keys(getVisibleNavItems({ activeWorkspaceType: 'coach_standalone', subscriptionStatus: 'active' }))

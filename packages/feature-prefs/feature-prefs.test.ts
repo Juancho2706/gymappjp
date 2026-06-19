@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+    DOMAIN_ENABLED_KEY,
     NUTRITION_SECTIONS,
     PRESETS,
     normalizePreset,
+    resolveDomainEnabled,
     resolveSections,
     type ModuleKey,
     type NutritionSectionKey,
@@ -253,5 +255,130 @@ describe('@eva/feature-prefs — resolveSections', () => {
         })
         expect(res.micros_base).toBe(false)
         for (const k of CORE_KEYS) expect(res[k]).toBe(true)
+    })
+})
+
+describe('@eva/feature-prefs — master switch del dominio (_enabled)', () => {
+    it('DOMAIN_ENABLED_KEY es la key reservada "_enabled"', () => {
+        expect(DOMAIN_ENABLED_KEY).toBe('_enabled')
+    })
+
+    it('default true: sin la key _enabled el dominio esta prendido', () => {
+        expect(
+            resolveDomainEnabled({
+                entitledByModule: ALL_ENTITLED,
+                preset: 'basico',
+                useTeamBase: false,
+            }),
+        ).toBe(true)
+        expect(
+            resolveDomainEnabled({
+                entitledByModule: ALL_ENTITLED,
+                preset: 'intermedio',
+                coachSections: { recipes: true },
+                useTeamBase: false,
+            }),
+        ).toBe(true)
+    })
+
+    it('coach _enabled:false apaga el dominio', () => {
+        expect(
+            resolveDomainEnabled({
+                entitledByModule: ALL_ENTITLED,
+                preset: 'profesional',
+                coachSections: { [DOMAIN_ENABLED_KEY]: false },
+                useTeamBase: false,
+            }),
+        ).toBe(false)
+    })
+
+    it('dominio apagado → TODAS las secciones false, incluidas las core', () => {
+        const res = resolveSections({
+            entitledByModule: ALL_ENTITLED,
+            preset: 'profesional',
+            coachSections: { [DOMAIN_ENABLED_KEY]: false },
+            useTeamBase: false,
+        })
+        for (const section of NUTRITION_SECTIONS) {
+            expect(res[section.key]).toBe(false)
+        }
+        // explicitamente: las core tambien caen
+        for (const k of CORE_KEYS) expect(res[k]).toBe(false)
+    })
+
+    it('client _enabled override gana sobre coach (apaga)', () => {
+        const input = {
+            entitledByModule: ALL_ENTITLED,
+            preset: 'profesional' as const,
+            coachSections: { [DOMAIN_ENABLED_KEY]: true },
+            clientSections: { [DOMAIN_ENABLED_KEY]: false },
+            useTeamBase: false,
+        }
+        expect(resolveDomainEnabled(input)).toBe(false)
+        for (const k of CORE_KEYS) expect(resolveSections(input)[k]).toBe(false)
+    })
+
+    it('client _enabled override gana sobre coach (prende un dominio apagado por coach)', () => {
+        const input = {
+            entitledByModule: ALL_ENTITLED,
+            preset: 'basico' as const,
+            coachSections: { [DOMAIN_ENABLED_KEY]: false },
+            clientSections: { [DOMAIN_ENABLED_KEY]: true },
+            useTeamBase: false,
+        }
+        expect(resolveDomainEnabled(input)).toBe(true)
+        // dominio prendido → core vuelven a ON
+        for (const k of CORE_KEYS) expect(resolveSections(input)[k]).toBe(true)
+    })
+
+    it('useTeamBase → la base del _enabled es el team, ignora coach', () => {
+        const input = {
+            entitledByModule: ALL_ENTITLED,
+            preset: 'basico' as const,
+            coachSections: { [DOMAIN_ENABLED_KEY]: false }, // ignorado en modo team
+            teamSections: { [DOMAIN_ENABLED_KEY]: true },
+            useTeamBase: true,
+        }
+        expect(resolveDomainEnabled(input)).toBe(true)
+        for (const k of CORE_KEYS) expect(resolveSections(input)[k]).toBe(true)
+    })
+
+    it('team _enabled:false apaga el dominio en modo team', () => {
+        const input = {
+            entitledByModule: ALL_ENTITLED,
+            preset: 'profesional' as const,
+            teamSections: { [DOMAIN_ENABLED_KEY]: false },
+            useTeamBase: true,
+        }
+        expect(resolveDomainEnabled(input)).toBe(false)
+        for (const section of NUTRITION_SECTIONS) {
+            expect(resolveSections(input)[section.key]).toBe(false)
+        }
+    })
+
+    it('_enabled:true es no-op: identico a no setearlo', () => {
+        const withKey = resolveSections({
+            entitledByModule: ALL_ENTITLED,
+            preset: 'intermedio',
+            coachSections: { [DOMAIN_ENABLED_KEY]: true, recipes: true },
+            useTeamBase: false,
+        })
+        const without = resolveSections({
+            entitledByModule: ALL_ENTITLED,
+            preset: 'intermedio',
+            coachSections: { recipes: true },
+            useTeamBase: false,
+        })
+        expect(withKey).toEqual(without)
+    })
+
+    it('_enabled NO se trata como una seccion iterable (no aparece en el output)', () => {
+        const res = resolveSections({
+            entitledByModule: ALL_ENTITLED,
+            preset: 'basico',
+            coachSections: { [DOMAIN_ENABLED_KEY]: true },
+            useTeamBase: false,
+        })
+        expect(res[DOMAIN_ENABLED_KEY]).toBeUndefined()
     })
 })

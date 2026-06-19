@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import {
     FEATURE_DOMAINS,
+    resolveDomainEnabled,
     resolveSections,
     type FeatureDomain,
     type ModuleKey,
@@ -256,5 +257,51 @@ export const getNutritionProEnabledForClient = cache(
     }): Promise<boolean> => {
         const prefs = await resolveFeaturePrefs({ domain: 'nutrition', ...input })
         return prefs.micros_advanced === true
+    },
+)
+
+/**
+ * ¿Esta PRENDIDO el dominio Nutricion completo para este contexto? (master switch `_enabled`,
+ * plan §4.8). Distinto de las secciones: si devuelve `false`, el coach apago el dominio entero
+ * → el menu de Nutricion y todo su contenido se ocultan.
+ *
+ * Mismo contrato que el resto del servicio: React.cache (dedup por request) + flag
+ * `FEATURE_PREFS_ENABLED` fail-OPEN. Flag OFF / ausente / Edge caido => `true` (el dominio NO
+ * se oculta por preferencia — comportamiento de HOY), igual que `resolveFeaturePrefs` ignora
+ * las prefs con el flag apagado. No mira entitlement: el master switch es pura preferencia.
+ */
+export const resolveNutritionDomainEnabled = cache(
+    async (input: {
+        coachId: string
+        clientId?: string | null
+        clientTeamId?: string | null
+        clientOrgId?: string | null
+    }): Promise<boolean> => {
+        const domain: FeatureDomain = 'nutrition'
+        const enabled = await getFeaturePrefsEnabled()
+        // FLAG OFF / ausente / Edge caido => fail-OPEN: dominio prendido (no se oculta por pref).
+        if (!enabled) return true
+
+        const userDb = await createClient()
+        const serviceDb = createServiceRoleClient()
+        const useTeamBase = !!input.clientTeamId && !input.clientOrgId
+
+        const [coachOrTeam, clientSections] = await Promise.all([
+            useTeamBase
+                ? readTeamPrefs(serviceDb, input.clientTeamId!, domain)
+                : readCoachPrefs(serviceDb, input.coachId, domain),
+            input.clientId ? readClientPrefs(userDb, input.clientId, domain) : Promise.resolve(null),
+        ])
+
+        return resolveDomainEnabled({
+            // Solo importan las capas de preferencia + useTeamBase; el resto es no-op aca.
+            domain,
+            entitledByModule: {},
+            preset: coachOrTeam.preset as Preset | string | null,
+            useTeamBase,
+            coachSections: useTeamBase ? null : coachOrTeam.sections,
+            teamSections: useTeamBase ? coachOrTeam.sections : null,
+            clientSections,
+        })
     },
 )

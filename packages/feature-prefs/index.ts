@@ -211,6 +211,15 @@ export function normalizePreset(preset: unknown): Preset {
         : 'basico'
 }
 
+/**
+ * Key RESERVADA del jsonb `sections`: master switch del DOMINIO completo (plan §4.8).
+ * Distinta de los presets/secciones: si vale `false`, el dominio entero se oculta (menu +
+ * TODAS las secciones, incluidas las `core`). No es una `NutritionSectionKey` — nunca se
+ * itera como seccion. Ausente => `true` (dominio prendido) para no afectar a los coaches ya
+ * backfilleados.
+ */
+export const DOMAIN_ENABLED_KEY = '_enabled' as const
+
 /** Mapa de preferencias persistido (`sections jsonb`): seccion → on/off elegido. */
 export type SectionPrefs = Partial<Record<string, boolean>>
 
@@ -232,9 +241,34 @@ export interface ResolveSectionsInput {
 }
 
 /**
+ * Resuelve el MASTER SWITCH del dominio (key reservada `_enabled`, plan §4.8) — distinto de
+ * los presets/secciones. Resolucion mas-especifico-gana, espejando el orden de `wants`:
+ *   `clientSections._enabled ?? base._enabled ?? true`
+ * donde `base` es `teamSections` si `useTeamBase`, si no `coachSections`. Default `true` (ON)
+ * para no afectar a coaches existentes/backfilleados (sin la key => dominio prendido).
+ *
+ * Cuando devuelve `false`, el dominio entero esta apagado: `resolveSections` fuerza TODAS las
+ * secciones (incluidas las `core`) a `false`, porque el menu y su contenido se ocultan.
+ */
+export function resolveDomainEnabled(input: ResolveSectionsInput): boolean {
+    const base: SectionPrefs | null | undefined = input.useTeamBase
+        ? input.teamSections
+        : input.coachSections
+    return (
+        input.clientSections?.[DOMAIN_ENABLED_KEY] ??
+        base?.[DOMAIN_ENABLED_KEY] ??
+        true
+    )
+}
+
+/**
  * Resolver PURO del modelo `visible = core OR (entitled AND wants)`.
  *
- * Por seccion:
+ * Antes que nada honra el MASTER SWITCH del dominio (`resolveDomainEnabled`): si el dominio
+ * esta apagado (`_enabled === false`), TODAS las secciones (incluidas las `core`) resuelven
+ * `false` — el menu y su contenido completo se ocultan.
+ *
+ * Por seccion (con el dominio prendido):
  * - core → SIEMPRE `true` (no se gatea, no se toggleable).
  * - `entitled = requiresModule ? entitledByModule[requiresModule] === true : true`.
  * - `wants = clientSections?.[k] ?? base?.[k] ?? section.presets[preset]`, donde `base` es
@@ -258,7 +292,15 @@ export function resolveSections(
     const sections = FEATURE_DOMAINS[input.domain ?? 'nutrition']
     const base: SectionPrefs | null | undefined = useTeamBase ? teamSections : coachSections
 
+    // Master switch del dominio: si esta apagado, TODO el dominio se oculta (incluso core).
+    const domainEnabled = resolveDomainEnabled(input)
+
     const result: Record<string, boolean> = {}
+    if (!domainEnabled) {
+        for (const section of sections) result[section.key] = false
+        return result
+    }
+
     for (const section of sections) {
         if (section.core) {
             result[section.key] = true

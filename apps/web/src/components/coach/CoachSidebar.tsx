@@ -41,6 +41,12 @@ interface CoachSidebarProps {
     activeWorkspaceType?: WorkspaceType | null
     /** Módulos toggleables habilitados para el contexto activo (resuelto server-side en el layout). */
     enabledModules?: EnabledModules | null
+    /**
+     * Dominios de feature-prefs cuyo master switch `_enabled` el coach apagó (resuelto
+     * server-side en el layout). Una entrada con `featureDomain` en este set se oculta del nav.
+     * Ausente/vacío ⇒ ningún dominio apagado (fail-open).
+     */
+    disabledDomains?: string[] | null
 }
 
 /**
@@ -51,7 +57,7 @@ interface CoachSidebarProps {
  */
 const MOBILE_PRIMARY_KEYS = ['dashboard', 'clients', 'programs', 'nutrition'] as const
 
-export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus, enterpriseContext, workspaces, currentWorkspaceLabel, activeWorkspaceType, enabledModules }: CoachSidebarProps) {
+export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus, enterpriseContext, workspaces, currentWorkspaceLabel, activeWorkspaceType, enabledModules, disabledDomains }: CoachSidebarProps) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
@@ -90,7 +96,8 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
     const isBuilder = pathname.startsWith('/coach/builder') || pathname.startsWith('/coach/workout-programs/builder')
     const isOrgAdmin = enterpriseContext?.orgRole === 'org_owner' || enterpriseContext?.orgRole === 'org_admin'
     // Registro nav-como-módulos: cada flujo (standalone/enterprise/team) ve SOLO sus módulos.
-    const visibleNavItems = getVisibleNavItems({ activeWorkspaceType, subscriptionStatus, enabledModules })
+    const disabledDomainSet = disabledDomains && disabledDomains.length > 0 ? new Set(disabledDomains) : null
+    const visibleNavItems = getVisibleNavItems({ activeWorkspaceType, subscriptionStatus, enabledModules, disabledDomains: disabledDomainSet })
     // Particionar para el grupo "MÓDULOS" (DESKTOP): core va arriba y, si hay módulos comprados,
     // se agrupan bajo un divisor.
     const { core: coreNavItems, modules: moduleNavItems } = splitNavItems(visibleNavItems)

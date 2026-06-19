@@ -37,6 +37,12 @@ export type NavModule = {
     icon: LucideIcon
     contexts: ReadonlyArray<CoachWorkspaceType>
     entitlement?: ModuleKey
+    /**
+     * Dominio de feature-prefs al que pertenece la entrada (ej. 'nutrition'). Si el coach
+     * apagó el master switch `_enabled` de ese dominio, la entrada se oculta del nav (el menú
+     * desaparece). Ortogonal a `entitlement` (billing): esto es PREFERENCIA, no capability.
+     */
+    featureDomain?: string
 }
 
 const ALL: ReadonlyArray<CoachWorkspaceType> = ['coach_standalone', 'enterprise_coach', 'coach_team']
@@ -49,7 +55,7 @@ export const NAV_MODULES: ReadonlyArray<NavModule> = [
     // Movida 2 (declutter IA): 'exercises' ya NO es entrada top-level del nav — pasa a un botón
     // "Lista de ejercicios" dentro de Programas. La ruta /coach/exercises sigue VIVA (deep links,
     // bookmarks, app alumno /c/[slug]/exercises). Cero cambio de capability.
-    { key: 'nutrition', href: '/coach/nutrition-plans', label: 'Nutrición', shortLabel: 'Nutri', icon: Apple, contexts: ALL },
+    { key: 'nutrition', href: '/coach/nutrition-plans', label: 'Nutrición', shortLabel: 'Nutri', icon: Apple, contexts: ALL, featureDomain: 'nutrition' },
     // Movida 1 (hub "Opciones"): standalone colapsa 'brand' (Mi Marca) + 'billing' (Suscripción)
     // en UNA sola entrada "Opciones" → /coach/settings. Marca y Suscripción pasan a ser CARDS
     // dentro del hub (el hub lo arma el UI agent). Cero cambio de capability.
@@ -83,6 +89,13 @@ export type VisibleNavContext = {
     /** Módulos habilitados del CONTEXTO activo (team ⇒ del pool; standalone ⇒ propios).
      *  Ausente/undefined ⇒ los items con `entitlement` se ocultan (default OFF). */
     enabledModules?: EnabledModules | null
+    /**
+     * Dominios de feature-prefs cuyo master switch `_enabled` el coach apagó. Una entrada con
+     * `featureDomain` en este set se oculta del nav. Resuelto server-side en el layout
+     * (resolveNutritionDomainEnabled). Ausente/vacío ⇒ ningún dominio apagado = mostrar todo
+     * (fail-open, comportamiento de HOY).
+     */
+    disabledDomains?: ReadonlySet<string> | null
 }
 
 /**
@@ -92,6 +105,8 @@ export type VisibleNavContext = {
  *  3. Cuentas managed (org_managed/team_managed) nunca ven "Opciones" standalone (marca +
  *     suscripción) aunque el workspace activo sea standalone-like (no tienen identidad
  *     standalone — cinturón extra). El hub de team es `settings_team`, gateado por `contexts`.
+ *  4. Si el `featureDomain` de un módulo está en `disabledDomains` (master switch apagado por el
+ *     coach), el módulo se oculta. Ortogonal a `entitlement`: esto es PREFERENCIA, no capability.
  */
 export function getVisibleNavItems(ctx: VisibleNavContext): NavModule[] {
     const status = ctx.subscriptionStatus ?? ''
@@ -105,6 +120,7 @@ export function getVisibleNavItems(ctx: VisibleNavContext): NavModule[] {
             : 'coach_standalone'
 
     const isManaged = status === 'org_managed' || status === 'team_managed'
+    const disabledDomains = ctx.disabledDomains ?? null
 
     return NAV_MODULES.filter((item) => {
         if (!item.contexts.includes(active)) return false
@@ -112,6 +128,8 @@ export function getVisibleNavItems(ctx: VisibleNavContext): NavModule[] {
         // Módulos toggleables: solo con el entitlement ON (el gate real es server-side
         // via assertModule; esto es espejo visual — default OFF).
         if (item.entitlement && ctx.enabledModules?.[item.entitlement] !== true) return false
+        // Master switch de dominio apagado (preferencia del coach) ⇒ ocultar el menú.
+        if (item.featureDomain && disabledDomains?.has(item.featureDomain)) return false
         return true
     })
 }
