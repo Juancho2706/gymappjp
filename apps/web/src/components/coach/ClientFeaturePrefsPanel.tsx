@@ -127,17 +127,23 @@ export function ClientFeaturePrefsPanel({
     }
 
     return (
-        <section className="overflow-hidden rounded-2xl border border-dashed border-border/60 bg-card/40 dark:border-white/10">
+        <section className="overflow-hidden rounded-2xl border border-amber-500/40 bg-amber-500/[0.06] shadow-sm dark:border-amber-400/30 dark:bg-amber-400/[0.05]">
             <button
                 type="button"
                 onClick={() => setOpen((o) => !o)}
                 aria-expanded={open}
-                className="flex min-h-[44px] w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-primary/5"
+                className="flex min-h-[44px] w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-amber-500/10"
             >
-                <span className="flex min-w-0 items-center gap-2">
-                    <SlidersHorizontal className="h-3.5 w-3.5 shrink-0 text-primary" />
+                <span className="flex min-w-0 items-center gap-2.5">
+                    <motion.span
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                        animate={open || reduceMotion ? { scale: 1 } : { scale: [1, 1.1, 1] }}
+                        transition={{ duration: 1.6, repeat: open || reduceMotion ? 0 : Infinity, ease: 'easeInOut' }}
+                    >
+                        <SlidersHorizontal className="h-4 w-4" />
+                    </motion.span>
                     <span className="min-w-0">
-                        <span className="block text-xs font-black uppercase tracking-widest text-primary">
+                        <span className="block text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">
                             Funciones para este alumno
                         </span>
                         <span className="mt-0.5 block text-[10px] font-medium text-muted-foreground">
@@ -147,7 +153,7 @@ export function ClientFeaturePrefsPanel({
                 </span>
                 <ChevronDown
                     className={cn(
-                        'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
+                        'h-4 w-4 shrink-0 text-amber-600/70 transition-transform dark:text-amber-400/70',
                         open && 'rotate-180',
                     )}
                 />
