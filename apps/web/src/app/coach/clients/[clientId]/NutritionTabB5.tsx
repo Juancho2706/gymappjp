@@ -1002,9 +1002,7 @@ export function NutritionTabB5({
           baseEffective={nutritionOverrideContext.baseEffective}
           override={nutritionOverrideContext.override}
           entitledByModule={nutritionOverrideContext.entitledByModule}
-          domainEnabledBase={nutritionOverrideContext.domainEnabledBase}
-          domainEnabledOverride={nutritionOverrideContext.domainEnabledOverride}
-          useTeamBase={nutritionOverrideContext.useTeamBase}
+          domainEnabledBase={nutritionOverrideContext.domainEnabledBase}          useTeamBase={nutritionOverrideContext.useTeamBase}
         />
       )}
       <NutritionCoachAlertsPanel alerts={nutritionAlerts} />
@@ -1569,7 +1567,6 @@ export function NutritionTabB5({
             override={nutritionOverrideContext.override}
             entitledByModule={nutritionOverrideContext.entitledByModule}
             domainEnabledBase={nutritionOverrideContext.domainEnabledBase}
-            domainEnabledOverride={nutritionOverrideContext.domainEnabledOverride}
             useTeamBase={nutritionOverrideContext.useTeamBase}
           />
         )}
