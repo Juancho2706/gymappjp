@@ -9,9 +9,11 @@ interface RestDayCardProps {
     coachSlug: string
     nextWorkoutTitle: string | null
     nextWorkoutDayLabel: string | null
+    /** Master switch del dominio Nutricion: `false` => oculta el link "Ver nutrición →". */
+    showNutritionLink?: boolean
 }
 
-export function RestDayCard({ coachSlug, nextWorkoutTitle, nextWorkoutDayLabel }: RestDayCardProps) {
+export function RestDayCard({ coachSlug, nextWorkoutTitle, nextWorkoutDayLabel, showNutritionLink = true }: RestDayCardProps) {
     const base = useBasePath(`/c/${coachSlug}`)
     return (
         <GlassCard className="relative overflow-hidden bg-gradient-to-br from-slate-50 to-purple-50/30 p-6 text-center dark:from-gray-900 dark:to-slate-900">
@@ -32,9 +34,11 @@ export function RestDayCard({ coachSlug, nextWorkoutTitle, nextWorkoutDayLabel }
             ) : (
                 <p className="mt-2 text-sm text-muted-foreground">Recupera bien para la próxima sesión.</p>
             )}
-            <Link href={`${base}/nutrition`} className="mt-4 inline-block text-xs font-semibold text-[color:var(--theme-primary)]">
-                Ver nutrición →
-            </Link>
+            {showNutritionLink && (
+                <Link href={`${base}/nutrition`} className="mt-4 inline-block text-xs font-semibold text-[color:var(--theme-primary)]">
+                    Ver nutrición →
+                </Link>
+            )}
         </GlassCard>
     )
 }

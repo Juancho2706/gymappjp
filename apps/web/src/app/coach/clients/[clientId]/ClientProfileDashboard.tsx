@@ -36,6 +36,7 @@ import { updateClientGoalWeight } from './_actions/client-detail.actions'
 import type { NutrientTargetRow } from '@/services/nutrient-targets.service'
 import type { PrivateNoteRow, MealCommentRow } from '@/services/nutrition-notes.service'
 import type { NutritionSectionKey } from '@eva/feature-prefs'
+import type { ClientFeaturePrefsOverrideContext } from '@/services/feature-prefs.service'
 
 interface ClientProfileDashboardProps {
     data: any // using any temporarily to save time on type definitions
@@ -49,6 +50,8 @@ interface ClientProfileDashboardProps {
     nutritionDomainEnabled?: boolean
     /** Visibilidad por sección resuelta para ESTE alumno (entitled AND wants). */
     nutritionSectionFlags?: Record<NutritionSectionKey, boolean>
+    /** Contexto del override por-alumno (panel "Funciones para este alumno", Zona C). */
+    nutritionOverrideContext?: ClientFeaturePrefsOverrideContext
 }
 
 export function ClientProfileDashboard({
@@ -59,6 +62,7 @@ export function ClientProfileDashboard({
     nutritionProEnabled = false,
     nutritionDomainEnabled = true,
     nutritionSectionFlags,
+    nutritionOverrideContext,
 }: ClientProfileDashboardProps) {
     const reduceMotion = useReducedMotion()
     const [activeTab, setActiveTab] = useState<ProfileMainTabId>('overview')
@@ -926,6 +930,7 @@ export function ClientProfileDashboard({
                             nutritionProEnabled={nutritionProEnabled}
                             nutritionDomainEnabled={nutritionDomainEnabled}
                             nutritionSectionFlags={nutritionSectionFlags}
+                            nutritionOverrideContext={nutritionOverrideContext}
                         />
                     </div>
                     </motion.div>

@@ -15,6 +15,10 @@ import { mapClientPlanRowToInitialData } from '../../_data/plan-builder-mappers'
 import { AdherenceStrip } from '@/app/c/[coach_slug]/nutrition/_components/AdherenceStrip'
 import { getClientNutritionPlanPageAuthData, getCoachDisplayName } from './_data/client-plan-page.queries'
 import { EditedByBadge } from '@/components/coach/EditedByBadge'
+import {
+  resolveFeaturePrefs,
+  resolveNutritionDomainEnabled,
+} from '@/services/feature-prefs.service'
 
 interface Props {
   params: Promise<{ clientId: string }>
@@ -29,8 +33,34 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
   // exigir coach_id propio; standalone/org sí lo exigen dentro del query).
   if (!client) notFound()
 
+  // Contexto de feature-prefs para ESTE alumno (mismo modelo que la ficha del coach):
+  // coach del alumno + team activo (pool-base) + org. El resolver fija entitlement
+  // (pool-wins + kill-switch) y preferencia de forma identica a la vista del alumno.
+  const featurePrefsInput = {
+    coachId:
+      (client as { coach_id?: string | null }).coach_id ?? user.id,
+    clientId,
+    clientTeamId: activeTeamId ?? null,
+    clientOrgId: (client as { org_id?: string | null }).org_id ?? orgId ?? null,
+  }
+
+  // Master switch del dominio (fail-OPEN con flag OFF). Dominio OFF => el editor no se
+  // construye (atrapa refresh/visita directa aunque el menú esté oculto). Render-only.
+  const nutritionDomainEnabled = await resolveNutritionDomainEnabled(featurePrefsInput)
+  if (!nutritionDomainEnabled) redirect('/coach/dashboard')
+
   const plan = await getClientNutritionPlan(clientId, user.id, orgId ?? null, activeTeamId ?? null)
   const initialData = plan ? mapClientPlanRowToInitialData(plan) : null
+
+  // Visibilidad por seccion: gobierna los paneles Pro del builder (objetivos por
+  // composición corporal = goals_bodycomp; micros avanzados = micros_advanced). Las
+  // flags ya hornean el entitlement (body_composition / nutrition_exchanges) AND la
+  // preferencia coach/team/cliente. planId => pool-wins del entitlement.
+  const sectionFlags = await resolveFeaturePrefs({
+    domain: 'nutrition',
+    ...featurePrefsInput,
+    planId: (plan?.id as string | undefined) ?? null,
+  })
 
   // Módulo nutrition_exchanges (gating server-side espejo; assertModule en actions es el techo).
   const scope = { orgId: orgId ?? null, activeTeamId: activeTeamId ?? null }
@@ -115,6 +145,7 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
             initialData={initialData}
             clientProfile={intake ? { weight_kg: intake.weight_kg, height_cm: intake.height_cm } : null}
             exchange={exchange}
+            sectionFlags={sectionFlags}
           />
         </div>
         {adherence.length > 0 && planMealsStrip.length > 0 && (

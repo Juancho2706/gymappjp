@@ -69,6 +69,8 @@ import { addCoachMealComment } from './_actions/nutrition-notes.actions'
 import type { NutrientTargetRow } from '@/services/nutrient-targets.service'
 import type { PrivateNoteRow, MealCommentRow } from '@/services/nutrition-notes.service'
 import type { NutritionSectionKey } from '@eva/feature-prefs'
+import type { ClientFeaturePrefsOverrideContext } from '@/services/feature-prefs.service'
+import { ClientFeaturePrefsPanel } from '@/components/coach/ClientFeaturePrefsPanel'
 
 export type NutritionTimelineRow = {
   date: string
@@ -142,6 +144,12 @@ type NutritionTabB5Props = {
    * (flag global OFF / sin resolver) ⇒ comportamiento de HOY: mostrar todo.
    */
   nutritionSectionFlags?: Record<NutritionSectionKey, boolean>
+  /**
+   * Contexto del override por-alumno (panel "Funciones para este alumno", Zona C). Trae el
+   * `baseEffective` (lo heredado del default coach/team), el `override` ya guardado y el
+   * entitlement por módulo. `undefined` ⇒ no se monta el panel (sin contexto resuelto).
+   */
+  nutritionOverrideContext?: ClientFeaturePrefsOverrideContext
 }
 
 const MACRO_COLORS = {
@@ -334,6 +342,7 @@ export function NutritionTabB5({
   nutritionProEnabled = false,
   nutritionDomainEnabled = true,
   nutritionSectionFlags,
+  nutritionOverrideContext,
 }: NutritionTabB5Props) {
   const reduceMotion = useReducedMotion()
   // Helper de visibilidad por sección: `undefined` (flag global OFF / sin resolver) =>
@@ -983,6 +992,21 @@ export function NutritionTabB5({
         title="Alertas y contexto"
         subtitle="Señales del coach, check-ins y ciclos del plan"
       />
+      {/* Override por-alumno de la zona "Funciones": el coach fuerza mostrar/ocultar
+          secciones de Nutrición SOLO para este alumno, encima del default coach/team.
+          Escribe client_feature_prefs.sections (RLS coach-owner/manager). Gating = render. */}
+      {nutritionOverrideContext && (
+        <ClientFeaturePrefsPanel
+          clientId={clientId}
+          domain="nutrition"
+          baseEffective={nutritionOverrideContext.baseEffective}
+          override={nutritionOverrideContext.override}
+          entitledByModule={nutritionOverrideContext.entitledByModule}
+          domainEnabledBase={nutritionOverrideContext.domainEnabledBase}
+          domainEnabledOverride={nutritionOverrideContext.domainEnabledOverride}
+          useTeamBase={nutritionOverrideContext.useTeamBase}
+        />
+      )}
       <NutritionCoachAlertsPanel alerts={nutritionAlerts} />
       <NutritionCheckinContextCard
         recentCheckIns={recentCheckIns}
@@ -1524,16 +1548,32 @@ export function NutritionTabB5({
   // el plan, el historial y la adherencia siguen en la DB intactos.
   if (!nutritionDomainEnabled) {
     return (
-      <GlassCard className="border-dashed border-border/50 p-8 text-center dark:border-white/10">
-        <Utensils className="mx-auto mb-3 h-6 w-6 text-muted-foreground" />
-        <h3 className="text-sm font-black uppercase tracking-widest text-foreground">
-          Nutrición desactivada para este alumno
-        </h3>
-        <p className="mx-auto mt-2 max-w-md text-xs font-medium text-muted-foreground">
-          Apagaste el módulo de nutrición para este alumno en tus preferencias. Sus datos se
-          conservan; vuelve a activarlo para ver plan, macros y adherencia.
-        </p>
-      </GlassCard>
+      <div className="space-y-4">
+        <GlassCard className="border-dashed border-border/50 p-8 text-center dark:border-white/10">
+          <Utensils className="mx-auto mb-3 h-6 w-6 text-muted-foreground" />
+          <h3 className="text-sm font-black uppercase tracking-widest text-foreground">
+            Nutrición desactivada para este alumno
+          </h3>
+          <p className="mx-auto mt-2 max-w-md text-xs font-medium text-muted-foreground">
+            Apagaste el módulo de nutrición para este alumno en tus preferencias. Sus datos se
+            conservan; vuelve a activarlo para ver plan, macros y adherencia.
+          </p>
+        </GlassCard>
+        {/* Escape hatch: el panel de override permite re-activar la nutrición desde la
+            misma ficha aunque el dominio esté apagado (su master switch tri-state). */}
+        {nutritionOverrideContext && (
+          <ClientFeaturePrefsPanel
+            clientId={clientId}
+            domain="nutrition"
+            baseEffective={nutritionOverrideContext.baseEffective}
+            override={nutritionOverrideContext.override}
+            entitledByModule={nutritionOverrideContext.entitledByModule}
+            domainEnabledBase={nutritionOverrideContext.domainEnabledBase}
+            domainEnabledOverride={nutritionOverrideContext.domainEnabledOverride}
+            useTeamBase={nutritionOverrideContext.useTeamBase}
+          />
+        )}
+      </div>
     )
   }
 

@@ -8,6 +8,7 @@ import { ClientProfileHero } from './ClientProfileHero'
 import { createClient } from '@/lib/supabase/server'
 import { hasModule } from '@/services/entitlements.service'
 import {
+    resolveClientFeaturePrefsOverrideContext,
     resolveFeaturePrefs,
     resolveNutritionDomainEnabled,
 } from '@/services/feature-prefs.service'
@@ -81,6 +82,7 @@ async function ProfileContent({ clientId }: { clientId: string }) {
         nutritionProEnabled,
         nutritionDomainEnabled,
         nutritionSectionFlags,
+        nutritionOverrideContext,
     ] = await Promise.all([
         getCoachNutrientTargets(clientId),
         getCoachPrivateNotes(clientId),
@@ -90,6 +92,14 @@ async function ProfileContent({ clientId }: { clientId: string }) {
         resolveNutritionProEnabled(clientId),
         resolveNutritionDomainEnabled(featurePrefsInput),
         resolveFeaturePrefs({
+            domain: 'nutrition',
+            ...featurePrefsInput,
+            planId: activeNutritionPlanId,
+        }),
+        // Override por-alumno (tri-state heredar/mostrar/ocultar) que renderiza el panel
+        // "Funciones para este alumno" en la Zona C de la ficha. baseEffective = lo que se
+        // hereda del default coach/team; override = lo ya forzado para este alumno.
+        resolveClientFeaturePrefsOverrideContext({
             domain: 'nutrition',
             ...featurePrefsInput,
             planId: activeNutritionPlanId,
@@ -142,6 +152,7 @@ async function ProfileContent({ clientId }: { clientId: string }) {
                 nutritionProEnabled={nutritionProEnabled}
                 nutritionDomainEnabled={nutritionDomainEnabled}
                 nutritionSectionFlags={nutritionSectionFlags}
+                nutritionOverrideContext={nutritionOverrideContext}
             />
         </div>
     )

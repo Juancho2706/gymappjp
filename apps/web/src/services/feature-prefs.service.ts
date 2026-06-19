@@ -1,5 +1,6 @@
 import { cache } from 'react'
 import {
+    DOMAIN_ENABLED_KEY,
     FEATURE_DOMAINS,
     resolveDomainEnabled,
     resolveSections,
@@ -303,5 +304,120 @@ export const resolveNutritionDomainEnabled = cache(
             teamSections: useTeamBase ? coachOrTeam.sections : null,
             clientSections,
         })
+    },
+)
+
+/**
+ * Contexto para la UI de OVERRIDE por-alumno (`client_feature_prefs`) — el panel que el coach
+ * usa en la ficha del alumno para forzar mostrar/ocultar una seccion encima de la base
+ * coach/team. NO es el mismo contrato que `resolveFeaturePrefs` (que devuelve el resultado
+ * EFECTIVO con el override ya aplicado): aca el panel necesita las TRES piezas para pintar el
+ * tri-state "heredar / mostrar / ocultar" y bloquear las secciones Pro sin entitlement.
+ *
+ * Devuelve:
+ * - `baseEffective`: el resultado del resolver SIN la capa del alumno (lo que el alumno veria
+ *   "heredando" de la base coach/team). Es lo que muestra el estado "heredar".
+ * - `override`: la fila cruda `client_feature_prefs.sections` (parcial) — solo las keys que el
+ *   coach ya forzo para ESTE alumno. `undefined`/ausente en una key => "heredar".
+ * - `entitledByModule`: para LOCKear las secciones Pro sin entitlement (la pref solo achica).
+ * - `domainEnabledBase` / `domainEnabledOverride`: master switch del dominio (base vs override
+ *   crudo del alumno) para el toggle "Mostrar Nutricion".
+ *
+ * React.cache (dedupe por request). El override se lee request-scoped (RLS = techo: coach owner
+ * / managers de pool); la base + entitlement usan service-role (espejo del resto del servicio).
+ */
+export interface ClientFeaturePrefsOverrideContext {
+    /** Resultado del resolver SIN la capa del alumno (lo que se "hereda"). */
+    baseEffective: Record<NutritionSectionKey, boolean>
+    /** Fila cruda `client_feature_prefs.sections` (parcial). Key ausente => heredar. */
+    override: SectionPrefs
+    /** Entitlement por modulo (fail-closed) para LOCKear secciones Pro. */
+    entitledByModule: Partial<Record<ModuleKey, boolean>>
+    /** Master switch del dominio que resulta de la base coach/team (sin override). */
+    domainEnabledBase: boolean
+    /** Override crudo del master switch del dominio para ESTE alumno (`undefined` => heredar). */
+    domainEnabledOverride: boolean | undefined
+    /** `true` si la base es el team (pool); informa el copy "default del equipo" vs "tuyo". */
+    useTeamBase: boolean
+    /** `true` si el flag `FEATURE_PREFS_ENABLED` esta ON (si no, las prefs se ignoran). */
+    prefsEnabled: boolean
+}
+
+export const resolveClientFeaturePrefsOverrideContext = cache(
+    async (input: {
+        domain: 'nutrition'
+        coachId: string
+        clientId: string
+        planId?: string | null
+        clientTeamId?: string | null
+        clientOrgId?: string | null
+    }): Promise<ClientFeaturePrefsOverrideContext> => {
+        const domain = input.domain
+        const userDb = await createClient()
+        const serviceDb = createServiceRoleClient()
+        const useTeamBase = !!input.clientTeamId && !input.clientOrgId
+
+        const [prefsEnabled, entitledByModule, base, override] = await Promise.all([
+            getFeaturePrefsEnabled(),
+            entitledByModuleForNutrition(serviceDb, {
+                coachId: input.coachId,
+                planId: input.planId,
+                clientTeamId: input.clientTeamId,
+                clientOrgId: input.clientOrgId,
+            }),
+            useTeamBase
+                ? readTeamPrefs(serviceDb, input.clientTeamId!, domain)
+                : readCoachPrefs(serviceDb, input.coachId, domain),
+            readClientPrefs(userDb, input.clientId, domain),
+        ])
+
+        // `baseEffective` = resolver SIN la capa del alumno (clientSections null). Esto es lo
+        // que el alumno "hereda" de la base coach/team. Si el flag esta OFF, fail-OPEN:
+        // mostrar todo lo entitled (espejo del bypass de `resolveFeaturePrefs`).
+        let baseEffective: Record<NutritionSectionKey, boolean>
+        if (!prefsEnabled) {
+            baseEffective = {} as Record<NutritionSectionKey, boolean>
+            for (const section of FEATURE_DOMAINS[domain]) {
+                if (section.core) {
+                    baseEffective[section.key] = true
+                    continue
+                }
+                baseEffective[section.key] = section.requiresModule
+                    ? entitledByModule[section.requiresModule] === true
+                    : true
+            }
+        } else {
+            baseEffective = resolveSections({
+                domain,
+                entitledByModule,
+                preset: base.preset as Preset | string | null,
+                useTeamBase,
+                coachSections: useTeamBase ? null : base.sections,
+                teamSections: useTeamBase ? base.sections : null,
+                clientSections: null,
+            }) as Record<NutritionSectionKey, boolean>
+        }
+
+        const domainEnabledBase = resolveDomainEnabled({
+            domain,
+            entitledByModule: {},
+            preset: base.preset as Preset | string | null,
+            useTeamBase,
+            coachSections: useTeamBase ? null : base.sections,
+            teamSections: useTeamBase ? base.sections : null,
+            clientSections: null,
+        })
+
+        const overrideObj = (override ?? {}) as SectionPrefs
+
+        return {
+            baseEffective,
+            override: overrideObj,
+            entitledByModule,
+            domainEnabledBase,
+            domainEnabledOverride: overrideObj[DOMAIN_ENABLED_KEY],
+            useTeamBase,
+            prefsEnabled,
+        }
     },
 )

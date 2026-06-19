@@ -11,7 +11,7 @@ import {
 } from '@/lib/brand-assets'
 import { resolveMetadataBase } from '@/lib/site-url'
 import { ClientNav } from '@/components/client/ClientNav'
-import { getStudentMovementNavEnabled, getStudentBodyCompositionNavEnabled } from './_data/client-root.queries'
+import { getStudentMovementNavEnabled, getStudentBodyCompositionNavEnabled, getStudentNutritionNavEnabled } from './_data/client-root.queries'
 import { BasePathProvider } from '@/components/client/BasePathProvider'
 import { AppDownloadBanner } from '@/components/AppDownloadBanner'
 import { NetworkProvider } from '@/components/client/OfflineScreen'
@@ -187,9 +187,12 @@ export default async function ClientBrandLayout({ children, params }: Props) {
 
     // Espejo de los modulos movement_assessment + body_composition con el contexto del PROPIO
     // alumno (pool => su team; standalone => su coach) — mismo gate que la page.
-    const [showMovement, showBodyComposition] = await Promise.all([
+    const [showMovement, showBodyComposition, showNutrition] = await Promise.all([
         getStudentMovementNavEnabled(),
         getStudentBodyCompositionNavEnabled(),
+        // Master switch del dominio Nutricion (plan §4.8): si el coach lo apago para este alumno,
+        // el tab "Plan Alimenticio" del nav NO se monta (render-only; la page tambien gatea).
+        getStudentNutritionNavEnabled(),
     ])
 
     return (
@@ -250,6 +253,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                         initialUseBrandColors={initialUseBrandColors}
                         showMovement={showMovement}
                         showBodyComposition={showBodyComposition}
+                        showNutrition={showNutrition}
                     />
                     {/* InstallPrompt is rendered once globally in the root app/layout.tsx —
                         rendering a second one here stacked two banners for the student tree. */}

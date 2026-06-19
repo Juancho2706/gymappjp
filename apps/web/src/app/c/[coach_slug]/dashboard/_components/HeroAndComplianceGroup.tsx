@@ -1,9 +1,15 @@
-import { getHeroComplianceBundle } from '../_data/heroComplianceBundle'
+import { getDashboardNutritionDomainEnabled, getHeroComplianceBundle } from '../_data/heroComplianceBundle'
 import { HeroSection } from './hero/HeroSection'
 
 /** Bloque principal del hero (datos vía `getHeroComplianceBundle`; anillos en `ComplianceScoresCard`). */
 export async function HeroAndComplianceGroup({ userId, coachSlug }: { userId: string; coachSlug: string }) {
-    const { hero } = await getHeroComplianceBundle(userId, coachSlug)
+    // Master switch del dominio Nutricion: el RestDayCard linkea a /nutrition ("Ver nutrición →") —
+    // se oculta ese link cuando el coach apago la nutricion para este alumno. React.cache dedupe la
+    // lectura del dominio con el sidebar + tarjeta de compliance (1 query por request).
+    const [{ hero }, nutritionEnabled] = await Promise.all([
+        getHeroComplianceBundle(userId, coachSlug),
+        getDashboardNutritionDomainEnabled(userId),
+    ])
     return (
         <HeroSection
             coachSlug={coachSlug}
@@ -17,6 +23,7 @@ export async function HeroAndComplianceGroup({ userId, coachSlug }: { userId: st
             baseLoggedPerBlock={hero.baseLoggedPerBlock}
             nextWorkoutTitle={hero.nextWorkoutTitle}
             nextWorkoutDayLabel={hero.nextWorkoutDayLabel}
+            nutritionEnabled={nutritionEnabled}
         />
     )
 }

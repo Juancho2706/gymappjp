@@ -6,6 +6,10 @@ import { getCoachTemplateById } from '../../_data/nutrition-coach.queries'
 import { mapTemplateRowToInitialData } from '../../_data/plan-builder-mappers'
 import { getEditNutritionTemplateUser } from './_data/edit-template.queries'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
+import {
+  resolveFeaturePrefs,
+  resolveNutritionDomainEnabled,
+} from '@/services/feature-prefs.service'
 
 interface Props {
   params: Promise<{ templateId: string }>
@@ -19,6 +23,24 @@ export default async function EditNutritionTemplatePage({ params }: Props) {
   // Resolve workspace so org-scoped coach can only edit their org's templates
   const workspace = await getPreferredWorkspaceForRender(user.id)
   const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
+  const teamId = workspace?.type === 'coach_team' ? workspace.teamId : null
+
+  // Master switch del dominio + flags de seccion Pro (fail-OPEN con flag OFF). Dominio OFF =>
+  // el builder no se construye (atrapa refresh/visita directa). Render-only: no borra datos.
+  const [nutritionDomainEnabled, sectionFlags] = await Promise.all([
+    resolveNutritionDomainEnabled({
+      coachId: user.id,
+      clientTeamId: teamId,
+      clientOrgId: orgId,
+    }),
+    resolveFeaturePrefs({
+      domain: 'nutrition',
+      coachId: user.id,
+      clientTeamId: teamId,
+      clientOrgId: orgId,
+    }),
+  ])
+  if (!nutritionDomainEnabled) redirect('/coach/dashboard')
 
   const row = await getCoachTemplateById(user.id, templateId, orgId)
   if (!row) notFound()
@@ -39,7 +61,12 @@ export default async function EditNutritionTemplatePage({ params }: Props) {
           <p className="text-xs text-muted-foreground font-medium truncate max-w-[70vw]">{initialData.name}</p>
         </div>
       </header>
-      <PlanBuilder mode="template" coachId={user.id} initialData={initialData} />
+      <PlanBuilder
+        mode="template"
+        coachId={user.id}
+        initialData={initialData}
+        sectionFlags={sectionFlags}
+      />
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { NutritionHub } from './_components/NutritionHub'
 import {
   getCoachTemplates,
@@ -13,6 +14,7 @@ import { getNutritionPlansPageCoach, getCoachOrgNutritionTemplates } from './_da
 import { OrgTemplatesSection } from './_components/OrgTemplatesSection'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import { getCoachRecipes } from './_data/recipes.queries'
+import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
 
 type NutritionPlanRow = { id: string; name: string; is_active: boolean | null }
 
@@ -131,6 +133,16 @@ export default async function NutritionPlansPage() {
   const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
   const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
   const scope = { orgId, activeTeamId }
+
+  // Master switch del dominio (pref coach/team, fail-OPEN con flag OFF). Si el coach apagó
+  // la nutrición para su workspace, esta superficie no se construye — atrapa refresh/visita
+  // directa aunque el menú esté oculto. Render-only: no borra ningún dato.
+  const nutritionDomainEnabled = await resolveNutritionDomainEnabled({
+    coachId,
+    clientTeamId: activeTeamId,
+    clientOrgId: orgId,
+  })
+  if (!nutritionDomainEnabled) redirect('/coach/dashboard')
   const [templates, activePlans, coachClientsRaw, foodLib, orgTemplates, recipes] = await Promise.all([
     getCoachTemplates(coachId, orgId),
     getActivePlansBoardData(coachId, scope),
