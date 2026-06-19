@@ -30,16 +30,19 @@ const ORG_SLUG = 'e2e-performance-lab'
 const TEAM_NAME = 'E2E Pool Vortex'
 
 // Orden exacto del registro NAV_MODULES (coach-nav.ts) por contexto:
-const STANDALONE_MODULES = ['Dashboard', 'Alumnos', 'Programas', 'Ejercicios', 'Nutrición', 'Mi Marca', 'Suscripción', 'Soporte']
-const ENTERPRISE_MODULES = ['Dashboard', 'Alumnos', 'Programas', 'Ejercicios', 'Nutrición', 'Soporte']
+// Movida 1 (declutter): standalone colapsa "Mi Marca" + "Suscripción" en una sola entrada "Opciones"
+// (cards dentro del hub /coach/settings). Movida 2: "Ejercicios" deja de ser entrada top-level
+// (botón dentro de Programas; la ruta /coach/exercises sigue viva).
+const STANDALONE_MODULES = ['Dashboard', 'Alumnos', 'Programas', 'Nutrición', 'Opciones', 'Soporte']
+const ENTERPRISE_MODULES = ['Dashboard', 'Alumnos', 'Programas', 'Nutrición', 'Soporte']
 // Cardio + Movimiento aparecen para el team owner cuando enabled_modules los tiene ON
 // (E2E Pool Vortex: cardio/movement_assessment = true). Planes 2+3 los agregaron a la nav.
-const TEAM_MODULES = ['Dashboard', 'Alumnos', 'Equipo', 'Programas', 'Ejercicios', 'Cardio', 'Movimiento', 'Nutrición', 'Opciones', 'Soporte']
+const TEAM_MODULES = ['Dashboard', 'Alumnos', 'Equipo', 'Programas', 'Cardio', 'Movimiento', 'Nutrición', 'Opciones', 'Soporte']
 // Persona 9 (e2e-modules-coach): standalone con los 4 módulos ON. El nav desktop renderiza el
 // bloque CORE y, tras el divisor "MÓDULOS" (F3 — splitNavItems), el bloque de módulos al final.
 // collectNavTitles lee a[title] en orden de DOM ⇒ core seguido de los módulos.
 const MODULES_COACH_MODULES = [
-    'Dashboard', 'Alumnos', 'Programas', 'Ejercicios', 'Nutrición', 'Mi Marca', 'Suscripción', 'Soporte',
+    'Dashboard', 'Alumnos', 'Programas', 'Nutrición', 'Opciones', 'Soporte',
     'Cardio', 'Movimiento',
 ]
 // Contrato con F3 (CoachSidebar.tsx): el divisor del grupo MÓDULOS expone este testid en desktop.

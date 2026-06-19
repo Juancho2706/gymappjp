@@ -1,11 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { BrandSettingsForm } from './BrandSettingsForm'
-import { LogoUploadForm } from './LogoUploadForm'
-import { WhatChangesList } from './_components/WhatChangesList'
-import { BrandSettingsTourClient } from './_components/BrandSettingsTourClient'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
-import { Check, Palette, Package, ChevronRight, Users, LayoutList } from 'lucide-react'
+import { Check, Palette, Package, ChevronRight, Users, LayoutList, CreditCard, SlidersHorizontal } from 'lucide-react'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 import { DangerZone } from './_components/DangerZone'
 import { getCoachSettingsForUser } from './_data/settings.queries'
@@ -179,77 +175,95 @@ export default async function CoachSettingsPage() {
         )
     }
 
+    // Standalone con branding: hub "Opciones" de 3 cards grandes (mismo patrón que team_managed).
+    // El branding deja de vivir inline — ahora es su propia página /coach/settings/brand.
     return (
-        <div className="px-4 py-6 md:px-8 max-w-3xl lg:max-w-6xl animate-fade-in mx-auto" data-tour-id="brand-header">
-            <div className="mb-6 space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                    <div>
-                        <h1 className="text-xl md:text-2xl font-extrabold text-foreground leading-tight">
-                            Personaliza la app de tus alumnos
-                        </h1>
-                        <p className="text-muted-foreground text-sm mt-2 leading-relaxed">
-                            Tus alumnos instalan tu app como si fuera tuya. Aquí defines cómo se ve: logo, colores, nombre y mensajes.
-                            Cada alumno ve <span className="font-semibold text-foreground">TU marca</span>, no la de EVA.
-                        </p>
+        <div className="px-4 py-6 md:px-8 max-w-3xl animate-fade-in mx-auto space-y-6">
+            <div>
+                <h1 className="text-xl md:text-2xl font-extrabold text-foreground leading-tight">Opciones</h1>
+                <p className="text-muted-foreground text-sm mt-2 leading-relaxed">
+                    Tu marca, tu suscripción y la configuración de tu cuenta, todo en un solo lugar.
+                </p>
+            </div>
+
+            {/* 1. Mi Marca → branding (logo, colores, nombre, mensajes) */}
+            <Link
+                href="/coach/settings/brand"
+                className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
+            >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+                    <Palette className="h-5 w-5 text-primary" />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-foreground">Mi Marca</h3>
+                    <p className="text-xs text-muted-foreground">Logo, colores, nombre y mensajes de la app de tus alumnos</p>
+                </div>
+                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+            </Link>
+
+            {/* 2. Suscripción → /coach/subscription (sin cambios funcionales) */}
+            <Link
+                href="/coach/subscription"
+                className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
+            >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+                    <CreditCard className="h-5 w-5 text-primary" />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-foreground">Suscripción</h3>
+                    <p className="text-xs text-muted-foreground">Tu plan, facturación, alumnos activos y métodos de pago</p>
+                </div>
+                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+            </Link>
+
+            {/* 3. Opciones Coach → módulos (entitlements) + áreas del builder.
+                NOTA: esta card alojará la zona "Funciones" (toggles de visibilidad) en Fase C.
+                NO construir toggles ahora — solo dejar el espacio agrupado. */}
+            <section className="rounded-2xl border border-border bg-card overflow-hidden">
+                <div className="flex items-center gap-4 px-4 pt-4 pb-2">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+                        <SlidersHorizontal className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-foreground">Opciones Coach</h3>
+                        <p className="text-xs text-muted-foreground">Tus módulos y la configuración del builder</p>
                     </div>
                 </div>
 
-                <WhatChangesList />
-            </div>
+                <div className="divide-y divide-border border-t border-border">
+                    {/* Módulos (entitlements) — catálogo read-only, compra-only */}
+                    <Link
+                        href="/coach/settings/modules"
+                        className="group flex items-center gap-4 px-4 py-3.5 transition-colors hover:bg-card/60"
+                    >
+                        <Package className="h-5 w-5 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                            <h4 className="text-sm font-medium text-foreground">Módulos</h4>
+                            <p className="text-xs text-muted-foreground">Cardio, evaluación de movimiento, composición corporal, nutrición por intercambios</p>
+                        </div>
+                        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                    </Link>
 
-            <div className="space-y-6">
-                {/* Módulos (entitlements) */}
-                <Link
-                    href="/coach/settings/modules"
-                    className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
-                >
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
-                        <Package className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-foreground">Módulos</h3>
-                        <p className="text-xs text-muted-foreground">Cardio, evaluación de movimiento, composición corporal, nutrición por intercambios</p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                </Link>
+                    {/* Áreas custom del builder */}
+                    <Link
+                        href="/coach/settings/areas"
+                        className="group flex items-center gap-4 px-4 py-3.5 transition-colors hover:bg-card/60"
+                    >
+                        <LayoutList className="h-5 w-5 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                            <h4 className="text-sm font-medium text-foreground">Áreas del builder</h4>
+                            <p className="text-xs text-muted-foreground">Organizá los días con tus propias áreas (Movilidad, Core, HYROX…)</p>
+                        </div>
+                        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                    </Link>
 
-                {/* Áreas custom del builder */}
-                <Link
-                    href="/coach/settings/areas"
-                    className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
-                >
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
-                        <LayoutList className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-foreground">Áreas del builder</h3>
-                        <p className="text-xs text-muted-foreground">Organizá los días con tus propias áreas (Movilidad, Core, HYROX…)</p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                </Link>
+                    {/* Zona "Funciones" (Fase C): aquí irán los toggles de visibilidad coach/alumno.
+                        Placeholder intencional — NO construir toggles en esta fase. */}
+                </div>
+            </section>
 
-                {/* Logo upload */}
-                <LogoUploadForm
-                    currentLogoUrl={coach.logo_url}
-                    brandName={coach.brand_name}
-                />
-
-                {/* Brand settings form */}
-                <BrandSettingsForm coach={coach} />
-
-                {/* Danger zone — account deletion */}
-                <DangerZone />
-            </div>
-
-            <BrandSettingsTourClient
-                coachId={coach.id}
-                brandTourSeenServer={
-                    typeof coach.onboarding_guide === 'object' &&
-                    coach.onboarding_guide !== null &&
-                    !Array.isArray(coach.onboarding_guide) &&
-                    (coach.onboarding_guide as Record<string, unknown>).brand_tour_seen === true
-                }
-            />
+            {/* Danger zone — account deletion (siempre alcanzable) */}
+            <DangerZone />
         </div>
     )
 }

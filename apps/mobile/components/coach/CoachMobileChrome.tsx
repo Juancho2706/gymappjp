@@ -194,6 +194,11 @@ export function CoachMobileHeader() {
 // Primary thumb-zone tabs; the rest live behind "Más" (native pattern, no overflow scroll).
 const PRIMARY_TABS = ['home', 'clientes', 'builder', 'nutricion']
 
+// Movida 2: "Ejercicios" deja de ser destino de nav (redundante). El screen sigue
+// registrado en (tabs)/_layout para deep links, pero se omite de "Más" — la lista
+// se alcanza desde la pantalla de Programas (boton "Lista de ejercicios").
+const HIDDEN_FROM_OVERFLOW = ['ejercicios']
+
 export function CoachMobileTabBar({
   state,
   navigation,
@@ -212,7 +217,9 @@ export function CoachMobileTabBar({
   const primary = PRIMARY_TABS
     .map((name) => routes.find((r) => r.name === name))
     .filter(Boolean) as TabRoute[]
-  const overflow = routes.filter((r) => !PRIMARY_TABS.includes(r.name))
+  const overflow = routes.filter(
+    (r) => !PRIMARY_TABS.includes(r.name) && !HIDDEN_FROM_OVERFLOW.includes(r.name),
+  )
   const overflowActive = !PRIMARY_TABS.includes(activeName)
 
   function go(name: string) {
