@@ -14,585 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      _bak_client_memberships_20260609: {
-        Row: {
-          account_id: string | null
-          client_id: string | null
-          coach_id: string | null
-          created_at: string | null
-          deleted_at: string | null
-          id: string | null
-          org_id: string | null
-          scope: string | null
-          status: string | null
-        }
-        Insert: {
-          account_id?: string | null
-          client_id?: string | null
-          coach_id?: string | null
-          created_at?: string | null
-          deleted_at?: string | null
-          id?: string | null
-          org_id?: string | null
-          scope?: string | null
-          status?: string | null
-        }
-        Update: {
-          account_id?: string | null
-          client_id?: string | null
-          coach_id?: string | null
-          created_at?: string | null
-          deleted_at?: string | null
-          id?: string | null
-          org_id?: string | null
-          scope?: string | null
-          status?: string | null
-        }
-        Relationships: []
-      }
-      _bak_clients_20260609: {
-        Row: {
-          age_confirmed_at: string | null
-          coach_id: string | null
-          created_at: string | null
-          email: string | null
-          force_password_change: boolean | null
-          full_name: string | null
-          goal_weight_kg: number | null
-          id: string | null
-          is_active: boolean | null
-          is_archived: boolean | null
-          onboarding_completed: boolean | null
-          org_id: string | null
-          phone: string | null
-          subscription_start_date: string | null
-          updated_at: string | null
-          use_coach_brand_colors: boolean | null
-        }
-        Insert: {
-          age_confirmed_at?: string | null
-          coach_id?: string | null
-          created_at?: string | null
-          email?: string | null
-          force_password_change?: boolean | null
-          full_name?: string | null
-          goal_weight_kg?: number | null
-          id?: string | null
-          is_active?: boolean | null
-          is_archived?: boolean | null
-          onboarding_completed?: boolean | null
-          org_id?: string | null
-          phone?: string | null
-          subscription_start_date?: string | null
-          updated_at?: string | null
-          use_coach_brand_colors?: boolean | null
-        }
-        Update: {
-          age_confirmed_at?: string | null
-          coach_id?: string | null
-          created_at?: string | null
-          email?: string | null
-          force_password_change?: boolean | null
-          full_name?: string | null
-          goal_weight_kg?: number | null
-          id?: string | null
-          is_active?: boolean | null
-          is_archived?: boolean | null
-          onboarding_completed?: boolean | null
-          org_id?: string | null
-          phone?: string | null
-          subscription_start_date?: string | null
-          updated_at?: string | null
-          use_coach_brand_colors?: boolean | null
-        }
-        Relationships: []
-      }
-      _bak_clients_20260611: {
-        Row: {
-          age_confirmed_at: string | null
-          coach_id: string | null
-          created_at: string | null
-          email: string | null
-          force_password_change: boolean | null
-          full_name: string | null
-          goal_weight_kg: number | null
-          id: string | null
-          is_active: boolean | null
-          is_archived: boolean | null
-          onboarding_completed: boolean | null
-          org_id: string | null
-          phone: string | null
-          subscription_start_date: string | null
-          team_id: string | null
-          updated_at: string | null
-          use_coach_brand_colors: boolean | null
-        }
-        Insert: {
-          age_confirmed_at?: string | null
-          coach_id?: string | null
-          created_at?: string | null
-          email?: string | null
-          force_password_change?: boolean | null
-          full_name?: string | null
-          goal_weight_kg?: number | null
-          id?: string | null
-          is_active?: boolean | null
-          is_archived?: boolean | null
-          onboarding_completed?: boolean | null
-          org_id?: string | null
-          phone?: string | null
-          subscription_start_date?: string | null
-          team_id?: string | null
-          updated_at?: string | null
-          use_coach_brand_colors?: boolean | null
-        }
-        Update: {
-          age_confirmed_at?: string | null
-          coach_id?: string | null
-          created_at?: string | null
-          email?: string | null
-          force_password_change?: boolean | null
-          full_name?: string | null
-          goal_weight_kg?: number | null
-          id?: string | null
-          is_active?: boolean | null
-          is_archived?: boolean | null
-          onboarding_completed?: boolean | null
-          org_id?: string | null
-          phone?: string | null
-          subscription_start_date?: string | null
-          team_id?: string | null
-          updated_at?: string | null
-          use_coach_brand_colors?: boolean | null
-        }
-        Relationships: []
-      }
-      _bak_exercises_20260611: {
-        Row: {
-          body_part: string | null
-          coach_id: string | null
-          created_at: string | null
-          deleted_at: string | null
-          difficulty: string | null
-          equipment: string | null
-          gender_focus: string | null
-          gif_url: string | null
-          id: string | null
-          image_url: string | null
-          instructions: string[] | null
-          muscle_group: string | null
-          name: string | null
-          org_id: string | null
-          secondary_muscles: string[] | null
-          source: string | null
-          video_url: string | null
-        }
-        Insert: {
-          body_part?: string | null
-          coach_id?: string | null
-          created_at?: string | null
-          deleted_at?: string | null
-          difficulty?: string | null
-          equipment?: string | null
-          gender_focus?: string | null
-          gif_url?: string | null
-          id?: string | null
-          image_url?: string | null
-          instructions?: string[] | null
-          muscle_group?: string | null
-          name?: string | null
-          org_id?: string | null
-          secondary_muscles?: string[] | null
-          source?: string | null
-          video_url?: string | null
-        }
-        Update: {
-          body_part?: string | null
-          coach_id?: string | null
-          created_at?: string | null
-          deleted_at?: string | null
-          difficulty?: string | null
-          equipment?: string | null
-          gender_focus?: string | null
-          gif_url?: string | null
-          id?: string | null
-          image_url?: string | null
-          instructions?: string[] | null
-          muscle_group?: string | null
-          name?: string | null
-          org_id?: string | null
-          secondary_muscles?: string[] | null
-          source?: string | null
-          video_url?: string | null
-        }
-        Relationships: []
-      }
-      _bak_foods_20260611: {
-        Row: {
-          brand: string | null
-          calories: number | null
-          carbs_g: number | null
-          category: string | null
-          coach_id: string | null
-          fats_g: number | null
-          id: string | null
-          is_liquid: boolean | null
-          name: string | null
-          name_search: string | null
-          org_id: string | null
-          protein_g: number | null
-          serving_size: number | null
-          serving_unit: string | null
-        }
-        Insert: {
-          brand?: string | null
-          calories?: number | null
-          carbs_g?: number | null
-          category?: string | null
-          coach_id?: string | null
-          fats_g?: number | null
-          id?: string | null
-          is_liquid?: boolean | null
-          name?: string | null
-          name_search?: string | null
-          org_id?: string | null
-          protein_g?: number | null
-          serving_size?: number | null
-          serving_unit?: string | null
-        }
-        Update: {
-          brand?: string | null
-          calories?: number | null
-          carbs_g?: number | null
-          category?: string | null
-          coach_id?: string | null
-          fats_g?: number | null
-          id?: string | null
-          is_liquid?: boolean | null
-          name?: string | null
-          name_search?: string | null
-          org_id?: string | null
-          protein_g?: number | null
-          serving_size?: number | null
-          serving_unit?: string | null
-        }
-        Relationships: []
-      }
-      _bak_nutrition_meals_20260611: {
-        Row: {
-          created_at: string | null
-          day_of_week: number | null
-          description: string | null
-          id: string | null
-          name: string | null
-          order_index: number | null
-          plan_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          day_of_week?: number | null
-          description?: string | null
-          id?: string | null
-          name?: string | null
-          order_index?: number | null
-          plan_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          day_of_week?: number | null
-          description?: string | null
-          id?: string | null
-          name?: string | null
-          order_index?: number | null
-          plan_id?: string | null
-        }
-        Relationships: []
-      }
-      _bak_nutrition_plan_templates_20260611: {
-        Row: {
-          carbs_g: number | null
-          coach_id: string | null
-          created_at: string | null
-          daily_calories: number | null
-          description: string | null
-          fats_g: number | null
-          goal_type: string | null
-          id: string | null
-          instructions: string | null
-          is_favorite: boolean | null
-          name: string | null
-          org_id: string | null
-          protein_g: number | null
-          tags: string[] | null
-          updated_at: string | null
-        }
-        Insert: {
-          carbs_g?: number | null
-          coach_id?: string | null
-          created_at?: string | null
-          daily_calories?: number | null
-          description?: string | null
-          fats_g?: number | null
-          goal_type?: string | null
-          id?: string | null
-          instructions?: string | null
-          is_favorite?: boolean | null
-          name?: string | null
-          org_id?: string | null
-          protein_g?: number | null
-          tags?: string[] | null
-          updated_at?: string | null
-        }
-        Update: {
-          carbs_g?: number | null
-          coach_id?: string | null
-          created_at?: string | null
-          daily_calories?: number | null
-          description?: string | null
-          fats_g?: number | null
-          goal_type?: string | null
-          id?: string | null
-          instructions?: string | null
-          is_favorite?: boolean | null
-          name?: string | null
-          org_id?: string | null
-          protein_g?: number | null
-          tags?: string[] | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      _bak_nutrition_plans_20260611: {
-        Row: {
-          carbs_g: number | null
-          client_id: string | null
-          coach_id: string | null
-          created_at: string | null
-          daily_calories: number | null
-          fats_g: number | null
-          id: string | null
-          instructions: string | null
-          is_active: boolean | null
-          is_custom: boolean | null
-          last_edited_by_coach_id: string | null
-          name: string | null
-          org_id: string | null
-          protein_g: number | null
-          template_id: string | null
-          template_version_id: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          carbs_g?: number | null
-          client_id?: string | null
-          coach_id?: string | null
-          created_at?: string | null
-          daily_calories?: number | null
-          fats_g?: number | null
-          id?: string | null
-          instructions?: string | null
-          is_active?: boolean | null
-          is_custom?: boolean | null
-          last_edited_by_coach_id?: string | null
-          name?: string | null
-          org_id?: string | null
-          protein_g?: number | null
-          template_id?: string | null
-          template_version_id?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          carbs_g?: number | null
-          client_id?: string | null
-          coach_id?: string | null
-          created_at?: string | null
-          daily_calories?: number | null
-          fats_g?: number | null
-          id?: string | null
-          instructions?: string | null
-          is_active?: boolean | null
-          is_custom?: boolean | null
-          last_edited_by_coach_id?: string | null
-          name?: string | null
-          org_id?: string | null
-          protein_g?: number | null
-          template_id?: string | null
-          template_version_id?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      _bak_workout_blocks_20260609: {
-        Row: {
-          created_at: string | null
-          exercise_id: string | null
-          id: string | null
-          is_override: boolean | null
-          notes: string | null
-          order_index: number | null
-          plan_id: string | null
-          progression_type: string | null
-          progression_value: number | null
-          reps: string | null
-          rest_time: string | null
-          rir: string | null
-          section: string | null
-          sets: number | null
-          superset_group: string | null
-          target_weight_kg: number | null
-          tempo: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          exercise_id?: string | null
-          id?: string | null
-          is_override?: boolean | null
-          notes?: string | null
-          order_index?: number | null
-          plan_id?: string | null
-          progression_type?: string | null
-          progression_value?: number | null
-          reps?: string | null
-          rest_time?: string | null
-          rir?: string | null
-          section?: string | null
-          sets?: number | null
-          superset_group?: string | null
-          target_weight_kg?: number | null
-          tempo?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          exercise_id?: string | null
-          id?: string | null
-          is_override?: boolean | null
-          notes?: string | null
-          order_index?: number | null
-          plan_id?: string | null
-          progression_type?: string | null
-          progression_value?: number | null
-          reps?: string | null
-          rest_time?: string | null
-          rir?: string | null
-          section?: string | null
-          sets?: number | null
-          superset_group?: string | null
-          target_weight_kg?: number | null
-          tempo?: string | null
-        }
-        Relationships: []
-      }
-      _bak_workout_blocks_20260611: {
-        Row: {
-          created_at: string | null
-          exercise_id: string | null
-          id: string | null
-          is_override: boolean | null
-          notes: string | null
-          order_index: number | null
-          plan_id: string | null
-          progression_type: string | null
-          progression_value: number | null
-          reps: string | null
-          rest_time: string | null
-          rir: string | null
-          section: string | null
-          section_template_id: string | null
-          sets: number | null
-          superset_group: string | null
-          target_weight_kg: number | null
-          tempo: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          exercise_id?: string | null
-          id?: string | null
-          is_override?: boolean | null
-          notes?: string | null
-          order_index?: number | null
-          plan_id?: string | null
-          progression_type?: string | null
-          progression_value?: number | null
-          reps?: string | null
-          rest_time?: string | null
-          rir?: string | null
-          section?: string | null
-          section_template_id?: string | null
-          sets?: number | null
-          superset_group?: string | null
-          target_weight_kg?: number | null
-          tempo?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          exercise_id?: string | null
-          id?: string | null
-          is_override?: boolean | null
-          notes?: string | null
-          order_index?: number | null
-          plan_id?: string | null
-          progression_type?: string | null
-          progression_value?: number | null
-          reps?: string | null
-          rest_time?: string | null
-          rir?: string | null
-          section?: string | null
-          section_template_id?: string | null
-          sets?: number | null
-          superset_group?: string | null
-          target_weight_kg?: number | null
-          tempo?: string | null
-        }
-        Relationships: []
-      }
-      _bak_workout_logs_20260611: {
-        Row: {
-          block_id: string | null
-          client_id: string | null
-          exercise_name_at_log: string | null
-          id: string | null
-          logged_at: string | null
-          plan_name_at_log: string | null
-          reps_done: number | null
-          rir: number | null
-          rpe: number | null
-          set_number: number | null
-          target_reps_at_log: string | null
-          target_weight_at_log: number | null
-          weight_kg: number | null
-        }
-        Insert: {
-          block_id?: string | null
-          client_id?: string | null
-          exercise_name_at_log?: string | null
-          id?: string | null
-          logged_at?: string | null
-          plan_name_at_log?: string | null
-          reps_done?: number | null
-          rir?: number | null
-          rpe?: number | null
-          set_number?: number | null
-          target_reps_at_log?: string | null
-          target_weight_at_log?: number | null
-          weight_kg?: number | null
-        }
-        Update: {
-          block_id?: string | null
-          client_id?: string | null
-          exercise_name_at_log?: string | null
-          id?: string | null
-          logged_at?: string | null
-          plan_name_at_log?: string | null
-          reps_done?: number | null
-          rir?: number | null
-          rpe?: number | null
-          set_number?: number | null
-          target_reps_at_log?: string | null
-          target_weight_at_log?: number | null
-          weight_kg?: number | null
-        }
-        Relationships: []
-      }
       admin_audit_logs: {
         Row: {
           action: string
@@ -675,6 +96,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "beta_invite_registrations_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      billing_snapshots: {
+        Row: {
+          addons: Json
+          base_clp: number
+          billing_cycle: string | null
+          charged_at: string
+          coach_id: string
+          created_at: string
+          id: string
+          kind: string
+          provider_payment_id: string
+          tier: string | null
+          total_clp: number
+        }
+        Insert: {
+          addons?: Json
+          base_clp: number
+          billing_cycle?: string | null
+          charged_at: string
+          coach_id: string
+          created_at?: string
+          id?: string
+          kind: string
+          provider_payment_id: string
+          tier?: string | null
+          total_clp: number
+        }
+        Update: {
+          addons?: Json
+          base_clp?: number
+          billing_cycle?: string | null
+          charged_at?: string
+          coach_id?: string
+          created_at?: string
+          id?: string
+          kind?: string
+          provider_payment_id?: string
+          tier?: string | null
+          total_clp?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_snapshots_coach_id_fkey"
             columns: ["coach_id"]
             isOneToOne: false
             referencedRelation: "coaches"
@@ -785,56 +256,6 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      billing_snapshots: {
-        Row: {
-          addons: Json
-          base_clp: number
-          billing_cycle: string | null
-          charged_at: string
-          coach_id: string
-          created_at: string
-          id: string
-          kind: string
-          provider_payment_id: string
-          tier: string | null
-          total_clp: number
-        }
-        Insert: {
-          addons?: Json
-          base_clp: number
-          billing_cycle?: string | null
-          charged_at: string
-          coach_id: string
-          created_at?: string
-          id?: string
-          kind: string
-          provider_payment_id: string
-          tier?: string | null
-          total_clp: number
-        }
-        Update: {
-          addons?: Json
-          base_clp?: number
-          billing_cycle?: string | null
-          charged_at?: string
-          coach_id?: string
-          created_at?: string
-          id?: string
-          kind?: string
-          provider_payment_id?: string
-          tier?: string | null
-          total_clp?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "billing_snapshots_coach_id_fkey"
-            columns: ["coach_id"]
-            isOneToOne: false
-            referencedRelation: "coaches"
             referencedColumns: ["id"]
           },
         ]
@@ -974,6 +395,35 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_feature_prefs: {
+        Row: {
+          client_id: string
+          domain: string
+          sections: Json
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          domain: string
+          sections?: Json
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          domain?: string
+          sections?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_feature_prefs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
         ]
@@ -1502,6 +952,38 @@ export type Database = {
           },
         ]
       }
+      coach_feature_prefs: {
+        Row: {
+          coach_id: string
+          domain: string
+          preset: string | null
+          sections: Json
+          updated_at: string
+        }
+        Insert: {
+          coach_id: string
+          domain: string
+          preset?: string | null
+          sections?: Json
+          updated_at?: string
+        }
+        Update: {
+          coach_id?: string
+          domain?: string
+          preset?: string | null
+          sections?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_feature_prefs_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coach_onboarding_events: {
         Row: {
           coach_id: string
@@ -1543,6 +1025,9 @@ export type Database = {
           admin_notes: string | null
           billing_cycle: string
           brand_name: string
+          card_brand: string | null
+          card_last4: string | null
+          card_payment_method_id: string | null
           created_at: string
           current_period_end: string | null
           enabled_modules: Json
@@ -1565,9 +1050,6 @@ export type Database = {
           registration_ip: string | null
           slug: string
           slug_changed_at: string | null
-          card_brand: string | null
-          card_last4: string | null
-          card_payment_method_id: string | null
           subscription_mp_id: string | null
           subscription_status: string
           subscription_tier: string
@@ -1590,6 +1072,9 @@ export type Database = {
           admin_notes?: string | null
           billing_cycle?: string
           brand_name: string
+          card_brand?: string | null
+          card_last4?: string | null
+          card_payment_method_id?: string | null
           created_at?: string
           current_period_end?: string | null
           enabled_modules?: Json
@@ -1612,9 +1097,6 @@ export type Database = {
           registration_ip?: string | null
           slug: string
           slug_changed_at?: string | null
-          card_brand?: string | null
-          card_last4?: string | null
-          card_payment_method_id?: string | null
           subscription_mp_id?: string | null
           subscription_status?: string
           subscription_tier?: string
@@ -1637,6 +1119,9 @@ export type Database = {
           admin_notes?: string | null
           billing_cycle?: string
           brand_name?: string
+          card_brand?: string | null
+          card_last4?: string | null
+          card_payment_method_id?: string | null
           created_at?: string
           current_period_end?: string | null
           enabled_modules?: Json
@@ -1659,9 +1144,6 @@ export type Database = {
           registration_ip?: string | null
           slug?: string
           slug_changed_at?: string | null
-          card_brand?: string | null
-          card_last4?: string | null
-          card_payment_method_id?: string | null
           subscription_mp_id?: string | null
           subscription_status?: string
           subscription_tier?: string
@@ -1971,54 +1453,6 @@ export type Database = {
           },
         ]
       }
-      exercises_backup_20260405: {
-        Row: {
-          body_part: string | null
-          coach_id: string | null
-          created_at: string | null
-          difficulty: string | null
-          equipment: string | null
-          gender_focus: string | null
-          gif_url: string | null
-          id: string | null
-          instructions: string[] | null
-          muscle_group: string | null
-          name: string | null
-          secondary_muscles: string[] | null
-          video_url: string | null
-        }
-        Insert: {
-          body_part?: string | null
-          coach_id?: string | null
-          created_at?: string | null
-          difficulty?: string | null
-          equipment?: string | null
-          gender_focus?: string | null
-          gif_url?: string | null
-          id?: string | null
-          instructions?: string[] | null
-          muscle_group?: string | null
-          name?: string | null
-          secondary_muscles?: string[] | null
-          video_url?: string | null
-        }
-        Update: {
-          body_part?: string | null
-          coach_id?: string | null
-          created_at?: string | null
-          difficulty?: string | null
-          equipment?: string | null
-          gender_focus?: string | null
-          gif_url?: string | null
-          id?: string | null
-          instructions?: string[] | null
-          muscle_group?: string | null
-          name?: string | null
-          secondary_muscles?: string[] | null
-          video_url?: string | null
-        }
-        Relationships: []
-      }
       food_items: {
         Row: {
           food_id: string
@@ -2117,14 +1551,21 @@ export type Database = {
           exchange_portion_grams: number | null
           exchange_portion_label: string | null
           fats_g: number
+          fiber_g: number | null
+          household_grams: number | null
+          household_label: string | null
           id: string
           is_liquid: boolean
           name: string
           name_search: string | null
           org_id: string | null
           protein_g: number
+          saturated_fat_g: number | null
           serving_size: number
           serving_unit: string | null
+          sodium_mg: number | null
+          sugar_g: number | null
+          unsaturated_fat_g: number | null
         }
         Insert: {
           brand?: string | null
@@ -2136,14 +1577,21 @@ export type Database = {
           exchange_portion_grams?: number | null
           exchange_portion_label?: string | null
           fats_g: number
+          fiber_g?: number | null
+          household_grams?: number | null
+          household_label?: string | null
           id?: string
           is_liquid?: boolean
           name: string
           name_search?: string | null
           org_id?: string | null
           protein_g: number
+          saturated_fat_g?: number | null
           serving_size: number
           serving_unit?: string | null
+          sodium_mg?: number | null
+          sugar_g?: number | null
+          unsaturated_fat_g?: number | null
         }
         Update: {
           brand?: string | null
@@ -2155,14 +1603,21 @@ export type Database = {
           exchange_portion_grams?: number | null
           exchange_portion_label?: string | null
           fats_g?: number
+          fiber_g?: number | null
+          household_grams?: number | null
+          household_label?: string | null
           id?: string
           is_liquid?: boolean
           name?: string
           name_search?: string | null
           org_id?: string | null
           protein_g?: number
+          saturated_fat_g?: number | null
           serving_size?: number
           serving_unit?: string | null
+          sodium_mg?: number | null
+          sugar_g?: number | null
+          unsaturated_fat_g?: number | null
         }
         Relationships: [
           {
@@ -2452,6 +1907,169 @@ export type Database = {
             columns: ["news_item_id"]
             isOneToOne: false
             referencedRelation: "news_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrient_targets: {
+        Row: {
+          ceiling_value: number | null
+          client_id: string | null
+          coach_id: string | null
+          created_at: string
+          floor_value: number | null
+          id: string
+          intent: string
+          nutrient_key: string
+          provenance: string | null
+          target_value: number | null
+          updated_at: string
+        }
+        Insert: {
+          ceiling_value?: number | null
+          client_id?: string | null
+          coach_id?: string | null
+          created_at?: string
+          floor_value?: number | null
+          id?: string
+          intent?: string
+          nutrient_key: string
+          provenance?: string | null
+          target_value?: number | null
+          updated_at?: string
+        }
+        Update: {
+          ceiling_value?: number | null
+          client_id?: string | null
+          coach_id?: string | null
+          created_at?: string
+          floor_value?: number | null
+          id?: string
+          intent?: string
+          nutrient_key?: string
+          provenance?: string | null
+          target_value?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrient_targets_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrient_targets_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_intake_entries: {
+        Row: {
+          client_id: string
+          created_at: string
+          custom_name: string | null
+          food_id: string | null
+          id: string
+          log_date: string
+          quantity: number
+          source: string
+          unit: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          custom_name?: string | null
+          food_id?: string | null
+          id?: string
+          log_date: string
+          quantity: number
+          source?: string
+          unit: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          custom_name?: string | null
+          food_id?: string | null
+          id?: string
+          log_date?: string
+          quantity?: number
+          source?: string
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_intake_entries_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_intake_entries_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_meal_comments: {
+        Row: {
+          author_id: string
+          author_role: string
+          body: string
+          client_id: string
+          created_at: string
+          id: string
+          log_date: string | null
+          meal_log_id: string | null
+        }
+        Insert: {
+          author_id: string
+          author_role: string
+          body: string
+          client_id: string
+          created_at?: string
+          id?: string
+          log_date?: string | null
+          meal_log_id?: string | null
+        }
+        Update: {
+          author_id?: string
+          author_role?: string
+          body?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          log_date?: string | null
+          meal_log_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_meal_comments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_meal_comments_meal_log_id_fkey"
+            columns: ["meal_log_id"]
+            isOneToOne: false
+            referencedRelation: "meal_completions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_meal_comments_meal_log_id_fkey"
+            columns: ["meal_log_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_meal_logs"
             referencedColumns: ["id"]
           },
         ]
@@ -2952,6 +2570,138 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "nutrition_plan_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_private_notes: {
+        Row: {
+          body: string
+          client_id: string
+          coach_id: string
+          created_at: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          client_id: string
+          coach_id: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          client_id?: string
+          coach_id?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_private_notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_private_notes_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_recipe_assignments: {
+        Row: {
+          assigned_by: string | null
+          client_id: string
+          created_at: string
+          id: string
+          recipe_id: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          client_id: string
+          created_at?: string
+          id?: string
+          recipe_id: string
+        }
+        Update: {
+          assigned_by?: string | null
+          client_id?: string
+          created_at?: string
+          id?: string
+          recipe_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_recipe_assignments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_recipe_assignments_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_recipes: {
+        Row: {
+          coach_id: string | null
+          created_at: string
+          id: string
+          image_url: string | null
+          ingredients_text: string | null
+          instructions: string | null
+          name: string
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          coach_id?: string | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          ingredients_text?: string | null
+          instructions?: string | null
+          name: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          coach_id?: string | null
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          ingredients_text?: string | null
+          instructions?: string | null
+          name?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_recipes_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_recipes_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
             referencedColumns: ["id"]
           },
         ]
@@ -3781,6 +3531,54 @@ export type Database = {
           },
         ]
       }
+      shopping_list_items: {
+        Row: {
+          category: string | null
+          client_id: string
+          created_at: string
+          id: string
+          is_checked: boolean
+          is_manual: boolean
+          label: string
+          plan_id: string | null
+        }
+        Insert: {
+          category?: string | null
+          client_id: string
+          created_at?: string
+          id?: string
+          is_checked?: boolean
+          is_manual?: boolean
+          label: string
+          plan_id?: string | null
+        }
+        Update: {
+          category?: string | null
+          client_id?: string
+          created_at?: string
+          id?: string
+          is_checked?: boolean
+          is_manual?: boolean
+          label?: string
+          plan_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopping_list_items_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopping_list_items_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscription_events: {
         Row: {
           coach_id: string
@@ -3928,6 +3726,38 @@ export type Database = {
           },
           {
             foreignKeyName: "team_audit_logs_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_feature_prefs: {
+        Row: {
+          domain: string
+          preset: string | null
+          sections: Json
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          domain: string
+          preset?: string | null
+          sections?: Json
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          domain?: string
+          preset?: string | null
+          sections?: Json
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_feature_prefs_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
@@ -4704,6 +4534,10 @@ export type Database = {
       }
     }
     Functions: {
+      assign_org_client_to_coach: {
+        Args: { p_client_id: string; p_coach_id: string }
+        Returns: undefined
+      }
       bulk_assign_selected_clients: {
         Args: {
           p_actor_id: string
@@ -4804,30 +4638,32 @@ export type Database = {
           utilization_pct: number
         }[]
       }
+      get_client_activity_dates: {
+        Args: { p_client_id: string; p_days_back: number }
+        Returns: {
+          day: string
+        }[]
+      }
       get_client_current_streak: {
         Args: { p_client_id: string }
         Returns: number
-      }
-      get_client_activity_dates: {
-        Args: { p_client_id: string; p_days_back: number }
-        Returns: { day: string }[]
       }
       get_client_daily_tonnage: {
         Args: { p_client_id: string; p_max_days?: number }
         Returns: {
           day: string
-          tonnage: number
-          sessions: number
           moving_avg: number
+          sessions: number
+          tonnage: number
         }[]
       }
       get_client_exercise_prs: {
         Args: { p_client_id: string }
         Returns: {
           exercise_id: string
-          name: string
-          muscle_group: string
           max_weight_kg: number
+          muscle_group: string
+          name: string
           reps_at_max: number
         }[]
       }
@@ -4841,29 +4677,29 @@ export type Database = {
       get_client_strength_series: {
         Args: { p_client_id: string }
         Returns: {
-          exercise_id: string
-          name: string
-          muscle_group: string
           day: string
+          exercise_id: string
+          muscle_group: string
+          name: string
           one_rm: number
-          weight_kg: number
           reps_done: number
           total_volume: number
+          weight_kg: number
         }[]
       }
       get_client_weekly_prs: {
         Args: { p_client_id: string }
         Returns: {
-          exercise_id: string
-          name: string
-          muscle_group: string
-          week_weight: number
-          week_reps: number
-          week_1rm: number
-          before_weight: number
-          before_reps: number
           before_1rm: number
+          before_reps: number
+          before_weight: number
+          exercise_id: string
+          muscle_group: string
+          name: string
           pct_change: number
+          week_1rm: number
+          week_reps: number
+          week_weight: number
         }[]
       }
       get_client_workout_day_counts: {
@@ -4912,6 +4748,15 @@ export type Database = {
       get_enterprise_alumno_context: {
         Args: { p_org_slug: string }
         Returns: Json
+      }
+      get_legacy_tier_counts: {
+        Args: never
+        Returns: {
+          billing_cycle: string
+          coach_count: number
+          subscription_status: string
+          tier: string
+        }[]
       }
       get_org_branding: { Args: { p_org_id: string }; Returns: Json }
       get_platform_checkins_7d: { Args: never; Returns: number }
@@ -5037,14 +4882,21 @@ export type Database = {
           exchange_portion_grams: number | null
           exchange_portion_label: string | null
           fats_g: number
+          fiber_g: number | null
+          household_grams: number | null
+          household_label: string | null
           id: string
           is_liquid: boolean
           name: string
           name_search: string | null
           org_id: string | null
           protein_g: number
+          saturated_fat_g: number | null
           serving_size: number
           serving_unit: string | null
+          sodium_mg: number | null
+          sugar_g: number | null
+          unsaturated_fat_g: number | null
         }[]
         SetofOptions: {
           from: "*"
