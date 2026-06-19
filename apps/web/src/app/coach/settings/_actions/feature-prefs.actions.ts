@@ -45,10 +45,17 @@ const presetSchema = z.enum(PRESETS)
 const domainSchema = z.string().trim().min(1, 'domain requerido')
 
 /**
- * `sections`: record de booleans keyed por `NutritionSectionKey`. Keys desconocidas se rechazan
- * (no se persiste basura), valores no-boolean se rechazan.
+ * `sections`: record PARCIAL de booleans (el panel manda solo las keys que toca + `_enabled`).
+ * Gotcha Zod v4: `z.record(z.enum(...), …)` es EXHAUSTIVO (exige TODAS las keys del enum) → un
+ * subconjunto falla con "Datos invalidos". Usamos key `z.string()` (acepta parcial) + refine que
+ * rechaza keys fuera del allowlist (no se persiste basura). Valores no-boolean se rechazan.
  */
-const sectionsSchema = z.record(z.enum(SECTION_PREF_KEYS), z.boolean())
+const ALLOWED_SECTION_KEYS = new Set<string>(SECTION_PREF_KEYS)
+const sectionsSchema = z
+    .record(z.string(), z.boolean())
+    .refine((obj) => Object.keys(obj).every((k) => ALLOWED_SECTION_KEYS.has(k)), {
+        message: 'seccion desconocida',
+    })
 
 const coachPrefsSchema = z.object({
     domain: domainSchema,
