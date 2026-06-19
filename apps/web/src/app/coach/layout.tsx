@@ -21,6 +21,7 @@ import {
     getTeamEnabledModules,
     type EnabledModules,
 } from '@/services/entitlements.service'
+import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
 
 export const metadata: Metadata = {
     title: {
@@ -71,10 +72,24 @@ export default async function CoachLayout({
         return applyOperatorKillSwitch(raw)
     }
 
-    const [enterpriseContext, teamContext, enabledModules] = await Promise.all([
+    // Master switch de dominios (feature-prefs `_enabled`): si el coach apagó un dominio
+    // (ej. Nutrición), su entrada del nav se oculta. Fail-OPEN: cualquier error o flag OFF ⇒
+    // NINGÚN dominio apagado (mostrar todo = comportamiento de HOY). Para la vista PROPIA del
+    // coach se resuelve con su coachId de sesión (sin clientId/team-base override).
+    const resolveDisabledDomains = async (): Promise<string[]> => {
+        try {
+            const nutritionEnabled = await resolveNutritionDomainEnabled({ coachId: coach.id })
+            return nutritionEnabled ? [] : ['nutrition']
+        } catch {
+            return []
+        }
+    }
+
+    const [enterpriseContext, teamContext, enabledModules, disabledDomains] = await Promise.all([
         getCoachEnterpriseContext(coach, activeEnterpriseCoach?.orgId ?? null),
         getCoachTeamContext(activeTeamWorkspace?.teamId ?? null),
         resolveEnabledModules(),
+        resolveDisabledDomains(),
     ])
     const currentWorkspaceLabel =
         activeWorkspace?.label ??
@@ -160,6 +175,7 @@ export default async function CoachLayout({
                     currentWorkspaceLabel={currentWorkspaceLabel}
                     activeWorkspaceType={activeWorkspace?.type ?? null}
                     enabledModules={enabledModules}
+                    disabledDomains={disabledDomains}
                 />
                 <CoachMainWrapper>
                     {/* Background ambient glow */}

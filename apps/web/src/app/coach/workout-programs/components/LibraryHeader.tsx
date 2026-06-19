@@ -1,7 +1,8 @@
 'use client'
 
-import { Hash, Layers, ListChecks, Plus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import Link from 'next/link'
+import { Dumbbell, Hash, Layers, ListChecks, Plus } from 'lucide-react'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
@@ -54,14 +55,30 @@ export function LibraryHeader({
                     </span>
                 </div>
             </div>
-            <Button
-                type="button"
-                onClick={onNewTemplate}
-                className="h-11 w-full shrink-0 gap-2 rounded-xl px-4 shadow-sm sm:h-10 sm:w-auto sm:rounded-lg"
-            >
-                <Plus className="size-4" />
-                Nueva plantilla
-            </Button>
+            <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                {/* Movida 2: "Ejercicios" deja de ser menu top-level — entrada contextual aqui.
+                    La ruta /coach/exercises sigue viva (deep links + app alumno). */}
+                <Link
+                    href="/coach/exercises"
+                    className={cn(
+                        buttonVariants({ variant: 'outline' }),
+                        'h-11 w-full gap-2 rounded-xl px-4 sm:h-10 sm:w-auto sm:rounded-lg',
+                        'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 hover:border-emerald-500/40 hover:bg-emerald-500/20',
+                        'dark:text-emerald-200'
+                    )}
+                >
+                    <Dumbbell className="size-4" />
+                    Lista de ejercicios
+                </Link>
+                <Button
+                    type="button"
+                    onClick={onNewTemplate}
+                    className="h-11 w-full gap-2 rounded-xl px-4 shadow-sm sm:h-10 sm:w-auto sm:rounded-lg"
+                >
+                    <Plus className="size-4" />
+                    Nueva plantilla
+                </Button>
+            </div>
         </div>
     )
 }

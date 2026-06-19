@@ -399,6 +399,35 @@ export type Database = {
           },
         ]
       }
+      client_feature_prefs: {
+        Row: {
+          client_id: string
+          domain: string
+          sections: Json
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          domain: string
+          sections?: Json
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          domain?: string
+          sections?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_feature_prefs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_food_preferences: {
         Row: {
           client_id: string
@@ -916,6 +945,38 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "coach_email_drip_events_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coach_feature_prefs: {
+        Row: {
+          coach_id: string
+          domain: string
+          preset: string | null
+          sections: Json
+          updated_at: string
+        }
+        Insert: {
+          coach_id: string
+          domain: string
+          preset?: string | null
+          sections?: Json
+          updated_at?: string
+        }
+        Update: {
+          coach_id?: string
+          domain?: string
+          preset?: string | null
+          sections?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_feature_prefs_coach_id_fkey"
             columns: ["coach_id"]
             isOneToOne: false
             referencedRelation: "coaches"
@@ -3665,6 +3726,38 @@ export type Database = {
           },
           {
             foreignKeyName: "team_audit_logs_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_feature_prefs: {
+        Row: {
+          domain: string
+          preset: string | null
+          sections: Json
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          domain: string
+          preset?: string | null
+          sections?: Json
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          domain?: string
+          preset?: string | null
+          sections?: Json
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_feature_prefs_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"

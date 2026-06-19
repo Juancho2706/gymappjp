@@ -494,6 +494,8 @@ importers:
 
   packages/calc: {}
 
+  packages/feature-prefs: {}
+
   packages/module-catalog: {}
 
   packages/nutrition-engine: {}
