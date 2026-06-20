@@ -194,9 +194,11 @@ export async function registerAction(
             slug,
             invite_code: inviteCode,
             primary_color: '#10B981',
-            // Free tier: mark active immediately. Auth remains unconfirmed until email link
-            // is clicked, so this does not grant an active session early.
-            subscription_status: isFreeTier ? 'active' : 'pending_payment',
+            // Free tier: 'pending_email' until the email-confirm link is clicked, which flips it
+            // to 'active' AND fires the welcome + drip sequence (apps/web/src/app/auth/confirm/route.ts).
+            // Mirrors the mobile free-signup path (api/mobile/auth/register-coach-free); inserting
+            // 'active' here silently skipped welcome/drip for every web free coach.
+            subscription_status: isFreeTier ? 'pending_email' : 'pending_payment',
             subscription_tier: selectedTier,
             billing_cycle: isFreeTier ? 'monthly' : selectedBillingCycle,
             payment_provider: isFreeTier ? 'admin' : (process.env.PAYMENT_PROVIDER ?? 'mercadopago'),
