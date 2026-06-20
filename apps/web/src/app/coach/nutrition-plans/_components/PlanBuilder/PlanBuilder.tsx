@@ -28,6 +28,7 @@ import {
   upsertCoachNutritionTemplate,
   upsertClientNutritionPlanJson,
   getClientFoodFavorites,
+  getClientFoodRestrictions,
 } from '../../_actions/nutrition-coach.actions'
 import {
   createDayVariantAction,
@@ -48,6 +49,7 @@ import { trackNutritionEvent } from '@/lib/product-analytics'
 import type { DayVariant, NutritionPlanMode } from '@/domain/nutrition/exchange.types'
 import type { ExchangeBuilderData, ExchangeTargetDraft, FoodItemDraft, MealDraft, PlanBuilderInitialData } from './types'
 import type { ClientProfileHint } from './PlanBuilderSidebar'
+import type { NutritionSectionKey } from '@eva/feature-prefs'
 
 /** Comidas nuevas usan id local `meal-*` hasta que el plan se guarda (no persistibles aún). */
 function isPersistedMealId(mealId: string): boolean {
@@ -67,9 +69,16 @@ interface Props {
   clientProfile?: ClientProfileHint | null
   /** Módulo nutrition_exchanges (solo si está ON para el workspace activo). */
   exchange?: ExchangeBuilderData | null
+  /**
+   * Visibilidad efectiva por sección (resuelta server-side: entitlement AND preferencia).
+   * Gobierna los paneles Pro del sidebar — `goals_bodycomp` (objetivos por composición
+   * corporal, hornea `body_composition`) y `micros_advanced` (hornea `nutrition_exchanges`).
+   * Ausente => fail-OPEN al entitlement legacy (`!!exchange`) para no romper call sites viejos.
+   */
+  sectionFlags?: Partial<Record<NutritionSectionKey, boolean>> | null
 }
 
-export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfile, exchange }: Props) {
+export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfile, exchange, sectionFlags }: Props) {
   const router = useRouter()
   const [planName, setPlanName] = useState(initialData?.name ?? '')
   const [goals, setGoals] = useState({
@@ -94,9 +103,19 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
   const [isSaving, setIsSaving] = useState(false)
   const [autoSync, setAutoSync] = useState(true)
   const [clientFavoriteIds, setClientFavoriteIds] = useState<Set<string>>(new Set())
+  // Restricciones del alumno (A3): alergia = bloqueo con override; intolerancia/dislike = aviso blando
+  // (se mantienen como sets SEPARADOS para no degradar una intolerancia a "no le gusta" en el badge).
+  const [clientAllergyIds, setClientAllergyIds] = useState<Set<string>>(new Set())
+  const [clientIntoleranceIds, setClientIntoleranceIds] = useState<Set<string>>(new Set())
+  const [clientDislikeIds, setClientDislikeIds] = useState<Set<string>>(new Set())
 
   // ─── Módulo nutrition_exchanges (solo client-plan, con módulo ON) ──────────────
-  const exchangeEnabled = !!exchange && mode === 'client-plan'
+  // Gating efectivo: el bundle `exchange` (entitlement server-side) AND la visibilidad
+  // de seccion `micros_advanced` (entitlement AND preferencia coach/team/cliente). Sin
+  // `sectionFlags` => fail-OPEN al legacy (`!!exchange`). Render-only: el modo `exchanges`
+  // YA persistido en el plan se conserva en DB; solo se oculta la superficie de edición.
+  const microsAdvancedVisible = sectionFlags ? sectionFlags.micros_advanced === true : !!exchange
+  const exchangeEnabled = !!exchange && mode === 'client-plan' && microsAdvancedVisible
   const [planMode, setPlanMode] = useState<NutritionPlanMode>(exchange?.planMode ?? 'grams')
   const [exchangeTargets, setExchangeTargets] = useState<Record<string, ExchangeTargetDraft[]>>(
     exchange?.targetsByMealId ?? {}
@@ -276,6 +295,11 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
   useEffect(() => {
     if (!clientId) return
     getClientFoodFavorites(clientId).then((ids) => setClientFavoriteIds(new Set(ids)))
+    getClientFoodRestrictions(clientId).then((rows) => {
+      setClientAllergyIds(new Set(rows.filter((r) => r.preference_type === 'allergy').map((r) => r.food_id)))
+      setClientIntoleranceIds(new Set(rows.filter((r) => r.preference_type === 'intolerance').map((r) => r.food_id)))
+      setClientDislikeIds(new Set(rows.filter((r) => r.preference_type === 'dislike').map((r) => r.food_id)))
+    })
   }, [clientId])
 
   const sensors = useSensors(
@@ -285,6 +309,11 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
 
   const realTotals = useMemo(() => totalsFromMealDrafts(meals), [meals])
   const emptyMeals = useMemo(() => meals.filter((m) => m.foodItems.length === 0), [meals])
+
+  // Gating del panel "Objetivos por composición corporal" del sidebar. Si llega `sectionFlags`
+  // (resolver server-side: entitlement AND preferencia), manda; si no, fail-OPEN al entitlement
+  // legacy `!!exchange`. `goals_bodycomp` ya hornea el módulo `body_composition`.
+  const proBodyComp = sectionFlags ? sectionFlags.goals_bodycomp === true : !!exchange
 
   // Auto-sync goals whenever meals change and toggle is ON
   useEffect(() => {
@@ -635,6 +664,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
             onSave={handleSave}
             mode={mode}
             clientProfile={clientProfile}
+            proBodyComp={proBodyComp}
           />
         </div>
 
@@ -723,6 +753,9 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
             : []
         }
         clientFavoriteIds={clientFavoriteIds.size > 0 ? clientFavoriteIds : undefined}
+        clientAllergyIds={clientAllergyIds.size > 0 ? clientAllergyIds : undefined}
+        clientIntoleranceIds={clientIntoleranceIds.size > 0 ? clientIntoleranceIds : undefined}
+        clientDislikeIds={clientDislikeIds.size > 0 ? clientDislikeIds : undefined}
       />
     </div>
   )

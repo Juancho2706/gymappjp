@@ -187,6 +187,34 @@ function AddFoodFormBody({
               : 'Los macros de arriba son por 100g. Puedes dejarlo en 100.'}
           </p>
         </div>
+        {unit === 'g' && (
+          <div className="space-y-2 col-span-2 rounded-xl border border-border/50 bg-muted/20 p-3">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+              Medida casera (opcional)
+            </Label>
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <Input
+                name="household_label"
+                placeholder="Ej: taza, cucharada, palma"
+                maxLength={30}
+                className="h-11 rounded-xl"
+                aria-label="Nombre de la medida casera"
+              />
+              <Input
+                name="household_grams"
+                type="number"
+                min={1}
+                step="1"
+                placeholder="g"
+                className="h-11 w-24 rounded-xl"
+                aria-label="Gramos que pesa la medida casera"
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              El alumno verá ej. <span className="font-semibold text-foreground">120 g (1 taza)</span>. Es solo una referencia aproximada; no cambia los macros.
+            </p>
+          </div>
+        )}
       </div>
       <SubmitRow />
       {state.error && <p className="text-xs text-rose-500 font-bold text-center">{state.error}</p>}

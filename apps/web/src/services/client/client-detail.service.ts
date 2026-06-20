@@ -6,11 +6,19 @@ import { resolveCheckinPhotoUrls } from '@/lib/storage/checkin-photos'
 import { cache } from 'react'
 import { revalidatePath } from 'next/cache'
 import { format, parseISO, subDays } from 'date-fns'
-import { getTodayInSantiago, getSantiagoUtcBoundsForDay, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
+import {
+    getTodayInSantiago,
+    getSantiagoUtcBoundsForDay,
+    getNutritionDayOfWeekFromIsoYmdInSantiago,
+    nutritionMealAppliesOnIsoYmdInSantiago,
+} from '@/lib/date-utils'
 import {
     calculateConsumedMacrosWithCompletionFallback,
+    computeNutritionAdherence,
     normalizeMealForMacros,
     portionPctMapFromMealLogs,
+    type AdherenceMeal,
+    type MealLogRow,
     type NutritionMealMacroSource,
 } from '@/lib/nutrition-utils'
 import { calculateAttentionScore } from '@/services/dashboard.service'
@@ -297,22 +305,37 @@ export const getClientProfileData = cache(async (clientId: string) => {
     // Si no hay programa o no tiene bloques, evitamos dividir por 0
     if (weeklyWorkoutTarget === 0) weeklyWorkoutTarget = 1; 
 
-    // 2. Calcular Nutricion Hoy usando nutrition_meal_logs (fuente real de datos)
-    const planMealsToday = (activeNutritionPlanFull?.nutrition_meals ?? []).filter((m: { day_of_week?: number | null }) =>
-        nutritionMealAppliesOnIsoYmdInSantiago(m, todayIso)
+    // 2. Calcular Nutricion Hoy usando el motor canonico computeNutritionAdherence
+    //    (rango de UN dia = todayIso). El motor reemplaza el computo inline de
+    //    Formula A (mealsDone / applicableMeals filtrado por dia de semana).
+    //    Solo necesitamos el conteo de compliance del dia, no macros, asi que el
+    //    target vivo se pasa en cero (los macros del dia se calculan aparte mas
+    //    abajo via todayConsumedMacros).
+    const adherenceMealsToday: AdherenceMeal[] = (activeNutritionPlanFull?.nutrition_meals ?? []).map(
+        (m: NutritionMealMacroSource) => ({
+            ...normalizeMealForMacros(m),
+            day_of_week: m.day_of_week ?? null,
+        })
     )
-    let todayMealsTotal = planMealsToday.length
+    const todayMealLogs = ((todayNutritionLog as any)?.nutrition_meal_logs || []) as MealLogRow[]
+    const todayLogsByDate = new Map<string, MealLogRow[]>([[todayIso, todayMealLogs]])
+    const { perDay: adherencePerDayToday } = computeNutritionAdherence({
+        meals: adherenceMealsToday,
+        logsByDate: todayLogsByDate,
+        liveTarget: { calories: 0, protein: 0, carbs: 0, fats: 0 },
+        range: { startIso: todayIso, endIso: todayIso },
+        dayOfWeekResolver: getNutritionDayOfWeekFromIsoYmdInSantiago,
+        mealAppliesOn: nutritionMealAppliesOnIsoYmdInSantiago,
+    })
+    const todayAdherence = adherencePerDayToday[0]
+    const mealsDoneToday = todayAdherence?.mealsDone ?? 0
+    // todayMealsTotal: comidas aplicables hoy, con piso de 1 para no dividir por 0
+    // (misma invariante que el computo inline anterior).
+    let todayMealsTotal = todayAdherence?.applicableMeals ?? 0
     if (todayMealsTotal === 0) todayMealsTotal = 1
 
-    // Contar comidas completadas hoy desde nutrition_meal_logs
-    const todayMealLogs = (todayNutritionLog as any)?.nutrition_meal_logs || [];
-    const applicableTodayIds = new Set(planMealsToday.map((m: { id: string }) => m.id))
-    const mealsDoneToday = todayMealLogs.filter(
-        (ml: any) => ml.is_completed === true && applicableTodayIds.has(ml.meal_id)
-    ).length;
-
-    // Calcular % de cumplimiento de hoy (0 a 100)
-    const nutritionCompliancePercent = Math.min(100, Math.round((mealsDoneToday / todayMealsTotal) * 100));
+    // % de cumplimiento de hoy (0 a 100), redondeado.
+    const nutritionCompliancePercent = Math.min(100, Math.round((mealsDoneToday / todayMealsTotal) * 100))
 
     // 3. Progreso del Plan de Ejercicios
     let currentWeek = 0;

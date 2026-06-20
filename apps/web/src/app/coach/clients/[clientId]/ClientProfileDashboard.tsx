@@ -33,12 +33,37 @@ import {
 } from '@/lib/workout/programWeekVariant'
 import { effectiveWorkoutSection } from '@/lib/workout-block-grouping'
 import { updateClientGoalWeight } from './_actions/client-detail.actions'
+import type { NutrientTargetRow } from '@/services/nutrient-targets.service'
+import type { PrivateNoteRow, MealCommentRow } from '@/services/nutrition-notes.service'
+import type { NutritionSectionKey } from '@eva/feature-prefs'
+import type { ClientFeaturePrefsOverrideContext } from '@/services/feature-prefs.service'
 
 interface ClientProfileDashboardProps {
     data: any // using any temporarily to save time on type definitions
+    /** Zona C (coach) de Nutrición — resueltos server-side en page.tsx. */
+    coachNutrientTargets?: NutrientTargetRow[]
+    coachPrivateNotes?: PrivateNoteRow[]
+    coachMealComments?: MealCommentRow[]
+    /** "Nutrición Pro" (nutrition_exchanges) ON ⇒ umbrales de micros avanzados. */
+    nutritionProEnabled?: boolean
+    /** Master switch del dominio Nutrición resuelto para ESTE alumno (false ⇒ ocultar todo). */
+    nutritionDomainEnabled?: boolean
+    /** Visibilidad por sección resuelta para ESTE alumno (entitled AND wants). */
+    nutritionSectionFlags?: Record<NutritionSectionKey, boolean>
+    /** Contexto del override por-alumno (panel "Funciones para este alumno", Zona C). */
+    nutritionOverrideContext?: ClientFeaturePrefsOverrideContext
 }
 
-export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
+export function ClientProfileDashboard({
+    data,
+    coachNutrientTargets = [],
+    coachPrivateNotes = [],
+    coachMealComments = [],
+    nutritionProEnabled = false,
+    nutritionDomainEnabled = true,
+    nutritionSectionFlags,
+    nutritionOverrideContext,
+}: ClientProfileDashboardProps) {
     const reduceMotion = useReducedMotion()
     const [activeTab, setActiveTab] = useState<ProfileMainTabId>('overview')
     const [isPending, startTransition] = useTransition()
@@ -305,6 +330,21 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
         })
     }
 
+    // Deep-link a la Zona A (Progreso) del hogar único de nutrición. NO recomputa
+    // ningún número: los entry points leen los valores ya calculados (compliance/
+    // motor de adherencia) y solo navegan a la pestaña Nutrición.
+    const goToNutritionProgress = () => {
+        handleTabChange('nutrition')
+        requestAnimationFrame(() => {
+            document
+                .getElementById('nutrition-zone-a-progreso')
+                ?.scrollIntoView({
+                    behavior: reduceMotion ? 'auto' : 'smooth',
+                    block: 'start',
+                })
+        })
+    }
+
     const tabEase = [0.25, 0.46, 0.45, 0.94] as const
     const tabMotion = {
         initial: { opacity: 0, y: reduceMotion ? 0 : 8 } as const,
@@ -350,6 +390,7 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                 workoutHistory={data.workoutHistory || []}
                                 checkIns={checkIns || []}
                                 compliance={compliance}
+                                onViewNutrition={goToNutritionProgress}
                             />
 
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -357,6 +398,7 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                                     activeProgram={data.activeProgram}
                                     compliance={compliance}
                                     isNutritionAtRisk={isNutritionAtRisk}
+                                    onViewNutrition={goToNutritionProgress}
                                 />
                                 <ProfileCheckInSnapshot
                                     checkIn={lastCheckIn}
@@ -882,6 +924,13 @@ export function ClientProfileDashboard({ data }: ClientProfileDashboardProps) {
                             nutritionPlanCycles={data.nutritionPlanCycles ?? []}
                             nutritionTemplatesLite={data.nutritionTemplatesLite ?? []}
                             nutritionPlanHistoryEntries={data.nutritionPlanHistoryEntries ?? []}
+                            coachNutrientTargets={coachNutrientTargets}
+                            coachPrivateNotes={coachPrivateNotes}
+                            coachMealComments={coachMealComments}
+                            nutritionProEnabled={nutritionProEnabled}
+                            nutritionDomainEnabled={nutritionDomainEnabled}
+                            nutritionSectionFlags={nutritionSectionFlags}
+                            nutritionOverrideContext={nutritionOverrideContext}
                         />
                     </div>
                     </motion.div>

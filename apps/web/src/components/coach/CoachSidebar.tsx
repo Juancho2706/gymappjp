@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -9,10 +9,11 @@ import {
     PanelLeft,
     HelpCircle,
     Building2,
-    ChevronLeft,
-    ChevronRight,
+    MoreHorizontal,
+    X,
+    type LucideIcon,
 } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -40,41 +41,39 @@ interface CoachSidebarProps {
     activeWorkspaceType?: WorkspaceType | null
     /** Módulos toggleables habilitados para el contexto activo (resuelto server-side en el layout). */
     enabledModules?: EnabledModules | null
+    /**
+     * Dominios de feature-prefs cuyo master switch `_enabled` el coach apagó (resuelto
+     * server-side en el layout). Una entrada con `featureDomain` en este set se oculta del nav.
+     * Ausente/vacío ⇒ ningún dominio apagado (fail-open).
+     */
+    disabledDomains?: string[] | null
 }
 
-export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus, enterpriseContext, workspaces, currentWorkspaceLabel, activeWorkspaceType, enabledModules }: CoachSidebarProps) {
+/**
+ * Mobile bottom bar — tabs PRIMARIOS (zona del pulgar). El resto del nav vive detrás de "Más"
+ * (patrón nativo, espejo de `apps/mobile/components/coach/CoachMobileChrome.tsx`:
+ * `PRIMARY_TABS = ['home','clientes','builder','nutricion']`). NUNCA scroll horizontal plano.
+ * Match por `key` del registro `NAV_MODULES` (estable e independiente del label/contexto).
+ */
+const MOBILE_PRIMARY_KEYS = ['dashboard', 'clients', 'programs', 'nutrition'] as const
+
+export function CoachSidebar({ coachName, coachBrand, primaryColor, subscriptionStatus, enterpriseContext, workspaces, currentWorkspaceLabel, activeWorkspaceType, enabledModules, disabledDomains }: CoachSidebarProps) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
     const [isCollapsed, setIsCollapsed] = useState(false)
-    const navRef = useRef<HTMLElement>(null)
-    const [canScrollLeft, setCanScrollLeft] = useState(false)
-    const [canScrollRight, setCanScrollRight] = useState(false)
-
-    const updateScrollIndicators = useCallback(() => {
-        const el = navRef.current
-        if (!el) return
-        setCanScrollLeft(el.scrollLeft > 4)
-        setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
-    }, [])
-
-    useEffect(() => {
-        const el = navRef.current
-        if (!el) return
-        updateScrollIndicators()
-        el.addEventListener('scroll', updateScrollIndicators, { passive: true })
-        const ro = new ResizeObserver(updateScrollIndicators)
-        ro.observe(el)
-        return () => {
-            el.removeEventListener('scroll', updateScrollIndicators)
-            ro.disconnect()
-        }
-    }, [updateScrollIndicators])
+    const [moreOpen, setMoreOpen] = useState(false)
+    const reduceMotion = useReducedMotion()
 
     useEffect(() => {
         const saved = localStorage.getItem('sidebar-collapsed')
         if (saved === 'true') setIsCollapsed(true)
     }, [])
+
+    // Cerrar el panel "Más" al navegar (cambio de ruta).
+    useEffect(() => {
+        setMoreOpen(false)
+    }, [pathname])
 
     const activeColorStyle = primaryColor ? { color: primaryColor } : undefined
     const activeBgStyle = primaryColor ? { 
@@ -97,16 +96,31 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
     const isBuilder = pathname.startsWith('/coach/builder') || pathname.startsWith('/coach/workout-programs/builder')
     const isOrgAdmin = enterpriseContext?.orgRole === 'org_owner' || enterpriseContext?.orgRole === 'org_admin'
     // Registro nav-como-módulos: cada flujo (standalone/enterprise/team) ve SOLO sus módulos.
-    const visibleNavItems = getVisibleNavItems({ activeWorkspaceType, subscriptionStatus, enabledModules })
-    // Particionar para el grupo "MÓDULOS": en desktop core va arriba y, si hay módulos comprados,
-    // se agrupan bajo un divisor. En mobile el bottom bar renderiza plano [...core, ...modules].
+    const disabledDomainSet = disabledDomains && disabledDomains.length > 0 ? new Set(disabledDomains) : null
+    const visibleNavItems = getVisibleNavItems({ activeWorkspaceType, subscriptionStatus, enabledModules, disabledDomains: disabledDomainSet })
+    // Particionar para el grupo "MÓDULOS" (DESKTOP): core va arriba y, si hay módulos comprados,
+    // se agrupan bajo un divisor.
     const { core: coreNavItems, modules: moduleNavItems } = splitNavItems(visibleNavItems)
     const hasModuleGroup = moduleNavItems.length > 0
 
+    // MOBILE — patrón "4 primarios + Más" (espejo de CoachMobileChrome). Los primarios se eligen por
+    // `key` (estable); todo lo demás (Opciones, Soporte, módulos entitled, Equipo) vive tras "Más".
+    // Si el status está bloqueado, getVisibleNavItems ya colapsó a [Reactivar] ⇒ ese único item entra
+    // como primario y no hay overflow.
+    const mobilePrimary = MOBILE_PRIMARY_KEYS
+        .map((k) => visibleNavItems.find((i) => i.key === k))
+        .filter((i): i is NavModule => i != null)
+    const primaryKeySet = new Set(mobilePrimary.map((i) => i.key))
+    const mobileOverflow = visibleNavItems.filter((i) => !primaryKeySet.has(i.key))
+    const hasMobileOverflow = mobileOverflow.length > 0
+    const isMoreActive = mobileOverflow.some(
+        (i) => pathname === i.href || pathname.startsWith(i.href + '/')
+    )
+
+    // DESKTOP — link vertical del sidebar (sin las clases base mobile; el mobile usa su propio bottom bar).
     const renderNavLink = (item: NavModule) => {
         const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
         const Icon = item.icon
-        const short = item.shortLabel
         return (
             <Link
                 key={item.href}
@@ -114,9 +128,8 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                 prefetch={false}
                 title={item.label}
                 className={cn(
-                    'flex shrink-0 flex-col items-center gap-1 rounded-xl border border-transparent px-2 py-2 text-[10px] font-semibold transition-all duration-300 group md:w-full md:flex-none md:flex-row md:gap-3 md:px-4 md:py-2 md:text-sm',
-                    'min-w-[3.5rem] max-w-[5.25rem] md:min-w-0 md:max-w-none',
-                    isCollapsed ? 'md:justify-center md:px-0' : 'md:justify-start',
+                    'flex w-full flex-none flex-row items-center gap-3 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold transition-all duration-300 group',
+                    isCollapsed ? 'justify-center px-0' : 'justify-start',
                     isActive
                         ? 'text-sidebar-foreground bg-primary/10 border-primary/20 dark:shadow-[0_0_15px_-5px_rgba(var(--theme-primary-rgb,0,122,255),0.4)]'
                         : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'
@@ -125,21 +138,82 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
             >
                 <Icon
                     className={cn(
-                        'w-5 h-5 md:w-5 md:h-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110',
+                        'w-5 h-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110',
                         isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-sidebar-foreground'
                     )}
                     style={isActive ? activeColorStyle : undefined}
                 />
                 <span
                     className={cn(
-                        'max-w-full text-center leading-tight tracking-wide line-clamp-2 md:truncate md:text-left',
-                        isCollapsed && 'md:hidden'
+                        'max-w-full truncate text-left leading-tight tracking-wide',
+                        isCollapsed && 'hidden'
                     )}
                 >
-                    <span className="hidden uppercase md:inline md:text-[11px]">{item.label}</span>
-                    <span className="inline md:hidden">{short || item.label}</span>
+                    <span className="uppercase text-[11px]">{item.label}</span>
                 </span>
             </Link>
+        )
+    }
+
+    // MOBILE — tile de la barra inferior (44px+ touch target, zona del pulgar).
+    const renderMobileTile = (
+        tile: { key: string; label: string; short: string; icon: LucideIcon },
+        opts: { active: boolean; href?: string; onClick?: () => void }
+    ) => {
+        const Icon = tile.icon
+        const label = tile.short
+        const ariaLabel = tile.label
+        const inner = (
+            <>
+                <Icon
+                    className={cn(
+                        'h-[22px] w-[22px] flex-shrink-0 transition-transform duration-200',
+                        opts.active ? 'text-primary' : 'text-muted-foreground'
+                    )}
+                    style={opts.active ? activeColorStyle : undefined}
+                />
+                <span
+                    className={cn(
+                        'max-w-full truncate text-center text-[10px] font-semibold leading-tight tracking-wide',
+                        opts.active ? 'text-primary' : 'text-muted-foreground'
+                    )}
+                    style={opts.active ? activeColorStyle : undefined}
+                >
+                    {label}
+                </span>
+            </>
+        )
+        const tileClass = cn(
+            'flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 transition-colors',
+            opts.active ? 'bg-primary/10' : 'hover:bg-sidebar-accent'
+        )
+        if (opts.href) {
+            return (
+                <Link
+                    key={tile.key}
+                    href={opts.href}
+                    prefetch={false}
+                    title={ariaLabel}
+                    aria-label={ariaLabel}
+                    className={tileClass}
+                    style={opts.active ? activeBgStyle : undefined}
+                >
+                    {inner}
+                </Link>
+            )
+        }
+        return (
+            <button
+                key={tile.key}
+                type="button"
+                onClick={opts.onClick}
+                aria-label={ariaLabel}
+                aria-expanded={moreOpen}
+                className={tileClass}
+                style={opts.active ? activeBgStyle : undefined}
+            >
+                {inner}
+            </button>
         )
     }
 
@@ -184,16 +258,15 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                 </div>
             </div>
 
-            {/* Navigation Sidebar (Desktop) / Bottom Nav (Mobile — hidden on builder) */}
+            {/* Navigation Sidebar (Desktop only — el mobile usa el bottom bar "4 + Más" más abajo) */}
             <aside className={cn(
-                "fixed bottom-0 left-0 right-0 z-50 flex flex-col border-t border-sidebar-border bg-sidebar pb-safe pl-safe pr-safe shadow-2xl transition-all duration-300 [transform:translateZ(0)] md:sticky md:top-0 md:border-r md:border-t-0 md:pb-0 md:pl-0 md:pr-0 md:shadow-none",
+                "hidden md:sticky md:top-0 md:flex md:flex-col md:border-r md:border-sidebar-border md:bg-sidebar transition-all duration-300 [transform:translateZ(0)]",
                 isBuilder
                     ? "md:h-full md:min-h-0 md:max-h-full supports-[height:100dvh]:md:h-full"
                     : "md:h-dvh supports-[height:100dvh]:md:h-[100dvh]",
-                isCollapsed ? "md:w-20" : "md:w-64",
-                isBuilder && "hidden md:flex"
+                isCollapsed ? "md:w-20" : "md:w-64"
             )}>
-                
+
                 {/* Logo area (Desktop only) */}
                 <div className={cn("hidden md:flex py-5 border-b border-sidebar-border items-center", isCollapsed ? "px-0 justify-center flex-col gap-4" : "px-6 justify-between")}>
                     <div className={cn("flex min-w-0 items-center gap-3", isCollapsed && "justify-center")}>
@@ -236,39 +309,17 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                     </div>
                 )}
 
-                {/* Navigation Links */}
-                <div className="relative flex-none overflow-hidden md:flex-1 md:min-h-0 md:overflow-visible">
-                {canScrollLeft && (
-                    <div className="md:hidden pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center bg-gradient-to-r from-sidebar/90 to-transparent w-10">
-                        <motion.div
-                            animate={{ x: [0, -4, 0] }}
-                            transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
-                            className="ml-0.5"
-                        >
-                            <ChevronLeft className="w-4 h-4 text-sidebar-foreground/50" />
-                        </motion.div>
-                    </div>
-                )}
-                {canScrollRight && (
-                    <div className="md:hidden pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center bg-gradient-to-l from-sidebar/90 to-transparent w-10">
-                        <motion.div
-                            animate={{ x: [0, 4, 0] }}
-                            transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
-                            className="ml-auto mr-0.5"
-                        >
-                            <ChevronRight className="w-4 h-4 text-sidebar-foreground/50" />
-                        </motion.div>
-                    </div>
-                )}
-                <nav ref={navRef} className="flex max-w-full flex-none flex-row flex-nowrap justify-start gap-0.5 overflow-x-auto overflow-y-hidden overscroll-x-contain px-1 py-2 [-webkit-overflow-scrolling:touch] md:max-w-none md:flex-1 md:min-h-0 md:flex-col md:justify-start md:gap-1 md:space-y-1 md:overflow-x-hidden md:overflow-y-auto md:px-4 md:py-3 custom-scrollbar">
+                {/* Navigation Links (Desktop) */}
+                <div className="flex-1 min-h-0 overflow-visible">
+                <nav className="flex max-w-none flex-1 min-h-0 flex-col justify-start gap-1 space-y-1 overflow-x-hidden overflow-y-auto px-4 py-3 custom-scrollbar">
                     {enterpriseContext && isOrgAdmin && (
                         <Link
                             href={`/org/${enterpriseContext.orgSlug}`}
                             prefetch={false}
                             title="Panel empresa"
                             className={cn(
-                                'hidden shrink-0 items-center gap-3 rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-semibold text-sidebar-foreground transition-all duration-300 hover:bg-primary/15 md:flex',
-                                isCollapsed ? 'md:justify-center md:px-0' : 'md:justify-start'
+                                'flex shrink-0 items-center gap-3 rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-semibold text-sidebar-foreground transition-all duration-300 hover:bg-primary/15',
+                                isCollapsed ? 'justify-center px-0' : 'justify-start'
                             )}
                             style={activeBgStyle}
                         >
@@ -276,7 +327,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                                 className="h-5 w-5 flex-shrink-0 text-primary"
                                 style={activeColorStyle}
                             />
-                            <span className={cn('truncate text-left', isCollapsed && 'md:hidden')}>Panel empresa</span>
+                            <span className={cn('truncate text-left', isCollapsed && 'hidden')}>Panel empresa</span>
                         </Link>
                     )}
                     {coreNavItems.map(renderNavLink)}
@@ -353,6 +404,103 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                     )}
                 </div>
             </aside>
+
+            {/* ============================ MOBILE BOTTOM BAR ============================ */}
+            {/* Patrón nativo "4 primarios + Más" (espejo de CoachMobileChrome). Oculto en builder
+                (evita doble barra fija) y en desktop (md:). Los chromes globales — news bell, theme,
+                workspace switcher, sign-out — viven en el header mobile de arriba, sin duplicar. */}
+
+            {/* Backdrop + panel "Más" (overflow) */}
+            <AnimatePresence>
+                {moreOpen && !isBuilder && (
+                    <>
+                        <motion.div
+                            key="more-backdrop"
+                            className="md:hidden fixed inset-0 z-[58] bg-black/40"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: reduceMotion ? 0 : 0.18 }}
+                            onClick={() => setMoreOpen(false)}
+                            aria-hidden="true"
+                        />
+                        <motion.div
+                            key="more-panel"
+                            role="dialog"
+                            aria-label="Más opciones de navegación"
+                            className="md:hidden fixed inset-x-0 bottom-0 z-[60] flex flex-col gap-1 rounded-t-2xl border-t border-sidebar-border bg-sidebar px-3 pt-3 pb-safe shadow-2xl"
+                            initial={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+                            animate={reduceMotion ? { opacity: 1 } : { y: 0 }}
+                            exit={reduceMotion ? { opacity: 0 } : { y: '100%' }}
+                            transition={{ type: reduceMotion ? 'tween' : 'spring', duration: reduceMotion ? 0.18 : undefined, damping: 26, stiffness: 280 }}
+                        >
+                            <div className="mb-1 flex items-center justify-between px-2">
+                                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Más</p>
+                                <button
+                                    type="button"
+                                    onClick={() => setMoreOpen(false)}
+                                    aria-label="Cerrar"
+                                    className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-1.5 pb-1">
+                                {mobileOverflow.map((item) => {
+                                    const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+                                    const Icon = item.icon
+                                    return (
+                                        <Link
+                                            key={item.href}
+                                            href={item.href}
+                                            prefetch={false}
+                                            title={item.label}
+                                            aria-label={item.label}
+                                            onClick={() => setMoreOpen(false)}
+                                            className={cn(
+                                                'flex min-h-[44px] items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-sm font-semibold transition-colors',
+                                                isActive
+                                                    ? 'bg-primary/10 border-primary/20 text-sidebar-foreground'
+                                                    : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                                            )}
+                                            style={isActive ? activeBgStyle : undefined}
+                                        >
+                                            <Icon
+                                                className={cn('h-5 w-5 flex-shrink-0', isActive ? 'text-primary' : 'text-muted-foreground')}
+                                                style={isActive ? activeColorStyle : undefined}
+                                            />
+                                            <span className="truncate">{item.label}</span>
+                                        </Link>
+                                    )
+                                })}
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            <nav
+                aria-label="Navegación principal"
+                className={cn(
+                    'md:hidden fixed bottom-0 left-0 right-0 z-[59] flex items-stretch gap-0.5 border-t border-sidebar-border bg-sidebar px-1.5 pt-1.5 pb-safe pl-safe pr-safe shadow-2xl [transform:translateZ(0)]',
+                    isBuilder && 'hidden'
+                )}
+            >
+                {mobilePrimary.map((item) =>
+                    renderMobileTile(
+                        { key: item.key, label: item.label, short: item.shortLabel || item.label, icon: item.icon },
+                        {
+                            active: pathname === item.href || pathname.startsWith(item.href + '/'),
+                            href: item.href,
+                        }
+                    )
+                )}
+                {hasMobileOverflow &&
+                    renderMobileTile(
+                        { key: 'more', label: 'Más', short: 'Más', icon: MoreHorizontal },
+                        { active: isMoreActive || moreOpen, onClick: () => setMoreOpen((o) => !o) }
+                    )}
+            </nav>
         </>
     )
 }

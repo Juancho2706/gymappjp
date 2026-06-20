@@ -48,12 +48,12 @@ export function CookieConsent() {
         <div
             role="dialog"
             aria-label="Consentimiento de cookies"
-            className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 backdrop-blur-sm p-4 pb-safe animate-in slide-in-from-bottom-2 duration-300"
+            className="fixed bottom-0 left-0 right-0 z-[70] border-t border-border bg-background/95 backdrop-blur-sm p-4 pb-safe animate-in slide-in-from-bottom-2 duration-300"
         >
             <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <Cookie className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5 sm:mt-0" />
                 <p className="flex-1 text-xs text-muted-foreground leading-relaxed">
-                    Usamos cookies analíticas para mejorar la plataforma (PostHog).
+                    Usamos cookies analíticas para mejorar la plataforma.
                     Puedes aceptar o rechazar.{' '}
                     <a href="/legal/privacidad" className="underline hover:text-foreground">Política de privacidad</a>.
                 </p>

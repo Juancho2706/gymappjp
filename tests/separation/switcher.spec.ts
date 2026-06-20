@@ -121,13 +121,16 @@ test.describe('D3-D4: Jose Fit multi-contexto (flip standalone <-> team)', () =>
         await expectNoRuntimeError(page)
     })
 
-    test('D4: flip completo — team gana Equipo/pierde Mi Marca y ve a Carolina; standalone al revés', async ({ page }) => {
+    test('D4: flip completo — team gana Equipo y ve a Carolina; standalone pierde Equipo (Opciones en ambos)', async ({ page }) => {
         await loginJose(page)
+
+        // Movida 1 (declutter): "Mi Marca"/"Suscripción" standalone se colapsaron en "Opciones"
+        // (hub /coach/settings). El discriminador team↔standalone es ahora la presencia de "Equipo"
+        // (solo team), no la marca. "Opciones" existe en AMBOS contextos (settings_team vs options).
 
         // --- Contexto TEAM ---
         await switchWorkspace(page, TEAM_NAME)
         await expect(page.locator('aside nav a[title="Equipo"]')).toBeVisible({ timeout: 20_000 })
-        await expect(page.locator('aside nav a[title="Mi Marca"]')).toHaveCount(0)
         await expectNoRuntimeError(page)
 
         await page.goto('/coach/clients')
@@ -137,7 +140,7 @@ test.describe('D3-D4: Jose Fit multi-contexto (flip standalone <-> team)', () =>
 
         // --- Contexto STANDALONE ---
         await switchWorkspace(page, STANDALONE_LABEL)
-        await expect(page.locator('aside nav a[title="Mi Marca"]')).toBeVisible({ timeout: 20_000 })
+        await expect(page.locator('aside nav a[title="Opciones"]')).toBeVisible({ timeout: 20_000 })
         await expect(page.locator('aside nav a[title="Equipo"]')).toHaveCount(0)
         await expectNoRuntimeError(page)
 

@@ -350,6 +350,13 @@ export async function toggleClientFoodPreference(
     .eq('food_id', foodId)
     .maybeSingle()
 
+  // Safety (A2): el alumno NO puede pisar/borrar un marcador de alergia/intolerancia puesto por el
+  // coach (fila compartida por PK client_id,food_id). Su toggle de favorito/dislike es no-op ahi —
+  // si no, el hard-block del builder dejaria de dispararse al favoritear el alumno un alergeno.
+  if (existing && (existing.preference_type === 'allergy' || existing.preference_type === 'intolerance')) {
+    return { success: false, active: false }
+  }
+
   if (existing) {
     if (existing.preference_type === preferenceType) {
       const { error } = await supabase

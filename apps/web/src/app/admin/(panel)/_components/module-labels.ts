@@ -4,7 +4,7 @@ export const MODULE_LABELS: Record<ModuleKey, string> = {
     cardio: 'Cardio',
     movement_assessment: 'Evaluación de movimiento',
     body_composition: 'Composición corporal',
-    nutrition_exchanges: 'Nutrición por intercambios',
+    nutrition_exchanges: 'Nutrición Pro',
 }
 
 export { MODULE_KEYS }

@@ -31,10 +31,45 @@ import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { readNutritionReadModelCache, writeNutritionReadModelCache } from '@/lib/nutrition-plan-local-cache'
 import { ExchangeMealChips } from './ExchangeMealChips'
 import { ExchangeEquivalencesSheet } from './ExchangeEquivalencesSheet'
+import { MicrosPanel, type MicroTarget } from './MicrosPanel'
+import { PlatePanel } from './PlatePanel'
+import { OffPlanLogger } from './OffPlanLogger'
+import { ShoppingListView } from './ShoppingListView'
+import { NotesThread, type NotesThreadComment } from '@/components/nutrition/NotesThread'
+import type { PlateProportion } from '@/components/nutrition/ProportionPlate'
+import type { ShoppingListView as ShoppingListData } from '../_data/shopping.queries'
+import type { DayMicros } from '../_data/sections.queries'
+import type { IntakeFoodRef } from '@/services/nutrition-intake.service'
+import type { MealCommentRow } from '@/services/nutrition-notes.service'
+import { addClientMealComment } from '../_actions/nutrition-notes.actions'
+import { ChevronDown } from 'lucide-react'
 import { macrosForTargets } from '@/services/nutrition-exchanges/exchange-calc'
 import { loadBrandLogoDataUrl } from '@/lib/nutrition-pdf-brand'
 import type { StudentExchangeBundle } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
 import type { ExchangeGroup, PdfBrand } from '@/domain/nutrition/exchange.types'
+import type { NutritionSectionKey } from '@eva/feature-prefs'
+
+/**
+ * Visibilidad por seccion resuelta server-side (`resolveFeaturePrefs`). Gating = SOLO render,
+ * nunca borra data. Core (plan/macros/adherence) NO se gatea: siempre se renderiza.
+ * Default fail-OPEN (todo visible) = comportamiento de HOY para call sites legacy (offline/cache)
+ * que aun no pasan flags.
+ */
+type SectionFlags = Record<NutritionSectionKey, boolean>
+const ALL_SECTIONS_VISIBLE: SectionFlags = {
+  plan: true,
+  macros: true,
+  adherence: true,
+  micros_base: true,
+  plate: true,
+  off_plan_log: true,
+  notes: true,
+  habits: true,
+  recipes: true,
+  shopping: true,
+  micros_advanced: true,
+  goals_bodycomp: true,
+}
 
 type MealLogRow = { meal_id: string; is_completed: boolean; consumed_quantity: number | null; satisfaction_score?: number | null }
 type MealSwapRow = {
@@ -88,6 +123,33 @@ interface Props {
   /** Marca del tenant resuelta SERVER-SIDE (headers del proxy) para los PDFs. */
   pdfBrand?: PdfBrand | null
   brandLogoUrl?: string | null
+  // ─── Overhaul de nutrición (base tier) ───────────────────────────────────────
+  /** Notas bidireccionales del día (coach ⇄ alumno). */
+  notes?: MealCommentRow[]
+  /** Lista de compras derivada del plan + estado persistido. */
+  shoppingList?: ShoppingListData
+  /** Alimentos del catálogo usados recientemente (quick-add off-plan). */
+  offPlanRecents?: IntakeFoodRef[]
+  /** Micros del plan para el día (sodio + fibra + avanzados Pro). */
+  dayMicros?: DayMicros
+  /** Topes/metas de micros definidos por el coach (base + avanzados Pro). */
+  microTargets?: {
+    sodium?: MicroTarget
+    fiber?: MicroTarget
+    sugar?: MicroTarget
+    saturatedFat?: MicroTarget
+    unsaturatedFat?: MicroTarget
+  }
+  /** "Nutrición Pro" (módulo nutrition_exchanges) ON ⇒ muestra micros avanzados. */
+  nutritionProEnabled?: boolean
+  /** Proporción del plato (verduras/proteína/carbohidrato) derivada del plan. */
+  plateProportion?: PlateProportion
+  /**
+   * Visibilidad por seccion (resolver de feature-prefs). Solo gatea el RENDER de las secciones
+   * OPCIONALES; las core (comidas + anillos de macros + adherencia) siempre se muestran. Ausente
+   * => fail-OPEN (todo visible), comportamiento de HOY.
+   */
+  sectionFlags?: SectionFlags
 }
 
 export function NutritionShell({
@@ -101,6 +163,14 @@ export function NutritionShell({
   exchange,
   pdfBrand,
   brandLogoUrl,
+  notes,
+  shoppingList,
+  offPlanRecents,
+  dayMicros,
+  microTargets,
+  nutritionProEnabled = false,
+  plateProportion,
+  sectionFlags = ALL_SECTIONS_VISIBLE,
 }: Props) {
   const reduceMotion = useReducedMotion()
   const [selectedDate, setSelectedDate] = useState(today)
@@ -706,6 +776,26 @@ export function NutritionShell({
     })
   }, [mealsVisibleWithSwaps, plan.name, plan.instructions, selectedDate, goals, today, pdfBrand])
 
+  // ─── Overhaul: notas del día (alumno, hilo bidireccional) ────────────────────
+  const notesComments = useMemo<NotesThreadComment[]>(
+    () =>
+      (notes ?? []).map((c) => ({
+        id: c.id,
+        author_role: c.author_role === 'coach' ? 'coach' : 'client',
+        body: c.body,
+        created_at: c.created_at,
+      })),
+    [notes]
+  )
+
+  const handleAddNote = useCallback(
+    async (body: string) => {
+      const res = await addClientMealComment({ coachSlug, logDate: selectedDate, body })
+      if (!res.ok) toast.error(res.error)
+    },
+    [coachSlug, selectedDate]
+  )
+
   // ─── Módulo nutrition_exchanges (alumno) ─────────────────────────────────────
   const exchangeEnabled = !!exchange?.enabled
   const [equivalenceGroup, setEquivalenceGroup] = useState<ExchangeGroup | null>(null)
@@ -794,6 +884,25 @@ export function NutritionShell({
         isReadOnly={!isToday}
       />
 
+      {/* Zona de progreso ampliada: micros (colapsable) + proporción del plato. */}
+      {(sectionFlags.micros_base || sectionFlags.micros_advanced) && (
+        <MicrosPanel
+          sodiumMg={dayMicros?.sodiumMg ?? null}
+          fiberG={dayMicros?.fiberG ?? null}
+          sugarG={dayMicros?.sugarG ?? null}
+          saturatedFatG={dayMicros?.saturatedFatG ?? null}
+          unsaturatedFatG={dayMicros?.unsaturatedFatG ?? null}
+          sodiumTarget={microTargets?.sodium}
+          fiberTarget={microTargets?.fiber}
+          sugarTarget={microTargets?.sugar}
+          saturatedFatTarget={microTargets?.saturatedFat}
+          unsaturatedFatTarget={microTargets?.unsaturatedFat}
+          proEnabled={nutritionProEnabled && sectionFlags.micros_advanced}
+        />
+      )}
+
+      {sectionFlags.plate && plateProportion && <PlatePanel proportion={plateProportion} />}
+
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={selectedDate}
@@ -861,6 +970,17 @@ export function NutritionShell({
         </motion.div>
       </AnimatePresence>
 
+      {/* Registro fuera de plan (off-plan) — solo el día de hoy. */}
+      {sectionFlags.off_plan_log && isToday && (
+        <div className="flex justify-center">
+          <OffPlanLogger
+            recents={(offPlanRecents ?? []).map((f) => ({ id: f.id, name: f.name }))}
+            coachSlug={coachSlug}
+            today={today}
+          />
+        </div>
+      )}
+
       {exchangeEnabled && exchange && (
         <ExchangeEquivalencesSheet
           group={equivalenceGroup}
@@ -869,12 +989,30 @@ export function NutritionShell({
         />
       )}
 
-      <HabitsTracker
-        clientId={userId}
-        coachSlug={coachSlug}
-        logDate={selectedDate}
-        isToday={isToday}
-      />
+      {sectionFlags.habits && (
+        <HabitsTracker
+          clientId={userId}
+          coachSlug={coachSlug}
+          logDate={selectedDate}
+          isToday={isToday}
+        />
+      )}
+
+      {/* Notas del día (hilo bidireccional coach ⇄ alumno). */}
+      {sectionFlags.notes && (
+        <section className="space-y-2 rounded-2xl border border-border/60 bg-card/60 p-4 backdrop-blur-sm">
+          <div className="flex items-center gap-1.5">
+            <h3 className="m-0 text-sm font-semibold text-foreground">Notas del día</h3>
+            <InfoTooltip content="Deja una nota para tu coach sobre la nutrición de hoy. Tu coach también puede responderte aquí." />
+          </div>
+          <NotesThread
+            comments={notesComments}
+            onSubmit={handleAddNote}
+            currentRole="client"
+            emptyHint="Escribe una nota a tu coach sobre tu día (antojos, cómo te sentiste, dudas)."
+          />
+        </section>
+      )}
 
       {totalMeals > 0 && (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -933,6 +1071,25 @@ export function NutritionShell({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Lista de compras — colapsable (progressive disclosure). */}
+      {sectionFlags.shopping && shoppingList && (
+        <details className="group rounded-2xl border border-border/60 bg-card/60 backdrop-blur-sm">
+          <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-2 px-4 py-3">
+            <span className="flex items-center gap-1.5">
+              <span className="text-sm font-semibold text-foreground">Lista de compras</span>
+              <InfoTooltip content="Lista derivada de tu plan, agrupada por pasillo. Marca lo que ya tienes, agrega ítems o compártela por WhatsApp." />
+            </span>
+            <ChevronDown
+              className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180"
+              aria-hidden
+            />
+          </summary>
+          <div className="px-4 pb-4 pt-1">
+            <ShoppingListView list={shoppingList} coachSlug={coachSlug} />
+          </div>
+        </details>
       )}
 
       {adherenceEffective.length > 0 && (plan.nutrition_meals?.length ?? 0) > 0 && (

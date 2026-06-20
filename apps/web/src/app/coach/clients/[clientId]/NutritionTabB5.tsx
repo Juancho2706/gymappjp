@@ -41,6 +41,7 @@ import {
   Minus,
   Heart,
   Droplets,
+  MessageCircle,
 } from 'lucide-react'
 import { AdherenceStrip, type DayAdherence } from '@/app/c/[coach_slug]/nutrition/_components/AdherenceStrip'
 import { MacroRingSummary } from '@/app/c/[coach_slug]/nutrition/_components/MacroRingSummary'
@@ -60,6 +61,17 @@ import {
   type NutritionCycleRow,
   type NutritionHistoryEntryLite,
 } from './NutritionCycleHistorySection'
+import { ConsumedVsTarget, NutritionProgressZone } from '@/components/nutrition'
+import { NotesThread, type NotesThreadComment } from '@/components/nutrition/NotesThread'
+import { CoachNutrientTargetsEditor } from './CoachNutrientTargetsEditor'
+import { CoachPrivateNotesPanel } from './CoachPrivateNotesPanel'
+import { ClientFoodRestrictionsCard } from './ClientFoodRestrictionsCard'
+import { addCoachMealComment } from './_actions/nutrition-notes.actions'
+import type { NutrientTargetRow } from '@/services/nutrient-targets.service'
+import type { PrivateNoteRow, MealCommentRow } from '@/services/nutrition-notes.service'
+import type { NutritionSectionKey } from '@eva/feature-prefs'
+import type { ClientFeaturePrefsOverrideContext } from '@/services/feature-prefs.service'
+import { ClientFeaturePrefsPanel } from '@/components/coach/ClientFeaturePrefsPanel'
 
 export type NutritionTimelineRow = {
   date: string
@@ -112,13 +124,40 @@ type NutritionTabB5Props = {
   nutritionPlanCycles?: NutritionCycleRow[]
   nutritionTemplatesLite?: { id: string; name: string }[]
   nutritionPlanHistoryEntries?: NutritionHistoryEntryLite[]
+  /** Zona C (coach): umbrales de micros del alumno (+ defaults del coach). */
+  coachNutrientTargets?: NutrientTargetRow[]
+  /** Zona C (coach): notas privadas del coach sobre el alumno. */
+  coachPrivateNotes?: PrivateNoteRow[]
+  /** Zona C (coach): hilo bidireccional de comentarios del día de hoy. */
+  coachMealComments?: MealCommentRow[]
+  /** "Nutrición Pro" (nutrition_exchanges) ON ⇒ umbrales de micros avanzados (Zona C). */
+  nutritionProEnabled?: boolean
+  /**
+   * Master switch del dominio Nutrición resuelto para ESTE alumno. `false` ⇒ el coach
+   * apagó la nutrición para este alumno: se oculta toda la tab y se muestra una nota
+   * compacta. Gating = solo render; el historial nunca se borra.
+   */
+  nutritionDomainEnabled?: boolean
+  /**
+   * Visibilidad por sección resuelta para ESTE alumno (`entitled AND wants`). El coach ve
+   * lo que ve el alumno: las opcionales (micros, plate, recetas, notas, hábitos, etc.) se
+   * muestran por flag; las core (plan/macros/adherencia) van siempre. `undefined`
+   * (flag global OFF / sin resolver) ⇒ comportamiento de HOY: mostrar todo.
+   */
+  nutritionSectionFlags?: Record<NutritionSectionKey, boolean>
+  /**
+   * Contexto del override por-alumno (panel "Funciones para este alumno", Zona C). Trae el
+   * `baseEffective` (lo heredado del default coach/team), el `override` ya guardado y el
+   * entitlement por módulo. `undefined` ⇒ no se monta el panel (sin contexto resuelto).
+   */
+  nutritionOverrideContext?: ClientFeaturePrefsOverrideContext
 }
 
 const MACRO_COLORS = {
   cal: '#007AFF',
-  prot: '#10b981',
-  carb: '#f59e0b',
-  fat: '#ef4444',
+  prot: 'var(--color-macro-protein)',
+  carb: 'var(--color-macro-carbs)',
+  fat: 'var(--color-macro-fats)',
 }
 
 function MacroShareRing({
@@ -201,6 +240,78 @@ function HeatmapCell({
   )
 }
 
+function ZoneHeader({
+  letter,
+  title,
+  subtitle,
+}: {
+  letter: string
+  title: string
+  subtitle?: string
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-black text-primary">
+        {letter}
+      </span>
+      <div className="min-w-0">
+        <h2 className="text-sm font-black uppercase tracking-widest text-foreground">{title}</h2>
+        {subtitle ? (
+          <p className="text-[11px] font-medium text-muted-foreground">{subtitle}</p>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/** Collapsible "Detalle" accordion — collapsed by default. Reuses the file's
+ *  framer-motion expand pattern so heavy charts stay out of the default view. */
+function DetailAccordion({
+  title,
+  defaultOpen = false,
+  reduceMotion,
+  children,
+}: {
+  title: string
+  defaultOpen?: boolean
+  reduceMotion: boolean | null
+  children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <GlassCard className="overflow-hidden border-dashed border-border/50 dark:border-white/10">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-primary/5"
+        aria-expanded={open}
+      >
+        <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+          {title}
+        </span>
+        {open ? (
+          <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        )}
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: reduceMotion ? 0 : 0.22 }}
+            className="overflow-hidden border-t border-border/30 dark:border-white/10"
+          >
+            <div className="space-y-6 p-5">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </GlassCard>
+  )
+}
+
 export function NutritionTabB5({
   clientId,
   coachId,
@@ -226,8 +337,22 @@ export function NutritionTabB5({
   nutritionPlanCycles = [],
   nutritionTemplatesLite = [],
   nutritionPlanHistoryEntries = [],
+  coachNutrientTargets = [],
+  coachPrivateNotes = [],
+  coachMealComments = [],
+  nutritionProEnabled = false,
+  nutritionDomainEnabled = true,
+  nutritionSectionFlags,
+  nutritionOverrideContext,
 }: NutritionTabB5Props) {
   const reduceMotion = useReducedMotion()
+  // Helper de visibilidad por sección: `undefined` (flag global OFF / sin resolver) =>
+  // mostrar todo (comportamiento de HOY). Las core nunca llaman acá: van siempre.
+  const showSection = (key: NutritionSectionKey): boolean =>
+    nutritionSectionFlags ? nutritionSectionFlags[key] === true : true
+  // Micros (Zona C): el editor de umbrales cae bajo micros_base (umbrales base) y se
+  // enriquece con micros_advanced (Nutrición Pro). Visible si cualquiera está prendida.
+  const showMicros = showSection('micros_base') || showSection('micros_advanced')
   const [openMealId, setOpenMealId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [historyDate, setHistoryDate] = useState(santiagoTodayIso)
@@ -407,21 +532,194 @@ export function NutritionTabB5({
   const weekDelta = nutritionWeeklyAvgPct - nutritionPrevWeeklyAvgPct
   const WeekIcon = weekDelta > 1 ? TrendingUp : weekDelta < -1 ? TrendingDown : Minus
 
-  return (
-    <div className="space-y-6">
-      <NutritionCoachAlertsPanel alerts={nutritionAlerts} />
-      <NutritionCheckinContextCard
-        recentCheckIns={recentCheckIns}
-        nutritionWeeklyAvgPct={nutritionWeeklyAvgPct}
-      />
-      <NutritionCycleHistorySection
-        coachId={coachId}
-        clientId={clientId}
-        planId={typeof activeNutritionPlan?.id === 'string' ? activeNutritionPlan.id : undefined}
-        santiagoTodayIso={santiagoTodayIso}
-        activeCycle={nutritionPlanCycles.find((c) => c.is_active) ?? null}
-        templates={nutritionTemplatesLite}
-        historyEntries={nutritionPlanHistoryEntries}
+  // ── ZONE A · Progreso ──────────────────────────────────────────────────────
+  const zoneAProgreso = (
+    <NutritionProgressZone
+      title="Zona A · Progreso"
+      subtitle="Hoy (Santiago) · adherencia 30 días"
+      className="scroll-mt-24"
+    >
+      <div id="nutrition-zone-a-progreso" />
+      {plan && kcal > 0 ? (
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <div className="space-y-4">
+            <h3 className="text-xs font-black uppercase tracking-widest text-primary">Hoy (Santiago)</h3>
+            {!hasTodayNutritionLog ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No ha registrado comidas hoy (sin log diario).
+              </p>
+            ) : (
+              <>
+                <ConsumedVsTarget
+                  label="Energía diaria"
+                  consumed={tm.calories}
+                  target={kcal}
+                  unit="kcal"
+                />
+                <MacroRingSummary
+                  isReadOnly
+                  calories={{ consumed: tm.calories, target: kcal }}
+                  protein={{ consumed: tm.protein, target: prot }}
+                  carbs={{ consumed: tm.carbs, target: carb }}
+                  fats={{ consumed: tm.fats, target: fat }}
+                />
+              </>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
+              <Utensils className="h-4 w-4" /> Adherencia · 30 días
+              <InfoTooltip content="Cada cuadrado es un día. Verde = el alumno completó al menos una comida ese día. Gris = sin registro. No indica el 100% de las comidas, solo que logueó." />
+            </h3>
+            {useAdherenceStrip ? (
+              <div className="space-y-4">
+                <AdherenceStrip
+                  data={adherence30d!}
+                  planMeals={planMealsForStrip.map((m) => ({
+                    id: m.id,
+                    day_of_week: m.day_of_week ?? null,
+                  }))}
+                />
+                <div className="flex flex-wrap gap-4 text-sm">
+                  {nutritionMonthlyAvgPct != null && (
+                    <div>
+                      <div className="flex items-center gap-1">
+                        <p className="text-[9px] font-black uppercase text-muted-foreground">Promedio mensual</p>
+                        <InfoTooltip content="Promedio de comidas completadas vs totales del plan en los últimos 30 días. Considera solo los días con registro." iconClassName="w-3 h-3" />
+                      </div>
+                      <p className="text-2xl font-black tabular-nums">{nutritionMonthlyAvgPct}%</p>
+                    </div>
+                  )}
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <p className="text-[9px] font-black uppercase text-muted-foreground">Racha (≥80%)</p>
+                      <InfoTooltip content="Días consecutivos hacia atrás donde el alumno completó ≥80% de las comidas del día." iconClassName="w-3 h-3" />
+                    </div>
+                    <p className="text-2xl font-black tabular-nums">{nutritionStreakDays} días</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <WeekIcon className="w-5 h-5 text-muted-foreground" />
+                    <div>
+                      <div className="flex items-center gap-1">
+                        <p className="text-[9px] font-black uppercase text-muted-foreground">Semana vs anterior</p>
+                        <InfoTooltip content="Adherencia promedio de esta semana comparada con la semana anterior. Flecha arriba = mejora." iconClassName="w-3 h-3" />
+                      </div>
+                      <p className="font-bold tabular-nums">
+                        {nutritionWeeklyAvgPct}% vs {nutritionPrevWeeklyAvgPct}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="text-[10px] font-medium text-muted-foreground">
+                  Color según % de comidas del plan completadas ese día.
+                </p>
+                <div
+                  className="grid grid-cols-6 gap-1.5 sm:grid-cols-10"
+                  role="grid"
+                  aria-label="Mapa de adherencia nutricional de los últimos 30 días; cada celda es un día"
+                >
+                  {heatmapDays.map((day) => (
+                    <HeatmapCell key={day.dateKey} day={day} reduceMotion={reduceMotion} />
+                  ))}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-3 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-muted/60 border border-border/40" /> Sin datos
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-rose-500/30 border border-rose-500/45" /> &lt;60%
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-amber-500/35 border border-amber-500/45" /> 60–80%
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500/35 border border-emerald-500/50" /> &gt;80%
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      ) : (
+        <p className="py-6 text-center text-sm text-muted-foreground">
+          Asigna un plan de nutrición con meta calórica para ver el progreso del alumno.
+        </p>
+      )}
+
+      {plan && (
+        <div className="space-y-2 border-t border-border/40 pt-5 dark:border-white/10">
+          <h3 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-primary">
+            Últimos 7 días · kcal consumidas vs meta del log
+            <InfoTooltip content="Barras azules = calorías consumidas (suma de comidas completadas × porción). Línea naranja = meta calórica diaria del plan." />
+          </h3>
+          <p className="text-[10px] font-medium text-muted-foreground">
+            Consumo estimado según comidas del plan marcadas como hechas.
+          </p>
+          <div className="h-[260px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={chart7d} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
+                <XAxis
+                  dataKey="shortDate"
+                  tick={{ fill: chartAxisColor, fontSize: 9 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fill: chartAxisColor, fontSize: 9 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={36}
+                />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null
+                    const row = payload[0]?.payload as (typeof chart7d)[0]
+                    return (
+                      <div
+                        className="rounded-lg border px-3 py-2 text-[11px] font-semibold shadow-md"
+                        style={{
+                          backgroundColor: tooltipBgColor,
+                          borderColor: tooltipBorderColor,
+                          color: tooltipTextColor,
+                        }}
+                      >
+                        <p className="font-black">{row.log_date}</p>
+                        <p>Consumidas: {row.consumed} kcal</p>
+                        <p>Meta log: {row.target || '—'} kcal</p>
+                      </div>
+                    )
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700 }} />
+                <Bar dataKey="consumed" name="Consumidas" fill="rgba(16, 185, 129, 0.45)" radius={[3, 3, 0, 0]} maxBarSize={32} />
+                <Line
+                  type="monotone"
+                  dataKey="target"
+                  name="Meta log"
+                  stroke={MACRO_COLORS.cal}
+                  strokeWidth={2}
+                  dot={{ r: 2 }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+    </NutritionProgressZone>
+  )
+
+  // ── ZONE B · Plan y comidas ────────────────────────────────────────────────
+  const zoneBPlan = (
+    <section aria-label="Zona B · Plan y comidas" className="space-y-6">
+      <ZoneHeader
+        letter="B"
+        title="Plan y comidas"
+        subtitle="Plan activo, edición y lista de comidas"
       />
       {clientFavoriteFoods.length > 0 && (
         <GlassCard className="border-border/40 p-4 dark:border-white/10">
@@ -585,178 +883,183 @@ export function NutritionTabB5({
                 </div>
               </div>
             </div>
-            {pieData.length > 0 && (
-              <div className="mx-auto w-full max-w-[220px] lg:mx-0 lg:w-[240px]">
-                <div className="mb-2 flex items-center justify-center gap-1 lg:justify-start">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
-                    Macros meta (kcal)
-                  </p>
-                  <InfoTooltip content="Distribución porcentual de las calorías del plan. Referencia: 30% proteína / 40% carbos / 30% grasas para hipertrofia." iconClassName="w-3 h-3" />
-                </div>
-                <div className="h-[220px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={pieData}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="46%"
-                        innerRadius={44}
-                        outerRadius={66}
-                        paddingAngle={2}
-                        label={({ cx, cy, midAngle, outerRadius, name, value }) => {
-                          if (midAngle === undefined) return null
-                          const RADIAN = Math.PI / 180
-                          const radius = outerRadius + 20
-                          const x = cx + radius * Math.cos(-midAngle * RADIAN)
-                          const y = cy + radius * Math.sin(-midAngle * RADIAN)
-                          return (
-                            <text
-                              x={x}
-                              y={y}
-                              textAnchor={x > cx ? 'start' : 'end'}
-                              dominantBaseline="central"
-                              fontSize={9}
-                              fontWeight={700}
-                              fill="currentColor"
-                            >
-                              {`${(name ?? '').slice(0, 4)}: ${Math.round(value ?? 0)}kcal`}
-                            </text>
-                          )
-                        }}
-                        labelLine={false}
-                      >
-                        {pieData.map((entry, i) => (
-                          <Cell key={i} fill={entry.color} stroke="transparent" />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          if (!active || !payload?.length) return null
-                          const p = payload[0]!.payload as (typeof pieData)[0]
-                          return (
-                            <div
-                              className="rounded-lg border px-2 py-1.5 text-[10px] font-semibold shadow-md"
-                              style={{
-                                backgroundColor: tooltipBgColor,
-                                borderColor: tooltipBorderColor,
-                                color: tooltipTextColor,
-                              }}
-                            >
-                              {p.name}: {Math.round(p.value)} kcal
-                            </div>
-                          )
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
           </div>
         </GlassCard>
       )}
+    </section>
+  )
 
-      {plan && kcal > 0 && (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
-            <h3 className="mb-3 text-xs font-black uppercase tracking-widest text-primary">Hoy (Santiago)</h3>
-            {!hasTodayNutritionLog ? (
-              <p className="text-sm text-muted-foreground py-6 text-center">
-                No ha registrado comidas hoy (sin log diario).
-              </p>
-            ) : (
-              <MacroRingSummary
-                isReadOnly
-                calories={{ consumed: tm.calories, target: kcal }}
-                protein={{ consumed: tm.protein, target: prot }}
-                carbs={{ consumed: tm.carbs, target: carb }}
-                fats={{ consumed: tm.fats, target: fat }}
-              />
-            )}
-          </GlassCard>
+  const macroMetaPieDetail = pieData.length > 0 && (
+    <div className="mx-auto w-full max-w-[260px]">
+      <div className="mb-2 flex items-center justify-center gap-1">
+        <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+          Macros meta (kcal)
+        </p>
+        <InfoTooltip content="Distribución porcentual de las calorías del plan. Referencia: 30% proteína / 40% carbos / 30% grasas para hipertrofia." iconClassName="w-3 h-3" />
+      </div>
+      <div className="h-[220px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={pieData}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="46%"
+              innerRadius={44}
+              outerRadius={66}
+              paddingAngle={2}
+              label={({ cx, cy, midAngle, outerRadius, name, value }) => {
+                if (midAngle === undefined) return null
+                const RADIAN = Math.PI / 180
+                const radius = outerRadius + 20
+                const x = cx + radius * Math.cos(-midAngle * RADIAN)
+                const y = cy + radius * Math.sin(-midAngle * RADIAN)
+                return (
+                  <text
+                    x={x}
+                    y={y}
+                    textAnchor={x > cx ? 'start' : 'end'}
+                    dominantBaseline="central"
+                    fontSize={9}
+                    fontWeight={700}
+                    fill="currentColor"
+                  >
+                    {`${(name ?? '').slice(0, 4)}: ${Math.round(value ?? 0)}kcal`}
+                  </text>
+                )
+              }}
+              labelLine={false}
+            >
+              {pieData.map((entry, i) => (
+                <Cell key={i} fill={entry.color} stroke="transparent" />
+              ))}
+            </Pie>
+            <Tooltip
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null
+                const p = payload[0]!.payload as (typeof pieData)[0]
+                return (
+                  <div
+                    className="rounded-lg border px-2 py-1.5 text-[10px] font-semibold shadow-md"
+                    style={{
+                      backgroundColor: tooltipBgColor,
+                      borderColor: tooltipBorderColor,
+                      color: tooltipTextColor,
+                    }}
+                  >
+                    {p.name}: {Math.round(p.value)} kcal
+                  </div>
+                )
+              }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
 
-          <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
-            <h3 className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
-              <Utensils className="h-4 w-4" /> Adherencia · 30 días
-              <InfoTooltip content="Cada cuadrado es un día. Verde = el alumno completó al menos una comida ese día. Gris = sin registro. No indica el 100% de las comidas, solo que logueó." />
+  // ── Hilo bidireccional de comentarios (coach ⇄ alumno) ─────────────────────
+  // Mapea las filas del día de hoy a la forma que consume NotesThread. El coach
+  // responde vía la server action coach-scoped (author_role='coach', anclada al
+  // día de hoy en Santiago).
+  const notesThreadComments = useMemo<NotesThreadComment[]>(
+    () =>
+      coachMealComments.map((c) => ({
+        id: c.id,
+        author_role: c.author_role === 'coach' ? 'coach' : 'client',
+        body: c.body,
+        created_at: c.created_at,
+      })),
+    [coachMealComments]
+  )
+
+  const handleCoachReply = async (body: string) => {
+    const res = await addCoachMealComment({
+      clientId,
+      logDate: santiagoTodayIso,
+      body,
+    })
+    if (!res.ok) {
+      toast.error(res.error)
+    }
+  }
+
+  // ── ZONE C · Alertas y contexto ────────────────────────────────────────────
+  const zoneCContexto = (
+    <section aria-label="Zona C · Alertas y contexto" className="space-y-4">
+      <ZoneHeader
+        letter="C"
+        title="Alertas y contexto"
+        subtitle="Señales del coach, check-ins y ciclos del plan"
+      />
+      {/* Override por-alumno de la zona "Funciones": el coach fuerza mostrar/ocultar
+          secciones de Nutrición SOLO para este alumno, encima del default coach/team.
+          Escribe client_feature_prefs.sections (RLS coach-owner/manager). Gating = render. */}
+      {nutritionOverrideContext && (
+        <ClientFeaturePrefsPanel
+          clientId={clientId}
+          domain="nutrition"
+          baseEffective={nutritionOverrideContext.baseEffective}
+          override={nutritionOverrideContext.override}
+          entitledByModule={nutritionOverrideContext.entitledByModule}
+          domainEnabledBase={nutritionOverrideContext.domainEnabledBase}          useTeamBase={nutritionOverrideContext.useTeamBase}
+        />
+      )}
+      <NutritionCoachAlertsPanel alerts={nutritionAlerts} />
+      <NutritionCheckinContextCard
+        recentCheckIns={recentCheckIns}
+        nutritionWeeklyAvgPct={nutritionWeeklyAvgPct}
+      />
+
+      {/* Restricciones dietarias (A2/A3): el coach marca alergias/intolerancias que el builder
+          respeta (advierte dislike, bloquea alergia con override). Ya queda oculto cuando la
+          nutricion esta desactivada para el alumno por el early-return de dominio mas arriba
+          (no usa showSection); NO mover la card sobre ese early-return. */}
+      <ClientFoodRestrictionsCard clientId={clientId} coachId={coachId} />
+
+      {/* Hilo bidireccional: el coach responde los comentarios del alumno. Gateado por
+          `notes` (la superficie de notas/comentarios del alumno). */}
+      {showSection('notes') && (
+        <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
+          <div className="mb-3 flex items-center gap-1.5">
+            <MessageCircle className="h-3.5 w-3.5 shrink-0 text-primary" />
+            <h3 className="text-xs font-black uppercase tracking-widest text-primary">
+              Conversación de nutrición · hoy
             </h3>
-            {useAdherenceStrip ? (
-              <div className="space-y-4">
-                <AdherenceStrip
-                  data={adherence30d!}
-                  planMeals={planMealsForStrip.map((m) => ({
-                    id: m.id,
-                    day_of_week: m.day_of_week ?? null,
-                  }))}
-                />
-                <div className="flex flex-wrap gap-4 text-sm">
-                  {nutritionMonthlyAvgPct != null && (
-                    <div>
-                      <div className="flex items-center gap-1">
-                        <p className="text-[9px] font-black uppercase text-muted-foreground">Promedio mensual</p>
-                        <InfoTooltip content="Promedio de comidas completadas vs totales del plan en los últimos 30 días. Considera solo los días con registro." iconClassName="w-3 h-3" />
-                      </div>
-                      <p className="text-2xl font-black tabular-nums">{nutritionMonthlyAvgPct}%</p>
-                    </div>
-                  )}
-                  <div>
-                    <div className="flex items-center gap-1">
-                      <p className="text-[9px] font-black uppercase text-muted-foreground">Racha (≥80%)</p>
-                      <InfoTooltip content="Días consecutivos hacia atrás donde el alumno completó ≥80% de las comidas del día." iconClassName="w-3 h-3" />
-                    </div>
-                    <p className="text-2xl font-black tabular-nums">{nutritionStreakDays} días</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <WeekIcon className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <div className="flex items-center gap-1">
-                        <p className="text-[9px] font-black uppercase text-muted-foreground">Semana vs anterior</p>
-                        <InfoTooltip content="Adherencia promedio de esta semana comparada con la semana anterior. Flecha arriba = mejora." iconClassName="w-3 h-3" />
-                      </div>
-                      <p className="font-bold tabular-nums">
-                        {nutritionWeeklyAvgPct}% vs {nutritionPrevWeeklyAvgPct}%
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <>
-                <p className="mb-3 text-[10px] font-medium text-muted-foreground">
-                  Color según % de comidas del plan completadas ese día.
-                </p>
-                <div
-                  className="grid grid-cols-6 gap-1.5 sm:grid-cols-10"
-                  role="grid"
-                  aria-label="Mapa de adherencia nutricional de los últimos 30 días; cada celda es un día"
-                >
-                  {heatmapDays.map((day) => (
-                    <HeatmapCell key={day.dateKey} day={day} reduceMotion={reduceMotion} />
-                  ))}
-                </div>
-                <div className="mt-4 flex flex-wrap gap-3 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-muted/60 border border-border/40" /> Sin datos
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-rose-500/30 border border-rose-500/45" /> &lt;60%
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-amber-500/35 border border-amber-500/45" /> 60–80%
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500/35 border border-emerald-500/50" /> &gt;80%
-                  </span>
-                </div>
-              </>
-            )}
-          </GlassCard>
-        </div>
+            <InfoTooltip content="Hilo visible para el alumno: responde sus comentarios del día. Para notas que el alumno no ve, usa la nota privada más abajo." iconClassName="w-3 h-3" />
+          </div>
+          <NotesThread
+            comments={notesThreadComments}
+            currentRole="coach"
+            onSubmit={handleCoachReply}
+            emptyHint="Sin comentarios del alumno hoy. Puedes escribirle una nota."
+          />
+        </GlassCard>
       )}
 
-      {habitsForDate && (habitsForDate.water_ml != null || habitsForDate.steps != null || habitsForDate.sleep_hours != null || habitsForDate.fasting_hours != null || (habitsForDate.supplements?.length ?? 0) > 0) && (
+      {/* Umbrales de micros para este alumno (base + avanzados con Nutrición Pro).
+          Gateado por micros_base/micros_advanced (espejo de lo que ve el alumno). */}
+      {showMicros && (
+        <CoachNutrientTargetsEditor
+          clientId={clientId}
+          initial={coachNutrientTargets}
+          proEnabled={nutritionProEnabled}
+        />
+      )}
+
+      {/* Nota privada del coach — el alumno nunca la ve (feature E). */}
+      <CoachPrivateNotesPanel clientId={clientId} notes={coachPrivateNotes} />
+      <NutritionCycleHistorySection
+        coachId={coachId}
+        clientId={clientId}
+        planId={typeof activeNutritionPlan?.id === 'string' ? activeNutritionPlan.id : undefined}
+        santiagoTodayIso={santiagoTodayIso}
+        activeCycle={nutritionPlanCycles.find((c) => c.is_active) ?? null}
+        templates={nutritionTemplatesLite}
+        historyEntries={nutritionPlanHistoryEntries}
+      />
+      {showSection('habits') && habitsForDate && (habitsForDate.water_ml != null || habitsForDate.steps != null || habitsForDate.sleep_hours != null || habitsForDate.fasting_hours != null || (habitsForDate.supplements?.length ?? 0) > 0) && (
         <GlassCard className="border-dashed border-sky-500/20 bg-sky-500/[0.02] p-4 dark:border-sky-500/15">
           <h3 className="mb-3 flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-sky-600 dark:text-sky-400">
             <Droplets className="h-3.5 w-3.5" />
@@ -825,69 +1128,18 @@ export function NutritionTabB5({
           </div>
         </GlassCard>
       )}
+    </section>
+  )
 
-      {plan && (
-        <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
-          <h3 className="mb-1 flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-primary">
-            Últimos 7 días · kcal consumidas vs meta del log
-            <InfoTooltip content="Barras azules = calorías consumidas (suma de comidas completadas × porción). Línea naranja = meta calórica diaria del plan." />
-          </h3>
-          <p className="mb-4 text-[10px] font-medium text-muted-foreground">
-            Consumo estimado según comidas del plan marcadas como hechas.
-          </p>
-          <div className="h-[260px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chart7d} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
-                <XAxis
-                  dataKey="shortDate"
-                  tick={{ fill: chartAxisColor, fontSize: 9 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fill: chartAxisColor, fontSize: 9 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={36}
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null
-                    const row = payload[0]?.payload as (typeof chart7d)[0]
-                    return (
-                      <div
-                        className="rounded-lg border px-3 py-2 text-[11px] font-semibold shadow-md"
-                        style={{
-                          backgroundColor: tooltipBgColor,
-                          borderColor: tooltipBorderColor,
-                          color: tooltipTextColor,
-                        }}
-                      >
-                        <p className="font-black">{row.log_date}</p>
-                        <p>Consumidas: {row.consumed} kcal</p>
-                        <p>Meta log: {row.target || '—'} kcal</p>
-                      </div>
-                    )
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700 }} />
-                <Bar dataKey="consumed" name="Consumidas" fill="rgba(16, 185, 129, 0.45)" radius={[3, 3, 0, 0]} maxBarSize={32} />
-                <Line
-                  type="monotone"
-                  dataKey="target"
-                  name="Meta log"
-                  stroke={MACRO_COLORS.cal}
-                  strokeWidth={2}
-                  dot={{ r: 2 }}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </GlassCard>
-      )}
-
+  // ── DETALLE (collapsed by default) ─────────────────────────────────────────
+  const detailCharts = (
+    <>
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        {macroMetaPieDetail ? (
+          <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
+            {macroMetaPieDetail}
+          </GlassCard>
+        ) : null}
         <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
           <h3 className="mb-1 text-xs font-black uppercase tracking-widest text-primary">
             Objetivo kcal vs adherencia
@@ -1045,8 +1297,11 @@ export function NutritionTabB5({
           </GlassCard>
         )}
       </div>
+    </>
+  )
 
-      {mealDetails && mealDetails.length > 0 && (
+  // Lista de comidas del plan (Zona B)
+  const mealsList = mealDetails && mealDetails.length > 0 && (
         <GlassCard className="border-dashed border-border/50 p-6 dark:border-white/10">
           <h3 className="mb-4 text-xs font-black uppercase tracking-widest text-primary">
             Plan completo · comidas
@@ -1147,8 +1402,11 @@ export function NutritionTabB5({
             })}
           </div>
         </GlassCard>
-      )}
+      )
 
+  // Historial detallado (Detalle): último día, tabla de logs, día específico
+  const detailHistory = (
+    <>
       {(() => {
         const latest = [...nutritionTimeline].sort(
           (a, b) => new Date(b.log_date).getTime() - new Date(a.log_date).getTime()
@@ -1287,6 +1545,61 @@ export function NutritionTabB5({
           </div>
         )}
       </GlassCard>
+    </>
+  )
+
+  // Dominio Nutrición apagado para ESTE alumno: el coach apagó la nutrición en sus
+  // preferencias. Mostrar una nota compacta en vez de la tab completa. Gating = render:
+  // el plan, el historial y la adherencia siguen en la DB intactos.
+  if (!nutritionDomainEnabled) {
+    return (
+      <div className="space-y-4">
+        <GlassCard className="border-dashed border-border/50 p-8 text-center dark:border-white/10">
+          <Utensils className="mx-auto mb-3 h-6 w-6 text-muted-foreground" />
+          <h3 className="text-sm font-black uppercase tracking-widest text-foreground">
+            Nutrición desactivada para este alumno
+          </h3>
+          <p className="mx-auto mt-2 max-w-md text-xs font-medium text-muted-foreground">
+            Apagaste el módulo de nutrición para este alumno en tus preferencias. Sus datos se
+            conservan; vuelve a activarlo para ver plan, macros y adherencia.
+          </p>
+        </GlassCard>
+        {/* Escape hatch: el panel de override permite re-activar la nutrición desde la
+            misma ficha aunque el dominio esté apagado (su master switch tri-state). */}
+        {nutritionOverrideContext && (
+          <ClientFeaturePrefsPanel
+            clientId={clientId}
+            domain="nutrition"
+            baseEffective={nutritionOverrideContext.baseEffective}
+            override={nutritionOverrideContext.override}
+            entitledByModule={nutritionOverrideContext.entitledByModule}
+            domainEnabledBase={nutritionOverrideContext.domainEnabledBase}
+            useTeamBase={nutritionOverrideContext.useTeamBase}
+          />
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Zona A · Progreso — los números canónicos del motor de adherencia */}
+      {zoneAProgreso}
+
+      {/* Zona B · Plan y comidas */}
+      {zoneBPlan}
+      {mealsList}
+
+      {/* Zona C · Alertas y contexto */}
+      {zoneCContexto}
+
+      {/* Detalle — gráficos densos e historial, colapsados por defecto */}
+      <DetailAccordion title="Detalle · gráficos densos" reduceMotion={reduceMotion}>
+        {detailCharts}
+      </DetailAccordion>
+      <DetailAccordion title="Detalle · historial de logs" reduceMotion={reduceMotion}>
+        {detailHistory}
+      </DetailAccordion>
     </div>
   )
 }

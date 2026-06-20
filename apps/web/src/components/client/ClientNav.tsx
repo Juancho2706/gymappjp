@@ -41,9 +41,16 @@ interface Props {
     showMovement?: boolean
     /** Espejo del modulo body_composition (resuelto server-side; gate real en la page). */
     showBodyComposition?: boolean
+    /**
+     * Master switch del dominio Nutricion para el alumno (resuelto server-side via
+     * `resolveNutritionDomainEnabled`). `false` => el coach apago la nutricion para este alumno y
+     * el tab "Plan Alimenticio" NO se muestra (render-only; la page tambien gatea). Default `true`
+     * (fail-OPEN, espejo de `resolveNutritionDomainEnabled` con flag OFF).
+     */
+    showNutrition?: boolean
 }
 
-export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initialUseBrandColors = true, showMovement = false, showBodyComposition = false }: Props) {
+export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initialUseBrandColors = true, showMovement = false, showBodyComposition = false, showNutrition = true }: Props) {
     const base = basePath ?? `/c/${coachSlug}`
     const pathname = usePathname()
     const router = useRouter()
@@ -88,11 +95,11 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
             label: 'Inicio',
             icon: Home,
         },
-        {
+        ...(showNutrition ? [{
             href: `${base}/nutrition`,
             label: 'Plan Alimenticio',
             icon: Apple,
-        },
+        }] : []),
         {
             href: `${base}/exercises`,
             label: 'Aprender',

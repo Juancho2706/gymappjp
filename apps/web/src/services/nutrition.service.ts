@@ -102,6 +102,17 @@ export class NutritionService {
         }))
     }
 
+    /** food_items de una comida de plantilla para el payload del RPC de propagación (sin meal_id;
+     *  el RPC asigna el id al insertar). C1 — `apply_nutrition_template_to_client`. */
+    private opFoodItemsFor(templateMeal: TemplateMealWithGroups) {
+        return this.getTemplateMealItems(templateMeal).map((it) => ({
+            food_id: it.food_id,
+            quantity: it.quantity,
+            unit: it.unit,
+            swap_options: it.swap_options ?? [],
+        }))
+    }
+
     /**
      * Inserta un conjunto de comidas (con sus food_items) en un plan, BATCHEADO:
      * 1 INSERT para todas las comidas + 1 INSERT para todos los food_items
@@ -326,32 +337,38 @@ export class NutritionService {
             (existingPlanRows ?? []).map((r: any) => [r.client_id as string, r.id as string])
         );
 
-        // Best-effort por-cliente (NO transaccional: PostgREST autocommit). Si falla a mitad,
-        // re-ejecutar la propagación reconcilia (UPDATE in-place por order_index = idempotente).
+        // Plantilla ordenada + lookup por order_index (idéntica para todos los alumnos → 1 vez).
+        const templateMealsSorted = [...template.template_meals].sort(
+            (a: any, b: any) => a.order_index - b.order_index
+        );
+        const templateByIndex = new Map<number, TemplateMealWithGroups>(
+            templateMealsSorted.map((t: any) => [t.order_index as number, t as TemplateMealWithGroups])
+        );
+        const planFields = {
+            name: template.name,
+            daily_calories: template.daily_calories,
+            protein_g: template.protein_g,
+            carbs_g: template.carbs_g,
+            fats_g: template.fats_g,
+            instructions: template.instructions,
+        };
+        const opItemsFor = (orderIndex: number) => {
+            const tMeal = templateByIndex.get(orderIndex);
+            return tMeal ? this.opFoodItemsFor(tMeal) : [];
+        };
+
+        // C1: el diff se calcula con la pure-fn TESTEADA `reconcileMeals` (matching por order_index +
+        // decisión log-aware de qué borrar) y se aplica ATÓMICAMENTE por alumno vía RPC
+        // `apply_nutrition_template_to_client` (un solo statement = una transacción). Si un alumno
+        // falla, su plan NO queda a medias (rollback del RPC) y NO aborta a los demás: se acumula y
+        // se reporta para reintentar (re-correr es idempotente por order_index).
+        const failures: { clientId: string; error: string }[] = [];
+
         for (const clientId of allClientIds) {
             const existingPlanId = existingPlanByClient.get(clientId);
-
-            let planId: string;
+            let op: Record<string, unknown>;
 
             if (existingPlanId) {
-                // UPDATE in-place: el plan_id NO cambia → daily_nutrition_logs siguen válidos
-                let updatePlanQuery = this.supabase
-                    .from('nutrition_plans')
-                    .update({
-                        name: template.name,
-                        daily_calories: template.daily_calories,
-                        protein_g: template.protein_g,
-                        carbs_g: template.carbs_g,
-                        fats_g: template.fats_g,
-                        instructions: template.instructions,
-                    } as any)
-                    .eq('id', existingPlanId)
-                    .eq('coach_id', coachId)
-                updatePlanQuery = this.applyOrgScope(updatePlanQuery, orgId)
-                await updatePlanQuery;
-
-                planId = existingPlanId;
-
                 // Comidas existentes -> match por order_index (preserva IDs → nutrition_meal_logs sobreviven)
                 const { data: existingMeals } = await this.supabase
                     .from('nutrition_meals')
@@ -359,13 +376,7 @@ export class NutritionService {
                     .eq('plan_id', existingPlanId)
                     .order('order_index', { ascending: true });
 
-                const templateMealsSorted = [...template.template_meals].sort(
-                    (a: any, b: any) => a.order_index - b.order_index
-                );
-
-                // Cascade-safety (CRÍTICO): nutrition_meal_logs.meal_id -> nutrition_meals es ON DELETE
-                // CASCADE; borrar una comida con historial elimina la adherencia del alumno. Averiguar
-                // cuáles comidas huérfanas tienen logs ANTES de decidir qué borrar.
+                // Cascade-safety (CRÍTICO): averiguar qué comidas huérfanas tienen logs ANTES de borrar.
                 const newIndices = new Set(templateMealsSorted.map((m: any) => m.order_index as number));
                 const removalCandidates = (existingMeals ?? [])
                     .filter((m: any) => !newIndices.has(m.order_index as number))
@@ -393,86 +404,68 @@ export class NutritionService {
                     loggedMealIds
                 );
 
-                // BORRAR huérfanas sin logs (batcheado; las que tienen logs se conservan)
-                if (recon.toDelete.length) {
-                    await this.supabase.from('food_items').delete().in('meal_id', recon.toDelete);
-                    await this.supabase.from('nutrition_meals').delete().in('id', recon.toDelete);
-                }
-
-                // UPDATE in-place de comidas matcheadas (valores distintos por id → 1 update c/u)
-                for (const u of recon.toUpdate) {
-                    await this.supabase
-                        .from('nutrition_meals')
-                        .update({
-                            name: u.name,
-                            description: u.description,
-                            order_index: u.order_index,
-                            day_of_week: u.day_of_week,
-                        })
-                        .eq('id', u.id);
-                }
-                // food_items de las comidas updateadas: 1 DELETE + 1 INSERT batcheados (antes 2/comida)
-                if (recon.toUpdate.length) {
-                    const updatedIds = recon.toUpdate.map((u) => u.id);
-                    await this.supabase.from('food_items').delete().in('meal_id', updatedIds);
-                    const idByIndex = new Map<number, string>(recon.toUpdate.map((u) => [u.order_index, u.id]));
-                    const foodRows: ReturnType<typeof this.foodRowsFor> = [];
-                    for (const tMeal of templateMealsSorted) {
-                        const mealId = idByIndex.get(tMeal.order_index as number);
-                        if (!mealId) continue;
-                        const items = this.getTemplateMealItems(tMeal as TemplateMealWithGroups);
-                        if (items.length > 0) foodRows.push(...this.foodRowsFor(mealId, items));
-                    }
-                    if (foodRows.length > 0) await this.supabase.from('food_items').insert(foodRows as any);
-                }
-
-                // INSERTAR comidas nuevas (índices de plantilla sin comida existente), batcheado
-                if (recon.toInsert.length) {
-                    const insertIndices = new Set(recon.toInsert.map((t) => t.order_index));
-                    const toInsertMeals = templateMealsSorted.filter((t: any) =>
-                        insertIndices.has(t.order_index as number)
-                    ) as TemplateMealWithGroups[];
-                    await this.insertMealsForPlan(planId, toInsertMeals);
-                }
-
-                continue; // meals already handled above
+                op = {
+                    client_id: clientId,
+                    org_id: orgId,
+                    template_id: templateId,
+                    mode: 'update',
+                    plan_id: existingPlanId,
+                    plan_fields: planFields,
+                    meals_delete: recon.toDelete,
+                    meals_update: recon.toUpdate.map((u) => ({
+                        id: u.id,
+                        name: u.name,
+                        description: u.description,
+                        order_index: u.order_index,
+                        day_of_week: u.day_of_week,
+                        food_items: opItemsFor(u.order_index),
+                    })),
+                    meals_insert: recon.toInsert.map((t) => ({
+                        name: t.name,
+                        description: t.description,
+                        order_index: t.order_index,
+                        day_of_week: t.day_of_week,
+                        food_items: opItemsFor(t.order_index),
+                    })),
+                };
             } else {
-                // Cliente nuevo para esta plantilla: crear plan fresco
-                // (no hay logs históricos todavía → crear nuevo plan_id es seguro)
-                let deactivateQuery = this.supabase
-                    .from('nutrition_plans')
-                    .update({ is_active: false } as any)
-                    .eq('client_id', clientId)
-                    .eq('coach_id', coachId)
-                    .eq('is_active', true)
-                deactivateQuery = this.applyOrgScope(deactivateQuery, orgId)
-                await deactivateQuery;
-
-                const { data: newPlan } = await this.supabase
-                    .from('nutrition_plans')
-                    .insert({
-                        client_id: clientId,
-                        coach_id: coachId,
-                        org_id: orgId,
-                        template_id: templateId,
-                        name: template.name,
-                        daily_calories: template.daily_calories,
-                        protein_g: template.protein_g,
-                        carbs_g: template.carbs_g,
-                        fats_g: template.fats_g,
-                        instructions: template.instructions,
-                        is_active: true,
-                        is_custom: false,
-                    } as any)
-                    .select('id')
-                    .single();
-
-                if (!newPlan) continue;
-                planId = newPlan.id;
-
-                // Cliente nuevo: insertar TODAS las comidas de la plantilla (batcheado, N exactas).
-                await this.insertMealsForPlan(planId, template.template_meals as TemplateMealWithGroups[]);
+                // Cliente nuevo para esta plantilla (sin logs históricos → plan_id fresco es seguro).
+                op = {
+                    client_id: clientId,
+                    org_id: orgId,
+                    template_id: templateId,
+                    mode: 'create',
+                    plan_id: null,
+                    plan_fields: planFields,
+                    meals_delete: [],
+                    meals_update: [],
+                    meals_insert: templateMealsSorted.map((t: any) => ({
+                        name: t.name,
+                        description: (t as { description?: string }).description ?? '',
+                        order_index: t.order_index as number,
+                        day_of_week: (t as { day_of_week?: number | null }).day_of_week ?? null,
+                        food_items: this.opFoodItemsFor(t as TemplateMealWithGroups),
+                    })),
+                };
             }
+
+            // p_coach: SOLO lo honra el RPC bajo service_role (el cron de ciclos no tiene auth.uid());
+            // en sesión de coach, auth.uid() gana y p_coach se ignora (sin impersonación).
+            const { error } = await this.supabase.rpc('apply_nutrition_template_to_client', {
+                p_op: op as any,
+                p_coach: coachId,
+            });
+            if (error) failures.push({ clientId, error: error.message });
+        }
+
+        if (failures.length) {
+            // Cada alumno es atómico (los que fallaron no quedaron a medias). Surface el detalle para
+            // que el reintento sea accionable (no un genérico que falla igual cada vez).
+            const reasons = [...new Set(failures.map((f) => f.error))].join('; ');
+            throw new Error(
+                `Propagación incompleta: ${failures.length} de ${allClientIds.size} alumno(s) fallaron. ` +
+                `Motivo(s): ${reasons}. Reintenta (re-correr reconcilia los ya aplicados).`
+            );
         }
     }
 

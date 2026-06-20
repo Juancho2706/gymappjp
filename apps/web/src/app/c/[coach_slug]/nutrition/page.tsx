@@ -16,7 +16,26 @@ import { NutritionNoPlanFromServer } from './_components/NutritionNoPlanFromServ
 import { PushNotificationBanner } from './_components/PushNotificationBanner'
 import { getClientNutritionUser } from './_data/nutrition-auth.queries'
 import { getStudentExchangeData } from './_data/nutrition-exchanges.queries'
+import { getAssignedRecipesForClient } from './_data/recipes.queries'
+import { RecipeIdeasSection } from './_components/RecipeIdeasSection'
 import { pdfBrandFromProxyHeaders } from '@/lib/nutrition-pdf-brand'
+import { getClientMealComments } from './_data/nutrition-notes.queries'
+import { getShoppingList } from './_data/shopping.queries'
+import { getRecentIntakeFoods } from './_data/intake.queries'
+import {
+  getPlanDayMicros,
+  getMicroTargetsForClient,
+  getNutritionProEnabledForClient,
+  platePropFromMacros,
+} from './_data/sections.queries'
+import { getClientScope } from './_data/client-scope.queries'
+import {
+  resolveFeaturePrefs,
+  resolveNutritionDomainEnabled,
+} from '@/services/feature-prefs.service'
+import { NutritionDomainOff } from './_components/NutritionDomainOff'
+import { getNutritionWeeklyRecap } from './_data/recap.queries'
+import { WeeklyRecapCard } from './_components/WeeklyRecapCard'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
 
@@ -39,7 +58,33 @@ export default async function ClientNutritionPage({ params }: Props) {
   }
 
   const { iso: today } = getTodayInSantiago()
-  const [todayLog, adherence, heroBundle, exchange, headersList] = await Promise.all([
+  // Scope del alumno (team/org) — alimenta el resolver de feature-prefs (capa base = team en §4.9).
+  const clientScope = await getClientScope(user.id)
+  const prefsInput = {
+    domain: 'nutrition' as const,
+    coachId: plan.coach_id ?? '',
+    clientId: user.id,
+    planId: plan.id,
+    clientTeamId: clientScope.teamId,
+    clientOrgId: clientScope.orgId,
+  }
+  const [
+    todayLog,
+    adherence,
+    heroBundle,
+    exchange,
+    recipes,
+    headersList,
+    notes,
+    shoppingList,
+    offPlanRecents,
+    dayMicros,
+    microTargets,
+    nutritionProEnabled,
+    domainEnabled,
+    sectionFlags,
+    weeklyRecap,
+  ] = await Promise.all([
     getNutritionLogForDate(user.id, plan.id, today),
     getNutritionAdherence30d(user.id, plan.id),
     getHeroComplianceBundle(user.id, coach_slug),
@@ -50,8 +95,35 @@ export default async function ClientNutritionPage({ params }: Props) {
       planCoachId: plan.coach_id ?? null,
       planMode: (plan as { plan_mode?: string | null }).plan_mode,
     }),
+    // Feature L: recetas-idea asignadas por el coach (inspiración, solo lectura).
+    getAssignedRecipesForClient(user.id),
     headers(),
+    // Overhaul (base tier): notas del día, lista de compras, recientes off-plan, micros.
+    getClientMealComments(today),
+    getShoppingList(user.id),
+    getRecentIntakeFoods(10),
+    getPlanDayMicros(user.id, plan.id, today),
+    getMicroTargetsForClient(plan.coach_id ?? null, user.id),
+    getNutritionProEnabledForClient(plan.id),
+    // Master switch del dominio + visibilidad por seccion (fail-OPEN con flag OFF, §4.4).
+    resolveNutritionDomainEnabled({
+      coachId: plan.coach_id ?? '',
+      clientId: user.id,
+      clientTeamId: clientScope.teamId,
+      clientOrgId: clientScope.orgId,
+    }),
+    resolveFeaturePrefs(prefsInput),
+    // Recap semanal motivacional (K): on-demand desde el motor, tono adaptativo.
+    getNutritionWeeklyRecap(user.id),
   ])
+
+  // Dominio apagado por el coach => ocultar TODA la nutricion (menu + contenido), nunca blanco.
+  if (!domainEnabled) {
+    return <NutritionDomainOff coachSlug={coach_slug} />
+  }
+
+  // Proporción del plato derivada del split de macros del plan (guía, no meta).
+  const plateProportion = platePropFromMacros(plan.protein_g ?? 0, plan.carbs_g ?? 0)
   const hasTodayWorkout = heroBundle.hero.hasWorkout
   // Marca del tenant resuelta SERVER-SIDE desde headers del proxy (free tier ⇒ EVA, AC4).
   const pdfBrand = pdfBrandFromProxyHeaders(headersList)
@@ -83,6 +155,8 @@ export default async function ClientNutritionPage({ params }: Props) {
       <main className="max-w-lg mx-auto px-4 py-5 pb-28 space-y-5 relative z-0">
         <PushNotificationBanner />
 
+        {weeklyRecap && <WeeklyRecapCard recap={weeklyRecap} />}
+
         {plan.instructions && (
           <details className="bg-muted/30 border border-border rounded-2xl">
             <summary className="px-4 py-3 text-xs font-black uppercase tracking-widest text-muted-foreground cursor-pointer list-none flex items-center justify-between">
@@ -108,7 +182,17 @@ export default async function ClientNutritionPage({ params }: Props) {
           exchange={exchange}
           pdfBrand={pdfBrand}
           brandLogoUrl={brandLogoUrl}
+          notes={notes}
+          shoppingList={shoppingList}
+          offPlanRecents={offPlanRecents}
+          dayMicros={dayMicros}
+          microTargets={microTargets}
+          nutritionProEnabled={nutritionProEnabled}
+          plateProportion={plateProportion}
+          sectionFlags={sectionFlags}
         />
+
+        {sectionFlags.recipes && <RecipeIdeasSection recipes={recipes} />}
       </main>
     </div>
   )

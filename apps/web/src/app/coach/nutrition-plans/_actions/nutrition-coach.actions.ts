@@ -1,5 +1,6 @@
 'use server'
 
+import { z } from 'zod'
 import { format } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import type { Json } from '@/lib/database.types'
@@ -804,6 +805,11 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
     const servingSizeRaw = formData.get('serving_size') as string | null
     const servingParsed = parseFloat(servingSizeRaw ?? '')
     const serving_size = !isNaN(servingParsed) && servingParsed > 0 ? servingParsed : 100
+    // Medida casera (C) opcional — solo aplica a gramos (en 'un' la unidad ya es la medida).
+    const householdLabelRaw = (formData.get('household_label') as string | null)?.trim() || ''
+    const householdGramsParsed = parseFloat((formData.get('household_grams') as string | null) ?? '')
+    const hasHousehold =
+      serving_unit === 'g' && householdLabelRaw.length > 0 && householdGramsParsed > 0
 
     const parsed = CustomFoodSchema.safeParse({
       name,
@@ -814,6 +820,9 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
       serving_size,
       serving_unit,
       category,
+      ...(hasHousehold
+        ? { household_grams: householdGramsParsed, household_label: householdLabelRaw }
+        : {}),
     })
 
     if (!parsed.success) {
@@ -831,6 +840,8 @@ export async function saveCustomFood(coachId: string, prevState: unknown, formDa
       is_liquid,
       category: parsed.data.category,
       coach_id: coachId,
+      household_grams: parsed.data.household_grams ?? null,
+      household_label: parsed.data.household_label ?? null,
     })
 
     if (error) throw error
@@ -1185,4 +1196,109 @@ export async function getClientFoodFavorites(clientId: string): Promise<string[]
     .eq('client_id', clientId)
     .eq('preference_type', 'favorite')
   return (data ?? []).map((r) => r.food_id)
+}
+
+export type ClientFoodRestrictionType = 'dislike' | 'allergy' | 'intolerance'
+export type ClientFoodRestriction = {
+  food_id: string
+  name: string
+  preference_type: ClientFoodRestrictionType
+}
+
+/**
+ * Internal: confirma que el coach autenticado puede gestionar al alumno bajo su workspace activo.
+ * - enterprise_coach: alumno propio dentro de la org.
+ * - coach_team: pool plano -> CUALQUIER coach del team gestiona a CUALQUIER alumno del pool (espeja
+ *   la RLS `team_client_food_prefs_member_all`). Sin este branch la alerta de alergia fallaria
+ *   OPEN y en silencio para alumnos del pool de otro coach (P1 del review).
+ * - standalone: alumno propio sin org.
+ */
+async function coachOwnsClient(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  clientId: string
+): Promise<boolean> {
+  const workspace = await resolvePreferredWorkspace(supabase, userId)
+  let clientQuery = supabase.from('clients').select('id').eq('id', clientId)
+  if (workspace?.type === 'enterprise_coach') {
+    clientQuery = clientQuery.eq('coach_id', userId).eq('org_id', workspace.orgId)
+  } else if (workspace?.type === 'coach_team') {
+    clientQuery = clientQuery.eq('team_id', workspace.teamId)
+  } else {
+    clientQuery = clientQuery.eq('coach_id', userId).is('org_id', null)
+  }
+  const { data: clientRow } = await clientQuery.maybeSingle()
+  return !!clientRow
+}
+
+/**
+ * Restricciones dietarias del alumno (dislike/allergy/intolerance) CON nombre del alimento, para el
+ * filtro del builder (A3) y el manager del coach. Valida que el coach sea dueno del alumno.
+ */
+export async function getClientFoodRestrictions(clientId: string): Promise<ClientFoodRestriction[]> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+  if (!(await coachOwnsClient(supabase, user.id, clientId))) return []
+
+  const { data } = await supabase
+    .from('client_food_preferences')
+    .select('food_id, preference_type, foods ( name )')
+    .eq('client_id', clientId)
+    .in('preference_type', ['dislike', 'allergy', 'intolerance'])
+
+  return (data ?? []).map((r) => {
+    const foods = r.foods as { name?: string | null } | null
+    return {
+      food_id: r.food_id as string,
+      name: foods?.name ?? 'Alimento',
+      preference_type: r.preference_type as ClientFoodRestrictionType,
+    }
+  })
+}
+
+const setRestrictionSchema = z.object({
+  clientId: z.string().uuid(),
+  foodId: z.string().uuid(),
+  // null => limpiar la restriccion de ese alimento.
+  preferenceType: z.enum(['dislike', 'allergy', 'intolerance']).nullable(),
+})
+
+/**
+ * El coach setea/limpia una restriccion dietaria de SU alumno (A2). Upsert por (client_id, food_id);
+ * null limpia. Coach-scoped: RLS "coach manage client prefs" + chequeo explicito de propiedad.
+ */
+export async function setClientFoodRestriction(
+  raw: z.infer<typeof setRestrictionSchema>
+): Promise<{ success: boolean; error?: string }> {
+  const parsed = setRestrictionSchema.safeParse(raw)
+  if (!parsed.success) return { success: false, error: zodErrorMessage(parsed.error.issues) }
+  const { clientId, foodId, preferenceType } = parsed.data
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: 'No autorizado.' }
+  if (!(await coachOwnsClient(supabase, user.id, clientId))) {
+    return { success: false, error: 'Alumno no encontrado en tu workspace.' }
+  }
+
+  if (preferenceType === null) {
+    const { error } = await supabase
+      .from('client_food_preferences')
+      .delete()
+      .eq('client_id', clientId)
+      .eq('food_id', foodId)
+    if (error) return { success: false, error: error.message }
+  } else {
+    const { error } = await supabase
+      .from('client_food_preferences')
+      .upsert(
+        { client_id: clientId, food_id: foodId, preference_type: preferenceType },
+        { onConflict: 'client_id,food_id' }
+      )
+    if (error) return { success: false, error: error.message }
+  }
+
+  revalidatePath(`/coach/clients/${clientId}`)
+  return { success: true }
 }

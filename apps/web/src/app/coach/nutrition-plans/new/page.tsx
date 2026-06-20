@@ -6,6 +6,11 @@ import { getNewNutritionTemplateUser } from './_data/new-template.queries'
 import { getCoachOrgNutritionTemplates } from '../_data/nutrition-page.queries'
 import { createClient } from '@/lib/supabase/server'
 import type { PlanBuilderInitialData } from '../_components/PlanBuilder/types'
+import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
+import {
+  resolveFeaturePrefs,
+  resolveNutritionDomainEnabled,
+} from '@/services/feature-prefs.service'
 
 interface Props {
   searchParams: Promise<{ org_template?: string }>
@@ -14,6 +19,28 @@ interface Props {
 export default async function NewNutritionTemplatePage({ searchParams }: Props) {
   const user = await getNewNutritionTemplateUser()
   if (!user) redirect('/login')
+
+  // Contexto de workspace del coach (template = coach-scoped, no client-scoped).
+  const workspace = await getPreferredWorkspaceForRender(user.id)
+  const wsOrgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
+  const wsTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
+
+  // Master switch del dominio + flags de seccion Pro (fail-OPEN con flag OFF). Dominio OFF =>
+  // el builder no se construye (atrapa refresh/visita directa). Render-only: no borra datos.
+  const [nutritionDomainEnabled, sectionFlags] = await Promise.all([
+    resolveNutritionDomainEnabled({
+      coachId: user.id,
+      clientTeamId: wsTeamId,
+      clientOrgId: wsOrgId,
+    }),
+    resolveFeaturePrefs({
+      domain: 'nutrition',
+      coachId: user.id,
+      clientTeamId: wsTeamId,
+      clientOrgId: wsOrgId,
+    }),
+  ])
+  if (!nutritionDomainEnabled) redirect('/coach/dashboard')
 
   const { org_template } = await searchParams
 
@@ -67,7 +94,12 @@ export default async function NewNutritionTemplatePage({ searchParams }: Props) 
           </p>
         </div>
       </header>
-      <PlanBuilder mode="template" coachId={user.id} initialData={initialData} />
+      <PlanBuilder
+        mode="template"
+        coachId={user.id}
+        initialData={initialData}
+        sectionFlags={sectionFlags}
+      />
     </div>
   )
 }

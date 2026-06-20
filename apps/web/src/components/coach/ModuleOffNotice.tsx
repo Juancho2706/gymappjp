@@ -44,9 +44,9 @@ const MODULE_COPY: Record<ModuleKey, ModuleCopy> = {
     },
     nutrition_exchanges: {
         icon: Apple,
-        title: 'El módulo Nutrición por intercambios no está habilitado',
+        title: 'El módulo Nutrición Pro no está habilitado',
         description:
-            'Las pautas de nutrición por porciones de intercambio con equivalencias y PDF con tu marca son parte del módulo Nutrición por intercambios.',
+            'Las pautas por intercambios, las plantillas reutilizables, los micronutrientes avanzados, los objetivos por composición corporal y el PDF con tu marca son parte del módulo Nutrición Pro.',
     },
 }
 

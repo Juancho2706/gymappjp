@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Loader2, Search, X, ChevronLeft, Plus, PenLine, Heart } from 'lucide-react'
+import { Loader2, Search, X, ChevronLeft, Plus, PenLine, Heart, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { previewMacrosForQuantity } from './MacroCalculator'
@@ -40,6 +40,12 @@ interface Props {
   excludedFoodIds?: string[]
   /** food_ids the current client has marked as favorite — shows ❤️ badge */
   clientFavoriteIds?: Set<string>
+  /** food_ids marcados como ALERGIA — badge rojo + confirmacion bloqueante al elegir (A3). */
+  clientAllergyIds?: Set<string>
+  /** food_ids marcados como INTOLERANCIA — badge ambar de aviso (A3, distinto de dislike). */
+  clientIntoleranceIds?: Set<string>
+  /** food_ids marcados como "no le gusta" — badge gris de aviso blando (A3). */
+  clientDislikeIds?: Set<string>
 }
 
 const CATEGORIES = [
@@ -107,12 +113,18 @@ function MacroPill({ label, value, color }: { label: string; value: number; colo
 function VirtualFoodList({
   items,
   clientFavoriteIds,
+  clientAllergyIds,
+  clientIntoleranceIds,
+  clientDislikeIds,
   onPickFood,
   onGoCreate,
   scrollRef,
 }: {
   items: FoodRow[]
   clientFavoriteIds?: Set<string>
+  clientAllergyIds?: Set<string>
+  clientIntoleranceIds?: Set<string>
+  clientDislikeIds?: Set<string>
   onPickFood: (f: FoodRow) => void
   onGoCreate: () => void
   scrollRef: React.RefObject<HTMLDivElement | null>
@@ -151,15 +163,18 @@ function VirtualFoodList({
                 </button>
               ) : (() => {
                 const f = items[vItem.index]!
+                const isAllergy = clientAllergyIds?.has(f.id) ?? false
+                const isIntolerance = !isAllergy && (clientIntoleranceIds?.has(f.id) ?? false)
+                const isDislike = !isAllergy && !isIntolerance && (clientDislikeIds?.has(f.id) ?? false)
                 return (
                   <button
                     type="button"
                     onClick={() => onPickFood(f)}
                     className={cn(
-                      'w-full rounded-xl border px-3 py-3 text-left transition-colors',
-                      'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50',
-                      'dark:border-white/8 dark:bg-white/[0.03] dark:hover:bg-white/[0.07] dark:hover:border-white/15',
-                      'active:scale-[0.99]'
+                      'w-full rounded-xl border px-3 py-3 text-left transition-colors active:scale-[0.99]',
+                      isAllergy
+                        ? 'border-rose-300 bg-rose-50/70 hover:bg-rose-50 dark:border-rose-500/30 dark:bg-rose-500/[0.07] dark:hover:bg-rose-500/10'
+                        : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50 dark:border-white/8 dark:bg-white/[0.03] dark:hover:bg-white/[0.07] dark:hover:border-white/15'
                     )}
                   >
                     <div className="flex items-center gap-1.5">
@@ -167,8 +182,23 @@ function VirtualFoodList({
                         {f.name}
                         {f.brand && <span className="ml-1.5 text-[10px] font-normal text-zinc-400">{f.brand}</span>}
                       </p>
+                      {isAllergy && (
+                        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-md bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-rose-600 dark:text-rose-400">
+                          <AlertTriangle className="h-3 w-3" /> Alergia
+                        </span>
+                      )}
+                      {isIntolerance && (
+                        <span className="inline-flex shrink-0 items-center rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                          Intolerancia
+                        </span>
+                      )}
+                      {isDislike && (
+                        <span className="inline-flex shrink-0 items-center rounded-md bg-zinc-200/80 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
+                          No le gusta
+                        </span>
+                      )}
                       {clientFavoriteIds?.has(f.id) && (
-                        <Heart className="h-3.5 w-3.5 shrink-0 fill-rose-400 text-rose-400" aria-label="Favorito del cliente" />
+                        <Heart role="img" className="h-3.5 w-3.5 shrink-0 fill-rose-400 text-rose-400" aria-label="Favorito del cliente" />
                       )}
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1">
@@ -203,8 +233,15 @@ export function FoodSearchDrawer({
   onConfirmSwapFood,
   excludedFoodIds = [],
   clientFavoriteIds,
+  clientAllergyIds,
+  clientIntoleranceIds,
+  clientDislikeIds,
 }: Props) {
   const [view, setView] = useState<View>('search')
+  // Alimento alergeno pendiente de confirmacion (A3): bloquea el pick hasta override deliberado.
+  const [allergyConfirm, setAllergyConfirm] = useState<FoodRow | null>(null)
+  const allergyCancelRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<FoodRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -233,6 +270,7 @@ export function FoodSearchDrawer({
       setResults([])
       setLoading(false)
       setPicked(null)
+      setAllergyConfirm(null)
       setQuantity('100')
       setUnit('g')
       setCategory('todos')
@@ -253,6 +291,51 @@ export function FoodSearchDrawer({
   useEffect(() => {
     listRef.current?.scrollTo({ top: 0 })
   }, [category])
+
+  // A11y del confirm de alergeno (A3): Escape cierra (accion segura) + foco al boton Cancelar.
+  useEffect(() => {
+    if (!allergyConfirm) return
+    allergyCancelRef.current?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setAllergyConfirm(null)
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [allergyConfirm])
+
+  // A11y del drawer (modal): Escape cierra + Tab atrapado dentro del panel. Cuando el confirm de
+  // alergeno esta abierto, ese dialogo maneja su propio foco/Escape (no atrapamos aqui).
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (allergyConfirm) return
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+        return
+      }
+      if (e.key === 'Tab' && panelRef.current) {
+        const focusables = panelRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        )
+        if (focusables.length === 0) return
+        const first = focusables[0]!
+        const last = focusables[focusables.length - 1]!
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, allergyConfirm, onClose])
 
   // Fetch foods
   useEffect(() => {
@@ -281,14 +364,17 @@ export function FoodSearchDrawer({
     return () => { cancelled = true; clearTimeout(t) }
   }, [searchTerm, open, coachId])
 
+  // Rank de afinidad: favorito arriba, alergia/dislike abajo (favorito +2 · dislike -1 · alergia -2).
+  const affinityRank = (id: string): number => {
+    if (clientAllergyIds?.has(id)) return -2
+    if (clientFavoriteIds?.has(id)) return 2
+    if (clientIntoleranceIds?.has(id) || clientDislikeIds?.has(id)) return -1
+    return 0
+  }
   const filtered = results
     .filter((f) => !excludedFoodIds.includes(f.id))
     .filter((f) => category === 'todos' ? true : normalizeCategory(f.category) === category)
-    .sort((a, b) => {
-      const aFav = clientFavoriteIds?.has(a.id) ? 1 : 0
-      const bFav = clientFavoriteIds?.has(b.id) ? 1 : 0
-      return bFav - aFav
-    })
+    .sort((a, b) => affinityRank(b.id) - affinityRank(a.id))
 
   const parsedQuantity = parseFloat(quantity) || 0
   const preview = picked ? previewMacrosForQuantity(toFoodDraftShape(picked), parsedQuantity, unit) : null
@@ -305,6 +391,18 @@ export function FoodSearchDrawer({
     setUnit(defaultUnit)
     setQuantity(String(f.serving_size || (f.is_liquid ? 200 : 100)))
   }, [selectionMode, onConfirmSwapFood, onClose])
+
+  // Intercepta el pick: si el alimento es alergeno del alumno, exige confirmacion deliberada (A3).
+  const handleListPick = useCallback(
+    (f: FoodRow) => {
+      if (clientAllergyIds?.has(f.id)) {
+        setAllergyConfirm(f)
+        return
+      }
+      handlePickFood(f)
+    },
+    [clientAllergyIds, handlePickFood]
+  )
 
   const handleGoCreate = useCallback(() => {
     setNewName(searchTerm.trim())
@@ -390,6 +488,7 @@ export function FoodSearchDrawer({
 
       {/* Modal panel — full screen on mobile, centered card on desktop */}
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal
         aria-label="Buscar alimento"
@@ -512,7 +611,10 @@ export function FoodSearchDrawer({
                 <VirtualFoodList
                   items={filtered}
                   clientFavoriteIds={clientFavoriteIds}
-                  onPickFood={handlePickFood}
+                  clientAllergyIds={clientAllergyIds}
+                  clientIntoleranceIds={clientIntoleranceIds}
+                  clientDislikeIds={clientDislikeIds}
+                  onPickFood={handleListPick}
                   onGoCreate={handleGoCreate}
                   scrollRef={listRef}
                 />
@@ -720,6 +822,56 @@ export function FoodSearchDrawer({
           </div>
         )}
       </div>
+
+      {/* ── CONFIRMACIÓN DE ALÉRGENO (A3) — bloquea hasta override deliberado ── */}
+      {allergyConfirm && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setAllergyConfirm(null)}
+            aria-hidden
+          />
+          <div
+            role="alertdialog"
+            aria-modal
+            aria-label="Confirmar alérgeno"
+            aria-describedby="allergy-confirm-desc"
+            className="relative w-full max-w-sm rounded-2xl border border-rose-300 bg-white p-5 shadow-2xl dark:border-rose-500/40 dark:bg-zinc-900"
+          >
+            <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
+              <AlertTriangle aria-hidden="true" className="h-5 w-5" />
+              <p className="text-sm font-black uppercase tracking-widest">Posible alérgeno</p>
+            </div>
+            <p id="allergy-confirm-desc" className="mt-3 text-sm text-zinc-700 dark:text-zinc-200">
+              Este alumno marcó <span className="font-bold">{allergyConfirm.name}</span> como{' '}
+              <span className="font-bold text-rose-600 dark:text-rose-400">alergia</span>. Agregarlo a
+              su plan puede ser peligroso.
+            </p>
+            <div className="mt-5 flex gap-2">
+              <Button
+                ref={allergyCancelRef}
+                type="button"
+                variant="outline"
+                onClick={() => setAllergyConfirm(null)}
+                className="h-11 flex-1 rounded-xl font-bold"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  const f = allergyConfirm
+                  setAllergyConfirm(null)
+                  handlePickFood(f)
+                }}
+                className="h-11 flex-1 rounded-xl bg-rose-600 font-bold text-white hover:bg-rose-700"
+              >
+                Agregar igual
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 

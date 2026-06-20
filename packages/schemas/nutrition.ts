@@ -111,6 +111,9 @@ export const CustomFoodSchema = z.object({
     .max(10000),
   serving_unit: z.enum(['g', 'un', 'ml']),
   category: z.enum(VALID_FOOD_CATEGORIES),
+  // Medida casera (C) opcional: "1 taza = 120 g". Display sobre gramos, nunca reemplaza la masa.
+  household_grams: z.number().positive('Los gramos deben ser mayores a 0').max(10000).optional(),
+  household_label: z.string().trim().max(30, 'Máximo 30 caracteres').optional(),
 })
 
 export type FoodItemInput = z.infer<typeof FoodItemSchema>

@@ -13,6 +13,8 @@ interface HeroSectionProps {
     baseLoggedPerBlock: Record<string, number>
     nextWorkoutTitle: string | null
     nextWorkoutDayLabel: string | null
+    /** Master switch del dominio Nutricion: oculta el link "Ver nutrición →" del RestDayCard. */
+    nutritionEnabled?: boolean
 }
 
 export function HeroSection({
@@ -27,6 +29,7 @@ export function HeroSection({
     baseLoggedPerBlock,
     nextWorkoutTitle,
     nextWorkoutDayLabel,
+    nutritionEnabled = true,
 }: HeroSectionProps) {
     if (hasWorkout && planId && planTitle) {
         return (
@@ -42,5 +45,5 @@ export function HeroSection({
             />
         )
     }
-    return <RestDayCard coachSlug={coachSlug} nextWorkoutTitle={nextWorkoutTitle} nextWorkoutDayLabel={nextWorkoutDayLabel} />
+    return <RestDayCard coachSlug={coachSlug} nextWorkoutTitle={nextWorkoutTitle} nextWorkoutDayLabel={nextWorkoutDayLabel} showNutritionLink={nutritionEnabled} />
 }

@@ -5,6 +5,7 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { coachIdentifierColumn } from '@/lib/coach/invite-code'
 import { isStudentMovementEnabled } from '@/services/assessment/movement-assessment.service'
 import { isStudentBodyCompositionEnabled } from '@/services/bodycomp/body-composition.service'
+import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
 
 /**
  * Contexto de pool/team detectable en Server Components: el proxy /t/[team_slug] reescribe a
@@ -60,6 +61,38 @@ export const getStudentBodyCompositionNavEnabled = cache(async () => {
         return await isStudentBodyCompositionEnabled(supabase, createServiceRoleClient(), user.id)
     } catch {
         return false
+    }
+})
+
+/**
+ * Master switch del dominio Nutricion para el NAV del alumno (tab "Plan Alimenticio"). Espejo
+ * exacto de `getDashboardNutritionDomainEnabled`: resuelve el scope (coach/team/org) desde la
+ * fila `clients` del PROPIO alumno (RLS techo: `clients.id = auth.uid()`), no del coach del plan
+ * — asi cubre el caso "sin plan todavia" (el dominio puede estar apagado sin que exista plan).
+ *
+ * Cuando el coach apaga la nutricion para este alumno, el tab del nav se OCULTA (render-only; la
+ * page tambien gatea con `resolveNutritionDomainEnabled` => `NutritionDomainOff`). React.cache +
+ * fail-OPEN del flag `FEATURE_PREFS_ENABLED` (flag OFF => `true`, nada se oculta) heredado del
+ * resolver. Fail-CLOSED a `true` ante error: nunca esconder el tab por un fallo de lectura.
+ */
+export const getStudentNutritionNavEnabled = cache(async (): Promise<boolean> => {
+    const user = await getClientRootUser()
+    if (!user) return true
+    const supabase = await createClient()
+    try {
+        const { data } = await supabase
+            .from('clients')
+            .select('coach_id, team_id, org_id')
+            .eq('id', user.id)
+            .maybeSingle()
+        return await resolveNutritionDomainEnabled({
+            coachId: (data?.coach_id ?? '') as string,
+            clientId: user.id,
+            clientTeamId: (data?.team_id ?? null) as string | null,
+            clientOrgId: (data?.org_id ?? null) as string | null,
+        })
+    } catch {
+        return true
     }
 })
 

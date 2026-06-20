@@ -7,6 +7,13 @@ import { ClientProfileDashboard } from './ClientProfileDashboard'
 import { ClientProfileHero } from './ClientProfileHero'
 import { createClient } from '@/lib/supabase/server'
 import { hasModule } from '@/services/entitlements.service'
+import {
+    resolveClientFeaturePrefsOverrideContext,
+    resolveFeaturePrefs,
+    resolveNutritionDomainEnabled,
+} from '@/services/feature-prefs.service'
+import { getCoachNutrientTargets } from './_data/nutrient-targets.queries'
+import { getCoachPrivateNotes, getCoachMealComments } from './_data/nutrition-notes.queries'
 
 export default async function ClientProfilePage({ params }: { params: Promise<{ clientId: string }> }) {
     const { clientId } = await params
@@ -41,6 +48,63 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
 async function ProfileContent({ clientId }: { clientId: string }) {
     const data = await getClientProfileData(clientId)
     const { client, nutritionPlans, checkIns, compliance } = data
+
+    // Zona C (coach) de Nutrición: umbrales de micros, nota privada y el hilo
+    // bidireccional de comentarios (anclado al día de hoy en Santiago). Se
+    // resuelven server-side y se pasan al dashboard → NutritionTabB5.
+    const nutritionTodayIso = (data.todayIso as string | undefined) ?? ''
+
+    // Prefs RESUELTAS para ESTE alumno: el coach debe ver lo que ve el alumno
+    // (base coach/team + override del cliente). El resolver gobierna que zonas
+    // opcionales se muestran; las core (plan/macros/adherencia) van siempre.
+    // El contexto (coach/team/org/plan) sale de la fila del alumno + plan activo
+    // para que entitlement (pool-wins + kill-switch) + preferencia coincidan con
+    // la vista del alumno.
+    const nutritionClient = client as {
+        coach_id?: string | null
+        team_id?: string | null
+        org_id?: string | null
+    }
+    const nutritionCoachId = nutritionClient.coach_id ?? ''
+    const activeNutritionPlanId =
+        (data.activeNutritionPlanWithMeals as { id?: string } | null | undefined)?.id ?? null
+    const featurePrefsInput = {
+        coachId: nutritionCoachId,
+        clientId,
+        clientTeamId: nutritionClient.team_id ?? null,
+        clientOrgId: nutritionClient.org_id ?? null,
+    }
+
+    const [
+        coachNutrientTargets,
+        coachPrivateNotes,
+        coachMealComments,
+        nutritionProEnabled,
+        nutritionDomainEnabled,
+        nutritionSectionFlags,
+        nutritionOverrideContext,
+    ] = await Promise.all([
+        getCoachNutrientTargets(clientId),
+        getCoachPrivateNotes(clientId),
+        nutritionTodayIso
+            ? getCoachMealComments(clientId, nutritionTodayIso)
+            : Promise.resolve([]),
+        resolveNutritionProEnabled(clientId),
+        resolveNutritionDomainEnabled(featurePrefsInput),
+        resolveFeaturePrefs({
+            domain: 'nutrition',
+            ...featurePrefsInput,
+            planId: activeNutritionPlanId,
+        }),
+        // Override por-alumno (tri-state heredar/mostrar/ocultar) que renderiza el panel
+        // "Funciones para este alumno" en la Zona C de la ficha. baseEffective = lo que se
+        // hereda del default coach/team; override = lo ya forzado para este alumno.
+        resolveClientFeaturePrefsOverrideContext({
+            domain: 'nutrition',
+            ...featurePrefsInput,
+            planId: activeNutritionPlanId,
+        }),
+    ])
 
     const sortedCheckIns = [...(checkIns || [])].sort(
         (a, b) =>
@@ -80,9 +144,36 @@ async function ProfileContent({ clientId }: { clientId: string }) {
 
             <ModuleLinksRow clientId={clientId} />
 
-            <ClientProfileDashboard data={data} />
+            <ClientProfileDashboard
+                data={data}
+                coachNutrientTargets={coachNutrientTargets}
+                coachPrivateNotes={coachPrivateNotes}
+                coachMealComments={coachMealComments}
+                nutritionProEnabled={nutritionProEnabled}
+                nutritionDomainEnabled={nutritionDomainEnabled}
+                nutritionSectionFlags={nutritionSectionFlags}
+                nutritionOverrideContext={nutritionOverrideContext}
+            />
         </div>
     )
+}
+
+/**
+ * ¿"Nutrición Pro" (módulo nutrition_exchanges) ON para el contexto del recurso de
+ * este alumno? Gobierna los micros AVANZADOS del editor de umbrales (Zona C). Gate
+ * server-side por contexto del RECURSO (team del pool manda; si no, el coach). Espejo
+ * visual; el gate real de escritura sigue siendo server-side. Fail-closed.
+ */
+async function resolveNutritionProEnabled(clientId: string): Promise<boolean> {
+    const supabase = await createClient()
+    const { data: row } = await supabase
+        .from('clients')
+        .select('team_id, org_id, coach_id')
+        .eq('id', clientId)
+        .maybeSingle()
+    if (!row || row.org_id) return false
+    const ctx = row.team_id ? { teamId: row.team_id } : { coachId: row.coach_id }
+    return hasModule(supabase, 'nutrition_exchanges', ctx)
 }
 
 /**

@@ -332,7 +332,12 @@ export default function BuilderScreen() {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={styles.listHeader}>
-            <LibraryHero stats={stats} theme={theme} onNewTemplate={openNewTemplate} />
+            <LibraryHero
+              stats={stats}
+              theme={theme}
+              onNewTemplate={openNewTemplate}
+              onExercises={() => router.push('/coach/ejercicios')}
+            />
 
             <View style={[styles.toolbar, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
               <View style={[styles.searchBox, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
@@ -458,7 +463,7 @@ export default function BuilderScreen() {
   )
 }
 
-function LibraryHero({ stats, theme, onNewTemplate }: { stats: { templates: number; active: number; noProgram: number; total: number }; theme: any; onNewTemplate: () => void }) {
+function LibraryHero({ stats, theme, onNewTemplate, onExercises }: { stats: { templates: number; active: number; noProgram: number; total: number }; theme: any; onNewTemplate: () => void; onExercises: () => void }) {
   return (
     <View style={[styles.hero, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}>
       <View style={styles.heroTop}>
@@ -476,6 +481,18 @@ function LibraryHero({ stats, theme, onNewTemplate }: { stats: { templates: numb
           <Plus size={18} color={theme.primaryForeground} />
         </TouchableOpacity>
       </View>
+
+      {/* Movida 2: entrada contextual a la lista de ejercicios (ya no vive en la nav). */}
+      <TouchableOpacity
+        style={[styles.exercisesButton, { borderColor: theme.success + '55', backgroundColor: theme.success + '14', borderRadius: theme.radius.lg }]}
+        onPress={onExercises}
+        activeOpacity={0.82}
+        accessibilityRole="button"
+        accessibilityLabel="Lista de ejercicios"
+      >
+        <Dumbbell size={16} color={theme.success} />
+        <Text style={[styles.exercisesButtonText, { color: theme.success, fontFamily: 'Inter_600SemiBold' }]}>Lista de ejercicios</Text>
+      </TouchableOpacity>
 
       <View style={styles.statGrid}>
         <HeroStat icon={Layers3} label="Plantillas" value={stats.templates} color={theme.primary} theme={theme} />
@@ -1172,6 +1189,8 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 22, letterSpacing: -0.5, marginTop: 3 },
   heroSub: { fontSize: 13, lineHeight: 18, marginTop: 4 },
   newButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  exercisesButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, paddingVertical: 11, paddingHorizontal: 14 },
+  exercisesButtonText: { fontSize: 13.5 },
   statGrid: { flexDirection: 'row', gap: 8 },
   heroStat: { flex: 1, borderWidth: 1, padding: 10, gap: 3 },
   heroStatValue: { fontSize: 17, letterSpacing: -0.3 },

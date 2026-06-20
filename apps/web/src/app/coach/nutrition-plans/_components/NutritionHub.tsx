@@ -3,7 +3,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { useState } from 'react'
 import Link from 'next/link'
-import { LayoutTemplate, Users, Apple, Plus, HelpCircle } from 'lucide-react'
+import { LayoutTemplate, Users, Apple, Plus, HelpCircle, ChefHat } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { AppOnlyBadge } from '@/components/AppOnlyBadge'
@@ -14,6 +14,10 @@ import { FoodLibrary } from './FoodLibrary'
 import type { AssignModalClient } from './AssignModal'
 import { NutritionOnboarding } from './NutritionOnboarding'
 import { CoachNutritionGuideDialog } from './CoachNutritionGuideDialog'
+import { RecipeLibrary } from './recipes/RecipeLibrary'
+import type { RecipeRow } from '@/services/nutrition-recipes.service'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { TierBadge } from '@/components/nutrition/TierBadge'
 
 type FoodLib = {
   foods: {
@@ -37,6 +41,7 @@ type Props = {
   assignClients: AssignModalClient[]
   clientsWithoutPlan: { id: string; full_name: string }[]
   foods: FoodLib
+  recipes: RecipeRow[]
   coachId: string
 }
 
@@ -46,6 +51,7 @@ export function NutritionHub({
   assignClients,
   clientsWithoutPlan,
   foods,
+  recipes,
   coachId,
 }: Props) {
   const [hubTab, setHubTab] = useState('templates')
@@ -177,6 +183,13 @@ export function NutritionHub({
               <Apple className="w-3.5 h-3.5" />
               Alimentos
             </TabsTrigger>
+            <TabsTrigger
+              value="recipes"
+              className="flex-1 h-12 rounded-xl data-[state=active]:bg-background data-[state=active]:text-[var(--theme-primary)] data-[state=active]:shadow-lg transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
+            >
+              <ChefHat className="w-3.5 h-3.5" />
+              Recetas
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -211,12 +224,28 @@ export function NutritionHub({
             <FoodLibrary initialFoods={foods.foods} totalFoods={foods.total} coachId={coachId} />
           </div>
         </TabsContent>
+
+        <TabsContent value="recipes" className="mt-0 focus-visible:outline-none">
+          <div className="space-y-6">
+            <SectionHeading
+              icon={<ChefHat className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />}
+              title="Recetas"
+              trailing={
+                <>
+                  <TierBadge tier="base" />
+                  <InfoTooltip content="Ideas de recetas para inspirar a tus alumnos. Viene incluido en el módulo de nutrición (Base). No afectan macros ni adherencia." />
+                </>
+              }
+            />
+            <RecipeLibrary recipes={recipes} clients={assignClients} />
+          </div>
+        </TabsContent>
       </Tabs>
     </div>
   )
 }
 
-function SectionHeading({ icon, title }: { icon: ReactNode; title: string }) {
+function SectionHeading({ icon, title, trailing }: { icon: ReactNode; title: string; trailing?: ReactNode }) {
   return (
     <div
       className="flex items-center gap-4 pb-2 border-b-2"
@@ -229,6 +258,7 @@ function SectionHeading({ icon, title }: { icon: ReactNode; title: string }) {
         {icon}
       </div>
       <h2 className="text-xl font-black uppercase tracking-tight font-display">{title}</h2>
+      {trailing ? <div className="flex items-center gap-1.5">{trailing}</div> : null}
     </div>
   )
 }

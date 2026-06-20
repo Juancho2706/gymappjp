@@ -27,3 +27,14 @@ export const scaleIn = {
     show: { opacity: 1, scale: 1 },
 }
 
+export const easings = {
+    ringFill: [0.22, 1, 0.36, 1] as const,
+    dirSlide: [0.16, 1, 0.3, 1] as const,
+}
+
+export const springsSheet = {
+    enter: { type: 'spring', stiffness: 320, damping: 34, mass: 0.9 },
+} as const
+
+export const springsRow = { type: 'spring', stiffness: 400, damping: 30 } as const
+

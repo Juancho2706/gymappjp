@@ -6,7 +6,7 @@ import { hasModule } from '@/services/entitlements.service'
 import { NUTRITION_EXCHANGES_MODULE } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
 import { ModuleOffNotice } from '@/components/coach/ModuleOffNotice'
 
-export const metadata: Metadata = { title: 'Nutrición por intercambios | EVA' }
+export const metadata: Metadata = { title: 'Nutrición Pro | EVA' }
 
 /**
  * Superficie directa del módulo `nutrition_exchanges` (plan 05 F5.7). El editor de

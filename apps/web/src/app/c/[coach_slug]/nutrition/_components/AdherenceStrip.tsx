@@ -2,7 +2,9 @@
 
 import { useMemo } from 'react'
 import { format, parseISO, subDays } from 'date-fns'
+import { motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import { staggerContainer } from '@/lib/animation-presets'
 import { getTodayInSantiago, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 
@@ -17,6 +19,7 @@ interface Props {
 }
 
 export function AdherenceStrip({ data, planMeals }: Props) {
+  const reduceMotion = useReducedMotion()
   const { iso: today } = getTodayInSantiago()
 
   const days = useMemo(() => {
@@ -47,6 +50,11 @@ export function AdherenceStrip({ data, planMeals }: Props) {
     return 'bg-red-400'
   }
 
+  // A14: revelado escalonado de las celdas al entrar en viewport. Reduced-motion = visibles al instante.
+  const cellVariants = reduceMotion
+    ? { hidden: { opacity: 1 }, show: { opacity: 1 } }
+    : { hidden: { opacity: 0, scale: 0.6 }, show: { opacity: 1, scale: 1 } }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -62,24 +70,29 @@ export function AdherenceStrip({ data, planMeals }: Props) {
         </span>
       </div>
 
-      <div
+      <motion.div
         className="grid grid-cols-10 gap-0.5 sm:gap-1"
         role="grid"
         aria-label="Adherencia nutricional de los últimos 30 días, cada celda es un día"
+        variants={staggerContainer(reduceMotion ? 0 : 0.012)}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true, amount: 0.4 }}
       >
         {days.map((day) => (
-          <div
+          <motion.div
             key={day.iso}
+            variants={cellVariants}
             role="gridcell"
             aria-label={`${day.iso}: ${Math.round(day.pct * 100)} por ciento de comidas del plan completadas`}
             className={cn(
-              'h-2 w-full rounded-sm transition-all sm:aspect-square sm:h-auto',
+              'h-2 w-full rounded-sm transition-colors sm:aspect-square sm:h-auto',
               getColor(day.pct),
               day.isToday && 'ring-2 ring-[color:var(--theme-primary)] ring-offset-1 ring-offset-background'
             )}
           />
         ))}
-      </div>
+      </motion.div>
 
       <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
         <span className="flex items-center gap-1">

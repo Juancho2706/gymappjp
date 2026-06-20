@@ -70,14 +70,22 @@ export function ComplianceRing({ value, label, color, empty }: ComplianceRingPro
 
 export function ComplianceRingCluster({
     workoutScore,
-    nutritionScore,
+    nutritionEngagementScore,
     checkInScore,
     nutritionHasLogs,
+    nutritionEnabled = true,
 }: {
     workoutScore: number
-    nutritionScore: number
+    /** Engagement de registro (días con log / 30), NO cumplimiento de comidas. */
+    nutritionEngagementScore: number
     checkInScore: number
     nutritionHasLogs: boolean
+    /**
+     * Dominio Nutricion prendido para este alumno (master switch §4.8). Default `true` =
+     * comportamiento de HOY. Cuando es `false` se oculta SOLO el anillo de Nutrición y la
+     * grilla pasa a 2 columnas (Entrenos + Check-ins) — nunca un hueco vacío (NN/g pitfall).
+     */
+    nutritionEnabled?: boolean
 }) {
     const { t } = useTranslation()
     return (
@@ -86,9 +94,11 @@ export function ComplianceRingCluster({
                 <p className="text-center text-xs font-semibold text-muted-foreground">Últimos 30 días</p>
                 <InfoTooltip content={t('section.compliance')} />
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid gap-2 ${nutritionEnabled ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <ComplianceRing value={workoutScore} label="Entrenos" color="brand" />
-                <ComplianceRing value={nutritionScore} label="Nutrición" color="emerald" empty={!nutritionHasLogs} />
+                {nutritionEnabled ? (
+                    <ComplianceRing value={nutritionEngagementScore} label="Nutrición" color="emerald" empty={!nutritionHasLogs} />
+                ) : null}
                 <ComplianceRing value={checkInScore} label="Check-ins" color="violet" />
             </div>
         </GlassCard>

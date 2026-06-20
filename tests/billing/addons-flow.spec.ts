@@ -94,7 +94,7 @@ test.describe('add-ons — catálogo y reglas (visible con cualquier valor del f
         await expect(section.getByText('Cardio', { exact: true })).toBeVisible()
         await expect(section.getByText('Evaluación de movimiento')).toBeVisible()
         await expect(section.getByText('Composición corporal')).toBeVisible()
-        await expect(section.getByText('Nutrición por intercambios')).toBeVisible()
+        await expect(section.getByText('Nutrición Pro')).toBeVisible()
     })
 
     test('Plan actual muestra el desglose compuesto cuando hay add-ons facturables', async ({ page }) => {

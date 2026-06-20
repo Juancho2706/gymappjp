@@ -4,7 +4,10 @@ import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
+import { TierBadge } from '@/components/nutrition/TierBadge'
 import { COACH_NUTRITION_ONBOARDING_STEPS } from './nutrition-onboarding-shared'
+import { NUTRITION_SURFACES } from './nutrition-surfaces'
 
 type Props = {
   hasClients: boolean
@@ -98,6 +101,30 @@ export function CoachNutritionGuideDialog({ hasClients, onAssign, triggerLabel =
         {!hasClients && (
           <p className="text-[10px] text-muted-foreground">Necesitas al menos un alumno para usar “Asignar plan”.</p>
         )}
+
+        <div className="mt-2 space-y-3 border-t border-border/60 pt-4">
+          <div className="flex items-center gap-1.5">
+            <h3 className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+              Qué incluye nutrición
+            </h3>
+            <InfoTooltip
+              title="Base vs Nutrición Pro"
+              content="Lo marcado como Base viene incluido en el módulo de nutrición. Pro (intercambios) es un complemento de pago."
+              iconClassName="text-muted-foreground/70"
+            />
+          </div>
+          <ul className="space-y-2">
+            {NUTRITION_SURFACES.map((surface) => (
+              <li key={surface.key} className="flex items-start gap-2.5">
+                <TierBadge tier={surface.tier} className="mt-0.5 shrink-0" />
+                <div className="space-y-0.5">
+                  <p className="text-xs font-bold text-foreground">{surface.label}</p>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">{surface.description}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
       </DialogContent>
     </Dialog>
   )

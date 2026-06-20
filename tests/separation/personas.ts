@@ -36,13 +36,15 @@ export const BRANDS = {
 } as const
 
 // ── Matriz de módulos del sidebar coach por contexto ─────────────────────────
+// Movida 1/2 (declutter): "Ejercicios" ya no es entrada top-level (botón dentro de Programas);
+// standalone colapsa "Mi Marca" + "Suscripción" en una sola entrada "Opciones".
 export const MODULES = {
     /** Visibles en TODOS los contextos de coach */
-    common: ['Dashboard', 'Alumnos', 'Programas', 'Ejercicios', 'Nutrición', 'Soporte'],
+    common: ['Dashboard', 'Alumnos', 'Programas', 'Nutrición', 'Soporte'],
     /** SOLO contexto coach_team */
     teamOnly: ['Equipo', 'Opciones'],
-    /** SOLO contexto coach_standalone */
-    standaloneOnly: ['Mi Marca', 'Suscripción'],
+    /** SOLO contexto coach_standalone (hub "Opciones" = marca + suscripción) */
+    standaloneOnly: ['Opciones'],
 } as const
 
 // ── Rutas de login por shell de alumno ───────────────────────────────────────

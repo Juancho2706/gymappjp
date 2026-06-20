@@ -29,7 +29,7 @@ function parseBlocks(raw: Json): NutritionCycleBlock[] {
 export async function runNutritionCyclesAutomation(
   supabase: SupabaseClient<Database>,
   todayIso: string
-): Promise<{ scanned: number; applied: number; skipped: number }> {
+): Promise<{ scanned: number; applied: number; skipped: number; failed: number }> {
   const { data: cycles } = await supabase
     .from('nutrition_plan_cycles')
     .select('id, coach_id, client_id, start_date, blocks, last_applied_week, last_applied_template_id')
@@ -38,6 +38,7 @@ export async function runNutritionCyclesAutomation(
   const rows = (cycles ?? []) as CycleRow[]
   let applied = 0
   let skipped = 0
+  let failed = 0
 
   // El scope (org_id) NO vive en nutrition_plan_cycles -> leerlo del alumno. Sin esto,
   // propagateTemplateChanges recibe orgId=null y applyOrgScope fuerza is('org_id', null):
@@ -69,18 +70,26 @@ export async function runNutritionCyclesAutomation(
     }
     const service = new NutritionService(supabase)
     const orgId = orgByClient.get(c.client_id) ?? null
-    await service.propagateTemplateChanges(block.template_id, c.coach_id, JSON.stringify([c.client_id]), orgId)
-    await supabase
-      .from('nutrition_plan_cycles')
-      .update({
-        last_applied_week: weekIndex,
-        last_applied_template_id: block.template_id,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', c.id)
-    applied++
+    // Aislamiento por ciclo: un alumno que falle NO debe abortar la tanda diaria entera. Cada
+    // propagación es atómica por-alumno (RPC); si falla, se cuenta y se sigue (el ciclo no marca
+    // last_applied → se reintenta mañana).
+    try {
+      await service.propagateTemplateChanges(block.template_id, c.coach_id, JSON.stringify([c.client_id]), orgId)
+      await supabase
+        .from('nutrition_plan_cycles')
+        .update({
+          last_applied_week: weekIndex,
+          last_applied_template_id: block.template_id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', c.id)
+      applied++
+    } catch (e) {
+      failed++
+      console.error('[nutrition-cycles] propagacion fallo para ciclo', c.id, e)
+    }
   }
 
-  return { scanned: rows.length, applied, skipped }
+  return { scanned: rows.length, applied, skipped, failed }
 }
 

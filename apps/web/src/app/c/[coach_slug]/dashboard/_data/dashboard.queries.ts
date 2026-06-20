@@ -395,3 +395,51 @@ export const getNutritionLogDays30 = cache(async (clientId: string) => {
         .gte('log_date', thirtyDaysAgoStr)
     return new Set((data ?? []).map((r) => r.log_date)).size
 })
+
+/**
+ * Plan activo (con comidas + alimentos) + logs crudos de 30d para alimentar el
+ * motor canónico `computeNutritionAdherence` y poder exponer el CUMPLIMIENTO real
+ * de comidas (distinto del ENGAGEMENT de registro = días con log / 30).
+ * Devuelve `null` si el alumno no tiene plan activo.
+ */
+export const getNutritionAdherenceInputs30d = cache(async (clientId: string) => {
+    const supabase = await createClient()
+    const { iso } = getTodayInSantiago()
+    const startIso = format(subDays(parseISOAnchor(iso), 30), 'yyyy-MM-dd')
+
+    const { data: plan } = await supabase
+        .from('nutrition_plans')
+        .select(
+            `
+            id, daily_calories, protein_g, carbs_g, fats_g,
+            nutrition_meals (
+                id, day_of_week,
+                food_items (
+                    id, quantity, unit, swap_options,
+                    foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )
+                )
+            )
+            `
+        )
+        .eq('client_id', clientId)
+        .eq('is_active', true)
+        .maybeSingle()
+
+    if (!plan) return null
+
+    const { data: logs } = await supabase
+        .from('daily_nutrition_logs')
+        .select(
+            `
+            log_date,
+            target_calories_at_log, target_protein_at_log, target_carbs_at_log, target_fats_at_log,
+            nutrition_meal_logs ( meal_id, is_completed, consumed_quantity )
+            `
+        )
+        .eq('client_id', clientId)
+        .eq('plan_id', plan.id)
+        .gte('log_date', startIso)
+        .order('log_date', { ascending: true })
+
+    return { plan, logs: logs ?? [], startIso, endIso: iso }
+})
