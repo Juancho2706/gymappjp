@@ -292,7 +292,7 @@ export default function RegisterPage() {
                             />
                         </div>
                         <p className="text-xs text-muted-foreground pl-1">
-                            Se generará tu URL automáticamente: eva-app.cl/c/<strong>tu-marca</strong>
+                            Tu enlace para alumnos se genera automáticamente con un <strong>código único</strong> — lo encontrarás en tu panel.
                         </p>
                     </div>
 

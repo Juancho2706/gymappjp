@@ -18,7 +18,7 @@ import {
     isAuthDuplicateEmailMessage,
     sanitizePlatformEmail,
 } from '@/lib/auth/platform-email'
-import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
+import { buildCoachStudentUrl, getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
 // F3: single source of truth for coach scope + org filtering (replaces the local copies).
 import { resolveCoachScope as getCoachClientScope, applyOrgScope as applyClientScope } from '@/services/auth/coach-scope.service'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
@@ -443,7 +443,7 @@ export async function archiveClientAction(clientId: string): Promise<{ error?: s
     if (client.email) {
         const { data: coach } = await supabase
             .from('coaches')
-            .select('full_name, brand_name, slug')
+            .select('full_name, brand_name, slug, invite_code')
             .eq('id', coachUser.id)
             .maybeSingle()
 
@@ -453,7 +453,7 @@ export async function archiveClientAction(clientId: string): Promise<{ error?: s
             coachBrandName: coach?.brand_name ?? coach?.full_name ?? 'EVA',
             coachName: coach?.full_name ?? 'Tu entrenador',
             coachEmail: coachUser.email ?? null,
-            coachPublicUrl: `${appUrl}/c/${coach?.slug ?? ''}`,
+            coachPublicUrl: buildCoachStudentUrl(appUrl, coach),
         })
         sendTransactionalEmail({ to: client.email, subject, html }).catch(() => null)
     }
@@ -513,7 +513,7 @@ export async function unarchiveClientAction(clientId: string): Promise<{ error?:
     if (client.email) {
         const { data: coachInfo } = await supabase
             .from('coaches')
-            .select('full_name, brand_name, slug')
+            .select('full_name, brand_name, slug, invite_code')
             .eq('id', coachUser.id)
             .maybeSingle()
 
@@ -522,7 +522,7 @@ export async function unarchiveClientAction(clientId: string): Promise<{ error?:
             clientName: client.full_name,
             coachBrandName: coachInfo?.brand_name ?? coachInfo?.full_name ?? 'EVA',
             coachName: coachInfo?.full_name ?? 'Tu entrenador',
-            loginUrl: `${appUrl}/c/${coachInfo?.slug ?? ''}/login`,
+            loginUrl: buildCoachStudentUrl(appUrl, coachInfo, '/login'),
         })
         sendTransactionalEmail({ to: client.email, subject, html }).catch(() => null)
     }
