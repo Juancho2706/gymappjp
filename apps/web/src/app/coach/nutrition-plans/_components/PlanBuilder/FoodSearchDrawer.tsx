@@ -706,7 +706,7 @@ export function FoodSearchDrawer({
               </Select>
             </div>
 
-            <div className="mt-auto pt-2">
+            <div className="mt-auto pt-2 pb-safe">
               <Button
                 type="button"
                 onClick={handleCreateFood}
@@ -809,7 +809,7 @@ export function FoodSearchDrawer({
               </div>
             )}
 
-            <div className="mt-auto">
+            <div className="mt-auto pb-safe">
               <Button
                 type="button"
                 onClick={handleAdd}

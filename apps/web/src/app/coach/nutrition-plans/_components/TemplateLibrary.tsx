@@ -172,7 +172,7 @@ export function TemplateLibrary({ templates, coachId, clients }: Props) {
             return (
               <Card
                 key={template.id}
-                className="overflow-hidden bg-card/50 backdrop-blur-sm transition-all duration-300 rounded-2xl border-border/50"
+                className="overflow-hidden bg-card/50 backdrop-blur-sm transition-all duration-300 rounded-2xl border-border/50 hover:border-[color:var(--hover-border)]"
                 style={{ '--hover-border': 'var(--theme-primary)' } as React.CSSProperties}
               >
                 <CardContent className="p-5 border border-transparent rounded-2xl h-full flex flex-col gap-4">

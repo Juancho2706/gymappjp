@@ -166,14 +166,6 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
     }
   }, [state.success, refresh, debouncedSearch, category, scope])
 
-  const categories = useMemo(() => {
-    const set = new Set<string>()
-    for (const f of foods) {
-      if (f.category?.trim()) set.add(f.category.trim())
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b))
-  }, [foods])
-
   const displayed = useMemo(() => {
     const list = [...foods]
     list.sort((a, b) => {
@@ -266,14 +258,14 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
         >
           Todas
         </Badge>
-        {categories.map((cat) => (
+        {FOOD_CATEGORIES.map((cat) => (
           <Badge
-            key={cat}
-            variant={category === cat ? 'default' : 'outline'}
+            key={cat.value}
+            variant={category === cat.value ? 'default' : 'outline'}
             className="cursor-pointer shrink-0 rounded-lg px-3 py-1"
-            onClick={() => setCategory(cat)}
+            onClick={() => setCategory(cat.value)}
           >
-            {cat}
+            {cat.label}
           </Badge>
         ))}
       </div>

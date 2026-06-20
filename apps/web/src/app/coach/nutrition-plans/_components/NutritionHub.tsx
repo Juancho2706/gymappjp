@@ -86,7 +86,7 @@ export function NutritionHub({
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <div className="bg-card border border-border rounded-2xl px-4 py-3 text-center">
           <p className="text-2xl font-black text-foreground">{templates.length}</p>
           <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Plantillas</p>
@@ -102,7 +102,7 @@ export function NutritionHub({
       </div>
 
       <Tabs value={hubTab} onValueChange={setHubTab} className="w-full flex flex-col gap-8">
-        <div className="sticky top-0 z-20 bg-background/80 backdrop-blur-md pb-4 pt-2 -mx-4 px-4 md:mx-0 md:px-0 flex justify-center">
+        <div className="sticky top-[var(--coach-mobile-content-top-offset)] md:top-0 z-20 bg-background/80 backdrop-blur-md pb-4 pt-2 -mx-4 px-4 md:mx-0 md:px-0 flex justify-center">
           <TabsList
             className="bg-muted/50 p-1.5 h-auto flex gap-1 w-full max-w-2xl rounded-2xl border border-border/50 shadow-sm"
             style={{ '--theme-primary': 'var(--theme-primary)' } as CSSProperties}
