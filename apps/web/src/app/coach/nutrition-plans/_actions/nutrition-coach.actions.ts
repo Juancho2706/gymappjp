@@ -533,6 +533,77 @@ export async function upsertClientNutritionPlanJson(
 }
 
 /**
+ * Crea un plan draft VACÍO (0 comidas) para un alumno y lo deja activo, para abrir el editor con
+ * planId real desde el arranque (el modo Porciones exige un plan persistido → sin esto el coach
+ * tenía que Guardar un plan base ANTES de poder usar intercambios). Idempotente: si el alumno ya
+ * tiene un plan activo, lo reusa (no duplica). Un plan con 0 comidas se trata como "sin plan" en el
+ * board del coach (getActiveClientPlans/getCoachClients) y en la app del alumno (getActiveNutritionPlan)
+ * → un draft abandonado NO le muestra un plan vacío al alumno ni lo saca de "Sin plan activo".
+ */
+export async function createEmptyClientNutritionPlan(
+  coachId: string,
+  clientId: string
+): Promise<{ success: boolean; planId?: string; error?: string }> {
+  const scope = await requireCoachNutritionScope(coachId)
+  if (!scope.ok) return { success: false, error: scope.error }
+  const { supabase, orgId, activeTeamId } = scope
+
+  try {
+    // Gate 3-vías de pertenencia del alumno (mismo patrón que upsertClientNutritionPlanJson).
+    let clientQuery = supabase.from('clients').select('id').eq('id', clientId)
+    if (activeTeamId) {
+      clientQuery = clientQuery.eq('team_id', activeTeamId).is('org_id', null)
+    } else {
+      clientQuery = clientQuery.eq('coach_id', coachId)
+      clientQuery = applyOrgScope(clientQuery, orgId)
+      if (!orgId) clientQuery = clientQuery.is('team_id', null)
+    }
+    const { data: client } = await clientQuery.maybeSingle()
+    if (!client) return { success: false, error: 'Alumno no encontrado.' }
+
+    // Idempotencia: si ya hay un plan activo (incluido un draft previo), reusarlo (no duplicar).
+    const { data: existing } = await supabase
+      .from('nutrition_plans')
+      .select('id')
+      .eq('client_id', clientId)
+      .eq('is_active', true)
+      .maybeSingle()
+    if (existing) return { success: true, planId: existing.id as string }
+
+    // Sin plan activo: desactivar leftovers (espejo del upsert) e insertar el draft vacío activo.
+    let deactivateQuery = supabase.from('nutrition_plans').update({ is_active: false }).eq('client_id', clientId)
+    deactivateQuery = applyOrgScope(deactivateQuery, orgId)
+    await deactivateQuery
+
+    const { data: newPlan, error: planError } = await supabase
+      .from('nutrition_plans')
+      .insert({
+        client_id: clientId,
+        coach_id: coachId,
+        org_id: orgId,
+        name: 'Plan sin título',
+        daily_calories: 0,
+        protein_g: 0,
+        carbs_g: 0,
+        fats_g: 0,
+        is_active: true,
+        is_custom: true,
+        last_edited_by_coach_id: coachId,
+      })
+      .select('id')
+      .single()
+    if (planError) throw planError
+
+    revalidatePath('/coach/nutrition-plans')
+    return { success: true, planId: newPlan.id as string }
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Error al crear el plan.'
+    console.error('[createEmptyClientNutritionPlan]', e)
+    return { success: false, error: msg }
+  }
+}
+
+/**
  * Alta de alimento custom del coach con validación Zod.
  */
 export async function addCoachCustomFood(

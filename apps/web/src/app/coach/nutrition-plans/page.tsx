@@ -16,7 +16,15 @@ import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render
 import { getCoachRecipes } from './_data/recipes.queries'
 import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
 
-type NutritionPlanRow = { id: string; name: string; is_active: boolean | null }
+type NutritionPlanRow = {
+  id: string
+  name: string
+  is_active: boolean | null
+  // count de comidas (embed nutrition_meals(count)): un plan activo con 0 comidas es un draft y
+  // NO cuenta como plan asignado (board lo deja en "Sin plan activo", el alumno no lo ve).
+  nutrition_meals?: { count: number }[] | null
+}
+const planHasMeals = (p: NutritionPlanRow) => (p.nutrition_meals?.[0]?.count ?? 0) > 0
 
 export default async function NutritionPlansPage() {
   const { user, coach } = await getNutritionPlansPageCoach()
@@ -154,7 +162,7 @@ export default async function NutritionPlansPage() {
 
   const assignClients = coachClientsRaw.map((c) => {
     const plans = c.nutrition_plans as NutritionPlanRow[] | null | undefined
-    const active = plans?.find((p) => p.is_active)
+    const active = plans?.find((p) => p.is_active && planHasMeals(p))
     return {
       id: c.id,
       full_name: c.full_name,
@@ -165,7 +173,7 @@ export default async function NutritionPlansPage() {
   const clientsWithoutPlan = coachClientsRaw
     .filter((c) => {
       const plans = c.nutrition_plans as NutritionPlanRow[] | null | undefined
-      return !plans?.some((p) => p.is_active)
+      return !plans?.some((p) => p.is_active && planHasMeals(p))
     })
     .map((c) => ({ id: c.id, full_name: c.full_name }))
 

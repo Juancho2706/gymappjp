@@ -35,11 +35,12 @@ export function FoodBrowser({ coachId, initialFoods, totalFoods }: Props) {
   }, [search])
 
   const refresh = useCallback(
-    (q: string, cat: string) => {
+    (q: string, cat: string, scopeVal: 'all' | 'mine') => {
       startTransition(async () => {
         const { foods: next, total: count } = await searchCoachFoodLibrary(coachId, {
           search: q || undefined,
           category: cat !== 'todos' ? cat : undefined,
+          mine: scopeVal === 'mine',
           page: 0,
           pageSize: 150,
         })
@@ -55,8 +56,8 @@ export function FoodBrowser({ coachId, initialFoods, totalFoods }: Props) {
       skipFirst.current = false
       return
     }
-    refresh(debounced, category)
-  }, [debounced, category, refresh])
+    refresh(debounced, category, scope)
+  }, [debounced, category, scope, refresh])
 
   const categories = useMemo(() => {
     const s = new Set<string>()
@@ -67,15 +68,14 @@ export function FoodBrowser({ coachId, initialFoods, totalFoods }: Props) {
   }, [foods])
 
   const displayed = useMemo(() => {
-    let list = [...foods]
-    if (scope === 'mine') list = list.filter((f) => f.coach_id === coachId)
+    const list = [...foods]
     list.sort((a, b) => {
       if (sort === 'calories') return b.calories - a.calories
       if (sort === 'protein') return b.protein_g - a.protein_g
       return a.name.localeCompare(b.name)
     })
     return list
-  }, [foods, scope, sort, coachId])
+  }, [foods, sort])
 
   return (
     <div className="space-y-6">

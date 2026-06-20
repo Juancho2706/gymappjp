@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Users, ChevronRight, Trash2, Search, UserPlus } from 'lucide-react'
 import Link from 'next/link'
-import { unassignNutritionPlan } from '../_actions/nutrition-coach.actions'
+import { useRouter } from 'next/navigation'
+import { unassignNutritionPlan, createEmptyClientNutritionPlan } from '../_actions/nutrition-coach.actions'
 import { toast } from 'sonner'
 import type { ActivePlanBoardRow } from '../_data/nutrition-coach.queries'
 import {
@@ -27,6 +28,38 @@ type Props = {
   coachId: string
   activePlans: ActivePlanBoardRow[]
   clientsWithoutPlan: { id: string; full_name: string }[]
+}
+
+/**
+ * Botón "Asignar" de la lista "Sin plan activo": crea un plan draft vacío (planId real) y abre el
+ * editor con el modo Porciones ya activable — sin el doble-guardado previo. Idempotente server-side.
+ */
+function AssignButton({ coachId, clientId }: { coachId: string; clientId: string }) {
+  const router = useRouter()
+  const [pending, setPending] = useState(false)
+  const onAssign = async () => {
+    setPending(true)
+    const res = await createEmptyClientNutritionPlan(coachId, clientId)
+    if (res.success) {
+      // Navega al editor del plan ya persistido (no reseteamos pending: cambiamos de página).
+      router.push(`/coach/nutrition-plans/client/${clientId}`)
+    } else {
+      setPending(false)
+      toast.error(res.error || 'No se pudo crear el plan.')
+    }
+  }
+  return (
+    <Button
+      size="sm"
+      variant="secondary"
+      className="shrink-0 gap-1 text-[10px] font-black uppercase"
+      onClick={onAssign}
+      disabled={pending}
+    >
+      <UserPlus className="w-3 h-3" />
+      {pending ? 'Creando…' : 'Asignar'}
+    </Button>
+  )
 }
 
 export function ActivePlansBoard({ coachId, activePlans, clientsWithoutPlan }: Props) {
@@ -237,12 +270,7 @@ export function ActivePlansBoard({ coachId, activePlans, clientsWithoutPlan }: P
                   <p className="font-bold text-sm truncate">{c.full_name}</p>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Asigna desde Plantillas</p>
                 </div>
-                <Link href={`/coach/nutrition-plans/client/${c.id}`}>
-                  <Button size="sm" variant="secondary" className="shrink-0 gap-1 text-[10px] font-black uppercase">
-                    <UserPlus className="w-3 h-3" />
-                    Asignar
-                  </Button>
-                </Link>
+                <AssignButton coachId={coachId} clientId={c.id} />
               </Card>
             ))}
           </div>

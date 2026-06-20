@@ -60,11 +60,12 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
   }, [search])
 
   const refresh = useCallback(
-    (searchTerm: string, cat: string) => {
+    (searchTerm: string, cat: string, scopeVal: 'all' | 'mine') => {
       startTransition(async () => {
         const { foods: next, total: count } = await searchCoachFoodLibrary(coachId, {
           search: searchTerm || undefined,
           category: cat !== 'todos' ? cat : undefined,
+          mine: scopeVal === 'mine',
           page: 0,
           pageSize: PAGE_SIZE,
         })
@@ -115,13 +116,14 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
   )
 
   const loadMore = useCallback(
-    (currentPage: number, searchTerm: string, cat: string) => {
+    (currentPage: number, searchTerm: string, cat: string, scopeVal: 'all' | 'mine') => {
       setLoadingMore(true)
       startTransition(async () => {
         const nextPage = currentPage + 1
         const { foods: next } = await searchCoachFoodLibrary(coachId, {
           search: searchTerm || undefined,
           category: cat !== 'todos' ? cat : undefined,
+          mine: scopeVal === 'mine',
           page: nextPage,
           pageSize: PAGE_SIZE,
         })
@@ -138,8 +140,8 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
       skipNextFetch.current = false
       return
     }
-    refresh(debouncedSearch, category)
-  }, [debouncedSearch, category, refresh])
+    refresh(debouncedSearch, category, scope)
+  }, [debouncedSearch, category, scope, refresh])
 
   useEffect(() => {
     const sentinel = sentinelRef.current
@@ -147,22 +149,22 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && !pending && !loadingMore && foods.length < total) {
-          loadMore(page, debouncedSearch, category)
+          loadMore(page, debouncedSearch, category, scope)
         }
       },
       { threshold: 0.1 }
     )
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [pending, loadingMore, foods.length, total, loadMore, page, debouncedSearch, category])
+  }, [pending, loadingMore, foods.length, total, loadMore, page, debouncedSearch, category, scope])
 
   useEffect(() => {
     if (state.success) {
       setIsModalOpen(false)
       toast.success('Alimento guardado')
-      refresh(debouncedSearch, category)
+      refresh(debouncedSearch, category, scope)
     }
-  }, [state.success, refresh, debouncedSearch, category])
+  }, [state.success, refresh, debouncedSearch, category, scope])
 
   const categories = useMemo(() => {
     const set = new Set<string>()
@@ -173,15 +175,14 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
   }, [foods])
 
   const displayed = useMemo(() => {
-    let list = [...foods]
-    if (scope === 'mine') list = list.filter((f) => f.coach_id === coachId)
+    const list = [...foods]
     list.sort((a, b) => {
       if (sort === 'calories') return b.calories - a.calories
       if (sort === 'protein') return b.protein_g - a.protein_g
       return a.name.localeCompare(b.name)
     })
     return list
-  }, [foods, scope, sort, coachId])
+  }, [foods, sort])
 
   return (
     <div className="space-y-6">

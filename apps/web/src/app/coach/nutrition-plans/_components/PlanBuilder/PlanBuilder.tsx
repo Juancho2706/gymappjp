@@ -638,6 +638,14 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
           onDownloadPdf={handleDownloadExchangePdf}
         />
       )}
+      {mode === 'template' && sectionFlags?.micros_advanced === true && (
+        <div className="w-full shrink-0 rounded-2xl border border-blue-500/40 bg-blue-500/10 px-4 py-3 text-sm text-blue-700 dark:text-blue-300">
+          <p className="font-bold">Porciones y equivalencias</p>
+          <p className="mt-1 text-xs leading-relaxed">
+            Las porciones (grupos de intercambio) y equivalencias se configuran al asignar este plan a un alumno, no en la plantilla.
+          </p>
+        </div>
+      )}
       {!exchangeActive && emptyMeals.length > 0 && (
         <div className="w-full shrink-0 rounded-2xl border border-orange-500/40 bg-orange-500/10 px-4 py-3 text-sm text-orange-700 dark:text-orange-300">
           <p className="font-bold">Reparación asistida: hay comidas incompletas</p>

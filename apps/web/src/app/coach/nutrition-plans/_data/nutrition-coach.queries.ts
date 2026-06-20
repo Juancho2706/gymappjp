@@ -145,7 +145,8 @@ export const getActiveClientPlans = cache(async (coachId: string, scope: CoachCl
       `
       id, client_id, template_id, name, is_custom, is_active, daily_calories, protein_g, carbs_g, fats_g, updated_at,
       clients ( id, full_name, team_id ),
-      nutrition_plan_templates ( name )
+      nutrition_plan_templates ( name ),
+      nutrition_meals ( count )
     `
     )
     .eq('is_active', true)
@@ -162,7 +163,11 @@ export const getActiveClientPlans = cache(async (coachId: string, scope: CoachCl
     query = query.eq('coach_id', coachId).is('org_id', null)
   }
   const { data } = await query
-  const rows = data ?? []
+  // Un plan activo SIN comidas es un draft (auto-creado al "Asignar"): se trata como "sin plan"
+  // hasta que tenga ≥1 comida → no aparece en el board ni en la app del alumno.
+  const rows = (data ?? []).filter(
+    (p) => ((p.nutrition_meals as { count: number }[] | null)?.[0]?.count ?? 0) > 0
+  )
   if (scope.orgId || scope.activeTeamId) return rows
   // Standalone: ALLOWLIST de clientes standalone (no denylist por embed: si RLS oculta el client,
   // el embed viene null y un denylist "!team_id" incluiría el plan — fail-open). Mismo patrón que
@@ -325,6 +330,8 @@ export type FoodLibraryOptions = {
   pageSize?: number
   /** Active workspace org (Fase 2C): null = standalone (system + own), set = org (system + org foods). */
   orgId?: string | null
+  /** "Mis alimentos": SOLO los custom del coach (coach_id = coachId). Filtro server-side. */
+  mine?: boolean
 }
 
 /**
@@ -344,12 +351,17 @@ function foodWorkspaceFilter(coachId: string, orgId: string | null): string {
  */
 export const getFoodLibrary = cache(async (coachId: string, options: FoodLibraryOptions = {}) => {
   const supabase = await createClient()
-  const { search, category, maxCalories, page = 0, pageSize = DEFAULT_FOOD_PAGE_SIZE, orgId = null } = options
+  const { search, category, maxCalories, page = 0, pageSize = DEFAULT_FOOD_PAGE_SIZE, orgId = null, mine = false } = options
 
-  let query = supabase
+  const selected = supabase
     .from('foods')
     .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, category, coach_id, is_liquid, brand', { count: 'exact' })
-    .or(foodWorkspaceFilter(coachId, orgId))
+  // "Mis alimentos" (mine): SOLO los custom del coach (coach_id = coachId), filtrado SERVER-SIDE.
+  // Antes se filtraba client-side sobre una página parcial del catálogo global → la lista quedaba
+  // vacía (los custom no estaban en la 1ra página) y el infinite-scroll disparaba en loop.
+  let query = (mine
+    ? selected.eq('coach_id', coachId)
+    : selected.or(foodWorkspaceFilter(coachId, orgId)))
     .order('coach_id', { ascending: false })
     .order('name')
     .range(page * pageSize, (page + 1) * pageSize - 1)
@@ -459,7 +471,7 @@ export const getCoachClients = cache(async (coachId: string, scope: CoachClientS
     .select(
       `
       id, full_name,
-      nutrition_plans ( id, name, is_active )
+      nutrition_plans ( id, name, is_active, nutrition_meals ( count ) )
     `
     )
     .order('full_name')

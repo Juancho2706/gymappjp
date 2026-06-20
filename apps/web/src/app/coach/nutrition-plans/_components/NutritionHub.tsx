@@ -3,9 +3,8 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { useState } from 'react'
 import Link from 'next/link'
-import { LayoutTemplate, Users, Apple, Plus, HelpCircle, ChefHat } from 'lucide-react'
+import { LayoutTemplate, Users, Apple, Plus, ChefHat } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { AppOnlyBadge } from '@/components/AppOnlyBadge'
 import { TemplateLibrary, type TemplateLibraryItem } from './TemplateLibrary'
 import { ActivePlansBoard } from './ActivePlansBoard'
@@ -54,7 +53,7 @@ export function NutritionHub({
   recipes,
   coachId,
 }: Props) {
-  const [hubTab, setHubTab] = useState('templates')
+  const [hubTab, setHubTab] = useState('clients')
   const hasClients = assignClients.length > 0
 
   return (
@@ -68,59 +67,6 @@ export function NutritionHub({
               hasClients={hasClients}
               onAssign={() => setHubTab('clients')}
             />
-            <Dialog>
-              <DialogTrigger
-                render={
-                  <button
-                    type="button"
-                    className="w-8 h-8 rounded-full bg-amber-400 hover:bg-amber-500 shadow-[0_0_15px_rgba(251,191,36,0.5)] flex items-center justify-center text-amber-950 transition-all hover:scale-110 active:scale-95 group relative"
-                  >
-                    <HelpCircle className="w-5 h-5 fill-amber-400 stroke-amber-950" />
-                  </button>
-                }
-              />
-              <DialogContent className="sm:max-w-2xl bg-white dark:bg-zinc-950 border-slate-200 dark:border-white/10">
-                <DialogHeader>
-                  <DialogTitle className="text-2xl font-black uppercase tracking-tighter flex items-center gap-2">
-                    <Apple className="w-6 h-6 text-emerald-500" />
-                    Logística de nutrición
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="space-y-6 pt-4 max-h-[70vh] overflow-y-auto pr-2">
-                  <div className="space-y-3">
-                    <h3 className="text-lg font-black uppercase text-primary">1. Plantillas (moldes)</h3>
-                    <p className="text-sm text-slate-600 dark:text-muted-foreground leading-relaxed">
-                      Las plantillas son moldes globales. No pertenecen a un alumno hasta que las{' '}
-                      <span className="font-bold">asignas</span>. Si editas una plantilla y guardas,{' '}
-                      <span className="font-bold text-amber-600 dark:text-amber-500">
-                        los alumnos sincronizados se actualizan con ese molde
-                      </span>
-                      .
-                    </p>
-                  </div>
-                  <div className="space-y-3">
-                    <h3 className="text-lg font-black uppercase text-emerald-500">2. Alumnos (planes activos)</h3>
-                    <p className="text-sm text-slate-600 dark:text-muted-foreground leading-relaxed">
-                      Al asignar una plantilla, el plan queda{' '}
-                      <span className="text-xs bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-400 px-1 py-0.5 rounded">
-                        SYNCED
-                      </span>
-                      .
-                    </p>
-                  </div>
-                  <div className="space-y-3">
-                    <h3 className="text-lg font-black uppercase text-rose-500">3. Edición individual (custom)</h3>
-                    <p className="text-sm text-slate-600 dark:text-muted-foreground leading-relaxed">
-                      Si ajustas el plan solo para un alumno, pasa a{' '}
-                      <span className="font-bold">personalizado (CUSTOM)</span> y deja de seguir el molde.
-                    </p>
-                    <div className="p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-xl text-xs text-amber-800 dark:text-amber-400 font-medium">
-                      Si luego editas el molde global, el plan custom de ese alumno no cambia.
-                    </div>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
           </div>
           <p className="text-muted-foreground font-bold text-sm uppercase tracking-widest flex items-center gap-2">
             <span
@@ -163,7 +109,7 @@ export function NutritionHub({
           >
             <TabsTrigger
               value="templates"
-              className="flex-1 h-12 rounded-xl data-[state=active]:bg-background data-[state=active]:text-[var(--theme-primary)] data-[state=active]:shadow-lg transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
+              className="flex-1 h-12 rounded-xl data-active:bg-background data-active:text-[var(--theme-primary)] data-active:shadow-lg data-active:font-black data-active:ring-1 data-active:ring-[var(--theme-primary)]/30 transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
             >
               <LayoutTemplate className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Plantillas</span>
@@ -171,21 +117,21 @@ export function NutritionHub({
             </TabsTrigger>
             <TabsTrigger
               value="clients"
-              className="flex-1 h-12 rounded-xl data-[state=active]:bg-background data-[state=active]:text-[var(--theme-primary)] data-[state=active]:shadow-lg transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
+              className="flex-1 h-12 rounded-xl data-active:bg-background data-active:text-[var(--theme-primary)] data-active:shadow-lg data-active:font-black data-active:ring-1 data-active:ring-[var(--theme-primary)]/30 transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
             >
               <Users className="w-3.5 h-3.5" />
               Alumnos
             </TabsTrigger>
             <TabsTrigger
               value="foods"
-              className="flex-1 h-12 rounded-xl data-[state=active]:bg-background data-[state=active]:text-[var(--theme-primary)] data-[state=active]:shadow-lg transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
+              className="flex-1 h-12 rounded-xl data-active:bg-background data-active:text-[var(--theme-primary)] data-active:shadow-lg data-active:font-black data-active:ring-1 data-active:ring-[var(--theme-primary)]/30 transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
             >
               <Apple className="w-3.5 h-3.5" />
               Alimentos
             </TabsTrigger>
             <TabsTrigger
               value="recipes"
-              className="flex-1 h-12 rounded-xl data-[state=active]:bg-background data-[state=active]:text-[var(--theme-primary)] data-[state=active]:shadow-lg transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
+              className="flex-1 h-12 rounded-xl data-active:bg-background data-active:text-[var(--theme-primary)] data-active:shadow-lg data-active:font-black data-active:ring-1 data-active:ring-[var(--theme-primary)]/30 transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
             >
               <ChefHat className="w-3.5 h-3.5" />
               Recetas

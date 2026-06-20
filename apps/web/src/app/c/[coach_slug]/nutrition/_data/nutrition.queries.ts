@@ -27,6 +27,9 @@ export const getActiveNutritionPlan = cache(async (userId: string) => {
     .eq('is_active', true)
     .order('order_index', { referencedTable: 'nutrition_meals' })
     .maybeSingle()
+  // Un plan activo sin comidas es un draft auto-creado (el coach pulsó "Asignar" pero aún no lo
+  // armó): se trata como "sin plan" para el alumno → no muestra un plan vacío.
+  if (data && (data.nutrition_meals?.length ?? 0) === 0) return null
   return data
 })
 
