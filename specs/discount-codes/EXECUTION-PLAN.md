@@ -9,8 +9,8 @@ EVA adds a coupon/discount-codes engine: the CEO mints codes in `/admin/codigos`
 
 **Resolved decisions (CEO, 2026-06-20 — do not re-litigate):**
 
-- `discount_type` = `percent | fixed_clp` ONLY. NO `free_period`. "Free months" = 100%-off for N cycles via the percent engine. MP native `free_trial` deferred to v2.
-- `applies_to_scope` = FULL (tiers + `module_keys`) in the **schema**, but **phased implementation**: F2a = base-plan discount only; F2b = per-module discount. Both share one schema.
+- `discount_type` = `percent | fixed_clp` ONLY. NO `free_period`. **"Free months" go via existing `admin_grant`** (manual CEO courtesy), NOT a redeemable code — the paid path refuses `netClp <= 0` (CEO decision 2026-06-20). MP native `free_trial` deferred to v2.
+- `applies_to_scope` = FULL in the **schema**. v1 ships **`target='base'` + `target='total'`** (F2a). **`target='total'` is the PRIMARY mode** (CEO decision 2026-06-20): a standing % off the coach's WHOLE recurring bill (base + whatever modules are live), persisting across module add/remove for the coupon's duration — automatic, because `getCompositeAmountClp` re-resolves the live composite × discount on every renewal. **Per-module-SPECIFIC targeting (`target='module'`, F2b) is DEFERRED post-v1** — not needed; `total` covers all current deals.
 - `fixed_clp_target` = per-coupon configurable (`base | module | total`), default `base`, clamped `>= 0` inside `getCompositeAmountClp`.
 - Revert = **future-only, honor mid-term**: revoking stops FUTURE re-application but NEVER raises an honored price mid-term (SERNAC art.30/35). A gated fraud-clawback path (typed reason + audit) is DEFERRED/optional.
 - Mint = CEO/`ADMIN_EMAILS` only (reuse `assertAdmin` + `admin_audit_logs`). No org/team owner minting in v1.
@@ -128,7 +128,7 @@ tx-rollback `42501` proof + `get_advisors` 0 critical + `module-grants.sql` gree
 
 ### F2a — Pricing engine + base-plan discount (money path)
 
-**Scope:** base-plan discount only. Per-module target exists in schema but computes to **base-target behavior** so F2b lands with no re-migration.
+**Scope:** `target='base'` AND `target='total'` (base + ALL live add-ons). **`target='total'` is the primary mode** — a standing % off the coach's whole bill that persists across module add/remove (re-resolved each renewal). `target='module'` (specific add-on) computes as base-behavior here and is REJECTED at redeem until F2b ships (deferred). No re-migration when F2b lands.
 
 #### Tasks (ordered)
 1. Add pure `computeDiscountedClp(input)` to `packages/tiers/index.ts`: `percent | fixed_clp`, target `base | module | total`, clamp `>= 0`, `Math.round` per-item (mirror `getTierPriceClp`/`getAddonCycleAmountClp` rounding so base+addons sum stays exact). Returns `{ netClp, discountClp, baseBeforeDiscountClp }`. Pure, no DB. **Co-located** with tiers (shared with mobile).
@@ -146,6 +146,7 @@ tx-rollback `42501` proof + `get_advisors` 0 critical + `module-grants.sql` gree
    - `cron/mp-reconcile/route.ts:203` — **add `active_coupon_redemption_id` to the coach SELECT (~line 112)** (critic: column omitted → spec unresolvable) + resolve + pass spec into `expectedClp`.
    - `subscription-status/route.ts:74` — **resolve via `resolve_active_discount` RPC** (critic blocker: user-scoped client can't join catalog) so on-load price = charged price.
    - `addons/route.ts` `applyFirstChargeToAddons` PUT (~180) — the PUT-that-sets-MP-amount must use the SAME spec as reconcile expected.
+   - `addons/route.ts` one-shot proration at add-on ALTA (`getAddonProrationClp`) + `confirm-addon` materialized price — apply the active discount HERE too (`target='total'`: a newly-added module is discounted from day one, including its prorated first charge). The add-on purchase preview/disclosure shows the discounted module price.
 6. **`updateCheckoutAmount` idempotency** (critic: verified — it passes NO `X-Idempotency-Key`): extend `mercadopago.ts` `updateCheckoutAmount` with an `idempotencyKey?` arg/overload; coupon-driven PUTs pass `key = hash(coachId|redemptionId|expectedClp)`.
 7. **100%-off / MP-floor guard** (critic blocker): in `create-preference` + `confirm-upgrade`, detect `netClp === 0` and **refuse the paid path** (block 100%-for-N-cycles from reaching MP; route via `admin_grant` or special-case skip). Unit-test `netClp > 0` before any MP preapproval call. (DB CHECK already blocks 100%-forever; this guards 100%-for-N-cycles.)
 8. **Concurrency: redeem vs upgrade** (critic): redeem rejects `409` if `isUpgradeInFlight`; `confirm-upgrade`/webhook re-resolve active coupon when recomputing `newComposite` so the upgrade PUT preserves the discount.
@@ -182,7 +183,7 @@ tx-rollback `42501` proof + `get_advisors` 0 critical + `module-grants.sql` gree
 
 ### F2b — Per-module discount (target = module)
 
-**Scope:** activate `target='module'` real behavior. Schema/UI already shipped in F1/F3.
+**Scope:** per-MODULE-SPECIFIC targeting (`target='module'` — discount ONE specific add-on, e.g. "50% off only the nutrition module"). **DEFERRED post-v1 (CEO decision 2026-06-20):** the common "X% off the coach's whole bill incl. modules" case is `target='total'` (handled in F2a), so module-specific targeting is not needed for current deals. Schema (`fixed_clp_target='module'`) stays reserved; `target='module'` codes are rejected at redeem until F2b ships.
 
 #### Tasks
 1. In `computeDiscountedClp` + `getCompositeAmountClp`, apply `fixed_clp`/`percent` to the targeted module's add-on cycle amount only (use `getAddonCycleAmountClp` per module), clamp `>= 0` to that component.
@@ -291,11 +292,11 @@ Webhook + reconcile + cron integration tests; redelivery double-decrement test; 
 ### F5 — Admin mint UI + Coach redeem/disclosure UI + QA gate
 
 #### Tasks — CEO admin (`/admin/(panel)/codigos`)
-1. `packages/schemas/coupon.ts`: `CreateCouponAdminSchema` + `RevokeRedemptionSchema` (`percent | fixed_clp`, `fixed_clp_target`, scope tiers+module_keys, duration cycles). Export from `packages/schemas/index.ts`. Use `z.guid()` (not `z.uuid()`) for any id that can reference seed rows (memory).
+1. `packages/schemas/coupon.ts`: `CreateCouponAdminSchema` + `RevokeRedemptionSchema` (`percent | fixed_clp`, `fixed_clp_target`, scope tiers+module_keys, duration cycles). Export from `packages/schemas/index.ts`. Use `z.guid()` (not `z.uuid()`) for any id that can reference seed rows (memory). **Code format = BOTH (CEO decision 2026-06-20):** schema has optional `code_display` (vanity, e.g. `PARTNER50`, validated normalized-unique); when omitted, server autogenerates a high-entropy random code (8-10 chars, unambiguous alphabet). Add `generateCouponCode()` (mirror `generateUniqueInviteCode` retry-on-collision) in `coupons.normalize.ts`.
 2. `codigos/_actions/coupon-form.ts` — **NO `'use server'`** (pure builder, mirror `module-form.ts`): `buildCouponInsert` + `readScope`. + `coupon-form.test.ts`. (Critic memory gotcha: pure builder, no type re-export-without-`from`.)
 3. `codigos/_data/codigos.queries.ts`: `getCouponsForAdmin()` + `getCouponRedemptions(couponId)` via `createServiceRoleClient`, specific cols, `Promise.all` counts (mirror `teams.queries.ts`).
 4. `codigos/_actions/codigos.actions.ts` (`'use server'`, async-only): `mintCouponAction` (`assertAdmin`, Zod, insert coupons+coupon_codes, `logAdminAction 'coupon.mint'`, `revalidatePath`), `revokeRedemptionAction` (future-only: set `revoke_effective_at`, mark redemption; **NEVER raise price, never touch a price field**). Mint guard rejects `(percent=100 AND forever)` pointing to admin_grant.
-5. `codigos/page.tsx` RSC + `_components/{CodigosTable,CouponMintSheet,RedemptionsDrawer}.tsx`. For `discount_type`/`fixed_clp_target`/`duration` use native `<select>`/radio (TeamCreateSheet pattern), NOT raw Base UI Select (memory: renders value not label). If Tabs used, style active on `[data-active]` not `[data-state=active]` (memory). Reuse `CredentialRow`/`AdminEmptyState`.
+5. `codigos/page.tsx` RSC + `_components/{CodigosTable,CouponMintSheet,RedemptionsDrawer}.tsx`. **CouponMintSheet code field = vanity text input + "Autogenerar" toggle** (empty/toggle → server random; typed → vanity, live uniqueness check). For `discount_type`/`fixed_clp_target`/`duration` use native `<select>`/radio (TeamCreateSheet pattern), NOT raw Base UI Select (memory: renders value not label). If Tabs used, style active on `[data-active]` not `[data-state=active]` (memory). Reuse `CredentialRow`/`AdminEmptyState`.
 6. `AdminSidebar.tsx`: add `{href:'/admin/codigos', label:'Códigos', icon: Ticket}` to `NAV_PLATAFORMA` + `NAV_MOBILE`.
 
 #### Tasks — Coach redeem + SERNAC disclosure (`/coach/subscription`)
@@ -306,7 +307,7 @@ Webhook + reconcile + cron integration tests; redelivery double-decrement test; 
 11. Extend `subscription-status/route.ts` response with `billing.baseBeforeDiscountClp/discountClp/couponCode` + `activeCoupon{code,durationLabel,revertsToClp}` (via `resolve_active_discount` RPC). **Ship in the SAME change as the UI** (critic: else input shows over an applied coupon). Default-hide input until billing payload loaded.
 12. Gate `CouponRedeemCard` behind `hasActivePaidPlan && SELF_SERVICE_ADDONS_ENABLED` (critic: hide for free/managed; show "muy pronto" notice when flag OFF). Non-stackable: if `activeCoupon` present hide input, show chip+Quitar.
 13. **Stale preview invalidation** (critic): on `selectedTier`/`selectedCycle` change, invalidate cached preview, re-run preview before opening modal; re-price server-side at confirm, reject stale (`AMOUNT_OUTDATED`).
-14. Optional code-at-register: **defer to post-payment redeem** (critic — new coach has no coach row/redemption at first preapproval; auto-applying at signup also skips the consent modal). Document register `codigo` field as v1.1 (passes through to a post-payment redeem prompt with the disclosure on `/coach/subscription`).
+14. **Code-at-register — IN v1 (CEO decision 2026-06-20).** `register.actions.ts` accepts an optional `codigo`. Ordering that resolves the critic's concern (new coach has no row/redemption at first preapproval; auto-apply must NOT skip consent): (a) create the coach row first; (b) validate the code server-side (eligibility, global cap, `first_time_only` — natural fit for new-coach promos); (c) render `CouponDisclosureModal` with SERVER-computed prices BEFORE the first checkout (consent at register, same copy + `coupon_terms_text` evidence as `/coach/subscription`); (d) on confirm, atomically write the redemption + set `active_coupon_redemption_id`, then the first `create-preference` resolves the discount (already threaded in F2a) so the FIRST charge is discounted. Reuse the same `redeem-coupon` service path + disclosure component; never trust a client price. Add `data-testid` `register-coupon-input`. (Powers the "20% a X coaches nuevos" acquisition deal.)
 15. `data-testid` hooks: `coupon-input`, `coupon-discount-line`, `coupon-disclosure-modal`, `coupon-confirm`.
 
 #### Tasks — QA gate
