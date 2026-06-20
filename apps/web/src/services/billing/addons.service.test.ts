@@ -123,6 +123,32 @@ describe('getCompositeAmountClp', () => {
             getTierPriceClp('elite', 'quarterly')
         )
     })
+
+    // F2a overload: con 4º arg `discount` devuelve estructurado; sin él, number legacy.
+    it('overload con discount=null → estructurado, descuento 0, total = composite legacy', () => {
+        const legacy = getCompositeAmountClp('pro', 'monthly', [{ moduleKey: 'cardio', priceClpMensual: 9990 }])
+        const r = getCompositeAmountClp('pro', 'monthly', [{ moduleKey: 'cardio', priceClpMensual: 9990 }], null)
+        expect(r.discountClp).toBe(0)
+        expect(r.totalClp).toBe(legacy)
+        expect(r.baseBeforeDiscountClp).toBe(legacy)
+    })
+
+    it('overload con cupón 20% total → aplica sobre base + add-ons (compone)', () => {
+        const composite = getCompositeAmountClp('pro', 'monthly', [{ moduleKey: 'cardio', priceClpMensual: 9990 }])
+        const r = getCompositeAmountClp('pro', 'monthly', [{ moduleKey: 'cardio', priceClpMensual: 9990 }], {
+            type: 'percent',
+            value: 20,
+            target: 'total',
+        })
+        expect(r.baseBeforeDiscountClp).toBe(composite)
+        expect(r.discountClp).toBe(Math.round(composite * 0.2))
+        expect(r.totalClp).toBe(composite - Math.round(composite * 0.2))
+    })
+
+    it('overload sin 4º arg sigue devolviendo number (back-compat de callers)', () => {
+        const r = getCompositeAmountClp('pro', 'monthly', [])
+        expect(typeof r).toBe('number')
+    })
 })
 
 // ── Prorrateo one-shot (regla 2 trim/anual) ──────────────────────────────────────
