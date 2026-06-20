@@ -431,6 +431,8 @@ Webhook + reconcile + cron integration tests; redelivery double-decrement test; 
 | O5 | F3 | **`per_account_limit` key** — `coach_id` (subscription) vs auth-account identity across multiple subscriptions over time. | `coach_id` for v1. |
 | O6 | F5 | **Code-at-register** — defer to post-payment redeem (with disclosure) vs atomic redemption inside the register tx. | Defer to v1.1 post-payment redeem. |
 | O7 | F1 | **Confirm migration timestamp slot** `20260620120000` is free + after `20260619140000` and not inside any reserved gate-window. | Use `20260620120000`. |
+| O8 | F2a / Finance | **Coupon × cycle-discount stacking + margin floor.** The coupon engine is non-stackable *with other coupons*, but the quarterly(−10%)/annual(−20%) cycle discount is a SEPARATE factor: a 20% code on an annual plan compounds to **36% off** (0.8×0.8); 50%+annual = **60%**. Does the code apply to the cycle-discounted price (compound) or to list? Add a **max-effective-discount / margin floor**. | Compound on the already-cycle-discounted composite + a configurable margin floor; **confirm with CEO**. |
+| O9 | F4 / Legal | **IVA / boleta of a discounted recurring charge** when the SpA invoices — what the boleta shows (net? IVA on net?). `billing_snapshots` (base/discount/total) maps to it. Tie to O3 legal sign-off. | Define with Legal before flipping the money gate. |
 
 ---
 
@@ -452,3 +454,33 @@ Webhook + reconcile + cron integration tests; redelivery double-decrement test; 
 - **Per-redemption:** `revokeRedemptionAction` (future-only) — stops future re-application at `current_period_end`, never raises the honored price.
 - **Schema:** migration is additive/forward-only; nullable cols + trigger COALESCE mean a code rollback leaves the DB inert (no active redemptions → no discount applied). Do NOT drop columns (forward-only).
 - **Refund/chargeback:** webhook auto-reverts the active redemption + nulls the pointer so a reactivated coach starts clean.
+
+---
+
+## 7. Business audit — startup roles (2026-06-20)
+
+> 5 lenses (PM/Growth, Finance, Sales/CSM, Data, Support). Engineering/security/legal covered in §1-§6. Verdict: feature is commercially sound; these are BUSINESS additions, not blockers — **except O8 (stacking/floor), which needs a CEO decision.**
+
+**PM / Growth**
+- Codes are **CEO-minted only** (not public/self-serve) → low risk of training discount-seeking or anchoring price low. Keep it that way.
+- Default duration = **time-boxed (N cycles)**; reserve `forever` for strategic partners (mint UI defaults to finite + confirms on `forever`).
+- **Mint guardrails:** soft cap on discount % (confirm above ~50%), default `expires_at`, default `max_redemptions`.
+- Referral / winback / reactivation = future use-cases the generic-code + `restricted_to_coach_id` schema already supports.
+
+**Finance / unit-economics**
+- 🔴 **O8 stacking + margin floor** (see Open Items): a code compounds on the cycle discount today (20%+annual = 36%). Decide compound-vs-list + a max-effective-discount floor so net never drops below cost.
+- **Discount-cost reporting:** beyond MRR-net, report margin given away (Σ `discount_clp`) + effective ARPU per cohort.
+- 🔴 **O9 IVA/boleta** of discounted charges when the SpA invoices.
+
+**Sales / CSM**
+- **Leak control:** for partner / high-value codes use **`restricted_to_coach_id`** (schema already has it) and/or low `max_redemptions` — bind a "50% partner" code to one coach so a leak is useless. Make this the **default for high-value mints**.
+- Winback: hand a time-boxed code at churn (use-case, no new build).
+
+**Data / Analytics**
+- 🟡 The `coupon_redemptions` ledger HAS the data, but the plan only reports MRR-net. Add **`/admin/codigos` metrics**: redemptions per code, register-conversion, discounted-vs-non cohort retention, total discount cost. Mostly queries — measurable from day 1 without re-migration (confirm `redeemed_at`/`source_ip`/`discount` captured — they are).
+
+**Support / Ops**
+- 🟡 **Per-coach discount visibility:** #1 ticket = "why did my price go up?" — CS needs to SEE a coach's active discount + history on **`/admin/coaches/[id]`** (not only per-code). Add it. Pre-increase email + disclosure already cut the volume.
+- Leaked-code (`active=false`) + dispute/chargeback (webhook reverts) responses already covered.
+
+**Must-add to plan/spec:** mint guardrails (PM) · O8 stacking+floor decision · O9 IVA-boleta · `restricted_to_coach_id` default for high-value (Sales) · coupon analytics on `/admin/codigos` (Data) · per-coach discount view for CS (Support).
