@@ -46,8 +46,9 @@ type DB = SupabaseClient<Database>
 // Mantenerlo estrecho desacopla F2 de la extensión del provider de F3 (interface segregation):
 // el endpoint/webhook inyecta un objeto que cumpla esta forma.
 export interface AddonPaymentsPort {
-    /** PUT /preapproval/{id}: sube/baja el monto del próximo cobro (sin re-autorizar al pagador). */
-    updateCheckoutAmount(checkoutId: string, amountClp: number): Promise<void>
+    /** PUT /preapproval/{id}: sube/baja el monto del próximo cobro (sin re-autorizar al pagador).
+     * `idempotencyKey` opcional → dedup de PUTs cupón-driven (F2a.2b); omitido = comportamiento intacto. */
+    updateCheckoutAmount(checkoutId: string, amountClp: number, idempotencyKey?: string): Promise<void>
     /** Crea un pago one-shot (Checkout Pro clásico) y devuelve la URL de checkout. */
     createOneShotPayment(input: {
         coachId: string

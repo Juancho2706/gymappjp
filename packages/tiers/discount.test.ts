@@ -101,3 +101,35 @@ describe('computeDiscountedClp — compone con descuento de ciclo (O8)', () => {
         expect(r.baseBeforeDiscountClp).toBe(annualBase)
     })
 })
+
+describe('computeDiscountedClp — margin floor configurable (O8)', () => {
+    it('50% + anual clampea al floor cuando el floor supera el neto descontado', () => {
+        // pro anual = 287904; 50% → neto natural 143952. Floor 150000 > 143952 → clampea al floor.
+        const annualBase = getTierPriceClp('pro', 'annual')
+        const naturalNet = annualBase - Math.round(annualBase * 0.5)
+        const floorClp = naturalNet + 6048 // 150000 para pro anual; > neto natural
+        const spec: DiscountSpec = { type: 'percent', value: 50, target: 'total' }
+        const r = computeDiscountedClp({ baseClp: annualBase, addons: [], spec, floorClp })
+        expect(r.netClp).toBe(floorClp) // neto clampeado al piso de margen
+        expect(r.discountClp).toBe(annualBase - floorClp) // descuento recalculado desde el neto
+    })
+    it('descuento profundo (90%) clampea al floor en vez de caer casi a 0', () => {
+        const spec: DiscountSpec = { type: 'percent', value: 90, target: 'total' }
+        const r = computeDiscountedClp({ baseClp: 30000, addons: [], spec, floorClp: 25000 })
+        // natural = 30000 - 27000 = 3000; floor 25000 lo levanta
+        expect(r.netClp).toBe(25000)
+        expect(r.discountClp).toBe(5000)
+    })
+    it('floor por debajo del neto natural = no-op (comportamiento historico)', () => {
+        const spec: DiscountSpec = { type: 'percent', value: 20, target: 'total' }
+        const sinFloor = computeDiscountedClp({ baseClp: 10000, addons: [], spec })
+        const conFloorBajo = computeDiscountedClp({ baseClp: 10000, addons: [], spec, floorClp: 1000 })
+        expect(conFloorBajo.netClp).toBe(sinFloor.netClp) // 8000, el floor 1000 no muerde
+    })
+    it('floor mayor que el composite no sube el precio (clamp a composite)', () => {
+        const spec: DiscountSpec = { type: 'percent', value: 50, target: 'total' }
+        const r = computeDiscountedClp({ baseClp: 10000, addons: [], spec, floorClp: 999999 })
+        expect(r.netClp).toBe(10000) // nunca cobra mas que el composite
+        expect(r.discountClp).toBe(0)
+    })
+})

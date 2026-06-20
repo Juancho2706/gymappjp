@@ -167,9 +167,11 @@ export interface PaymentsProvider {
     /**
      * Sube/baja el monto del próximo cobro de un preapproval SIN re-autorizar al pagador
      * (PUT /preapproval/{id}, plan 05 F3.1). El monto del próximo cobro pasa a `amountClp`.
+     * `idempotencyKey` opcional → header X-Idempotency-Key (PUTs cupón-driven dedup de doble
+     * aplicación de monto; F2a.2b). Los callers sin cupón lo omiten (comportamiento intacto).
      * validar en sandbox (item 1): ¿cuándo aplica?, ¿genera cargo inmediato?, ¿email al pagador?
      */
-    updateCheckoutAmount(checkoutId: string, amountClp: number): Promise<void>
+    updateCheckoutAmount(checkoutId: string, amountClp: number, idempotencyKey?: string): Promise<void>
     /**
      * Como `updateCheckoutAmount` pero ADEMÁS reescribe el `external_reference` del preapproval
      * (PUT /preapproval/{id} acepta `external_reference`). Lo usa el upgrade de tier
@@ -177,11 +179,13 @@ export interface PaymentsProvider {
      * compuesto Y dejar el reference apuntando al NUEVO tier|cycle, evitando que el siguiente
      * evento `preapproval` re-derive el tier viejo y revierta el upgrade (P0-1 stale-ref revert).
      * Construir `externalReference` con `buildCheckoutExternalReference`.
+     * `idempotencyKey` opcional → header X-Idempotency-Key (PUTs cupón-driven, F2a.2b).
      */
     updateCheckoutAmountAndRef(
         checkoutId: string,
         amountClp: number,
-        externalReference: string
+        externalReference: string,
+        idempotencyKey?: string
     ): Promise<void>
     /**
      * PUT /preapproval/{id} { card_token_id } — cambia la tarjeta del preapproval EXISTENTE sin
