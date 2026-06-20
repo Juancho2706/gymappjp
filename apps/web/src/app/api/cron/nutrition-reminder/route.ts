@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import webpush from 'web-push'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { getTodayInSantiago } from '@/lib/date-utils'
+import { getTodayInSantiago, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 
 function isAuthorized(req: Request) {
   const expected = process.env.CRON_SECRET
@@ -50,7 +50,7 @@ export async function GET(req: Request) {
         clients!inner (
           coach_id,
           coaches!inner ( slug ),
-          nutrition_plans!inner ( id, is_active )
+          nutrition_plans!inner ( id, is_active, nutrition_meals ( name, day_of_week ) )
         )
       `
       )
@@ -91,15 +91,38 @@ export async function GET(req: Request) {
       const clientData = sub.clients as unknown as {
         coach_id: string
         coaches: { slug: string }
-        nutrition_plans: { id: string; is_active: boolean }[]
+        nutrition_plans: {
+          id: string
+          is_active: boolean
+          nutrition_meals: { name: string | null; day_of_week: number | null }[]
+        }[]
       }
 
       const coachSlug = clientData?.coaches?.slug ?? ''
       const notificationUrl = `/c/${coachSlug}/nutrition`
 
+      // Recordatorio meal-aware (C3, versión liviana): lista las comidas del plan que aplican HOY
+      // (day_of_week null = diario; 1=Lun…7=Dom). Mismo cron diario, misma query (una relación
+      // anidada más) → cero IO/cron extra. Si no hay comidas hoy (p.ej. día sin plan), cae al
+      // mensaje genérico — nunca suprime el recordatorio.
+      const activePlan =
+        (clientData.nutrition_plans ?? []).find((p) => p.is_active) ?? clientData.nutrition_plans?.[0]
+      const mealsToday = [
+        ...new Set(
+          (activePlan?.nutrition_meals ?? [])
+            .filter((m) => nutritionMealAppliesOnIsoYmdInSantiago(m, today))
+            .map((m) => m.name?.trim())
+            .filter((n): n is string => !!n)
+        ),
+      ]
+      const body =
+        mealsToday.length > 0
+          ? `Hoy: ${mealsToday.slice(0, 4).join(' · ')}${mealsToday.length > 4 ? ` +${mealsToday.length - 4}` : ''}. Toca para registrar 🥗`
+          : 'Recuerda registrar tus comidas de hoy en EVA'
+
       const payload = JSON.stringify({
         title: '¿Ya registraste tus comidas? 🥗',
-        body: 'Recuerda registrar tus comidas de hoy en EVA',
+        body,
         url: notificationUrl,
       })
 
