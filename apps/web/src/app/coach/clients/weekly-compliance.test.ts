@@ -34,7 +34,11 @@ describe('getWeeklyCompliance', () => {
 
   it('computes nutrition compliance from daily_nutrition_logs meal marks', async () => {
     const supabase = {
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'coach-1' } } }) },
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'coach-1' } } }),
+        // getWeeklyCompliance migró a getClaims (lectura coach-scoped, sin /user).
+        getClaims: vi.fn().mockResolvedValue({ data: { claims: { sub: 'coach-1' } } }),
+      },
       from: vi.fn((table: string) => {
         if (table === 'clients') {
           // assertCoachClientReadAccess: .select('id').eq().eq().is().maybeSingle()

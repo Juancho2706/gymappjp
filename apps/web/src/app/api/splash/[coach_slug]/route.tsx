@@ -41,7 +41,9 @@ export async function GET(request: NextRequest, { params }: Params) {
 
     // Alumno de pool (team_id set, org_id NULL): marca del TEAM (name/logo_url/primary_color +
     // splash_bg_color para el fondo). teams no tiene SELECT anon → service-role.
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. Best-effort identity-only (.eq('id', user.id)); splash público y cacheado → no requiere revocación fresca.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (user) {
         const { data: client } = await supabase
             .from('clients')
