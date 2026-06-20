@@ -37,7 +37,9 @@ import { assertCoachClientReadAccess, getCoachClientScope } from '@/services/cli
 
 export const getClientProfileData = cache(async (clientId: string) => {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. Lectura coach-scoped (RLS + assertCoachClientReadAccess la gatean), no es boundary de mutación → no requiere revocación fresca.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
 
     if (!user) throw new Error("Unauthorized")
     const { orgId, viaTeam } = await assertCoachClientReadAccess(supabase, user.id, clientId)
@@ -700,7 +702,9 @@ export async function deletePayment(paymentId: string, clientId: string) {
 
 export async function getWeeklyCompliance(clientId: string) {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. Lectura coach-scoped (RLS la gatea), no requiere revocación fresca.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
 
     if (!user) throw new Error("Unauthorized")
 
@@ -710,7 +714,9 @@ export async function getWeeklyCompliance(clientId: string) {
 
 export async function getDynamicMetrics(clientId: string) {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. Lectura coach-scoped (RLS la gatea), no requiere revocación fresca.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
 
     if (!user) throw new Error("Unauthorized")
 
@@ -744,7 +750,9 @@ export async function getDynamicMetrics(clientId: string) {
 
 export async function getClientNutritionForDate(clientId: string, date: string) {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. Lectura coach-scoped (RLS la gatea), no requiere revocación fresca.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) throw new Error('Unauthorized')
 
     await assertCoachClientReadAccess(supabase, user.id, clientId)
@@ -780,7 +788,9 @@ export async function getClientNutritionForDate(clientId: string, date: string) 
 
 export async function getClientWorkoutForDate(clientId: string, date: string) {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. Lectura coach-scoped (RLS la gatea), no requiere revocación fresca.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) throw new Error('Unauthorized')
 
     await assertCoachClientReadAccess(supabase, user.id, clientId)
@@ -817,7 +827,9 @@ export async function updateClientGoalWeight(clientId: string, goalWeightKg: num
 /** Días (YYYY-MM-DD) con workout_logs para el cliente en los últimos 90 días. */
 export async function getClientWorkoutActivityDates(clientId: string): Promise<string[]> {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. Lectura coach-scoped (RLS la gatea), no requiere revocación fresca.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) return []
 
     try {
@@ -843,7 +855,9 @@ export async function getClientHabitsForDate(
   date: string
 ): Promise<{ water_ml: number | null; steps: number | null; sleep_hours: number | null; fasting_hours: number | null; supplements: string[] | null; notes: string | null } | null> {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  // getClaims(): verificación local del JWT (ES256), sin /user. Lectura coach-scoped (RLS la gatea), no requiere revocación fresca.
+  const { data: __cl } = await supabase.auth.getClaims()
+  const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
   if (!user) return null
 
   try {
@@ -865,7 +879,9 @@ export async function getClientHabitsForDate(
 /** Días (YYYY-MM-DD) con daily_nutrition_logs para el cliente en los últimos 90 días. */
 export async function getClientNutritionActivityDates(clientId: string): Promise<string[]> {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin /user. Lectura coach-scoped (RLS la gatea), no requiere revocación fresca.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) return []
 
     try {

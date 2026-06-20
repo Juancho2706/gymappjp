@@ -93,7 +93,9 @@ async function resolveManifestBrand(
   supabase: Awaited<ReturnType<typeof createClient>>,
   coach: ManifestBrand & { id: string }
 ): Promise<ManifestBrand> {
-  const { data: { user } } = await supabase.auth.getUser()
+  // getClaims(): verificación local del JWT (ES256), sin /user. Best-effort identity-only (.eq('id', user.id)); manifest público y cacheado (s-maxage 86400) → no requiere revocación fresca.
+  const { data: __cl } = await supabase.auth.getClaims()
+  const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
   if (!user) return coach
 
   const { data: client } = await supabase

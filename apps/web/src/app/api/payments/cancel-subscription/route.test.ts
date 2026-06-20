@@ -58,6 +58,10 @@ function makeAdmin() {
                 return terminal({ data: null, error: null })
             }),
             insert: vi.fn(async () => ({ error: null })),
+            // clearUpgradeInFlight (P0-4) hace subscription_events.delete().eq() — sin este nodo el
+            // builder no expone .delete y la ruta loguea un console.error best-effort cada corrida
+            // (ruido cosmético, el test igual da 200). El terminal resuelve a {data:[],error:null}.
+            delete: vi.fn(() => terminal({ data: [], error: null })),
         })),
     }
 }
