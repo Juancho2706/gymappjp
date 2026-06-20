@@ -106,11 +106,15 @@ export type Database = {
       billing_snapshots: {
         Row: {
           addons: Json
+          base_before_discount_clp: number | null
           base_clp: number
           billing_cycle: string | null
           charged_at: string
           coach_id: string
+          coupon_code: string | null
+          coupon_redemption_id: string | null
           created_at: string
+          discount_clp: number | null
           id: string
           kind: string
           provider_payment_id: string
@@ -119,11 +123,15 @@ export type Database = {
         }
         Insert: {
           addons?: Json
+          base_before_discount_clp?: number | null
           base_clp: number
           billing_cycle?: string | null
           charged_at: string
           coach_id: string
+          coupon_code?: string | null
+          coupon_redemption_id?: string | null
           created_at?: string
+          discount_clp?: number | null
           id?: string
           kind: string
           provider_payment_id: string
@@ -132,11 +140,15 @@ export type Database = {
         }
         Update: {
           addons?: Json
+          base_before_discount_clp?: number | null
           base_clp?: number
           billing_cycle?: string | null
           charged_at?: string
           coach_id?: string
+          coupon_code?: string | null
+          coupon_redemption_id?: string | null
           created_at?: string
+          discount_clp?: number | null
           id?: string
           kind?: string
           provider_payment_id?: string
@@ -149,6 +161,13 @@ export type Database = {
             columns: ["coach_id"]
             isOneToOne: false
             referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "billing_snapshots_coupon_redemption_id_fkey"
+            columns: ["coupon_redemption_id"]
+            isOneToOne: false
+            referencedRelation: "coupon_redemptions"
             referencedColumns: ["id"]
           },
         ]
@@ -1021,6 +1040,7 @@ export type Database = {
       }
       coaches: {
         Row: {
+          active_coupon_redemption_id: string | null
           active_org_id: string | null
           admin_notes: string | null
           billing_cycle: string
@@ -1068,6 +1088,7 @@ export type Database = {
           welcome_modal_version: number
         }
         Insert: {
+          active_coupon_redemption_id?: string | null
           active_org_id?: string | null
           admin_notes?: string | null
           billing_cycle?: string
@@ -1115,6 +1136,7 @@ export type Database = {
           welcome_modal_version?: number
         }
         Update: {
+          active_coupon_redemption_id?: string | null
           active_org_id?: string | null
           admin_notes?: string | null
           billing_cycle?: string
@@ -1163,6 +1185,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "coaches_active_coupon_redemption_id_fkey"
+            columns: ["active_coupon_redemption_id"]
+            isOneToOne: false
+            referencedRelation: "coupon_redemptions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "coaches_active_org_id_fkey"
             columns: ["active_org_id"]
             isOneToOne: false
@@ -1170,6 +1199,241 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      coupon_codes: {
+        Row: {
+          active: boolean
+          code_display: string | null
+          code_normalized: string
+          coupon_id: string
+          created_at: string
+          expires_at: string | null
+          first_time_only: boolean
+          id: string
+          max_redemptions: number | null
+          min_amount_clp: number | null
+          per_account_limit: number
+          redeemed_count: number
+          restricted_to_coach_id: string | null
+        }
+        Insert: {
+          active?: boolean
+          code_display?: string | null
+          code_normalized: string
+          coupon_id: string
+          created_at?: string
+          expires_at?: string | null
+          first_time_only?: boolean
+          id?: string
+          max_redemptions?: number | null
+          min_amount_clp?: number | null
+          per_account_limit?: number
+          redeemed_count?: number
+          restricted_to_coach_id?: string | null
+        }
+        Update: {
+          active?: boolean
+          code_display?: string | null
+          code_normalized?: string
+          coupon_id?: string
+          created_at?: string
+          expires_at?: string | null
+          first_time_only?: boolean
+          id?: string
+          max_redemptions?: number | null
+          min_amount_clp?: number | null
+          per_account_limit?: number
+          redeemed_count?: number
+          restricted_to_coach_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_codes_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_codes_restricted_to_coach_id_fkey"
+            columns: ["restricted_to_coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coupon_cycle_decrements: {
+        Row: {
+          created_at: string
+          id: string
+          provider_payment_id: string
+          redemption_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          provider_payment_id: string
+          redemption_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          provider_payment_id?: string
+          redemption_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_cycle_decrements_redemption_id_fkey"
+            columns: ["redemption_id"]
+            isOneToOne: false
+            referencedRelation: "coupon_redemptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coupon_redemptions: {
+        Row: {
+          applied_cycles_remaining: number | null
+          billing_snapshot_id: string | null
+          coach_id: string
+          coupon_code_id: string
+          coupon_id: string
+          coupon_terms_text: string | null
+          coupon_terms_version: string | null
+          created_at: string
+          discount_value_snapshot: Json
+          first_time_only: boolean
+          id: string
+          normalized_email: string | null
+          redeemed_at: string
+          revoke_effective_at: string | null
+          source_ip: unknown
+          status: string
+        }
+        Insert: {
+          applied_cycles_remaining?: number | null
+          billing_snapshot_id?: string | null
+          coach_id: string
+          coupon_code_id: string
+          coupon_id: string
+          coupon_terms_text?: string | null
+          coupon_terms_version?: string | null
+          created_at?: string
+          discount_value_snapshot: Json
+          first_time_only?: boolean
+          id?: string
+          normalized_email?: string | null
+          redeemed_at?: string
+          revoke_effective_at?: string | null
+          source_ip?: unknown
+          status?: string
+        }
+        Update: {
+          applied_cycles_remaining?: number | null
+          billing_snapshot_id?: string | null
+          coach_id?: string
+          coupon_code_id?: string
+          coupon_id?: string
+          coupon_terms_text?: string | null
+          coupon_terms_version?: string | null
+          created_at?: string
+          discount_value_snapshot?: Json
+          first_time_only?: boolean
+          id?: string
+          normalized_email?: string | null
+          redeemed_at?: string
+          revoke_effective_at?: string | null
+          source_ip?: unknown
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_redemptions_billing_snapshot_id_fkey"
+            columns: ["billing_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "billing_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemptions_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemptions_coupon_code_id_fkey"
+            columns: ["coupon_code_id"]
+            isOneToOne: false
+            referencedRelation: "coupon_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemptions_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coupons: {
+        Row: {
+          amount_off_clp: number | null
+          applies_to_scope: Json
+          code_kind: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          discount_type: string
+          duration: string
+          duration_in_cycles: number | null
+          fixed_clp_target: string
+          id: string
+          max_redemptions: number | null
+          percent_value: number | null
+          redeem_by: string | null
+          stackable: boolean
+          updated_at: string
+        }
+        Insert: {
+          amount_off_clp?: number | null
+          applies_to_scope?: Json
+          code_kind?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          discount_type: string
+          duration: string
+          duration_in_cycles?: number | null
+          fixed_clp_target?: string
+          id?: string
+          max_redemptions?: number | null
+          percent_value?: number | null
+          redeem_by?: string | null
+          stackable?: boolean
+          updated_at?: string
+        }
+        Update: {
+          amount_off_clp?: number | null
+          applies_to_scope?: Json
+          code_kind?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          discount_type?: string
+          duration?: string
+          duration_in_cycles?: number | null
+          fixed_clp_target?: string
+          id?: string
+          max_redemptions?: number | null
+          percent_value?: number | null
+          redeem_by?: string | null
+          stackable?: boolean
+          updated_at?: string
+        }
+        Relationships: []
       }
       daily_habits: {
         Row: {
@@ -4535,7 +4799,7 @@ export type Database = {
     }
     Functions: {
       apply_nutrition_template_to_client: {
-        Args: { p_op: Json; p_coach?: string }
+        Args: { p_coach?: string; p_op: Json }
         Returns: Json
       }
       assign_org_client_to_coach: {
@@ -4874,6 +5138,7 @@ export type Database = {
       }
       is_team_manager: { Args: { p_team_id: string }; Returns: boolean }
       is_team_member: { Args: { p_team_id: string }; Returns: boolean }
+      resolve_active_discount: { Args: never; Returns: Json }
       search_foods: {
         Args: { search_term: string }
         Returns: {
