@@ -34,6 +34,8 @@ import {
   resolveNutritionDomainEnabled,
 } from '@/services/feature-prefs.service'
 import { NutritionDomainOff } from './_components/NutritionDomainOff'
+import { getNutritionWeeklyRecap } from './_data/recap.queries'
+import { WeeklyRecapCard } from './_components/WeeklyRecapCard'
 
 export const metadata: Metadata = { title: 'Plan Nutricional' }
 
@@ -81,6 +83,7 @@ export default async function ClientNutritionPage({ params }: Props) {
     nutritionProEnabled,
     domainEnabled,
     sectionFlags,
+    weeklyRecap,
   ] = await Promise.all([
     getNutritionLogForDate(user.id, plan.id, today),
     getNutritionAdherence30d(user.id, plan.id),
@@ -110,6 +113,8 @@ export default async function ClientNutritionPage({ params }: Props) {
       clientOrgId: clientScope.orgId,
     }),
     resolveFeaturePrefs(prefsInput),
+    // Recap semanal motivacional (K): on-demand desde el motor, tono adaptativo.
+    getNutritionWeeklyRecap(user.id),
   ])
 
   // Dominio apagado por el coach => ocultar TODA la nutricion (menu + contenido), nunca blanco.
@@ -149,6 +154,8 @@ export default async function ClientNutritionPage({ params }: Props) {
 
       <main className="max-w-lg mx-auto px-4 py-5 pb-28 space-y-5 relative z-0">
         <PushNotificationBanner />
+
+        {weeklyRecap && <WeeklyRecapCard recap={weeklyRecap} />}
 
         {plan.instructions && (
           <details className="bg-muted/30 border border-border rounded-2xl">
