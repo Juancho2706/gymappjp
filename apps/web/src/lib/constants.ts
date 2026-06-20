@@ -58,6 +58,11 @@ export type {
     SaleTier,
     TierConfig,
     TierCapabilities,
+    DiscountSpec,
+    DiscountResult,
+    DiscountType,
+    DiscountTarget,
+    CompositeLineAddon,
 } from '@eva/tiers'
 // SubscriptionStatus / PaymentProvider viven en domain (no son del catálogo de tiers).
 export type { PaymentProvider, SubscriptionStatus } from '@/domain/coach/types'
@@ -82,6 +87,8 @@ export {
     getRecommendedTier,
     getTierRank,
     comparePlanDirection,
+    computeDiscountedClp,
+    DISCOUNT_NET_FLOOR_CLP,
 } from '@eva/tiers'
 
 

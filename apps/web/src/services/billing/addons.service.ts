@@ -3,9 +3,11 @@ import type { Database } from '@/lib/database.types'
 import {
     ADDON_CONFIG,
     BILLING_CYCLE_CONFIG,
+    computeDiscountedClp,
     getTierCapabilities,
     getTierPriceClp,
     type BillingCycle,
+    type DiscountSpec,
     type SubscriptionTier,
 } from '@/lib/constants'
 import type { ModuleKey } from '@/services/entitlements.service'
@@ -153,17 +155,43 @@ export function isAddonBillable(row: Pick<CoachAddon, 'status' | 'firstChargedAt
  * la UI y los tests): precio del tier por ciclo + Σ del monto-por-ciclo de cada add-on
  * facturable. El llamador filtra con `isAddonBillable` antes de pasar `billableAddons`.
  */
+/** Composite con descuento de cupon aplicado (F2a): neto + desglose para evidencia/snapshot. */
+export type CompositeWithDiscount = {
+    totalClp: number                // neto cobrado (composite - descuento, con piso)
+    baseBeforeDiscountClp: number   // composite (base + add-ons) ANTES del cupon
+    discountClp: number             // descuento efectivo aplicado
+}
+
+// Overload: sin 4º arg → number legacy (callers existentes IDENTICOS). Con `discount` (spec o
+// null) → resultado estructurado. El descuento se re-resuelve server-side en el call site y se
+// pasa aca → un solo chokepoint; el webhook/cron recomputan con el MISMO spec (drift-safe).
 export function getCompositeAmountClp(
     tier: SubscriptionTier,
     cycle: BillingCycle,
     billableAddons: BillableAddon[]
-): number {
+): number
+export function getCompositeAmountClp(
+    tier: SubscriptionTier,
+    cycle: BillingCycle,
+    billableAddons: BillableAddon[],
+    discount: DiscountSpec | null
+): CompositeWithDiscount
+export function getCompositeAmountClp(
+    tier: SubscriptionTier,
+    cycle: BillingCycle,
+    billableAddons: BillableAddon[],
+    discount?: DiscountSpec | null
+): number | CompositeWithDiscount {
     const base = getTierPriceClp(tier, cycle)
-    const addons = billableAddons.reduce(
-        (sum, a) => sum + getAddonCycleAmountClp(a.priceClpMensual, cycle),
-        0
-    )
-    return base + addons
+    const addonLines = billableAddons.map((a) => ({
+        moduleKey: a.moduleKey,
+        cycleAmountClp: getAddonCycleAmountClp(a.priceClpMensual, cycle),
+    }))
+    const addonsTotal = addonLines.reduce((sum, a) => sum + a.cycleAmountClp, 0)
+    // Sin 4º arg → comportamiento legacy IDENTICO.
+    if (discount === undefined) return base + addonsTotal
+    const r = computeDiscountedClp({ baseClp: base, addons: addonLines, spec: discount })
+    return { totalClp: r.netClp, baseBeforeDiscountClp: r.baseBeforeDiscountClp, discountClp: r.discountClp }
 }
 
 /** Add-ons facturables como `BillableAddon[]` (para alimentar `getCompositeAmountClp`). */
