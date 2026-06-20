@@ -10,6 +10,7 @@ import { listUserWorkspaces, pickPreferredWorkspace } from '@/services/auth/work
 import { findWorkspacePreference } from '@/infrastructure/db/workspace.repository'
 import { canAccessWorkspacePath, defaultWorkspaceHome } from '@/services/auth/workspace-route-guard.service'
 import { BRAND_APP_ICON, BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
+import { isPrefetchRequest } from '@/lib/http/prefetch-request'
 import {
     clientIpFromRequest,
     jsonRateLimited,
@@ -24,20 +25,8 @@ import { ENTERPRISE_STAFF_ROLES } from '@/domain/org/permissions'
 type Coach = Tables<'coaches'>
 type Client = Tables<'clients'>
 
-/**
- * Phase 2: ¿es un PREFETCH de Next.js (RSC speculativo) y no una navegacion real?
- * Next setea `next-router-prefetch`; los browsers `purpose: prefetch` / `Sec-Purpose: ...prefetch`.
- * Capa secundaria al `missing` del matcher (en Next 16 estos headers a veces faltan): se usa para
- * saltar SOLO efectos colaterales (touch_coach_activity), nunca la logica de auth/redirect.
- */
-function isPrefetchRequest(request: NextRequest): boolean {
-    const h = request.headers
-    return (
-        h.get('next-router-prefetch') === '1' ||
-        h.get('purpose') === 'prefetch' ||
-        (h.get('sec-purpose')?.includes('prefetch') ?? false)
-    )
-}
+// Phase 2: isPrefetchRequest extraída a `@/lib/http/prefetch-request` (Phase 5 — función pura,
+// testeada con matriz de headers). Salta SOLO efectos colaterales (touch_coach_activity) en prefetch.
 
 /**
  * F2/B-9: answer "is this coach an active member of this org?" from the proxy. The alumno's
@@ -452,7 +441,7 @@ export async function proxy(request: NextRequest) {
         // Debounced in DB (no-op if <5min since last update), so await is safe.
         // Phase 2: en prefetch el request a PostgREST viaja igual aunque el SQL sea no-op — una
         // visita real lo toca de todos modos. Saltarlo no afecta auth/routing.
-        if (!isPrefetchRequest(request)) {
+        if (!isPrefetchRequest(request.headers)) {
             await supabase.rpc('touch_coach_activity', { p_coach_id: user.id })
         }
 
