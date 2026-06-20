@@ -312,3 +312,86 @@ export function comparePlanDirection(
     if (n < c) return 'downgrade'
     return 'same'
 }
+
+// ── Cupones: motor de precio puro (F2a, specs/discount-codes/EXECUTION-PLAN.md) ──
+//
+// El cupon se aplica SOBRE el composite ya con descuento de ciclo (COMPONE — decision CEO O8
+// 2026-06-20). target='total' = % sobre toda la cuenta (base + add-ons vivos); 'base' = solo el
+// plan; 'module' = solo los add-ons indicados. El neto nunca baja de DISCOUNT_NET_FLOOR_CLP
+// (piso de margen). La expiracion/decremento de ciclos vive en F4 (webhook); aca, si
+// remainingCycles <= 0 el descuento NO se aplica. PURO: corre igual en web y mobile.
+
+export type DiscountType = 'percent' | 'fixed_clp'
+export type DiscountTarget = 'base' | 'module' | 'total'
+
+export type DiscountSpec = {
+    type: DiscountType
+    value: number                       // percent: 1..100 ; fixed_clp: CLP entero >= 0
+    target: DiscountTarget
+    moduleKeys?: string[]               // requerido para target='module'
+    remainingCycles?: number | null     // null = forever/once vigente ; <= 0 = expirado (sin descuento)
+}
+
+export type CompositeLineAddon = { moduleKey: string; cycleAmountClp: number }
+
+export type DiscountResult = {
+    baseBeforeDiscountClp: number       // composite (base + add-ons) ANTES del cupon
+    discountClp: number                 // descuento efectivo aplicado (>= 0)
+    netClp: number                      // composite - discount, con piso >= DISCOUNT_NET_FLOOR_CLP
+}
+
+/**
+ * Piso del neto cobrado (CLP). El neto nunca baja de aca tras aplicar un cupon. Default 0
+ * (solo no-negativo); el path pago ADEMAS rechaza netClp === 0 (decision O1: 100%-off-N-ciclos
+ * no va por el path pago — va por admin_grant). Subir si se define un costo/margen minimo.
+ */
+export const DISCOUNT_NET_FLOOR_CLP = 0
+
+/**
+ * Aplica un cupon a un composite (base + add-ons) ya con descuento de ciclo. PURO, sin DB.
+ * Compone sobre el composite (O8). Redondeo Math.round (espejo de applyDiscount). Clamp al piso.
+ * Devuelve siempre el composite como baseBeforeDiscountClp (evidencia SERNAC).
+ */
+export function computeDiscountedClp(input: {
+    baseClp: number
+    addons?: CompositeLineAddon[]
+    spec: DiscountSpec | null | undefined
+}): DiscountResult {
+    const addons = input.addons ?? []
+    const base = Math.max(0, Math.round(input.baseClp))
+    const addonsTotal = addons.reduce((s, a) => s + Math.max(0, Math.round(a.cycleAmountClp)), 0)
+    const composite = base + addonsTotal
+
+    const spec = input.spec
+    const active = !!spec && (spec.remainingCycles == null || spec.remainingCycles > 0)
+    if (!spec || !active) {
+        return { baseBeforeDiscountClp: composite, discountClp: 0, netClp: composite }
+    }
+
+    // Monto sobre el que aplica el descuento, segun el target.
+    let targetAmount: number
+    if (spec.target === 'base') {
+        targetAmount = base
+    } else if (spec.target === 'module') {
+        const keys = new Set(spec.moduleKeys ?? [])
+        targetAmount = addons.reduce(
+            (s, a) => s + (keys.has(a.moduleKey) ? Math.max(0, Math.round(a.cycleAmountClp)) : 0),
+            0
+        )
+    } else {
+        targetAmount = composite // 'total'
+    }
+
+    let rawDiscount: number
+    if (spec.type === 'percent') {
+        const pct = Math.min(100, Math.max(0, spec.value))
+        rawDiscount = Math.round(targetAmount * (pct / 100))
+    } else {
+        // fixed_clp: nunca descuenta mas que el monto del target
+        rawDiscount = Math.min(Math.max(0, Math.round(spec.value)), targetAmount)
+    }
+
+    // El neto no baja del piso; el descuento efectivo se recalcula desde el neto (consistencia).
+    const net = Math.max(DISCOUNT_NET_FLOOR_CLP, composite - rawDiscount)
+    return { baseBeforeDiscountClp: composite, discountClp: composite - net, netClp: net }
+}
