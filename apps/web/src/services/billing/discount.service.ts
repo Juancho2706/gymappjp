@@ -94,6 +94,41 @@ export async function resolveActiveDiscountSpec(db: DB, coachId: string): Promis
     return resolveDiscountSpecByRedemptionId(db, coach?.active_coupon_redemption_id ?? null)
 }
 
+/** Detalle del descuento vivo del coach (spec + id + código + ciclos) — para snapshots y lifecycle (F4). */
+export type ActiveDiscountDetail = {
+    redemptionId: string
+    spec: DiscountSpec | null
+    couponCode: string | null
+    appliedCyclesRemaining: number | null
+}
+
+/**
+ * Resuelve el detalle del cupón vivo (service-role): redemptionId + spec + código + ciclos restantes.
+ * Lo usan el snapshot de cobro (evidencia/MRR) y el lifecycle de ciclos (F4). null si no hay cupón vivo.
+ */
+export async function resolveActiveDiscountDetail(db: DB, coachId: string): Promise<ActiveDiscountDetail | null> {
+    const { data: coach } = await db
+        .from('coaches')
+        .select('active_coupon_redemption_id')
+        .eq('id', coachId)
+        .maybeSingle()
+    const redemptionId = coach?.active_coupon_redemption_id
+    if (!redemptionId) return null
+    const { data: r } = await db
+        .from('coupon_redemptions')
+        .select('status, discount_value_snapshot, applied_cycles_remaining')
+        .eq('id', redemptionId)
+        .maybeSingle()
+    if (!r || r.status !== 'active') return null
+    const snap = (r.discount_value_snapshot ?? {}) as Record<string, unknown>
+    return {
+        redemptionId,
+        spec: discountSpecFromSnapshot(r.discount_value_snapshot, r.applied_cycles_remaining),
+        couponCode: typeof snap.code === 'string' ? snap.code : null,
+        appliedCyclesRemaining: r.applied_cycles_remaining,
+    }
+}
+
 /**
  * Variante para call sites que YA tienen el `active_coupon_redemption_id` del coach (p.ej. el cron
  * lo incluye en su SELECT de coaches) → evita la lectura redundante de `coaches`. Devuelve `null`

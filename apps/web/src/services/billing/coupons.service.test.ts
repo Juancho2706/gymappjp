@@ -9,7 +9,12 @@ vi.mock('@/infrastructure/db/coupon-redemptions.repository', () => ({
 }))
 
 import * as repo from '@/infrastructure/db/coupon-redemptions.repository'
-import { redeemCoupon, formatCouponTermsText } from './coupons.service'
+import {
+    redeemCoupon,
+    formatCouponTermsText,
+    decrementCouponCycleForCharge,
+    revertActiveCouponForCoach,
+} from './coupons.service'
 import type { CouponCatalogRow } from '@/infrastructure/db/coupon-redemptions.repository'
 
 const findActiveCouponByCode = vi.mocked(repo.findActiveCouponByCode)
@@ -141,6 +146,129 @@ describe('redeemCoupon', () => {
         findActiveCouponByCode.mockResolvedValue(makeRow({ firstTimeOnly: true }))
         await redeemCoupon({} as never, { ...baseInput, coachEmail: 'John.Doe+promo@gmail.com' })
         expect(insertRedemption.mock.calls[0][1].normalizedEmail).toBe('johndoe@gmail.com')
+    })
+})
+
+// db mock para el lifecycle (resolveActiveDiscountDetail + decrement/revert).
+function makeLifecycleDb(opts: {
+    activeRedemptionId: string | null
+    redemption?: { status: string; applied_cycles_remaining: number | null; snapshot?: Record<string, unknown> }
+    decrementInsertError?: { message: string } | null
+}) {
+    const updates: Array<Record<string, unknown>> = []
+    const decrementInserts: Array<Record<string, unknown>> = []
+    const db = {
+        from: vi.fn((table: string) => {
+            if (table === 'coaches') {
+                return {
+                    select: () => ({
+                        eq: () => ({
+                            maybeSingle: async () => ({
+                                data: { active_coupon_redemption_id: opts.activeRedemptionId },
+                                error: null,
+                            }),
+                        }),
+                    }),
+                }
+            }
+            if (table === 'coupon_redemptions') {
+                return {
+                    select: () => ({
+                        eq: () => ({
+                            maybeSingle: async () =>
+                                opts.redemption
+                                    ? {
+                                          data: {
+                                              status: opts.redemption.status,
+                                              discount_value_snapshot: opts.redemption.snapshot ?? {
+                                                  type: 'percent',
+                                                  value: 20,
+                                                  target: 'total',
+                                              },
+                                              applied_cycles_remaining: opts.redemption.applied_cycles_remaining,
+                                          },
+                                          error: null,
+                                      }
+                                    : { data: null, error: null },
+                        }),
+                    }),
+                    update: (patch: Record<string, unknown>) => {
+                        updates.push(patch)
+                        return { eq: () => ({ eq: async () => ({ error: null }) }), then: undefined }
+                    },
+                }
+            }
+            if (table === 'coupon_cycle_decrements') {
+                return {
+                    insert: async () => {
+                        decrementInserts.push({})
+                        return { error: opts.decrementInsertError ?? null }
+                    },
+                }
+            }
+            return {}
+        }),
+    }
+    // El update de coupon_redemptions en decrement usa .update().eq() (1 eq); revert usa .update().eq().eq().
+    // Normalizamos: el primer eq devuelve un thenable que también expone eq.
+    return { db: db as never, updates, decrementInserts }
+}
+
+describe('decrementCouponCycleForCharge', () => {
+    it('forever (applied_cycles_remaining null) → no decrementa', async () => {
+        const { db, updates } = makeLifecycleDb({
+            activeRedemptionId: 'r1',
+            redemption: { status: 'active', applied_cycles_remaining: null },
+        })
+        const r = await decrementCouponCycleForCharge(db, 'coach-1', 'pay-1')
+        expect(r).toEqual({ decremented: false, expired: false })
+        expect(updates).toHaveLength(0)
+    })
+    it('sin cupón vivo → no-op', async () => {
+        const { db } = makeLifecycleDb({ activeRedemptionId: null })
+        const r = await decrementCouponCycleForCharge(db, 'coach-1', 'pay-1')
+        expect(r).toEqual({ decremented: false, expired: false })
+    })
+    it('repeating con 3 ciclos → decrementa a 2, sigue active', async () => {
+        const { db, updates } = makeLifecycleDb({
+            activeRedemptionId: 'r1',
+            redemption: { status: 'active', applied_cycles_remaining: 3 },
+        })
+        const r = await decrementCouponCycleForCharge(db, 'coach-1', 'pay-1')
+        expect(r).toEqual({ decremented: true, expired: false })
+        expect(updates[0]).toMatchObject({ applied_cycles_remaining: 2, status: 'active' })
+    })
+    it('último ciclo (1 → 0) → expira', async () => {
+        const { db, updates } = makeLifecycleDb({
+            activeRedemptionId: 'r1',
+            redemption: { status: 'active', applied_cycles_remaining: 1 },
+        })
+        const r = await decrementCouponCycleForCharge(db, 'coach-1', 'pay-1')
+        expect(r).toEqual({ decremented: true, expired: true })
+        expect(updates[0]).toMatchObject({ applied_cycles_remaining: 0, status: 'expired' })
+    })
+    it('reentrega (insert companion duplicado) → idempotente, no decrementa', async () => {
+        const { db, updates } = makeLifecycleDb({
+            activeRedemptionId: 'r1',
+            redemption: { status: 'active', applied_cycles_remaining: 3 },
+            decrementInsertError: { message: 'duplicate key value violates unique constraint' },
+        })
+        const r = await decrementCouponCycleForCharge(db, 'coach-1', 'pay-1')
+        expect(r).toEqual({ decremented: false, expired: false })
+        expect(updates).toHaveLength(0)
+    })
+})
+
+describe('revertActiveCouponForCoach', () => {
+    it('con cupón vivo → marca reverted', async () => {
+        const { db } = makeLifecycleDb({ activeRedemptionId: 'r1' })
+        const r = await revertActiveCouponForCoach(db, 'coach-1')
+        expect(r).toEqual({ reverted: true })
+    })
+    it('sin cupón vivo → no-op', async () => {
+        const { db } = makeLifecycleDb({ activeRedemptionId: null })
+        const r = await revertActiveCouponForCoach(db, 'coach-1')
+        expect(r).toEqual({ reverted: false })
     })
 })
 

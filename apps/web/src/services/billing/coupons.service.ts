@@ -5,6 +5,7 @@ import { getCompositeAmountClp } from './addons.service'
 import {
     discountSpecFromSnapshot,
     isChargeableNetClp,
+    resolveActiveDiscountDetail,
     type DiscountValueSnapshot,
 } from './discount.service'
 import { normalizeCouponCode, normalizeEmailForFirstTime } from './coupons.normalize'
@@ -221,4 +222,60 @@ export async function redeemCoupon(db: DB, input: RedeemCouponInput): Promise<Re
             durationLabel: durationLabel(row.duration, row.durationInCycles),
         },
     }
+}
+
+/**
+ * Lifecycle de ciclos (F4): decrementa applied_cycles_remaining del cupón vivo EXACTAMENTE una vez por
+ * cobro (provider_payment_id), vía la fila companion `coupon_cycle_decrements` (UNIQUE). Al llegar a 0
+ * marca la redención `expired` → el trigger nulea coaches.active_coupon_redemption_id (próximo cobro a
+ * precio lleno). No-op para cupones `forever` (appliedCyclesRemaining null) o sin cupón vivo. Idempotente
+ * ante reentrega del webhook + rama stale + recurring. `db` service-role. Best-effort: NO tumba el cobro.
+ */
+export async function decrementCouponCycleForCharge(
+    db: DB,
+    coachId: string,
+    providerPaymentId: string
+): Promise<{ decremented: boolean; expired: boolean }> {
+    const detail = await resolveActiveDiscountDetail(db, coachId)
+    if (!detail || detail.appliedCyclesRemaining == null) return { decremented: false, expired: false }
+
+    // Idempotencia exactly-once: la fila companion (redemption_id, provider_payment_id) UNIQUE. Si ya
+    // existe (reentrega / otra rama ya decrementó por este pago), 23505 → no-op.
+    const { error: dupErr } = await db
+        .from('coupon_cycle_decrements')
+        .insert({ redemption_id: detail.redemptionId, provider_payment_id: providerPaymentId })
+    if (dupErr) {
+        if (/duplicate|unique|23505/i.test(dupErr.message)) return { decremented: false, expired: false }
+        // Error inesperado: no decrementamos (mejor honrar un ciclo de más que cobrar de más por error).
+        return { decremented: false, expired: false }
+    }
+
+    const next = detail.appliedCyclesRemaining - 1
+    const willExpire = next <= 0
+    await db
+        .from('coupon_redemptions')
+        .update({ applied_cycles_remaining: next, status: willExpire ? 'expired' : 'active' })
+        .eq('id', detail.redemptionId)
+    return { decremented: true, expired: willExpire }
+}
+
+/**
+ * Revierte el cupón vivo del coach (refund/chargeback/expire terminal, F4): marca la redención `reverted`
+ * → el trigger nulea el puntero, de modo que un coach reactivado arranca SIN descuento fantasma. No-op si
+ * no hay cupón vivo. `db` service-role. Best-effort.
+ */
+export async function revertActiveCouponForCoach(db: DB, coachId: string): Promise<{ reverted: boolean }> {
+    const { data: coach } = await db
+        .from('coaches')
+        .select('active_coupon_redemption_id')
+        .eq('id', coachId)
+        .maybeSingle()
+    const redemptionId = coach?.active_coupon_redemption_id
+    if (!redemptionId) return { reverted: false }
+    await db
+        .from('coupon_redemptions')
+        .update({ status: 'reverted' })
+        .eq('id', redemptionId)
+        .eq('status', 'active')
+    return { reverted: true }
 }
