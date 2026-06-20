@@ -57,6 +57,8 @@ export type CreateCouponAdminInput = z.infer<typeof CreateCouponAdminSchema>
 /** Canje de un código por el coach (/coach/subscription) o en el registro. */
 export const RedeemCouponSchema = z.object({
     code: z.string().min(1).max(60),
+    /** false = solo preview (disclosure SERNAC); true/omitido = commit (escribe la redención). */
+    commit: z.boolean().optional(),
 })
 export type RedeemCouponInput = z.infer<typeof RedeemCouponSchema>
 

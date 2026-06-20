@@ -8,7 +8,8 @@ import {
     resolveActiveDiscountDetail,
     type DiscountValueSnapshot,
 } from './discount.service'
-import { normalizeCouponCode, normalizeEmailForFirstTime } from './coupons.normalize'
+import { normalizeCouponCode, normalizeEmailForFirstTime, randomCouponCode } from './coupons.normalize'
+import type { CreateCouponAdminInput } from '@eva/schemas'
 import {
     claimCouponCapacity,
     countRedemptionsForAccount,
@@ -45,10 +46,12 @@ export type CouponPreview = {
     totalClp: number
     couponCode: string
     durationLabel: string
+    /** Texto legal SERNAC interpolado server-side (el MISMO que se persiste al commit). */
+    termsText: string
 }
 
 export type RedeemCouponResult =
-    | { ok: true; redemptionId: string; preview: CouponPreview }
+    | { ok: true; redemptionId: string | null; preview: CouponPreview }
     | { ok: false; code: RedeemErrorCode; message: string }
 
 export type RedeemCouponInput = {
@@ -61,6 +64,9 @@ export type RedeemCouponInput = {
     sourceIp: string | null
     couponTermsText: string | null
     couponTermsVersion: string | null
+    /** false = solo PREVIEW (valida + precia, NO escribe) → para el disclosure SERNAC pre-consentimiento.
+     *  true/omitido = COMMIT (claim atómico + insert del ledger). redemptionId = null en preview. */
+    commit?: boolean
 }
 
 function durationLabel(duration: CouponCatalogRow['duration'], cycles: number | null): string {
@@ -72,11 +78,11 @@ function durationLabel(duration: CouponCatalogRow['duration'], cycles: number | 
 const clp = (n: number) => `$${n.toLocaleString('es-CL')}`
 
 /**
- * Versión de la copia legal SERNAC. ⚠️ DRAFT hasta la firma de JP (rep SII) — el gate de dinero
- * (COUPON_REDEMPTION_ENABLED) está OFF en prod hasta entonces (plan O3). NO subir a un valor "firmado"
- * sin la aprobación legal.
+ * Versión de la copia legal SERNAC. APROBADA por el socio (O3, 2026-06-20). El gate de dinero
+ * (COUPON_REDEMPTION_ENABLED) sigue OFF en prod hasta el flip explícito + QA sandbox. Si la copia
+ * cambia, BUMPEAR esta versión (queda congelada por redención como evidencia de qué aceptó el coach).
  */
-export const COUPON_TERMS_VERSION = 'sernac-v1-2026-06-DRAFT'
+export const COUPON_TERMS_VERSION = 'sernac-v1-2026-06'
 
 /**
  * PURA: texto de disclosure interpolado SOLO desde montos del SERVER (nunca cliente) → evidencia de
@@ -175,13 +181,9 @@ export async function redeemCoupon(db: DB, input: RedeemCouponInput): Promise<Re
         return { ok: false, code: 'ALREADY_REDEEMED', message: 'Ya usaste este código el máximo de veces permitido.' }
     }
 
-    // Cap global ATÓMICO (RPC). false = lleno/inactivo.
-    const claimed = await claimCouponCapacity(db, row.codeId)
-    if (!claimed) return { ok: false, code: 'CAP_REACHED', message: 'Este código alcanzó su límite de canjes.' }
-
-    // Evidencia SERNAC: texto interpolado SOLO desde montos del server (nunca cliente). Si el caller
-    // (modal F5) ya pasó el texto exacto mostrado, se usa ese; si no, se construye server-side.
     const dLabel = durationLabel(row.duration, row.durationInCycles)
+    // Evidencia SERNAC: texto interpolado SOLO desde montos del server (nunca cliente). El MISMO texto
+    // se muestra en el disclosure (preview) y se persiste al commit. El caller puede pasar un override.
     const termsText =
         input.couponTermsText ??
         formatCouponTermsText({
@@ -192,6 +194,24 @@ export async function redeemCoupon(db: DB, input: RedeemCouponInput): Promise<Re
             durationLabel: dLabel,
             isLifetime: row.duration === 'forever',
         })
+
+    const previewObj: CouponPreview = {
+        baseBeforeDiscountClp: composite.baseBeforeDiscountClp,
+        discountClp: composite.discountClp,
+        totalClp: composite.totalClp,
+        couponCode: snapshot.code ?? row.codeNormalized,
+        durationLabel: dLabel,
+        termsText,
+    }
+    // PREVIEW (sin commit): valida + precia, NO escribe. El disclosure SERNAC se muestra con ESTE precio
+    // server-side; el commit recién ocurre al confirmar.
+    if (input.commit === false) {
+        return { ok: true, redemptionId: null, preview: previewObj }
+    }
+
+    // Cap global ATÓMICO (RPC). false = lleno/inactivo.
+    const claimed = await claimCouponCapacity(db, row.codeId)
+    if (!claimed) return { ok: false, code: 'CAP_REACHED', message: 'Este código alcanzó su límite de canjes.' }
 
     // INSERT del ledger (índices únicos parciales = no-acumulación/first_time atómicos). Compensa el cap si falla.
     const inserted = await insertRedemption(db, {
@@ -211,17 +231,84 @@ export async function redeemCoupon(db: DB, input: RedeemCouponInput): Promise<Re
         return { ok: false, code: inserted.code, message: inserted.message }
     }
 
-    return {
-        ok: true,
-        redemptionId: inserted.redemptionId,
-        preview: {
-            baseBeforeDiscountClp: composite.baseBeforeDiscountClp,
-            discountClp: composite.discountClp,
-            totalClp: composite.totalClp,
-            couponCode: snapshot.code ?? row.codeNormalized,
-            durationLabel: durationLabel(row.duration, row.durationInCycles),
-        },
+    return { ok: true, redemptionId: inserted.redemptionId, preview: previewObj }
+}
+
+// ── Mint (CEO /admin/codigos, F5) ────────────────────────────────────────────────
+
+export type MintCouponResult =
+    | { ok: true; couponId: string; codeId: string; codeDisplay: string }
+    | { ok: false; code: 'CODE_TAKEN' | 'INSERT_FAILED'; message: string }
+
+/**
+ * Crea un cupón (definición) + su código canjeable (F5). El código es vanity (input.codeDisplay) o
+ * autogenerado random con retry-on-collision (mirror generateUniqueInviteCode). `appliesToScope` mapea
+ * tiers/module_keys/floorClp al jsonb. `db` service-role (escritura del catálogo solo service-role).
+ * El Zod (CreateCouponAdminSchema) ya validó XOR/repeating/100%-forever antes de llegar acá.
+ */
+export async function mintCoupon(
+    db: DB,
+    input: CreateCouponAdminInput,
+    createdBy: string
+): Promise<MintCouponResult> {
+    const appliesToScope: Record<string, unknown> = {}
+    if (input.scopeTiers?.length) appliesToScope.tiers = input.scopeTiers
+    if (input.scopeModuleKeys?.length) appliesToScope.module_keys = input.scopeModuleKeys
+    if (input.floorClp != null) appliesToScope.floorClp = input.floorClp
+
+    const { data: coupon, error: couponErr } = await db
+        .from('coupons')
+        .insert({
+            discount_type: input.discountType,
+            percent_value: input.discountType === 'percent' ? input.percentValue ?? null : null,
+            amount_off_clp: input.discountType === 'fixed_clp' ? input.amountOffClp ?? null : null,
+            fixed_clp_target: input.fixedClpTarget,
+            applies_to_scope: appliesToScope as unknown as Json,
+            duration: input.duration,
+            duration_in_cycles: input.duration === 'repeating' ? input.durationInCycles ?? null : null,
+            max_redemptions: input.maxRedemptions ?? null,
+            redeem_by: input.redeemBy ?? null,
+            created_by: createdBy,
+        })
+        .select('id')
+        .single()
+    if (couponErr || !coupon) {
+        return { ok: false, code: 'INSERT_FAILED', message: couponErr?.message ?? 'No se pudo crear el cupón.' }
     }
+
+    const isVanity = !!input.codeDisplay
+    const maxAttempts = isVanity ? 1 : 6
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const display = input.codeDisplay ?? randomCouponCode()
+        const codeNormalized = normalizeCouponCode(display)
+        const { data: codeRow, error: codeErr } = await db
+            .from('coupon_codes')
+            .insert({
+                coupon_id: coupon.id,
+                code_normalized: codeNormalized,
+                code_display: display,
+                active: true,
+                expires_at: input.redeemBy ?? null,
+                max_redemptions: input.maxRedemptions ?? null,
+                per_account_limit: input.perAccountLimit,
+                first_time_only: input.firstTimeOnly,
+                restricted_to_coach_id: input.restrictedToCoachId ?? null,
+            })
+            .select('id')
+            .single()
+        if (!codeErr && codeRow) {
+            return { ok: true, couponId: coupon.id, codeId: codeRow.id, codeDisplay: display }
+        }
+        const dup = /duplicate|unique|coupon_codes_code_active_uq|23505/i.test(codeErr?.message ?? '')
+        if (!dup) {
+            return { ok: false, code: 'INSERT_FAILED', message: codeErr?.message ?? 'No se pudo crear el código.' }
+        }
+        if (isVanity) {
+            return { ok: false, code: 'CODE_TAKEN', message: `El código "${display}" ya está en uso.` }
+        }
+        // autogen colisionó → reintentar con otro random
+    }
+    return { ok: false, code: 'CODE_TAKEN', message: 'No se pudo generar un código único; reintenta.' }
 }
 
 /**

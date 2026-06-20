@@ -106,6 +106,7 @@ export async function POST(request: Request) {
             sourceIp: clientIp(request),
             couponTermsText: null, // server-built (evidencia SERNAC desde montos del server)
             couponTermsVersion: null,
+            commit: parsed.data.commit ?? false, // default PREVIEW: el commit exige confirmación explícita
         })
 
         if (!result.ok) {
@@ -115,8 +116,8 @@ export async function POST(request: Request) {
             )
         }
 
-        // Auditoría del canje (no-PII más allá del coach). Best-effort.
-        await admin.from('admin_audit_logs').insert({
+        // Auditoría SOLO del commit real (preview no escribe nada). Best-effort.
+        if (result.redemptionId) await admin.from('admin_audit_logs').insert({
             admin_email: 'coupon-redeem',
             action: 'coach.coupon_redeemed',
             target_table: 'coupon_redemptions',

@@ -30,6 +30,7 @@ import type { ModuleKey } from '@/services/entitlements.service'
 import { useCaptureAddonFunnel } from '@/lib/posthog/events'
 import Link from 'next/link'
 import { Zap, Crown, Rocket, TrendingUp, Building2, Check, Leaf, HelpCircle, Puzzle, Lock, Gift, ArrowLeft, type LucideIcon } from 'lucide-react'
+import { CouponRedeemCard } from './_components/CouponRedeemCard'
 
 // growth/scale: LEGACY (fuera de venta). Se mantienen en los mapas de display porque el PLAN
 // ACTUAL de un coach grandfathered puede ser legacy y debe renderizar su icono/color correcto.
@@ -540,7 +541,11 @@ export default function CoachSubscriptionPage() {
                 Gestioná tu plan, frecuencia de cobro y cancelación.
             </p>
 
-    
+            {/* Código de descuento (cupones, F5) — self-gated: se oculta sin plan pago activo / flag OFF. */}
+            <div className="mt-6">
+                <CouponRedeemCard />
+            </div>
+
             {loading ? (
                 <p role="status" aria-live="polite" className="mt-6 text-sm text-muted-foreground">Cargando estado de suscripción...</p>
             ) : null}
