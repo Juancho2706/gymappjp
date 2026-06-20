@@ -198,7 +198,7 @@ function VirtualFoodList({
                         </span>
                       )}
                       {clientFavoriteIds?.has(f.id) && (
-                        <Heart className="h-3.5 w-3.5 shrink-0 fill-rose-400 text-rose-400" aria-label="Favorito del cliente" />
+                        <Heart role="img" className="h-3.5 w-3.5 shrink-0 fill-rose-400 text-rose-400" aria-label="Favorito del cliente" />
                       )}
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1">
@@ -241,6 +241,7 @@ export function FoodSearchDrawer({
   // Alimento alergeno pendiente de confirmacion (A3): bloquea el pick hasta override deliberado.
   const [allergyConfirm, setAllergyConfirm] = useState<FoodRow | null>(null)
   const allergyCancelRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [results, setResults] = useState<FoodRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -304,6 +305,37 @@ export function FoodSearchDrawer({
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [allergyConfirm])
+
+  // A11y del drawer (modal): Escape cierra + Tab atrapado dentro del panel. Cuando el confirm de
+  // alergeno esta abierto, ese dialogo maneja su propio foco/Escape (no atrapamos aqui).
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (allergyConfirm) return
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+        return
+      }
+      if (e.key === 'Tab' && panelRef.current) {
+        const focusables = panelRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+        )
+        if (focusables.length === 0) return
+        const first = focusables[0]!
+        const last = focusables[focusables.length - 1]!
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, allergyConfirm, onClose])
 
   // Fetch foods
   useEffect(() => {
@@ -456,6 +488,7 @@ export function FoodSearchDrawer({
 
       {/* Modal panel — full screen on mobile, centered card on desktop */}
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal
         aria-label="Buscar alimento"
@@ -802,13 +835,14 @@ export function FoodSearchDrawer({
             role="alertdialog"
             aria-modal
             aria-label="Confirmar alérgeno"
+            aria-describedby="allergy-confirm-desc"
             className="relative w-full max-w-sm rounded-2xl border border-rose-300 bg-white p-5 shadow-2xl dark:border-rose-500/40 dark:bg-zinc-900"
           >
             <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
-              <AlertTriangle className="h-5 w-5" />
+              <AlertTriangle aria-hidden="true" className="h-5 w-5" />
               <p className="text-sm font-black uppercase tracking-widest">Posible alérgeno</p>
             </div>
-            <p className="mt-3 text-sm text-zinc-700 dark:text-zinc-200">
+            <p id="allergy-confirm-desc" className="mt-3 text-sm text-zinc-700 dark:text-zinc-200">
               Este alumno marcó <span className="font-bold">{allergyConfirm.name}</span> como{' '}
               <span className="font-bold text-rose-600 dark:text-rose-400">alergia</span>. Agregarlo a
               su plan puede ser peligroso.

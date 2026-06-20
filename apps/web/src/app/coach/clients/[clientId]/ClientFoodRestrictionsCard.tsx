@@ -157,6 +157,7 @@ export function ClientFoodRestrictionsCard({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
+        aria-controls="food-restrictions-panel"
         className="flex min-h-[44px] w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/40"
       >
         <span className="flex min-w-0 items-center gap-2.5">
@@ -192,6 +193,9 @@ export function ClientFoodRestrictionsCard({
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
+            id="food-restrictions-panel"
+            role="region"
+            aria-label="Restricciones alimentarias"
             initial={reduceMotion ? false : { height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={reduceMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
@@ -200,19 +204,22 @@ export function ClientFoodRestrictionsCard({
           >
             <div className="space-y-4 p-4">
               {/* Tipo a agregar */}
-              <div className="flex gap-1.5">
+              <div role="radiogroup" aria-label="Tipo de restricción a agregar" className="flex gap-1.5">
                 {TYPE_ORDER.map((t) => (
                   <button
                     key={t}
                     type="button"
+                    role="radio"
+                    aria-checked={addType === t}
                     onClick={() => setAddType(t)}
                     className={cn(
                       'flex-1 rounded-xl border px-2 py-2 text-[11px] font-bold transition-colors',
                       addType === t
-                        ? TYPE_META[t].chip
+                        ? cn(TYPE_META[t].chip, 'ring-2 ring-current ring-offset-1 ring-offset-card')
                         : 'border-border bg-background text-muted-foreground hover:bg-muted/40'
                     )}
                   >
+                    {addType === t && <span className="sr-only">Seleccionado: </span>}
                     {TYPE_META[t].label}
                   </button>
                 ))}
@@ -241,10 +248,15 @@ export function ClientFoodRestrictionsCard({
               </div>
 
               {term.trim().length >= 2 && (
-                <div className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-border bg-background p-1.5">
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="max-h-56 space-y-1 overflow-y-auto rounded-xl border border-border bg-background p-1.5"
+                >
                   {searching && (
                     <div className="flex justify-center py-4">
-                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                      <Loader2 aria-hidden="true" className="h-5 w-5 animate-spin text-muted-foreground" />
+                      <span className="sr-only">Buscando alimentos…</span>
                     </div>
                   )}
                   {!searching && results.length === 0 && (
@@ -257,8 +269,11 @@ export function ClientFoodRestrictionsCard({
                         <button
                           key={f.id}
                           type="button"
-                          disabled={already || isPending}
-                          onClick={() => add(f, addType)}
+                          disabled={already}
+                          aria-disabled={already || isPending}
+                          onClick={() => {
+                            if (!isPending) add(f, addType)
+                          }}
                           className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-muted/60 disabled:opacity-50"
                         >
                           <span className="min-w-0 truncate text-foreground">
@@ -306,9 +321,9 @@ export function ClientFoodRestrictionsCard({
                             onClick={() => remove(i.food_id)}
                             disabled={isPending}
                             aria-label={`Quitar ${i.name}`}
-                            className="-mr-0.5 rounded-full p-0.5 transition-opacity hover:opacity-70 disabled:opacity-40"
+                            className="-my-1 -mr-1.5 ml-0.5 flex h-6 w-6 items-center justify-center rounded-full transition-opacity hover:opacity-70 disabled:opacity-40"
                           >
-                            <X className="h-3 w-3" />
+                            <X aria-hidden="true" className="h-3 w-3" />
                           </button>
                         </span>
                       ))}

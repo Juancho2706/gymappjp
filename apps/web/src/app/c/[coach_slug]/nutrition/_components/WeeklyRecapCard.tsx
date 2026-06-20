@@ -63,8 +63,8 @@ export function WeeklyRecapCard({ recap }: { recap: WeeklyRecap }) {
     recap.deltaPct == null || recap.deltaPct === 0
       ? 'text-muted-foreground'
       : recap.deltaPct > 0
-        ? 'text-emerald-600 dark:text-emerald-400'
-        : 'text-amber-600 dark:text-amber-400'
+        ? 'text-emerald-700 dark:text-emerald-400'
+        : 'text-amber-700 dark:text-amber-400'
 
   return (
     <motion.section
@@ -94,9 +94,12 @@ export function WeeklyRecapCard({ recap }: { recap: WeeklyRecap }) {
               <span className={cn('text-4xl font-black tabular-nums', tone.ring)}>{recap.thisWeekPct}%</span>
               {recap.deltaPct != null && (
                 <span className={cn('inline-flex items-center gap-0.5 text-xs font-bold tabular-nums', deltaColor)}>
-                  <DeltaIcon className="h-3.5 w-3.5" />
+                  <DeltaIcon aria-hidden="true" className="h-3.5 w-3.5" />
+                  <span className="sr-only">
+                    {recap.deltaPct > 0 ? 'Subió ' : recap.deltaPct < 0 ? 'Bajó ' : 'Sin cambios, '}
+                  </span>
                   {recap.deltaPct > 0 ? '+' : ''}
-                  {recap.deltaPct}% vs ant.
+                  {recap.deltaPct}% vs. semana anterior
                 </span>
               )}
             </div>
@@ -115,9 +118,9 @@ export function WeeklyRecapCard({ recap }: { recap: WeeklyRecap }) {
           href={`https://wa.me/?text=${encodeURIComponent(shareText(recap))}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-4 inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-border bg-background/70 px-3 text-xs font-bold text-foreground transition-colors hover:bg-background"
+          className="mt-4 inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-border bg-background/70 px-3 text-xs font-bold text-foreground transition-colors hover:bg-background"
         >
-          <Share2 className="h-3.5 w-3.5" /> Compartir mi semana
+          <Share2 aria-hidden="true" className="h-3.5 w-3.5" /> Compartir mi semana
         </a>
       )}
     </motion.section>

@@ -198,6 +198,7 @@ function AddFoodFormBody({
                 placeholder="Ej: taza, cucharada, palma"
                 maxLength={30}
                 className="h-11 rounded-xl"
+                aria-label="Nombre de la medida casera"
               />
               <Input
                 name="household_grams"
