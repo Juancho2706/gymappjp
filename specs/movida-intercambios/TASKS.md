@@ -327,7 +327,7 @@ del gate autorizado. Commit + push por fase cuando el usuario lo pida.
 - [ ] TG.2 — `tests/team/exchanges-isolation.sql` + suites de separación existentes en verde.
 - [ ] TG.3 — Access log verificado (`pdf_generate` del COACH en team con metadata; el flujo del
   alumno NO deja fila — AC7) + advisors sin críticos nuevos.
-- [ ] TG.4 — Actualizar `docs/plans/movida/00-DIRECTOR.md` (bitácora + DoD M1),
+- [ ] TG.4 — Actualizar `docs/archive/movida/00-DIRECTOR.md` (bitácora + DoD M1),
   `docs/testing/TEST_STATUS.md`, `docs/status/NEXT_STEPS.md`.
 
 ## Definition of Done universal

@@ -3,7 +3,7 @@
 **Status:** DRAFT (listo para review)
 **Owner:** Juan (EVA) — feature del Plan 3 §A de Movida
 **Last updated:** 2026-06-11
-**Related plan:** `docs/plans/movida/03-PLAN-evaluacion-nutricion.md` §A · Director: `docs/plans/movida/00-DIRECTOR.md`
+**Related plan:** `docs/archive/movida/03-PLAN-evaluacion-nutricion.md` §A · Director: `docs/archive/movida/00-DIRECTOR.md`
 **Branch:** `feat/movida-platform`
 
 ---

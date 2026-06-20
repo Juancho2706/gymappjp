@@ -12,19 +12,24 @@ Ultima modificacion: 2026-05-21 18:25 -04:00
 | `testing/TEST_STATUS.md` | Registro consolidado de pruebas validas y pendientes. |
 | `operations/LOCAL_WORKFLOW.md` | Como trabajar local sin tocar live/master. |
 
-## Planes vivos
+## Planes y specs
+
+Las features nuevas se especifican en `specs/<feature>/{SPEC,PLAN,TASKS}.md` (SDD). Los planes estrategicos y de Movida ya ejecutados/cancelados se movieron a `archive/` (ver abajo).
 
 | Documento | Estado |
 |---|---|
-| `plans/ENTERPRISE_PLAN.md` | Implementado y validado en local. |
-| `plans/ARCHITECTURE_100_PLAN.md` | Cerrado contra gates medibles. |
-| `plans/EXECUTION_PLAN.md` | Plan maestro historico/largo. Usar como referencia, no como fuente unica. |
-| `plans/AUDIT_PLAN.md` | Auditoria pre-enterprise historica. |
-| `plans/ENTERPRISE_DEMO_AND_ROADMAP.md` | Material demo/roadmap enterprise. |
+| `plans/enterprise-reference-matrices.md` | Referencia enterprise (motor vivo, archivado comercialmente). |
+| `plans/plan-c-enterprise-dashboard-revenue-mvp.md` | MVP dashboard revenue enterprise. |
+| `specs/<feature>/` | Specs vivos de features en diseño/curso (SDD). |
 
 ## Archivo historico
 
-`archive/` contiene handoffs y logs de sesiones. No usar como fuente primaria si contradice documentos canonicos.
+`archive/` contiene handoffs, logs de sesiones y material ya shippeado/cancelado. No usar como fuente primaria si contradice documentos canonicos o el codigo:
+
+- `archive/estrategia/` — planes estrategicos ya ejecutados (teams-first, addons, archivado enterprise).
+- `archive/movida/` — esfuerzo Movida (deal cancelado 2026-06-16); historial completo.
+- `archive/nutrition-overhaul-2026-06/` — auditoria + diseño del overhaul de nutricion/menus (shippeado 2026-06).
+- `archive/specs/` — specs de features ya en produccion (exercise-creator, client-excel-import, coach-change-card).
 
 ## Docs privados ignorados
 

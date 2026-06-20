@@ -2,7 +2,7 @@
 
 **Estado:** DRAFT (listo para implementar tras OK)
 **Última actualización:** 2026-06-11
-**Plan maestro:** `docs/plans/movida/02-PLAN-entrenamiento.md` · Director: `docs/plans/movida/00-DIRECTOR.md`
+**Plan maestro:** `docs/archive/movida/02-PLAN-entrenamiento.md` · Director: `docs/archive/movida/00-DIRECTOR.md`
 **Branch:** `feat/movida-platform`
 
 ---

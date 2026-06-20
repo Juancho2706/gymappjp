@@ -325,7 +325,7 @@ consolidación en fase CONTRACT futura (fuera de este SPEC).
 | UPDATE | `apps/web/src/lib/i18n/{es,en}.json` | namespace `nutrition.exchange.*` (mismo commit que cada UI) |
 | CREATE | `tests/team/exchanges-isolation.sql` | suite RLS (corre SOLO en gate autorizado) |
 | CREATE | `tests/separation/nutrition-exchanges.spec.ts` | E2E personas (corre SOLO en gate autorizado) |
-| UPDATE | `docs/plans/movida/00-DIRECTOR.md` | bitácora + §7 (bloqueantes nuevos ya agregados por este SDD) |
+| UPDATE | `docs/archive/movida/00-DIRECTOR.md` | bitácora + §7 (bloqueantes nuevos ya agregados por este SDD) |
 | UPDATE | `docs/architecture/FLOWS_AND_COMPONENTS.md` + `docs/status/NEXT_STEPS.md` | regla de docs canónicas |
 
 ## Server actions (todas: Zod v4 + `assertModule` al tope + revalidate)
