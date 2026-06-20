@@ -437,6 +437,3 @@ Webhook + reconcile + cron integration tests; redelivery double-decrement test; 
 - **Per-redemption:** `revokeRedemptionAction` (future-only) — stops future re-application at `current_period_end`, never raises the honored price.
 - **Schema:** migration is additive/forward-only; nullable cols + trigger COALESCE mean a code rollback leaves the DB inert (no active redemptions → no discount applied). Do NOT drop columns (forward-only).
 - **Refund/chargeback:** webhook auto-reverts the active redemption + nulls the pointer so a reactivated coach starts clean.
-```
-
-That document is the complete `specs/discount-codes/EXECUTION-PLAN.md`. Key grounding verified against the codebase: the `billing_snapshots` snapshot `kind` type currently only allows `'recurring' | 'addon_proration'` (critic gap confirmed at `addon-webhook.service.ts:70`), `updateCheckoutAmount` does NOT pass `X-Idempotency-Key` (confirmed at `mercadopago.ts:479`), `getCompositeAmountClp` has callers across `webhook`, `subscription-status`, `confirm-upgrade`, `create-preference`, `cron/mp-reconcile`, `addons` and `addon-webhook.service` (9+ sites confirmed), and `specs/discount-codes/` does not exist (F0 SDD blocker confirmed; templates exist at `specs/_templates/`).
