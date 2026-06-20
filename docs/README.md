@@ -10,8 +10,6 @@ Ultima modificacion: 2026-05-21 18:25 -04:00
 | `architecture/PROJECT_STRUCTURE.md` | Estructura del repo, capas, reglas y ownership. |
 | `architecture/FLOWS_AND_COMPONENTS.md` | Flujos principales y que rutas/componentes/actions toca cada uno. |
 | `testing/TEST_STATUS.md` | Registro consolidado de pruebas validas y pendientes. |
-| `status/CURRENT_PHASE.md` | Estado operativo de la rama `v2/enterprise`. |
-| `status/NEXT_STEPS.md` | Opinion tecnica actual y orden recomendado de trabajo. |
 | `operations/LOCAL_WORKFLOW.md` | Como trabajar local sin tocar live/master. |
 
 ## Planes vivos
