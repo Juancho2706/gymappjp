@@ -4534,6 +4534,10 @@ export type Database = {
       }
     }
     Functions: {
+      apply_nutrition_template_to_client: {
+        Args: { p_op: Json; p_coach?: string }
+        Returns: Json
+      }
       assign_org_client_to_coach: {
         Args: { p_client_id: string; p_coach_id: string }
         Returns: undefined
