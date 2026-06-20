@@ -3,7 +3,7 @@
 **Status:** DRAFT (listo para implementación)
 **Owner:** Juan V.
 **Last updated:** 2026-06-11
-**Related plan:** `docs/plans/movida/03-PLAN-evaluacion-nutricion.md` §C · Director: `docs/plans/movida/00-DIRECTOR.md`
+**Related plan:** `docs/archive/movida/03-PLAN-evaluacion-nutricion.md` §C · Director: `docs/archive/movida/00-DIRECTOR.md`
 **Módulo:** key `nutrition_exchanges` (ya declarada en `MODULE_KEYS`, `apps/web/src/services/entitlements.service.ts`)
 **Milestone:** M1 "Diferenciador nutri" — mata el Canva de Fran (`@franallendel.nutri`)
 

@@ -1,6 +1,6 @@
 # PLAN — Entrenamiento Movida: ejercicios polimórficos + cardio TrainingPeaks-lite
 
-> SPEC: `specs/movida-entrenamiento/SPEC.md`. Insumo maestro: `docs/plans/movida/02-PLAN-entrenamiento.md`.
+> SPEC: `specs/movida-entrenamiento/SPEC.md`. Insumo maestro: `docs/archive/movida/02-PLAN-entrenamiento.md`.
 > Construye SOBRE la fundación 2026-06-10 (Director §"FUNDACIÓN COMPLETADA"): NAV_MODULES,
 > scoping 3-vías por workspace activo, marca por tenant, `assertModule`, testing calmado.
 
@@ -338,4 +338,4 @@ Transversales en TODOS: `side_mode`, `load_*` (carga polimórfica), `distance_*`
   `workout.type.*`, `workout.cardio.*`); mobile: `h-dvh`, `*-safe`, `overflow-x: clip`.
 - Por tanda: typecheck + vitest. E2E/SQL SOLO al gate final autorizado (regla 2026-06-10). Review
   adversarial en F4 y F5 (núcleo builder + ejecución).
-- Docs: actualizar `docs/plans/movida/00-DIRECTOR.md` (bitácora) y canónicas al cerrar cada fase.
+- Docs: actualizar `docs/archive/movida/00-DIRECTOR.md` (bitácora) y canónicas al cerrar cada fase.
