@@ -65,6 +65,7 @@ import { ConsumedVsTarget, NutritionProgressZone } from '@/components/nutrition'
 import { NotesThread, type NotesThreadComment } from '@/components/nutrition/NotesThread'
 import { CoachNutrientTargetsEditor } from './CoachNutrientTargetsEditor'
 import { CoachPrivateNotesPanel } from './CoachPrivateNotesPanel'
+import { ClientFoodRestrictionsCard } from './ClientFoodRestrictionsCard'
 import { addCoachMealComment } from './_actions/nutrition-notes.actions'
 import type { NutrientTargetRow } from '@/services/nutrient-targets.service'
 import type { PrivateNoteRow, MealCommentRow } from '@/services/nutrition-notes.service'
@@ -1010,6 +1011,12 @@ export function NutritionTabB5({
         recentCheckIns={recentCheckIns}
         nutritionWeeklyAvgPct={nutritionWeeklyAvgPct}
       />
+
+      {/* Restricciones dietarias (A2/A3): el coach marca alergias/intolerancias que el builder
+          respeta (advierte dislike, bloquea alergia con override). Ya queda oculto cuando la
+          nutricion esta desactivada para el alumno por el early-return de dominio mas arriba
+          (no usa showSection); NO mover la card sobre ese early-return. */}
+      <ClientFoodRestrictionsCard clientId={clientId} coachId={coachId} />
 
       {/* Hilo bidireccional: el coach responde los comentarios del alumno. Gateado por
           `notes` (la superficie de notas/comentarios del alumno). */}

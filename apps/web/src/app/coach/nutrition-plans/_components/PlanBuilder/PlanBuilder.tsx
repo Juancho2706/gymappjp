@@ -28,6 +28,7 @@ import {
   upsertCoachNutritionTemplate,
   upsertClientNutritionPlanJson,
   getClientFoodFavorites,
+  getClientFoodRestrictions,
 } from '../../_actions/nutrition-coach.actions'
 import {
   createDayVariantAction,
@@ -102,6 +103,11 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
   const [isSaving, setIsSaving] = useState(false)
   const [autoSync, setAutoSync] = useState(true)
   const [clientFavoriteIds, setClientFavoriteIds] = useState<Set<string>>(new Set())
+  // Restricciones del alumno (A3): alergia = bloqueo con override; intolerancia/dislike = aviso blando
+  // (se mantienen como sets SEPARADOS para no degradar una intolerancia a "no le gusta" en el badge).
+  const [clientAllergyIds, setClientAllergyIds] = useState<Set<string>>(new Set())
+  const [clientIntoleranceIds, setClientIntoleranceIds] = useState<Set<string>>(new Set())
+  const [clientDislikeIds, setClientDislikeIds] = useState<Set<string>>(new Set())
 
   // ─── Módulo nutrition_exchanges (solo client-plan, con módulo ON) ──────────────
   // Gating efectivo: el bundle `exchange` (entitlement server-side) AND la visibilidad
@@ -289,6 +295,11 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
   useEffect(() => {
     if (!clientId) return
     getClientFoodFavorites(clientId).then((ids) => setClientFavoriteIds(new Set(ids)))
+    getClientFoodRestrictions(clientId).then((rows) => {
+      setClientAllergyIds(new Set(rows.filter((r) => r.preference_type === 'allergy').map((r) => r.food_id)))
+      setClientIntoleranceIds(new Set(rows.filter((r) => r.preference_type === 'intolerance').map((r) => r.food_id)))
+      setClientDislikeIds(new Set(rows.filter((r) => r.preference_type === 'dislike').map((r) => r.food_id)))
+    })
   }, [clientId])
 
   const sensors = useSensors(
@@ -742,6 +753,9 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
             : []
         }
         clientFavoriteIds={clientFavoriteIds.size > 0 ? clientFavoriteIds : undefined}
+        clientAllergyIds={clientAllergyIds.size > 0 ? clientAllergyIds : undefined}
+        clientIntoleranceIds={clientIntoleranceIds.size > 0 ? clientIntoleranceIds : undefined}
+        clientDislikeIds={clientDislikeIds.size > 0 ? clientDislikeIds : undefined}
       />
     </div>
   )
