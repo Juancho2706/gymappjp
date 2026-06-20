@@ -27,6 +27,7 @@ import {
     toBillableAddons,
     type AddonPaymentsPort,
 } from '@/services/billing/addons.service'
+import { resolveActiveDiscountSpec, buildAmountPutIdempotencyKey } from '@/services/billing/discount.service'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildAddonActivationReceiptEmail } from '@/lib/email/addon-receipt-templates'
 import { buildPaymentFailedEmail, buildPaymentRecoveredEmail } from '@/lib/email/payment-dunning-templates'
@@ -202,7 +203,8 @@ async function handleWebhook(request: Request, rawBody: string) {
     // necesita el PUT de monto (materializeAddonFromOneShot / PUT diferido del compromiso mínimo);
     // createOneShotPayment lo usa el endpoint de alta, NUNCA el webhook (lanza si se invoca acá).
     const addonPayments: AddonPaymentsPort = {
-        updateCheckoutAmount: (checkoutId, amountClp) => provider.updateCheckoutAmount(checkoutId, amountClp),
+        updateCheckoutAmount: (checkoutId, amountClp, idempotencyKey) =>
+            provider.updateCheckoutAmount(checkoutId, amountClp, idempotencyKey),
         createOneShotPayment: () => {
             throw new Error('createOneShotPayment no se usa en el webhook')
         },
@@ -604,12 +606,21 @@ async function handleWebhook(request: Request, rawBody: string) {
             // cuyo reference (menor) SÍ es autoritativo y debe poder aplicar.
             const live = await listLive(admin, coach.id)
             const liveAddonKeys = live.map((a) => a.moduleKey)
-            const newComposite = getCompositeAmountClp(newTier, cycle, toBillableAddons(live))
-            await provider.updateCheckoutAmountAndRef(
-                mpId,
-                newComposite,
-                buildCheckoutExternalReference(coach.id, newTier, cycle, liveAddonKeys)
-            )
+            // F2a.2b: honra el cupón vivo en el compuesto del PUT (mismo spec que confirm-upgrade/cron).
+            const upgradeSpec = await resolveActiveDiscountSpec(admin, coach.id)
+            const newComposite = getCompositeAmountClp(newTier, cycle, toBillableAddons(live), upgradeSpec).totalClp
+            const upgradeCheckoutRef = buildCheckoutExternalReference(coach.id, newTier, cycle, liveAddonKeys)
+            // Sin cupón → llamada 3-arg intacta; con cupón → + idempotency key.
+            if (upgradeSpec) {
+                await provider.updateCheckoutAmountAndRef(
+                    mpId,
+                    newComposite,
+                    upgradeCheckoutRef,
+                    buildAmountPutIdempotencyKey(coach.id, newComposite)
+                )
+            } else {
+                await provider.updateCheckoutAmountAndRef(mpId, newComposite, upgradeCheckoutRef)
+            }
 
             // Snapshot del cobro one-shot del upgrade (kind='tier_upgrade_proration') — idempotente
             // por provider_payment_id. base_clp=0: el one-shot es SOLO la diferencia prorrateada de
@@ -1012,7 +1023,10 @@ async function handleWebhook(request: Request, rawBody: string) {
             // (b) Evento `updated` (o `authorized`): confirmar el PUT comparando el monto vigente del
             // preapproval contra el compuesto esperado; drift → alerta. validar en sandbox (item 8).
             const live = await listLive(admin, coach.id)
-            const expectedClp = getCompositeAmountClp(finalTier, finalCycle, toBillableAddons(live))
+            // F2a.2b: el esperado incluye el descuento vivo (mismo spec que el PUT) → un preapproval
+            // con cupón NO dispara falso addon_amount_drift.
+            const reconcileSpec = await resolveActiveDiscountSpec(admin, coach.id)
+            const expectedClp = getCompositeAmountClp(finalTier, finalCycle, toBillableAddons(live), reconcileSpec).totalClp
             const reconciled = reconcilePreapprovalAmount({
                 providerAmountClp: result.providerAmountClp,
                 expectedClp,

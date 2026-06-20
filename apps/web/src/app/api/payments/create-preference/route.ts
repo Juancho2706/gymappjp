@@ -26,6 +26,7 @@ import {
     getTierUpgradeProrationClp,
     toBillableAddons,
 } from '@/services/billing/addons.service'
+import { resolveActiveDiscountSpec, isChargeableNetClp } from '@/services/billing/discount.service'
 import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
 import { claimUpgradeInFlight, clearUpgradeInFlight } from '@/services/billing/plan-change-lock'
 import type { BillableAddon } from '@/domain/billing/types'
@@ -307,7 +308,23 @@ export async function POST(request: Request) {
         const billableAddons = [...billableByKey.values()]
         const checkoutAddons = [...billableByKey.keys()]
 
-        const amountClp = getCompositeAmountClp(tier, billingCycle, billableAddons)
+        // F2a.2b: descuento de cupón re-resuelto server-side desde coaches.active_coupon_redemption_id
+        // y aplicado en el ÚNICO chokepoint. spec null = sin cupón = monto compuesto idéntico al legacy.
+        // El neto del preapproval ya nace descontado (MP-net-at-source); el webhook/cron recomputan con
+        // el MISMO spec → sin falso addon_amount_drift. Guard O1: el path pago rechaza neto no cobrable
+        // (un 100%-off va por admin_grant, NUNCA por MP que rechaza transaction_amount <= 0).
+        const discountSpec = await resolveActiveDiscountSpec(admin, user.id)
+        const composite = getCompositeAmountClp(tier, billingCycle, billableAddons, discountSpec)
+        const amountClp = composite.totalClp
+        if (!isChargeableNetClp(amountClp)) {
+            return NextResponse.json(
+                {
+                    code: 'NET_NOT_CHARGEABLE',
+                    error: 'Un descuento del 100% no se cobra por este medio; se gestiona como cortesía interna.',
+                },
+                { status: 400 }
+            )
+        }
         const cycle = BILLING_CYCLE_CONFIG[billingCycle]
         const addonSuffix = checkoutAddons.length > 0 ? ` + ${checkoutAddons.length} add-on(s)` : ''
         const retryQuery = `tier=${encodeURIComponent(tier)}&cycle=${encodeURIComponent(billingCycle)}`

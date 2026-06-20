@@ -8,8 +8,9 @@ import {
     getAddonCycleAmountClp,
     toBillableAddons,
 } from '@/services/billing/addons.service'
+import { resolveActiveDiscountFromRpc } from '@/services/billing/discount.service'
 import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
-import { CHANGE_CARD_ENABLED, getTierPriceClp, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
+import { CHANGE_CARD_ENABLED, getTierPriceClp, type BillingCycle, type DiscountSpec, type SubscriptionTier } from '@/lib/constants'
 
 function normalizeCycle(raw: string | null): BillingCycle {
     if (raw === 'monthly' || raw === 'quarterly' || raw === 'annual') return raw
@@ -71,7 +72,20 @@ export async function GET() {
         (sum, a) => sum + getAddonCycleAmountClp(a.priceClpMensual, cycle),
         0
     )
-    const totalClp = getCompositeAmountClp(tier, cycle, billable)
+    // F2a.2b: cupón vivo resuelto via RPC SECURITY DEFINER (cliente user-scoped no puede joinear el
+    // catálogo bajo RLS). El precio MOSTRADO == el COBRADO (SERNAC: disclosed == charged). spec null
+    // (sin cupón) → totalClp idéntico al compuesto de lista. tolerante a fallos: si la RPC falla, sin descuento.
+    let couponSpec: DiscountSpec | null = null
+    let couponCode: string | null = null
+    try {
+        const resolved = await resolveActiveDiscountFromRpc(supabase)
+        couponSpec = resolved.spec
+        couponCode = resolved.code
+    } catch {
+        couponSpec = null
+    }
+    const composite = getCompositeAmountClp(tier, cycle, billable, couponSpec)
+    const totalClp = composite.totalClp
 
     // Alumnos activos standalone (mismo filtro canónico que el cap gate de alta de alumno).
     // La UI lo usa para bloquear downgrades a un tier cuyo max_clients < alumnos activos.
@@ -87,7 +101,16 @@ export async function GET() {
         coach,
         events: events ?? [],
         addons,
-        billing: { baseClp, addonsClp, totalClp },
+        billing: {
+            baseClp,
+            addonsClp,
+            totalClp,
+            baseBeforeDiscountClp: composite.baseBeforeDiscountClp,
+            discountClp: composite.discountClp,
+        },
+        activeCoupon: couponSpec
+            ? { code: couponCode, discountClp: composite.discountClp }
+            : null,
         activeClientCount,
         // Flag server-only del cambio de tarjeta (la página es client → no puede leer process.env).
         // P1-8: gateamos TAMBIÉN en que exista NEXT_PUBLIC_MP_PUBLIC_KEY — sin la public key el tokenizer

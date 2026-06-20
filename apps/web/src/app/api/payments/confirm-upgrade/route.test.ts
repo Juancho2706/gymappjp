@@ -34,6 +34,12 @@ function makeAdmin() {
                         coachUpdates.push(patch)
                         return { eq: vi.fn(async () => ({ error: coachUpdateError })) }
                     }),
+                    // F2a.2b: resolveActiveDiscountSpec lee coaches.active_coupon_redemption_id (null = sin cupón).
+                    select: vi.fn(() => ({
+                        eq: vi.fn(() => ({
+                            maybeSingle: vi.fn(async () => ({ data: { active_coupon_redemption_id: null }, error: null })),
+                        })),
+                    })),
                 }
             }
             if (table === 'subscription_events') {

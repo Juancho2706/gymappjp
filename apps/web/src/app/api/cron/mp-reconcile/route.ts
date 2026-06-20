@@ -9,6 +9,7 @@ import {
     getCompositeAmountClp,
     toBillableAddons,
 } from '@/services/billing/addons.service'
+import { resolveDiscountSpecByRedemptionId } from '@/services/billing/discount.service'
 import type { BillingCycle, SubscriptionTier } from '@/lib/constants'
 
 // IMPORTANTE (plan 01 F7): el guard de este cron quedó FAIL-CLOSED — sin CRON_SECRET devuelve
@@ -109,7 +110,7 @@ export async function GET(req: Request) {
     // Get coaches with MP subscription IDs
     const { data: coaches, error } = await admin
         .from('coaches')
-        .select('id, slug, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id')
+        .select('id, slug, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, active_coupon_redemption_id')
         .not('subscription_mp_id', 'is', null)
         .not('subscription_status', 'eq', 'free')
         .not('subscription_status', 'eq', 'org_managed')
@@ -200,7 +201,10 @@ export async function GET(req: Request) {
             // baja regla 4 quedó facturable en MP (drift detecta el monto), se reporta como drift (c).
 
             // (c) Drift de monto: comparar el monto vigente del preapproval contra el compuesto esperado.
-            const expectedClp = getCompositeAmountClp(tier, cycle, toBillableAddons(live))
+            // F2a.2b: el esperado incluye el descuento vivo (resuelto desde active_coupon_redemption_id
+            // del SELECT) → el preapproval con cupón NO se reporta como drift falso.
+            const couponSpec = await resolveDiscountSpecByRedemptionId(admin, coach.active_coupon_redemption_id)
+            const expectedClp = getCompositeAmountClp(tier, cycle, toBillableAddons(live), couponSpec).totalClp
             const mpAmount = mpData.auto_recurring?.transaction_amount
             if (mpIsActive && typeof mpAmount === 'number' && mpAmount !== expectedClp) {
                 addonAlerts.push({

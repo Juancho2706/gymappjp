@@ -91,16 +91,25 @@ export async function resolveActiveDiscountSpec(db: DB, coachId: string): Promis
         .select('active_coupon_redemption_id')
         .eq('id', coachId)
         .maybeSingle()
-    const redemptionId = coach?.active_coupon_redemption_id
-    if (!redemptionId) return null
+    return resolveDiscountSpecByRedemptionId(db, coach?.active_coupon_redemption_id ?? null)
+}
 
+/**
+ * Variante para call sites que YA tienen el `active_coupon_redemption_id` del coach (p.ej. el cron
+ * lo incluye en su SELECT de coaches) → evita la lectura redundante de `coaches`. Devuelve `null`
+ * si no hay puntero, el ledger no está `active`, o el snapshot es inválido/expirado. `db` service-role.
+ */
+export async function resolveDiscountSpecByRedemptionId(
+    db: DB,
+    redemptionId: string | null | undefined
+): Promise<DiscountSpec | null> {
+    if (!redemptionId) return null
     const { data: redemption } = await db
         .from('coupon_redemptions')
         .select('status, discount_value_snapshot, applied_cycles_remaining')
         .eq('id', redemptionId)
         .maybeSingle()
     if (!redemption || redemption.status !== 'active') return null
-
     return discountSpecFromSnapshot(
         redemption.discount_value_snapshot,
         redemption.applied_cycles_remaining
