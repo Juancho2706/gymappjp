@@ -66,11 +66,37 @@ export function hslToHex(h: number, s: number, l: number): string {
 }
 
 /**
- * Genera una paleta completa a partir de un color primario HEX.
+ * Genera una paleta completa a partir de un color primario HEX, y opcionalmente un secundario
+ * (white-label v2 — color2 INDEPENDIENTE: badges/tags/macros/2da serie de charts; decisión CEO #1).
+ *
+ * - Llamada single-arg INTACTA: sin `secondaryHex`, las vars `secondary*` salen `undefined` (los
+ *   consumidores existentes no las leen). Mismo shape de retorno siempre (ergonómico, sin narrowing).
+ * - Las shades del secundario son el ESPEJO exacto de las del primario.
  */
-export function generateBrandPalette(primaryHex: string) {
+export function generateBrandPalette(primaryHex: string, secondaryHex?: string | null) {
     const [h, s, l] = hexToHsl(primaryHex)
     const contrast = getContrastInfo(primaryHex)
+
+    const secondary = secondaryHex
+        ? (() => {
+            const [h2, s2, l2] = hexToHsl(secondaryHex)
+            return {
+                secondary: secondaryHex as string | undefined,
+                secondaryDark: hslToHex(h2, Math.min(s2 + 10, 100), Math.max(l2 - 15, 10)) as string | undefined,
+                secondaryLight: hslToHex(h2, Math.max(s2 - 10, 0), Math.min(l2 + 20, 95)) as string | undefined,
+                secondarySurface: hslToHex(h2, Math.max(s2 - 20, 0), Math.min(l2 + 35, 97)) as string | undefined,
+                secondaryRgb: hexToRgb(secondaryHex) as string | undefined,
+                secondaryForeground: getContrastInfo(secondaryHex).textColor as '#ffffff' | '#000000' | undefined,
+            }
+        })()
+        : {
+            secondary: undefined as string | undefined,
+            secondaryDark: undefined as string | undefined,
+            secondaryLight: undefined as string | undefined,
+            secondarySurface: undefined as string | undefined,
+            secondaryRgb: undefined as string | undefined,
+            secondaryForeground: undefined as '#ffffff' | '#000000' | undefined,
+        }
 
     return {
         primary: primaryHex,
@@ -80,6 +106,7 @@ export function generateBrandPalette(primaryHex: string) {
         primaryGlow: hslToHex(h, s, Math.min(l + 10, 90)),
         primaryRgb: hexToRgb(primaryHex),
         primaryForeground: contrast.textColor,
+        ...secondary,
     }
 }
 

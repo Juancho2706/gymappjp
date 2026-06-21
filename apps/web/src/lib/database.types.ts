@@ -1040,11 +1040,15 @@ export type Database = {
       }
       coaches: {
         Row: {
+          accent_dark: string | null
+          accent_light: string | null
           active_coupon_redemption_id: string | null
           active_org_id: string | null
           admin_notes: string | null
           billing_cycle: string
+          brand_font_key: string | null
           brand_name: string
+          brand_secondary_color: string | null
           card_brand: string | null
           card_last4: string | null
           card_payment_method_id: string | null
@@ -1060,9 +1064,12 @@ export type Database = {
           loader_show_icon: boolean
           loader_text: string | null
           loader_text_color: string | null
+          loader_variant: string
           logo_url: string | null
+          logo_url_dark: string | null
           marketing_consent: boolean
           max_clients: number
+          neutral_tint: boolean
           onboarding_guide: Json
           payment_provider: string
           previous_slugs: string[] | null
@@ -1088,11 +1095,15 @@ export type Database = {
           welcome_modal_version: number
         }
         Insert: {
+          accent_dark?: string | null
+          accent_light?: string | null
           active_coupon_redemption_id?: string | null
           active_org_id?: string | null
           admin_notes?: string | null
           billing_cycle?: string
+          brand_font_key?: string | null
           brand_name: string
+          brand_secondary_color?: string | null
           card_brand?: string | null
           card_last4?: string | null
           card_payment_method_id?: string | null
@@ -1108,9 +1119,12 @@ export type Database = {
           loader_show_icon?: boolean
           loader_text?: string | null
           loader_text_color?: string | null
+          loader_variant?: string
           logo_url?: string | null
+          logo_url_dark?: string | null
           marketing_consent?: boolean
           max_clients?: number
+          neutral_tint?: boolean
           onboarding_guide?: Json
           payment_provider?: string
           previous_slugs?: string[] | null
@@ -1136,11 +1150,15 @@ export type Database = {
           welcome_modal_version?: number
         }
         Update: {
+          accent_dark?: string | null
+          accent_light?: string | null
           active_coupon_redemption_id?: string | null
           active_org_id?: string | null
           admin_notes?: string | null
           billing_cycle?: string
+          brand_font_key?: string | null
           brand_name?: string
+          brand_secondary_color?: string | null
           card_brand?: string | null
           card_last4?: string | null
           card_payment_method_id?: string | null
@@ -1156,9 +1174,12 @@ export type Database = {
           loader_show_icon?: boolean
           loader_text?: string | null
           loader_text_color?: string | null
+          loader_variant?: string
           logo_url?: string | null
+          logo_url_dark?: string | null
           marketing_consent?: boolean
           max_clients?: number
+          neutral_tint?: boolean
           onboarding_guide?: Json
           payment_provider?: string
           previous_slugs?: string[] | null
@@ -3370,6 +3391,7 @@ export type Database = {
           brand_history: Json
           brand_published_at: string | null
           brand_published_by: string | null
+          brand_secondary_color: string | null
           client_limit: number
           created_at: string | null
           currency: string
@@ -3381,6 +3403,7 @@ export type Database = {
           loader_icon_mode: string
           loader_text: string | null
           loader_text_color: string | null
+          loader_variant: string
           logo_url: string | null
           logo_url_dark: string | null
           name: string
@@ -3407,6 +3430,7 @@ export type Database = {
           brand_history?: Json
           brand_published_at?: string | null
           brand_published_by?: string | null
+          brand_secondary_color?: string | null
           client_limit?: number
           created_at?: string | null
           currency?: string
@@ -3418,6 +3442,7 @@ export type Database = {
           loader_icon_mode?: string
           loader_text?: string | null
           loader_text_color?: string | null
+          loader_variant?: string
           logo_url?: string | null
           logo_url_dark?: string | null
           name: string
@@ -3444,6 +3469,7 @@ export type Database = {
           brand_history?: Json
           brand_published_at?: string | null
           brand_published_by?: string | null
+          brand_secondary_color?: string | null
           client_limit?: number
           created_at?: string | null
           currency?: string
@@ -3455,6 +3481,7 @@ export type Database = {
           loader_icon_mode?: string
           loader_text?: string | null
           loader_text_color?: string | null
+          loader_variant?: string
           logo_url?: string | null
           logo_url_dark?: string | null
           name?: string
@@ -4107,6 +4134,7 @@ export type Database = {
         Row: {
           accent_dark: string | null
           accent_light: string | null
+          brand_secondary_color: string | null
           created_at: string
           deleted_at: string | null
           enabled_modules: Json
@@ -4115,6 +4143,7 @@ export type Database = {
           loader_icon_mode: string
           loader_text: string | null
           loader_text_color: string | null
+          loader_variant: string
           logo_url: string | null
           logo_url_dark: string | null
           name: string
@@ -4130,6 +4159,7 @@ export type Database = {
         Insert: {
           accent_dark?: string | null
           accent_light?: string | null
+          brand_secondary_color?: string | null
           created_at?: string
           deleted_at?: string | null
           enabled_modules?: Json
@@ -4138,6 +4168,7 @@ export type Database = {
           loader_icon_mode?: string
           loader_text?: string | null
           loader_text_color?: string | null
+          loader_variant?: string
           logo_url?: string | null
           logo_url_dark?: string | null
           name: string
@@ -4153,6 +4184,7 @@ export type Database = {
         Update: {
           accent_dark?: string | null
           accent_light?: string | null
+          brand_secondary_color?: string | null
           created_at?: string
           deleted_at?: string | null
           enabled_modules?: Json
@@ -4161,6 +4193,7 @@ export type Database = {
           loader_icon_mode?: string
           loader_text?: string | null
           loader_text_color?: string | null
+          loader_variant?: string
           logo_url?: string | null
           logo_url_dark?: string | null
           name?: string

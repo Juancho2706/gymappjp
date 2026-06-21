@@ -7,6 +7,7 @@ import {
     getTierMaxClients,
     getTierPriceClp,
     isBillingCycleAllowedForTier,
+    isBrandingAllowed,
     isSaleTier,
     SALE_TIERS,
     TIER_CONFIG,
@@ -40,9 +41,24 @@ describe('subscription constants', () => {
         expect(getTierMaxClients('starter')).toBe(10)
         expect(getTierMaxClients('pro')).toBe(30)
         expect(getTierCapabilities('starter').canUseNutrition).toBe(false)
-        expect(getTierCapabilities('starter').canUseBranding).toBe(true)
+        // white-label v2 (decision CEO 2026-06-21): branding = Pro+ ENTERO → starter SIN branding.
+        expect(getTierCapabilities('starter').canUseBranding).toBe(false)
         expect(getTierCapabilities('pro').canUseNutrition).toBe(true)
         expect(getTierCapabilities('pro').canUseBranding).toBe(true)
+    })
+
+    it('branding gate (isBrandingAllowed) — Pro+ ENTERO + fail-closed (white-label v2)', () => {
+        // free/starter NO tienen branding (ven TODO EVA system); pro/elite/growth/scale SÍ.
+        expect(isBrandingAllowed('free')).toBe(false)
+        expect(isBrandingAllowed('starter')).toBe(false)
+        expect(isBrandingAllowed('pro')).toBe(true)
+        expect(isBrandingAllowed('elite')).toBe(true)
+        expect(isBrandingAllowed('growth')).toBe(true)
+        expect(isBrandingAllowed('scale')).toBe(true)
+        // fail-closed: un tier inválido (string fuera del union) cae a false, nunca filtra marca.
+        expect(isBrandingAllowed('' as SubscriptionTier)).toBe(false)
+        expect(isBrandingAllowed('enterprise' as SubscriptionTier)).toBe(false)
+        expect(isBrandingAllowed(null as unknown as SubscriptionTier)).toBe(false)
     })
 
     it('pins elite ceiling at 100 (F0-a)', () => {

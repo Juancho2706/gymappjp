@@ -7,6 +7,11 @@ import { InstallPrompt } from '@/components/InstallPrompt'
 import { BRAND_APP_ICON } from '@/lib/brand-assets'
 import { LoginEntrance, LoginEntranceItem } from './_components/LoginEntrance'
 import { getClientLoginCoach, getClientLoginMetadataCoach } from './_data/login.queries'
+import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
+import { resolveBrandTheme } from '@eva/brand-kit'
+import { resolveBrandFontStack } from '@/lib/brand-fonts'
+import { generateBrandPalette } from '@/lib/color-utils'
+import { BRAND_PRIMARY_COLOR } from '@/lib/brand-assets'
 
 interface Props {
     params: Promise<{ coach_slug: string }>
@@ -45,14 +50,32 @@ export default async function ClientLoginPage({ params }: Props) {
 
     if (!coach) notFound()
 
+    // white-label v2: branding pre-auth = Pro+ ENTERO. free/starter → EVA visual (color/logo EVA),
+    // conservando el NOMBRE del coach (identidad). Cierra el gate-leak (la query antes no miraba tier).
+    const brandingAllowed = isBrandingAllowed((coach.subscription_tier ?? 'free') as SubscriptionTier)
+    const brandColor = brandingAllowed ? (coach.primary_color || BRAND_PRIMARY_COLOR) : BRAND_PRIMARY_COLOR
+    const theme = resolveBrandTheme({
+        brandColor,
+        accentLight: brandingAllowed ? (coach.accent_light || null) : null,
+        accentDark: brandingAllowed ? (coach.accent_dark || null) : null,
+        secondaryLight: brandingAllowed ? (coach.brand_secondary_color || null) : null,
+        secondaryDark: brandingAllowed ? (coach.brand_secondary_color || null) : null,
+    })
+    const accentRgb = generateBrandPalette(theme.light.accent).primaryRgb.replace(/,\s*/g, ' ')
+    const logoUrl = brandingAllowed ? coach.logo_url : null
+    // Fuente solo en el wordmark/título (decisión #4); inputs/cuerpo en Inter (primera pantalla, sin cache).
+    const brandFontStack = resolveBrandFontStack(brandingAllowed ? (coach.brand_font_key ?? '') : '')
+
     return (
-        <div className="relative min-h-dvh flex flex-col items-center justify-center p-4 pt-safe bg-background overflow-hidden">
-            {/* Ambient glow using coach color */}
+        <div className="login-brand relative min-h-dvh flex flex-col items-center justify-center p-4 pt-safe bg-background overflow-hidden">
+            {/* Acento por-modo + fuente: scoped a .login-brand para no tocar el resto del árbol. */}
+            <style dangerouslySetInnerHTML={{ __html: `.login-brand{--login-accent:${theme.light.accent};--login-accent-rgb:${accentRgb};--login-font:${brandFontStack};}.dark .login-brand{--login-accent:${theme.dark.accent};}` }} />
+            {/* Ambient glow using the resolved brand accent (gated). */}
             <div
                 className="fixed inset-0 pointer-events-none"
                 aria-hidden="true"
                 style={{
-                    background: `radial-gradient(ellipse 90% 55% at 50% -10%, ${coach.primary_color}22, transparent 65%)`,
+                    background: 'radial-gradient(ellipse 90% 55% at 50% -10%, rgb(var(--login-accent-rgb) / 0.13), transparent 65%)',
                 }}
             />
             {/* Subtle grid */}
@@ -66,13 +89,13 @@ export default async function ClientLoginPage({ params }: Props) {
                 {/* Coach brand header */}
                 <LoginEntranceItem className="text-center mb-7">
                     <div className="flex justify-center mb-4">
-                        {coach.logo_url ? (
+                        {logoUrl ? (
                             <div
                                 className="relative flex items-center justify-center w-20 h-20 rounded-2xl overflow-hidden border shadow-lg"
-                                style={{ borderColor: `${coach.primary_color}30`, boxShadow: `0 8px 32px ${coach.primary_color}20` }}
+                                style={{ borderColor: 'rgb(var(--login-accent-rgb) / 0.19)', boxShadow: '0 8px 32px rgb(var(--login-accent-rgb) / 0.12)' }}
                             >
                                 <Image
-                                    src={coach.logo_url}
+                                    src={logoUrl}
                                     alt={coach.brand_name}
                                     fill
                                     className="object-contain p-2"
@@ -82,16 +105,16 @@ export default async function ClientLoginPage({ params }: Props) {
                             <div
                                 className="flex items-center justify-center w-20 h-20 rounded-2xl border shadow-lg"
                                 style={{
-                                    backgroundColor: `${coach.primary_color}15`,
-                                    borderColor: `${coach.primary_color}30`,
-                                    boxShadow: `0 8px 32px ${coach.primary_color}15`,
+                                    backgroundColor: 'rgb(var(--login-accent-rgb) / 0.08)',
+                                    borderColor: 'rgb(var(--login-accent-rgb) / 0.19)',
+                                    boxShadow: '0 8px 32px rgb(var(--login-accent-rgb) / 0.08)',
                                 }}
                             >
-                                <Dumbbell className="w-9 h-9" style={{ color: coach.primary_color }} />
+                                <Dumbbell className="w-9 h-9" style={{ color: 'var(--login-accent)' }} />
                             </div>
                         )}
                     </div>
-                    <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
+                    <h1 className="font-display text-2xl font-bold tracking-tight text-foreground" style={{ fontFamily: 'var(--login-font)' }}>
                         {coach.brand_name}
                     </h1>
                     <p className="mt-1.5 text-sm text-muted-foreground max-w-[260px] mx-auto leading-relaxed">
@@ -103,9 +126,9 @@ export default async function ClientLoginPage({ params }: Props) {
                 <LoginEntranceItem>
                     <ClientLoginForm
                         coachSlug={coach_slug}
-                        primaryColor={coach.primary_color}
+                        primaryColor={theme.light.accent}
                         brandName={coach.brand_name}
-                        logoUrl={coach.logo_url}
+                        logoUrl={logoUrl}
                     />
                 </LoginEntranceItem>
 

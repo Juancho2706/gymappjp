@@ -20,6 +20,13 @@ export type CoachSession = Pick<
     | 'logo_url'
     | 'onboarding_guide'
     | 'subscription_tier'
+    | 'brand_secondary_color'
+    | 'accent_light'
+    | 'accent_dark'
+    | 'neutral_tint'
+    | 'logo_url_dark'
+    | 'brand_font_key'
+    | 'loader_variant'
 > & {
     use_brand_colors_coach?: boolean
 }

@@ -59,13 +59,14 @@ export function isSaleTier(tier: string): tier is SaleTier {
 
 const QUARTERLY_DISCOUNT = 0.1
 const ANNUAL_DISCOUNT = 0.2
+// 'Branding personalizado' YA NO es shared: branding = Pro+ ENTERO (decision CEO 2026-06-21,
+// white-label v2). Se agrega solo a pro/elite/growth/scale, no a starter.
 const SHARED_TIER_FEATURES = [
     'Rutinas ilimitadas con GIFs',
     'Catálogo de ejercicios con GIF',
     'Programas de entrenamiento',
     'Check-in y progreso',
     'Dashboard coach',
-    'Branding personalizado',
 ] as const
 
 /** Rango de alumnos por tier (copy marketing / UI). */
@@ -114,33 +115,35 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
         label: 'Pro',
         maxClients: 30,
         monthlyPriceClp: 29990,
-        features: [...SHARED_TIER_FEATURES, 'Planes de nutrición'],
+        features: [...SHARED_TIER_FEATURES, 'Branding personalizado', 'Planes de nutrición'],
     },
     elite: {
         label: 'Elite',
         maxClients: 100,
         monthlyPriceClp: 44990,
-        features: [...SHARED_TIER_FEATURES, 'Planes de nutrición'],
+        features: [...SHARED_TIER_FEATURES, 'Branding personalizado', 'Planes de nutrición'],
     },
     // LEGACY — fuera de venta, grandfathered + placeholder team/org_managed (migracion 20260609230000). NO borrar.
     growth: {
         label: 'Growth',
         maxClients: 120,
         monthlyPriceClp: 84990,
-        features: [...SHARED_TIER_FEATURES, 'Planes de nutrición'],
+        features: [...SHARED_TIER_FEATURES, 'Branding personalizado', 'Planes de nutrición'],
     },
     // LEGACY — fuera de venta, grandfathered + placeholder team/org_managed (migracion 20260609230000). NO borrar.
     scale: {
         label: 'Scale',
         maxClients: 500,
         monthlyPriceClp: 190000,
-        features: [...SHARED_TIER_FEATURES, 'Planes de nutrición'],
+        features: [...SHARED_TIER_FEATURES, 'Branding personalizado', 'Planes de nutrición'],
     },
 }
 
 /**
  * Feature gates by tier.
- * free/starter: no nutrition (upgrade driver). free: no branding (upgrade driver).
+ * free/starter: no nutrition (upgrade driver).
+ * free/starter: no branding — branding (color/logo/loader + white-label v2: color2/font/dark) es
+ * Pro+ ENTERO (decision CEO 2026-06-21, white-label v2). El gate único es isBrandingAllowed().
  * canUseAdvancedReports reserved for future implementation — gate not active yet.
  */
 const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
@@ -153,7 +156,7 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
     },
     starter: {
         canUseNutrition: false,
-        canUseBranding: true,
+        canUseBranding: false,
         canUseAdvancedReports: true,
         canCreateCustomExercises: true,
         canImportClients: true,
@@ -210,6 +213,17 @@ export function getTierMaxClients(tier: SubscriptionTier) {
 
 export function getTierCapabilities(tier: SubscriptionTier): TierCapabilities {
     return TIER_CAPABILITIES[tier]
+}
+
+/**
+ * ¿El tier puede usar branding (white-label)? Fuente ÚNICA del gate de marca: la consumen las 5
+ * superficies (proxy, layout alumno, layout coach, login query, manifest/splash) + el write-path.
+ * Branding = Pro+ ENTERO (decision CEO 2026-06-21): free/starter ven TODO EVA system (color/logo/
+ * loader EVA); pro/elite/growth/scale ven su marca. Fail-closed: un tier inválido (string arbitrario
+ * fuera del union) cae a false.
+ */
+export function isBrandingAllowed(tier: SubscriptionTier): boolean {
+    return TIER_CAPABILITIES[tier]?.canUseBranding === true
 }
 
 // ── Ciclos de cobro ───────────────────────────────────────────────────────────

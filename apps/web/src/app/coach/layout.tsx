@@ -12,6 +12,9 @@ import { getUnreadNewsCount, getPublishedNewsItems } from '@/lib/news/queries'
 import type { Metadata } from 'next'
 import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { generateBrandPalette } from '@/lib/color-utils'
+import { resolveBrandTheme } from '@eva/brand-kit'
+import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
+import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { getCoachEnterpriseContext, getCoachTeamContext } from './_data/layout.queries'
 import { createClient } from '@/lib/supabase/server'
 import { getPreferredWorkspaceForRender, listUserWorkspacesForRender } from '@/services/auth/workspace-render-cache'
@@ -99,17 +102,33 @@ export default async function CoachLayout({
         'Mi negocio EVA'
 
     // Marca por contexto: enterprise → org; team → team; standalone → la del coach.
+    // white-label v2 (decisión #2): el branding standalone es Pro+ ENTERO. Si el coach no es Pro o
+    // apagó el toggle, su panel cae a EVA. enterprise/team traen su marca propia (ya Pro).
+    const isManaged = !!(enterpriseContext?.primaryColor || teamContext?.primaryColor)
+    const standaloneBrandOn =
+        !isManaged &&
+        coach.use_brand_colors_coach !== false &&
+        isBrandingAllowed((coach.subscription_tier ?? 'free') as SubscriptionTier)
     const primaryColor =
         enterpriseContext?.primaryColor
             ? enterpriseContext.primaryColor
             : teamContext?.primaryColor
             ? teamContext.primaryColor
-            : coach.use_brand_colors_coach === false
-            ? SYSTEM_PRIMARY_COLOR
-            : (coach.primary_color || BRAND_PRIMARY_COLOR)
-    const palette = generateBrandPalette(primaryColor)
+            : standaloneBrandOn
+            ? (coach.primary_color || BRAND_PRIMARY_COLOR)
+            : SYSTEM_PRIMARY_COLOR
 
-    const useCustomStyles = coach.use_brand_colors_coach !== false
+    // Campos v2 (color2/accent/fuente) solo para el coach standalone Pro+ con el toggle en "mi marca".
+    const accentLight = standaloneBrandOn ? (coach.accent_light || null) : null
+    const accentDark = standaloneBrandOn ? (coach.accent_dark || null) : null
+    const neutralTint = standaloneBrandOn && coach.neutral_tint === true
+    const secondaryColor = standaloneBrandOn ? (coach.brand_secondary_color || null) : null
+    const brandFontStack = resolveBrandFontStack(standaloneBrandOn ? (coach.brand_font_key ?? '') : '')
+    const brandTheme = resolveBrandTheme({ brandColor: primaryColor, accentLight, accentDark, neutralTint, secondaryLight: secondaryColor, secondaryDark: secondaryColor })
+    const palette = generateBrandPalette(brandTheme.light.accent, brandTheme.light.accent2)
+
+    // Loader del panel: custom solo si la marca está activa (standalone Pro+) o si es managed con toggle on.
+    const useCustomStyles = isManaged ? (coach.use_brand_colors_coach !== false) : standaloneBrandOn
     const loaderConfig = useCustomStyles ? {
         customText: coach.loader_text ?? undefined,
         useCustom: coach.use_custom_loader ?? false,
@@ -139,19 +158,32 @@ export default async function CoachLayout({
         <>
         <style dangerouslySetInnerHTML={{ __html: `
             :root {
-                --theme-primary: ${palette.primary};
+                --theme-primary: ${brandTheme.light.accent};
                 --theme-primary-rgb: ${palette.primaryRgb};
                 --theme-primary-dark: ${palette.primaryDark};
                 --theme-primary-light: ${palette.primaryLight};
                 --theme-primary-surface: ${palette.primarySurface};
                 --theme-primary-glow: ${palette.primaryGlow};
-                --theme-primary-foreground: ${palette.primaryForeground};
-                --primary: ${palette.primary};
-                --primary-foreground: ${palette.primaryForeground};
+                --theme-primary-foreground: ${brandTheme.light.accentText};
+                --primary: ${brandTheme.light.accent};
+                --primary-foreground: ${brandTheme.light.accentText};
+                --theme-secondary: ${brandTheme.light.accent2};
+                --theme-secondary-rgb: ${palette.secondaryRgb ?? palette.primaryRgb};
+                --theme-secondary-foreground: ${brandTheme.light.accent2Text};
+                --brand-font: ${brandFontStack};
                 --coach-loader-text: '${(loaderConfig.customText || '').replace(/'/g, "\\'")}';
                 --coach-use-custom-loader: ${loaderConfig.useCustom ? '1' : '0'};
                 --coach-loader-color: '${(loaderConfig.textColor || '').replace(/'/g, "\\'")}';
                 --coach-loader-icon-mode: '${loaderConfig.iconMode}';
+            }
+            /* Dark-mode brandeado (antes el panel NO tenía bloque .dark → dark genérico). */
+            .dark {
+                --theme-primary: ${brandTheme.dark.accent};
+                --theme-primary-foreground: ${brandTheme.dark.accentText};
+                --primary: ${brandTheme.dark.accent};
+                --primary-foreground: ${brandTheme.dark.accentText};
+                --theme-secondary: ${brandTheme.dark.accent2};
+                --theme-secondary-foreground: ${brandTheme.dark.accent2Text};
             }
         ` }} />
         <div

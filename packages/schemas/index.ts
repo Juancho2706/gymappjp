@@ -1,4 +1,6 @@
 // SAFE FOR MOBILE (web + @eva/mobile)
+// Claves canónicas de marca (white-label v2): FONT_KEY_TUPLE/FontKey, LOADER_VARIANT_TUPLE/LoaderVariant.
+export * from './brand'
 // LoginSchema, ForgotPasswordSchema, ResetPasswordSchema, ChangePasswordSchema
 export * from './auth'
 // CheckInSchema, QuickWeightSchema, UpsertHabitsSchema
