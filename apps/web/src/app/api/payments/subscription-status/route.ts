@@ -109,7 +109,9 @@ export async function GET() {
             discountClp: composite.discountClp,
         },
         activeCoupon: couponSpec
-            ? { code: couponCode, discountClp: composite.discountClp }
+            // spec expuesto para que la UI compute el precio descontado de CUALQUIER tier/cycle con la
+            // MISMA fn pura (computeDiscountedClp) → mostrado == cobrado (el server recomputa igual, sin drift).
+            ? { code: couponCode, discountClp: composite.discountClp, spec: couponSpec }
             : null,
         activeClientCount,
         // Flag server-only del cambio de tarjeta (la página es client → no puede leer process.env).
