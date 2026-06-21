@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, S
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { ArrowLeftRight, Calculator, ChevronDown, ChevronLeft, ChevronUp, Plus, Trash2, UtensilsCrossed, X } from 'lucide-react-native'
+import { ArrowLeftRight, AlertTriangle, Calculator, ChevronDown, ChevronLeft, ChevronUp, Plus, Ruler, Trash2, UtensilsCrossed, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, NativeDialog } from '../../components'
@@ -11,23 +11,43 @@ import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { calcMacros, ACTIVITY_LABELS, GOAL_ADJUSTMENTS, type ActivityKey, type GoalKey } from '../../lib/macro-calculator'
 import { FoodSearchSheet } from '../../components/coach/FoodSearchSheet'
 import { FoodSwapSheet } from '../../components/coach/FoodSwapSheet'
+import { ExchangeModePanel } from '../../components/coach/ExchangeModePanel'
+import { ExchangeTargetsEditor, type ExchangeTargetDraft } from '../../components/coach/ExchangeTargetsEditor'
+import { BodyCompGoalsSheet } from '../../components/coach/BodyCompGoalsSheet'
 import {
   DAY_OF_WEEK,
+  createDayVariantDb,
+  deleteDayVariantDb,
   draftItemMacros,
   draftTotals,
   emptyPlanDraft,
   foodToDraftItem,
+  getClientBodyProfile,
   getClientFoodFavorites,
+  getClientFoodRestrictions,
+  getCoachExchangeGroups,
   getPlanDraft,
+  getPlanExchangeData,
+  householdMeasureLabel,
   newMeal,
   saveClientPlan,
+  saveMealExchangeTargetsDb,
+  setMealDayVariantDb,
+  setPlanModeDb,
+  EMPTY_RESTRICTIONS,
+  type ClientBodyProfile,
+  type ClientFoodRestrictions,
+  type DayVariant,
   type DraftMeal,
+  type ExchangeGroup,
   type FoodRow,
+  type NutritionPlanMode,
   type PlanDraft,
   type SwapOption,
 } from '../../lib/nutrition-builder'
 import { coerceSwapOptionUnit } from '../../lib/nutrition-utils'
 import { getTemplateDraft, saveTemplate } from '../../lib/nutrition-templates'
+import { hasModule } from '../../lib/entitlements'
 
 function unitsForFood(item: { unit: string; serving_unit?: string; is_liquid?: boolean }) {
   const units = item.is_liquid || item.serving_unit === 'ml' ? ['ml', 'un'] : ['g', 'un']
@@ -58,6 +78,31 @@ export default function NutritionBuilderScreen() {
   const [calcOpen, setCalcOpen] = useState(false)
   const [calc, setCalc] = useState({ weight: '', height: '', age: '', gender: 'M' as 'M' | 'F', activity: 'moderate' as ActivityKey, goal: 'maintain' as GoalKey })
 
+  // ─── Nutrición Pro (módulo nutrition_exchanges) + body_composition ─────────────
+  // Solo planes de alumno (no plantillas). El gate de dinero es server-side (RLS); acá
+  // decidimos qué superficie mostrar via entitlement del coach.
+  const [proExchanges, setProExchanges] = useState(false)
+  const [proBodyComp, setProBodyComp] = useState(false)
+  const [planMode, setPlanMode] = useState<NutritionPlanMode>('grams')
+  const [exchangeGroups, setExchangeGroups] = useState<ExchangeGroup[]>([])
+  // Targets y variante por COMIDA, keyed por el uid estable del DraftMeal.
+  const [targetsByUid, setTargetsByUid] = useState<Record<string, ExchangeTargetDraft[]>>({})
+  const [variantByUid, setVariantByUid] = useState<Record<string, string | null>>({})
+  const [dayVariants, setDayVariants] = useState<DayVariant[]>([])
+  const [variantPending, setVariantPending] = useState(false)
+  const [modePending, setModePending] = useState(false)
+  // Restricciones dietarias del alumno (alergia bloquea con override; resto = aviso blando).
+  const [restrictions, setRestrictions] = useState<ClientFoodRestrictions>(EMPTY_RESTRICTIONS)
+  const [allergyConfirm, setAllergyConfirm] = useState<FoodRow | null>(null)
+  // Perfil corporal del alumno (calculadora por composición corporal).
+  const [bodyProfile, setBodyProfile] = useState<ClientBodyProfile>({ weightKg: null, heightCm: null })
+  const [bcOpen, setBcOpen] = useState(false)
+
+  const exchangeEnabled = !isTemplate && !!clientId && proExchanges
+  const exchangeActive = exchangeEnabled && planMode === 'exchanges'
+  // canToggle: el modo porciones se persiste por plan_id → exige plan ya guardado.
+  const planPersisted = !!planId || !!draft.id
+
   useEffect(() => {
     (async () => {
       if (isTemplate) {
@@ -68,17 +113,55 @@ export default function NutritionBuilderScreen() {
       }
       if (planId) {
         const d = await getPlanDraft(planId)
-        if (d) { setDraft(d); setMacrosManual((d.daily_calories ?? 0) > 0) }
+        if (d) {
+          setDraft(d)
+          setMacrosManual((d.daily_calories ?? 0) > 0)
+          // Datos del modo intercambios — rekey de DB meal_id → uid estable del draft.
+          try {
+            const ex = await getPlanExchangeData(planId)
+            const idToUid = new Map<string, string>()
+            for (const m of d.meals) if (m.id) idToUid.set(m.id, m.uid)
+            const tByUid: Record<string, ExchangeTargetDraft[]> = {}
+            for (const [mealId, list] of Object.entries(ex.targetsByMealId)) {
+              const u = idToUid.get(mealId)
+              if (u) tByUid[u] = list.map((t) => ({ exchangeGroupId: t.exchangeGroupId, portions: t.portions, notes: t.notes ?? null }))
+            }
+            const vByUid: Record<string, string | null> = {}
+            for (const [mealId, vid] of Object.entries(ex.variantByMealId)) {
+              const u = idToUid.get(mealId)
+              if (u) vByUid[u] = vid
+            }
+            setTargetsByUid(tByUid)
+            setVariantByUid(vByUid)
+            setDayVariants(ex.variants)
+            setPlanMode(ex.planMode)
+          } catch { /* degrada a gramos */ }
+        }
       }
       setLoading(false)
     })()
   }, [planId, templateId])
 
-  // Favoritos del alumno (solo planes de alumno) → resaltar en el buscador.
+  // Favoritos + restricciones del alumno + entitlements + catálogo de grupos (solo plan de alumno).
   useEffect(() => {
     if (isTemplate || !clientId) return
     getClientFoodFavorites(clientId).then(setFavoriteIds).catch(() => {})
+    getClientFoodRestrictions(clientId).then(setRestrictions).catch(() => {})
+    getClientBodyProfile(clientId).then(setBodyProfile).catch(() => {})
+    ;(async () => {
+      try {
+        const [ex, bc] = await Promise.all([hasModule('nutrition_exchanges'), hasModule('body_composition')])
+        setProExchanges(ex)
+        setProBodyComp(bc)
+        if (ex) setExchangeGroups(await getCoachExchangeGroups())
+      } catch { /* fail-closed: superficie Pro oculta */ }
+    })()
   }, [clientId, isTemplate])
+
+  // En modo porciones los objetivos son el REQUERIMIENTO de la nutri (no autosync con gramos).
+  useEffect(() => {
+    if (exchangeActive) setMacrosManual(true)
+  }, [exchangeActive])
 
   const totals = draftTotals(draft.meals)
 
@@ -91,7 +174,11 @@ export default function NutritionBuilderScreen() {
   function patch(p: Partial<PlanDraft>) { setDraft((d) => ({ ...d, ...p })) }
   function setMeals(fn: (meals: DraftMeal[]) => DraftMeal[]) { setDraft((d) => ({ ...d, meals: fn(d.meals) })) }
   function updateMeal(uid: string, p: Partial<DraftMeal>) { setMeals((ms) => ms.map((m) => (m.uid === uid ? { ...m, ...p } : m))) }
-  function removeMeal(uid: string) { setMeals((ms) => ms.filter((m) => m.uid !== uid).map((m, i) => ({ ...m, order_index: i }))) }
+  function removeMeal(uid: string) {
+    setMeals((ms) => ms.filter((m) => m.uid !== uid).map((m, i) => ({ ...m, order_index: i })))
+    setTargetsByUid((prev) => { const { [uid]: _drop, ...rest } = prev; return rest })
+    setVariantByUid((prev) => { const { [uid]: _drop, ...rest } = prev; return rest })
+  }
   function addMeal() { setMeals((ms) => [...ms, newMeal(ms.length)]) }
   function moveMeal(uid: string, dir: -1 | 1) {
     setMeals((ms) => {
@@ -153,11 +240,70 @@ export default function NutritionBuilderScreen() {
     patchTargetSwaps((opts) => opts.filter((o) => o.food_id !== swapFoodId))
   }
 
-  function handleFoodSelected(food: FoodRow) {
-    if (searchMode === 'swap') { addSwapToTarget(food); return }
+  function addFoodToActiveMeal(food: FoodRow) {
     const mealUid = activeMealRef.current
     if (!mealUid) return
     setMeals((ms) => ms.map((m) => (m.uid === mealUid ? { ...m, items: [...m.items, foodToDraftItem(food)] } : m)))
+  }
+
+  function handleFoodSelected(food: FoodRow) {
+    if (searchMode === 'swap') { addSwapToTarget(food); return }
+    // Safety (A3): si el alumno marcó este alimento como ALERGIA, exigir confirmación deliberada.
+    if (!isTemplate && restrictions.allergy.has(food.id)) {
+      setAllergyConfirm(food)
+      return
+    }
+    addFoodToActiveMeal(food)
+  }
+
+  // ─── Modo intercambios (Pro) ──────────────────────────────────────────────────
+  async function handleToggleMode(next: boolean) {
+    const pid = planId ?? draft.id
+    if (!pid) { Alert.alert('Guardá el plan primero', 'Activá el modo porciones después de guardar el plan.'); return }
+    const nextMode: NutritionPlanMode = next ? 'exchanges' : 'grams'
+    const prev = planMode
+    setPlanMode(nextMode)
+    setModePending(true)
+    const res = await setPlanModeDb(pid, nextMode)
+    setModePending(false)
+    if (!res.ok) { setPlanMode(prev); Alert.alert('Error', res.error ?? 'No se pudo cambiar el modo.') }
+  }
+
+  function handleTargetsChange(mealUid: string, targets: ExchangeTargetDraft[]) {
+    setTargetsByUid((prev) => ({ ...prev, [mealUid]: targets }))
+    const mealId = draft.meals.find((m) => m.uid === mealUid)?.id
+    // Persistencia inmediata solo si la comida ya existe en DB; si no, se guarda al Guardar.
+    if (mealId) saveMealExchangeTargetsDb(mealId, targets).catch(() => {})
+  }
+
+  function handleMealVariantChange(mealUid: string, variantId: string | null) {
+    setVariantByUid((prev) => ({ ...prev, [mealUid]: variantId }))
+    const mealId = draft.meals.find((m) => m.uid === mealUid)?.id
+    if (mealId) setMealDayVariantDb(mealId, variantId).catch(() => {})
+  }
+
+  async function handleCreateVariant(name: string) {
+    const pid = planId ?? draft.id
+    if (!pid) return
+    setVariantPending(true)
+    const res = await createDayVariantDb(pid, name)
+    setVariantPending(false)
+    if (res.ok && res.variant) setDayVariants((prev) => [...prev, res.variant!])
+    else Alert.alert('Error', res.error ?? 'No se pudo crear la variante.')
+  }
+
+  async function handleDeleteVariant(variantId: string) {
+    setVariantPending(true)
+    const res = await deleteDayVariantDb(variantId)
+    setVariantPending(false)
+    if (res.ok) {
+      setDayVariants((prev) => prev.filter((v) => v.id !== variantId))
+      setVariantByUid((prev) => {
+        const next: Record<string, string | null> = {}
+        for (const [u, vid] of Object.entries(prev)) next[u] = vid === variantId ? null : vid
+        return next
+      })
+    } else Alert.alert('Error', res.error ?? 'No se pudo eliminar la variante.')
   }
 
   const swapItem = swapTarget
@@ -179,16 +325,40 @@ export default function NutritionBuilderScreen() {
   async function save() {
     if (draft.name.trim().length < 2) { Alert.alert('Falta el nombre', isTemplate ? 'Indicá un nombre para la plantilla.' : 'Indicá un nombre para el plan.'); return }
     if (draft.meals.length === 0) { Alert.alert('Sin comidas', 'Agregá al menos una comida antes de guardar.'); return }
-    const empties = draft.meals.filter((m) => m.items.length === 0)
+    // En modo porciones una comida puede no tener alimentos pero sí porciones prescritas.
+    const empties = draft.meals.filter((m) => {
+      if (m.items.length > 0) return false
+      if (exchangeActive && (targetsByUid[m.uid]?.some((t) => t.portions > 0))) return false
+      return true
+    })
     if (empties.length > 0) {
       setShowEmptyWarn(true)
-      Alert.alert('Comidas incompletas', `Completá al menos 1 alimento en: ${empties.map((m) => m.name || 'Sin nombre').join(', ')}.`)
+      Alert.alert('Comidas incompletas', `Completá al menos 1 alimento${exchangeActive ? ' o porción' : ''} en: ${empties.map((m) => m.name || 'Sin nombre').join(', ')}.`)
       return
     }
     setSaving(true)
-    const res = isTemplate ? await saveTemplate(draft) : await saveClientPlan(clientId!, draft)
+    if (isTemplate) {
+      const res = await saveTemplate(draft)
+      setSaving(false)
+      if (!res.ok) { Alert.alert('Error', res.error ?? 'No se pudo guardar.'); return }
+      router.back()
+      return
+    }
+    const res = await saveClientPlan(clientId!, draft)
+    if (!res.ok || !res.planId) { setSaving(false); Alert.alert('Error', res.error ?? 'No se pudo guardar.'); return }
+
+    // Persistir datos del modo intercambios keyed por las NUEVAS meal ids (mealIdsByUid).
+    if (exchangeEnabled && res.mealIdsByUid) {
+      try {
+        await setPlanModeDb(res.planId, planMode)
+        for (const [uid, mealId] of Object.entries(res.mealIdsByUid)) {
+          const targets = targetsByUid[uid] ?? []
+          await saveMealExchangeTargetsDb(mealId, targets)
+          await setMealDayVariantDb(mealId, variantByUid[uid] ?? null)
+        }
+      } catch { /* best-effort: el plan ya quedó guardado */ }
+    }
     setSaving(false)
-    if (!res.ok) { Alert.alert('Error', res.error ?? 'No se pudo guardar.'); return }
     router.back()
   }
 
@@ -247,6 +417,27 @@ export default function NutritionBuilderScreen() {
 
           <Button label="Calcular metas (Mifflin-St Jeor)" variant="outline" leftIcon={Calculator} onPress={() => setCalcOpen(true)} full />
 
+          {proBodyComp && !isTemplate ? (
+            <Button label="Metas por composición corporal" variant="outline" leftIcon={Ruler} onPress={() => setBcOpen(true)} full />
+          ) : null}
+
+          {/* Modo intercambios (Nutrición Pro) */}
+          {exchangeEnabled ? (
+            <ExchangeModePanel
+              active={planMode === 'exchanges'}
+              canToggle={planPersisted}
+              togglePending={modePending}
+              onToggleMode={handleToggleMode}
+              groups={exchangeGroups}
+              variants={dayVariants}
+              meals={draft.meals.map((m) => ({ targets: targetsByUid[m.uid] ?? [], dayVariantId: variantByUid[m.uid] ?? null }))}
+              goals={{ calories: draft.daily_calories, protein: draft.protein_g, carbs: draft.carbs_g, fats: draft.fats_g }}
+              variantPending={variantPending}
+              onCreateVariant={handleCreateVariant}
+              onDeleteVariant={handleDeleteVariant}
+            />
+          ) : null}
+
           {/* Live totals from foods */}
           <View style={[styles.totals, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
             <Text style={[styles.totalsLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Suma de alimentos</Text>
@@ -293,14 +484,24 @@ export default function NutritionBuilderScreen() {
               {meal.items.map((it, itemIdx) => {
                 const im = draftItemMacros(it)
                 const swapCount = it.swapOptions?.length ?? 0
+                const household = householdMeasureLabel(it)
+                const restriction = !isTemplate
+                  ? (restrictions.allergy.has(it.food_id) ? 'allergy' : restrictions.intolerance.has(it.food_id) ? 'intolerance' : restrictions.dislike.has(it.food_id) ? 'dislike' : null)
+                  : null
                 return (
                   <View key={it.uid} style={{ gap: 6 }}>
-                    <View style={[styles.itemRow, { borderColor: theme.border }]}>
+                    <View style={[styles.itemRow, { borderColor: restriction === 'allergy' ? theme.destructive + '66' : theme.border }]}>
                       <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text numberOfLines={1} style={[styles.itemName, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{it.name}</Text>
+                        <View style={styles.itemNameRow}>
+                          <Text numberOfLines={1} style={[styles.itemName, { color: theme.foreground, fontFamily: 'Inter_600SemiBold', flexShrink: 1 }]}>{it.name}</Text>
+                          {restriction ? <RestrictionBadge theme={theme} type={restriction} /> : null}
+                        </View>
                         <Text style={[styles.itemMacro, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
                           {Math.round(im.calories)} kcal · P{Math.round(im.protein)} C{Math.round(im.carbs)} G{Math.round(im.fats)}
                         </Text>
+                        {household ? (
+                          <Text style={[styles.itemHousehold, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>≈ {household}</Text>
+                        ) : null}
                       </View>
                       <TextInput
                         value={String(it.quantity)}
@@ -347,6 +548,18 @@ export default function NutritionBuilderScreen() {
                 <View style={[styles.warnBox, { borderColor: '#F9731640', backgroundColor: '#F9731614' }]}>
                   <Text style={[styles.warnText, { color: '#F97316', fontFamily: 'Inter_600SemiBold' }]}>Comida vacía: agregá al menos 1 alimento.</Text>
                 </View>
+              ) : null}
+
+              {/* Modo intercambios: editor de porciones por comida */}
+              {exchangeActive ? (
+                <ExchangeTargetsEditor
+                  groups={exchangeGroups}
+                  targets={targetsByUid[meal.uid] ?? []}
+                  onChange={(t) => handleTargetsChange(meal.uid, t)}
+                  variants={dayVariants}
+                  variantId={variantByUid[meal.uid] ?? null}
+                  onVariantChange={(v) => handleMealVariantChange(meal.uid, v)}
+                />
               ) : null}
 
               <TextInput value={meal.notes} onChangeText={(v) => updateMeal(meal.uid, { notes: v })} placeholder="Nota para el alumno (opcional)" placeholderTextColor={theme.mutedForeground} maxLength={500} multiline
@@ -397,7 +610,47 @@ export default function NutritionBuilderScreen() {
           }} full />
         </ScrollView>
       </NativeDialog>
+
+      {/* Calculadora por composición corporal (módulo body_composition) */}
+      <BodyCompGoalsSheet
+        open={bcOpen}
+        onClose={() => setBcOpen(false)}
+        weightKg={bodyProfile.weightKg}
+        onApply={(g) => { setMacrosManual(true); patch({ daily_calories: g.calories, protein_g: g.protein, carbs_g: g.carbs, fats_g: g.fats }) }}
+      />
+
+      {/* Confirmación de alérgeno (safety A3): bloquea hasta override deliberado */}
+      <NativeDialog open={!!allergyConfirm} title="Posible alérgeno" onClose={() => setAllergyConfirm(null)}>
+        <View style={[styles.allergyBox, { borderColor: theme.destructive + '55', backgroundColor: theme.destructive + '14' }]}>
+          <AlertTriangle size={20} color={theme.destructive} />
+          <Text style={[styles.allergyText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+            Este alumno marcó <Text style={{ fontFamily: 'Montserrat_700Bold' }}>{allergyConfirm?.name}</Text> como{' '}
+            <Text style={{ color: theme.destructive, fontFamily: 'Montserrat_700Bold' }}>alergia</Text>. Agregarlo a su plan puede ser peligroso.
+          </Text>
+        </View>
+        <View style={styles.allergyActions}>
+          <View style={{ flex: 1 }}>
+            <Button label="Cancelar" variant="outline" onPress={() => setAllergyConfirm(null)} full />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button label="Agregar igual" onPress={() => { const f = allergyConfirm; setAllergyConfirm(null); if (f) addFoodToActiveMeal(f) }} full />
+          </View>
+        </View>
+      </NativeDialog>
     </SafeAreaView>
+  )
+}
+
+function RestrictionBadge({ theme, type }: { theme: any; type: 'allergy' | 'intolerance' | 'dislike' }) {
+  const cfg = type === 'allergy'
+    ? { label: 'Alergia', color: theme.destructive }
+    : type === 'intolerance'
+      ? { label: 'Intolerancia', color: '#F59E0B' }
+      : { label: 'No le gusta', color: theme.mutedForeground }
+  return (
+    <View style={[styles.restrictionBadge, { borderColor: cfg.color + '66', backgroundColor: cfg.color + '14' }]}>
+      <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: cfg.color }}>{cfg.label}</Text>
+    </View>
   )
 }
 
@@ -482,8 +735,14 @@ const styles = StyleSheet.create({
   dayRow: { gap: 6, paddingVertical: 2 },
   dayChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6 },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8 },
+  itemNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   itemName: { fontSize: 13 },
   itemMacro: { fontSize: 11, marginTop: 2 },
+  itemHousehold: { fontSize: 11, marginTop: 1 },
+  restrictionBadge: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 },
+  allergyBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderWidth: 1, borderRadius: 12, padding: 12 },
+  allergyText: { flex: 1, fontSize: 13, lineHeight: 18 },
+  allergyActions: { flexDirection: 'row', gap: 10 },
   qtyInput: { width: 62, height: 44, borderWidth: 1, borderRadius: 9, textAlign: 'center', fontSize: 16, lineHeight: 20, paddingTop: 0, paddingBottom: 0, paddingHorizontal: 6, includeFontPadding: false },
   unitWrap: { flexDirection: 'row', gap: 2, backgroundColor: 'transparent' },
   unitChip: { paddingHorizontal: 7, paddingVertical: 6, borderRadius: 7 },

@@ -118,3 +118,20 @@ PROXIMO scope sugerido (no hecho): T5 Areas settings, o pasar a P0/P1 del inform
 - GOTCHAS: @eva/calc y domain/* no resuelven desde mobile → portados inline (anti-drift anotado). exchange_groups RLS: web usa service-role; mobile lee bajo sesion alumno → si RLS no expone grupos, degrada fail-closed a vista gramos (verificar policy en device). FEATURE_PREFS flag vive en Edge Config (no accesible mobile) → fail-OPEN (muestra entitled, respeta master _enabled). Timers: beep web → haptics (iOS). Builder: drag-to-area board completo no portado (chip+sheet si); drag por seccion legacy preservado.
 - commit: (siguiente)
 - VERIFICAR DEVICE (critico, son screens core): (1) workout fuerza NO regresiono; cardio/mobility/roller renderizan grid+inputs+timers correctos; zonas HR con bpm si el alumno tiene perfil cardio. (2) nutricion core intacto; swaps/exchanges/micros/plato/off-plan/notas/recetas/shopping/recap aparecen segun data del coach (exchange chips dependen de RLS exchange_groups). (3) builder: guardar programa con bloque cardio/mobility (columnas typed persisten, no 42501); strength sin cambios.
+
+---
+
+## 2026-06-21 — OLA D (workflow 3 agentes)
+- estado: done (tsc exit=0 [2 fix: FoodRow household_* → opcional (rompia meal-groups Ola A); estilos off* faltantes en clients-import] / expo exit=0)
+- Nutrition Pro coach: MODIFICO app/coach/nutrition-builder.tsx + lib/nutrition-builder.ts + componentes ExchangeModePanel/ExchangeTargetsEditor/BodyCompGoalsSheet. Modo intercambios (targets por comida + variantes de dia + toggle plan_mode), alergenos (warning al agregar alimento marcado), body-comp goals (Katch/Cunningham), medidas caseras. Reusa lib/nutrition-exchanges. Gramos preservado. PDF equivalencias = follow-up.
+- Mi Equipo: app/coach/team.tsx + lib/team.ts (hero+rol, share slug/invite, asientos ring, miembros [roles/transfer/remove], Brand Studio nombre/color/loader; logos avanzados → web). seat_limit read-only.
+- Clients import: app/coach/clients-import.tsx + lib/import-clients.ts (wizard 4 pasos CSV + mapeo columnas + preview + tier-gate/max_clients). xlsx = follow-up (dep).
+- wiring (yo): perfil "Mi equipo" (gated por pertenencia via getMyTeamOverview); FAB import en clientes → /coach/clients-import.
+- commit: (siguiente)
+- VERIFICAR DEVICE: nutrition-builder toggle intercambios (plan guardado), alergeno warning, body-comp goals; team (rol/miembros/brand — RLS triggers backstop); import wizard (CSV+mapeo+tier-gate, crea de a uno).
+
+---
+
+## ESTADO GLOBAL (post Ola D)
+Cubierto ~todo el screen-level del informe docs/audits/rn-web-parity-2026-06-21.md. Commits en feat/rn-parity-overnight: T1-T4 + Cardio + Ola A (areas/funciones/modulos/recetas/meal-groups) + Ola B (movement/bodycomp/vistas alumno) + Ola C (workout polimorfico/nutrition overhaul/builder polimorfico) + Ola D (nutrition Pro coach/team/import).
+PENDIENTE (config/polish, NO screen-gaps): nav registry compartido + Opciones hub + tabs gated + workspace switcher + news bell (chrome polish — nav actual funciona, todo reachable por perfil); Google OAuth (necesita OAuth client config en cloud); iOS universal links (re-agregar associatedDomains rompe build iOS por capability del App ID — accion en Apple Developer); PDF equivalencias nutricion; xlsx import; subscription add-on purchase/reactivate (pagos = web-only). TODO el codigo: tsc 0 + bundle OK por ola; FALTA verificacion en DEVICE + merge a master por PR.

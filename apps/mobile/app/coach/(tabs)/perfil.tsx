@@ -4,10 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Apple, Bell, ClipboardList, CreditCard, ExternalLink, HeartPulse, LayoutList, LogOut, Package, SlidersHorizontal, User } from 'lucide-react-native'
+import { Apple, Bell, ClipboardList, CreditCard, ExternalLink, HeartPulse, LayoutList, LogOut, Package, SlidersHorizontal, User, Users } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { hasModule } from '../../../lib/entitlements'
+import { getMyTeamOverview } from '../../../lib/team'
 import { signOutAndCleanup } from '../../../lib/auth-actions'
 import { getCoachProfile, CoachProfile } from '../../../lib/coach'
 import { getCoachOrgContext, CoachOrgContext, orgRoleLabel } from '../../../lib/org'
@@ -51,6 +52,7 @@ export default function CoachPerfilScreen() {
   const [pushEnabled, setPushEnabled] = useState(false)
   const [cardioEnabled, setCardioEnabled] = useState(false)
   const [movementEnabled, setMovementEnabled] = useState(false)
+  const [hasTeam, setHasTeam] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -60,6 +62,7 @@ export default function CoachPerfilScreen() {
     // Mostrar accesos a módulos de pago según entitlement (gate real = server-side).
     hasModule('cardio').then(setCardioEnabled).catch(() => {})
     hasModule('movement_assessment').then(setMovementEnabled).catch(() => {})
+    getMyTeamOverview().then((t) => setHasTeam(!!t)).catch(() => {})
   }, [])
 
   async function togglePush(value: boolean) {
@@ -277,6 +280,18 @@ export default function CoachPerfilScreen() {
         </Section>
 
         <Section title="Configuración">
+          {hasTeam ? (
+            <TouchableOpacity
+              style={[styles.linkRow, { borderColor: theme.border }]}
+              onPress={() => router.push('/coach/team')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.linkText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+                Mi equipo
+              </Text>
+              <Users size={14} color={theme.mutedForeground} />
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             style={[styles.linkRow, { borderColor: theme.border }]}
             onPress={() => router.push('/coach/settings/areas')}

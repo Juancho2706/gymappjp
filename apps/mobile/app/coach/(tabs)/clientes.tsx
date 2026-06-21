@@ -1045,10 +1045,10 @@ export default function ClientesScreen() {
       />
       )}
 
-      {/* A-F14: FAB secundario Importar (paste CSV) */}
+      {/* A-F14: FAB secundario Importar → wizard completo (CSV + mapeo + tier-gate) */}
       <TouchableOpacity
         style={[styles.fabSecondary, { backgroundColor: theme.card, borderColor: theme.border }]}
-        onPress={() => setShowImport(true)}
+        onPress={() => router.push('/coach/clients-import')}
         activeOpacity={0.85}
       >
         <Upload size={20} color={theme.primary} />

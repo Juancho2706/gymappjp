@@ -1,6 +1,17 @@
 import { supabase } from './supabase'
 import { getCoachOrgContext } from './org'
 import { getTodayInSantiago, isoDateAddDays } from './date-utils'
+import {
+  type ComposedGroupPart,
+  type DayVariant,
+  type ExchangeFoodEquivalence,
+  type ExchangeGroup,
+  type MealExchangeTarget,
+  type NutritionPlanMode,
+} from './nutrition-exchanges'
+
+// Re-export para que el builder y los componentes coach consuman desde un solo hogar.
+export type { DayVariant, ExchangeGroup, ExchangeFoodEquivalence, MealExchangeTarget, NutritionPlanMode }
 
 // Coach nutrition plan builder — mirrors the web `upsertClientNutritionPlanJson`
 // (apps/web .../coach/nutrition-plans). Writes nutrition_plans → nutrition_meals
@@ -33,6 +44,10 @@ export interface FoodRow {
   is_liquid: boolean
   category: string | null
   brand: string | null
+  // Medida casera (espejo web bf90571c): render "120 g (1 taza)". Opcionales: no
+  // todos los call-sites que construyen un FoodRow las traen (ej. meal-groups).
+  household_grams?: number | null
+  household_label?: string | null
 }
 
 /** Alternativa de intercambio para un alimento (1:1 con web `food_items.swap_options`). */
@@ -67,7 +82,22 @@ export interface DraftFoodItem {
   serving_size: number
   serving_unit: string
   is_liquid: boolean
+  household_grams: number | null
+  household_label: string | null
   swapOptions: SwapOption[]
+}
+
+/**
+ * Render de medida casera (espejo web bf90571c): "120 g (1 taza)".
+ * Devuelve null si no hay etiqueta casera para mostrar.
+ */
+export function householdMeasureLabel(food: { household_grams?: number | null; household_label?: string | null }): string | null {
+  if (!food.household_label) return null
+  const label = food.household_label.trim()
+  if (!label) return null
+  return food.household_grams != null && food.household_grams > 0
+    ? `${Math.round(food.household_grams)} g (${label})`
+    : label
 }
 
 export interface DraftMeal {
@@ -136,6 +166,8 @@ export function foodToDraftItem(food: FoodRow): DraftFoodItem {
     serving_size: food.serving_size || 100,
     serving_unit: food.serving_unit || 'g',
     is_liquid: !!food.is_liquid || food.serving_unit === 'ml',
+    household_grams: food.household_grams ?? null,
+    household_label: food.household_label ?? null,
     swapOptions: [],
   }
 }
@@ -253,7 +285,7 @@ export async function createCustomFood(input: CustomFoodInput): Promise<{ ok: bo
       category: input.category,
       coach_id: coachId,
     })
-    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand')
+    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand, household_grams, household_label')
     .single()
 
   if (error) return { ok: false, error: error.message }
@@ -266,7 +298,7 @@ export async function listCoachFoods(): Promise<FoodRow[]> {
   if (!coachId) return []
   const { data } = await supabase
     .from('foods')
-    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand')
+    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand, household_grams, household_label')
     .eq('coach_id', coachId)
     .order('name')
   return (data as FoodRow[] | null) ?? []
@@ -318,7 +350,7 @@ export async function searchFoods(query: string, opts: SearchFoodsOptions = {}):
   const { category, scope = 'all', maxCalories, limit = 500 } = opts
   let q = supabase
     .from('foods')
-    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand')
+    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand, household_grams, household_label')
   if (scope === 'mine' && coachId) q = q.eq('coach_id', coachId)
   else if (scope === 'system') q = q.is('coach_id', null)
   else q = q.or(coachId ? `coach_id.is.null,coach_id.eq.${coachId}` : 'coach_id.is.null')
@@ -450,7 +482,7 @@ export async function getPlanDraft(planId: string): Promise<PlanDraft | null> {
 
   const { data: meals } = await supabase
     .from('nutrition_meals')
-    .select('id, name, description, order_index, day_of_week, food_items ( food_id, quantity, unit, swap_options, foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid ) )')
+    .select('id, name, description, order_index, day_of_week, food_items ( food_id, quantity, unit, swap_options, foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, household_grams, household_label ) )')
     .eq('plan_id', planId)
     .order('order_index', { ascending: true })
 
@@ -474,6 +506,8 @@ export async function getPlanDraft(planId: string): Promise<PlanDraft | null> {
       serving_size: fi.foods?.serving_size ?? 100,
       serving_unit: fi.foods?.serving_unit ?? 'g',
       is_liquid: !!fi.foods?.is_liquid || fi.foods?.serving_unit === 'ml',
+      household_grams: fi.foods?.household_grams ?? null,
+      household_label: fi.foods?.household_label ?? null,
       swapOptions: parseSwapOptions(fi.swap_options),
     })),
   }))
@@ -490,7 +524,12 @@ export async function getPlanDraft(planId: string): Promise<PlanDraft | null> {
   }
 }
 
-export async function saveClientPlan(clientId: string, draft: PlanDraft): Promise<{ ok: boolean; planId?: string; error?: string }> {
+/**
+ * Resultado del guardado: `mealIdsByUid` mapea el uid de cada DraftMeal a su id de DB
+ * persistido (orden = order_index). El builder lo usa para persistir, en una segunda
+ * pasada, los targets de intercambio y la asignación de variante por comida (modo Pro).
+ */
+export async function saveClientPlan(clientId: string, draft: PlanDraft): Promise<{ ok: boolean; planId?: string; mealIdsByUid?: Record<string, string>; error?: string }> {
   const coachId = await currentCoachId()
   if (!coachId) return { ok: false, error: 'No autenticado.' }
   if (draft.name.trim().length < 2) return { ok: false, error: 'Indicá un nombre para el plan.' }
@@ -513,6 +552,7 @@ export async function saveClientPlan(clientId: string, draft: PlanDraft): Promis
   }
 
   const sorted = [...draft.meals].sort((a, b) => a.order_index - b.order_index)
+  const mealIdsByUid: Record<string, string> = {}
 
   try {
     let planId = draft.id
@@ -545,12 +585,14 @@ export async function saveClientPlan(clientId: string, draft: PlanDraft): Promis
           }).eq('id', existingId)
           await supabase.from('food_items').delete().eq('meal_id', existingId)
           await insertItems(existingId, meal.items)
+          mealIdsByUid[meal.uid] = existingId
         } else {
           const { data: nm, error } = await supabase.from('nutrition_meals').insert({
             plan_id: planId, name: meal.name, description: meal.notes ?? '', order_index: i, day_of_week: meal.day_of_week ?? null,
           }).select('id').single()
           if (error) throw error
           await insertItems(nm.id, meal.items)
+          mealIdsByUid[meal.uid] = nm.id
         }
       }
     } else {
@@ -567,10 +609,11 @@ export async function saveClientPlan(clientId: string, draft: PlanDraft): Promis
         }).select('id').single()
         if (mErr) throw mErr
         await insertItems(nm.id, meal.items)
+        mealIdsByUid[meal.uid] = nm.id
       }
     }
 
-    return { ok: true, planId: planId ?? undefined }
+    return { ok: true, planId: planId ?? undefined, mealIdsByUid }
   } catch (e: any) {
     return { ok: false, error: e?.message ?? 'Error al guardar el plan.' }
   }
@@ -689,4 +732,372 @@ export async function duplicatePlanToClient(sourcePlanId: string, targetClientId
   } catch (e: any) {
     return { ok: false, error: e?.message ?? 'No se pudo copiar el plan.' }
   }
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// Nutrición Pro (módulo nutrition_exchanges) — lado COACH (builder)
+// Espejo de:
+//   apps/web/.../PlanBuilder (ExchangeModePanel + ExchangeTargetsEditor)
+//   apps/web/src/services/nutrition-exchanges/* + infrastructure/db/exchanges.repository.ts
+// El gate de dinero sigue server-side (RLS met_coach_all / xg_select); acá el coach
+// escribe con su sesión (RLS = techo). Sin service-role.
+// ════════════════════════════════════════════════════════════════════════════════
+
+const EXCHANGE_GROUP_COLUMNS =
+  'id, slug, code, name, coach_id, team_id, is_system, ref_calories, ref_protein_g, ref_carbs_g, ref_fats_g, color, sort_order, composed_of, macros_confirmed'
+
+function parseComposedOf(value: unknown): ComposedGroupPart[] | null {
+  if (!Array.isArray(value)) return null
+  const parts: ComposedGroupPart[] = []
+  for (const item of value) {
+    if (
+      item &&
+      typeof item === 'object' &&
+      !Array.isArray(item) &&
+      typeof (item as any).code === 'string' &&
+      typeof (item as any).portions === 'number'
+    ) {
+      parts.push({ code: (item as any).code, portions: (item as any).portions })
+    }
+  }
+  return parts.length > 0 ? parts : null
+}
+
+function mapExchangeGroupRow(r: any): ExchangeGroup {
+  return {
+    id: r.id,
+    slug: r.slug,
+    code: r.code,
+    name: r.name,
+    coachId: r.coach_id ?? null,
+    teamId: r.team_id ?? null,
+    isSystem: !!r.is_system,
+    refCalories: Number(r.ref_calories) || 0,
+    refProteinG: Number(r.ref_protein_g) || 0,
+    refCarbsG: Number(r.ref_carbs_g) || 0,
+    refFatsG: Number(r.ref_fats_g) || 0,
+    color: r.color ?? null,
+    sortOrder: r.sort_order ?? 0,
+    composedOf: parseComposedOf(r.composed_of),
+    macrosConfirmed: !!r.macros_confirmed,
+  }
+}
+
+/**
+ * Catálogo de grupos de intercambio visibles para el coach: system + propios + team activo.
+ * Espejo de findExchangeGroupsForScope (RLS xg_select = techo). standalone v1: sin team.
+ */
+export async function getCoachExchangeGroups(): Promise<ExchangeGroup[]> {
+  const coachId = await currentCoachId()
+  if (!coachId) return []
+  // standalone mobile v1: no hay workspace team activo (igual que el resto de libs coach).
+  const filters = ['is_system.eq.true', `coach_id.eq.${coachId}`]
+  const { data } = await supabase
+    .from('exchange_groups')
+    .select(EXCHANGE_GROUP_COLUMNS)
+    .or(filters.join(','))
+    .is('deleted_at', null)
+    .order('sort_order', { ascending: true })
+    .order('code', { ascending: true })
+  return ((data ?? []) as any[]).map(mapExchangeGroupRow)
+}
+
+export interface PlanExchangeData {
+  planMode: NutritionPlanMode
+  /** keyed por meal_id de DB. */
+  targetsByMealId: Record<string, MealExchangeTarget[]>
+  variants: DayVariant[]
+  /** keyed por meal_id de DB. */
+  variantByMealId: Record<string, string | null>
+}
+
+const EMPTY_PLAN_EXCHANGE_DATA: PlanExchangeData = {
+  planMode: 'grams',
+  targetsByMealId: {},
+  variants: [],
+  variantByMealId: {},
+}
+
+/** Carga el modo del plan, targets por comida y variantes (builder coach, RLS-scoped). */
+export async function getPlanExchangeData(planId: string): Promise<PlanExchangeData> {
+  try {
+    const { data: plan } = await supabase
+      .from('nutrition_plans')
+      .select('id, plan_mode')
+      .eq('id', planId)
+      .maybeSingle()
+    const planMode: NutritionPlanMode = (plan as any)?.plan_mode === 'exchanges' ? 'exchanges' : 'grams'
+
+    const { data: mealsData } = await supabase
+      .from('nutrition_meals')
+      .select('id, day_variant_id')
+      .eq('plan_id', planId)
+    const assignments = ((mealsData ?? []) as any[]).map((m) => ({
+      mealId: m.id as string,
+      dayVariantId: (m.day_variant_id ?? null) as string | null,
+    }))
+    const mealIds = assignments.map((a) => a.mealId)
+
+    const [targetsRes, variantsRes] = await Promise.all([
+      mealIds.length
+        ? supabase
+            .from('meal_exchange_targets')
+            .select('id, meal_id, exchange_group_id, portions, notes')
+            .in('meal_id', mealIds)
+        : Promise.resolve({ data: [] as any[] }),
+      supabase
+        .from('nutrition_plan_day_variants')
+        .select('id, plan_id, name, sort_order, created_at')
+        .eq('plan_id', planId)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true }),
+    ])
+
+    const targetsByMealId: Record<string, MealExchangeTarget[]> = {}
+    for (const r of ((targetsRes as any).data ?? []) as any[]) {
+      const t: MealExchangeTarget = {
+        id: r.id,
+        mealId: r.meal_id,
+        exchangeGroupId: r.exchange_group_id,
+        portions: Number(r.portions) || 0,
+        notes: r.notes ?? null,
+      }
+      ;(targetsByMealId[t.mealId] ??= []).push(t)
+    }
+    const variants: DayVariant[] = ((variantsRes.data ?? []) as any[]).map((r) => ({
+      id: r.id,
+      planId: r.plan_id,
+      name: r.name,
+      sortOrder: r.sort_order ?? 0,
+    }))
+    const variantByMealId: Record<string, string | null> = {}
+    for (const a of assignments) variantByMealId[a.mealId] = a.dayVariantId
+
+    return { planMode, targetsByMealId, variants, variantByMealId }
+  } catch {
+    return EMPTY_PLAN_EXCHANGE_DATA
+  }
+}
+
+/** Cambia el modo del plan (gramos ↔ porciones). RLS = techo. */
+export async function setPlanModeDb(planId: string, mode: NutritionPlanMode): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase.from('nutrition_plans').update({ plan_mode: mode }).eq('id', planId)
+  return error ? { ok: false, error: error.message } : { ok: true }
+}
+
+/** Reemplaza (delete + insert) los targets de UNA comida. Espejo de replaceMealExchangeTargets. */
+export async function saveMealExchangeTargetsDb(
+  mealId: string,
+  targets: { exchangeGroupId: string; portions: number; notes?: string | null }[]
+): Promise<{ ok: boolean; error?: string }> {
+  const { error: delErr } = await supabase.from('meal_exchange_targets').delete().eq('meal_id', mealId)
+  if (delErr) return { ok: false, error: delErr.message }
+  const live = targets.filter((t) => t.portions > 0)
+  if (live.length === 0) return { ok: true }
+  const { error: insErr } = await supabase.from('meal_exchange_targets').insert(
+    live.map((t) => ({ meal_id: mealId, exchange_group_id: t.exchangeGroupId, portions: t.portions, notes: t.notes ?? null }))
+  )
+  return insErr ? { ok: false, error: insErr.message } : { ok: true }
+}
+
+/** Asigna/limpia la variante de día de una comida (null = aplica a todas). */
+export async function setMealDayVariantDb(mealId: string, variantId: string | null): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase.from('nutrition_meals').update({ day_variant_id: variantId }).eq('id', mealId)
+  return error ? { ok: false, error: error.message } : { ok: true }
+}
+
+/** Crea una variante de día. Espejo de createPlanDayVariant (máx 6, sin nombres repetidos). */
+export async function createDayVariantDb(planId: string, name: string): Promise<{ ok: boolean; variant?: DayVariant; error?: string }> {
+  const trimmed = name.trim()
+  if (trimmed.length < 1) return { ok: false, error: 'Indicá un nombre.' }
+  const { data: existing } = await supabase
+    .from('nutrition_plan_day_variants')
+    .select('id, name, sort_order')
+    .eq('plan_id', planId)
+  const list = (existing ?? []) as any[]
+  if (list.length >= 6) return { ok: false, error: 'Máximo 6 variantes por pauta.' }
+  if (list.some((v) => String(v.name).toLowerCase() === trimmed.toLowerCase())) {
+    return { ok: false, error: 'Ya existe una variante con ese nombre.' }
+  }
+  const { data, error } = await supabase
+    .from('nutrition_plan_day_variants')
+    .insert({ plan_id: planId, name: trimmed, sort_order: list.length })
+    .select('id, plan_id, name, sort_order')
+    .single()
+  if (error || !data) return { ok: false, error: error?.message ?? 'No se pudo crear la variante.' }
+  return { ok: true, variant: { id: (data as any).id, planId, name: (data as any).name, sortOrder: (data as any).sort_order ?? list.length } }
+}
+
+/** Borra una variante (las comidas asignadas quedan day_variant_id NULL — ON DELETE SET NULL). */
+export async function deleteDayVariantDb(variantId: string): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabase.from('nutrition_plan_day_variants').delete().eq('id', variantId)
+  return error ? { ok: false, error: error.message } : { ok: true }
+}
+
+/** Código resumen de una comida en porciones: "2C · 1LAC · 1F" (espejo de portionsSummaryLabel web). */
+export function portionsSummaryLabel(
+  targets: { exchangeGroupId: string; portions: number }[],
+  groups: ExchangeGroup[]
+): string {
+  const map = new Map(groups.map((g) => [g.id, g]))
+  return targets
+    .map((t) => ({ group: map.get(t.exchangeGroupId), portions: t.portions }))
+    .filter((r): r is { group: ExchangeGroup; portions: number } => !!r.group && r.portions > 0)
+    .sort((a, b) =>
+      a.group.sortOrder !== b.group.sortOrder
+        ? a.group.sortOrder - b.group.sortOrder
+        : a.group.code.localeCompare(b.group.code)
+    )
+    .map((r) => {
+      const p = Math.round(r.portions * 10) / 10
+      return `${p}${r.group.code}`
+    })
+    .join(' · ')
+}
+
+/** ¿Algún grupo usado tiene macros sin confirmar? (badge "referencial", espejo web AC3). */
+export function hasUnconfirmedMacros(
+  targets: { exchangeGroupId: string; portions: number }[],
+  groups: ExchangeGroup[]
+): boolean {
+  const map = new Map(groups.map((g) => [g.id, g]))
+  return targets.some((t) => {
+    const g = map.get(t.exchangeGroupId)
+    return !!g && !g.macrosConfirmed
+  })
+}
+
+// ── Restricciones dietarias del alumno (alergia / intolerancia / disgusto) ──────
+// Espejo de getClientFoodRestrictions (web). Safety: alergia bloquea con override.
+
+export type ClientRestrictionType = 'allergy' | 'intolerance' | 'dislike'
+
+export interface ClientFoodRestrictions {
+  allergy: Set<string>
+  intolerance: Set<string>
+  dislike: Set<string>
+}
+
+export const EMPTY_RESTRICTIONS: ClientFoodRestrictions = {
+  allergy: new Set(),
+  intolerance: new Set(),
+  dislike: new Set(),
+}
+
+/**
+ * Restricciones dietarias del alumno por food_id. RLS-scoped (el coach solo lee las de sus
+ * alumnos). Se devuelven 3 sets separados para no degradar una intolerancia a "no le gusta".
+ */
+export async function getClientFoodRestrictions(clientId: string): Promise<ClientFoodRestrictions> {
+  try {
+    const { data } = await supabase
+      .from('client_food_preferences')
+      .select('food_id, preference_type')
+      .eq('client_id', clientId)
+      .in('preference_type', ['allergy', 'intolerance', 'dislike'])
+    const out: ClientFoodRestrictions = { allergy: new Set(), intolerance: new Set(), dislike: new Set() }
+    for (const r of ((data ?? []) as any[])) {
+      const t = r.preference_type as ClientRestrictionType
+      if (t === 'allergy' || t === 'intolerance' || t === 'dislike') out[t].add(r.food_id as string)
+    }
+    return out
+  } catch {
+    return { allergy: new Set(), intolerance: new Set(), dislike: new Set() }
+  }
+}
+
+// ── Perfil corporal del alumno (objetivos por composición corporal — body_composition) ──
+
+export interface ClientBodyProfile {
+  weightKg: number | null
+  heightCm: number | null
+}
+
+/**
+ * Peso/altura del alumno para la calculadora por composición corporal (RLS-scoped).
+ * Fuente canónica = `client_intake` (espejo web client-plan-page.queries); fallback a
+ * `clients.initial_weight_kg`/`height_cm` si no hay intake.
+ */
+export async function getClientBodyProfile(clientId: string): Promise<ClientBodyProfile> {
+  try {
+    const { data: intake } = await supabase
+      .from('client_intake')
+      .select('weight_kg, height_cm')
+      .eq('client_id', clientId)
+      .maybeSingle()
+    let weightKg = (intake as any)?.weight_kg != null ? Number((intake as any).weight_kg) : null
+    let heightCm = (intake as any)?.height_cm != null ? Number((intake as any).height_cm) : null
+    if (weightKg == null || heightCm == null) {
+      const { data: c } = await supabase
+        .from('clients')
+        .select('initial_weight_kg, height_cm')
+        .eq('id', clientId)
+        .maybeSingle()
+      if (weightKg == null && (c as any)?.initial_weight_kg != null) weightKg = Number((c as any).initial_weight_kg)
+      if (heightCm == null && (c as any)?.height_cm != null) heightCm = Number((c as any).height_cm)
+    }
+    return { weightKg, heightCm }
+  } catch {
+    return { weightKg: null, heightCm: null }
+  }
+}
+
+// ── Cálculo por composición corporal (espejo verbatim de @eva/nutrition-engine) ──
+// Katch-McArdle / Cunningham / LBM + reparto protein-forward, igual que la web.
+
+export type BodyCompFormula = 'katch' | 'cunningham'
+
+export const BODYCOMP_FORMULA_LABELS: Record<BodyCompFormula, string> = {
+  katch: 'Katch-McArdle',
+  cunningham: 'Cunningham (atletas)',
+}
+
+const BC_ACTIVITY_FACTORS: Record<ActivityKeyBC, number> = {
+  sedentary: 1.2,
+  light: 1.375,
+  moderate: 1.55,
+  active: 1.725,
+  very_active: 1.9,
+}
+const BC_GOAL_CALORIE_MULTIPLIER: Record<GoalKeyBC, number> = { lose: 0.85, maintain: 1, gain: 1.1 }
+const BC_GOAL_PROTEIN_G_PER_KG: Record<GoalKeyBC, number> = { lose: 2.2, maintain: 1.8, gain: 1.6 }
+const BC_GOAL_FAT_KCAL_FRACTION: Record<GoalKeyBC, number> = { lose: 0.3, maintain: 0.275, gain: 0.25 }
+const BC_KCAL_PER_GRAM = { protein: 4, carbs: 4, fats: 9 }
+
+// Las keys de actividad/objetivo del builder mobile (macro-calculator) usan otra convención
+// (cut/maintain/bulk). Acá usamos las del engine (lose/maintain/gain) para el cálculo bodycomp.
+export type ActivityKeyBC = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active'
+export type GoalKeyBC = 'lose' | 'maintain' | 'gain'
+
+const bcRound = (n: number) => Math.round(n)
+
+export function computeKatchMcArdle(leanBodyMassKg: number): number {
+  return bcRound(370 + 21.6 * Math.max(0, leanBodyMassKg))
+}
+export function computeCunningham(leanBodyMassKg: number): number {
+  return bcRound(500 + 22 * Math.max(0, leanBodyMassKg))
+}
+export function leanBodyMassFromBodyFat(weightKg: number, bodyFatPct: number): number {
+  const pct = Math.min(100, Math.max(0, bodyFatPct))
+  return weightKg * (1 - pct / 100)
+}
+
+export interface BodyCompGoals { calories: number; protein: number; carbs: number; fats: number }
+
+/** Objetivos por composición corporal (Pro). Espejo de calcMacrosBodyComp (web sidebar). */
+export function calcMacrosBodyComp(
+  leanBodyMassKg: number,
+  weightKg: number,
+  activity: ActivityKeyBC,
+  goal: GoalKeyBC,
+  formula: BodyCompFormula
+): BodyCompGoals {
+  const bmr = formula === 'cunningham' ? computeCunningham(leanBodyMassKg) : computeKatchMcArdle(leanBodyMassKg)
+  const tdee = bcRound(bmr * BC_ACTIVITY_FACTORS[activity])
+  const calories = bcRound(tdee * BC_GOAL_CALORIE_MULTIPLIER[goal])
+  const protein = bcRound(BC_GOAL_PROTEIN_G_PER_KG[goal] * weightKg)
+  const fats = bcRound((calories * BC_GOAL_FAT_KCAL_FRACTION[goal]) / BC_KCAL_PER_GRAM.fats)
+  const remaining = calories - protein * BC_KCAL_PER_GRAM.protein - fats * BC_KCAL_PER_GRAM.fats
+  const carbs = bcRound(Math.max(0, remaining) / BC_KCAL_PER_GRAM.carbs)
+  return { calories, protein, carbs, fats }
 }
