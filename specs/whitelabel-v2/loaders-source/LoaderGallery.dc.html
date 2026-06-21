@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #08080a; }
+    @keyframes lgSpin { to { transform: rotate(360deg); } }
+    @keyframes lgSpinRev { to { transform: rotate(-360deg); } }
+    @keyframes lgFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+    @keyframes lgPing { 0% { transform: translate(-50%,-50%) scale(0.45); opacity: 0.9; } 80% { opacity: 0; } 100% { transform: translate(-50%,-50%) scale(1.7); opacity: 0; } }
+    @keyframes lgEq { 0%,100% { transform: scaleY(0.28); } 50% { transform: scaleY(1); } }
+    @keyframes lgDash { 0% { stroke-dashoffset: 360; } 50% { stroke-dashoffset: 110; } 100% { stroke-dashoffset: 360; } }
+    @keyframes lgBar { 0% { transform: translateX(-100%); } 100% { transform: translateX(320%); } }
+    @keyframes lgDot { 0%,100% { transform: scale(0.5); opacity: 0.35; } 50% { transform: scale(1); opacity: 1; } }
+    .lg-spin { animation: lgSpin 1.2s linear infinite; transform-origin: center; }
+    .lg-spin-slow { animation: lgSpin 7s linear infinite; transform-origin: center; }
+    .lg-conic { animation: lgSpin 1s linear infinite; }
+    .lg-arcA { animation: lgSpin 1.5s linear infinite; transform-origin: center; }
+    .lg-arcB { animation: lgSpinRev 2.1s linear infinite; transform-origin: center; }
+    .lg-float { animation: lgFloat 2.8s ease-in-out infinite; }
+    .lg-dash { animation: lgDash 1.6s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) { [class*="lg-"] { animation: none !important; } }
+  </style>
+</helmet>
+
+<div id="lg-root" data-screen-label="EVA · Loaders" style="--ld-brand: #007AFF; --ld-rgb: 0 122 255; min-height: 100vh; background: #08080a; color: #F8F9FA; font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; padding: 44px 32px 64px; box-sizing: border-box;">
+
+  <div style="max-width: 1120px; margin: 0 auto 34px; display: flex; flex-direction: column; gap: 10px;">
+    <div style="font-family: 'Geist Mono', monospace; font-size: 11px; letter-spacing: 0.18em; text-transform: lowercase; color: var(--ld-brand); transition: color 0.1s linear;">// loaders · 6 variantes</div>
+    <h1 style="font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: clamp(26px, 3.4vw, 40px); letter-spacing: -0.035em; margin: 0;">Elige tu pantalla de carga.</h1>
+    <p style="font-size: 14.5px; line-height: 1.55; color: #A1A1AA; margin: 0; max-width: 560px;">Las seis usan el color de marca en vivo —cada una en un tono distinto. Dime cuál te gusta y la dejo como carga oficial del sitio.</p>
+  </div>
+
+  <div style="max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 18px;">
+
+    <!-- ░ V0 · Progreso (original) ░ -->
+    <div id="cell-0" style="position: relative; height: 270px; border-radius: 20px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.09); overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;">
+      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, rgb(var(--ld-rgb) / 0.14), transparent 62%); filter: blur(30px); transition: background 0.1s linear;"></div>
+      <span style="position: absolute; top: 14px; left: 16px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: #71717A;">01 · progreso</span>
+      <div style="position: relative; width: 96px; height: 96px; display: flex; align-items: center; justify-content: center;">
+        <svg width="96" height="96" viewBox="0 0 96 96" style="position: absolute; inset: 0; transform: rotate(-90deg);">
+          <circle cx="48" cy="48" r="40" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="4"></circle>
+          <circle id="po-arc" cx="48" cy="48" r="40" fill="none" stroke="var(--ld-brand)" stroke-width="4" stroke-linecap="round" stroke-dasharray="251.3" stroke-dashoffset="251.3" style="filter: drop-shadow(0 0 6px rgb(var(--ld-rgb) / 0.7)); transition: stroke 0.1s linear;"></circle>
+        </svg>
+        <img class="lg-float" src="./eva-icon-white.png" alt="EVA" style="position: relative; width: 32px; height: 32px; filter: drop-shadow(0 0 10px rgb(var(--ld-rgb) / 0.6));"></img>
+      </div>
+      <div style="position: relative; display: flex; flex-direction: column; align-items: center; gap: 11px;">
+        <span style="font-family: 'Archivo','Montserrat',sans-serif; font-weight: 900; font-size: 18px; letter-spacing: -0.04em; color: #FFFFFF;">EVA</span>
+        <div style="position: relative; width: 150px; height: 3px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden;">
+          <div id="po-bar" style="position: absolute; left: 0; top: 0; bottom: 0; width: 0%; border-radius: 99px; background: var(--ld-brand); box-shadow: 0 0 9px rgb(var(--ld-rgb) / 0.8); transition: background 0.1s linear;"></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 9px;">
+          <span id="po-cap" style="font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: #71717A;">// preparando tu espacio</span>
+          <span id="po-pct" style="font-family: 'Geist Mono', monospace; font-size: 9px; font-weight: 600; color: var(--ld-brand); font-variant-numeric: tabular-nums; transition: color 0.1s linear;">0%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ░ V1 · Anillo (original) ░ -->
+    <div id="cell-1" style="position: relative; height: 270px; border-radius: 20px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.09); overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;">
+      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, rgb(var(--ld-rgb) / 0.14), transparent 62%); filter: blur(30px); transition: background 0.1s linear;"></div>
+      <span style="position: absolute; top: 14px; left: 16px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: #71717A;">02 · anillo</span>
+      <div style="position: relative; width: 96px; height: 96px; display: flex; align-items: center; justify-content: center;">
+        <svg class="lg-spin" width="96" height="96" viewBox="0 0 96 96" style="position: absolute; inset: 0;">
+          <circle cx="48" cy="48" r="40" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="4"></circle>
+          <circle class="lg-dash" cx="48" cy="48" r="40" fill="none" stroke="var(--ld-brand)" stroke-width="4" stroke-linecap="round" stroke-dasharray="251" style="filter: drop-shadow(0 0 6px rgb(var(--ld-rgb) / 0.7)); transition: stroke 0.1s linear;"></circle>
+        </svg>
+        <img class="lg-float" src="./eva-icon-white.png" alt="EVA" style="position: relative; width: 34px; height: 34px; filter: drop-shadow(0 0 10px rgb(var(--ld-rgb) / 0.6));"></img>
+      </div>
+      <span style="position: relative; font-family: 'Archivo','Montserrat',sans-serif; font-weight: 900; font-size: 18px; letter-spacing: -0.04em; color: #FFFFFF;">EVA</span>
+    </div>
+
+    <!-- ░ V2 · Radar (sonar pings) ░ -->
+    <div id="cell-2" style="position: relative; height: 270px; border-radius: 20px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.09); overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;">
+      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, rgb(var(--ld-rgb) / 0.12), transparent 62%); filter: blur(30px); transition: background 0.1s linear;"></div>
+      <span style="position: absolute; top: 14px; left: 16px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: #71717A;">03 · radar</span>
+      <div style="position: relative; width: 96px; height: 96px; display: flex; align-items: center; justify-content: center;">
+        <span style="position: absolute; top: 50%; left: 50%; width: 96px; height: 96px; border-radius: 50%; border: 2px solid var(--ld-brand); animation: lgPing 2.2s cubic-bezier(0,0,0.2,1) infinite; transition: border-color 0.1s linear;"></span>
+        <span style="position: absolute; top: 50%; left: 50%; width: 96px; height: 96px; border-radius: 50%; border: 2px solid var(--ld-brand); animation: lgPing 2.2s cubic-bezier(0,0,0.2,1) 0.73s infinite; transition: border-color 0.1s linear;"></span>
+        <span style="position: absolute; top: 50%; left: 50%; width: 96px; height: 96px; border-radius: 50%; border: 2px solid var(--ld-brand); animation: lgPing 2.2s cubic-bezier(0,0,0.2,1) 1.46s infinite; transition: border-color 0.1s linear;"></span>
+        <span style="position: relative; display: inline-flex; align-items: center; justify-content: center; width: 54px; height: 54px; border-radius: 50%; background: rgb(var(--ld-rgb) / 0.12); border: 1px solid rgb(var(--ld-rgb) / 0.4); transition: all 0.1s linear;">
+          <img class="lg-float" src="./eva-icon-white.png" alt="EVA" style="width: 28px; height: 28px; filter: drop-shadow(0 0 8px rgb(var(--ld-rgb) / 0.6));"></img>
+        </span>
+      </div>
+      <span style="position: relative; font-family: 'Archivo','Montserrat',sans-serif; font-weight: 900; font-size: 18px; letter-spacing: -0.04em; color: #FFFFFF;">EVA</span>
+    </div>
+
+    <!-- ░ V3 · Cometa (conic) ░ -->
+    <div id="cell-3" style="position: relative; height: 270px; border-radius: 20px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.09); overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;">
+      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, rgb(var(--ld-rgb) / 0.14), transparent 62%); filter: blur(30px); transition: background 0.1s linear;"></div>
+      <span style="position: absolute; top: 14px; left: 16px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: #71717A;">04 · cometa</span>
+      <div style="position: relative; width: 96px; height: 96px; display: flex; align-items: center; justify-content: center;">
+        <div class="lg-conic" style="position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 0deg, transparent 0%, rgb(var(--ld-rgb) / 0.05) 35%, var(--ld-brand) 100%); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px)); mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px)); transition: background 0.1s linear;"></div>
+        <img class="lg-float" src="./eva-icon-white.png" alt="EVA" style="position: relative; width: 32px; height: 32px; filter: drop-shadow(0 0 10px rgb(var(--ld-rgb) / 0.6));"></img>
+      </div>
+      <span style="position: relative; font-family: 'Archivo','Montserrat',sans-serif; font-weight: 900; font-size: 18px; letter-spacing: -0.04em; color: #FFFFFF;">EVA</span>
+    </div>
+
+    <!-- ░ V4 · Ecualizador ░ -->
+    <div id="cell-4" style="position: relative; height: 270px; border-radius: 20px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.09); overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;">
+      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, rgb(var(--ld-rgb) / 0.13), transparent 62%); filter: blur(30px); transition: background 0.1s linear;"></div>
+      <span style="position: absolute; top: 14px; left: 16px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: #71717A;">05 · ritmo</span>
+      <div style="position: relative; display: flex; align-items: flex-end; gap: 7px; height: 56px;">
+        <span style="width: 7px; height: 56px; border-radius: 4px; background: linear-gradient(180deg, var(--ld-brand), rgb(var(--ld-rgb) / 0.4)); transform-origin: bottom; animation: lgEq 1.0s ease-in-out infinite; transition: background 0.1s linear;"></span>
+        <span style="width: 7px; height: 56px; border-radius: 4px; background: linear-gradient(180deg, var(--ld-brand), rgb(var(--ld-rgb) / 0.4)); transform-origin: bottom; animation: lgEq 1.0s ease-in-out 0.18s infinite; transition: background 0.1s linear;"></span>
+        <span style="width: 7px; height: 56px; border-radius: 4px; background: linear-gradient(180deg, var(--ld-brand), rgb(var(--ld-rgb) / 0.4)); transform-origin: bottom; animation: lgEq 1.0s ease-in-out 0.36s infinite; transition: background 0.1s linear;"></span>
+        <span style="width: 7px; height: 56px; border-radius: 4px; background: linear-gradient(180deg, var(--ld-brand), rgb(var(--ld-rgb) / 0.4)); transform-origin: bottom; animation: lgEq 1.0s ease-in-out 0.54s infinite; transition: background 0.1s linear;"></span>
+        <span style="width: 7px; height: 56px; border-radius: 4px; background: linear-gradient(180deg, var(--ld-brand), rgb(var(--ld-rgb) / 0.4)); transform-origin: bottom; animation: lgEq 1.0s ease-in-out 0.72s infinite; transition: background 0.1s linear;"></span>
+      </div>
+      <span style="position: relative; font-family: 'Archivo','Montserrat',sans-serif; font-weight: 900; font-size: 18px; letter-spacing: -0.04em; color: #FFFFFF;">EVA</span>
+    </div>
+
+    <!-- ░ V5 · Órbitas (dual arcs) ░ -->
+    <div id="cell-5" style="position: relative; height: 270px; border-radius: 20px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.09); overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;">
+      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 260px; height: 260px; border-radius: 50%; background: radial-gradient(circle, rgb(var(--ld-rgb) / 0.14), transparent 62%); filter: blur(30px); transition: background 0.1s linear;"></div>
+      <span style="position: absolute; top: 14px; left: 16px; font-family: 'Geist Mono', monospace; font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: #71717A;">06 · órbitas</span>
+      <div style="position: relative; width: 96px; height: 96px; display: flex; align-items: center; justify-content: center;">
+        <svg class="lg-arcA" width="96" height="96" viewBox="0 0 96 96" style="position: absolute; inset: 0;">
+          <circle cx="48" cy="48" r="42" fill="none" stroke="var(--ld-brand)" stroke-width="3" stroke-linecap="round" stroke-dasharray="66 198" style="transition: stroke 0.1s linear;"></circle>
+        </svg>
+        <svg class="lg-arcB" width="96" height="96" viewBox="0 0 96 96" style="position: absolute; inset: 0;">
+          <circle cx="48" cy="48" r="32" fill="none" stroke="rgb(var(--ld-rgb) / 0.45)" stroke-width="3" stroke-linecap="round" stroke-dasharray="50 151" style="transition: stroke 0.1s linear;"></circle>
+        </svg>
+        <img src="./eva-icon-white.png" alt="EVA" style="position: relative; width: 30px; height: 30px; filter: drop-shadow(0 0 10px rgb(var(--ld-rgb) / 0.6));"></img>
+      </div>
+      <span style="position: relative; font-family: 'Archivo','Montserrat',sans-serif; font-weight: 900; font-size: 18px; letter-spacing: -0.04em; color: #FFFFFF;">EVA</span>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  componentDidMount() {
+    this.brandStyle = document.createElement('style');
+    document.head.appendChild(this.brandStyle);
+    this.palette = [
+      [0, 122, 255], [0, 199, 190], [22, 163, 74],
+      [245, 158, 11], [255, 59, 31], [88, 86, 214], [0, 229, 255],
+    ];
+    this.cur = this.palette[0].slice();
+    this.target = this.palette[0].slice();
+    this.pos = 0;
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.applyBrand();
+    if (reduce) return;
+    this.last = performance.now();
+    this.loop = this.loop.bind(this);
+    this.raf = requestAnimationFrame(this.loop);
+  }
+  componentWillUnmount() { if (this.raf) cancelAnimationFrame(this.raf); }
+  ringColor(x) {
+    const n = this.palette.length;
+    const i = ((Math.floor(x) % n) + n) % n, j = (i + 1) % n, f = x - Math.floor(x);
+    const a = this.palette[i], b = this.palette[j];
+    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+  }
+  rule(sel, x) {
+    const c = this.ringColor(x);
+    const r = Math.round(c[0]), g = Math.round(c[1]), b = Math.round(c[2]);
+    return sel + '{--ld-brand:rgb(' + r + ' ' + g + ' ' + b + ');--ld-rgb:' + r + ' ' + g + ' ' + b + ';}';
+  }
+  applyBrand() {
+    if (!this.brandStyle) return;
+    // header uses the base hue; each cell is offset so all 6 show a different color at once
+    let css = this.rule('#lg-root', this.pos);
+    for (let i = 0; i < 6; i++) css += this.rule('#cell-' + i, this.pos + i * 1.16);
+    this.brandStyle.textContent = css;
+  }
+  ease(x) { return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; }
+  drawProgress(now) {
+    if (this.pStart === undefined) this.pStart = now;
+    const D = 2600, H = 900, G = 320, t = now - this.pStart;
+    let p, cap;
+    if (t < D) { p = this.ease(t / D); cap = '// preparando tu espacio'; }
+    else if (t < D + H) { p = 1; cap = '// listo'; }
+    else { p = 1; cap = '// listo'; if (t > D + H + G) this.pStart = now; }
+    const arc = document.getElementById('po-arc');
+    if (arc) arc.setAttribute('stroke-dashoffset', String(251.3 * (1 - p)));
+    const bar = document.getElementById('po-bar');
+    if (bar) bar.style.width = (p * 100) + '%';
+    const pc = document.getElementById('po-pct');
+    if (pc) pc.textContent = Math.round(p * 100) + '%';
+    const cp = document.getElementById('po-cap');
+    if (cp && cp.textContent !== cap) cp.textContent = cap;
+  }
+  loop(now) {
+    const dt = Math.min(0.05, (now - this.last) / 1000);
+    this.last = now;
+    this.pos += dt * 0.16;
+    this.target = this.ringColor(this.pos);
+    for (let c = 0; c < 3; c++) this.cur[c] += (this.target[c] - this.cur[c]) * 0.12;
+    this.applyBrand();
+    this.drawProgress(now);
+    this.raf = requestAnimationFrame(this.loop);
+  }
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

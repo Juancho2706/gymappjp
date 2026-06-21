@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #08080a; }
+    @font-face { font-family: 'Archivo'; src: local('Archivo'); }
+    @keyframes loaderSpin { to { transform: rotate(360deg); } }
+    @keyframes loaderFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+    @media (prefers-reduced-motion: reduce) { .ld-spin { animation: none !important; } .ld-float { animation: none !important; } }
+  </style>
+</helmet>
+
+<div data-screen-label="EVA · Loader" style="position: relative; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #08080a; color: #F8F9FA; font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; overflow: hidden;">
+
+  <!-- backdrop -->
+  <div style="position: absolute; inset: 0; pointer-events: none; overflow: hidden;">
+    <div id="ld-glow" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 620px; height: 620px; border-radius: 50%; background: radial-gradient(circle, rgb(var(--ld-rgb, 0 122 255) / 0.18) 0%, transparent 62%); filter: blur(90px); transition: background 0.1s linear;"></div>
+    <div style="position: absolute; inset: 0; background-image: linear-gradient(rgba(140,140,150,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(140,140,150,0.05) 1px, transparent 1px); background-size: 44px 44px; -webkit-mask-image: radial-gradient(ellipse 55% 55% at 50% 50%, black 0%, transparent 78%); mask-image: radial-gradient(ellipse 55% 55% at 50% 50%, black 0%, transparent 78%);"></div>
+  </div>
+
+  <!-- loader stack -->
+  <div id="ld-wrap" style="position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 30px; transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.22,1,0.36,1);">
+
+    <!-- ring + icon -->
+    <div style="position: relative; width: 160px; height: 160px; display: flex; align-items: center; justify-content: center;">
+      <!-- rotating dashed outer ring -->
+      <svg class="ld-spin" width="160" height="160" viewBox="0 0 160 160" style="position: absolute; inset: 0; animation: loaderSpin 7s linear infinite;">
+        <circle cx="80" cy="80" r="74" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1" stroke-dasharray="2 7" stroke-linecap="round"></circle>
+      </svg>
+      <!-- progress ring -->
+      <svg width="160" height="160" viewBox="0 0 160 160" style="position: absolute; inset: 0; transform: rotate(-90deg);">
+        <circle cx="80" cy="80" r="64" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="5"></circle>
+        <circle id="ld-arc" cx="80" cy="80" r="64" fill="none" stroke="var(--ld-brand, #007AFF)" stroke-width="5" stroke-linecap="round" stroke-dasharray="402.1" stroke-dashoffset="402.1" style="filter: drop-shadow(0 0 8px rgb(var(--ld-rgb, 0 122 255) / 0.7));"></circle>
+      </svg>
+      <!-- icon -->
+      <img id="ld-icon" class="ld-float" src="./eva-icon-white.png" alt="EVA" style="position: relative; width: 56px; height: 56px; animation: loaderFloat 2.8s ease-in-out infinite; filter: drop-shadow(0 0 14px rgb(var(--ld-rgb, 0 122 255) / 0.6)); transition: filter 0.1s linear;"></img>
+    </div>
+
+    <!-- wordmark + bar + percent -->
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+      <span style="font-family: 'Archivo', 'Montserrat', sans-serif; font-weight: 900; font-size: 30px; letter-spacing: -0.05em; color: #FFFFFF;">EVA</span>
+      <div style="position: relative; width: 200px; height: 3px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden;">
+        <div id="ld-bar" style="position: absolute; left: 0; top: 0; bottom: 0; width: 0%; border-radius: 99px; background: var(--ld-brand, #007AFF); box-shadow: 0 0 10px rgb(var(--ld-rgb, 0 122 255) / 0.8);"></div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span id="ld-caption" style="font-family: 'Geist Mono', monospace; font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: #71717A;">// preparando tu espacio</span>
+        <span id="ld-pct" style="font-family: 'Geist Mono', monospace; font-size: 10.5px; font-weight: 600; letter-spacing: 0.06em; color: var(--ld-brand, #007AFF); font-variant-numeric: tabular-nums; transition: color 0.1s linear;">0%</span>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  componentDidMount() {
+    this.root = document.querySelector('[data-screen-label="EVA · Loader"]');
+    this.brandStyle = document.createElement('style');
+    document.head.appendChild(this.brandStyle);
+
+    // EVA white-label palette — the loader color flows through it, echoing the landing
+    this.palette = [
+      [0, 122, 255], [0, 199, 190], [22, 163, 74],
+      [245, 158, 11], [255, 59, 31], [88, 86, 214], [0, 229, 255],
+    ];
+    this.cur = this.palette[0].slice();
+    this.target = this.palette[0].slice();
+    this.pos = 0;
+
+    this.C = 2 * Math.PI * 64;                 // ring circumference
+    this.DURATION = 2800;                       // fill time
+    this.HOLD = 950;                            // hold at 100%
+    this.FADE = 520;                            // fade out
+    this.GAP = 260;                             // gap before restart
+    this.cycleStart = performance.now();
+
+    this.arc = document.getElementById('ld-arc');
+    this.bar = document.getElementById('ld-bar');
+    this.pct = document.getElementById('ld-pct');
+    this.cap = document.getElementById('ld-caption');
+    this.wrap = document.getElementById('ld-wrap');
+
+    this.reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (this.reduce) { this.renderProgress(1); this.applyBrand(); return; }
+
+    this.last = performance.now();
+    this.loop = this.loop.bind(this);
+    this.raf = requestAnimationFrame(this.loop);
+  }
+
+  componentWillUnmount() { if (this.raf) cancelAnimationFrame(this.raf); }
+
+  ringColor(x) {
+    const n = this.palette.length;
+    const i = ((Math.floor(x) % n) + n) % n, j = (i + 1) % n, f = x - Math.floor(x);
+    const a = this.palette[i], b = this.palette[j];
+    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+  }
+
+  applyBrand() {
+    const r = Math.round(this.cur[0]), g = Math.round(this.cur[1]), b = Math.round(this.cur[2]);
+    if (this.brandStyle) {
+      this.brandStyle.textContent = '[data-screen-label="EVA · Loader"]{--ld-brand:rgb(' + r + ' ' + g + ' ' + b + ');--ld-rgb:' + r + ' ' + g + ' ' + b + ';}';
+    }
+  }
+
+  easeInOut(x) { return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; }
+
+  renderProgress(p) {
+    if (this.arc) this.arc.setAttribute('stroke-dashoffset', String(this.C * (1 - p)));
+    if (this.bar) this.bar.style.width = (p * 100) + '%';
+    if (this.pct) this.pct.textContent = Math.round(p * 100) + '%';
+  }
+
+  loop(now) {
+    const dt = Math.min(0.05, (now - this.last) / 1000);
+    this.last = now;
+
+    // color morph through the palette
+    this.pos += dt * 0.16;
+    this.target = this.ringColor(this.pos);
+    for (let c = 0; c < 3; c++) this.cur[c] += (this.target[c] - this.cur[c]) * 0.12;
+    this.applyBrand();
+
+    // lifecycle within the cycle
+    const t = now - this.cycleStart;
+    const D = this.DURATION, H = this.HOLD, F = this.FADE, G = this.GAP;
+
+    if (t < D) {
+      const p = this.easeInOut(t / D);
+      this.renderProgress(p);
+      if (this.wrap) { this.wrap.style.opacity = '1'; this.wrap.style.transform = 'scale(1)'; }
+      if (this.cap) this.cap.textContent = '// preparando tu espacio';
+    } else if (t < D + H) {
+      this.renderProgress(1);
+      if (this.cap && this.cap.textContent !== '// listo') this.cap.textContent = '// listo';
+    } else if (t < D + H + F) {
+      const f = (t - D - H) / F;
+      if (this.wrap) { this.wrap.style.opacity = String(1 - f); this.wrap.style.transform = 'scale(' + (1 - 0.04 * f) + ')'; }
+    } else if (t < D + H + F + G) {
+      if (this.wrap) this.wrap.style.opacity = '0';
+    } else {
+      this.cycleStart = now;
+      this.renderProgress(0);
+    }
+
+    this.raf = requestAnimationFrame(this.loop);
+  }
+
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
