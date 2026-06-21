@@ -80,6 +80,11 @@ export default function RegisterPage() {
     const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly')
     // Add-ons opcionales del signup (plan 05 F5.5) — solo tiers pagos.
     const [selectedAddons, setSelectedAddons] = useState<ModuleKey[]>([])
+    // Código de descuento (REGISTER-CODE): manual (campo colapsado) o auto-aplicado desde ?codigo=.
+    // Solo se threadea a /processing (el canje + disclosure SERNAC + consentimiento ocurren allá).
+    const [couponCode, setCouponCode] = useState('')
+    const [couponFieldOpen, setCouponFieldOpen] = useState(false)
+    const [couponAutoApplied, setCouponAutoApplied] = useState(false)
     const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
     const selectedPrice = useMemo(() => getTierPriceClp(tier, billingCycle), [tier, billingCycle])
     // Total en vivo = plan + add-ons seleccionados (monto por ciclo, mismos descuentos del plan).
@@ -109,6 +114,14 @@ export default function RegisterPage() {
                     setEmail(profile.email)
                 }
             })
+        }
+
+        // Auto-apply del código desde el link privado (?codigo=PARTNER20). Camino primario del deal.
+        const rawCoupon = params.get('codigo') ?? params.get('coupon')
+        if (rawCoupon) {
+            setCouponCode(rawCoupon.toUpperCase().replace(/[\s-]+/g, ''))
+            setCouponFieldOpen(true)
+            setCouponAutoApplied(true)
         }
 
         const rawTier = params.get('tier')
@@ -202,6 +215,7 @@ export default function RegisterPage() {
                     <input type="hidden" name="subscription_tier" value={tier} />
                     <input type="hidden" name="billing_cycle" value={billingCycle} />
                     <input type="hidden" name="addons" value={addonsCsv} />
+                    <input type="hidden" name="coupon_code" value={couponCode} />
                     {/* Honeypot — bots fill this, humans don't */}
                     <input
                         name="website"
@@ -503,6 +517,34 @@ export default function RegisterPage() {
                                             <p className="mt-1 text-xs text-muted-foreground">Plan ${selectedPrice.toLocaleString('es-CL')} + módulos ${addonsCycleTotal.toLocaleString('es-CL')} CLP</p>
                                         </div>
                                     )}
+                                    {/* REGISTER-CODE: código de descuento colapsado (camino primario = link auto-aplicado ?codigo=). */}
+                                    <div className="rounded-xl border border-border bg-secondary/20 p-3">
+                                        {!couponFieldOpen ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => setCouponFieldOpen(true)}
+                                                className="text-sm font-medium text-primary hover:underline"
+                                            >
+                                                ¿Tenés un código de descuento?
+                                            </button>
+                                        ) : couponAutoApplied && couponCode ? (
+                                            <p className="text-sm text-emerald-600 dark:text-emerald-400">
+                                                Código <span className="font-mono font-semibold">{couponCode}</span> aplicado. Verás el descuento con su detalle antes de pagar.
+                                            </p>
+                                        ) : (
+                                            <div>
+                                                <label className="block text-xs font-medium text-muted-foreground mb-1">Código de descuento</label>
+                                                <input
+                                                    value={couponCode}
+                                                    onChange={(e) => setCouponCode(e.target.value.toUpperCase().replace(/[\s-]+/g, ''))}
+                                                    placeholder="PARTNER20"
+                                                    className="w-full h-11 rounded-lg border border-border bg-background px-3 text-sm font-mono uppercase focus:outline-none focus:ring-1 focus:ring-primary"
+                                                />
+                                                <p className="mt-1 text-[11px] text-muted-foreground">El descuento se confirma con su detalle antes del primer cobro.</p>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     {/* Las 5 reglas de cobro de los módulos, visibles también en el signup */}
                                     {selectedAddons.length > 0 && (
                                         <ol className="space-y-1.5">

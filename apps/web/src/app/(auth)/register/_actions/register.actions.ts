@@ -26,6 +26,7 @@ import { scheduleFreeCoachDripSequence } from '@/lib/email/send-drip-sequence'
 import { clientIpFromRequest } from '@/lib/rate-limit'
 import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
 import { sendCoachSignupConfirmationEmail } from '@/lib/auth/send-coach-email-confirmation'
+import { normalizeCouponCode } from '@/services/billing/coupons.normalize'
 
 export type RegisterState = {
     error?: string
@@ -255,8 +256,13 @@ export async function registerAction(
     )
     const addonsParam = sanitizedAddons.length > 0 ? `&addons=${encodeURIComponent(sanitizedAddons.join(','))}` : ''
 
+    // Código de descuento (REGISTER-CODE): solo se SANEA y se threadea a /processing — NO se canjea acá
+    // (el canje + disclosure SERNAC + consentimiento ocurren en /processing, antes del primer cobro).
+    const couponCode = normalizeCouponCode((formData.get('coupon_code') as string | null) ?? '')
+    const couponParam = couponCode ? `&coupon=${encodeURIComponent(couponCode)}` : ''
+
     const selectedCycleLabel = BILLING_CYCLE_CONFIG[selectedBillingCycle].label.toLowerCase()
     redirect(
-        `/coach/subscription/processing?from=register&tier=${encodeURIComponent(selectedTier)}&cycle=${encodeURIComponent(selectedBillingCycle)}&plan=${encodeURIComponent(selectedCycleLabel)}${addonsParam}`
+        `/coach/subscription/processing?from=register&tier=${encodeURIComponent(selectedTier)}&cycle=${encodeURIComponent(selectedBillingCycle)}&plan=${encodeURIComponent(selectedCycleLabel)}${addonsParam}${couponParam}`
     )
 }

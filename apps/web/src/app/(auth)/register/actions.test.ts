@@ -335,7 +335,8 @@ describe('registerAction', () => {
     expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
       id: 'u-free',
       subscription_tier: 'free',
-      subscription_status: 'active',
+      // PR #28 (drip fix): web free signup nace 'pending_email' hasta confirmar el correo (no 'active').
+      subscription_status: 'pending_email',
       payment_provider: 'admin',
       max_clients: 3,
       trial_used_email: 'coach@example.com',

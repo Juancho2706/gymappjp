@@ -54,12 +54,24 @@ export default function SubscriptionProcessingPage() {
     const [scheduled, setScheduled] = useState(false)
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const pollStartRef = useRef<number>(0)
+    // REGISTER-CODE: disclosure del cupón antes del primer checkout. El consentimiento = el botón
+    // "Confirmar y pagar con descuento" (R4.2). Código inválido NUNCA bloquea (cae a precio lleno).
+    const [couponPhase, setCouponPhase] = useState<'idle' | 'preview' | 'applying'>('idle')
+    const [couponPreview, setCouponPreview] = useState<{
+        baseBeforeDiscountClp: number
+        discountClp: number
+        totalClp: number
+        couponCode: string
+        durationLabel: string
+        termsText: string
+    } | null>(null)
 
     const preapprovalId = useMemo(
         () => extractPreapprovalId(searchParams.get('subscription') ?? '', searchParams),
         [searchParams]
     )
     const fromRegister = searchParams.get('from') === 'register'
+    const couponFromUrl = searchParams.get('coupon')
     const rawTierParam = searchParams.get('tier')
     const normalizedTierParam = rawTierParam === 'starter_lite' ? 'starter'
         : rawTierParam === 'free' ? null  // free coaches don't use this page
@@ -112,6 +124,50 @@ export default function SubscriptionProcessingPage() {
             setError(err instanceof Error ? err.message : 'Error inesperado al iniciar checkout.')
             setCanRetry(true)
         }
+    }
+
+    // Carga el preview del cupón (sin escribir). Si falla, NO bloquea: nota suave + checkout a precio lleno.
+    async function loadCouponPreview() {
+        try {
+            const res = await fetch('/api/payments/redeem-coupon-signup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: couponFromUrl, commit: false }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok || !data.preview) {
+                // Código inválido/no-elegible → NO bloquea: checkout a precio lleno (silencioso).
+                void startCheckoutFromRegister()
+                return
+            }
+            setCouponPreview(data.preview)
+            setCouponPhase('preview')
+        } catch {
+            void startCheckoutFromRegister()
+        }
+    }
+
+    // Consentimiento SERNAC (R4.2): "Confirmar y pagar" = aplicar el cupón (commit) y RECIÉN ahí al checkout.
+    async function confirmCouponAndCheckout() {
+        setCouponPhase('applying')
+        try {
+            const res = await fetch('/api/payments/redeem-coupon-signup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: couponFromUrl, commit: true }),
+            })
+            const data = await res.json().catch(() => ({}))
+            // ya aplicado (reintento) = éxito
+            if (!res.ok && data?.code !== 'ALREADY_HAS_COUPON' && data?.code !== 'ALREADY_REDEEMED') {
+                setError(data?.error ?? 'No se pudo aplicar el código.')
+                setCanRetry(true)
+                setCouponPhase('idle')
+                return
+            }
+        } catch {
+            // commit falló por red: seguimos al checkout igual (el reconcile/cron ajusta el estado del cupón).
+        }
+        void startCheckoutFromRegister()
     }
 
     useEffect(() => {
@@ -174,7 +230,12 @@ export default function SubscriptionProcessingPage() {
         }
 
         if (fromRegister && !preapprovalId) {
-            void startCheckoutFromRegister()
+            // Con código → disclosure SERNAC primero (preview→consent→commit→checkout). Sin código → checkout directo.
+            if (couponFromUrl) {
+                void loadCouponPreview()
+            } else {
+                void startCheckoutFromRegister()
+            }
             return () => {
                 alive = false
                 if (pollRef.current) {
@@ -301,6 +362,54 @@ export default function SubscriptionProcessingPage() {
                         >
                             Volver a mi suscripción
                         </Link>
+                    </div>
+                </div>
+            </main>
+        )
+    }
+
+    // REGISTER-CODE: disclosure SERNAC del descuento, server-priced, ANTES del primer cobro (R4.2).
+    if ((couponPhase === 'preview' || couponPhase === 'applying') && couponPreview && !error) {
+        const clp = (n: number) => `$${n.toLocaleString('es-CL')}`
+        return (
+            <main className="flex min-h-dvh items-center justify-center px-4 py-12 pt-safe pb-safe bg-background">
+                <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-xl">
+                    <h1 className="text-xl font-bold text-foreground">Confirma tu descuento</h1>
+                    <p className="mt-2 text-sm text-muted-foreground">{couponPreview.termsText}</p>
+                    <div className="mt-4 rounded-xl border border-border bg-secondary/30 p-4 text-sm">
+                        <div className="flex justify-between text-muted-foreground">
+                            <span>Precio normal</span>
+                            <span className="line-through">{clp(couponPreview.baseBeforeDiscountClp)}</span>
+                        </div>
+                        <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                            <span>Descuento ({couponPreview.durationLabel})</span>
+                            <span>−{clp(couponPreview.discountClp)}</span>
+                        </div>
+                        <div className="mt-1 flex justify-between border-t border-border pt-1 font-semibold text-foreground">
+                            <span>Pagas</span>
+                            <span>{clp(couponPreview.totalClp)}</span>
+                        </div>
+                    </div>
+                    <div className="mt-6 flex flex-col gap-3">
+                        <button
+                            type="button"
+                            onClick={() => void confirmCouponAndCheckout()}
+                            disabled={couponPhase === 'applying'}
+                            className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                        >
+                            {couponPhase === 'applying' ? 'Aplicando…' : 'Confirmar y pagar con descuento'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setCouponPhase('idle')
+                                setCouponPreview(null)
+                                void startCheckoutFromRegister()
+                            }}
+                            className="inline-flex h-11 items-center justify-center rounded-xl border border-border px-6 text-sm font-semibold text-foreground hover:bg-secondary/40"
+                        >
+                            Continuar sin código
+                        </button>
                     </div>
                 </div>
             </main>
