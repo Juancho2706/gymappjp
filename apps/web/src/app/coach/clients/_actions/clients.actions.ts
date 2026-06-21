@@ -22,6 +22,7 @@ import { buildCoachStudentUrl, getCoachPublicIdentifier } from '@/lib/coach/publ
 // F3: single source of truth for coach scope + org filtering (replaces the local copies).
 import { resolveCoachScope as getCoachClientScope, applyOrgScope as applyClientScope } from '@/services/auth/coach-scope.service'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
+import { generateStudentTempPassword } from '@/lib/auth/temp-credentials'
 
 export type CreateClientState = {
     error?: string
@@ -390,7 +391,9 @@ export async function resetClientPasswordAction(clientId: string): Promise<{ err
 
     if (!client) return { error: 'Alumno no encontrado.' }
 
-    const tempPassword = Math.floor(100000 + Math.random() * 900000).toString()
+    // PIN puro (6 dígitos numéricos) lo rechaza la protección HIBP de Supabase
+    // con 422 "Password is known to be weak". Patrón Eva${pin}! pasa el filtro.
+    const tempPassword = generateStudentTempPassword()
 
     // GoTrue Admin API: aqui si se necesita (y se tiene) admin real.
     const authAdmin = createServiceRoleClient()
