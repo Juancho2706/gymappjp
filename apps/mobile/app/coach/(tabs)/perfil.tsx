@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Apple, Bell, CreditCard, ExternalLink, HeartPulse, LogOut, User } from 'lucide-react-native'
+import { Apple, Bell, CreditCard, ExternalLink, HeartPulse, LayoutList, LogOut, Package, SlidersHorizontal, User } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { hasModule } from '../../../lib/entitlements'
@@ -259,6 +259,39 @@ export default function CoachPerfilScreen() {
               Cambiar contraseña
             </Text>
             <ExternalLink size={14} color={theme.mutedForeground} />
+          </TouchableOpacity>
+        </Section>
+
+        <Section title="Configuración">
+          <TouchableOpacity
+            style={[styles.linkRow, { borderColor: theme.border }]}
+            onPress={() => router.push('/coach/settings/areas')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.linkText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+              Áreas del builder
+            </Text>
+            <LayoutList size={14} color={theme.mutedForeground} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.linkRow, { borderColor: theme.border }]}
+            onPress={() => router.push('/coach/settings/funciones')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.linkText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+              Funciones
+            </Text>
+            <SlidersHorizontal size={14} color={theme.mutedForeground} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.linkRow, { borderColor: theme.border }]}
+            onPress={() => router.push('/coach/settings/modules')}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.linkText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+              Módulos
+            </Text>
+            <Package size={14} color={theme.mutedForeground} />
           </TouchableOpacity>
         </Section>
 

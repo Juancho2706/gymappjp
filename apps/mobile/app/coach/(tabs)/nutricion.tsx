@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Alert, FlatList, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { Apple, BadgeCheck, CheckCircle2, ChevronRight, Copy, HelpCircle, Layers, Link2, Lock, Pencil, Plus, Trash2, Users, UtensilsCrossed } from 'lucide-react-native'
+import { Apple, BadgeCheck, ChefHat, CheckCircle2, ChevronRight, Copy, HelpCircle, Layers, LayoutGrid, Link2, Lock, Pencil, Plus, Trash2, Users, UtensilsCrossed } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
@@ -338,6 +338,26 @@ export default function CoachNutricionScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.foodsTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Biblioteca de alimentos</Text>
                   <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{foodsCount} alimento{foodsCount !== 1 ? 's' : ''} · crear / editar / borrar</Text>
+                </View>
+                <ChevronRight size={20} color={theme.mutedForeground} />
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => router.push('/coach/recipes')} activeOpacity={0.85}
+                style={[styles.foodsCta, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+                <View style={[styles.foodsIcon, { backgroundColor: theme.primary + '1A' }]}><ChefHat size={22} color={theme.primary} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.foodsTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Recetas</Text>
+                  <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Ideas inspiracionales para tus alumnos</Text>
+                </View>
+                <ChevronRight size={20} color={theme.mutedForeground} />
+              </TouchableOpacity>
+
+              <TouchableOpacity onPress={() => router.push('/coach/meal-groups')} activeOpacity={0.85}
+                style={[styles.foodsCta, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+                <View style={[styles.foodsIcon, { backgroundColor: theme.primary + '1A' }]}><LayoutGrid size={22} color={theme.primary} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.foodsTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Grupos de alimentos</Text>
+                  <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Combos reutilizables para armar comidas</Text>
                 </View>
                 <ChevronRight size={20} color={theme.mutedForeground} />
               </TouchableOpacity>

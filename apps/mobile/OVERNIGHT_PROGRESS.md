@@ -80,3 +80,18 @@ PROXIMO scope sugerido (no hecho): T5 Areas settings, o pasar a P0/P1 del inform
 - scope: NO hay vista alumno standalone de cardio en web (zonas viven en el workout cardio = execution polimorfico XL). Cardio mobile = coach hub + editor.
 - commit: (siguiente)
 - VERIFICAR EN DEVICE: (1) coach con modulo cardio ON ve el link "Zonas de cardio" en perfil + hub funciona; coach sin modulo → link oculto + hub muestra "Modulo no habilitado". (2) calc zonas con alumno (Tanaka/Karvonen segun reposo) y manual. (3) pace calc. (4) editar perfil de un alumno → guardar → que NO tire 42501 (confirma grants) y que el preview de zonas actualice en vivo. (5) birth_date es TextInput AAAA-MM-DD (no date picker nativo — mejora futura).
+
+---
+
+## 2026-06-21 — OLA A (workflow 5 agentes, integracion central)
+- estado: done (tsc exit=0 [1 fix: meal-groups unit 'ml' inalcanzable] / expo exit=0)
+- 5 modulos coach portados (archivos nuevos, agentes en paralelo, cero deps, cero migraciones):
+  - Areas builder: app/coach/settings/areas.tsx + lib/areas.ts (CRUD workout_section_templates, valida @eva/schemas, RLS coach)
+  - Funciones: app/coach/settings/funciones.tsx + lib/feature-prefs.ts (preset + master toggle + secciones, coach_feature_prefs upsert; @eva/feature-prefs espejado inline)
+  - Modulos: app/coach/settings/modules.tsx + lib/modules-catalog.ts (catalogo read-only de enabled_modules; @eva/module-catalog espejado inline)
+  - Recetas: app/coach/recipes.tsx + lib/recipes.ts (CRUD nutrition_recipes + assign + foto bucket recipe-media)
+  - Meal-groups: app/coach/meal-groups.tsx + lib/meal-groups.ts (saved_meals/items, macros via lib/nutrition-utils canonico)
+- wiring (yo, archivos compartidos): perfil.tsx seccion "Configuracion" → areas/funciones/modulos; nutricion.tsx tab Alimentos → cards Recetas + Grupos.
+- GOTCHAS/drift anotados por agentes: @eva/feature-prefs y @eva/module-catalog NO estan en deps de mobile → espejados inline (riesgo drift). recipe-media upload usa sesion coach (no service-role) → confirmar policy de storage en device (si falla, guarda sin imagen). meal-groups persiste unit 'un' vs 'u' web (numericamente igual). Todo standalone coach v1 (no team-scope).
+- commit: (siguiente)
+- VERIFICAR DEVICE: cada pantalla abre desde su entry; CRUD escribe (areas/funciones/recetas/meal-groups → que no tiren 42501); modulos read-only; recetas foto-upload.
