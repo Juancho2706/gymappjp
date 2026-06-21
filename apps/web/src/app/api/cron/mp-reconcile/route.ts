@@ -10,6 +10,8 @@ import {
     toBillableAddons,
 } from '@/services/billing/addons.service'
 import { resolveDiscountSpecByRedemptionId } from '@/services/billing/discount.service'
+import { revertActiveCouponForCoach } from '@/services/billing/coupons.service'
+import { releaseCouponCapacity } from '@/infrastructure/db/coupon-redemptions.repository'
 import type { BillingCycle, SubscriptionTier } from '@/lib/constants'
 
 // IMPORTANTE (plan 01 F7): el guard de este cron quedó FAIL-CLOSED — sin CRON_SECRET devuelve
@@ -332,6 +334,55 @@ export async function GET(req: Request) {
         }
     }
 
+    // ── Barrido de registros ABANDONADOS con cupón (REGISTER-CODE) ──────────────────────────────
+    // Un coach NUEVO que canjeó un código al registrarse queda con active_coupon_redemption_id +
+    // subscription_status='pending_payment' + subscription_mp_id=null. Si abandona el checkout y nunca
+    // paga, mantiene un cupón vivo y quemó un cupo del cap. Tras 48h lo revertimos: marca la redención
+    // 'reverted' (el trigger nulea el puntero) y libera 1 cupo del cap. Best-effort por coach; NUNCA
+    // throw que tumbe el cron. Idempotente: la 2da corrida no encuentra los ya revertidos (puntero null).
+    let signupAbandoned = 0
+    const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString()
+    const { data: abandonedCoaches, error: abandonedErr } = await admin
+        .from('coaches')
+        .select('id, active_coupon_redemption_id')
+        .not('active_coupon_redemption_id', 'is', null)
+        .eq('subscription_status', 'pending_payment')
+        .is('subscription_mp_id', null)
+        .lt('created_at', fortyEightHoursAgo)
+    if (abandonedErr) {
+        console.error('[cron/mp-reconcile] abandoned-coupon query failed:', abandonedErr)
+    }
+    for (const coach of abandonedCoaches ?? []) {
+        const redemptionId = coach.active_coupon_redemption_id
+        if (!redemptionId) continue
+        try {
+            // Leer la redención viva para obtener el coupon_code_id (necesario para liberar el cap).
+            const { data: redemption } = await admin
+                .from('coupon_redemptions')
+                .select('coupon_code_id')
+                .eq('id', redemptionId)
+                .maybeSingle()
+            const codeId = redemption?.coupon_code_id ?? null
+
+            await revertActiveCouponForCoach(admin, coach.id)
+            if (codeId) await releaseCouponCapacity(admin, codeId)
+
+            await admin.from('admin_audit_logs').insert({
+                admin_email: 'cron',
+                action: 'coach.coupon_signup_abandoned',
+                target_table: 'coupon_redemptions',
+                target_id: redemptionId,
+                payload: {
+                    coach_id: coach.id,
+                    triggered_by: 'cron/mp-reconcile',
+                },
+            })
+            signupAbandoned++
+        } catch (err) {
+            console.error(`[cron/mp-reconcile] abandoned-coupon revert failed for coach ${coach.id}:`, err)
+        }
+    }
+
     // Also flag org_invoices pending > 10 days
     const tenDaysAgo = new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString()
     const { data: overdueInvoices } = await admin
@@ -424,7 +475,7 @@ ${addonBlock}
     }
 
     console.info(
-        `[cron/mp-reconcile] done — checked=${checked} divergences=${divergences.length} addonAlerts=${addonAlerts.length} addonsExpired=${addonsExpired} errors=${errors}`
+        `[cron/mp-reconcile] done — checked=${checked} divergences=${divergences.length} addonAlerts=${addonAlerts.length} addonsExpired=${addonsExpired} signupAbandoned=${signupAbandoned} errors=${errors}`
     )
     return NextResponse.json({
         ok: true,
@@ -432,6 +483,7 @@ ${addonBlock}
         divergences: divergences.length,
         addonAlerts: addonAlerts.length,
         addonsExpired,
+        signupAbandoned,
         overdue: overdueInvoices?.length ?? 0,
         errors,
     })

@@ -13,6 +13,7 @@ import {
 } from '@/lib/constants'
 import { normalizePlatformEmail, isDisposableEmail } from '@/lib/auth/platform-email'
 import { generateUniqueInviteCode } from '@/lib/coach/invite-code.server'
+import { normalizeCouponCode } from '@/services/billing/coupons.normalize'
 
 export type CompleteOnboardingState = { error?: string }
 
@@ -132,7 +133,10 @@ export async function completeOAuthOnboarding(
     }
 
     const selectedCycleLabel = BILLING_CYCLE_CONFIG[selectedBillingCycle].label.toLowerCase()
+    // REGISTER-CODE (R2.10 OAuth): saneamos el código y lo threadeamos a /processing (canje + disclosure ahí).
+    const couponCode = normalizeCouponCode((formData.get('coupon_code') as string | null) ?? '')
+    const couponParam = couponCode ? `&coupon=${encodeURIComponent(couponCode)}` : ''
     redirect(
-        `/coach/subscription/processing?from=register&tier=${encodeURIComponent(selectedTier)}&cycle=${encodeURIComponent(selectedBillingCycle)}&plan=${encodeURIComponent(selectedCycleLabel)}`
+        `/coach/subscription/processing?from=register&tier=${encodeURIComponent(selectedTier)}&cycle=${encodeURIComponent(selectedBillingCycle)}&plan=${encodeURIComponent(selectedCycleLabel)}${couponParam}`
     )
 }

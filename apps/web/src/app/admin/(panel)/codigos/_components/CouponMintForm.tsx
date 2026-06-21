@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState, useState } from 'react'
+import { MAX_PERCENT_WITHOUT_OVERRIDE } from '@eva/schemas'
 import { mintCouponAction, type MintActionState } from '../_actions/codigos.actions'
 
 const initial: MintActionState = { ok: false, message: '' }
@@ -17,20 +18,13 @@ export function CouponMintForm() {
     const [state, formAction, pending] = useActionState(mintCouponAction, initial)
     const [discountType, setDiscountType] = useState<'percent' | 'fixed_clp'>('percent')
     const [duration, setDuration] = useState<'once' | 'repeating' | 'forever'>('repeating')
-
-    // Guardrail suave: confirmar antes de mintear un descuento alto (CEO-only, pero evita un fat-finger).
-    function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-        const fd = new FormData(e.currentTarget)
-        const pct = Number(fd.get('percentValue'))
-        if (discountType === 'percent' && pct >= 60 && !window.confirm(`¿Crear un cupón de ${pct}%? Es un descuento alto — confirma que es intencional.`)) {
-            e.preventDefault()
-        }
-    }
+    const [percentValue, setPercentValue] = useState<number>(20)
+    // R3.8: arriba de 21% el CEO debe tildar el check de descuento alto (lo enforce el schema Zod).
+    const needsOverride = discountType === 'percent' && percentValue > MAX_PERCENT_WITHOUT_OVERRIDE
 
     return (
         <form
             action={formAction}
-            onSubmit={onSubmit}
             className="rounded-lg border border-[--admin-border] bg-[--admin-bg-elevated] p-4"
         >
             <h2 className="mb-3 text-sm font-semibold text-[--admin-text-1]">Crear código</h2>
@@ -51,7 +45,16 @@ export function CouponMintForm() {
                 {discountType === 'percent' ? (
                     <div>
                         <label className={labelCls}>Porcentaje (1–100)</label>
-                        <input name="percentValue" type="number" min={1} max={100} className={inputCls} placeholder="20" />
+                        <input
+                            name="percentValue"
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={percentValue}
+                            onChange={(e) => setPercentValue(Number(e.target.value))}
+                            className={inputCls}
+                            placeholder="20"
+                        />
                     </div>
                 ) : (
                     <div>
@@ -127,6 +130,25 @@ export function CouponMintForm() {
                     <span className="text-[10px] text-[--admin-text-3]">(planes; vacío = todos)</span>
                 </div>
             </div>
+
+            {/* R1.0: allowlist de correos — el código solo lo canjean estos correos (lista cerrada). */}
+            <div className="mt-3">
+                <label className={labelCls}>Correos permitidos (uno por línea; vacío = abierto a cualquiera)</label>
+                <textarea
+                    name="allowed_emails"
+                    rows={3}
+                    className={`${inputCls} font-mono`}
+                    placeholder={'coach1@gmail.com\ncoach2@outlook.com'}
+                />
+            </div>
+
+            {/* R3.8: override del CEO para descuentos > 21%. */}
+            {needsOverride && (
+                <label className="mt-3 flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-600">
+                    <input name="high_discount_override" type="checkbox" />
+                    Confirmo que el descuento de <strong>{percentValue}%</strong> (mayor a {MAX_PERCENT_WITHOUT_OVERRIDE}%) es intencional.
+                </label>
+            )}
 
             <div className="mt-4 flex items-center gap-3">
                 <button

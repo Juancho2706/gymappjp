@@ -118,6 +118,40 @@ export async function countRedemptionsForAccount(
     return count ?? 0
 }
 
+/** Inserta el allowlist de correos de un cupón (REGISTER-CODE R1.0). Idempotente (PK (coupon_id,email)). */
+export async function insertCouponAllowedEmails(
+    db: DB,
+    couponId: string,
+    normalizedEmails: string[]
+): Promise<void> {
+    if (normalizedEmails.length === 0) return
+    const rows = [...new Set(normalizedEmails)].map((e) => ({ coupon_id: couponId, normalized_email: e }))
+    await db.from('coupon_allowed_emails').upsert(rows, { onConflict: 'coupon_id,normalized_email', ignoreDuplicates: true })
+}
+
+/**
+ * Estado del allowlist de un cupón para un correo. `hasAllowlist` = el cupón restringe a una lista;
+ * `allowed` = ese correo está en la lista. Sin allowlist → { hasAllowlist:false, allowed:true } (abierto).
+ */
+export async function getAllowlistStatus(
+    db: DB,
+    couponId: string,
+    normalizedEmail: string
+): Promise<{ hasAllowlist: boolean; allowed: boolean }> {
+    const { count } = await db
+        .from('coupon_allowed_emails')
+        .select('coupon_id', { count: 'exact', head: true })
+        .eq('coupon_id', couponId)
+    if ((count ?? 0) === 0) return { hasAllowlist: false, allowed: true }
+    const { data } = await db
+        .from('coupon_allowed_emails')
+        .select('coupon_id')
+        .eq('coupon_id', couponId)
+        .eq('normalized_email', normalizedEmail)
+        .maybeSingle()
+    return { hasAllowlist: true, allowed: !!data }
+}
+
 export type InsertRedemptionRow = {
     couponId: string
     couponCodeId: string

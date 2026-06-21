@@ -1200,6 +1200,32 @@ export type Database = {
           },
         ]
       }
+      coupon_allowed_emails: {
+        Row: {
+          coupon_id: string
+          created_at: string
+          normalized_email: string
+        }
+        Insert: {
+          coupon_id: string
+          created_at?: string
+          normalized_email: string
+        }
+        Update: {
+          coupon_id?: string
+          created_at?: string
+          normalized_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_allowed_emails_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coupon_codes: {
         Row: {
           active: boolean
