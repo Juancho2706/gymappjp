@@ -4837,6 +4837,7 @@ export type Database = {
         Args: { p_email: string }
         Returns: Json
       }
+      claim_coupon_code: { Args: { p_code_id: string }; Returns: boolean }
       current_user_managed_team_ids: { Args: never; Returns: string[] }
       current_user_pool_client_ids: { Args: never; Returns: string[] }
       current_user_pool_coach_ids: { Args: never; Returns: string[] }
@@ -5138,6 +5139,7 @@ export type Database = {
       }
       is_team_manager: { Args: { p_team_id: string }; Returns: boolean }
       is_team_member: { Args: { p_team_id: string }; Returns: boolean }
+      release_coupon_code: { Args: { p_code_id: string }; Returns: undefined }
       resolve_active_discount: { Args: never; Returns: Json }
       search_foods: {
         Args: { search_term: string }
