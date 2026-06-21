@@ -68,3 +68,15 @@ RETOMAR / MERGEAR:
 - Mergear a master por flujo normal de PR (rama feat/rn-parity-overnight). Build EAS para device.
 - Limpiar worktree al terminar: git worktree remove D:/tmp/gymappjp-rn-overnight
 PROXIMO scope sugerido (no hecho): T5 Areas settings, o pasar a P0/P1 del informe (workout polimorfico, modulos pagos) que requieren packages/DB y NO son aptos unattended.
+
+---
+
+## 2026-06-21 10:37 — CARDIO modulo completo (supervisado, extra post-Medio)
+- estado: done (tsc exit=0 / expo exit=0)
+- CORRECCION clave: los modulos pagos NO necesitan migracion — la DB ya tiene todas las tablas/columnas (verificado en database.types: movement_assessments, body_composition_measurements, exchange_groups/meal_exchange_targets, clients.resting_hr/max_hr_override/ref_5k_time_sec/birth_date, enabled_modules). Mobile lee/escribe por PostgREST como el resto.
+- archivos nuevos: lib/cardio.ts (dominio puro Tanaka/Karvonen/%FCmax + pace + INTERVAL_TEMPLATES, espejo de apps/web/src/domain/cardio + lib/workout-interval), lib/entitlements.ts (hasModule lee coaches.enabled_modules objeto {key:bool}), lib/cardio-data.ts (listCardioClients/getCardioClient/saveCardioProfile valida con @eva/schemas CardioProfileUpdateSchema), app/coach/cardio/index.tsx (hub: calc zonas alumno/manual + pace + plantillas, gated), app/coach/cardio/[clientId].tsx (editor 4 campos + preview de zonas en vivo + save). modificado: app/coach/(tabs)/perfil.tsx (link gated "Zonas de cardio").
+- GRANTS (de-risk hecho leyendo el codigo): updateCardioProfileAction web usa createClient() = sesion del COACH (no service-role) → las columnas cardio de clients YA tienen GRANT UPDATE para authenticated. Mobile escribe las mismas bajo RLS coach → sin migracion, sin endpoint. (Confirmar en device que el PATCH no tira 42501.)
+- gating: enabled_modules es OBJETO {cardio:true}, no array. Kill-switch operador (EVA_DISABLED_MODULES) es server-only → mobile espeja entitlement, el gate real de datos sigue server-side.
+- scope: NO hay vista alumno standalone de cardio en web (zonas viven en el workout cardio = execution polimorfico XL). Cardio mobile = coach hub + editor.
+- commit: (siguiente)
+- VERIFICAR EN DEVICE: (1) coach con modulo cardio ON ve el link "Zonas de cardio" en perfil + hub funciona; coach sin modulo → link oculto + hub muestra "Modulo no habilitado". (2) calc zonas con alumno (Tanaka/Karvonen segun reposo) y manual. (3) pace calc. (4) editar perfil de un alumno → guardar → que NO tire 42501 (confirma grants) y que el preview de zonas actualice en vivo. (5) birth_date es TextInput AAAA-MM-DD (no date picker nativo — mejora futura).

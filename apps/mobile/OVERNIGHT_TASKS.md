@@ -59,5 +59,11 @@ Todas las tareas T1-T4 quedan `done` o `blocked`, y cada `done` muestra en el tr
 
 ---
 
+## CARDIO — módulo completo (extra, post-Medio, supervisado)  [estado: done]
+**Scope:** hub coach (calculadora zonas FC + pace + plantillas intervalos) + editor de perfil por-cliente. Gateado por entitlement (`coaches.enabled_modules.cardio`). NO hay vista alumno standalone de cardio en web (las zonas viven en el workout de cardio = execution polimórfico XL, fuera).
+**Archivos nuevos:** `lib/cardio.ts` (dominio puro espejo web domain/cardio + INTERVAL_TEMPLATES), `lib/entitlements.ts` (hasModule mobile), `lib/cardio-data.ts` (list/get/save, valida con `@eva/schemas` CardioProfileUpdateSchema, escribe `clients` bajo RLS coach), `app/coach/cardio/index.tsx` (hub), `app/coach/cardio/[clientId].tsx` (editor + preview vivo). Modificado: `app/coach/(tabs)/perfil.tsx` (link gated "Zonas de cardio").
+**Grants:** SIN migración — el write web corre bajo sesión del coach (no service-role), entonces las columnas `clients.birth_date/resting_hr/max_hr_override/ref_5k_time_sec` ya tienen GRANT UPDATE para `authenticated`. Mobile escribe las mismas → OK.
+**AC:** tsc exit=0 + expo exit=0. Verificar en DEVICE: gating (coach con/sin módulo), calc zonas (Tanaka/Karvonen), pace, guardar perfil (que el PATCH no tire 42501).
+
 ## EXCLUIDO (no intentar en esta corrida)
 `apps/web` (salvo `.well-known`), `packages/`, migraciones DB, módulos pagos completos (cardio/movement/bodycomp/nutrition-Pro), nav refactor, workout polimórfico, nutrition overhaul alumno, Áreas/Funciones/Módulos/Team settings, cualquier flujo de pago, push a remoto.

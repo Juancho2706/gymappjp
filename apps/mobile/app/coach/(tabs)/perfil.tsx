@@ -4,9 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Apple, Bell, CreditCard, ExternalLink, LogOut, User } from 'lucide-react-native'
+import { Apple, Bell, CreditCard, ExternalLink, HeartPulse, LogOut, User } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
+import { hasModule } from '../../../lib/entitlements'
 import { signOutAndCleanup } from '../../../lib/auth-actions'
 import { getCoachProfile, CoachProfile } from '../../../lib/coach'
 import { getCoachOrgContext, CoachOrgContext, orgRoleLabel } from '../../../lib/org'
@@ -48,12 +49,15 @@ export default function CoachPerfilScreen() {
   } | null>(null)
   const [activeClientCount, setActiveClientCount] = useState<number | null>(null)
   const [pushEnabled, setPushEnabled] = useState(false)
+  const [cardioEnabled, setCardioEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     load().catch(() => setLoading(false))
     // Reflejar el estado REAL del permiso del SO (no asumir off).
     Notifications.getPermissionsAsync().then(({ status }) => setPushEnabled(status === 'granted')).catch(() => {})
+    // Mostrar accesos a módulos de pago según entitlement (gate real = server-side).
+    hasModule('cardio').then(setCardioEnabled).catch(() => {})
   }, [])
 
   async function togglePush(value: boolean) {
@@ -224,6 +228,18 @@ export default function CoachPerfilScreen() {
         </Section>
 
         <Section title="Cuenta">
+          {cardioEnabled ? (
+            <TouchableOpacity
+              style={[styles.linkRow, { borderColor: theme.border }]}
+              onPress={() => router.push('/coach/cardio')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.linkText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+                Zonas de cardio
+              </Text>
+              <HeartPulse size={14} color={theme.mutedForeground} />
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             style={[styles.linkRow, { borderColor: theme.border }]}
             onPress={() => router.push('/coach/foods')}
