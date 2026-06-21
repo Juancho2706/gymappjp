@@ -18,9 +18,19 @@ export function CouponMintForm() {
     const [discountType, setDiscountType] = useState<'percent' | 'fixed_clp'>('percent')
     const [duration, setDuration] = useState<'once' | 'repeating' | 'forever'>('repeating')
 
+    // Guardrail suave: confirmar antes de mintear un descuento alto (CEO-only, pero evita un fat-finger).
+    function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+        const fd = new FormData(e.currentTarget)
+        const pct = Number(fd.get('percentValue'))
+        if (discountType === 'percent' && pct >= 60 && !window.confirm(`¿Crear un cupón de ${pct}%? Es un descuento alto — confirma que es intencional.`)) {
+            e.preventDefault()
+        }
+    }
+
     return (
         <form
             action={formAction}
+            onSubmit={onSubmit}
             className="rounded-lg border border-[--admin-border] bg-[--admin-bg-elevated] p-4"
         >
             <h2 className="mb-3 text-sm font-semibold text-[--admin-text-1]">Crear código</h2>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Ticket } from 'lucide-react'
 
 type Preview = {
@@ -26,6 +26,39 @@ export function CouponRedeemCard() {
     const [phase, setPhase] = useState<'idle' | 'checking' | 'preview' | 'applying' | 'done'>('idle')
     const [preview, setPreview] = useState<Preview | null>(null)
     const [error, setError] = useState('')
+    const dialogRef = useRef<HTMLDivElement>(null)
+
+    // Focus-trap del disclosure (SERNAC: el consentimiento no debe poder escaparse con Tab). Al entrar
+    // en 'preview' enfoca el botón confirmar; Tab/Shift+Tab ciclan dentro del diálogo; Escape cancela.
+    useEffect(() => {
+        if (phase !== 'preview') return
+        const root = dialogRef.current
+        if (!root) return
+        const focusables = root.querySelectorAll<HTMLElement>('button, [href], input, [tabindex]:not([tabindex="-1"])')
+        focusables[0]?.focus()
+    }, [phase])
+
+    function onDialogKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+        if (e.key === 'Escape') {
+            setPhase('idle')
+            setPreview(null)
+            return
+        }
+        if (e.key !== 'Tab') return
+        const root = dialogRef.current
+        if (!root) return
+        const f = Array.from(root.querySelectorAll<HTMLElement>('button, [href], input, [tabindex]:not([tabindex="-1"])'))
+        if (f.length === 0) return
+        const first = f[0]
+        const last = f[f.length - 1]
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault()
+            last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault()
+            first.focus()
+        }
+    }
 
     async function loadStatus() {
         try {
@@ -94,7 +127,7 @@ export function CouponRedeemCard() {
                     Código <span className="font-mono font-semibold">{activeCode}</span> aplicado a tu suscripción.
                 </p>
             ) : (phase === 'preview' || phase === 'applying') && preview ? (
-                <div role="dialog" aria-modal="true" className="space-y-3">
+                <div ref={dialogRef} onKeyDown={onDialogKeyDown} role="dialog" aria-modal="true" aria-label="Confirmar código de descuento" className="space-y-3">
                     <p className="text-sm text-white/90">{preview.termsText}</p>
                     <div className="rounded-lg bg-white/5 p-3 text-sm">
                         <div className="flex justify-between text-white/60">
