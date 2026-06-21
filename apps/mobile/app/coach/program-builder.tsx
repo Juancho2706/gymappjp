@@ -32,11 +32,14 @@ import { ProgramPhasesBar } from '../../components/coach/ProgramPhasesBar'
 import { BuilderOnboardingTour, type TourStep } from '../../components/coach/BuilderOnboardingTour'
 import { getMuscleColor } from '../../lib/muscle-colors'
 import { listCoachExercises, type ExerciseRow } from '../../lib/exercises'
+import { listAreas, buildAreaVMs, type AreaVM } from '../../lib/areas'
+import { legacyRepsSummaryFor, effectiveExerciseType, EXERCISE_TYPE_LABEL } from '../../lib/workout-exercise-type'
+import { resolveClientZones, type HrZoneRange } from '../../lib/cardio'
 import { exportProgramPdf } from '../../lib/program-pdf'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { usePlanBuilder } from '../../lib/plan-builder/reducer'
 import { buildDaySkeleton } from '../../lib/plan-builder/skeleton'
-import type { BuilderBlock, BuilderSection, DayState, DurationType, ProgramStructureType } from '../../lib/plan-builder/types'
+import type { BuilderBlock, BuilderCardioContext, BuilderSection, DayState, DurationType, ProgramStructureType } from '../../lib/plan-builder/types'
 
 const DAY_SHORT = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const SLIDE = Math.round(Dimensions.get('window').width * 0.22) // desplazamiento del slide de día
@@ -65,7 +68,7 @@ function dayLabel(structure: ProgramStructureType, d: DayState): string {
 }
 
 // PostgREST puede devolver la FK `exercises` como objeto o como array de un elemento.
-function embeddedExerciseRow(raw: any): { name?: string; muscle_group?: string; gif_url?: string; video_url?: string } | null {
+function embeddedExerciseRow(raw: any): { name?: string; muscle_group?: string; gif_url?: string; video_url?: string; exercise_type?: string } | null {
   if (raw == null) return null
   if (Array.isArray(raw)) return raw[0] && typeof raw[0] === 'object' ? raw[0] : null
   return typeof raw === 'object' ? raw : null
@@ -91,18 +94,40 @@ function mapDbBlock(b: any): BuilderBlock {
     progression_type: b.progression_type ?? null,
     progression_value: b.progression_value ?? null,
     section: (b.section as BuilderBlock['section']) ?? 'main',
+    section_template_id: b.section_template_id ?? null,
     is_override: b.is_override ?? false,
+    // Polimórfico (specs/movida-entrenamiento): round-trip de los campos tipados.
+    // Filas legacy: todo NULL ⇒ el bloque queda byte-identical al mapeo de siempre.
+    exercise_type: (ex?.exercise_type as BuilderBlock['exercise_type']) ?? null,
+    exercise_type_override: (b.exercise_type_override as BuilderBlock['exercise_type_override']) ?? null,
+    side_mode: b.side_mode ?? null,
+    reps_value: b.reps_value ?? null,
+    reps_unit: b.reps_unit ?? null,
+    load_type: b.load_type ?? null,
+    load_value: b.load_value != null ? String(b.load_value) : undefined,
+    load_unit: b.load_unit ?? null,
+    distance_value: b.distance_value != null ? String(b.distance_value) : undefined,
+    distance_unit: b.distance_unit ?? null,
+    duration_sec: b.duration_sec ?? null,
+    target_pace_sec_per_km: b.target_pace_sec_per_km ?? null,
+    hr_zone: b.hr_zone ?? null,
+    instructions: b.instructions ?? undefined,
+    interval_config: b.interval_config ?? null,
   }
 }
 
 // Columnas base (las que la prod standalone seguro tiene).
 const PROGRAM_SELECT =
   'id, name, program_structure_type, duration_type, weeks_to_repeat, cycle_length, ab_mode, workout_plans ( id, title, day_of_week, week_variant, workout_blocks ( id, exercise_id, order_index, sets, reps, rir, rest_time, notes, target_weight_kg, tempo, superset_group, progression_type, progression_value, section, is_override, exercises ( name, muscle_group, gif_url, video_url ) ) )'
-// Rico = base + meta extra (notas/fecha/phases). Si la columna falta, selectWithFallback usa el base.
-const PROGRAM_SELECT_RICH = PROGRAM_SELECT.replace(
-  'ab_mode,',
-  'ab_mode, duration_days, program_notes, start_date, start_date_flexible, program_phases,'
-)
+// Columnas tipadas/polimórficas del bloque (specs/movida-entrenamiento) — pueden faltar en prod legacy.
+const TYPED_BLOCK_COLS =
+  'section_template_id, exercise_type_override, side_mode, reps_value, reps_unit, load_type, load_value, load_unit, distance_value, distance_unit, duration_sec, target_pace_sec_per_km, hr_zone, instructions, interval_config'
+// Rico = base + meta extra (notas/fecha/phases) + columnas tipadas + exercise_type embebido.
+// Si CUALQUIER columna falta, selectWithFallback cae al base (byte-identical legacy).
+const PROGRAM_SELECT_RICH = PROGRAM_SELECT
+  .replace('ab_mode,', 'ab_mode, duration_days, program_notes, start_date, start_date_flexible, program_phases,')
+  .replace('is_override,', `is_override, ${TYPED_BLOCK_COLS},`)
+  .replace('exercises ( name, muscle_group, gif_url, video_url )', 'exercises ( name, muscle_group, gif_url, video_url, exercise_type )')
 
 type ProgramPhase = { name: string; weeks: number; color: string }
 
@@ -121,24 +146,67 @@ type ProgramMetaPayload = {
   program_phases?: unknown
 }
 
-function blockInsert(b: BuilderBlock, i: number, planId: string) {
+// Parsea un input numérico opcional (string → número | null), tolerando coma decimal.
+function parseOptionalNum(v: string | undefined | null): number | null {
+  if (v == null || !String(v).trim()) return null
+  const n = parseFloat(String(v).replace(',', '.'))
+  return Number.isFinite(n) ? n : null
+}
+
+// Columnas base (legacy) de un bloque — las que prod standalone seguro tiene.
+function blockInsertBase(b: BuilderBlock, i: number, planId: string, type: ReturnType<typeof effectiveExerciseType>, reps: string) {
   return {
     plan_id: planId,
     exercise_id: b.exercise_id,
     order_index: i,
-    sets: b.sets ?? 3,
-    reps: b.reps || '8-10',
+    sets: Number.isFinite(b.sets as number) && (b.sets as number) >= 1 ? Math.round(b.sets as number) : type === 'strength' ? 3 : 1,
+    reps,
     rir: b.rir || null,
     rest_time: b.rest_time || null,
     notes: b.notes || null,
-    target_weight_kg: b.target_weight_kg && b.target_weight_kg.trim() ? Number(b.target_weight_kg) : null,
+    target_weight_kg: parseOptionalNum(b.target_weight_kg),
     tempo: b.tempo || null,
     superset_group: b.superset_group || null,
-    progression_type: b.progression_type || null,
-    progression_value: b.progression_value ?? null,
+    progression_type: type === 'strength' ? (b.progression_type || null) : null,
+    progression_value: type === 'strength' && b.progression_type ? (b.progression_value ?? null) : null,
     section: b.section ?? 'main',
     is_override: b.is_override ?? false,
   }
+}
+
+// Bloque COMPLETO = base + columnas tipadas/polimórficas + área. Espejo 1:1 de la web
+// (WeeklyPlanBuilder save): reps SIEMPRE poblado (strength = texto del coach, otros = resumen
+// legacy ≤20 chars), distance/load parseados de string. Filas legacy ⇒ campos null, byte-identical.
+function blockInsert(b: BuilderBlock, i: number) {
+  const type = effectiveExerciseType(b, { exercise_type: b.exercise_type })
+  const distanceValue = parseOptionalNum(b.distance_value)
+  const loadValue = parseOptionalNum(b.load_value)
+  const reps = type === 'strength'
+    ? (b.reps || '')
+    : legacyRepsSummaryFor({ ...b, distance_value: distanceValue, load_value: loadValue }, type)
+  // base sin plan_id (lo inyecta el caller) — se compone abajo.
+  const base = blockInsertBase(b, i, '', type, reps)
+  const { plan_id: _omit, ...baseNoPlan } = base
+  void _omit
+  const full = {
+    ...baseNoPlan,
+    section_template_id: b.section_template_id ?? null,
+    exercise_type_override: b.exercise_type_override ?? null,
+    side_mode: b.side_mode ?? null,
+    reps_value: b.reps_value ?? null,
+    reps_unit: b.reps_unit ?? null,
+    load_type: b.load_type ?? null,
+    load_value: loadValue,
+    load_unit: b.load_unit ?? null,
+    distance_value: distanceValue,
+    distance_unit: distanceValue != null ? (b.distance_unit ?? 'm') : null,
+    duration_sec: b.duration_sec ?? null,
+    target_pace_sec_per_km: b.target_pace_sec_per_km ?? null,
+    hr_zone: b.hr_zone ?? null,
+    instructions: b.instructions?.trim() ? b.instructions.trim() : null,
+    interval_config: b.interval_config ?? null,
+  }
+  return { full, base: baseNoPlan }
 }
 
 // Quita las columnas de meta extra (para prod que aún no las tiene).
@@ -208,8 +276,16 @@ async function persistProgram(opts: {
         .select('id')
         .single()
       if (planErr) throw planErr
-      const inserts = day.blocks.map((b, i) => blockInsert(b, i, (plan as { id: string }).id))
-      const { error: blkErr } = await supabase.from('workout_blocks').insert(inserts)
+      const planId = (plan as { id: string }).id
+      const composed = day.blocks.map((b, i) => blockInsert(b, i))
+      const fullInserts = composed.map((c) => ({ plan_id: planId, ...c.full }))
+      let { error: blkErr } = await supabase.from('workout_blocks').insert(fullInserts)
+      // Fallback prod legacy sin las columnas tipadas/área (specs/movida-entrenamiento aún no aplicado).
+      if (blkErr && isMissingColumnError(blkErr)) {
+        const baseInserts = composed.map((c) => ({ plan_id: planId, ...c.base }))
+        const retry = await supabase.from('workout_blocks').insert(baseInserts)
+        blkErr = retry.error
+      }
       if (blkErr) throw blkErr
     }
   }
@@ -243,6 +319,13 @@ export default function ProgramBuilderScreen() {
   // Catálogo completo precargado (1:1 web): alimenta el sheet de añadir + enriquece media de bloques.
   const [catalog, setCatalog] = useState<ExerciseRow[]>([])
   const catById = useMemo(() => new Map(catalog.map((e) => [e.id, e])), [catalog])
+  // Áreas custom + system del coach (selector de área por bloque + agrupación visual).
+  const [areaVMs, setAreaVMs] = useState<AreaVM[]>([])
+  const areaById = useMemo(() => new Map(areaVMs.map((a) => [a.id, a])), [areaVMs])
+  // Mapa exercise_id → exercise_type para enriquecer bloques nuevos (el catálogo base no lo trae).
+  const [exTypeById, setExTypeById] = useState<Map<string, string | null>>(new Map())
+  // Contexto cardio del alumno (zonas resueltas). Sin alumno (plantilla) ⇒ módulo OFF.
+  const [cardioCtx, setCardioCtx] = useState<BuilderCardioContext>({ enabled: false, zones: null })
 
   // Program meta
   const [name, setName] = useState('Programa principal')
@@ -314,6 +397,45 @@ export default function ProgramBuilderScreen() {
   useEffect(() => {
     listCoachExercises().then(({ exercises }) => setCatalog(exercises)).catch(() => {})
   }, [])
+
+  // Precarga de áreas del coach (selector de área por bloque). Resiliente: si falla, queda vacío.
+  useEffect(() => {
+    listAreas().then((areas) => setAreaVMs(buildAreaVMs(areas))).catch(() => {})
+  }, [])
+
+  // Mapa exercise_id → exercise_type (para detectar el tipo de bloques nuevos). El catálogo base
+  // no trae exercise_type; lo leemos aparte. Resiliente: si la columna falta en prod legacy, queda vacío.
+  useEffect(() => {
+    supabase.from('exercises').select('id, exercise_type').is('deleted_at', null)
+      .then(({ data, error }) => {
+        if (error || !data) return
+        setExTypeById(new Map((data as any[]).map((r) => [r.id as string, (r.exercise_type as string | null) ?? null])))
+      })
+  }, [])
+
+  // Contexto cardio del alumno: resolver zonas FC desde su perfil (fecha de nacimiento + FC reposo).
+  // Sin alumno (plantilla) ⇒ módulo OFF (sin chips de bpm ni plantillas auto-sugeridas por defecto).
+  useEffect(() => {
+    if (isTemplate || !clientId) { setCardioCtx({ enabled: true, zones: null }); return }
+    let alive = true
+    supabase.from('clients').select('birth_date, resting_hr, max_hr_override').eq('id', clientId).maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return
+        const c = data as any
+        let zones: HrZoneRange[] | null = null
+        if (c) {
+          const resolved = resolveClientZones({
+            birthDate: c.birth_date ?? null,
+            restingHr: c.resting_hr ?? null,
+            maxHrOverride: c.max_hr_override ?? null,
+          })
+          zones = resolved?.zones ?? null
+        }
+        setCardioCtx({ enabled: true, zones })
+      })
+      .then(undefined, () => { if (alive) setCardioCtx({ enabled: true, zones: null }) })
+    return () => { alive = false }
+  }, [isTemplate, clientId])
 
   function variantDays(plans: any[], v: 'A' | 'B', structure: ProgramStructureType, len: number): DayState[] {
     const built = buildDaySkeleton(structure, len, [])
@@ -506,8 +628,26 @@ export default function ProgramBuilderScreen() {
     const next = secBlocks[pos + 1]
     const isLastInSec = pos === secBlocks.length - 1
     const linkedToNext = !!block.superset_group && block.superset_group === next?.superset_group
+    const area = block.section_template_id ? areaById.get(block.section_template_id) : null
+    const blockType = effectiveExerciseType(block, { exercise_type: block.exercise_type })
+    const typeChip = blockType !== 'strength' ? EXERCISE_TYPE_LABEL[blockType] : null
     return (
       <View>
+        {area || typeChip ? (
+          <View style={styles.blockTagRow}>
+            {area ? (
+              <View style={[styles.blockTag, { borderColor: area.color + '66', backgroundColor: area.color + '1A' }]}>
+                <View style={[styles.blockTagDot, { backgroundColor: area.color }]} />
+                <Text style={[styles.blockTagTxt, { color: area.color, fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>{area.name}</Text>
+              </View>
+            ) : null}
+            {typeChip ? (
+              <View style={[styles.blockTag, { borderColor: theme.primary + '55', backgroundColor: theme.primary + '14' }]}>
+                <Text style={[styles.blockTagTxt, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>{typeChip.toUpperCase()}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
         <BuilderBlockCard
           block={block}
           drag={drag}
@@ -763,10 +903,26 @@ export default function ProgramBuilderScreen() {
     if (!name.trim()) { Alert.alert('Nombre requerido', 'Ingresa un nombre para el programa.'); return }
     const hasAny = days.some((d) => d.blocks.length > 0) || (abMode && otherDays.some((d) => d.blocks.length > 0))
     if (!hasAny) { Alert.alert('Sin ejercicios', 'Agrega al menos un ejercicio en algún día.'); return }
-    // P-F5: guard de bloques (web bloquea save si sets<1 o reps vacío) — evita persistir incompletos.
+    // P-F5: guard de bloques type-aware (espejo de blockIsValid web) — evita persistir incompletos.
+    // Fuerza: sets≥1 + reps. Cardio: duración|distancia|intervalos. Movilidad: sets≥1 + (hold|reps). Roller: hold|pasadas.
     const allBlocks = [...days, ...(abMode ? otherDays : [])].flatMap((d) => d.blocks)
-    const invalid = allBlocks.find((b) => !b.sets || b.sets < 1 || !String(b.reps ?? '').trim())
-    if (invalid) { Alert.alert('Ejercicio incompleto', `Revisá "${invalid.exercise_name}": necesita series (≥1) y reps.`); return }
+    const invalid = allBlocks.find((b) => {
+      const type = effectiveExerciseType(b, { exercise_type: b.exercise_type })
+      const dist = parseFloat((b.distance_value || '').replace(',', '.'))
+      const hasDist = Number.isFinite(dist) && dist > 0
+      if (type === 'cardio') return !((b.duration_sec ?? 0) > 0 || hasDist || !!b.interval_config)
+      if (type === 'mobility') return !b.sets || b.sets < 1 || !((b.duration_sec ?? 0) > 0 || (b.reps_value ?? 0) > 0)
+      if (type === 'roller') return !((b.duration_sec ?? 0) > 0 || (b.reps_value ?? 0) > 0)
+      return !b.sets || b.sets < 1 || !String(b.reps ?? '').trim()
+    })
+    if (invalid) {
+      const t = effectiveExerciseType(invalid, { exercise_type: invalid.exercise_type })
+      const msg = t === 'cardio' ? 'necesita duración, distancia o intervalos.'
+        : t === 'mobility' ? 'necesita series (≥1) y hold o respiraciones.'
+        : t === 'roller' ? 'necesita duración o pasadas.'
+        : 'necesita series (≥1) y reps.'
+      Alert.alert('Ejercicio incompleto', `Revisá "${invalid.exercise_name}": ${msg}`); return
+    }
     setSaving(true)
     try {
       const coach = await getCoachProfile()
@@ -982,11 +1138,12 @@ export default function ProgramBuilderScreen() {
         dayBlockCount={currentDay?.blocks.length ?? 0}
         dayName={currentDay?.name ?? ''}
         simpleMode={isSimpleMode}
-        onSelect={(block) => { addExercise(activeDayId, { ...block, dayId: activeDayId, section: pendingSection }); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}) }}
+        onSelect={(block) => { addExercise(activeDayId, { ...block, dayId: activeDayId, section: pendingSection, exercise_type: (exTypeById.get(block.exercise_id) as BuilderBlock['exercise_type']) ?? null }); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}) }}
       />
       <BlockEditorSheet ref={editorRef} block={editingBlock} onChange={updateBlock} onRemove={(uid) => { removeBlock(activeDayId, uid); editorRef.current?.dismiss() }}
         onSetSection={setBlockSection.bind(null, activeDayId)} onToggleOverride={toggleBlockOverride} onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)} onClose={() => setEditingUid(null)}
         days={days.map((d) => ({ id: d.id, name: d.name }))} currentDayId={activeDayId} clientId={isTemplate ? undefined : clientId}
+        areas={areaVMs} cardio={cardioCtx}
         onMoveToDay={(uid, target) => { transferBlock(uid, activeDayId, target); setActiveDayId(target); editorRef.current?.dismiss(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}) }} />
 
       <TemplatePickerSheet ref={templateRef} onSelect={loadTemplate} />
@@ -1129,6 +1286,10 @@ const styles = StyleSheet.create({
   ssPillTxt: { fontSize: 9, letterSpacing: 0.6, textTransform: 'uppercase' },
   ssLinkBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderStyle: 'dashed', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   ssLinkTxt: { fontSize: 9, letterSpacing: 0.6, textTransform: 'uppercase' },
+  blockTagRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 5, marginBottom: 4 },
+  blockTag: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2, maxWidth: '70%' },
+  blockTagDot: { width: 6, height: 6, borderRadius: 3 },
+  blockTagTxt: { fontSize: 8.5, letterSpacing: 0.4, textTransform: 'uppercase' },
   dayTabBar: { flexDirection: 'row', alignItems: 'stretch', gap: 3, padding: 4, borderRadius: 14 },
   dayTab: { paddingVertical: 7, paddingHorizontal: 4, borderRadius: 10, alignItems: 'center', justifyContent: 'center', gap: 2 },
   dayTabLabel: { fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase' },
