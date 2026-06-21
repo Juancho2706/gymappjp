@@ -715,12 +715,34 @@ export async function proxy(request: NextRequest) {
         }
 
         // Coach branding fetch was started in parallel with getUser() above — await the result
-        const { data: coachData } = await coachBrandingPromise!
+        let { data: coachData, error: coachBrandingError } = await coachBrandingPromise!
+
+        // Hardening (incidente 2026-06-21): si el SELECT rich de branding falla —p.ej. una
+        // columna nueva del select sin GRANT a `anon` (el login pre-auth corre como anon)—
+        // supabase-js devuelve {data:null,error}. NO tumbar el login de TODOS los coaches con
+        // un /not-found por eso. Reintentar con un SELECT MÍNIMO de identidad (columnas
+        // siempre granteadas: id/slug/brand_name/primary_color/logo_url) para resolver el
+        // coach.id (que el layout /c exige) y degradar a branding EVA-default. Un column-grant
+        // faltante a futuro degrada en vez de romper. Solo el "coach genuinamente inexistente"
+        // (sin error y sin fila) debe 404.
+        if (coachBrandingError && coachSlug) {
+            console.error('[proxy] coach branding rich select failed; falling back to minimal', {
+                path: pathname,
+                error: coachBrandingError.message,
+            })
+            const idCol = INVITE_CODE_RE.test(coachSlug) ? 'invite_code' : 'slug'
+            const { data: minData } = await supabase
+                .from('coaches')
+                .select('id, brand_name, primary_color, logo_url, slug')
+                .eq(idCol, coachSlug)
+                .maybeSingle()
+            coachData = minData as typeof coachData
+        }
 
         const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug' | 'loader_text' | 'use_custom_loader' | 'loader_text_color' | 'loader_icon_mode' | 'subscription_tier' | 'brand_secondary_color' | 'accent_light' | 'accent_dark' | 'neutral_tint' | 'logo_url_dark' | 'brand_font_key' | 'loader_variant'> | null
 
         if (!coach) {
-            // Coach slug doesn't exist → 404
+            // No error + no fila → coach genuinamente inexistente → 404
             const notFoundUrl = request.nextUrl.clone()
             notFoundUrl.pathname = '/not-found'
             return NextResponse.redirect(notFoundUrl)
