@@ -26,6 +26,55 @@ export type AdminCouponRow = {
     createdAt: string
 }
 
+export type RedemptionRow = {
+    redemptionId: string
+    codeDisplay: string | null
+    coachSlug: string | null
+    status: string
+    redeemedAt: string
+    discountClp: number | null
+    couponCode: string | null
+}
+
+/** Canjes recientes (todos los códigos) con el coach + descuento aplicado — para el panel CEO. */
+export async function getRecentRedemptions(limit = 50): Promise<RedemptionRow[]> {
+    const db = createServiceRoleClient()
+    const { data } = await db
+        .from('coupon_redemptions')
+        .select('id, status, redeemed_at, discount_value_snapshot, coaches:coach_id(slug)')
+        .order('redeemed_at', { ascending: false })
+        .limit(limit)
+    return (data ?? []).map((r) => {
+        const snap = (r.discount_value_snapshot ?? {}) as Record<string, unknown>
+        const coach = (r.coaches ?? null) as { slug?: string } | null
+        return {
+            redemptionId: r.id,
+            codeDisplay: typeof snap.code === 'string' ? snap.code : null,
+            coachSlug: coach?.slug ?? null,
+            status: r.status,
+            redeemedAt: r.redeemed_at,
+            discountClp: null,
+            couponCode: typeof snap.code === 'string' ? snap.code : null,
+        }
+    })
+}
+
+/** Métricas agregadas: nº de canjes vivos + total de descuento ya otorgado (desde snapshots). */
+export async function getCouponMetrics(): Promise<{
+    activeRedemptions: number
+    totalRedemptions: number
+    totalDiscountGivenClp: number
+}> {
+    const db = createServiceRoleClient()
+    const [{ count: total }, { count: active }, { data: snaps }] = await Promise.all([
+        db.from('coupon_redemptions').select('id', { count: 'exact', head: true }),
+        db.from('coupon_redemptions').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+        db.from('billing_snapshots').select('discount_clp').not('coupon_redemption_id', 'is', null),
+    ])
+    const totalDiscountGivenClp = (snaps ?? []).reduce((s, r) => s + (r.discount_clp ?? 0), 0)
+    return { activeRedemptions: active ?? 0, totalRedemptions: total ?? 0, totalDiscountGivenClp }
+}
+
 export async function getCouponsForAdmin(): Promise<AdminCouponRow[]> {
     const db = createServiceRoleClient()
     const { data } = await db

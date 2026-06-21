@@ -1,4 +1,9 @@
-import { getCouponsForAdmin, type AdminCouponRow } from './_data/codigos.queries'
+import {
+    getCouponsForAdmin,
+    getRecentRedemptions,
+    getCouponMetrics,
+    type AdminCouponRow,
+} from './_data/codigos.queries'
 import { CouponMintForm } from './_components/CouponMintForm'
 import { DeactivateButton } from './_components/DeactivateButton'
 
@@ -16,10 +21,28 @@ const th = 'px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wid
 const td = 'px-3 py-2 text-sm text-[--admin-text-2]'
 
 export default async function CodigosPage() {
-    const coupons = await getCouponsForAdmin()
+    const [coupons, redemptions, metrics] = await Promise.all([
+        getCouponsForAdmin(),
+        getRecentRedemptions(50),
+        getCouponMetrics(),
+    ])
 
     return (
         <div className="space-y-6 p-4 md:p-6">
+            <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-elevated] p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-[--admin-text-3]">Canjes vivos</p>
+                    <p className="text-xl font-semibold text-[--admin-text-1]">{metrics.activeRedemptions}</p>
+                </div>
+                <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-elevated] p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-[--admin-text-3]">Canjes totales</p>
+                    <p className="text-xl font-semibold text-[--admin-text-1]">{metrics.totalRedemptions}</p>
+                </div>
+                <div className="rounded-lg border border-[--admin-border] bg-[--admin-bg-elevated] p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-[--admin-text-3]">Descuento otorgado</p>
+                    <p className="text-xl font-semibold text-[--admin-text-1]">${metrics.totalDiscountGivenClp.toLocaleString('es-CL')}</p>
+                </div>
+            </div>
             <div>
                 <h1 className="text-lg font-semibold text-[--admin-text-1]">Códigos de descuento</h1>
                 <p className="text-xs text-[--admin-text-3]">
@@ -75,6 +98,39 @@ export default async function CodigosPage() {
                         ))}
                     </tbody>
                 </table>
+            </div>
+
+            <div>
+                <h2 className="mb-2 text-sm font-semibold text-[--admin-text-1]">Canjes recientes</h2>
+                <div className="overflow-x-auto rounded-lg border border-[--admin-border]">
+                    <table className="w-full border-collapse">
+                        <thead className="bg-[--admin-bg-elevated]">
+                            <tr>
+                                <th className={th}>Código</th>
+                                <th className={th}>Coach</th>
+                                <th className={th}>Estado</th>
+                                <th className={th}>Fecha</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {redemptions.length === 0 && (
+                                <tr>
+                                    <td className={td} colSpan={4}>
+                                        Sin canjes todavía.
+                                    </td>
+                                </tr>
+                            )}
+                            {redemptions.map((r) => (
+                                <tr key={r.redemptionId} className="border-t border-[--admin-border]">
+                                    <td className={`${td} font-mono text-[--admin-text-1]`}>{r.couponCode ?? '—'}</td>
+                                    <td className={td}>{r.coachSlug ?? '—'}</td>
+                                    <td className={td}>{r.status}</td>
+                                    <td className={td}>{new Date(r.redeemedAt).toLocaleDateString('es-CL')}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     )
