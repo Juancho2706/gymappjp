@@ -14,6 +14,8 @@ import { generateBrandPalette, getContrastInfo, hexToRgb } from '@/lib/color-uti
 import { BrandThemePreview } from './_components/BrandThemePreview'
 import { QRCodeSVG } from 'qrcode.react'
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
+import { BrandAdvancedSection } from './BrandAdvancedSection'
+import type { SubscriptionTier } from '@eva/tiers'
 
 type Coach = Tables<'coaches'>
 
@@ -494,6 +496,20 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                     <p className="text-xs text-destructive">{state.fieldErrors.primary_color[0]}</p>
                 )}
             </div>
+
+            {/* white-label v2 — branding avanzado (Pro): color2 + fuente + dark + loader */}
+            <BrandAdvancedSection
+                tier={(coach.subscription_tier ?? 'starter') as SubscriptionTier}
+                primaryColor={selectedColor || '#10B981'}
+                defaults={{
+                    secondaryColor: coach.brand_secondary_color ?? '',
+                    accentLight: coach.accent_light ?? '',
+                    accentDark: coach.accent_dark ?? '',
+                    neutralTint: coach.neutral_tint ?? false,
+                    fontKey: coach.brand_font_key ?? '',
+                    loaderVariant: coach.loader_variant ?? 'eva',
+                }}
+            />
 
             {/* Loader customization */}
             <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-loader">
