@@ -476,14 +476,14 @@ export class MercadoPagoProvider implements PaymentsProvider {
      * preapproval está `paused`/`cancelled`, el PUT puede fallar — el llamador maneja el error
      * (reversión D5 en alta mensual; alerta de drift en el reconcile). validar en sandbox (item 7).
      */
-    async updateCheckoutAmount(checkoutId: string, amountClp: number): Promise<void> {
+    async updateCheckoutAmount(checkoutId: string, amountClp: number, idempotencyKey?: string): Promise<void> {
         const encoded = encodeURIComponent(checkoutId)
         await mpPutJson(`/preapproval/${encoded}`, {
             auto_recurring: {
                 transaction_amount: amountClp,
                 currency_id: 'CLP',
             },
-        })
+        }, idempotencyKey)
     }
 
     /**
@@ -500,7 +500,8 @@ export class MercadoPagoProvider implements PaymentsProvider {
     async updateCheckoutAmountAndRef(
         checkoutId: string,
         amountClp: number,
-        externalReference: string
+        externalReference: string,
+        idempotencyKey?: string
     ): Promise<void> {
         const encoded = encodeURIComponent(checkoutId)
         await mpPutJson(`/preapproval/${encoded}`, {
@@ -509,7 +510,7 @@ export class MercadoPagoProvider implements PaymentsProvider {
                 currency_id: 'CLP',
             },
             external_reference: externalReference,
-        })
+        }, idempotencyKey)
     }
 
     /**

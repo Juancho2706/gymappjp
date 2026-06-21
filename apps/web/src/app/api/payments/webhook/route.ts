@@ -27,6 +27,8 @@ import {
     toBillableAddons,
     type AddonPaymentsPort,
 } from '@/services/billing/addons.service'
+import { resolveActiveDiscountSpec, resolveActiveDiscountDetail, buildAmountPutIdempotencyKey } from '@/services/billing/discount.service'
+import { decrementCouponCycleForCharge, revertActiveCouponForCoach } from '@/services/billing/coupons.service'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildAddonActivationReceiptEmail } from '@/lib/email/addon-receipt-templates'
 import { buildPaymentFailedEmail, buildPaymentRecoveredEmail } from '@/lib/email/payment-dunning-templates'
@@ -202,7 +204,8 @@ async function handleWebhook(request: Request, rawBody: string) {
     // necesita el PUT de monto (materializeAddonFromOneShot / PUT diferido del compromiso mínimo);
     // createOneShotPayment lo usa el endpoint de alta, NUNCA el webhook (lanza si se invoca acá).
     const addonPayments: AddonPaymentsPort = {
-        updateCheckoutAmount: (checkoutId, amountClp) => provider.updateCheckoutAmount(checkoutId, amountClp),
+        updateCheckoutAmount: (checkoutId, amountClp, idempotencyKey) =>
+            provider.updateCheckoutAmount(checkoutId, amountClp, idempotencyKey),
         createOneShotPayment: () => {
             throw new Error('createOneShotPayment no se usa en el webhook')
         },
@@ -250,6 +253,14 @@ async function handleWebhook(request: Request, rawBody: string) {
                     const liveForSnap = await listLive(admin, coach.id)
                     const breakdown = buildAddonBreakdown(liveForSnap, cycleForCharge)
                     const baseClp = tierBaseClp(tierForCharge, cycleForCharge)
+                    // F4: el snapshot registra el descuento vigente de ESTE cobro (total_clp = honrado).
+                    const detail = await resolveActiveDiscountDetail(admin, coach.id)
+                    const snapComposite = getCompositeAmountClp(
+                        tierForCharge,
+                        cycleForCharge,
+                        toBillableAddons(liveForSnap),
+                        detail?.spec ?? null
+                    )
                     await insertBillingSnapshot(admin, {
                         coachId: coach.id,
                         providerPaymentId: result.providerPaymentId,
@@ -259,8 +270,21 @@ async function handleWebhook(request: Request, rawBody: string) {
                         kind: 'recurring',
                         baseClp,
                         addons: breakdown,
-                        totalClp: baseClp + breakdown.reduce((s, l) => s + l.cycle_amount_clp, 0),
+                        totalClp: snapComposite.totalClp,
+                        baseBeforeDiscountClp: snapComposite.baseBeforeDiscountClp,
+                        discountClp: snapComposite.discountClp,
+                        couponCode: detail?.couponCode ?? null,
+                        couponRedemptionId: detail?.redemptionId ?? null,
                     })
+                    // F4: decrementar el ciclo del cupón EXACTAMENTE una vez por este cobro (idempotente).
+                    // Al expirar (plazo disclosed cumplido) subir el preapproval al precio lleno DESDE la
+                    // próxima renovación — revert disclosed (N ciclos → precio normal), SERNAC-safe.
+                    const cycleResult = await decrementCouponCycleForCharge(admin, coach.id, result.providerPaymentId)
+                    if (cycleResult.expired && mpId) {
+                        const liveNow = await listLive(admin, coach.id)
+                        const fullComposite = getCompositeAmountClp(tierForCharge, cycleForCharge, toBillableAddons(liveNow))
+                        await provider.updateCheckoutAmount(mpId, fullComposite)
+                    }
                 }
                 const recurringUpdate: Record<string, unknown> = {
                     subscription_status: 'active',
@@ -604,12 +628,21 @@ async function handleWebhook(request: Request, rawBody: string) {
             // cuyo reference (menor) SÍ es autoritativo y debe poder aplicar.
             const live = await listLive(admin, coach.id)
             const liveAddonKeys = live.map((a) => a.moduleKey)
-            const newComposite = getCompositeAmountClp(newTier, cycle, toBillableAddons(live))
-            await provider.updateCheckoutAmountAndRef(
-                mpId,
-                newComposite,
-                buildCheckoutExternalReference(coach.id, newTier, cycle, liveAddonKeys)
-            )
+            // F2a.2b: honra el cupón vivo en el compuesto del PUT (mismo spec que confirm-upgrade/cron).
+            const upgradeSpec = await resolveActiveDiscountSpec(admin, coach.id)
+            const newComposite = getCompositeAmountClp(newTier, cycle, toBillableAddons(live), upgradeSpec).totalClp
+            const upgradeCheckoutRef = buildCheckoutExternalReference(coach.id, newTier, cycle, liveAddonKeys)
+            // Sin cupón → llamada 3-arg intacta; con cupón → + idempotency key.
+            if (upgradeSpec) {
+                await provider.updateCheckoutAmountAndRef(
+                    mpId,
+                    newComposite,
+                    upgradeCheckoutRef,
+                    buildAmountPutIdempotencyKey(coach.id, newComposite)
+                )
+            } else {
+                await provider.updateCheckoutAmountAndRef(mpId, newComposite, upgradeCheckoutRef)
+            }
 
             // Snapshot del cobro one-shot del upgrade (kind='tier_upgrade_proration') — idempotente
             // por provider_payment_id. base_clp=0: el one-shot es SOLO la diferencia prorrateada de
@@ -741,6 +774,14 @@ async function handleWebhook(request: Request, rawBody: string) {
                     const liveForSnap = await listLive(admin, coach.id)
                     const breakdown = buildAddonBreakdown(liveForSnap, cycleForCharge)
                     const baseClp = tierBaseClp(tierForCharge, cycleForCharge)
+                    // F4: el snapshot registra el descuento vigente de ESTE cobro (total_clp = honrado).
+                    const detail = await resolveActiveDiscountDetail(admin, coach.id)
+                    const snapComposite = getCompositeAmountClp(
+                        tierForCharge,
+                        cycleForCharge,
+                        toBillableAddons(liveForSnap),
+                        detail?.spec ?? null
+                    )
                     await insertBillingSnapshot(admin, {
                         coachId: coach.id,
                         providerPaymentId: result.providerPaymentId,
@@ -750,8 +791,21 @@ async function handleWebhook(request: Request, rawBody: string) {
                         kind: 'recurring',
                         baseClp,
                         addons: breakdown,
-                        totalClp: baseClp + breakdown.reduce((s, l) => s + l.cycle_amount_clp, 0),
+                        totalClp: snapComposite.totalClp,
+                        baseBeforeDiscountClp: snapComposite.baseBeforeDiscountClp,
+                        discountClp: snapComposite.discountClp,
+                        couponCode: detail?.couponCode ?? null,
+                        couponRedemptionId: detail?.redemptionId ?? null,
                     })
+                    // F4: decrementar el ciclo del cupón EXACTAMENTE una vez por este cobro (idempotente).
+                    // Al expirar (plazo disclosed cumplido) subir el preapproval al precio lleno DESDE la
+                    // próxima renovación — revert disclosed (N ciclos → precio normal), SERNAC-safe.
+                    const cycleResult = await decrementCouponCycleForCharge(admin, coach.id, result.providerPaymentId)
+                    if (cycleResult.expired && mpId) {
+                        const liveNow = await listLive(admin, coach.id)
+                        const fullComposite = getCompositeAmountClp(tierForCharge, cycleForCharge, toBillableAddons(liveNow))
+                        await provider.updateCheckoutAmount(mpId, fullComposite)
+                    }
                 }
             } catch (chargeErr) {
                 console.error('[payments.webhook] recurring-charge addon hooks failed (stale branch)', {
@@ -801,6 +855,8 @@ async function handleWebhook(request: Request, rawBody: string) {
                     }
                 }
                 const cancelled = await cancelAllForCoach(admin, coach.id, new Date().toISOString())
+                // F4: revertir el cupón vivo (refund/chargeback) → puntero nulo, un coach reactivado arranca limpio.
+                await revertActiveCouponForCoach(admin, coach.id)
                 const { error: blockErr } = await admin
                     .from('coaches')
                     .update({ subscription_status: 'expired', current_period_end: null, subscription_mp_id: null })
@@ -1001,6 +1057,8 @@ async function handleWebhook(request: Request, rawBody: string) {
         // (a) TERMINAL expire → cancelar DURO todos los add-ons (trigger D1 apaga módulos).
         if (terminalDecision === 'expire') {
             const cancelled = await cancelAllForCoach(admin, coach.id, new Date().toISOString())
+            // F4: revertir el cupón vivo al expirar terminal → puntero nulo (reactivación limpia).
+            await revertActiveCouponForCoach(admin, coach.id)
             if (cancelled > 0) {
                 console.info('[payments.webhook] cancelled all addons on terminal expire', {
                     traceId,
@@ -1012,7 +1070,10 @@ async function handleWebhook(request: Request, rawBody: string) {
             // (b) Evento `updated` (o `authorized`): confirmar el PUT comparando el monto vigente del
             // preapproval contra el compuesto esperado; drift → alerta. validar en sandbox (item 8).
             const live = await listLive(admin, coach.id)
-            const expectedClp = getCompositeAmountClp(finalTier, finalCycle, toBillableAddons(live))
+            // F2a.2b: el esperado incluye el descuento vivo (mismo spec que el PUT) → un preapproval
+            // con cupón NO dispara falso addon_amount_drift.
+            const reconcileSpec = await resolveActiveDiscountSpec(admin, coach.id)
+            const expectedClp = getCompositeAmountClp(finalTier, finalCycle, toBillableAddons(live), reconcileSpec).totalClp
             const reconciled = reconcilePreapprovalAmount({
                 providerAmountClp: result.providerAmountClp,
                 expectedClp,

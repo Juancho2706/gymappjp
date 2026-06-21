@@ -12,6 +12,7 @@ import {
     parseTierUpgradeReference,
 } from '@/lib/payments/providers/mercadopago'
 import { getCompositeAmountClp, toBillableAddons } from '@/services/billing/addons.service'
+import { resolveActiveDiscountSpec, buildAmountPutIdempotencyKey } from '@/services/billing/discount.service'
 import { listLive } from '@/infrastructure/db/coach-addons.repository'
 import { clearUpgradeInFlight } from '@/services/billing/plan-change-lock'
 import { fetchCoachBillingRow } from '../addons/_lib/coach-context'
@@ -181,12 +182,21 @@ export async function POST(request: Request) {
         // `preapproval` re-derivaría el tier VIEJO del reference y revertiría el upgrade.
         const live = await listLive(admin, user.id)
         const liveAddonKeys = live.map((a) => a.moduleKey)
-        const newComposite = getCompositeAmountClp(ref.newTier, ref.cycle, toBillableAddons(live))
-        await provider.updateCheckoutAmountAndRef(
-            coach.subscription_mp_id,
-            newComposite,
-            buildCheckoutExternalReference(user.id, ref.newTier, ref.cycle, liveAddonKeys)
-        )
+        // F2a.2b: honra el cupón vivo en el compuesto del PUT (mismo spec que webhook/cron → sin drift).
+        const discountSpec = await resolveActiveDiscountSpec(admin, user.id)
+        const newComposite = getCompositeAmountClp(ref.newTier, ref.cycle, toBillableAddons(live), discountSpec).totalClp
+        const newCheckoutRef = buildCheckoutExternalReference(user.id, ref.newTier, ref.cycle, liveAddonKeys)
+        // Sin cupón → llamada 3-arg intacta (callers/tests legacy); con cupón → + idempotency key.
+        if (discountSpec) {
+            await provider.updateCheckoutAmountAndRef(
+                coach.subscription_mp_id,
+                newComposite,
+                newCheckoutRef,
+                buildAmountPutIdempotencyKey(user.id, newComposite)
+            )
+        } else {
+            await provider.updateCheckoutAmountAndRef(coach.subscription_mp_id, newComposite, newCheckoutRef)
+        }
 
         // Evento de historial deduplicado por `tier_upgrade:${paymentId}` (idempotente con el
         // webhook, que escribe el snapshot pero esta key garantiza que la activación quede trazada).

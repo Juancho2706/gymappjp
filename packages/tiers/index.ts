@@ -341,21 +341,25 @@ export type DiscountResult = {
 }
 
 /**
- * Piso del neto cobrado (CLP). El neto nunca baja de aca tras aplicar un cupon. Default 0
+ * Piso del neto cobrado (CLP) por DEFECTO. El neto nunca baja de aca tras aplicar un cupon. Default 0
  * (solo no-negativo); el path pago ADEMAS rechaza netClp === 0 (decision O1: 100%-off-N-ciclos
- * no va por el path pago — va por admin_grant). Subir si se define un costo/margen minimo.
+ * no va por el path pago — va por admin_grant). Subir si se define un costo/margen minimo GLOBAL.
+ * Es CONFIGURABLE por llamada via input.floorClp (decision O8: margin floor configurable);
+ * el default mantiene el comportamiento historico (solo no-negativo) hasta que el CEO fije un costo.
  */
 export const DISCOUNT_NET_FLOOR_CLP = 0
 
 /**
  * Aplica un cupon a un composite (base + add-ons) ya con descuento de ciclo. PURO, sin DB.
- * Compone sobre el composite (O8). Redondeo Math.round (espejo de applyDiscount). Clamp al piso.
- * Devuelve siempre el composite como baseBeforeDiscountClp (evidencia SERNAC).
+ * Compone sobre el composite (O8). Redondeo Math.round (espejo de applyDiscount). Clamp al piso
+ * (configurable via floorClp, default DISCOUNT_NET_FLOOR_CLP). El neto nunca supera el composite
+ * (un cupon nunca sube el precio). Devuelve siempre el composite como baseBeforeDiscountClp (evidencia SERNAC).
  */
 export function computeDiscountedClp(input: {
     baseClp: number
     addons?: CompositeLineAddon[]
     spec: DiscountSpec | null | undefined
+    floorClp?: number                   // piso de margen configurable (O8); default DISCOUNT_NET_FLOOR_CLP
 }): DiscountResult {
     const addons = input.addons ?? []
     const base = Math.max(0, Math.round(input.baseClp))
@@ -391,7 +395,9 @@ export function computeDiscountedClp(input: {
         rawDiscount = Math.min(Math.max(0, Math.round(spec.value)), targetAmount)
     }
 
-    // El neto no baja del piso; el descuento efectivo se recalcula desde el neto (consistencia).
-    const net = Math.max(DISCOUNT_NET_FLOOR_CLP, composite - rawDiscount)
+    // El neto no baja del piso (margin floor, O8) ni sube del composite; el descuento efectivo
+    // se recalcula desde el neto (consistencia). floor clampeado a >= 0 por seguridad.
+    const floor = Math.max(0, Math.round(input.floorClp ?? DISCOUNT_NET_FLOOR_CLP))
+    const net = Math.min(composite, Math.max(floor, composite - rawDiscount))
     return { baseBeforeDiscountClp: composite, discountClp: composite - net, netClp: net }
 }

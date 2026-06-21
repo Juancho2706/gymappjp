@@ -16,6 +16,7 @@ import {
     getTierMaxClients,
     getTierNutritionSummary,
     getTierPriceClp,
+    computeDiscountedClp,
     isBillingCycleAllowedForTier,
     isSaleTier,
     SALE_TIERS,
@@ -23,6 +24,7 @@ import {
     TIER_CONFIG,
     TIER_STUDENT_RANGE_LABEL,
     type BillingCycle,
+    type DiscountSpec,
     type SaleTier,
     type SubscriptionTier,
 } from '@/lib/constants'
@@ -30,6 +32,7 @@ import type { ModuleKey } from '@/services/entitlements.service'
 import { useCaptureAddonFunnel } from '@/lib/posthog/events'
 import Link from 'next/link'
 import { Zap, Crown, Rocket, TrendingUp, Building2, Check, Leaf, HelpCircle, Puzzle, Lock, Gift, ArrowLeft, type LucideIcon } from 'lucide-react'
+import { CouponRedeemCard } from './_components/CouponRedeemCard'
 
 // growth/scale: LEGACY (fuera de venta). Se mantienen en los mapas de display porque el PLAN
 // ACTUAL de un coach grandfathered puede ser legacy y debe renderizar su icono/color correcto.
@@ -147,6 +150,9 @@ export default function CoachSubscriptionPage() {
     // ── Add-ons (plan 05 F5) ──────────────────────────────────────────────────
     const [addons, setAddons] = useState<CoachAddonView[]>([])
     const [billing, setBilling] = useState<BillingBreakdown | null>(null)
+    // Cupón vivo (F5): spec re-resuelto server-side → la UI computa el precio descontado de cualquier
+    // tier/cycle con la MISMA fn pura (computeDiscountedClp) que cobra el server (mostrado == cobrado).
+    const [activeCoupon, setActiveCoupon] = useState<{ code: string | null; discountClp: number; spec: DiscountSpec } | null>(null)
     const [addonModalKey, setAddonModalKey] = useState<ModuleKey | null>(null)
     const [addonTermsAccepted, setAddonTermsAccepted] = useState(false)
     const [addonSaving, setAddonSaving] = useState(false)
@@ -201,6 +207,7 @@ export default function CoachSubscriptionPage() {
                 setEvents(Array.isArray(payload.events) ? payload.events : [])
                 setAddons(Array.isArray(payload.addons) ? payload.addons : [])
                 setBilling(payload.billing ?? null)
+                setActiveCoupon(payload.activeCoupon ?? null)
                 setActiveClientCount(typeof payload.activeClientCount === 'number' ? payload.activeClientCount : 0)
                 const tier = payload.coach.subscription_tier as SubscriptionTier
                 const cycle = payload.coach.billing_cycle as BillingCycle
@@ -422,6 +429,21 @@ export default function CoachSubscriptionPage() {
         return sum + Math.round(ADDON_CONFIG[key].priceClpMensual * months * (1 - discountPercent / 100))
     }, 0)
     const selectedComposite = selectedPrice + upgradeAddonsCycleTotal
+    // F5: precio del plan elegido CON el cupón vivo aplicado. Usa computeDiscountedClp (la MISMA fn pura
+    // que el server) sobre el composite del tier/cycle elegido → el preview mostrado == lo que cobrará el
+    // server (sin drift). Solo display; el monto real lo recomputa el server en el checkout.
+    const selectedAddonLines = upgradeAddons.map((key) => {
+        const { months, discountPercent } = BILLING_CYCLE_CONFIG[selectedCycle]
+        return {
+            moduleKey: key,
+            cycleAmountClp: Math.round(ADDON_CONFIG[key].priceClpMensual * months * (1 - discountPercent / 100)),
+        }
+    })
+    const selectedCouponResult = activeCoupon
+        ? computeDiscountedClp({ baseClp: selectedPrice, addons: selectedAddonLines, spec: activeCoupon.spec })
+        : null
+    const selectedCompositeNet = selectedCouponResult ? selectedCouponResult.netClp : selectedComposite
+    const selectedCouponDiscount = selectedCouponResult ? selectedCouponResult.discountClp : 0
     const coachCycle = (coach?.billing_cycle ?? 'monthly') as BillingCycle
     const coachTier = (coach?.subscription_tier ?? 'starter') as SubscriptionTier
     // Dirección del cambio de plan elegido vs el tier vigente — bifurca el copy del modal (issue #1).
@@ -462,6 +484,7 @@ export default function CoachSubscriptionPage() {
             setEvents(Array.isArray(payload.events) ? payload.events : [])
             setAddons(Array.isArray(payload.addons) ? payload.addons : [])
             setBilling(payload.billing ?? null)
+            setActiveCoupon(payload.activeCoupon ?? null)
             setActiveClientCount(typeof payload.activeClientCount === 'number' ? payload.activeClientCount : 0)
         } catch {
             /* transient — el estado previo sigue visible */
@@ -540,7 +563,11 @@ export default function CoachSubscriptionPage() {
                 Gestioná tu plan, frecuencia de cobro y cancelación.
             </p>
 
-    
+            {/* Código de descuento (cupones, F5) — self-gated: se oculta sin plan pago activo / flag OFF. */}
+            <div className="mt-6">
+                <CouponRedeemCard />
+            </div>
+
             {loading ? (
                 <p role="status" aria-live="polite" className="mt-6 text-sm text-muted-foreground">Cargando estado de suscripción...</p>
             ) : null}
@@ -1018,9 +1045,17 @@ export default function CoachSubscriptionPage() {
                             {upgradeAddons.length > 0 ? 'Total (plan + módulos)' : 'Total a pagar'}
                         </p>
                         <p className="text-lg font-extrabold text-foreground">
-                            ${selectedComposite.toLocaleString('es-CL')} CLP
+                            {selectedCouponDiscount > 0 && (
+                                <span className="mr-2 text-sm font-normal text-muted-foreground line-through">${selectedComposite.toLocaleString('es-CL')}</span>
+                            )}
+                            ${selectedCompositeNet.toLocaleString('es-CL')} CLP
                             <span className="text-sm font-normal text-muted-foreground"> / {BILLING_CYCLE_CONFIG[selectedCycle].label.toLowerCase()}</span>
                         </p>
+                        {selectedCouponDiscount > 0 && activeCoupon && (
+                            <p className="text-[11px] font-medium text-emerald-500">
+                                Cupón {activeCoupon.code} aplicado · −${selectedCouponDiscount.toLocaleString('es-CL')}
+                            </p>
+                        )}
                         {upgradeAddons.length > 0 && (
                             <p className="text-[11px] text-muted-foreground">
                                 plan ${selectedPrice.toLocaleString('es-CL')} + {upgradeAddons.length} módulo(s) ${upgradeAddonsCycleTotal.toLocaleString('es-CL')}
@@ -1110,8 +1145,11 @@ export default function CoachSubscriptionPage() {
                                         <strong className="text-foreground">{TIER_CONFIG[selectedTier].label}</strong>{' '}
                                         se activará por{' '}
                                         <strong className="text-foreground">
-                                            ${selectedComposite.toLocaleString('es-CL')} CLP / {BILLING_CYCLE_CONFIG[selectedCycle].label.toLowerCase()}
+                                            ${selectedCompositeNet.toLocaleString('es-CL')} CLP / {BILLING_CYCLE_CONFIG[selectedCycle].label.toLowerCase()}
                                         </strong>
+                                        {selectedCouponDiscount > 0 && activeCoupon && (
+                                            <span className="text-emerald-500"> (cupón {activeCoupon.code}: −${selectedCouponDiscount.toLocaleString('es-CL')})</span>
+                                        )}
                                         {upgradeAddons.length > 0 && (
                                             <span className="text-muted-foreground">
                                                 {' '}(plan ${selectedPrice.toLocaleString('es-CL')} + {upgradeAddons.map((k) => ADDON_CONFIG[k].label).join(', ')})

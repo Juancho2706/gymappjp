@@ -316,6 +316,62 @@ export async function rateLimitCardChange(
     }
 }
 
+let couponRedeemRatelimit: Ratelimit | null | undefined
+let couponRedeemIpRatelimit: Ratelimit | null | undefined
+
+function getCouponRedeemRatelimit(): Ratelimit | null {
+    if (couponRedeemRatelimit !== undefined) return couponRedeemRatelimit
+    const redis = redisFromEnv()
+    if (!redis) { couponRedeemRatelimit = null; return null }
+    couponRedeemRatelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(10, '1 h'),
+        prefix: 'ratelimit:coupon-redeem',
+    })
+    return couponRedeemRatelimit
+}
+
+function getCouponRedeemIpRatelimit(): Ratelimit | null {
+    if (couponRedeemIpRatelimit !== undefined) return couponRedeemIpRatelimit
+    const redis = redisFromEnv()
+    if (!redis) { couponRedeemIpRatelimit = null; return null }
+    couponRedeemIpRatelimit = new Ratelimit({
+        redis,
+        limiter: Ratelimit.slidingWindow(5, '1 h'),
+        prefix: 'ratelimit:coupon-redeem-ip',
+    })
+    return couponRedeemIpRatelimit
+}
+
+/**
+ * fail-CLOSED (espeja rateLimitCardChange): el canje de cupón mueve dinero (baja el precio del
+ * preapproval) → blanco de enumeración de códigos. Negamos antes que dejar pasar por una caída de
+ * Redis. Enforce de AMBAS llaves: 10/hora por coach + 5/hora por IP (ambas deben pasar).
+ */
+export async function rateLimitCouponRedeem(
+    coachId: string,
+    ip: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const coachLimiter = getCouponRedeemRatelimit()
+    const ipLimiter = getCouponRedeemIpRatelimit()
+    if (!coachLimiter || !ipLimiter) return { ok: false, retryAfter: 3600 }
+    try {
+        const [coachRes, ipRes] = await Promise.all([
+            coachLimiter.limit(`coupon-redeem:${coachId}`),
+            ipLimiter.limit(`coupon-redeem-ip:${ip}`),
+        ])
+        await Promise.all([
+            coachRes.pending.catch(() => undefined),
+            ipRes.pending.catch(() => undefined),
+        ])
+        if (coachRes.success && ipRes.success) return { ok: true }
+        const reset = Math.max(coachRes.success ? 0 : coachRes.reset, ipRes.success ? 0 : ipRes.reset)
+        return { ok: false, retryAfter: Math.max(1, Math.ceil((reset - Date.now()) / 1000)) }
+    } catch {
+        return { ok: false, retryAfter: 3600 }
+    }
+}
+
 export function jsonRateLimited(retryAfter: number) {
     return NextResponse.json(
         { error: 'Too many requests', code: 'RATE_LIMIT' },
