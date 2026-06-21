@@ -6,6 +6,8 @@ vi.mock('@/infrastructure/db/coupon-redemptions.repository', () => ({
     releaseCouponCapacity: vi.fn(),
     countRedemptionsForAccount: vi.fn(),
     insertRedemption: vi.fn(),
+    getAllowlistStatus: vi.fn(),
+    insertCouponAllowedEmails: vi.fn(),
 }))
 
 import * as repo from '@/infrastructure/db/coupon-redemptions.repository'
@@ -22,6 +24,7 @@ const claimCouponCapacity = vi.mocked(repo.claimCouponCapacity)
 const releaseCouponCapacity = vi.mocked(repo.releaseCouponCapacity)
 const countRedemptionsForAccount = vi.mocked(repo.countRedemptionsForAccount)
 const insertRedemption = vi.mocked(repo.insertRedemption)
+const getAllowlistStatus = vi.mocked(repo.getAllowlistStatus)
 
 function makeRow(over: Partial<CouponCatalogRow> = {}): CouponCatalogRow {
     return {
@@ -67,6 +70,7 @@ beforeEach(() => {
     countRedemptionsForAccount.mockResolvedValue(0)
     claimCouponCapacity.mockResolvedValue(true)
     insertRedemption.mockResolvedValue({ ok: true, redemptionId: 'redemption-1' })
+    getAllowlistStatus.mockResolvedValue({ hasAllowlist: false, allowed: true }) // sin allowlist = abierto
 })
 
 describe('redeemCoupon', () => {
@@ -84,6 +88,21 @@ describe('redeemCoupon', () => {
         expect(insertRedemption).toHaveBeenCalledOnce()
         // persiste evidencia SERNAC (terms text construido server-side)
         expect(insertRedemption.mock.calls[0][1].couponTermsText).toMatch(/PARTNER20/)
+    })
+
+    it('allowlist: correo NO habilitado → NOT_ELIGIBLE, sin claim', async () => {
+        findActiveCouponByCode.mockResolvedValue(makeRow())
+        getAllowlistStatus.mockResolvedValue({ hasAllowlist: true, allowed: false })
+        const r = await redeemCoupon({} as never, baseInput)
+        expect(r).toMatchObject({ ok: false, code: 'NOT_ELIGIBLE' })
+        expect(claimCouponCapacity).not.toHaveBeenCalled()
+    })
+
+    it('allowlist: correo habilitado → canjea normal', async () => {
+        findActiveCouponByCode.mockResolvedValue(makeRow())
+        getAllowlistStatus.mockResolvedValue({ hasAllowlist: true, allowed: true })
+        const r = await redeemCoupon({} as never, baseInput)
+        expect(r.ok).toBe(true)
     })
 
     it('código inexistente → CODE_NOT_FOUND, sin claim', async () => {

@@ -23,6 +23,11 @@ export async function mintCouponAction(_prev: MintActionState, formData: FormDat
     const { user, adminClient } = await assertAdmin()
 
     const scopeTiers = formData.getAll('scopeTiers').map(String).filter(Boolean)
+    // R1.0: allowlist de correos desde el textarea (una por línea o coma). El server normaliza en mintCoupon.
+    const allowedEmails = String(formData.get('allowed_emails') ?? '')
+        .split(/[\n,;]+/)
+        .map((s) => s.trim())
+        .filter((s) => s.includes('@'))
     const raw = {
         discountType: formData.get('discountType'),
         percentValue: numOrUndef(formData.get('percentValue')),
@@ -36,6 +41,9 @@ export async function mintCouponAction(_prev: MintActionState, formData: FormDat
         perAccountLimit: numOrUndef(formData.get('perAccountLimit')) ?? 1,
         firstTimeOnly: formData.get('firstTimeOnly') === 'on' || formData.get('firstTimeOnly') === 'true',
         floorClp: numOrUndef(formData.get('floorClp')),
+        allowedEmails: allowedEmails.length > 0 ? allowedEmails : undefined,
+        // R3.8: el check del CEO para descuentos > 21%.
+        highDiscountOverride: formData.get('high_discount_override') === 'on' || formData.get('high_discount_override') === 'true',
     }
 
     const parsed = CreateCouponAdminSchema.safeParse(raw)

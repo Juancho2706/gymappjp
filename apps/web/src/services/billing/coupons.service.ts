@@ -14,6 +14,8 @@ import {
     claimCouponCapacity,
     countRedemptionsForAccount,
     findActiveCouponByCode,
+    getAllowlistStatus,
+    insertCouponAllowedEmails,
     insertRedemption,
     releaseCouponCapacity,
     type CouponCatalogRow,
@@ -141,6 +143,14 @@ export async function redeemCoupon(db: DB, input: RedeemCouponInput): Promise<Re
     const scopeTiers = Array.isArray(scope.tiers) ? scope.tiers.filter((t): t is string => typeof t === 'string') : []
     if (scopeTiers.length > 0 && !scopeTiers.includes(input.tier)) {
         return { ok: false, code: 'NOT_ELIGIBLE', message: 'El código no aplica a tu plan actual.' }
+    }
+
+    // Allowlist de correos (REGISTER-CODE R1.0): si el cupón restringe a una lista, el correo del coach
+    // (normalizado anti +alias/gmail-dots) debe estar en ella. Sin allowlist → abierto (comportamiento previo).
+    const normalizedEmail = normalizeEmailForFirstTime(input.coachEmail)
+    const allow = await getAllowlistStatus(db, row.couponId, normalizedEmail)
+    if (allow.hasAllowlist && !allow.allowed) {
+        return { ok: false, code: 'NOT_ELIGIBLE', message: 'Tu correo no está habilitado para este código.' }
     }
 
     // F2b DIFERIDO: target=module se rechaza al canje hasta que F2b esté live (no escribir una redención
@@ -297,6 +307,11 @@ export async function mintCoupon(
             .select('id')
             .single()
         if (!codeErr && codeRow) {
+            // R1.0: allowlist de correos (si vino) — solo esos correos podrán canjear este cupón.
+            if (input.allowedEmails?.length) {
+                const normalized = input.allowedEmails.map((e) => normalizeEmailForFirstTime(e)).filter(Boolean)
+                await insertCouponAllowedEmails(db, coupon.id, normalized)
+            }
             return { ok: true, couponId: coupon.id, codeId: codeRow.id, codeDisplay: display }
         }
         const dup = /duplicate|unique|coupon_codes_code_active_uq|23505/i.test(codeErr?.message ?? '')
