@@ -39,6 +39,19 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
   if (options.authenticated) {
     const { data } = await supabase.auth.getSession()
     token = data.session?.access_token ?? null
+    if (!token) {
+      // Sesión no hidratada todavía / access_token vencido al momento de la llamada:
+      // intentar refrescar/hidratar ANTES de pegar sin token. Sin esto, una llamada
+      // autenticada justo al entrar salía SIN header Authorization → el server respondía
+      // MISSING_TOKEN (401) → rebote al login apenas cargaba el panel. Si no hay refresh
+      // token (sesión realmente muerta), queda null y el server decide.
+      const refreshed = await supabase.auth.refreshSession()
+      token = refreshed.data.session?.access_token ?? null
+      if (!token) {
+        // Visible en `adb logcat` (release) para diagnosticar sesión vacía en device.
+        console.warn('[eva-auth] apiFetch sin token: getSession y refreshSession vacios →', path)
+      }
+    }
   }
 
   let res = await exec(token)
