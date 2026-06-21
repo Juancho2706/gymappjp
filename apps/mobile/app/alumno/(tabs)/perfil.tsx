@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Alert, Linking, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { ExternalLink, Fingerprint, KeyRound, LogOut, User, UserCog } from 'lucide-react-native'
+import { Activity, ExternalLink, Fingerprint, KeyRound, LogOut, Scale, User, UserCog } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { signOutAndCleanup } from '../../../lib/auth-actions'
@@ -170,6 +170,29 @@ export default function AlumnoPerfilScreen() {
                 </Text>
               </View>
             ) : null}
+          </Section>
+
+          <Section title="Mi evaluación">
+            <TouchableOpacity
+              style={[styles.actionRow, { borderBottomColor: theme.border }]}
+              onPress={() => router.push('/alumno/movimiento')}
+              activeOpacity={0.75}
+            >
+              <Activity size={16} color={theme.primary} strokeWidth={2} />
+              <Text style={[styles.actionLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+                Screening de movimiento
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionRow}
+              onPress={() => router.push('/alumno/bodycomp')}
+              activeOpacity={0.75}
+            >
+              <Scale size={16} color={theme.primary} strokeWidth={2} />
+              <Text style={[styles.actionLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+                Composición corporal
+              </Text>
+            </TouchableOpacity>
           </Section>
 
           <Section title="Cuenta">

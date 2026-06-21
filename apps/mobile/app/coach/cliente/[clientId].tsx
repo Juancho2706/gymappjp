@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Apple, Archive, ArchiveRestore, BarChart3, Clock, CreditCard, Dumbbell, LayoutGrid, MessageCircle, Pencil, Plus, Salad, Scale, TrendingUp, User, X } from 'lucide-react-native'
+import { Apple, Archive, ArchiveRestore, BarChart3, ClipboardList, Clock, CreditCard, Dumbbell, HeartPulse, LayoutGrid, MessageCircle, Pencil, Plus, Salad, Scale, TrendingUp, User, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import { useTheme } from '../../../context/ThemeContext'
@@ -18,6 +18,7 @@ import { AnalisisTab } from '../../../components/coach/clientDetail/AnalisisTab'
 import { PlanTab } from '../../../components/coach/clientDetail/PlanTab'
 import { NutricionTab } from '../../../components/coach/clientDetail/NutricionTab'
 import { FacturacionTab } from '../../../components/coach/clientDetail/FacturacionTab'
+import { hasModule } from '../../../lib/entitlements'
 import { apiFetch } from '../../../lib/api'
 import {
   getCoachClientDetail,
@@ -59,6 +60,12 @@ export default function ClientDetailScreen() {
   const { clientId } = useLocalSearchParams<{ clientId: string; clientName?: string }>()
   const { theme } = useTheme()
   const router = useRouter()
+  const [mods, setMods] = useState<{ cardio: boolean; movement: boolean; bodycomp: boolean }>({ cardio: false, movement: false, bodycomp: false })
+  useEffect(() => {
+    Promise.all([hasModule('cardio'), hasModule('movement_assessment'), hasModule('body_composition')])
+      .then(([cardio, movement, bodycomp]) => setMods({ cardio, movement, bodycomp }))
+      .catch(() => {})
+  }, [])
 
   const [tab, setTab] = useState<ClientTab>('overview')
   const [data, setData] = useState<CoachClientDetailData | null>(null)
@@ -278,6 +285,19 @@ export default function ClientDetailScreen() {
 
           {tab === 'overview' ? (
             <>
+              {mods.cardio || mods.movement || mods.bodycomp ? (
+                <View style={{ gap: 8, marginTop: 8 }}>
+                  {mods.movement ? (
+                    <Button label="Screening de movimiento" variant="outline" leftIcon={ClipboardList} onPress={() => router.push(`/coach/movement/${client.id}`)} full />
+                  ) : null}
+                  {mods.bodycomp ? (
+                    <Button label="Composición corporal" variant="outline" leftIcon={Scale} onPress={() => router.push(`/coach/bodycomp/${client.id}`)} full />
+                  ) : null}
+                  {mods.cardio ? (
+                    <Button label="Perfil cardio" variant="outline" leftIcon={HeartPulse} onPress={() => router.push(`/coach/cardio/${client.id}`)} full />
+                  ) : null}
+                </View>
+              ) : null}
               <View style={{ height: 6 }} />
               <Button
                 label={client.is_archived ? 'Reactivar alumno' : 'Archivar alumno'}

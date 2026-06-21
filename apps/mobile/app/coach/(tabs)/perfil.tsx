@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Apple, Bell, CreditCard, ExternalLink, HeartPulse, LayoutList, LogOut, Package, SlidersHorizontal, User } from 'lucide-react-native'
+import { Apple, Bell, ClipboardList, CreditCard, ExternalLink, HeartPulse, LayoutList, LogOut, Package, SlidersHorizontal, User } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { hasModule } from '../../../lib/entitlements'
@@ -50,6 +50,7 @@ export default function CoachPerfilScreen() {
   const [activeClientCount, setActiveClientCount] = useState<number | null>(null)
   const [pushEnabled, setPushEnabled] = useState(false)
   const [cardioEnabled, setCardioEnabled] = useState(false)
+  const [movementEnabled, setMovementEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -58,6 +59,7 @@ export default function CoachPerfilScreen() {
     Notifications.getPermissionsAsync().then(({ status }) => setPushEnabled(status === 'granted')).catch(() => {})
     // Mostrar accesos a módulos de pago según entitlement (gate real = server-side).
     hasModule('cardio').then(setCardioEnabled).catch(() => {})
+    hasModule('movement_assessment').then(setMovementEnabled).catch(() => {})
   }, [])
 
   async function togglePush(value: boolean) {
@@ -238,6 +240,18 @@ export default function CoachPerfilScreen() {
                 Zonas de cardio
               </Text>
               <HeartPulse size={14} color={theme.mutedForeground} />
+            </TouchableOpacity>
+          ) : null}
+          {movementEnabled ? (
+            <TouchableOpacity
+              style={[styles.linkRow, { borderColor: theme.border }]}
+              onPress={() => router.push('/coach/movement')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.linkText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+                Screening de movimiento
+              </Text>
+              <ClipboardList size={14} color={theme.mutedForeground} />
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity

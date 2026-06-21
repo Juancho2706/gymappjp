@@ -95,3 +95,15 @@ PROXIMO scope sugerido (no hecho): T5 Areas settings, o pasar a P0/P1 del inform
 - GOTCHAS/drift anotados por agentes: @eva/feature-prefs y @eva/module-catalog NO estan en deps de mobile → espejados inline (riesgo drift). recipe-media upload usa sesion coach (no service-role) → confirmar policy de storage en device (si falla, guarda sin imagen). meal-groups persiste unit 'un' vs 'u' web (numericamente igual). Todo standalone coach v1 (no team-scope).
 - commit: (siguiente)
 - VERIFICAR DEVICE: cada pantalla abre desde su entry; CRUD escribe (areas/funciones/recetas/meal-groups → que no tiren 42501); modulos read-only; recetas foto-upload.
+
+---
+
+## 2026-06-21 — OLA B (workflow 3 agentes, modulos pagos)
+- estado: done (tsc exit=0 [2 fix: import @eva/schemas/bodycomp subpath → barrel @eva/schemas] / expo exit=0)
+- Movement coach (completo): lib/movement.ts (@eva/calc portado INLINE verbatim — no resuelve desde mobile), app/coach/movement/index.tsx (hub gated + risk band + drafts), [clientId]/index.tsx (reporte + evolucion + historial+delete), [clientId]/new.tsx (wizard 7 patrones, autosave, consentimiento, finalize recomputa). @eva/schemas para Zod.
+- Body comp coach (completo): lib/bodycomp.ts (computeIsak Kerr 5C + Heath-Carter + %grasa portado INLINE; @eva/schemas para Zod), app/coach/bodycomp/[clientId].tsx (SegmentedTabs BIA [11 metricas] / ISAK [wizard 4 pasos + preview] + TrendPanels, gated).
+- Vistas alumno read-only: lib/movement-data.ts, lib/bodycomp-data.ts, app/alumno/movimiento.tsx (report card + evolucion), app/alumno/bodycomp.tsx (BIA+ISAK summary + tendencia). LEEN columnas persistidas (no recalculan) → cero drift.
+- wiring (yo): perfil coach link "Screening de movimiento" gated; detalle alumno fila de botones gated (movement/bodycomp/perfil cardio); perfil alumno seccion "Mi evaluacion" (movimiento+bodycomp).
+- GOTCHAS: @eva/calc NO resuelve desde mobile → movement calc portado inline (anti-drift). @eva/schemas/bodycomp subpath NO resuelve, SI el barrel @eva/schemas (export * from './bodycomp'). Standalone coach v1 (sin team consent/audit). Movement evolution = tabla first-vs-last en vez de radar (no hay radar RN primitive). bodycomp requiere weight del alumno.
+- commit: (siguiente)
+- VERIFICAR DEVICE: coach con modulo → entradas visibles; wizard movement guarda+finaliza (CHECK final_complete: composite/band/consent NOT NULL); bodycomp BIA+ISAK guardan (que no tiren 42501); preview ISAK calcula; vistas alumno muestran data propia o EmptyState.
