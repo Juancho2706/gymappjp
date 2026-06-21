@@ -8,6 +8,8 @@ import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 import { listLive } from '@/infrastructure/db/coach-addons.repository'
 import { toBillableAddons } from '@/services/billing/addons.service'
 import { redeemCoupon, type RedeemErrorCode } from '@/services/billing/coupons.service'
+import { buildAmountPutIdempotencyKey } from '@/services/billing/discount.service'
+import { getPaymentsProvider } from '@/lib/payments/provider'
 import type { BillingCycle, SubscriptionTier } from '@/lib/constants'
 
 // GATE de dinero server-side fail-closed, SEPARADO de NEXT_PUBLIC_SELF_SERVICE_ADDONS_ENABLED. El
@@ -78,7 +80,7 @@ export async function POST(request: Request) {
         const admin = createServiceRoleClient()
         const { data: coach } = await admin
             .from('coaches')
-            .select('subscription_tier, subscription_status, billing_cycle')
+            .select('subscription_tier, subscription_status, billing_cycle, subscription_mp_id')
             .eq('id', user.id)
             .maybeSingle()
         if (!coach) return NextResponse.json({ error: 'Coach no encontrado' }, { status: 404 })
@@ -131,8 +133,27 @@ export async function POST(request: Request) {
             if (error) console.error('[redeem-coupon] audit log failed:', error.message)
         })
 
-        // Preview-only: NO se hace PUT a MP. El descuento se aplica en el próximo recompute del
-        // preapproval (create-preference/upgrade ya threadean el spec, F2a.2b).
+        // Commit con preapproval vivo: PUT del monto descontado a MP de inmediato → el PRÓXIMO cobro
+        // ya sale al precio del disclosure (el ciclo actual, ya pagado, NO se toca: MP solo cambia el
+        // próximo). Best-effort: si el PUT falla, la redención queda escrita igual (drift lo loguea
+        // webhook/cron); NUNCA tumbamos el canje por un fallo del provider. Sin preapproval (comp /
+        // internal) no hay dónde aplicar → no-op. result.preview.totalClp = neto server-side descontado.
+        const mpId = coach.subscription_mp_id?.trim() || null
+        if (result.redemptionId && mpId) {
+            try {
+                await getPaymentsProvider().updateCheckoutAmount(
+                    mpId,
+                    result.preview.totalClp,
+                    buildAmountPutIdempotencyKey(user.id, result.preview.totalClp)
+                )
+            } catch (putErr) {
+                console.error('[redeem-coupon] PUT del monto descontado falló — redención escrita, reconcile reintenta', {
+                    coachId: user.id,
+                    message: putErr instanceof Error ? putErr.message : String(putErr),
+                })
+            }
+        }
+
         return NextResponse.json({ ok: true, redemptionId: result.redemptionId, preview: result.preview })
     } catch (error) {
         const message = error instanceof Error ? error.message : 'No se pudo canjear el código.'
