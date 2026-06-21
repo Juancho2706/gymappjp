@@ -103,7 +103,7 @@ export function ResetPasswordButton({ clientId, clientName }: ResetPasswordButto
                         Restablecer contraseña
                     </AlertDialogTitle>
                     <AlertDialogDescription className="text-muted-foreground">
-                        ¿Generar una nueva contraseña temporal (PIN de 6 dígitos) para <span className="text-foreground font-medium">{clientName}</span>?
+                        ¿Generar una nueva contraseña temporal para <span className="text-foreground font-medium">{clientName}</span>?
                         El alumno será forzado a cambiarla al ingresar.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -119,7 +119,7 @@ export function ResetPasswordButton({ clientId, clientName }: ResetPasswordButto
                         disabled={isPending}
                         className="bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl disabled:opacity-60"
                     >
-                        {isPending ? 'Generando...' : 'Generar PIN temporal'}
+                        {isPending ? 'Generando...' : 'Generar contraseña temporal'}
                     </AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>

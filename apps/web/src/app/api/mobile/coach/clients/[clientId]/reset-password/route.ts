@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { generateStudentTempPassword } from '@/lib/auth/temp-credentials'
 
 function bearerToken(request: NextRequest): string | null {
     const auth = request.headers.get('authorization') || request.headers.get('Authorization')
@@ -32,7 +33,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { data: client } = await scope(admin.from('clients').select('id').eq('id', clientId).eq('coach_id', coachUser.id), orgId).maybeSingle()
     if (!client) return NextResponse.json({ error: 'Alumno no encontrado.', code: 'NOT_FOUND' }, { status: 404 })
 
-    const tempPassword = Math.floor(100000 + Math.random() * 900000).toString()
+    // PIN puro numérico lo rechaza la protección HIBP de Supabase (422). Eva${pin}! pasa.
+    const tempPassword = generateStudentTempPassword()
     const { error: authError } = await admin.auth.admin.updateUserById(clientId, { password: tempPassword })
     if (authError) return NextResponse.json({ error: `Error al actualizar: ${authError.message}`, code: 'RESET_FAILED' }, { status: 500 })
 
