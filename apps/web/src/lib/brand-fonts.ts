@@ -33,8 +33,8 @@ export type CuratedFont = {
 export const DEFAULT_FONT_KEY: FontKey = 'inter'
 
 export const CURATED_FONTS: Record<FontKey, CuratedFont> = {
-    'inter':         { label: 'Inter',             family: 'Inter',             cssVar: '--font-brand-inter',         note: 'Default EVA · workhorse de cuerpo' },
-    'montserrat':    { label: 'Montserrat',        family: 'Montserrat',        cssVar: '--font-brand-montserrat',    note: 'Display clásico' },
+    'inter':         { label: 'Inter',             family: 'Inter',             cssVar: '--font-inter',               note: 'Default EVA · workhorse de cuerpo' },
+    'montserrat':    { label: 'Montserrat',        family: 'Montserrat',        cssVar: '--font-montserrat',          note: 'Display clásico' },
     'plus-jakarta':  { label: 'Plus Jakarta Sans', family: 'Plus Jakarta Sans', cssVar: '--font-brand-plus-jakarta',  note: 'Moderna, variable' },
     'hanken':        { label: 'Hanken Grotesk',    family: 'Hanken Grotesk',    cssVar: '--font-brand-hanken',        note: 'Cuerpo fuerte 2026' },
     'manrope':       { label: 'Manrope',           family: 'Manrope',           cssVar: '--font-brand-manrope',       note: 'Geométrica limpia' },
@@ -53,13 +53,17 @@ export function isFontKey(value: string | null | undefined): value is FontKey {
 }
 
 /**
- * Resuelve la CSS var `--brand-font` para un coach. Si la key es inválida/null → Inter.
- * La cadena resultante SIEMPRE termina en `var(--font-brand-inter), sans-serif` (degradación legible).
- * Se inyecta server-side; el cliente nunca recibe el string crudo del coach.
+ * Resuelve el valor de la CSS var `--brand-font` (slot de DISPLAY/títulos, decisión #4) para un coach.
+ * - Sin fuente custom (key inválida/null) → default de display de EVA (Montserrat) → headings no cambian.
+ * - 'inter'/'montserrat' reusan las vars ya cargadas (`--font-inter`/`--font-montserrat`).
+ * - El resto → su `--font-brand-<key>` con fallback a Inter (degrada a legible, nunca a serif del sistema).
+ * Se inyecta server-side; el cliente nunca recibe el string crudo del coach (anti CSS-injection).
  */
 export function resolveBrandFontStack(fontKey: string | null | undefined): string {
-    if (!isFontKey(fontKey) || fontKey === 'inter') {
-        return 'var(--font-brand-inter), sans-serif'
+    if (!isFontKey(fontKey)) {
+        return 'var(--font-montserrat), var(--font-inter), ui-sans-serif'
     }
-    return `var(${CURATED_FONTS[fontKey].cssVar}), var(--font-brand-inter), sans-serif`
+    if (fontKey === 'inter') return 'var(--font-inter), sans-serif'
+    if (fontKey === 'montserrat') return 'var(--font-montserrat), var(--font-inter), sans-serif'
+    return `var(${CURATED_FONTS[fontKey].cssVar}), var(--font-inter), sans-serif`
 }

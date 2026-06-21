@@ -1,5 +1,9 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Montserrat } from 'next/font/google'
+import {
+  Inter, Montserrat,
+  Plus_Jakarta_Sans, Hanken_Grotesk, Manrope, Poppins, Sora,
+  Space_Grotesk, Outfit, Figtree, DM_Sans, Lexend,
+} from 'next/font/google'
 import './globals.css'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
@@ -30,6 +34,23 @@ const montserrat = Montserrat({
   subsets: ['latin'],
   display: 'swap',
 })
+
+// White-label v2 — fuentes curadas (Pro+, decisión CEO 2026-06-21). preload:false es CRÍTICO:
+// el browser solo descarga la woff2 cuya font-family se usa (sin 10 <link rel=preload> degradando
+// el LCP). Cada una expone --font-brand-<key>; el coach las activa por brand_font_key (enum cerrado).
+const plusJakarta = Plus_Jakarta_Sans({ variable: '--font-brand-plus-jakarta', subsets: ['latin'], display: 'swap', preload: false })
+const hanken = Hanken_Grotesk({ variable: '--font-brand-hanken', subsets: ['latin'], display: 'swap', preload: false })
+const manrope = Manrope({ variable: '--font-brand-manrope', subsets: ['latin'], display: 'swap', preload: false })
+const poppins = Poppins({ variable: '--font-brand-poppins', subsets: ['latin'], display: 'swap', preload: false, weight: ['400', '500', '600', '700'] })
+const sora = Sora({ variable: '--font-brand-sora', subsets: ['latin'], display: 'swap', preload: false })
+const spaceGrotesk = Space_Grotesk({ variable: '--font-brand-space-grotesk', subsets: ['latin'], display: 'swap', preload: false })
+const outfit = Outfit({ variable: '--font-brand-outfit', subsets: ['latin'], display: 'swap', preload: false })
+const figtree = Figtree({ variable: '--font-brand-figtree', subsets: ['latin'], display: 'swap', preload: false })
+const dmSans = DM_Sans({ variable: '--font-brand-dm-sans', subsets: ['latin'], display: 'swap', preload: false })
+const lexend = Lexend({ variable: '--font-brand-lexend', subsets: ['latin'], display: 'swap', preload: false })
+const BRAND_FONT_VARS = [plusJakarta, hanken, manrope, poppins, sora, spaceGrotesk, outfit, figtree, dmSans, lexend]
+  .map((f) => f.variable)
+  .join(' ')
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -100,7 +121,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" data-scroll-behavior="smooth" suppressHydrationWarning>
-      <body className={`${inter.variable} ${montserrat.variable} antialiased`} suppressHydrationWarning>
+      <body className={`${inter.variable} ${montserrat.variable} ${BRAND_FONT_VARS} antialiased`} suppressHydrationWarning>
         <PostHogProvider>
           <ThemeScriptSuppressor />
           <ThemeProvider
