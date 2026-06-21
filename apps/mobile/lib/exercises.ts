@@ -108,6 +108,14 @@ export function exerciseThumb(row: {
   return null
 }
 
+/** true si el ejercicio tiene video real: YouTube, o media de video/gif directa. */
+export function exerciseHasVideo(row: { video_url: string | null; gif_url: string | null }): boolean {
+  if (youtubeId(row.video_url)) return true
+  if (row.gif_url) return true
+  if (row.video_url && /\.(mp4|webm|mov|gif)(\?|$)/i.test(row.video_url)) return true
+  return false
+}
+
 /** Normaliza acentos + minúsculas (1:1 web `normalizeString`). */
 export function normalizeString(str: string): string {
   return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()

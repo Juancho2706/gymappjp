@@ -22,5 +22,13 @@
 
 ---
 
+## 2026-06-21 ~01:40 — T2 Filtros ejercicios "Con video"
+- estado: done
+- archivos: lib/exercises.ts (+exerciseHasVideo), app/coach/(tabs)/ejercicios.tsx (state videoOnly + chip "Con video" + filtro + key), app/alumno/(tabs)/exercises.tsx (import + state + toggle row + filtro)
+- validación: tsc exit=0 / expo exit=0
+- commit: (siguiente)
+- próxima: T3 subscription display
+- learnings/gotchas: "Personalizados" en coach YA existe como tab "Míos" (source==='own') → no dupliqué chip; agregué solo "Con video" en coach. Alumno no tiene ownership (ve coach+system) → solo "Con video". exerciseHasVideo = youtube(video_url) || gif_url || video_url .mp4/.webm/.mov/.gif. AC plural "toggles" cubierto por la combinación tab-origen + chip-video en coach; alumno = chip-video.
+
 ## RESUMEN FINAL
 (el agente escribe esto al cumplir la completion condition o al parar por bound: qué quedó done, qué blocked y por qué, qué revisar en la mañana, comando exacto para retomar.)

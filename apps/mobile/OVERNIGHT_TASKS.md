@@ -35,7 +35,7 @@ Todas las tareas T1-T4 quedan `done` o `blocked`, y cada `done` muestra en el tr
 **Pasos:** centralizar los tokens macro en `lib/theme.ts` (+ exponerlos en `tailwind.config.js`/`global.css` si aplica), flip de `MACRO_COLORS` a los valores canónicos, agregar variantes dark si la web las tiene, apuntar consumidores al token central (no const local duplicada).
 **AC binario:** tsc exit=0 + expo exit=0; `MacroRingSummary` y consumidores leen el token central; valores = canónicos.
 
-## T2 — Filtros de ejercicios "Con video" / "Personalizados"  [estado: todo]
+## T2 — Filtros de ejercicios "Con video" / "Personalizados"  [estado: done]
 **Por qué:** web tiene toggles que mobile no.
 **Archivos:** `apps/mobile/app/coach/(tabs)/ejercicios.tsx`, `apps/mobile/app/alumno/(tabs)/exercises.tsx`, helpers en `apps/mobile/lib/exercises.ts` (`exerciseThumb`/`youtubeId`/video).
 **Web ref:** `apps/web/src/app/coach/exercises/page.tsx` (toggles "Personalizados" y "Con video" con chequeo real de video).

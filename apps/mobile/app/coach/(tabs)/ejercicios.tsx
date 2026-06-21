@@ -12,7 +12,7 @@ import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { ExerciseFormSheet } from '../../../components/coach/ExerciseFormSheet'
 import { ExercisePreviewSheet } from '../../../components/coach/ExercisePreviewSheet'
-import { canCreateCustomExercises, cloneExercise, exerciseThumb, filterExercises, listCoachExercises, MUSCLE_GROUPS, type ExerciseRow } from '../../../lib/exercises'
+import { canCreateCustomExercises, cloneExercise, exerciseHasVideo, exerciseThumb, filterExercises, listCoachExercises, MUSCLE_GROUPS, type ExerciseRow } from '../../../lib/exercises'
 import { getCoachProfile } from '../../../lib/coach'
 
 const DIFFICULTY_LABEL: Record<string, string> = {
@@ -38,6 +38,7 @@ export default function EjerciciosScreen() {
   const [query, setQuery] = useState('')
   const [muscle, setMuscle] = useState<string | null>(null)
   const [source, setSource] = useState<Source>('all')
+  const [videoOnly, setVideoOnly] = useState(false)
   const [canCreate, setCanCreate] = useState(true)
   const [editTarget, setEditTarget] = useState<ExerciseRow | null>(null)
   const [previewTarget, setPreviewTarget] = useState<ExerciseRow | null>(null)
@@ -71,10 +72,11 @@ export default function EjerciciosScreen() {
     const bySource = exercises.filter((e) => {
       if (source === 'system' && e.isOwn) return false
       if (source === 'own' && !e.isOwn) return false
+      if (videoOnly && !exerciseHasVideo(e)) return false
       return true
     })
     return filterExercises(bySource, query.trim(), muscle || 'todos')
-  }, [exercises, query, muscle, source])
+  }, [exercises, query, muscle, source, videoOnly])
 
   // Agrupado por músculo (header + filas) para el FlashList.
   const listData = useMemo<ListItem[]>(() => {
@@ -182,6 +184,7 @@ export default function EjerciciosScreen() {
 
       {/* Muscle filter */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterRow}>
+        <FilterChip theme={theme} label="Con video" active={videoOnly} onPress={() => setVideoOnly((v) => !v)} />
         <FilterChip theme={theme} label="Todos" active={muscle === null} onPress={() => setMuscle(null)} />
         {muscleOptions.map((m) => (
           <FilterChip key={m} theme={theme} label={m} active={muscle === m} onPress={() => setMuscle(m)} />
@@ -190,7 +193,7 @@ export default function EjerciciosScreen() {
 
       {/* List (agrupada por músculo) */}
       <MotiView
-        key={`${source}|${muscle ?? 'all'}`}
+        key={`${source}|${muscle ?? 'all'}|${videoOnly ? 'vid' : 'any'}`}
         from={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ type: 'timing', duration: 220 }}

@@ -14,6 +14,7 @@ import { MotiView } from 'moti'
 import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
+import { exerciseHasVideo } from '../../../lib/exercises'
 import { useTheme } from '../../../context/ThemeContext'
 import { BottomSheet, EmptyState, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -36,6 +37,7 @@ export default function ExercisesScreen() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null)
+  const [videoOnly, setVideoOnly] = useState(false)
   const [selected, setSelected] = useState<Exercise | null>(null)
 
   useEffect(() => { load().catch(() => setLoading(false)) }, [])
@@ -72,7 +74,8 @@ export default function ExercisesScreen() {
   const filtered = exercises.filter((e) => {
     const matchSearch = !search || e.name.toLowerCase().includes(search.toLowerCase())
     const matchMuscle = !selectedMuscle || selectedMuscle === 'Todos' || e.muscle_group === selectedMuscle
-    return matchSearch && matchMuscle
+    const matchVideo = !videoOnly || exerciseHasVideo(e)
+    return matchSearch && matchMuscle && matchVideo
   })
 
   return (
@@ -96,6 +99,18 @@ export default function ExercisesScreen() {
             </TouchableOpacity>
           )}
         </View>
+      </View>
+
+      <View style={styles.toggleRow}>
+        <TouchableOpacity
+          onPress={() => setVideoOnly((v) => !v)}
+          activeOpacity={0.8}
+          style={[styles.muscleChip, { backgroundColor: videoOnly ? theme.primary : theme.card, borderColor: videoOnly ? theme.primary : theme.border, borderRadius: theme.radius.lg }]}
+        >
+          <Text style={[styles.muscleChipText, { color: videoOnly ? theme.primaryForeground : theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            Con video
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {muscleGroups.length > 1 && (
@@ -220,6 +235,7 @@ const styles = StyleSheet.create({
   searchWrap: { paddingHorizontal: 16, paddingBottom: 8 },
   searchBox: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, paddingHorizontal: 12, height: 44, gap: 8 },
   searchInput: { flex: 1, fontSize: 14 },
+  toggleRow: { flexDirection: 'row', paddingHorizontal: 16, paddingBottom: 10 },
   muscleScroll: { paddingHorizontal: 16, gap: 6, paddingBottom: 10 },
   muscleChip: { borderWidth: 1, paddingHorizontal: 12, paddingVertical: 7 },
   muscleChipText: { fontSize: 12 },
