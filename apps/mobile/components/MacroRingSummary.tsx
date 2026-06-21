@@ -7,8 +7,10 @@ import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming } from '
 import { useTheme } from '../context/ThemeContext'
 import { ProgressBar } from './ProgressBar'
 
-// P5: paleta de macros compartida (rings + siglas en filas de alimentos).
-export const MACRO_COLORS = { kcal: '#10B981', protein: '#f97316', carbs: '#3b82f6', fats: '#eab308' } as const
+// Paleta de macros centralizada en lib/theme (single source of truth, canonica
+// = web --color-macro-*). Re-export para consumidores que la importan desde aqui
+// (ej. FoodSearchSheet). Superficies scheme-aware usan theme.macro.* directo.
+export { MACRO_COLORS } from '../lib/theme'
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
@@ -28,7 +30,7 @@ function MacroRing({ consumed, target, label, color, size = 80 }: MacroRingProps
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
   const strokeDash = circumference * Math.min(pct, 1)
-  const ringColor = over ? theme.destructive : color
+  const ringColor = over ? theme.macro.over : color
 
   // P5: animar el llenado del ring cada vez que cambian los macros automáticos.
   const offset = useSharedValue(circumference)
@@ -64,7 +66,7 @@ function MacroRing({ consumed, target, label, color, size = 80 }: MacroRingProps
         </Svg>
         <View style={[StyleSheet.absoluteFill, styles.ringCenter]}>
           {over ? (
-            <AlertTriangle size={16} color={theme.destructive} strokeWidth={2.5} />
+            <AlertTriangle size={16} color={theme.macro.over} strokeWidth={2.5} />
           ) : (
             <Text style={[styles.ringValue, { color: ringColor, fontFamily: 'Montserrat_800ExtraBold' }]}>
               {Math.round(consumed)}
@@ -129,21 +131,21 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
             </Text>
           </View>
         </View>
-        <Text style={[styles.calPct, { color: calOver ? theme.destructive : '#10B981', fontFamily: 'Montserrat_800ExtraBold' }]}>
+        <Text style={[styles.calPct, { color: calOver ? theme.macro.over : theme.macro.goal, fontFamily: 'Montserrat_800ExtraBold' }]}>
           {calPctDisplay}%
         </Text>
       </View>
 
       <ProgressBar
         value={calPct}
-        color={calOver ? theme.destructive : '#10B981'}
+        color={calOver ? theme.macro.over : theme.macro.goal}
         height={10}
       />
 
       <View style={styles.ringsRow}>
-        <MacroRing consumed={protein.consumed} target={protein.target} label="Proteína" color={MACRO_COLORS.protein} />
-        <MacroRing consumed={carbs.consumed} target={carbs.target} label="Carbos" color={MACRO_COLORS.carbs} />
-        <MacroRing consumed={fats.consumed} target={fats.target} label="Grasas" color={MACRO_COLORS.fats} />
+        <MacroRing consumed={protein.consumed} target={protein.target} label="Proteína" color={theme.macro.protein} />
+        <MacroRing consumed={carbs.consumed} target={carbs.target} label="Carbos" color={theme.macro.carbs} />
+        <MacroRing consumed={fats.consumed} target={fats.target} label="Grasas" color={theme.macro.fats} />
       </View>
     </MotiView>
   )

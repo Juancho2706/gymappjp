@@ -22,6 +22,14 @@ export interface Theme {
   accentForeground: string
   cyan: string
   input: string
+  // Nutrition overhaul — canonical macro palette (scheme-aware, mirrors web --color-macro-*)
+  macro: {
+    protein: string
+    carbs: string
+    fats: string
+    over: string
+    goal: string
+  }
   // Border radius scale
   radius: {
     sm: number
@@ -69,6 +77,7 @@ export const lightTheme: Theme = {
   accentForeground: '#007AFF',
   cyan: '#00E5FF',
   input: 'rgba(0,0,0,0.05)',
+  macro: { protein: '#5E9FD6', carbs: '#FFB74D', fats: '#81C784', over: '#EF4444', goal: '#10B981' },
   radius,
   shadowGlowBlue: {
     shadowColor: '#007AFF',
@@ -109,6 +118,7 @@ export const darkTheme: Theme = {
   accentForeground: '#00E5FF',
   cyan: '#00E5FF',
   input: 'rgba(255,255,255,0.05)',
+  macro: { protein: '#7FB3E0', carbs: '#FFC97A', fats: '#A0D6A3', over: '#EF4444', goal: '#10B981' },
   radius,
   shadowGlowBlue: {
     shadowColor: '#007AFF',
@@ -127,6 +137,18 @@ export const darkTheme: Theme = {
   fontSans: 'Inter_400Regular',
   fontDisplay: 'Montserrat_600SemiBold',
 }
+
+/**
+ * Canonical macro palette (static) for non-scheme-aware consumers (e.g. food-row
+ * siglas). Mirrors web --color-macro-* light tokens. Scheme-aware surfaces (rings)
+ * should read `theme.macro.*` instead. Single source of truth for macro colors.
+ */
+export const MACRO_COLORS = {
+  kcal: '#10B981',
+  protein: '#5E9FD6',
+  carbs: '#FFB74D',
+  fats: '#81C784',
+} as const
 
 const DEFAULT_BRAND = '#007AFF'
 
