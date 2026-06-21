@@ -30,5 +30,13 @@
 - próxima: T3 subscription display
 - learnings/gotchas: "Personalizados" en coach YA existe como tab "Míos" (source==='own') → no dupliqué chip; agregué solo "Con video" en coach. Alumno no tiene ownership (ve coach+system) → solo "Con video". exerciseHasVideo = youtube(video_url) || gif_url || video_url .mp4/.webm/.mov/.gif. AC plural "toggles" cubierto por la combinación tab-origen + chip-video en coach; alumno = chip-video.
 
+## 2026-06-21 ~01:55 — T3 Subscription display parity
+- estado: done
+- archivos: lib/coach-subscription.ts (tipos AddonLive/PaymentEvent/BillingBreakdown/CardInfo + MODULE_LABELS inline + extractEventAmountClp + getCoachSubscriptionOverview ahora lee card/addons/events/snapshot directos), app/coach/(tabs)/subscription.tsx (cards Facturacion, Modulos activos con badge Cortesia EVA, Tarjeta, Historial de pagos; helper formatClp + BreakdownRow)
+- validación: tsc exit=0 (2º intento) / expo exit=0
+- commit: (siguiente)
+- próxima: T4 login alumno brandeado
+- learnings/gotchas: GOTCHA importante — el endpoint web /api/payments/subscription-status usa createClient() (sesion por COOKIE) → NO acepta el Bearer de mobile (devolveria 401). Solucion: leer DIRECTO por PostgREST bajo la sesion del coach (RLS SELECT-own) las tablas coaches(card_*)/coach_addons/subscription_events/billing_snapshots; el total compuesto sale del ultimo billing_snapshot (congelado) → NO recomputo precios (no duplico la logica de @/lib/constants ni services/billing, que no estan en packages). MODULE_LABELS inline (4 keys estables) en vez de @eva/module-catalog (no importado en mobile, evitar fallo de resolucion). GOTCHA tsc: el builder de supabase es PromiseLike (sin .catch) → usar IIFE async + try/catch, no .then().catch(). Todas las lecturas guarded → pantalla degrada elegante. Render gated por presencia (vacio = no se muestra la card). Verificacion runtime = en device.
+
 ## RESUMEN FINAL
 (el agente escribe esto al cumplir la completion condition o al parar por bound: qué quedó done, qué blocked y por qué, qué revisar en la mañana, comando exacto para retomar.)

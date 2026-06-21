@@ -42,7 +42,7 @@ Todas las tareas T1-T4 quedan `done` o `blocked`, y cada `done` muestra en el tr
 **Pasos:** agregar 2 chips toggle; filtro 100% client-side: "Con video" = tiene gif/imagen/youtube real (reusar helper existente); "Personalizados" = `coach_id` propio (no system). Combinable con search+músculo+origen ya existentes.
 **AC binario:** tsc exit=0 + expo exit=0; los toggles filtran la lista en ambas pantallas.
 
-## T3 — Subscription display parity (solo lectura)  [estado: todo]
+## T3 — Subscription display parity (solo lectura)  [estado: done]
 **Por qué:** mobile muestra payload fino; web tiene precio/addons/tarjeta/historial. ACCIONES de pago siguen web-only (no tocar).
 **Archivos:** `apps/mobile/lib/coach-subscription.ts` (`getCoachSubscriptionOverview` hoy fino), `apps/mobile/app/coach/(tabs)/subscription.tsx`. Reusar el `apiFetch` bearer ya usado en otras libs mobile.
 **Web ref:** endpoint `/api/payments/subscription-status` (devuelve `billing` base+addons+total, `addons[]` con `source` admin_grant=Cortesía, `card_last4`/`brand`, `events[]`).
