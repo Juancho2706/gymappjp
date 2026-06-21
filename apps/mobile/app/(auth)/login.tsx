@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
+import { Image } from 'expo-image'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowRight, Check, Eye, EyeOff, Lock, Mail, Sparkles } from 'lucide-react-native'
@@ -27,7 +28,7 @@ export default function LoginScreen() {
   const { role } = useLocalSearchParams<{ role: 'coach' | 'alumno' }>()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { theme } = useTheme()
+  const { theme, branding } = useTheme()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPwd, setShowPwd] = useState(false)
@@ -92,21 +93,39 @@ export default function LoginScreen() {
             transition={{ type: 'timing', duration: 500 }}
             style={{ marginBottom: 24, gap: 8 }}
           >
-            <View
-              className="flex-row items-center self-start"
-              style={{ gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: theme.radius['3xl'], backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }}
-            >
-              <Sparkles size={12} color={theme.primary} strokeWidth={2.25} />
-              <Text style={{ fontSize: 11, letterSpacing: 0.3, color: theme.mutedForeground, fontFamily: theme.fontSans }}>
-                {isCoach ? 'Panel del coach' : 'Tu entrenamiento'}
-              </Text>
-            </View>
-            <Text style={{ fontSize: 30, letterSpacing: -0.5, color: theme.foreground, fontFamily: 'Montserrat_700Bold' }}>
-              Bienvenido de vuelta
-            </Text>
-            <Text style={{ fontSize: 14, lineHeight: 20, color: theme.mutedForeground, fontFamily: theme.fontSans }}>
-              {isCoach ? 'Ingresá tus credenciales para acceder al panel' : 'Accedé a tu entrenamiento personalizado'}
-            </Text>
+            {!isCoach && branding ? (
+              <>
+                {branding.logoUrl ? (
+                  <View style={{ width: 80, height: 80, borderRadius: theme.radius.xl, overflow: 'hidden', backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
+                    <Image source={{ uri: branding.logoUrl }} style={{ width: 80, height: 80 }} contentFit="cover" />
+                  </View>
+                ) : null}
+                <Text style={{ fontSize: 30, letterSpacing: -0.5, color: theme.foreground, fontFamily: 'Montserrat_700Bold' }}>
+                  {branding.displayName}
+                </Text>
+                <Text style={{ fontSize: 14, lineHeight: 20, color: theme.mutedForeground, fontFamily: theme.fontSans }}>
+                  {branding.welcomeMessage?.trim() || 'Accedé a tu entrenamiento personalizado'}
+                </Text>
+              </>
+            ) : (
+              <>
+                <View
+                  className="flex-row items-center self-start"
+                  style={{ gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: theme.radius['3xl'], backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }}
+                >
+                  <Sparkles size={12} color={theme.primary} strokeWidth={2.25} />
+                  <Text style={{ fontSize: 11, letterSpacing: 0.3, color: theme.mutedForeground, fontFamily: theme.fontSans }}>
+                    {isCoach ? 'Panel del coach' : 'Tu entrenamiento'}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 30, letterSpacing: -0.5, color: theme.foreground, fontFamily: 'Montserrat_700Bold' }}>
+                  Bienvenido de vuelta
+                </Text>
+                <Text style={{ fontSize: 14, lineHeight: 20, color: theme.mutedForeground, fontFamily: theme.fontSans }}>
+                  {isCoach ? 'Ingresá tus credenciales para acceder al panel' : 'Accedé a tu entrenamiento personalizado'}
+                </Text>
+              </>
+            )}
           </MotiView>
 
           {/* Form card (glass-lite spotlight) */}
@@ -192,6 +211,11 @@ export default function LoginScreen() {
                 style={{ fontSize: 13, fontWeight: '600', color: theme.primary, fontFamily: theme.fontSans }}
               >
                 Crear cuenta nueva
+              </Text>
+            ) : null}
+            {!isCoach ? (
+              <Text style={{ fontSize: 11, letterSpacing: 0.3, color: theme.mutedForeground, fontFamily: theme.fontSans }}>
+                Impulsado por EVA
               </Text>
             ) : null}
             <Text style={{ fontSize: 12, letterSpacing: 0.3, color: theme.mutedForeground, fontFamily: theme.fontSans }}>

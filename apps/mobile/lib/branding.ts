@@ -7,6 +7,8 @@ export interface CoachBranding {
   primaryColor: string
   displayName: string
   inviteCode: string
+  // Mensaje de bienvenida del coach (subtítulo del login del alumno). Opcional (DB-compat / grant anon).
+  welcomeMessage?: string | null
   // M-F1: loader personalizado del coach (lo consume EvaLoader). Opcionales por DB-compat.
   logoUrl?: string | null
   useCustomLoader?: boolean
@@ -34,7 +36,7 @@ export function normalizeCoachIdentifier(input: string): string {
 }
 
 const BRANDING_COLS_RICH =
-  'id, slug, primary_color, display_name, invite_code, logo_url, use_custom_loader, loader_text, loader_icon_mode, loader_text_color'
+  'id, slug, primary_color, display_name, invite_code, welcome_message, logo_url, use_custom_loader, loader_text, loader_icon_mode, loader_text_color'
 const BRANDING_COLS_MIN = 'id, slug, primary_color, display_name, invite_code'
 
 export async function fetchBrandingByCoachIdentifier(identifierInput: string): Promise<CoachBranding | null> {
@@ -60,6 +62,7 @@ export async function fetchBrandingByCoachIdentifier(identifierInput: string): P
     primaryColor: data.primary_color ?? '#007AFF',
     displayName: data.display_name ?? data.slug,
     inviteCode: data.invite_code,
+    welcomeMessage: data.welcome_message ?? null,
     logoUrl: data.logo_url ?? null,
     useCustomLoader: data.use_custom_loader ?? false,
     loaderText: data.loader_text ?? null,

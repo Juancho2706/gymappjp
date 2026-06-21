@@ -50,7 +50,7 @@ Todas las tareas T1-T4 quedan `done` o `blocked`, y cada `done` muestra en el tr
 **AC binario:** tsc exit=0 + expo exit=0; renderiza los campos nuevos cuando el API responde; sin crash con payload vacío.
 **Nota:** la correctitud runtime se verifica en device (no en esta corrida). AC = compila + render seguro.
 
-## T4 — Login alumno brandeado (logo + nombre + welcome_message)  [estado: todo]
+## T4 — Login alumno brandeado (logo + nombre + welcome_message)  [estado: done]
 **Por qué:** mobile aplica el COLOR del coach pero dropea logo + brand_name + welcome_message en el login del alumno (header genérico).
 **Archivos:** `apps/mobile/app/(auth)/login.tsx` (branch `role=alumno`), `apps/mobile/lib/branding.ts` (tipo `CoachBranding` + `fetchBrandingByCoachIdentifier` — sumar `welcome_message`), `apps/mobile/context/ThemeContext.tsx` (payload de branding).
 **Web ref:** `apps/web/src/app/c/[coach_slug]/login/ClientLoginForm.tsx` (logo 80x80, título brand_name, subtítulo welcome_message).
