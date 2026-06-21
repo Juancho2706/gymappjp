@@ -228,6 +228,46 @@ export async function GET(req: Request) {
                 })
             }
 
+            // (c2) Pre-aviso SERNAC de fin de descuento: si el cupón está en su ÚLTIMO ciclo descontado
+            // (remainingCycles===1), el siguiente cobro vuelve al precio normal → avisar al coach con
+            // >= 1 ciclo de lead. Idempotente: una sola vez por redención (admin_audit_logs).
+            if (couponSpec && couponSpec.remainingCycles === 1 && coach.active_coupon_redemption_id) {
+                const { count: notified } = await admin
+                    .from('admin_audit_logs')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('action', 'coach.coupon_pre_increase_notice')
+                    .eq('target_id', coach.active_coupon_redemption_id)
+                if ((notified ?? 0) === 0) {
+                    const fullComposite = getCompositeAmountClp(tier, cycle, toBillableAddons(live))
+                    try {
+                        const { data: au } = await admin.auth.admin.getUserById(coach.id)
+                        const to = au?.user?.email
+                        if (to) {
+                            const body = `
+<h1 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#111827;">Tu descuento termina pronto</h1>
+<p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+  Tu próximo cobro mantiene el descuento. Después de ese cobro, el descuento termina y tu suscripción
+  vuelve a su precio normal de <strong>$${fullComposite.toLocaleString('es-CL')} CLP</strong> en la siguiente renovación.
+</p>
+<p style="margin:0;font-size:13px;color:#6b7280;">Podés revisar tu plan cuando quieras desde tu cuenta.</p>`
+                            const html = wrapEmailLayout(body, { headerTitle: 'EVA', previewText: 'Tu descuento termina pronto' })
+                            await sendTransactionalEmail({ to, subject: 'Tu descuento termina pronto', html }).catch((e) =>
+                                console.error('[cron/mp-reconcile] pre-increase email failed:', e)
+                            )
+                        }
+                    } catch (e) {
+                        console.error('[cron/mp-reconcile] pre-increase notice lookup failed:', e)
+                    }
+                    await admin.from('admin_audit_logs').insert({
+                        admin_email: 'cron',
+                        action: 'coach.coupon_pre_increase_notice',
+                        target_table: 'coupon_redemptions',
+                        target_id: coach.active_coupon_redemption_id,
+                        payload: { coach_slug: coach.slug, reverts_to_clp: fullComposite, triggered_by: 'cron/mp-reconcile' },
+                    })
+                }
+            }
+
             // (d) Kill-switch prolongado: add-on FACTURABLE cuyo módulo está en EVA_DISABLED_MODULES.
             // Cobrar un módulo apagado por el operador es exposición SERNAC directa (Riesgo 4). La
             // primera detección se persiste en admin_audit_logs; el reaviso mide el lapso desde la 1ª.
