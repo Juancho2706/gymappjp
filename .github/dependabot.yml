@@ -8,7 +8,7 @@ updates:
       time: "06:00"
       timezone: America/Santiago
     open-pull-requests-limit: 5
-    target-branch: v2/enterprise
+    target-branch: master
     labels:
       - dependencies
       - root
@@ -45,29 +45,10 @@ updates:
       time: "06:00"
       timezone: America/Santiago
     open-pull-requests-limit: 3
-    target-branch: v2/enterprise
+    target-branch: master
     labels:
       - dependencies
       - mobile
-    ignore:
-      - dependency-name: "expo"
-      - dependency-name: "react"
-      - dependency-name: "react-native"
-      - dependency-name: "expo-router"
-      - dependency-name: "expo-*"
-
-  - package-ecosystem: npm
-    directory: /apps/enterprise
-    schedule:
-      interval: weekly
-      day: monday
-      time: "06:00"
-      timezone: America/Santiago
-    open-pull-requests-limit: 3
-    target-branch: v2/enterprise
-    labels:
-      - dependencies
-      - enterprise
     ignore:
       - dependency-name: "expo"
       - dependency-name: "react"
@@ -83,7 +64,7 @@ updates:
       time: "06:00"
       timezone: America/Santiago
     open-pull-requests-limit: 3
-    target-branch: v2/enterprise
+    target-branch: master
     labels:
       - dependencies
       - github-actions
