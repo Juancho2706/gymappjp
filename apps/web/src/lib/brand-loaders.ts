@@ -11,18 +11,9 @@
  * - Brand-aware: color = --theme-primary del coach; fondo theme-aware; icono = logo del coach.
  */
 
-/** Keys válidas de loader (tuple para z.enum). 'eva' = default actual; el resto = las 6 del CEO. */
-export const LOADER_VARIANT_TUPLE = [
-    'eva',
-    'progreso',
-    'anillo',
-    'radar',
-    'cometa',
-    'ritmo',
-    'orbitas',
-] as const
-
-export type LoaderVariant = (typeof LOADER_VARIANT_TUPLE)[number]
+// Las KEYS canónicas viven en @eva/schemas (compartido, fuente única del z.enum). Acá solo metadata UI.
+import { LOADER_VARIANT_TUPLE, type LoaderVariant } from '@eva/schemas'
+export { LOADER_VARIANT_TUPLE, type LoaderVariant }
 
 export const DEFAULT_LOADER_VARIANT: LoaderVariant = 'eva'
 

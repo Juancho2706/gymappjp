@@ -14,23 +14,10 @@
  * brand-kit (compartido web+mobile) NO conoce fuentes (es DOM-free): mobile carga fuentes via Expo.
  */
 
-/** Claves válidas de fuente (tuple para z.enum del schema). Orden = orden del dropdown. */
-export const FONT_KEY_TUPLE = [
-    'inter',
-    'montserrat',
-    'plus-jakarta',
-    'hanken',
-    'manrope',
-    'poppins',
-    'sora',
-    'space-grotesk',
-    'outfit',
-    'figtree',
-    'dm-sans',
-    'lexend',
-] as const
-
-export type FontKey = (typeof FONT_KEY_TUPLE)[number]
+// Las KEYS canónicas viven en @eva/schemas (compartido web+mobile, fuente única del z.enum).
+// Acá solo se les agrega la metadata de presentación web (familia CSS + --font-brand-<key>).
+import { FONT_KEY_TUPLE, type FontKey } from '@eva/schemas'
+export { FONT_KEY_TUPLE, type FontKey }
 
 export type CuratedFont = {
     /** Nombre visible en el selector. */

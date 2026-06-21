@@ -28,6 +28,13 @@ export async function updateBrandSettingsAction(
         use_custom_loader: formData.get('use_custom_loader') === 'on',
         loader_text_color: (formData.get('loader_text_color') as string | null)?.trim() ?? '',
         loader_icon_mode: (formData.get('loader_icon_mode') as string | null) ?? 'eva',
+        // white-label v2 (gateados a Pro+ más abajo)
+        brand_secondary_color: (formData.get('brand_secondary_color') as string | null)?.trim() ?? '',
+        accent_light: (formData.get('accent_light') as string | null)?.trim() ?? '',
+        accent_dark: (formData.get('accent_dark') as string | null)?.trim() ?? '',
+        neutral_tint: formData.get('neutral_tint') === 'on',
+        brand_font_key: (formData.get('brand_font_key') as string | null)?.trim() ?? '',
+        loader_variant: (formData.get('loader_variant') as string | null) ?? 'eva',
         welcome_modal_enabled: formData.get('welcome_modal_enabled') === 'on',
         welcome_modal_content: (formData.get('welcome_modal_content') as string | null)?.trim() ?? '',
         welcome_modal_type: (formData.get('welcome_modal_type') as string | null) ?? 'text',
@@ -87,8 +94,13 @@ export async function updateBrandSettingsAction(
         updatePayload.use_custom_loader = parsed.data.use_custom_loader
         updatePayload.loader_text_color = parsed.data.loader_text_color || null
         updatePayload.loader_icon_mode = parsed.data.loader_icon_mode
-        // Campos v2 (brand_secondary_color/accent_*/neutral_tint/brand_font_key/loader_variant/
-        // logo_url_dark) se agregan a este mismo bloque gateado en W2.
+        // white-label v2 (mismo gate Pro+). logo_url_dark se sube aparte (updateLogoDarkAction, W2 UI).
+        updatePayload.brand_secondary_color = parsed.data.brand_secondary_color || null
+        updatePayload.accent_light = parsed.data.accent_light || null
+        updatePayload.accent_dark = parsed.data.accent_dark || null
+        updatePayload.neutral_tint = parsed.data.neutral_tint
+        updatePayload.brand_font_key = parsed.data.brand_font_key || null
+        updatePayload.loader_variant = parsed.data.loader_variant
     }
 
     const { error } = await supabase
