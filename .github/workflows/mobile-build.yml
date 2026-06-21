@@ -62,19 +62,34 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Inject prod env vars into eas.json for prodpreview
-        if: ${{ inputs.profile == 'prodpreview' }}
+      # Candado 1+2+3: inyecta el Supabase de PROD en el perfil ELEGIDO (no solo prodpreview),
+      # setea EXPO_PUBLIC_API_URL explicito, y FALLA el build si los secrets estan vacios
+      # (en vez de entregar un APK apuntado al backend equivocado que patea al login).
+      - name: Inject prod env vars into eas.json (${{ inputs.profile }})
+        if: ${{ inputs.profile == 'prodpreview' || inputs.profile == 'production' }}
         working-directory: apps/${{ inputs.app }}
         env:
+          PROFILE: ${{ inputs.profile }}
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
           node -e "
             const fs = require('fs');
+            const profile = process.env.PROFILE;
+            const url = process.env.SUPABASE_URL;
+            const key = process.env.SUPABASE_KEY;
+            if (!url || !key) {
+              console.error('FATAL: secrets NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY vacios. Abortando para no entregar un APK apuntado al backend equivocado.');
+              process.exit(1);
+            }
             const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
-            eas.build.prodpreview.env.EXPO_PUBLIC_SUPABASE_URL = process.env.SUPABASE_URL;
-            eas.build.prodpreview.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = process.env.SUPABASE_KEY;
+            eas.build[profile] = eas.build[profile] || {};
+            eas.build[profile].env = eas.build[profile].env || {};
+            eas.build[profile].env.EXPO_PUBLIC_SUPABASE_URL = url;
+            eas.build[profile].env.EXPO_PUBLIC_SUPABASE_ANON_KEY = key;
+            eas.build[profile].env.EXPO_PUBLIC_API_URL = eas.build[profile].env.EXPO_PUBLIC_API_URL || 'https://eva-app.cl';
             fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2));
+            console.log('OK: eas.json perfil ' + profile + ' -> Supabase ' + url + ' - API ' + eas.build[profile].env.EXPO_PUBLIC_API_URL);
           "
 
       - name: Build Android (${{ inputs.profile }})
@@ -124,19 +139,34 @@ jobs:
             exit 1
           fi
 
-      - name: Inject prod env vars into eas.json for prodpreview
-        if: ${{ inputs.profile == 'prodpreview' }}
+      # Candado 1+2+3: inyecta el Supabase de PROD en el perfil ELEGIDO (no solo prodpreview),
+      # setea EXPO_PUBLIC_API_URL explicito, y FALLA el build si los secrets estan vacios
+      # (en vez de entregar un APK apuntado al backend equivocado que patea al login).
+      - name: Inject prod env vars into eas.json (${{ inputs.profile }})
+        if: ${{ inputs.profile == 'prodpreview' || inputs.profile == 'production' }}
         working-directory: apps/${{ inputs.app }}
         env:
+          PROFILE: ${{ inputs.profile }}
           SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: |
           node -e "
             const fs = require('fs');
+            const profile = process.env.PROFILE;
+            const url = process.env.SUPABASE_URL;
+            const key = process.env.SUPABASE_KEY;
+            if (!url || !key) {
+              console.error('FATAL: secrets NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY vacios. Abortando para no entregar un APK apuntado al backend equivocado.');
+              process.exit(1);
+            }
             const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
-            eas.build.prodpreview.env.EXPO_PUBLIC_SUPABASE_URL = process.env.SUPABASE_URL;
-            eas.build.prodpreview.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = process.env.SUPABASE_KEY;
+            eas.build[profile] = eas.build[profile] || {};
+            eas.build[profile].env = eas.build[profile].env || {};
+            eas.build[profile].env.EXPO_PUBLIC_SUPABASE_URL = url;
+            eas.build[profile].env.EXPO_PUBLIC_SUPABASE_ANON_KEY = key;
+            eas.build[profile].env.EXPO_PUBLIC_API_URL = eas.build[profile].env.EXPO_PUBLIC_API_URL || 'https://eva-app.cl';
             fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2));
+            console.log('OK: eas.json perfil ' + profile + ' -> Supabase ' + url + ' - API ' + eas.build[profile].env.EXPO_PUBLIC_API_URL);
           "
 
       - name: Prepare iOS credentials
