@@ -43,13 +43,21 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
 
   let res = await exec(token)
 
-  // Ola 0: manejo central de 401/sesión expirada. Refrescar una vez y reintentar;
-  // si sigue 401, cerrar sesión (el root layout redirige a login → sin "sesión zombi").
+  // Manejo central de 401. Refrescar una vez y reintentar. CLAVE: solo cerramos
+  // sesión si el REFRESH falla (sesión irrecuperable). Si el refresh anda pero el
+  // endpoint SIGUE 401, es un problema del ENDPOINT (authz/verificación server,
+  // ej. verifyMobileBearer rechazando un token que GoTrue/PostgREST sí aceptan),
+  // NO una sesión muerta → lanzamos ApiError y el caller decide (degradar/mostrar
+  // error). Antes hacíamos signOut acá → un 401 de UN endpoint te deslogueaba y el
+  // guard raíz te pateaba al login aunque la sesión estuviera viva.
   if (res.status === 401 && options.authenticated) {
     const { data, error } = await supabase.auth.refreshSession()
     const newToken = data.session?.access_token ?? null
-    if (!error && newToken) res = await exec(newToken)
-    if (res.status === 401) await supabase.auth.signOut().catch(() => {})
+    if (!error && newToken) {
+      res = await exec(newToken)
+    } else {
+      await supabase.auth.signOut().catch(() => {})
+    }
   }
 
   const payload = await res.json().catch(() => null)
