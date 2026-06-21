@@ -803,7 +803,9 @@ export default function ProgramBuilderScreen() {
       start_date: startDateFlexible ? null : (startDate.trim() || null),
       start_date_flexible: startDateFlexible,
       duration_days: durationType === 'weeks' ? null : durationDays,
-      program_phases: phases.length ? phases : null,
+      // [] (no null): la columna workout_programs.program_phases es NOT NULL con default []
+      // -> mandar null tiraba 23502 al guardar/asignar. Espeja phasesForDb de la web.
+      program_phases: phases.length ? phases : [],
     }
   }
   function currentVariantSets(): { variant: 'A' | 'B'; days: DayState[] }[] {
