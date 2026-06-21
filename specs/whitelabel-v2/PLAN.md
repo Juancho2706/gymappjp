@@ -6,6 +6,21 @@
 
 ---
 
+## 0. Decisiones CERRADAS por el CEO (2026-06-21) — resuelven la seccion 5, no se re-litigan
+
+1. **Color secundario = INDEPENDIENTE** (badges/tags/macros nutricionales/2da serie de charts). NO es el acento del tema; botones/links siguen saliendo del primario. Aditivo, con default derivado.
+2. **Branding = Pro+ ENTERO.** starter y free ven **TODO EVA system** (colores EVA, loader EVA, logo EVA) — SIN custom de ningun tipo. NO hay "branding basico" para starter. `canUseBranding` se vuelve Pro+ (era `true` en starter). **Colapsa el diseno de 2 capabilities a UNA** (`isBrandingAllowed`).
+3. **Corte DURO:** coaches < Pro que hoy tengan color/logo custom **caen a EVA en el deploy** (lo guardado en DB NO se borra, solo deja de aplicar). Sin flag de grandfathering. → el CEO avisa a cualquier starter ACTIVO afectado antes del deploy (ver nota de comms en W0/seccion 5).
+4. **Fuente = solo titulos/display.** Body siempre Inter (perf + cero CLS). Aplica tambien al panel coach cuando el toggle esta en "mi marca".
+5. **Dark = el ALUMNO elige claro/oscuro**; el coach solo customiza el acento por-modo. Sin `forcedTheme`, sin columna de modo forzado.
+6. **logo_url_dark = SI ahora** (paridad orgs/teams; resuelve logo oscuro invisible en dark).
+7. **Loaders = SI en el MVP, VARIAS variantes (5+).** Formato lo define el CEO (React/SVG/Lottie) al pasar los disenos; se adapta el pipeline. W3 queda EN scope (no diferido).
+8. **Subdominio = DIFERIDO** hasta senal real (>=3 coaches Pro pidiendolo O 1 upgrade atribuido). W5 fuera del ciclo actual.
+
+**Scope del ciclo actual (tras decisiones): W0 -> W1 -> W2 -> W3 -> W4.** W5 (subdominio) diferido.
+
+---
+
 ## 1. Resumen + decision de enfoque
 
 **Hallazgo central (8 roles convergen):** la base es mas madura que lo que sugiere el roadmap. El motor `@eva/brand-kit` (`packages/brand-kit/index.ts`) ya resuelve tema light+dark con acento por-modo, contrast-clamp WCAG AA (`clampAccent`, `pickOnColor`, `resolveBrandTheme`, `contrastReport`, `isThemeReadable`), y el layout del alumno (`apps/web/src/app/c/[coach_slug]/layout.tsx` L162-237) YA consume `accentLight/accentDark/neutralTint` y emite un bloque `.dark`. El grueso de v2 es **threading de campos nuevos por un pipe que ya existe** (proxy SELECT → headers `x-coach-*` → `<style>` inyectado) + **UX de configuracion**, no arquitectura nueva.
@@ -17,11 +32,11 @@
 | **W0** | Spec congelada + gate Pro+ server-side + lista de fuentes + schema/migracion definidos | Sin gate server-side primero, todo lo demas filtra el feature pago. Bloqueante. |
 | **W1** | Migracion `coaches` (paridad con orgs/teams) + motor (color2 en `generateBrandPalette` + `resolveBrandTheme`) + regen types | Motor aditivo, puro TS, testeable sin UI. Habilita W2-W4. |
 | **W2** | Aplicacion visual: color2 + fuente + dark brandeado, alumno + panel coach con toggle | 80% del valor percibido. Reusa el pipe + `@eva/brand-kit`. |
-| **W3** | Variantes de loader (importar los del CEO) | Depende de los assets del CEO; menor valor (solo se ve en transiciones). |
+| **W3** | Variantes de loader (importar los del CEO, 5+) | Depende de los assets del CEO; menor valor (solo se ve en transiciones) pero el CEO lo quiere en el MVP. |
 | **W4** | Login/onboarding brandeados pre-auth | Alto "wow" de demo; cierra el gate-leak del login. |
-| **W5** | Subdominio `slug.eva-app.cl` (cookies aisladas host-only) | **Track aparte**, infra-dependiente (DNS/Vercel/Supabase). Detras de flag. No mezclar con W1-W4. |
+| **W5** | Subdominio `slug.eva-app.cl` (cookies aisladas host-only) | **DIFERIDO** (decision #8), infra-dependiente (DNS/Vercel/Supabase). Detras de flag. No mezclar con W1-W4. |
 
-**Recomendacion de PM (riesgo #1 = roadmap-burner con revenue casi nulo):** construir **W0→W2 + W4** en el primer ciclo (reusan motor, ~5-7 dias, y dan el argumento de venta para las 14 llamadas). **W3 (loaders) y W5 (subdominio) detras de senal real:** ≥3 coaches Pro pidiendo "mas marca" O ≥1 upgrade atribuido a branding. Esto NO es re-litigar scope: el scope sigue completo, solo se faseo el gasto de ingenieria.
+**Scope del ciclo (decision CEO): W0 → W1 → W2 → W3 → W4.** El CEO eligio mantener loaders (W3, 5+ variantes) en el MVP. **Solo W5 (subdominio) se difiere** hasta senal real (>=3 coaches Pro pidiendolo O >=1 upgrade atribuido a branding). El PM marca el riesgo #1 (roadmap-burner con revenue ~nulo): mitigacion = usar v2 como argumento de venta en las 14 llamadas + instrumentar atribucion (seccion 7) para validar el gasto antes de abrir W5.
 
 ---
 
@@ -33,24 +48,24 @@
 
 **Tareas atomicas:**
 
-1. **Nuevo capability `canUseBrandingV2` (deep branding) — NO redefinir `canUseBranding`.**
-   - Archivo: `packages/tiers/index.ts`. Hoy `TIER_CAPABILITIES.starter.canUseBranding = true` (L154-160) y el motivo es que el branding basico (1 color + logo) YA se vendio a starter via `SHARED_TIER_FEATURES` ("Branding personalizado", L68). Redefinir `canUseBranding` romperia eso.
-   - Agregar a `TierCapabilities` (L37-43) el campo `canUseBrandingV2: boolean`. Setear `false` para `free`/`starter`, `true` para `pro`/`elite`/`growth`/`scale`.
-   - Exportar helper puro `isBrandingV2Allowed(tier: SubscriptionTier): boolean` (= `getTierCapabilities(tier).canUseBrandingV2`). Esta es la **fuente unica** que consumen las 5 superficies (proxy, layout alumno, layout coach, login, manifest/splash). No existe hoy ningun `isProOrAbove`/tier-rank helper para branding — este se crea aca.
-   - **DoD:** test unitario nuevo (`packages/tiers/*.test.ts`) que asegure la matriz: `free=false, starter=false, pro=true, elite=true, growth=true, scale=true`, y fail-closed (`'' / null / unknown → false`).
+1. **Gate UNICO: branding (todo) = Pro+ — flip de `canUseBranding` (decision CEO #2).**
+   - Archivo: `packages/tiers/index.ts`. Hoy `TIER_CAPABILITIES.starter.canUseBranding = true` (L154-160). **Flip a `false` para `free` y `starter`**; `true` para `pro`/`elite`/`growth`/`scale`. NO se agrega un 2do capability: starter/free pierden TODO el branding (color/logo/loader), no solo la "profundidad".
+   - Ajustar el copy de `SHARED_TIER_FEATURES` ("Branding personalizado", L68) para que starter ya NO lo liste (era un feature de starter; ahora arranca en Pro). Revisar paginas de pricing/planes que muestren ese bullet.
+   - Helper puro `isBrandingAllowed(tier): boolean` (= `getTierCapabilities(tier).canUseBranding`). **Fuente unica** de las 5 superficies (proxy, layout alumno, layout coach, login, manifest/splash). Reusa el `canUseBranding` ya existente — solo cambia su valor por tier.
+   - **DoD:** test de matriz `free=false, starter=false, pro=true, elite=true, growth=true, scale=true` + fail-closed (`'' / null / unknown → false`).
 
 2. **Gate Pro+ en el WRITE path (hoy AUSENTE — bloqueante de monetizacion).**
-   - Archivo: `apps/web/src/app/coach/settings/_actions/settings.actions.ts`. Hoy `updateBrandSettingsAction` (L16-88) valida el schema y hace UPDATE **sin chequear tier**. El unico gate vive en la page (redirect) + en el render del alumno (`isFreeTier`). Un coach starter/free puede POSTear el action directo y persistir campos v2.
-   - Plan: en la action, fetch `coach.subscription_tier`; si `!isBrandingV2Allowed(tier)`, **strip** (no persistir) los campos v2 (`brand_secondary_color`, `brand_font_key`, `accent_light`, `accent_dark`, `neutral_tint`, `logo_url_dark`, `loader_variant != 'eva'`). Los campos v1 (`primary_color`, `logo_url`, `loader_*`, `welcome_*`) se mantienen como hoy para no romper starter.
-   - **DoD:** un starter que envia payload con `brand_font_key` NO lo persiste; un pro SI.
+   - Archivo: `apps/web/src/app/coach/settings/_actions/settings.actions.ts`. Hoy `updateBrandSettingsAction` (L16-88) valida el schema y hace UPDATE **sin chequear tier**. Un coach starter/free puede POSTear el action directo y persistir branding.
+   - Plan: en la action, fetch `coach.subscription_tier`; si `!isBrandingAllowed(tier)`, **rechazar** la escritura de TODOS los campos de marca (`primary_color`, `brand_secondary_color`, `logo_url`, `logo_url_dark`, `brand_font_key`, `accent_*`, `neutral_tint`, `loader_*`, `welcome_*`). Branding es Pro+ entero (decision #2).
+   - **DoD:** un starter que envia cualquier payload de branding NO lo persiste; un pro SI.
 
-3. **Decidir el modelo de columnas (paridad con orgs/teams).** Verificado: `coaches` solo tiene `primary_color` + `logo_*` + `loader_*` + `welcome_*`. `organizations`/`teams` ya tienen `accent_light/accent_dark/neutral_tint/logo_url_dark` (`packages/schemas/org.ts` ya valida `HexColor` para accent/neutral). `brand_secondary_color` y `loader_variant` son conceptos NUEVOS (no existen en orgs/teams tampoco).
+3. **Modelo de columnas (paridad con orgs/teams).** Verificado: `coaches` solo tiene `primary_color` + `logo_*` + `loader_*` + `welcome_*`. `organizations`/`teams` ya tienen `accent_light/accent_dark/neutral_tint/logo_url_dark` (`packages/schemas/org.ts` ya valida `HexColor` para accent/neutral). `brand_secondary_color` y `loader_variant` son conceptos NUEVOS (no existen en orgs/teams tampoco). `logo_url_dark` SE AGREGA (decision #6).
 
-4. **Congelar la lista de ~12 fuentes** (ver seccion 3) y el formato/cantidad de loaders del CEO (decision abierta — seccion 5).
+4. **Congelar la lista de ~12 fuentes** (ver seccion 3). **Loaders (decision #7): 5+ variantes en el MVP**; el CEO pasa sus disenos (React/SVG/Lottie) y se congela el enum de `loader_variant` con esas keys. El formato exacto define el pipeline de W3 (component-switch vs Lottie lazy + sanitizacion).
 
 5. **Definir el registry de fuentes como fuente unica:** crear `apps/web/src/lib/brand-fonts.ts` (web-only) con `CURATED_FONTS: Record<FontKey, { family, cssVar, fallback, category }>` y un `z.enum` de las 12 keys. (La carga real con `next/font` va en W2; aca solo se congela el contrato y el enum para que schema/proxy puedan confiar en el.)
 
-**DoD de W0:** capability + helper testeado; write-path gateado; lista de columnas y de fuentes firmada; enum de fuentes definido. Sin cambios visuales.
+**DoD de W0:** capability flipeado + helper testeado; write-path gateado; lista de columnas/fuentes/loaders firmada; enums de fuente y loader definidos. Sin cambios visuales.
 
 ---
 
@@ -77,7 +92,7 @@
      ADD COLUMN loader_variant text NOT NULL DEFAULT 'eva';
    ```
    - Todas nullable/defaulted → NULL accent ⇒ `resolveBrandTheme` cae a `brandColor` (ya manejado en L119/124). Zero-regression.
-   - **NO** se cambia RLS: `coaches_update_own` ya cubre self-update. El gate de los campos pagados vive en el server action (RLS no ve el tier barato).
+   - **NO** se cambia RLS: `coaches_update_own` ya cubre self-update. El gate del branding (todo Pro+) vive en el server action (RLS no ve el tier barato).
    - Validar con tx-rollback antes de aplicar (`SET LOCAL ROLE` + advisors). Regenerar `apps/web/src/lib/database.types.ts`.
 
 2. **Motor color2 en `apps/web/src/lib/color-utils.ts` (puro, sin deps).**
@@ -110,21 +125,21 @@
 
 2. **Threading por el proxy (`apps/web/src/proxy.ts`).**
    - Extender el SELECT de `coachBrandingPromise` (L200-202) con: `brand_secondary_color, accent_light, accent_dark, neutral_tint, logo_url_dark, brand_font_key, loader_variant`. **Es la misma fila ya fetcheada** → costo ~0 (sin query nueva; respeta la optimizacion de DB-requests de la memoria).
-   - En el branch `/c` (L730-741), tras computar el tier, setear headers nuevos SOLO si `isBrandingV2Allowed(tier)`: `x-coach-secondary-color`, `x-coach-accent-light`, `x-coach-accent-dark`, `x-coach-neutral-tint`, `x-coach-logo-url-dark`, `x-coach-font-key`, `x-coach-loader-variant`. Si no es Pro+, **no setearlos** (caen a EVA en el layout). Espejar en `buildClientRouteResponse` (L743-763).
+   - En el branch `/c` (L730-741), tras computar el tier, setear los headers de marca SOLO si `isBrandingAllowed(tier)`: `x-coach-secondary-color`, `x-coach-accent-light`, `x-coach-accent-dark`, `x-coach-neutral-tint`, `x-coach-logo-url-dark`, `x-coach-font-key`, `x-coach-loader-variant` (mas los `x-coach-*` actuales de color/logo). Si no es Pro+, **no setear NINGUN header de marca** (cae a EVA completo en el layout). Espejar en `buildClientRouteResponse` (L743-763).
    - **Factor compartido:** extraer `buildCoachBrandHeaders(coach, tier)` para que el branch `/c` y el futuro branch subdominio (W5) no driften.
 
 3. **Layout del alumno (`apps/web/src/app/c/[coach_slug]/layout.tsx`).**
-   - Leer los headers nuevos (espejo de L164-166). El gate ya esta cableado: cambiar el predicado de `isFreeTier` a `!isBrandingV2Allowed(tier)` **solo para los campos v2** (color2/font/accent-dark/neutral-tint). Los campos v1 (`primary_color`, `logo_url`) mantienen su gate actual `isFreeTier` para no degradar starter.
+   - Leer los headers nuevos (espejo de L164-166). Gate: reemplazar el predicado `isFreeTier` por `!isBrandingAllowed(tier)` para **TODOS** los campos de marca (color1+color2/logo/font/accent/dark/loader). starter cae al gate igual que free (decision #2) → ven EVA completo.
    - Pasar `secondaryHex` a `generateBrandPalette` (L170) y agregar al `<style>` (L214-237): `--theme-secondary`, `--theme-secondary-rgb`, `--theme-secondary-foreground` en `:root` + su override en `.dark`. Re-validar hex en 2da capa igual que `safeLoaderTextColor` (L157-159) ANTES de interpolar.
    - Fuente: emitir `--brand-font: var(--font-brand-<key>, var(--font-inter))` resuelta desde el registry server-side (NUNCA el string crudo del coach).
 
 4. **Fuente: cargar las 12 con `next/font` (build-time, self-hosted).**
    - En `apps/web/src/app/layout.tsx` (hoy solo `Inter`+`Montserrat`, L22-32): instanciar las 12 con `next/font/google`, cada una `{ variable: '--font-brand-<key>', subsets:['latin'], display:'swap', preload:false, weight:['400','500','600','700'], adjustFontFallback:true }`. `preload:false` en las 11 no-default es **critico** (12 `<link rel=preload>` en `<head>` degradaria LCP). El browser solo descarga la woff2 cuya `font-family` se usa.
-   - **Refactor del `!important` (bloqueante "looks done but isn't"):** `globals.css` L300 (`body`) y L306 (`h1..h6`) hardcodean `font-family ... !important`, que **silenciara** `--brand-font`. Rerutear via los tokens `@theme` (L14-15): `--font-sans: var(--brand-font-body, var(--font-inter), ...)` y `--font-display: var(--brand-font, var(--font-montserrat), ...)`, y **quitar** los `!important` (o scopearlos a un wrapper del subtree branded para que las paginas de marketing EVA queden byte-identicas). **MVP recomendado: fuente custom solo en headings/display + wordmark**; body queda Inter (legibilidad + colapsa CLS casi a cero).
+   - **Refactor del `!important` (bloqueante "looks done but isn't"):** `globals.css` L300 (`body`) y L306 (`h1..h6`) hardcodean `font-family ... !important`, que **silenciara** `--brand-font`. Rerutear via los tokens `@theme` (L14-15): `--font-sans: var(--brand-font-body, var(--font-inter), ...)` y `--font-display: var(--brand-font, var(--font-montserrat), ...)`, y **quitar** los `!important` (o scopearlos a un wrapper del subtree branded para que las paginas de marketing EVA queden byte-identicas). **Decision #4: fuente custom solo en headings/display + wordmark**; body queda Inter (legibilidad + colapsa CLS casi a cero).
 
 5. **Panel coach (`apps/web/src/app/coach/layout.tsx`) — el gap real del dark brandeado.**
    - Hoy llama `generateBrandPalette(primaryColor)` (L110) y emite SOLO `:root` (L140-156), **sin** `.dark`, **sin** `resolveBrandTheme`. El alumno ya lo hace bien.
-   - Plan: portar el patron del alumno — usar `resolveBrandTheme({ brandColor, accentLight, accentDark, neutralTint, secondaryLight, secondaryDark })` + emitir el bloque `.dark` + `--brand-font` + vars secondary. Gatear con `use_brand_colors_coach !== false` (toggle existente, L112) **Y** `isBrandingV2Allowed(coach.subscription_tier)` para los campos v2.
+   - Plan: portar el patron del alumno — usar `resolveBrandTheme({ brandColor, accentLight, accentDark, neutralTint, secondaryLight, secondaryDark })` + emitir el bloque `.dark` + `--brand-font` + vars secondary. Gatear con `use_brand_colors_coach !== false` (toggle existente, L112) **Y** `isBrandingAllowed(coach.subscription_tier)`.
    - **DoD del toggle:** con `use_brand_colors_coach = false` el panel coach renderiza EVA; con `true` renderiza la marca (incl. fuente+dark+color2). Los alumnos SIEMPRE ven la marca (el toggle solo afecta el panel del coach).
 
 6. **UI del coach (`apps/web/src/app/coach/settings/BrandSettingsForm.tsx`).**
@@ -132,23 +147,23 @@
    - Agregar: color-picker secundario, dropdown de fuente (cada opcion renderizada en su tipografia + par Titulo/cuerpo), accent dark + toggle de preview light/dark, neutral_tint. **Reusar la red de seguridad:** badge WCAG existente + `contrastReport` por-modo (patron de `org/[slug]/brand/_components/BrandStudio.tsx`), y **bloquear Guardar si cualquier modo falla AA** (publish-gate `isThemeReadable`).
    - **Reuso fuerte recomendado:** extraer un `<BrandStudio>` compartido de `org/[slug]/brand/_components/BrandStudio.tsx` (que YA tiene preview light/dark, accent por-modo, dual logo, guard de contraste) y parametrizarlo por who-can-edit + set de columnas. Mata el drift entre las superficies de inyeccion.
 
-**DoD de W2:** un coach Pro guarda color2/fuente/dark y los ve live en preview, en la app del alumno (light Y dark) y en su panel (con toggle). Un starter NO puede guardarlos (write-path) ni verlos (render cae a EVA). vitest + tsc + mobile tsc verdes.
+**DoD de W2:** un coach Pro guarda color2/fuente/dark y los ve live en preview, en la app del alumno (light Y dark) y en su panel (con toggle). Un starter NO puede guardarlos (write-path) ni verlos (render cae a EVA completo). vitest + tsc + mobile tsc verdes.
 
 ---
 
-### W3 — Variantes de loader (importar los del CEO)
+### W3 — Variantes de loader (importar los del CEO, 5+ en el MVP)
 
-**Objetivo:** registry cerrado de loaders seleccionables, con los disenos del CEO importados como codigo del repo (no upload).
+**Objetivo:** registry cerrado de loaders seleccionables (decision #7: 5+ variantes), con los disenos del CEO importados como codigo del repo (no upload).
 
 **Tareas atomicas:**
 
-1. **Registry tipado:** `apps/web/src/components/loaders/registry.tsx` mapeando `loader_variant` (enum) → componente. Default `'eva'`/`'treefrog'` = los actuales (`EvaRouteLoader.tsx`, `EvaTreefrogLoader.tsx`), 0 JS extra. Los disenos del CEO se incrustan como NUEVAS entradas vetadas en PR.
+1. **Registry tipado:** `apps/web/src/components/loaders/registry.tsx` mapeando `loader_variant` (enum) → componente. Default `'eva'`/`'treefrog'` = los actuales (`EvaRouteLoader.tsx`, `EvaTreefrogLoader.tsx`), 0 JS extra. Las 5+ entradas del CEO se incrustan como NUEVAS keys vetadas en PR.
 2. **Threading:** header `x-coach-loader-variant` (ya seteado en W2) + CSS var `--coach-loader-variant` en el `<style>` (mismo patron que `--coach-loader-icon-mode` L228). El lector client `useLoaderBrandConfig` (en `EvaRouteLoader.tsx`) lee la var en runtime.
 3. **Brand-aware:** cada variante DEBE consumir `--theme-primary`/`--theme-secondary` (o aceptar `{primary,secondary}` prop). Modelo a copiar: `EvaTreefrogLoader.module.css` (SVG + CSS module, 0 deps, brand-tintable).
-4. **Lottie (si aplica) — gateado:** preferir variantes CSS/SVG (0 dep) para el default. Si una variante es Lottie, lazy-load del player (`next/dynamic({ ssr:false })`) SOLO dentro de esa variante, reusando el patron de `apps/web/src/app/enterprise/_components/atoms/LottiePlayer.tsx` (ya respeta `prefers-reduced-motion`). Presupuesto: cada JSON < 30KB; nunca meter el runtime Lottie en el critical path del loader default. Render `EvaTreefrogLoader` como placeholder sincrono hasta que hidrate.
+4. **Lottie (si aplica) — gateado:** preferir variantes CSS/SVG (0 dep). Si una variante es Lottie, lazy-load del player (`next/dynamic({ ssr:false })`) SOLO dentro de esa variante, reusando el patron de `apps/web/src/app/enterprise/_components/atoms/LottiePlayer.tsx` (ya respeta `prefers-reduced-motion`). Presupuesto: cada JSON < 30KB; nunca meter el runtime Lottie en el critical path del loader default. Render `EvaTreefrogLoader` como placeholder sincrono hasta que hidrate. **Con 5+ variantes el peso importa:** code-split por variante; solo carga la elegida.
 5. **Sanitizacion al importar:** SVG inline → strip `<script>`/`on*=`/`<foreignObject>`/`href=javascript:` (DOMPurify perfil SVG en build). Lottie → validar JSON, rechazar expresiones y URLs remotas en `assets[].u/p`. El coach solo elige por enum; nunca markup.
 
-**DoD de W3:** coach Pro elige una variante en el selector (galeria con thumbnails), se aplica en alumno + panel, `prefers-reduced-motion` cae a estatico, variante invalida → fallback EVA. Bundle del first-load del alumno sin regresion (Lottie lazy).
+**DoD de W3:** coach Pro elige una de las 5+ variantes en el selector (galeria con thumbnails), se aplica en alumno + panel, `prefers-reduced-motion` cae a estatico, variante invalida → fallback EVA. Bundle del first-load del alumno sin regresion (variantes lazy/code-split).
 
 ---
 
@@ -159,15 +174,17 @@
 **Tareas atomicas:**
 
 1. **Extender la query pre-auth (`apps/web/src/app/c/[coach_slug]/login/_data/login.queries.ts`).** `getClientLoginCoach` (L19-28) hoy selecciona `brand_name, primary_color, logo_url, welcome_message` y **NO mira tier** → un coach free/starter ya filtra su marca en login (gate-leak). Agregar al SELECT: `brand_secondary_color, accent_dark, logo_url_dark, brand_font_key, subscription_tier`.
-2. **Aplicar el gate Pro+ en el login (`login/page.tsx` + `ClientLoginForm.tsx`).** Si `!isBrandingV2Allowed(tier)` → caer a EVA para los campos v2 (espejo del gate del layout autenticado). Para v1 (primary/logo), mantener el comportamiento actual (decidir con CEO si starter conserva su color en login — seccion 5).
-3. **Migrar el login a `resolveBrandTheme` + var de fuente.** Hoy pinta `primary_color` crudo, sin acento por-modo, sin fuente, sin dark. Inyectar un `<style>` scopeado (mismo helper `buildBrandStyleTag` de W2) con `--brand-font` + acento + `.dark`. **Recomendacion perf:** fuente custom solo en el wordmark/titulo del login (texto corto, swap imperceptible), body/inputs en Inter (es la primera pantalla, sin cache caliente).
+2. **Aplicar el gate Pro+ en el login (`login/page.tsx` + `ClientLoginForm.tsx`).** Si `!isBrandingAllowed(tier)` → caer a **EVA total** (decision #2/#3: starter no tiene branding, ni siquiera color1/logo en login). Pro+ ve marca completa. Mismo predicado que el layout autenticado.
+3. **Migrar el login a `resolveBrandTheme` + var de fuente.** Hoy pinta `primary_color` crudo, sin acento por-modo, sin fuente, sin dark. Inyectar un `<style>` scopeado (mismo helper `buildBrandStyleTag` de W2) con `--brand-font` + acento + `.dark`. **Decision #4 (perf):** fuente custom solo en el wordmark/titulo del login (texto corto, swap imperceptible), body/inputs en Inter (es la primera pantalla, sin cache caliente).
 4. **Onboarding/welcome modal** (`welcome_modal_*` ya existen) hereda las mismas vars una vez el login las inyecta.
 
-**DoD de W4:** alumno nuevo de un coach Pro ve marca completa (color2/fuente/dark) en login y onboarding, identica a la app; coach free/starter ve EVA (o solo v1, segun decision CEO) en login. Incluir el login como tab en el preview del coach para que confirme coherencia.
+**DoD de W4:** alumno nuevo de un coach Pro ve marca completa (color2/fuente/dark) en login y onboarding, identica a la app; coach free/starter ve **EVA total** en login. Incluir el login como tab en el preview del coach para que confirme coherencia.
 
 ---
 
-### W5 — Subdominio `slug.eva-app.cl` (track aparte, cookies aisladas)
+### W5 — Subdominio `slug.eva-app.cl` (DIFERIDO, track aparte, cookies aisladas)
+
+**Estado: DIFERIDO (decision #8)** hasta senal real (>=3 coaches Pro pidiendolo O >=1 upgrade atribuido a branding). Se documenta para no perder el diseno; NO entra al ciclo actual.
 
 **Objetivo:** servir cada coach Pro+ bajo su subdominio, con **sesiones aisladas host-only** (sin SSO cruzado).
 
@@ -205,7 +222,7 @@ Todas Google Fonts, subset `latin`, sans-serif (legibilidad de app), variable do
 | `dm-sans` | **DM Sans** | compacta, legible en small |
 | `lexend` | **Lexend** | **pick de accesibilidad** (disenada para legibilidad) |
 
-Si el peso de build de las 12 molesta, recortar a 6-8 (excluir las que no aporten contraste de personalidad). MVP: aplicar a headings/display; body en Inter.
+Si el peso de build de las 12 molesta, recortar a 6-8 (excluir las que no aporten contraste de personalidad). Decision #4: aplicar a headings/display; body en Inter.
 
 ---
 
@@ -213,37 +230,42 @@ Si el peso de build de las 12 molesta, recortar a 6-8 (excluir las que no aporte
 
 | # | Riesgo | Sev | Mitigacion |
 |---|---|---|---|
-| R1 | **Roadmap-burner:** 5 features de pixeles con revenue ~nulo | alta | Time-box: W0→W2+W4 ahora; W3/W5 detras de senal (≥3 pedidos Pro o 1 upgrade atribuido). Usar v2 como argumento en las 14 llamadas. |
-| R2 | **Gate-leak / bypass de monetizacion:** write-path sin tier check; login/manifest sin tier check; starter ya tiene branding | alta | `isBrandingV2Allowed` como predicado unico en proxy + layout alumno + layout coach + login query + manifest/splash + write action. Test de matriz. |
-| R3 | **Cookie compartida `Domain=.eva-app.cl`:** XSS o subdomain-takeover en 1 tenant compromete la auth de TODA la plataforma | alta | **Host-only por tenant** (`AUTH_COOKIE_DOMAIN` SIN setear, login por subdominio, sin SSO cruzado). Wildcard DNS solo al proyecto EVA, sin CNAMEs colgantes. Assert de deploy. Consenso seguridad 2026 (Okta/WorkOS). |
+| R1 | **Roadmap-burner:** features de pixeles con revenue ~nulo | alta | CEO mantiene W0-W4 (incl. loaders); solo W5 diferido. Mitigacion: usar v2 como argumento en las 14 llamadas + instrumentar atribucion de upgrade (seccion 7) para validar el gasto antes de abrir W5. |
+| R2 | **Gate-leak / bypass de monetizacion:** write-path sin tier check; login/manifest sin tier check | alta | `isBrandingAllowed` (= `canUseBranding` flipeado a Pro+) como predicado unico en proxy + layout alumno + layout coach + login query + manifest/splash + write action. Test de matriz. |
+| R3 | **Cookie compartida `Domain=.eva-app.cl`:** XSS o subdomain-takeover en 1 tenant compromete la auth de TODA la plataforma | alta | **Host-only por tenant** (`AUTH_COOKIE_DOMAIN` SIN setear, login por subdominio, sin SSO cruzado). Wildcard DNS solo al proyecto EVA, sin CNAMEs colgantes. Assert de deploy. Consenso seguridad 2026 (Okta/WorkOS). Aplica solo cuando se abra W5. |
 | R4 | **`!important` de fuente** (`globals.css` L300/L306) silencia `--brand-font` → "looks done but isn't" | alta | Rerutear `--font-sans`/`--font-display` por `var(--brand-font, default)` y quitar/scopear los `!important`. Test que asserta `font-family` computada en un heading `/c`. |
 | R5 | **Fuente dinamica rompe build** (`next/font` es build-time) o `@import` runtime degrada LCP/CLS + fuga IP (Ley 21.719) | media | Pre-cargar las 12 con `next/font` self-hosted, `preload:false`, `adjustFontFallback:true`; conmutar por `--brand-font`. PROHIBIR `@import`/`<link>` a googleapis. |
 | R6 | **Contraste/legibilidad:** coach elige color2/dark ilegible; valida solo light y publica un dark que falla AA | media | `clampAccent` ya rescata; **bloquear Guardar** si `contrastReport` falla en CUALQUIER modo (publish-gate `isThemeReadable`). Preview light/dark obligatorio. Mostrar swatch clampeado con nota "ajustamos tu color para legibilidad". |
-| R7 | **color2 invisible** (sin consumidores definidos) o choca con primary | media | Allow-list cerrada ANTES de wirear: botones secundarios/outline, badges/tags + macros nutricionales, 2da serie de charts, underline de tab activo. Excluir: CTA primario, nav activo, links, focus ring (quedan primary). Warning suave si color2 ≈ primary (deltaE/hue OKLCH). |
+| R7 | **color2 invisible** (sin consumidores definidos) o choca con primary | media | color2 es INDEPENDIENTE (decision #1). Allow-list cerrada ANTES de wirear: botones secundarios/outline, badges/tags + macros nutricionales, 2da serie de charts, underline de tab activo. Excluir: CTA primario, nav activo, links, focus ring (quedan primary). Warning suave si color2 ≈ primary (deltaE/hue OKLCH). |
 | R8 | **brand-kit compartido web+mobile** se rompe al agregar color2 | media | Solo aditivo: `secondaryLight/Dark` opcionales en `BrandThemeInput`, `accent2/accent2Text` con default = accent. Nunca cambiar firmas/defaults. `mobile tsc` en el gate. Fuente NO entra a brand-kit. |
-| R9 | **Loaders del CEO** inflan bundle / XSS via SVG-Lottie | media | Registry cerrado en repo (no upload); Lottie lazy `next/dynamic({ssr:false})` solo en su variante, < 30KB; SVG sanitizado (DOMPurify) en build; default sigue siendo SVG 0-dep. |
+| R9 | **Loaders del CEO (5+)** inflan bundle / XSS via SVG-Lottie | media | Registry cerrado en repo (no upload); code-split por variante (solo carga la elegida); Lottie lazy `next/dynamic({ssr:false})` solo en su variante, < 30KB; SVG sanitizado (DOMPurify) en build; default sigue siendo SVG 0-dep. |
 | R10 | **Drift entre los 3 sitios de inyeccion** (`<style>` alumno, coach, login) | media | Un solo helper server-side `buildBrandStyleTag({palette, theme, fontKey, secondary, loaderCfg})` consumido por las 3 superficies. El client SOLO lee vars, nunca input directo. |
-| R11 | **Powered-by-EVA removible** por CSS del coach o confundido con el footer free | baja | Render fuera del scope de vars manipulables (markup fijo, como L272-281). Pro+ = micro-badge discreto SIN UTM agresivo; free = footer-CTA con `utm_source=free_footer`. Incognito total descartado (decision cerrada). |
+| R11 | **Corte duro a starter (decision #3):** un coach starter activo pierde su marca sin aviso y se queja | media | Antes del deploy, el CEO corre la query (seccion 5) de coaches < Pro con branding seteado y les avisa. El valor en DB NO se borra (si suben a Pro, vuelve). |
+| R12 | **Powered-by-EVA removible** por CSS del coach o confundido con el footer free | baja | Render fuera del scope de vars manipulables (markup fijo, como L272-281). Pro+ = micro-badge discreto SIN UTM agresivo; free = footer-CTA con `utm_source=free_footer`. Incognito total descartado (decision cerrada). |
 
 ---
 
-## 5. Decisiones abiertas que requieren al CEO
+## 5. Decisiones (RESUELTAS por el CEO 2026-06-21)
 
-1. **Color secundario = acento por-modo o color independiente?** ¿`brand_secondary_color` es el `accent_light/accent_dark` del tema (botones/links por modo) o un color SEPARADO para badges/charts/etiquetas nutricionales? Cambia el scope de columnas y del motor. *(El plan asume independiente + aditivo con default derivado, lo mas seguro.)*
-2. **Gate de v1 en starter:** ¿starter conserva el branding BASICO (1 color + logo, ya vendido) y solo se gatea la "profundidad" (color2/fuente/dark/loader) a Pro+? *(El plan asume que SI — evita downgrade de un feature vivo. Necesita OK explicito porque toca `@eva/tiers` y el copy de planes.)*
-3. **Login pre-auth y starter:** ¿el login de un coach starter/free cae a EVA total, o mantiene logo+nombre+color1 y solo dropea los campos v2 como teaser de conversion? *(Define el assert exacto de W4.)*
-4. **Fuente: headings-only o body+headings?** ¿Tambien aplica al PANEL del coach? *(El plan recomienda headings-only para colapsar CLS; afecta cuantos lugares cargan la fuente.)*
-5. **Dark mode del alumno: ¿el coach FUERZA un modo o solo customiza el acento dentro del modo que elige el alumno?** Forzar requiere `forcedTheme` + un `dark_mode_pref` y pelea con el toggle del alumno. *(El plan asume accent-only, mas simple, reusa el `.dark` existente.)*
-6. **Loaders del CEO: formato exacto** (React/SVG vs Lottie JSON) y **cuantas variantes en el MVP**. Define el registry (component-switch vs Lottie lazy) y el pipeline de sanitizacion. *(Bloquea W3.)*
-7. **`logo_url_dark`:** ¿se agrega ahora (riesgo real de logo dark-on-dark invisible)? *(El plan lo incluye en la migracion por paridad con orgs/teams; barato.)*
-8. **Subdominio: junto a v2 o despues?** *(El plan lo trata como track aparte W5; recomendado despues de senal.)*
+Las 8 decisiones abiertas quedaron cerradas (ver bloque "Decisiones CERRADAS" — seccion 0). Resumen: color2 independiente · branding = Pro+ entero (starter/free = EVA total) · corte duro sin grandfather · fuente solo titulos · dark lo elige el alumno (accent-only) · logo_url_dark SI · loaders SI 5+ variantes en MVP · subdominio diferido.
+
+**Notas de implementacion que sobreviven a las decisiones:**
+- **Manifest cacheado 24h** (`s-maxage=86400`): tras un downgrade Pro→starter el manifest PWA puede tardar en volver a EVA. Documentar el lag o cache-bustear en cambio de tier.
+- **Comms del corte duro (decision #3):** antes del deploy, el CEO revisa si algun coach starter/free ACTIVO tiene branding seteado y le avisa (cae a EVA). Query rapida:
+  ```sql
+  select id, slug, subscription_tier, primary_color, logo_url
+  from public.coaches
+  where subscription_tier in ('free','starter')
+    and (primary_color is not null or logo_url is not null);
+  ```
+- **Loader: formato exacto** (React/SVG vs Lottie JSON) — pendiente solo de que el CEO pase los assets; define el pipeline de W3 (component-switch vs Lottie lazy + sanitizacion). NO bloquea W0-W2.
 
 ---
 
 ## 6. Gate Pro+ server-side + "Powered by EVA" + toggle
 
-- **Gate Pro+ (server-side, fuente unica):** `isBrandingV2Allowed(tier)` (W0) consumido en las 5 superficies: (a) `updateBrandSettingsAction` (strip de campos v2 si no Pro+), (b) `proxy.ts` branch `/c` y subdominio (no setear headers v2 si no Pro+), (c) `c/[coach_slug]/layout.tsx` (render EVA para v2 si no Pro+), (d) `coach/layout.tsx` (idem panel), (e) `login.queries.ts`/`login/page.tsx` + `api/manifest/[coach_slug]/route.ts` + `api/splash`. **El proxy es el choke-point ideal:** neutralizar los headers v2 ahi colapsa "gatear en cada superficie" a un punto testeado. Defense-in-depth: el render igual cae a EVA si una fila stale trae valores Pro tras un downgrade.
-- **Downgrade Pro→starter:** las vars v2 NO se aplican (gate lee tier LIVE), SIN borrar lo guardado en DB. Mismo patron que `isFreeTier` hoy. **Manifest cacheado 24h** (`s-maxage=86400`) → documentar el lag o decidir cache-bust en cambio de tier.
+- **Gate Pro+ (server-side, fuente unica):** `isBrandingAllowed(tier)` (W0) consumido en las 5 superficies: (a) `updateBrandSettingsAction` (rechaza branding si no Pro+), (b) `proxy.ts` branch `/c` (no setear headers de marca si no Pro+), (c) `c/[coach_slug]/layout.tsx` (render EVA si no Pro+), (d) `coach/layout.tsx` (idem panel), (e) `login.queries.ts`/`login/page.tsx` + `api/manifest/[coach_slug]/route.ts` + `api/splash`. **El proxy es el choke-point ideal:** neutralizar los headers de marca ahi colapsa "gatear en cada superficie" a un punto testeado. Defense-in-depth: el render igual cae a EVA si una fila stale trae valores Pro tras un downgrade.
+- **Downgrade Pro→starter:** el branding NO se aplica (gate lee tier LIVE), SIN borrar lo guardado en DB. **Manifest cacheado 24h** (`s-maxage=86400`) → documentar el lag o decidir cache-bust en cambio de tier.
 - **"Powered by EVA" discreto SIEMPRE (no incognito):** mantener las instancias actuales (footer alumno L272-281, "Impulsado por EVA" en login). Para Pro+ NO se oculta: micro-badge discreto que **respeta dark/acento del coach** (que se vea integrado, no parche EVA), SIN el UTM agresivo del footer free. Render como markup fijo fuera del scope de vars del coach. Guard de regresion (snapshot) que asegure su presencia en free/starter/pro en alumno + login + panel.
 - **Toggle `use_brand_colors_coach`** (panel coach): ya gobierna color+loader del panel; v2 lo extiende a fuente+acento+dark. Reformular el copy confuso ("Usar todos mis estilos personalizados en mi dashboard actual", `BrandSettingsForm.tsx`) a un segmented control **"Ver mi marca | Ver EVA"** + nota "Esto solo cambia TU panel; tus alumnos siempre ven tu marca". Los alumnos SIEMPRE ven la marca del coach (el toggle no los afecta).
 
@@ -251,12 +273,12 @@ Si el peso de build de las 12 molesta, recortar a 6-8 (excluir las que no aporte
 
 ## 7. Metricas a instrumentar (desde el dia 1)
 
-1. **Adopcion v2:** % de coaches Pro+ que configuran ≥1 atributo v2 (color2/fuente/dark/loader) en 30 dias.
-2. **Atribucion de upgrade:** evento analytics "vio/toco el gate de deep-branding" + upgrades starter→pro en los 7 dias siguientes (sin el evento, la atribucion de revenue es debil — instrumentar evento real, no solo el proxy de brand-score).
-3. **Brand-completion score:** extender el `brandScore` existente en `BrandSettingsForm.tsx` con los campos v2; trackear distribucion (motor de descubrimiento Pro: un coach recien upgradeado ve su score incompleto).
+1. **Adopcion:** % de coaches Pro+ que configuran ≥1 atributo de marca (color2/fuente/dark/loader) en 30 dias.
+2. **Atribucion de upgrade:** evento analytics "vio/toco el gate de branding" + upgrades starter→pro en los 7 dias siguientes (sin el evento, la atribucion de revenue es debil — instrumentar evento real, no solo el proxy de brand-score). **Este es el dato que abre/cierra W5.**
+3. **Brand-completion score:** extender el `brandScore` existente en `BrandSettingsForm.tsx` con los campos nuevos; trackear distribucion (motor de descubrimiento Pro: un coach recien upgradeado ve su score incompleto).
 4. **Retencion:** retencion de alumnos en coaches con marca completa vs sin (la research liga app-branded ↔ retencion — argumento de venta, no solo estetica).
-5. **Performance (ya instrumentado con SpeedInsights + `@vercel/analytics` en el root layout):** baseline LCP/CLS/INP de `/c/[slug]/dashboard` y `/c/[slug]/login` ANTES del feature; gate de merge: **CLS no sube > 0.01, LCP mobile no sube > 100ms** tras cada sub-feature (color2 → fuente → dark → loader → subdominio).
-6. **Gate parity (test, no negocio):** assert E2E de que starter NO obtiene branding v2 en las 5 superficies, y que el "powered by EVA" esta SIEMPRE presente.
+5. **Performance (ya instrumentado con SpeedInsights + `@vercel/analytics` en el root layout):** baseline LCP/CLS/INP de `/c/[slug]/dashboard` y `/c/[slug]/login` ANTES del feature; gate de merge: **CLS no sube > 0.01, LCP mobile no sube > 100ms** tras cada sub-feature (color2 → fuente → dark → loader).
+6. **Gate parity (test, no negocio):** assert E2E de que starter NO obtiene branding en las 5 superficies, y que el "powered by EVA" esta SIEMPRE presente.
 
 ---
 
