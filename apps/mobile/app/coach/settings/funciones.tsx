@@ -7,6 +7,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { ScreenHeader, Button } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { getCoachOrgContext } from '../../../lib/org'
 import {
   DOMAIN_ENABLED_KEY,
   MODULE_LABELS,
@@ -54,6 +55,10 @@ export default function CoachFuncionesScreen() {
   const router = useRouter()
 
   const [loading, setLoading] = useState(true)
+  // Guard org-managed (espejo web settings/funciones: `if (orgManaged) redirect('/coach/dashboard')`).
+  // Enterprise no tiene zona Funciones (las prefs las gobierna la org). Conservador: solo redirige
+  // con CERTEZA (org_id en el JWT); si la lectura falla, fail-OPEN (el standalone nunca se redirige).
+  const [orgManaged, setOrgManaged] = useState(false)
   const [saving, setSaving] = useState(false)
   const [adjustOpen, setAdjustOpen] = useState(false)
 
@@ -65,6 +70,13 @@ export default function CoachFuncionesScreen() {
   useEffect(() => {
     ;(async () => {
       try {
+        // Fail-open: si la lectura del contexto falla, no se trata como org-managed.
+        const org = await getCoachOrgContext().catch(() => ({ isOrgManaged: false } as { isOrgManaged: boolean }))
+        if (org.isOrgManaged) {
+          setOrgManaged(true)
+          router.replace('/coach/home')
+          return // no cargamos prefs ni parpadeamos el editor; el loader se mantiene
+        }
         const prefs = await getNutritionPrefs()
         setEntitledByModule(prefs.entitledByModule)
         setPreset(prefs.preset)
@@ -74,7 +86,7 @@ export default function CoachFuncionesScreen() {
         setLoading(false)
       }
     })()
-  }, [])
+  }, [router])
 
   // `_enabled` ausente => dominio prendido (no rompe coaches backfilleados).
   const domainEnabled = sections[DOMAIN_ENABLED_KEY] ?? true
@@ -118,7 +130,8 @@ export default function CoachFuncionesScreen() {
     }
   }
 
-  if (loading) {
+  // Loader también mientras redirige al coach org-managed (no parpadea el editor de funciones).
+  if (loading || orgManaged) {
     return (
       <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: theme.background }]}>
         <AppBackground />

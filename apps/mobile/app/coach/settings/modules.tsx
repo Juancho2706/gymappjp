@@ -7,6 +7,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { ScreenHeader, Button } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { getCoachOrgContext } from '../../../lib/org'
 import { getCoachEnabledModules, type EnabledModules } from '../../../lib/entitlements'
 import { MODULE_CATALOG, MODULE_CATALOG_KEYS } from '../../../lib/modules-catalog'
 
@@ -23,19 +24,30 @@ export default function CoachModulesScreen() {
   const { theme } = useTheme()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  // Guard org-managed (espejo web settings/modules: `if (orgManaged) redirect('/coach/dashboard')`).
+  // Los módulos de un coach gestionado por org los gobierna la org, no aplica el catálogo propio.
+  // Conservador: solo redirige con CERTEZA (org_id en el JWT); si la lectura falla, fail-OPEN.
+  const [orgManaged, setOrgManaged] = useState(false)
   const [modules, setModules] = useState<EnabledModules>({})
 
   useEffect(() => {
     ;(async () => {
       try {
+        const org = await getCoachOrgContext().catch(() => ({ isOrgManaged: false } as { isOrgManaged: boolean }))
+        if (org.isOrgManaged) {
+          setOrgManaged(true)
+          router.replace('/coach/home')
+          return
+        }
         setModules(await getCoachEnabledModules())
       } finally {
         setLoading(false)
       }
     })()
-  }, [])
+  }, [router])
 
-  if (loading) {
+  // Loader también mientras redirige al coach org-managed (no parpadea el catálogo).
+  if (loading || orgManaged) {
     return (
       <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: theme.background }]}>
         <AppBackground />

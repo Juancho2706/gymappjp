@@ -23,6 +23,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { ScreenHeader, Button } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { getCoachOrgContext } from '../../../lib/org'
 import {
   buildAreaVMs,
   createArea,
@@ -37,6 +38,10 @@ export default function AreasScreen() {
   const { theme } = useTheme()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  // Guard org-managed (espejo web settings/areas: `if (orgManaged) redirect('/coach/dashboard')`).
+  // El coach gestionado por una org no administra sus áreas (la RLS rechazaría el CRUD). Conservador:
+  // solo redirige con CERTEZA (org_id presente en el JWT); si la lectura falla, fail-OPEN (no redirige).
+  const [orgManaged, setOrgManaged] = useState(false)
   const [saving, setSaving] = useState(false)
   const [areas, setAreas] = useState<WorkoutArea[]>([])
   const [newName, setNewName] = useState('')
@@ -49,12 +54,19 @@ export default function AreasScreen() {
   useEffect(() => {
     ;(async () => {
       try {
+        // Fail-open: si la lectura del contexto falla, no se trata como org-managed.
+        const org = await getCoachOrgContext().catch(() => ({ isOrgManaged: false } as { isOrgManaged: boolean }))
+        if (org.isOrgManaged) {
+          setOrgManaged(true)
+          router.replace('/coach/home')
+          return // no cargamos ni parpadeamos el CRUD; el loader se mantiene hasta el replace
+        }
         setAreas(await listAreas())
       } finally {
         setLoading(false)
       }
     })()
-  }, [])
+  }, [router])
 
   const vms = useMemo<AreaVM[]>(() => buildAreaVMs(areas), [areas])
 
@@ -127,7 +139,9 @@ export default function AreasScreen() {
     }
   }
 
-  if (loading) {
+  // Mientras carga, o si es org-managed (redirigiendo a la home), mantenemos el loader: nunca
+  // parpadea el CRUD que la org gestiona.
+  if (loading || orgManaged) {
     return (
       <SafeAreaView edges={['top']} style={[styles.root, { backgroundColor: theme.background }]}>
         <AppBackground />
