@@ -26,12 +26,6 @@ import {
     revokeAdminGrant,
 } from '@/infrastructure/db/coach-addons.repository'
 import { MODULE_KEYS } from '@/services/entitlements.service'
-import {
-    FEATURE_DOMAINS,
-    DOMAIN_ENABLED_KEY,
-    type FeatureDomain,
-    type FeatureSection,
-} from '@eva/feature-prefs'
 
 type DB = SupabaseClient<Database>
 
@@ -358,73 +352,7 @@ export async function materializeAddonFromOneShot(
     const newCompositeAmountClp = getCompositeAmountClp(ctx.tier, ctx.cycle, toBillableAddons(live))
     // PUT: suma el add-on al monto del preapproval DESDE la renovación.
     await payments.updateCheckoutAmount(ctx.subscriptionMpId, newCompositeAmountClp)
-
-    // Auto-ON visibilidad (reestructura settings F5): comprar = aparecer. El entitlement ya quedó
-    // ON (trigger D1), pero un módulo con capa de Funciones (nutrition_exchanges) podría quedar
-    // oculto por preferencia → "pagué y no aparece". Enciende la visibilidad. BEST-EFFORT: la
-    // visibilidad es cosmética y jamás puede tumbar la materialización del pago/entitlement.
-    try {
-        await enableModuleVisibility(db, ctx.coachId, key)
-    } catch (err) {
-        console.error('[addons.materialize] auto-ON visibilidad falló (no crítico)', {
-            coachId: ctx.coachId,
-            moduleKey: key,
-            message: err instanceof Error ? err.message : String(err),
-        })
-    }
-
     return { addon, newCompositeAmountClp }
-}
-
-// ── Auto-ON visibilidad al activar un módulo (reestructura settings F5) ───────────
-
-/**
- * Al materializarse la compra de un módulo con capa de visibilidad de Funciones
- * (`nutrition_exchanges` hoy), enciende la visibilidad para que "comprar = aparecer":
- * setea el master switch del dominio (`_enabled`) y las secciones que ESE módulo desbloquea.
- * Mergea sobre las prefs existentes (no pisa toggles de otras secciones). Idempotente.
- *
- * Módulos sin capa de visibilidad (cardio / movement_assessment / body_composition) → no-op:
- * no gatean secciones de feature-prefs; su visibilidad la decide solo el entitlement del nav.
- *
- * `db` debe ser service-role (la escritura de feature-prefs es authenticated-only por RLS; el
- * webhook ya corre service-role). El llamador la envuelve en try/catch (best-effort).
- */
-export async function enableModuleVisibility(
-    db: DB,
-    coachId: string,
-    key: ModuleKey
-): Promise<void> {
-    const domains = Object.entries(FEATURE_DOMAINS) as [FeatureDomain, readonly FeatureSection[]][]
-    for (const [domain, sections] of domains) {
-        const gatedKeys = sections.filter((s) => s.requiresModule === key).map((s) => s.key)
-        if (gatedKeys.length === 0) continue // este dominio no lo gatea este módulo
-
-        const { data: existing } = await db
-            .from('coach_feature_prefs')
-            .select('preset, sections')
-            .eq('coach_id', coachId)
-            .eq('domain', domain)
-            .maybeSingle()
-
-        const prev =
-            existing?.sections && typeof existing.sections === 'object' && !Array.isArray(existing.sections)
-                ? (existing.sections as Record<string, boolean>)
-                : {}
-        const nextSections: Record<string, boolean> = { ...prev, [DOMAIN_ENABLED_KEY]: true }
-        for (const k of gatedKeys) nextSections[k] = true
-
-        await db.from('coach_feature_prefs').upsert(
-            {
-                coach_id: coachId,
-                domain,
-                preset: (existing?.preset as string | null) ?? 'basico',
-                sections: nextSections,
-                updated_at: new Date().toISOString(),
-            },
-            { onConflict: 'coach_id,domain' }
-        )
-    }
 }
 
 // ── Baja: máquina de estados (reglas 3-4) ────────────────────────────────────────
