@@ -4,8 +4,9 @@ import { ArrowLeft } from 'lucide-react'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    title: 'Política de Privacidad | EVA',
-    description: 'Política de privacidad de EVA conforme a la Ley 21.719 de Chile.',
+    title: 'Política de Privacidad',
+    description: 'Política de privacidad de EVA: qué datos personales tratamos, con qué base y finalidad, subprocesadores, plazos de retención y cómo ejercer tus derechos, conforme a la normativa chilena de protección de datos.',
+    alternates: { canonical: '/privacidad' },
 }
 
 const LAST_UPDATED = '12 de junio de 2026'

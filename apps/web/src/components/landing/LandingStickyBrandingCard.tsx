@@ -47,7 +47,7 @@ export function LandingStickyBrandingCard() {
                             className="absolute top-3 right-3 p-1 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             aria-label="Cerrar"
                         >
-                            <X className="w-4 h-4" />
+                            <X aria-hidden className="w-4 h-4" />
                         </button>
 
                         <div className="flex items-start gap-4">
@@ -56,7 +56,7 @@ export function LandingStickyBrandingCard() {
                                     <div className="relative w-12 h-12 rounded-xl overflow-hidden border border-border bg-background">
                                         <Image
                                             src={coach.logo}
-                                            alt={coach.name}
+                                            alt=""
                                             fill
                                             sizes="48px"
                                             className="object-contain p-1"
@@ -64,7 +64,7 @@ export function LandingStickyBrandingCard() {
                                     </div>
                                 ) : (
                                     <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
-                                        <Dumbbell className="w-6 h-6 text-primary" />
+                                        <Dumbbell aria-hidden className="w-6 h-6 text-primary" />
                                     </div>
                                 )}
                             </div>
@@ -72,9 +72,9 @@ export function LandingStickyBrandingCard() {
                                 <p className="text-[10px] font-bold text-primary uppercase tracking-wider mb-1">
                                     {t('landing.sticky.welcome')}
                                 </p>
-                                <h4 className="text-sm font-bold text-foreground truncate mb-3">
+                                <p className="text-sm font-bold text-foreground truncate mb-3">
                                     {coach.name}
-                                </h4>
+                                </p>
                                 <Link
                                     href={`/c/${coach.slug}/login`}
                                     // prefetch={false}: el matcher fuerza el proxy en TODO /c (incluido prefetch);
@@ -84,7 +84,7 @@ export function LandingStickyBrandingCard() {
                                     className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold px-4 py-2 rounded-full transition-all group/btn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
                                     {t('landing.sticky.cta')}
-                                    <ArrowRight className="w-3 h-3 group-hover/btn:translate-x-0.5 transition-transform" />
+                                    <ArrowRight aria-hidden className="w-3 h-3 group-hover/btn:translate-x-0.5 transition-transform" />
                                 </Link>
                             </div>
                         </div>

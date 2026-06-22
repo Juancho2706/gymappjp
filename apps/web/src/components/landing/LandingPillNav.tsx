@@ -85,8 +85,8 @@ export function LandingPillNav() {
                     {t('landing.nav.login')}
                 </Link>
                 <Sheet>
-                    <SheetTrigger className="p-2 text-foreground/70 hover:text-foreground transition-colors rounded-full hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center justify-center">
-                        <Menu className="w-5 h-5" />
+                    <SheetTrigger aria-label="Abrir menu" className="p-2 text-foreground/70 hover:text-foreground transition-colors rounded-full hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring flex items-center justify-center">
+                        <Menu aria-hidden className="w-5 h-5" />
                     </SheetTrigger>
                     <SheetContent side="right" className="w-[300px] sm:w-[400px] border-l-border bg-background pt-14 flex flex-col gap-6">
                         <SheetTitle className="sr-only">Menú</SheetTitle>

@@ -3,6 +3,7 @@ import { Check, Zap, Crown, Dumbbell, Sprout, Users2 } from 'lucide-react'
 import type { Metadata } from 'next'
 import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
 import { SALES_EMAIL, teamsContactMailto } from '@/lib/brand-assets'
+import { resolveMetadataBase } from '@/lib/site-url'
 import {
     BILLING_CYCLE_CONFIG,
     getDefaultBillingCycleForTier,
@@ -17,15 +18,111 @@ import {
 } from '@/lib/constants'
 
 export const metadata: Metadata = {
-    title: 'Precios | EVA',
-    description: 'Elige el plan perfecto para tu negocio de coaching fitness. Plan gratuito disponible.',
+    title: 'Precios en CLP — Software para Personal Trainers y Coaches',
+    description:
+        'Planes en pesos chilenos para personal trainers, coaches y gimnasios: rutinas, planes de nutricion y app con tu marca. Empieza gratis, sin tarjeta. Mensual, trimestral o anual.',
+    alternates: { canonical: '/pricing' },
     openGraph: {
         title: 'Precios EVA',
         description: 'Planes en CLP con cobro mensual, trimestral o anual para coaches.',
-        url: 'https://www.eva-app.cl/pricing',
+        url: '/pricing',
         siteName: 'EVA',
         type: 'website',
     },
+}
+
+// FAQ — fuente única para el render visible Y el JSON-LD FAQPage (Google exige
+// que el texto del structured data coincida exactamente con el visible).
+const FAQ_ITEMS: Array<{ question: string; answer: string }> = [
+    {
+        question: '¿Cuándo se cobra?',
+        answer: 'El Free es gratuito para siempre. Los planes pagos se cobran al activarlos y se renuevan según el ciclo elegido.',
+    },
+    {
+        question: '¿Puedo cambiar de plan?',
+        answer: 'Sí. Desde tu panel podés hacer upgrade en cualquier momento. El nuevo plan se activa al término del ciclo actual.',
+    },
+    {
+        question: '¿Puedo cancelar en cualquier momento?',
+        answer: 'Sí. Al cancelar, conservás acceso completo hasta el último día del período que ya pagaste. Luego pasás al plan Free automáticamente.',
+    },
+    {
+        question: '¿Hay soporte?',
+        answer: 'Soporte por correo para todos los planes. Respuesta priorizada en tiers superiores.',
+    },
+]
+
+// JSON-LD para SEO/rich results. Precios desde la MISMA fuente que la UI (getTierPriceClp)
+// para evitar drift. URLs absolutas vía resolveMetadataBase (host-agnóstico).
+function buildStructuredData() {
+    const base = resolveMetadataBase()
+    const pricingUrl = new URL('/pricing', base).href
+
+    const offerTiers: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite']
+    const registerUrl = (tier: SubscriptionTier) =>
+        tier === 'free'
+            ? new URL('/register?tier=free', base).href
+            : new URL(`/register?tier=${tier}&cycle=${getDefaultBillingCycleForTier(tier)}`, base).href
+
+    const offers = offerTiers.map((tier) => ({
+        '@type': 'Offer',
+        name: TIER_CONFIG[tier].label,
+        price: String(getTierPriceClp(tier, 'monthly')),
+        priceCurrency: 'CLP',
+        availability: 'https://schema.org/InStock',
+        url: registerUrl(tier),
+    }))
+
+    const softwareApplication = {
+        '@context': 'https://schema.org',
+        '@type': 'SoftwareApplication',
+        name: 'EVA',
+        applicationCategory: 'BusinessApplication',
+        operatingSystem: 'Web, iOS, Android',
+        url: pricingUrl,
+        offers: {
+            '@type': 'AggregateOffer',
+            priceCurrency: 'CLP',
+            lowPrice: '0',
+            highPrice: String(getTierPriceClp('elite', 'monthly')),
+            offerCount: 4,
+            offers,
+        },
+    }
+
+    const faqPage = {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: FAQ_ITEMS.map((item) => ({
+            '@type': 'Question',
+            name: item.question,
+            acceptedAnswer: {
+                '@type': 'Answer',
+                text: item.answer,
+            },
+        })),
+    }
+
+    const breadcrumbList = {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+            {
+                '@type': 'ListItem',
+                position: 1,
+                name: 'Inicio',
+                item: new URL('/', base).href,
+            },
+            {
+                '@type': 'ListItem',
+                position: 2,
+                name: 'Precios',
+                item: pricingUrl,
+            },
+        ],
+    }
+
+    return { softwareApplication, faqPage, breadcrumbList }
 }
 
 const planDisplay: Array<{
@@ -78,8 +175,22 @@ const planDisplay: Array<{
 const cycleOrder: BillingCycle[] = ['monthly', 'quarterly', 'annual']
 
 export default function PricingPage() {
+    const { softwareApplication, faqPage, breadcrumbList } = buildStructuredData()
     return (
         <div className="min-h-dvh bg-background">
+            {/* JSON-LD inline (server-rendered) → visible al crawler sin ejecutar JS. */}
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareApplication) }}
+            />
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(faqPage) }}
+            />
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbList) }}
+            />
             {/* Header */}
             <header className="border-b border-border px-6 py-4 flex items-center justify-between">
                 <LandingBrandMark iconClassName="h-8 w-8 sm:h-9 sm:w-9" />
@@ -147,30 +258,12 @@ export default function PricingPage() {
                 </div>
 
                 <section className="mt-12 grid gap-4 md:grid-cols-2">
-                    <article className="rounded-2xl border border-border bg-card p-5">
-                        <h3 className="text-sm font-semibold text-foreground">¿Cuándo se cobra?</h3>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                            El Free es gratuito para siempre. Los planes pagos se cobran al activarlos y se renuevan según el ciclo elegido.
-                        </p>
-                    </article>
-                    <article className="rounded-2xl border border-border bg-card p-5">
-                        <h3 className="text-sm font-semibold text-foreground">¿Puedo cambiar de plan?</h3>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                            Sí. Desde tu panel podés hacer upgrade en cualquier momento. El nuevo plan se activa al término del ciclo actual.
-                        </p>
-                    </article>
-                    <article className="rounded-2xl border border-border bg-card p-5">
-                        <h3 className="text-sm font-semibold text-foreground">¿Puedo cancelar en cualquier momento?</h3>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                            Sí. Al cancelar, conservás acceso completo hasta el último día del período que ya pagaste. Luego pasás al plan Free automáticamente.
-                        </p>
-                    </article>
-                    <article className="rounded-2xl border border-border bg-card p-5">
-                        <h3 className="text-sm font-semibold text-foreground">¿Hay soporte?</h3>
-                        <p className="mt-2 text-sm text-muted-foreground">
-                            Soporte por correo para todos los planes. Respuesta priorizada en tiers superiores.
-                        </p>
-                    </article>
+                    {FAQ_ITEMS.map((item) => (
+                        <article key={item.question} className="rounded-2xl border border-border bg-card p-5">
+                            <h3 className="text-sm font-semibold text-foreground">{item.question}</h3>
+                            <p className="mt-2 text-sm text-muted-foreground">{item.answer}</p>
+                        </article>
+                    ))}
                 </section>
             </div>
         </div>

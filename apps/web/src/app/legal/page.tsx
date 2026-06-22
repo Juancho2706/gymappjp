@@ -4,8 +4,9 @@ import { ArrowLeft } from 'lucide-react'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    title: 'Aviso Legal | EVA',
+    title: 'Aviso Legal',
     description: 'Términos y condiciones de uso de EVA, plataforma para coaches, entrenadores personales y organizaciones.',
+    alternates: { canonical: '/legal' },
 }
 
 const LAST_UPDATED = '12 de junio de 2026'

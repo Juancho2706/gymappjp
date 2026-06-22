@@ -13,7 +13,7 @@ import { LanguageProvider } from '@/lib/i18n/LanguageContext'
 import { PwaRegister } from '@/components/PwaRegister'
 import { ScrollRestoration } from '@/components/ScrollRestoration'
 import { InstallPrompt } from '@/components/InstallPrompt'
-import { BRAND_APP_ICON, BRAND_OG_IMAGE, BRAND_OG_IMAGE_HEIGHT, BRAND_OG_IMAGE_WIDTH } from '@/lib/brand-assets'
+import { BRAND_OG_IMAGE, BRAND_OG_IMAGE_HEIGHT, BRAND_OG_IMAGE_WIDTH } from '@/lib/brand-assets'
 import { resolveMetadataBase } from '@/lib/site-url'
 import { PostHogProvider } from '@/lib/posthog/provider'
 import { CookieConsent } from '@/components/CookieConsent'
@@ -93,7 +93,7 @@ export const metadata: Metadata = {
         type: 'image/png',
       },
     ],
-    locale: 'es_ES',
+    locale: 'es_CL',
     type: 'website',
   },
   twitter: {
@@ -104,14 +104,9 @@ export const metadata: Metadata = {
   },
   metadataBase,
   manifest: '/api/manifest/default',
-  icons: {
-    icon: [
-      { url: '/icon.png', type: 'image/png', sizes: 'any' },
-      { url: BRAND_APP_ICON, type: 'image/png' },
-    ],
-    shortcut: '/icon.png',
-    apple: [{ url: BRAND_APP_ICON, type: 'image/png', sizes: '180x180' }],
-  },
+  // Favicon / app icons via Next file convention: app/favicon.ico + app/icon.png + app/apple-icon.png
+  // (símbolo EVA blanco sólido sobre cuadrado negro). Sin bloque metadata.icons: la convención emite
+  // los <link rel="icon|apple-touch-icon"> correctos y evita apuntar al outline tenue (BRAND_APP_ICON).
 }
 
 export default function RootLayout({
