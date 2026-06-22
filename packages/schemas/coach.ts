@@ -1,4 +1,7 @@
 import { z } from 'zod'
+import { FONT_KEY_TUPLE, LOADER_VARIANT_TUPLE } from './brand'
+
+const HEX_RE = /^#[0-9a-fA-F]{6}$/
 
 export const BrandSettingsSchema = z.object({
     full_name: z.string().min(2, 'Nombre requerido').max(100),
@@ -11,6 +14,15 @@ export const BrandSettingsSchema = z.object({
     use_custom_loader: z.boolean().default(false),
     loader_text_color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Color hexadecimal inválido').optional().or(z.literal('')),
     loader_icon_mode: z.enum(['eva', 'coach', 'none']).default('eva'),
+    // ── white-label v2 (decisión CEO 2026-06-21) — gateados a Pro+ en el server action ──
+    // color2 INDEPENDIENTE (badges/tags/macros/charts); accent por-modo; tinte neutro; fuente curada; loader.
+    brand_secondary_color: z.string().regex(HEX_RE, 'Color hexadecimal inválido').optional().or(z.literal('')),
+    accent_light: z.string().regex(HEX_RE, 'Color hexadecimal inválido').optional().or(z.literal('')),
+    accent_dark: z.string().regex(HEX_RE, 'Color hexadecimal inválido').optional().or(z.literal('')),
+    neutral_tint: z.boolean().default(false),
+    // brand_font_key: z.enum cerrado (NUNCA string libre — única defensa anti CSS-injection en fuente).
+    brand_font_key: z.enum(FONT_KEY_TUPLE).optional().or(z.literal('')),
+    loader_variant: z.enum(LOADER_VARIANT_TUPLE).default('eva'),
     welcome_modal_enabled: z.boolean().default(false),
     welcome_modal_content: z.string().max(1000, 'Máximo 1000 caracteres').optional().or(z.literal('')),
     welcome_modal_type: z.enum(['text', 'video']).default('text'),

@@ -5,6 +5,7 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { BrandSettingsSchema } from '@eva/schemas'
+import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { getPaymentsProvider } from '@/lib/payments/provider'
 
 export type BrandSettingsState = {
@@ -27,6 +28,13 @@ export async function updateBrandSettingsAction(
         use_custom_loader: formData.get('use_custom_loader') === 'on',
         loader_text_color: (formData.get('loader_text_color') as string | null)?.trim() ?? '',
         loader_icon_mode: (formData.get('loader_icon_mode') as string | null) ?? 'eva',
+        // white-label v2 (gateados a Pro+ más abajo)
+        brand_secondary_color: (formData.get('brand_secondary_color') as string | null)?.trim() ?? '',
+        accent_light: (formData.get('accent_light') as string | null)?.trim() ?? '',
+        accent_dark: (formData.get('accent_dark') as string | null)?.trim() ?? '',
+        neutral_tint: formData.get('neutral_tint') === 'on',
+        brand_font_key: (formData.get('brand_font_key') as string | null)?.trim() ?? '',
+        loader_variant: (formData.get('loader_variant') as string | null) ?? 'eva',
         welcome_modal_enabled: formData.get('welcome_modal_enabled') === 'on',
         welcome_modal_content: (formData.get('welcome_modal_content') as string | null)?.trim() ?? '',
         welcome_modal_type: (formData.get('welcome_modal_type') as string | null) ?? 'text',
@@ -42,10 +50,10 @@ export async function updateBrandSettingsAction(
     if (!user) return { error: 'No autenticado.' }
 
     // slug + invite_code son INMUTABLES (set-once en el registro). No se editan acá.
-    // Fetch current coach row solo para el versionado del welcome-modal.
+    // Fetch current coach row: versionado del welcome-modal + tier (gate de branding).
     const { data: currentCoach } = await supabase
         .from('coaches')
-        .select('welcome_modal_enabled, welcome_modal_content, welcome_modal_type, welcome_modal_version')
+        .select('welcome_modal_enabled, welcome_modal_content, welcome_modal_type, welcome_modal_version, subscription_tier')
         .eq('id', user.id)
         .single()
 
@@ -59,26 +67,45 @@ export async function updateBrandSettingsAction(
         welcomeModalVersion += 1
     }
 
+    // ── Gate de branding (decisión CEO 2026-06-21, white-label v2) ────────────────
+    // Branding VISUAL (color + loader) = Pro+ ENTERO. El page redirige y el render del alumno
+    // cae a EVA, pero el action es POSTeable directo → este es el enforcement server-side real.
+    // Identidad (full_name/brand_name) y comunicación (welcome_*) NO se gatean: el alumno ve el
+    // nombre del coach y su mensaje aunque el chrome sea EVA.
+    const tier = (currentCoach?.subscription_tier ?? 'free') as SubscriptionTier
+    const brandingAllowed = isBrandingAllowed(tier)
+
     // UPDATE self: coaches_update_own lo cubre → user-scoped (R3, auditoria 2026-06-11).
+    const updatePayload: Record<string, unknown> = {
+        full_name: parsed.data.full_name,
+        brand_name: parsed.data.brand_name,
+        welcome_message: parsed.data.welcome_message || null,
+        welcome_modal_enabled: parsed.data.welcome_modal_enabled,
+        welcome_modal_content: parsed.data.welcome_modal_content || null,
+        welcome_modal_type: parsed.data.welcome_modal_type,
+        welcome_modal_version: welcomeModalVersion,
+        welcome_modal_updated_at: modalChanged ? new Date().toISOString() : undefined,
+        updated_at: new Date().toISOString(),
+    }
+    if (brandingAllowed) {
+        updatePayload.primary_color = parsed.data.primary_color
+        updatePayload.use_brand_colors_coach = parsed.data.use_brand_colors_coach
+        updatePayload.loader_text = parsed.data.loader_text || null
+        updatePayload.use_custom_loader = parsed.data.use_custom_loader
+        updatePayload.loader_text_color = parsed.data.loader_text_color || null
+        updatePayload.loader_icon_mode = parsed.data.loader_icon_mode
+        // white-label v2 (mismo gate Pro+). logo_url_dark se sube aparte (updateLogoDarkAction, W2 UI).
+        updatePayload.brand_secondary_color = parsed.data.brand_secondary_color || null
+        updatePayload.accent_light = parsed.data.accent_light || null
+        updatePayload.accent_dark = parsed.data.accent_dark || null
+        updatePayload.neutral_tint = parsed.data.neutral_tint
+        updatePayload.brand_font_key = parsed.data.brand_font_key || null
+        updatePayload.loader_variant = parsed.data.loader_variant
+    }
+
     const { error } = await supabase
         .from('coaches')
-        .update({
-            full_name: parsed.data.full_name,
-            brand_name: parsed.data.brand_name,
-            primary_color: parsed.data.primary_color,
-            use_brand_colors_coach: parsed.data.use_brand_colors_coach,
-            welcome_message: parsed.data.welcome_message || null,
-            loader_text: parsed.data.loader_text || null,
-            use_custom_loader: parsed.data.use_custom_loader,
-            loader_text_color: parsed.data.loader_text_color || null,
-            loader_icon_mode: parsed.data.loader_icon_mode,
-            welcome_modal_enabled: parsed.data.welcome_modal_enabled,
-            welcome_modal_content: parsed.data.welcome_modal_content || null,
-            welcome_modal_type: parsed.data.welcome_modal_type,
-            welcome_modal_version: welcomeModalVersion,
-            welcome_modal_updated_at: modalChanged ? new Date().toISOString() : undefined,
-            updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq('id', user.id)
 
     if (error) return { error: error.message }
@@ -108,6 +135,17 @@ export async function updateLogoAction(
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'No autenticado.' }
+
+    // Gate de branding (Pro+ ENTERO, decisión CEO 2026-06-21): un coach < Pro no sube logo
+    // (su app cae a EVA). Enforcement server-side — el botón se oculta en UI pero el action es POSTeable.
+    const { data: logoCoach } = await supabase
+        .from('coaches')
+        .select('subscription_tier')
+        .eq('id', user.id)
+        .single()
+    if (!isBrandingAllowed((logoCoach?.subscription_tier ?? 'free') as SubscriptionTier)) {
+        return { error: 'El branding personalizado está disponible desde el plan Pro.' }
+    }
 
     const ext = file.name.split('.').pop() ?? 'png'
     const path = `${user.id}/logo.${ext}`

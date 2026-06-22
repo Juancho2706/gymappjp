@@ -65,3 +65,38 @@ describe('resolveBrandTheme', () => {
         expect(isThemeReadable({ brandColor: '#ffffff' })).toBe(true)
     })
 })
+
+describe('resolveBrandTheme — color2 / accent2 (white-label v2)', () => {
+    it('sin secundario: accent2 === accent (no altera los defaults existentes)', () => {
+        const t = resolveBrandTheme({ brandColor: '#10B981' })
+        expect(t.light.accent2).toBe(t.light.accent)
+        expect(t.dark.accent2).toBe(t.dark.accent)
+        expect(t.light.accent2Text).toBe(t.light.accentText)
+        expect(t.dark.accent2Text).toBe(t.dark.accentText)
+    })
+
+    it('secundarios adversariales: el tema sigue pasando AA en light Y dark (clamp rescata)', () => {
+        const adversarial = ['#ffffff', '#000000', '#39FF14', '#808000']
+        for (const brandColor of ['#8B5CF6', '#10B981']) {
+            for (const sec of adversarial) {
+                const report = contrastReport(
+                    resolveBrandTheme({ brandColor, secondaryLight: sec, secondaryDark: sec })
+                )
+                expect(
+                    report.passes,
+                    `${brandColor}+${sec} → ${JSON.stringify(report.items.filter((i) => !i.passes))}`
+                ).toBe(true)
+            }
+        }
+    })
+
+    it('el publish-gate considera el secundario (accent2 contrast-clamp por modo)', () => {
+        expect(
+            isThemeReadable({ brandColor: '#8B5CF6', secondaryLight: '#ffffff', secondaryDark: '#000000' })
+        ).toBe(true)
+        // el secundario clampeado es legible sobre su fondo en ambos modos
+        const t = resolveBrandTheme({ brandColor: '#8B5CF6', secondaryLight: '#fafafa', secondaryDark: '#050505' })
+        expect(contrastRatio(t.light.accent2, t.light.bg)).toBeGreaterThanOrEqual(3)
+        expect(contrastRatio(t.dark.accent2, t.dark.bg)).toBeGreaterThanOrEqual(3)
+    })
+})

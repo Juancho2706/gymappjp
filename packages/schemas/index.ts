@@ -1,4 +1,6 @@
 // SAFE FOR MOBILE (web + @eva/mobile)
+// Claves canónicas de marca (white-label v2): FONT_KEY_TUPLE/FontKey, LOADER_VARIANT_TUPLE/LoaderVariant.
+export * from './brand'
 // LoginSchema, ForgotPasswordSchema, ResetPasswordSchema, ChangePasswordSchema
 export * from './auth'
 // CheckInSchema, QuickWeightSchema, UpsertHabitsSchema
@@ -14,6 +16,8 @@ export * from './workout'
 // SERVER-ONLY (web / Next.js server actions only)
 // OrgCreateCoachSchema, OrgInviteSchema, etc. reference org_id / coach_id from DB.
 export * from './org'
+// CreateCouponAdminSchema, RedeemCouponSchema, RevokeRedemptionSchema (códigos de descuento).
+export * from './coupon'
 // Team (pool) member management schemas.
 export * from './team'
 // Modulos movida (specs/movida-*): screening de movimiento, composicion corporal,

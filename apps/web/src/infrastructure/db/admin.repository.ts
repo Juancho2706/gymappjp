@@ -38,7 +38,7 @@ export async function countActiveAdminCoaches(db: DB): Promise<number> {
         .from('coaches')
         .select('id', { count: 'exact', head: true })
         .in('subscription_status', ['active', 'trialing'])
-        .not('payment_provider', 'in', ['beta', 'internal'])
+        .not('payment_provider', 'in', '(beta,internal)')
 
     return count ?? 0
 }
@@ -49,7 +49,7 @@ export async function findPaidAdminCoachTiers(db: DB): Promise<AdminPaidCoachTie
         .select('subscription_tier')
         .not('subscription_mp_id', 'is', null)
         .eq('subscription_status', 'active')
-        .not('payment_provider', 'in', ['beta', 'internal'])
+        .not('payment_provider', 'in', '(beta,internal)')
 
     return (data ?? []) as AdminPaidCoachTierRow[]
 }

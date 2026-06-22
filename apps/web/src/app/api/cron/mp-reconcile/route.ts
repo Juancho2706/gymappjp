@@ -9,6 +9,9 @@ import {
     getCompositeAmountClp,
     toBillableAddons,
 } from '@/services/billing/addons.service'
+import { resolveDiscountSpecByRedemptionId } from '@/services/billing/discount.service'
+import { revertActiveCouponForCoach } from '@/services/billing/coupons.service'
+import { releaseCouponCapacity } from '@/infrastructure/db/coupon-redemptions.repository'
 import type { BillingCycle, SubscriptionTier } from '@/lib/constants'
 
 // IMPORTANTE (plan 01 F7): el guard de este cron quedó FAIL-CLOSED — sin CRON_SECRET devuelve
@@ -109,7 +112,7 @@ export async function GET(req: Request) {
     // Get coaches with MP subscription IDs
     const { data: coaches, error } = await admin
         .from('coaches')
-        .select('id, slug, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id')
+        .select('id, slug, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, active_coupon_redemption_id')
         .not('subscription_mp_id', 'is', null)
         .not('subscription_status', 'eq', 'free')
         .not('subscription_status', 'eq', 'org_managed')
@@ -200,7 +203,10 @@ export async function GET(req: Request) {
             // baja regla 4 quedó facturable en MP (drift detecta el monto), se reporta como drift (c).
 
             // (c) Drift de monto: comparar el monto vigente del preapproval contra el compuesto esperado.
-            const expectedClp = getCompositeAmountClp(tier, cycle, toBillableAddons(live))
+            // F2a.2b: el esperado incluye el descuento vivo (resuelto desde active_coupon_redemption_id
+            // del SELECT) → el preapproval con cupón NO se reporta como drift falso.
+            const couponSpec = await resolveDiscountSpecByRedemptionId(admin, coach.active_coupon_redemption_id)
+            const expectedClp = getCompositeAmountClp(tier, cycle, toBillableAddons(live), couponSpec).totalClp
             const mpAmount = mpData.auto_recurring?.transaction_amount
             if (mpIsActive && typeof mpAmount === 'number' && mpAmount !== expectedClp) {
                 addonAlerts.push({
@@ -222,6 +228,46 @@ export async function GET(req: Request) {
                         triggered_by: 'cron/mp-reconcile',
                     },
                 })
+            }
+
+            // (c2) Pre-aviso SERNAC de fin de descuento: si el cupón está en su ÚLTIMO ciclo descontado
+            // (remainingCycles===1), el siguiente cobro vuelve al precio normal → avisar al coach con
+            // >= 1 ciclo de lead. Idempotente: una sola vez por redención (admin_audit_logs).
+            if (couponSpec && couponSpec.remainingCycles === 1 && coach.active_coupon_redemption_id) {
+                const { count: notified } = await admin
+                    .from('admin_audit_logs')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('action', 'coach.coupon_pre_increase_notice')
+                    .eq('target_id', coach.active_coupon_redemption_id)
+                if ((notified ?? 0) === 0) {
+                    const fullComposite = getCompositeAmountClp(tier, cycle, toBillableAddons(live))
+                    try {
+                        const { data: au } = await admin.auth.admin.getUserById(coach.id)
+                        const to = au?.user?.email
+                        if (to) {
+                            const body = `
+<h1 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#111827;">Tu descuento termina pronto</h1>
+<p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">
+  Tu próximo cobro mantiene el descuento. Después de ese cobro, el descuento termina y tu suscripción
+  vuelve a su precio normal de <strong>$${fullComposite.toLocaleString('es-CL')} CLP</strong> en la siguiente renovación.
+</p>
+<p style="margin:0;font-size:13px;color:#6b7280;">Podés revisar tu plan cuando quieras desde tu cuenta.</p>`
+                            const html = wrapEmailLayout(body, { headerTitle: 'EVA', previewText: 'Tu descuento termina pronto' })
+                            await sendTransactionalEmail({ to, subject: 'Tu descuento termina pronto', html }).catch((e) =>
+                                console.error('[cron/mp-reconcile] pre-increase email failed:', e)
+                            )
+                        }
+                    } catch (e) {
+                        console.error('[cron/mp-reconcile] pre-increase notice lookup failed:', e)
+                    }
+                    await admin.from('admin_audit_logs').insert({
+                        admin_email: 'cron',
+                        action: 'coach.coupon_pre_increase_notice',
+                        target_table: 'coupon_redemptions',
+                        target_id: coach.active_coupon_redemption_id,
+                        payload: { coach_slug: coach.slug, reverts_to_clp: fullComposite, triggered_by: 'cron/mp-reconcile' },
+                    })
+                }
             }
 
             // (d) Kill-switch prolongado: add-on FACTURABLE cuyo módulo está en EVA_DISABLED_MODULES.
@@ -285,6 +331,55 @@ export async function GET(req: Request) {
         } catch (err) {
             console.error(`[cron/mp-reconcile] failed for coach ${coach.slug}:`, err)
             errors++
+        }
+    }
+
+    // ── Barrido de registros ABANDONADOS con cupón (REGISTER-CODE) ──────────────────────────────
+    // Un coach NUEVO que canjeó un código al registrarse queda con active_coupon_redemption_id +
+    // subscription_status='pending_payment' + subscription_mp_id=null. Si abandona el checkout y nunca
+    // paga, mantiene un cupón vivo y quemó un cupo del cap. Tras 48h lo revertimos: marca la redención
+    // 'reverted' (el trigger nulea el puntero) y libera 1 cupo del cap. Best-effort por coach; NUNCA
+    // throw que tumbe el cron. Idempotente: la 2da corrida no encuentra los ya revertidos (puntero null).
+    let signupAbandoned = 0
+    const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString()
+    const { data: abandonedCoaches, error: abandonedErr } = await admin
+        .from('coaches')
+        .select('id, active_coupon_redemption_id')
+        .not('active_coupon_redemption_id', 'is', null)
+        .eq('subscription_status', 'pending_payment')
+        .is('subscription_mp_id', null)
+        .lt('created_at', fortyEightHoursAgo)
+    if (abandonedErr) {
+        console.error('[cron/mp-reconcile] abandoned-coupon query failed:', abandonedErr)
+    }
+    for (const coach of abandonedCoaches ?? []) {
+        const redemptionId = coach.active_coupon_redemption_id
+        if (!redemptionId) continue
+        try {
+            // Leer la redención viva para obtener el coupon_code_id (necesario para liberar el cap).
+            const { data: redemption } = await admin
+                .from('coupon_redemptions')
+                .select('coupon_code_id')
+                .eq('id', redemptionId)
+                .maybeSingle()
+            const codeId = redemption?.coupon_code_id ?? null
+
+            await revertActiveCouponForCoach(admin, coach.id)
+            if (codeId) await releaseCouponCapacity(admin, codeId)
+
+            await admin.from('admin_audit_logs').insert({
+                admin_email: 'cron',
+                action: 'coach.coupon_signup_abandoned',
+                target_table: 'coupon_redemptions',
+                target_id: redemptionId,
+                payload: {
+                    coach_id: coach.id,
+                    triggered_by: 'cron/mp-reconcile',
+                },
+            })
+            signupAbandoned++
+        } catch (err) {
+            console.error(`[cron/mp-reconcile] abandoned-coupon revert failed for coach ${coach.id}:`, err)
         }
     }
 
@@ -380,7 +475,7 @@ ${addonBlock}
     }
 
     console.info(
-        `[cron/mp-reconcile] done — checked=${checked} divergences=${divergences.length} addonAlerts=${addonAlerts.length} addonsExpired=${addonsExpired} errors=${errors}`
+        `[cron/mp-reconcile] done — checked=${checked} divergences=${divergences.length} addonAlerts=${addonAlerts.length} addonsExpired=${addonsExpired} signupAbandoned=${signupAbandoned} errors=${errors}`
     )
     return NextResponse.json({
         ok: true,
@@ -388,6 +483,7 @@ ${addonBlock}
         divergences: divergences.length,
         addonAlerts: addonAlerts.length,
         addonsExpired,
+        signupAbandoned,
         overdue: overdueInvoices?.length ?? 0,
         errors,
     })

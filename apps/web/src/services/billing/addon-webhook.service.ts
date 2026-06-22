@@ -67,10 +67,16 @@ export async function insertBillingSnapshot(
         chargedAt: string
         tier: SubscriptionTier
         billingCycle: BillingCycle
-        kind: 'recurring' | 'addon_proration'
+        kind: 'recurring' | 'addon_proration' | 'tier_upgrade_proration'
         baseClp: number
         addons: AddonSnapshotLine[]
         totalClp: number
+        // F4 (cupones): evidencia del descuento. total_clp = honrado (descontado); base_before_discount =
+        // lista. Nullable/defaulted → snapshots sin cupón quedan idénticos (back-compat).
+        baseBeforeDiscountClp?: number
+        discountClp?: number
+        couponCode?: string | null
+        couponRedemptionId?: string | null
     }
 ): Promise<{ inserted: boolean }> {
     const row: Database['public']['Tables']['billing_snapshots']['Insert'] = {
@@ -83,6 +89,10 @@ export async function insertBillingSnapshot(
         base_clp: input.baseClp,
         addons: input.addons as unknown as Json,
         total_clp: input.totalClp,
+        ...(input.baseBeforeDiscountClp != null ? { base_before_discount_clp: input.baseBeforeDiscountClp } : {}),
+        ...(input.discountClp != null ? { discount_clp: input.discountClp } : {}),
+        ...(input.couponCode ? { coupon_code: input.couponCode } : {}),
+        ...(input.couponRedemptionId ? { coupon_redemption_id: input.couponRedemptionId } : {}),
     }
     // upsert con ignoreDuplicates: reintento del webhook = no-op (idempotente por provider_payment_id).
     const { error } = await db

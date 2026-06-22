@@ -19,6 +19,9 @@ import { OfflineNutritionQueueSync } from '@/app/c/[coach_slug]/_components/Offl
 import { OfflineWorkoutQueueSync } from '@/app/c/[coach_slug]/_components/OfflineWorkoutQueueSync'
 import { generateBrandPalette } from '@/lib/color-utils'
 import { resolveBrandTheme } from '@eva/brand-kit'
+import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
+import { resolveBrandFontStack } from '@/lib/brand-fonts'
+import { resolveLoaderVariant } from '@/lib/brand-loaders'
 
 interface Props {
     children: React.ReactNode
@@ -125,8 +128,10 @@ export default async function ClientBrandLayout({ children, params }: Props) {
 
     // Read branding from middleware headers (set in middleware.ts)
     // Free coaches: enforce EVA branding — white-label is a paid feature
-    const subscriptionTier = headersList.get('x-coach-subscription-tier') ?? 'starter'
-    const isFreeTier = subscriptionTier === 'free'
+    const subscriptionTier = (headersList.get('x-coach-subscription-tier') ?? 'starter') as SubscriptionTier
+    // white-label v2: branding = Pro+ ENTERO (no solo 'free'). `isFreeTier` ahora significa "< Pro".
+    // El proxy ya manda defaults EVA para < Pro; esto es defense-in-depth (fila stale post-downgrade).
+    const isFreeTier = !isBrandingAllowed(subscriptionTier)
     const primaryColor = isFreeTier
         ? SYSTEM_PRIMARY_COLOR
         : (headersList.get('x-coach-primary-color') ?? BRAND_PRIMARY_COLOR)
@@ -145,6 +150,11 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const loaderTextColor = headersList.get('x-coach-loader-text-color') ?? undefined
     const loaderIconModeRaw = headersList.get('x-coach-loader-icon-mode') ?? 'eva'
     const loaderIconMode = (loaderIconModeRaw === 'coach' || loaderIconModeRaw === 'none') ? loaderIconModeRaw : 'eva'
+    // white-label v2 — fuente curada + variante de loader + logo dark (todos gateados a Pro+ por isFreeTier).
+    const fontKey = isFreeTier ? '' : (headersList.get('x-coach-font-key') ?? '')
+    const brandFontStack = resolveBrandFontStack(fontKey) // server-side; nunca el string crudo del coach
+    const loaderVariant = isFreeTier ? 'eva' : resolveLoaderVariant(headersList.get('x-coach-loader-variant'))
+    const logoUrlDark = isFreeTier ? '' : (headersList.get('x-coach-logo-url-dark') || '')
 
     // Hardening anti stored-XSS: estos valores los fija un org_admin/co-gestor de team al
     // editar su marca y se inyectan crudos en un <style>. Las comillas simples se escapan,
@@ -164,14 +174,20 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const accentLight = isFreeTier ? null : (headersList.get('x-coach-accent-light') || null)
     const accentDark = isFreeTier ? null : (headersList.get('x-coach-accent-dark') || null)
     const neutralTint = !isFreeTier && headersList.get('x-coach-neutral-tint') === 'true'
-    const brandTheme = resolveBrandTheme({ brandColor: primaryColor, accentLight, accentDark, neutralTint })
+    // color2 INDEPENDIENTE (white-label v2): un color → clampeado por-modo a accent2 (legible en ambos).
+    const secondaryColor = isFreeTier ? null : (headersList.get('x-coach-secondary-color') || null)
+    const brandTheme = resolveBrandTheme({ brandColor: primaryColor, accentLight, accentDark, neutralTint, secondaryLight: secondaryColor, secondaryDark: secondaryColor })
 
-    // Generate full brand palette (derived shades) from the resolved light accent.
-    const palette = generateBrandPalette(brandTheme.light.accent)
+    // Generate full brand palette (derived shades) from the resolved light accent + secondary.
+    const palette = generateBrandPalette(brandTheme.light.accent, brandTheme.light.accent2)
     const lightAccent = brandTheme.light.accent
     const lightOnAccent = brandTheme.light.accentText
     const darkAccent = brandTheme.dark.accent
     const darkOnAccent = brandTheme.dark.accentText
+    const lightAccent2 = brandTheme.light.accent2
+    const lightOnAccent2 = brandTheme.light.accent2Text
+    const darkAccent2 = brandTheme.dark.accent2
+    const darkOnAccent2 = brandTheme.dark.accent2Text
 
     // Generate fallback favicon SVG (initial + color) if no logo
     const faviconUrl = logoUrl || generateFaviconSvg(brandName, primaryColor)
@@ -222,6 +238,11 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                     --theme-primary-foreground: ${lightOnAccent};
                     --primary: ${lightAccent};
                     --primary-foreground: ${lightOnAccent};
+                    --theme-secondary: ${lightAccent2};
+                    --theme-secondary-rgb: ${palette.secondaryRgb ?? palette.primaryRgb};
+                    --theme-secondary-foreground: ${lightOnAccent2};
+                    --brand-font: ${brandFontStack};
+                    --coach-loader-variant: '${loaderVariant}';
                     --coach-loader-text: '${safeLoaderText}';
                     --coach-use-custom-loader: ${useCustomLoader ? '1' : '0'};
                     --coach-loader-color: '${safeLoaderTextColor}';
@@ -233,6 +254,8 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                     --theme-primary-foreground: ${darkOnAccent};
                     --primary: ${darkAccent};
                     --primary-foreground: ${darkOnAccent};
+                    --theme-secondary: ${darkAccent2};
+                    --theme-secondary-foreground: ${darkOnAccent2};
                 }
             ` }} />
             <div
@@ -240,6 +263,8 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                 style={{ '--theme-primary-rgb': palette.primaryRgb } as React.CSSProperties}
                 data-coach-slug={coach_slug}
                 data-brand-name={brandName}
+                data-logo-dark={logoUrlDark || undefined}
+                data-loader-variant={loaderVariant}
             >
                 <NetworkProvider brandName={brandName} logoUrl={logoUrl} primaryColor={primaryColor}>
                   <BasePathProvider value={basePath}>

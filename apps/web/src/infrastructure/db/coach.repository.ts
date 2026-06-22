@@ -22,12 +22,20 @@ export type CoachRow = {
     loader_text_color: string | null
     loader_icon_mode: string | null
     onboarding_guide: unknown
+    // white-label v2
+    brand_secondary_color: string | null
+    accent_light: string | null
+    accent_dark: string | null
+    neutral_tint: boolean | null
+    logo_url_dark: string | null
+    brand_font_key: string | null
+    loader_variant: string | null
 }
 
 export async function findCoachById(db: DB, coachId: string): Promise<CoachRow | null> {
     const { data } = await db
         .from('coaches')
-        .select('id, full_name, brand_name, slug, invite_code, primary_color, logo_url, subscription_status, subscription_tier, current_period_end, trial_ends_at, active_org_id, use_brand_colors_coach, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, onboarding_guide')
+        .select('id, full_name, brand_name, slug, invite_code, primary_color, logo_url, subscription_status, subscription_tier, current_period_end, trial_ends_at, active_org_id, use_brand_colors_coach, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, onboarding_guide, brand_secondary_color, accent_light, accent_dark, neutral_tint, logo_url_dark, brand_font_key, loader_variant')
         .eq('id', coachId)
         .maybeSingle()
     return data as CoachRow | null
@@ -36,7 +44,7 @@ export async function findCoachById(db: DB, coachId: string): Promise<CoachRow |
 export async function findCoachBySlug(db: DB, slug: string): Promise<CoachRow | null> {
     const { data } = await db
         .from('coaches')
-        .select('id, full_name, brand_name, slug, invite_code, primary_color, logo_url, subscription_status, subscription_tier, current_period_end, trial_ends_at, active_org_id, use_brand_colors_coach, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, onboarding_guide')
+        .select('id, full_name, brand_name, slug, invite_code, primary_color, logo_url, subscription_status, subscription_tier, current_period_end, trial_ends_at, active_org_id, use_brand_colors_coach, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, onboarding_guide, brand_secondary_color, accent_light, accent_dark, neutral_tint, logo_url_dark, brand_font_key, loader_variant')
         .eq('slug', slug)
         .maybeSingle()
     return data as CoachRow | null
@@ -45,7 +53,7 @@ export async function findCoachBySlug(db: DB, slug: string): Promise<CoachRow | 
 export async function findCoachByInviteCode(db: DB, code: string): Promise<CoachRow | null> {
     const { data } = await db
         .from('coaches')
-        .select('id, full_name, brand_name, slug, invite_code, primary_color, logo_url, subscription_status, subscription_tier, current_period_end, trial_ends_at, active_org_id, use_brand_colors_coach, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, onboarding_guide')
+        .select('id, full_name, brand_name, slug, invite_code, primary_color, logo_url, subscription_status, subscription_tier, current_period_end, trial_ends_at, active_org_id, use_brand_colors_coach, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, onboarding_guide, brand_secondary_color, accent_light, accent_dark, neutral_tint, logo_url_dark, brand_font_key, loader_variant')
         .eq('invite_code', code)
         .maybeSingle()
     return data as CoachRow | null

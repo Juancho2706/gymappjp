@@ -24,11 +24,12 @@ beforeEach(() => {
 })
 
 describe('isUnambiguousTokenError — clasificación (rechazar local vs degradar a red)', () => {
-    it('expirado y claim-validation -> rechazar local (true)', () => {
+    it('expirado -> rechazar local (true)', () => {
         expect(isUnambiguousTokenError(new joseErrors.JWTExpired('expired', {} as any))).toBe(true)
-        expect(isUnambiguousTokenError(new joseErrors.JWTClaimValidationFailed('bad iss', {} as any))).toBe(true)
     })
-    it('firma/JWKS/alg/desconocido -> degradar (false)', () => {
+    it('claim iss/aud + firma/JWKS/alg/desconocido -> degradar a getUser (false)', () => {
+        // claim iss/aud puede ser drift de env sobre un token legítimo -> NO 401 duro, degrada.
+        expect(isUnambiguousTokenError(new joseErrors.JWTClaimValidationFailed('bad iss', {} as any))).toBe(false)
         expect(isUnambiguousTokenError(new joseErrors.JWSSignatureVerificationFailed())).toBe(false)
         expect(isUnambiguousTokenError(new Error('jwks fetch failed'))).toBe(false)
         expect(isUnambiguousTokenError(new joseErrors.JWKSNoMatchingKey())).toBe(false)
@@ -50,11 +51,22 @@ describe('verifyMobileBearer', () => {
         expect(getUserMock).not.toHaveBeenCalled()
     })
 
-    it('claim iss/aud mala -> 401 local, sin fallback', async () => {
-        jwtVerifyMock.mockRejectedValue(new joseErrors.JWTClaimValidationFailed('bad audience', {} as any))
-        const r = await verifyMobileBearer('wrong.aud')
+    it('claim iss/aud mismatch (token válido del propio proyecto) -> DEGRADA a getUser y pasa', async () => {
+        // Causa del incidente prod: token ES256 legítimo cuyo iss/aud no matchea la aserción
+        // local estricta (drift de env). Antes daba 401 duro; ahora degrada a getUser (autoritativo).
+        jwtVerifyMock.mockRejectedValue(new joseErrors.JWTClaimValidationFailed('unexpected iss', {} as any))
+        getUserMock.mockResolvedValue({ data: { user: { id: 'coach-real' } }, error: null })
+        const r = await verifyMobileBearer('valid.but.iss.mismatch')
+        expect(r).toEqual({ ok: true, userId: 'coach-real', via: 'getUser' })
+        expect(getUserMock).toHaveBeenCalledOnce()
+    })
+
+    it('claim mismatch + getUser RECHAZA (token ajeno/inválido) -> 401, no abre acceso', async () => {
+        jwtVerifyMock.mockRejectedValue(new joseErrors.JWTClaimValidationFailed('bad aud', {} as any))
+        getUserMock.mockResolvedValue({ data: { user: null }, error: { message: 'invalid token' } })
+        const r = await verifyMobileBearer('foreign.or.bad')
         expect(r).toEqual({ ok: false, status: 401 })
-        expect(getUserMock).not.toHaveBeenCalled()
+        expect(getUserMock).toHaveBeenCalledOnce()
     })
 
     it('JWKS inalcanzable -> DEGRADA a getUser (no 401 por caída de infra)', async () => {

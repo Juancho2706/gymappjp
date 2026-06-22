@@ -1,12 +1,28 @@
 'use client'
 
 import Image from 'next/image'
+import { useEffect, useState } from 'react'
 import { BRAND_APP_ICON } from '@/lib/brand-assets'
 import { cn } from '@/lib/utils'
 import { EvaTreefrogLoader } from '@/components/loaders/EvaTreefrogLoader'
+import { LoaderVariantView } from '@/components/loaders/variants'
+import { resolveLoaderVariant } from '@/lib/brand-loaders'
 import { generateBrandPalette } from '@/lib/color-utils'
 
 type IconMode = 'eva' | 'coach' | 'none'
+
+/** Lee la variante de loader del coach (--coach-loader-variant) post-mount (mounted-safe → 'eva' en SSR). */
+function useCoachLoaderVariant() {
+    const [variant, setVariant] = useState<ReturnType<typeof resolveLoaderVariant>>('eva')
+    useEffect(() => {
+        const raw = getComputedStyle(document.documentElement)
+            .getPropertyValue('--coach-loader-variant')
+            .trim()
+            .replace(/^['"]|['"]$/g, '')
+        setVariant(resolveLoaderVariant(raw))
+    }, [])
+    return variant
+}
 
 type EvaRouteLoaderProps = {
     subtitle?: string
@@ -33,6 +49,7 @@ export function EvaRouteLoader({
     iconMode = 'eva',
     coachLogoUrl,
 }: EvaRouteLoaderProps) {
+    const loaderVariant = useCoachLoaderVariant()
     const displayText = useCustom && customText?.trim() ? customText.trim().toUpperCase() : 'EVA'
     const isLongText = displayText.length > 6
 
@@ -70,6 +87,20 @@ export function EvaRouteLoader({
 
     const showIcon = iconMode !== 'none'
     const iconSrc = iconMode === 'coach' && coachLogoUrl ? coachLogoUrl : BRAND_APP_ICON
+
+    // white-label v2: si el coach Pro+ eligió una variante (≠ 'eva'), la renderizamos en lugar del
+    // wordmark shimmer por defecto. 'eva' (default + free/starter) sigue con el loader actual intacto.
+    if (loaderVariant !== 'eva') {
+        return (
+            <LoaderVariantView
+                variant={loaderVariant}
+                brandName={displayText}
+                iconSrc={showIcon ? iconSrc : undefined}
+                subtitle={subtitle}
+                size={size === 'sm' ? 'md' : size}
+            />
+        )
+    }
 
     return (
         <div

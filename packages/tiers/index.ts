@@ -59,13 +59,14 @@ export function isSaleTier(tier: string): tier is SaleTier {
 
 const QUARTERLY_DISCOUNT = 0.1
 const ANNUAL_DISCOUNT = 0.2
+// 'Branding personalizado' YA NO es shared: branding = Pro+ ENTERO (decision CEO 2026-06-21,
+// white-label v2). Se agrega solo a pro/elite/growth/scale, no a starter.
 const SHARED_TIER_FEATURES = [
     'Rutinas ilimitadas con GIFs',
     'Catálogo de ejercicios con GIF',
     'Programas de entrenamiento',
     'Check-in y progreso',
     'Dashboard coach',
-    'Branding personalizado',
 ] as const
 
 /** Rango de alumnos por tier (copy marketing / UI). */
@@ -114,33 +115,35 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
         label: 'Pro',
         maxClients: 30,
         monthlyPriceClp: 29990,
-        features: [...SHARED_TIER_FEATURES, 'Planes de nutrición'],
+        features: [...SHARED_TIER_FEATURES, 'Branding personalizado', 'Planes de nutrición'],
     },
     elite: {
         label: 'Elite',
         maxClients: 100,
         monthlyPriceClp: 44990,
-        features: [...SHARED_TIER_FEATURES, 'Planes de nutrición'],
+        features: [...SHARED_TIER_FEATURES, 'Branding personalizado', 'Planes de nutrición'],
     },
     // LEGACY — fuera de venta, grandfathered + placeholder team/org_managed (migracion 20260609230000). NO borrar.
     growth: {
         label: 'Growth',
         maxClients: 120,
         monthlyPriceClp: 84990,
-        features: [...SHARED_TIER_FEATURES, 'Planes de nutrición'],
+        features: [...SHARED_TIER_FEATURES, 'Branding personalizado', 'Planes de nutrición'],
     },
     // LEGACY — fuera de venta, grandfathered + placeholder team/org_managed (migracion 20260609230000). NO borrar.
     scale: {
         label: 'Scale',
         maxClients: 500,
         monthlyPriceClp: 190000,
-        features: [...SHARED_TIER_FEATURES, 'Planes de nutrición'],
+        features: [...SHARED_TIER_FEATURES, 'Branding personalizado', 'Planes de nutrición'],
     },
 }
 
 /**
  * Feature gates by tier.
- * free/starter: no nutrition (upgrade driver). free: no branding (upgrade driver).
+ * free/starter: no nutrition (upgrade driver).
+ * free/starter: no branding — branding (color/logo/loader + white-label v2: color2/font/dark) es
+ * Pro+ ENTERO (decision CEO 2026-06-21, white-label v2). El gate único es isBrandingAllowed().
  * canUseAdvancedReports reserved for future implementation — gate not active yet.
  */
 const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
@@ -153,7 +156,7 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
     },
     starter: {
         canUseNutrition: false,
-        canUseBranding: true,
+        canUseBranding: false,
         canUseAdvancedReports: true,
         canCreateCustomExercises: true,
         canImportClients: true,
@@ -210,6 +213,17 @@ export function getTierMaxClients(tier: SubscriptionTier) {
 
 export function getTierCapabilities(tier: SubscriptionTier): TierCapabilities {
     return TIER_CAPABILITIES[tier]
+}
+
+/**
+ * ¿El tier puede usar branding (white-label)? Fuente ÚNICA del gate de marca: la consumen las 5
+ * superficies (proxy, layout alumno, layout coach, login query, manifest/splash) + el write-path.
+ * Branding = Pro+ ENTERO (decision CEO 2026-06-21): free/starter ven TODO EVA system (color/logo/
+ * loader EVA); pro/elite/growth/scale ven su marca. Fail-closed: un tier inválido (string arbitrario
+ * fuera del union) cae a false.
+ */
+export function isBrandingAllowed(tier: SubscriptionTier): boolean {
+    return TIER_CAPABILITIES[tier]?.canUseBranding === true
 }
 
 // ── Ciclos de cobro ───────────────────────────────────────────────────────────
@@ -341,21 +355,25 @@ export type DiscountResult = {
 }
 
 /**
- * Piso del neto cobrado (CLP). El neto nunca baja de aca tras aplicar un cupon. Default 0
+ * Piso del neto cobrado (CLP) por DEFECTO. El neto nunca baja de aca tras aplicar un cupon. Default 0
  * (solo no-negativo); el path pago ADEMAS rechaza netClp === 0 (decision O1: 100%-off-N-ciclos
- * no va por el path pago — va por admin_grant). Subir si se define un costo/margen minimo.
+ * no va por el path pago — va por admin_grant). Subir si se define un costo/margen minimo GLOBAL.
+ * Es CONFIGURABLE por llamada via input.floorClp (decision O8: margin floor configurable);
+ * el default mantiene el comportamiento historico (solo no-negativo) hasta que el CEO fije un costo.
  */
 export const DISCOUNT_NET_FLOOR_CLP = 0
 
 /**
  * Aplica un cupon a un composite (base + add-ons) ya con descuento de ciclo. PURO, sin DB.
- * Compone sobre el composite (O8). Redondeo Math.round (espejo de applyDiscount). Clamp al piso.
- * Devuelve siempre el composite como baseBeforeDiscountClp (evidencia SERNAC).
+ * Compone sobre el composite (O8). Redondeo Math.round (espejo de applyDiscount). Clamp al piso
+ * (configurable via floorClp, default DISCOUNT_NET_FLOOR_CLP). El neto nunca supera el composite
+ * (un cupon nunca sube el precio). Devuelve siempre el composite como baseBeforeDiscountClp (evidencia SERNAC).
  */
 export function computeDiscountedClp(input: {
     baseClp: number
     addons?: CompositeLineAddon[]
     spec: DiscountSpec | null | undefined
+    floorClp?: number                   // piso de margen configurable (O8); default DISCOUNT_NET_FLOOR_CLP
 }): DiscountResult {
     const addons = input.addons ?? []
     const base = Math.max(0, Math.round(input.baseClp))
@@ -391,7 +409,9 @@ export function computeDiscountedClp(input: {
         rawDiscount = Math.min(Math.max(0, Math.round(spec.value)), targetAmount)
     }
 
-    // El neto no baja del piso; el descuento efectivo se recalcula desde el neto (consistencia).
-    const net = Math.max(DISCOUNT_NET_FLOOR_CLP, composite - rawDiscount)
+    // El neto no baja del piso (margin floor, O8) ni sube del composite; el descuento efectivo
+    // se recalcula desde el neto (consistencia). floor clampeado a >= 0 por seguridad.
+    const floor = Math.max(0, Math.round(input.floorClp ?? DISCOUNT_NET_FLOOR_CLP))
+    const net = Math.min(composite, Math.max(floor, composite - rawDiscount))
     return { baseBeforeDiscountClp: composite, discountClp: composite - net, netClp: net }
 }

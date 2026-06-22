@@ -21,6 +21,10 @@ export type BrandThemeTokens = {
     border: string
     accent: string
     accentText: string
+    /** Acento secundario (white-label v2, color2 independiente). Default = `accent` si no hay secundario. */
+    accent2: string
+    /** Texto legible sobre `accent2` (pickOnColor). */
+    accent2Text: string
     text: string
     textMuted: string
 }
@@ -33,6 +37,10 @@ export type BrandThemeInput = {
     accentLight?: string | null
     /** Optional accent override for dark mode (defaults to brandColor). */
     accentDark?: string | null
+    /** Optional secondary accent (color2) for light mode (white-label v2). Defaults to the light accent. */
+    secondaryLight?: string | null
+    /** Optional secondary accent (color2) for dark mode (white-label v2). Defaults to the dark accent. */
+    secondaryDark?: string | null
     /** Tint neutrals (bg/surface/border) with the brand hue for a premium feel. */
     neutralTint?: boolean
 }
@@ -117,11 +125,14 @@ export function resolveBrandTheme(input: BrandThemeInput): BrandTheme {
     const lightSurface = oklchHex(0.97, nC, h)
     const lightBorder = oklchHex(0.90, nC * 1.6, h)
     const lightAccent = clampAccent(input.accentLight || input.brandColor, lightBg, AA_UI)
+    // color2: default = el acento del mismo modo (sin secundario, accent2 === accent → no rompe nada).
+    const lightAccent2 = clampAccent(input.secondaryLight || lightAccent, lightBg, AA_UI)
 
     const darkBg = oklchHex(0.16, nC, h)
     const darkSurface = oklchHex(0.21, nC, h)
     const darkBorder = oklchHex(0.32, nC * 1.6, h)
     const darkAccent = clampAccent(input.accentDark || input.brandColor, darkBg, AA_UI)
+    const darkAccent2 = clampAccent(input.secondaryDark || darkAccent, darkBg, AA_UI)
 
     return {
         light: {
@@ -130,6 +141,8 @@ export function resolveBrandTheme(input: BrandThemeInput): BrandTheme {
             border: lightBorder,
             accent: lightAccent,
             accentText: pickOnColor(lightAccent),
+            accent2: lightAccent2,
+            accent2Text: pickOnColor(lightAccent2),
             text: pickOnColor(lightBg),
             textMuted: oklchHex(0.45, nC, h),
         },
@@ -139,6 +152,8 @@ export function resolveBrandTheme(input: BrandThemeInput): BrandTheme {
             border: darkBorder,
             accent: darkAccent,
             accentText: pickOnColor(darkAccent),
+            accent2: darkAccent2,
+            accent2Text: pickOnColor(darkAccent2),
             text: pickOnColor(darkBg),
             textMuted: oklchHex(0.72, nC, h),
         },
@@ -160,6 +175,9 @@ export function contrastReport(theme: BrandTheme): ContrastReport {
         check('Texto sobre superficie', mode, t.text, t.surface, AA_TEXT)
         check('Texto del acento', mode, t.accentText, t.accent, AA_TEXT)
         check('Acento sobre fondo', mode, t.accent, t.bg, AA_UI)
+        // color2 (white-label v2): el secundario también debe ser legible (publish-gate lo bloquea).
+        check('Texto del acento 2', mode, t.accent2Text, t.accent2, AA_TEXT)
+        check('Acento 2 sobre fondo', mode, t.accent2, t.bg, AA_UI)
     }
     return { passes: items.every((i) => i.passes), items }
 }

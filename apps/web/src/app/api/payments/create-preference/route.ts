@@ -26,6 +26,7 @@ import {
     getTierUpgradeProrationClp,
     toBillableAddons,
 } from '@/services/billing/addons.service'
+import { resolveActiveDiscountSpec, isChargeableNetClp } from '@/services/billing/discount.service'
 import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
 import { claimUpgradeInFlight, clearUpgradeInFlight } from '@/services/billing/plan-change-lock'
 import type { BillableAddon } from '@/domain/billing/types'
@@ -145,6 +146,9 @@ export async function POST(request: Request) {
 
         // El UPDATE de columnas de billing + la lectura de add-ons facturables van por service-role.
         const admin = createServiceRoleClient()
+        // Cupón vivo re-resuelto UNA vez (server-side): lo usan la proración del upgrade Y el composite
+        // recurrente. spec null = sin cupón = montos idénticos al legacy.
+        const discountSpec = await resolveActiveDiscountSpec(admin, user.id)
 
         const provider = getPaymentsProvider()
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
@@ -190,7 +194,7 @@ export async function POST(request: Request) {
                     // fijan a `currentCycle`, NO al `billingCycle` solicitado: si el coach pidió otro ciclo en
                     // el mismo gesto, se ignora aquí y deberá cambiarlo por separado. Así el monto prorrateado
                     // y el ref que el webhook/confirm-upgrade re-derivan quedan coherentes con lo activado.
-                    const prorationClp = getTierUpgradeProrationClp(
+                    let prorationClp = getTierUpgradeProrationClp(
                         currentTier,
                         tier,
                         currentCycle,
@@ -206,6 +210,13 @@ export async function POST(request: Request) {
                             { error: 'El cambio de plan no tiene una diferencia a cobrar.' },
                             { status: 400 }
                         )
+                    }
+                    // Cupón: descontar también la diferencia prorrateada del upgrade (un % sobre toda la
+                    // cuenta aplica a su proración). Solo percent target total/base — fixed_clp/module no
+                    // tienen sentido sobre un diff parcial de tier. Mínimo 1 (nunca $0 → MP lo rechaza).
+                    if (discountSpec && discountSpec.type === 'percent' && discountSpec.target !== 'module') {
+                        const pct = Math.min(100, Math.max(0, discountSpec.value))
+                        prorationClp = Math.max(1, prorationClp - Math.round((prorationClp * pct) / 100))
                     }
                     const upgradeQuery = `tier=${encodeURIComponent(tier)}&cycle=${encodeURIComponent(currentCycle)}`
                     const { checkoutUrl } = await provider.createOneShotPayment({
@@ -307,7 +318,22 @@ export async function POST(request: Request) {
         const billableAddons = [...billableByKey.values()]
         const checkoutAddons = [...billableByKey.keys()]
 
-        const amountClp = getCompositeAmountClp(tier, billingCycle, billableAddons)
+        // F2a.2b: descuento de cupón re-resuelto server-side desde coaches.active_coupon_redemption_id
+        // y aplicado en el ÚNICO chokepoint. spec null = sin cupón = monto compuesto idéntico al legacy.
+        // El neto del preapproval ya nace descontado (MP-net-at-source); el webhook/cron recomputan con
+        // el MISMO spec → sin falso addon_amount_drift. Guard O1: el path pago rechaza neto no cobrable
+        // (un 100%-off va por admin_grant, NUNCA por MP que rechaza transaction_amount <= 0).
+        const composite = getCompositeAmountClp(tier, billingCycle, billableAddons, discountSpec)
+        const amountClp = composite.totalClp
+        if (!isChargeableNetClp(amountClp)) {
+            return NextResponse.json(
+                {
+                    code: 'NET_NOT_CHARGEABLE',
+                    error: 'Un descuento del 100% no se cobra por este medio; se gestiona como cortesía interna.',
+                },
+                { status: 400 }
+            )
+        }
         const cycle = BILLING_CYCLE_CONFIG[billingCycle]
         const addonSuffix = checkoutAddons.length > 0 ? ` + ${checkoutAddons.length} add-on(s)` : ''
         const retryQuery = `tier=${encodeURIComponent(tier)}&cycle=${encodeURIComponent(billingCycle)}`

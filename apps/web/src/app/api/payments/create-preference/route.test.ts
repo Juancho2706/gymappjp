@@ -22,11 +22,17 @@ const userScopedFrom = vi.fn(() => ({
     select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: currentCoachMaybeSingle })) })),
 }))
 
-// Service-role client: only the billing-columns UPDATE goes through here (update→eq→{error}).
+// Service-role client: la UPDATE de columnas de billing (update→eq→{error}) + la lectura de
+// resolveActiveDiscountSpec (F2a.2b: coaches.active_coupon_redemption_id; null = sin cupón → monto idéntico).
 const adminUpdateEq = vi.fn().mockResolvedValue({ error: null })
 const fakeAdmin = {
     from: vi.fn(() => ({
         update: vi.fn(() => ({ eq: adminUpdateEq })),
+        select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+                maybeSingle: vi.fn().mockResolvedValue({ data: { active_coupon_redemption_id: null }, error: null }),
+            })),
+        })),
     })),
 }
 vi.mock('@/lib/supabase/admin-client', () => ({

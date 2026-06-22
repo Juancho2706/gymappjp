@@ -81,6 +81,13 @@ const nextConfig: NextConfig = {
         hostname: 'exercisedb-api.vercel.app',
       },
       {
+        // CDN actual de ExerciseDB (sus assets migraron acá; los gifs viven en /media/**). El catálogo
+        // se auto-hospeda en Supabase, pero algún ejercicio puntual (ej. "Aducción de cadera sentado en
+        // máquina") referencia este CDN directo en gif_url → sin permitirlo, next/image lo rechaza (400).
+        protocol: 'https',
+        hostname: 'static.exercisedb.dev',
+      },
+      {
         protocol: 'https',
         hostname: 'img.youtube.com',
       },

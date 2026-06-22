@@ -12,16 +12,19 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
  *
  * Estrategia fail-safe (regla global del plan):
  *  1. Verificación LOCAL con JWKS (sin red) -> camino rápido para el token válido.
- *  2. Token claramente inválido (expirado / claim iss-aud-nbf mala) -> 401 local, sin red.
- *  3. Cualquier ambigüedad (JWKS inalcanzable, kid desconocido, alg HS legacy, firma que no
- *     resuelve contra una key, error desconocido) -> DEGRADAR a `admin.auth.getUser` (red,
- *     autoritativo). Nunca un 401 masivo por una caída de infra de JWKS.
+ *  2. Token EXPIRADO -> 401 local, sin red (getUser también lo rechazaría).
+ *  3. Cualquier otra cosa (claim iss/aud/nbf por drift de env, JWKS inalcanzable, kid
+ *     desconocido, alg HS legacy, firma que no resuelve, error desconocido) -> DEGRADAR a
+ *     `admin.auth.getUser` (red, autoritativo). Nunca un 401 masivo por una aserción local
+ *     estricta (iss/aud) ni por una caída de infra de JWKS.
  */
 
 const AUDIENCE = 'authenticated'
 
 function supabaseUrl(): string {
-    return process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
+    // Normalizar trailing slash: un '/' final en NEXT_PUBLIC_SUPABASE_URL haría
+    // issuer `${url}//auth/v1` != iss real del token -> falso claim-mismatch. Blindaje.
+    return (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').replace(/\/+$/, '')
 }
 
 let _jwks: ReturnType<typeof createRemoteJWKSet> | null = null
@@ -35,15 +38,15 @@ function getJwks(url: string) {
 }
 
 /**
- * ¿El error de jwtVerify es un fallo de validez del token (rechazar local) o algo ambiguo
- * (degradar a getUser)? PURO -> testeable. Solo los errores INEQUÍVOCOS de token caen a 401:
- * expirado y claim-validation (iss/aud/nbf/exp). Todo lo demás (firma, JWKS, kid, alg) degrada.
+ * ¿El error de jwtVerify es un fallo INEQUÍVOCO del token (rechazar local) o algo que conviene
+ * que decida GoTrue (degradar a getUser)? PURO -> testeable. Solo el token EXPIRADO es 401 local
+ * (getUser también lo rechazaría; el 401 local evita un round-trip por token vencido).
+ * Claim-validation (iss/aud/nbf) DEJA DE SER 401 duro: puede ser drift de env (trailing slash,
+ * dominio custom) sobre un token legítimo del propio proyecto -> degradar a getUser (autoritativo:
+ * valida firma + exp + revocación + binding de proyecto). Firma/JWKS/kid/alg ya degradaban.
  */
 export function isUnambiguousTokenError(err: unknown): boolean {
-    return (
-        err instanceof joseErrors.JWTExpired ||
-        err instanceof joseErrors.JWTClaimValidationFailed
-    )
+    return err instanceof joseErrors.JWTExpired
 }
 
 export type MobileAuthResult =
@@ -81,7 +84,7 @@ export async function verifyMobileBearer(token: string): Promise<MobileAuthResul
         return UNAUTHORIZED // token válido pero sin sub -> no es una sesión de usuario
     } catch (err) {
         if (isUnambiguousTokenError(err)) return UNAUTHORIZED
-        // ambiguo (JWKS/red/kid/alg/firma): que decida GoTrue
+        // claim iss/aud (drift de env) o JWKS/red/kid/alg/firma -> que decida GoTrue (autoritativo).
         return verifyViaGetUser(token)
     }
 }

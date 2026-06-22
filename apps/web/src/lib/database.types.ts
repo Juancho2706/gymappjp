@@ -1040,11 +1040,15 @@ export type Database = {
       }
       coaches: {
         Row: {
+          accent_dark: string | null
+          accent_light: string | null
           active_coupon_redemption_id: string | null
           active_org_id: string | null
           admin_notes: string | null
           billing_cycle: string
+          brand_font_key: string | null
           brand_name: string
+          brand_secondary_color: string | null
           card_brand: string | null
           card_last4: string | null
           card_payment_method_id: string | null
@@ -1060,9 +1064,12 @@ export type Database = {
           loader_show_icon: boolean
           loader_text: string | null
           loader_text_color: string | null
+          loader_variant: string
           logo_url: string | null
+          logo_url_dark: string | null
           marketing_consent: boolean
           max_clients: number
+          neutral_tint: boolean
           onboarding_guide: Json
           payment_provider: string
           previous_slugs: string[] | null
@@ -1088,11 +1095,15 @@ export type Database = {
           welcome_modal_version: number
         }
         Insert: {
+          accent_dark?: string | null
+          accent_light?: string | null
           active_coupon_redemption_id?: string | null
           active_org_id?: string | null
           admin_notes?: string | null
           billing_cycle?: string
+          brand_font_key?: string | null
           brand_name: string
+          brand_secondary_color?: string | null
           card_brand?: string | null
           card_last4?: string | null
           card_payment_method_id?: string | null
@@ -1108,9 +1119,12 @@ export type Database = {
           loader_show_icon?: boolean
           loader_text?: string | null
           loader_text_color?: string | null
+          loader_variant?: string
           logo_url?: string | null
+          logo_url_dark?: string | null
           marketing_consent?: boolean
           max_clients?: number
+          neutral_tint?: boolean
           onboarding_guide?: Json
           payment_provider?: string
           previous_slugs?: string[] | null
@@ -1136,11 +1150,15 @@ export type Database = {
           welcome_modal_version?: number
         }
         Update: {
+          accent_dark?: string | null
+          accent_light?: string | null
           active_coupon_redemption_id?: string | null
           active_org_id?: string | null
           admin_notes?: string | null
           billing_cycle?: string
+          brand_font_key?: string | null
           brand_name?: string
+          brand_secondary_color?: string | null
           card_brand?: string | null
           card_last4?: string | null
           card_payment_method_id?: string | null
@@ -1156,9 +1174,12 @@ export type Database = {
           loader_show_icon?: boolean
           loader_text?: string | null
           loader_text_color?: string | null
+          loader_variant?: string
           logo_url?: string | null
+          logo_url_dark?: string | null
           marketing_consent?: boolean
           max_clients?: number
+          neutral_tint?: boolean
           onboarding_guide?: Json
           payment_provider?: string
           previous_slugs?: string[] | null
@@ -1196,6 +1217,32 @@ export type Database = {
             columns: ["active_org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coupon_allowed_emails: {
+        Row: {
+          coupon_id: string
+          created_at: string
+          normalized_email: string
+        }
+        Insert: {
+          coupon_id: string
+          created_at?: string
+          normalized_email: string
+        }
+        Update: {
+          coupon_id?: string
+          created_at?: string
+          normalized_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_allowed_emails_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
             referencedColumns: ["id"]
           },
         ]
@@ -3344,6 +3391,7 @@ export type Database = {
           brand_history: Json
           brand_published_at: string | null
           brand_published_by: string | null
+          brand_secondary_color: string | null
           client_limit: number
           created_at: string | null
           currency: string
@@ -3355,6 +3403,7 @@ export type Database = {
           loader_icon_mode: string
           loader_text: string | null
           loader_text_color: string | null
+          loader_variant: string
           logo_url: string | null
           logo_url_dark: string | null
           name: string
@@ -3381,6 +3430,7 @@ export type Database = {
           brand_history?: Json
           brand_published_at?: string | null
           brand_published_by?: string | null
+          brand_secondary_color?: string | null
           client_limit?: number
           created_at?: string | null
           currency?: string
@@ -3392,6 +3442,7 @@ export type Database = {
           loader_icon_mode?: string
           loader_text?: string | null
           loader_text_color?: string | null
+          loader_variant?: string
           logo_url?: string | null
           logo_url_dark?: string | null
           name: string
@@ -3418,6 +3469,7 @@ export type Database = {
           brand_history?: Json
           brand_published_at?: string | null
           brand_published_by?: string | null
+          brand_secondary_color?: string | null
           client_limit?: number
           created_at?: string | null
           currency?: string
@@ -3429,6 +3481,7 @@ export type Database = {
           loader_icon_mode?: string
           loader_text?: string | null
           loader_text_color?: string | null
+          loader_variant?: string
           logo_url?: string | null
           logo_url_dark?: string | null
           name?: string
@@ -4081,6 +4134,7 @@ export type Database = {
         Row: {
           accent_dark: string | null
           accent_light: string | null
+          brand_secondary_color: string | null
           created_at: string
           deleted_at: string | null
           enabled_modules: Json
@@ -4089,6 +4143,7 @@ export type Database = {
           loader_icon_mode: string
           loader_text: string | null
           loader_text_color: string | null
+          loader_variant: string
           logo_url: string | null
           logo_url_dark: string | null
           name: string
@@ -4104,6 +4159,7 @@ export type Database = {
         Insert: {
           accent_dark?: string | null
           accent_light?: string | null
+          brand_secondary_color?: string | null
           created_at?: string
           deleted_at?: string | null
           enabled_modules?: Json
@@ -4112,6 +4168,7 @@ export type Database = {
           loader_icon_mode?: string
           loader_text?: string | null
           loader_text_color?: string | null
+          loader_variant?: string
           logo_url?: string | null
           logo_url_dark?: string | null
           name: string
@@ -4127,6 +4184,7 @@ export type Database = {
         Update: {
           accent_dark?: string | null
           accent_light?: string | null
+          brand_secondary_color?: string | null
           created_at?: string
           deleted_at?: string | null
           enabled_modules?: Json
@@ -4135,6 +4193,7 @@ export type Database = {
           loader_icon_mode?: string
           loader_text?: string | null
           loader_text_color?: string | null
+          loader_variant?: string
           logo_url?: string | null
           logo_url_dark?: string | null
           name?: string
@@ -4837,6 +4896,7 @@ export type Database = {
         Args: { p_email: string }
         Returns: Json
       }
+      claim_coupon_code: { Args: { p_code_id: string }; Returns: boolean }
       current_user_managed_team_ids: { Args: never; Returns: string[] }
       current_user_pool_client_ids: { Args: never; Returns: string[] }
       current_user_pool_coach_ids: { Args: never; Returns: string[] }
@@ -5138,6 +5198,7 @@ export type Database = {
       }
       is_team_manager: { Args: { p_team_id: string }; Returns: boolean }
       is_team_member: { Args: { p_team_id: string }; Returns: boolean }
+      release_coupon_code: { Args: { p_code_id: string }; Returns: undefined }
       resolve_active_discount: { Args: never; Returns: Json }
       search_foods: {
         Args: { search_term: string }
