@@ -240,13 +240,13 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                         workspaces={workspaces ?? []}
                     />
                     <NewsBellButton />
-                    {pathname === '/coach/settings' && (
+                    {pathname === '/coach/settings/brand' && (
                         <button
                             type="button"
                             onClick={() => window.dispatchEvent(new CustomEvent('brand-tour-start'))}
                             className="text-muted-foreground hover:text-foreground transition-colors"
-                            title="Ver guía del panel Mi Marca"
-                            aria-label="Ver guía del panel Mi Marca"
+                            title="Ver guía de Mi Marca"
+                            aria-label="Ver guía de Mi Marca"
                         >
                             <HelpCircle className="w-5 h-5" />
                         </button>

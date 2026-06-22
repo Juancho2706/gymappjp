@@ -1,10 +1,9 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
+import { ArrowLeft, Palette } from 'lucide-react'
 import type { Metadata } from 'next'
 import { BrandSettingsForm } from '../BrandSettingsForm'
 import { LogoUploadForm } from '../LogoUploadForm'
-import { WhatChangesList } from '../_components/WhatChangesList'
 import { BrandSettingsTourClient } from '../_components/BrandSettingsTourClient'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
 import { getCoachSettingsForUser } from '../_data/settings.queries'
@@ -32,25 +31,26 @@ export default async function CoachBrandPage() {
             <div className="mb-6 space-y-4">
                 <Link
                     href="/coach/settings"
-                    className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 >
-                    <ChevronLeft className="h-4 w-4" />
+                    <ArrowLeft className="h-4 w-4" />
                     Opciones
                 </Link>
 
-                <div className="flex items-start justify-between gap-3">
-                    <div>
-                        <h1 className="text-xl md:text-2xl font-extrabold text-foreground leading-tight">
-                            Personaliza la app de tus alumnos
+                <div className="flex items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+                        <Palette className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                        <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
+                            Mi Marca
                         </h1>
-                        <p className="text-muted-foreground text-sm mt-2 leading-relaxed">
-                            Tus alumnos instalan tu app como si fuera tuya. Aquí defines cómo se ve: logo, colores, nombre y mensajes.
-                            Cada alumno ve <span className="font-semibold text-foreground">TU marca</span>, no la de EVA.
+                        <p className="text-muted-foreground text-sm mt-1 leading-relaxed">
+                            Personaliza la app de tus alumnos: logo, colores, nombre y mensajes.
+                            Cada alumno ve <span className="font-semibold text-foreground">TU marca</span>, no la de EVA — instalan tu app como si fuera tuya.
                         </p>
                     </div>
                 </div>
-
-                <WhatChangesList />
             </div>
 
             <div className="space-y-6">

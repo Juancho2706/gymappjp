@@ -6,7 +6,7 @@ import { PERSONAS } from './personas'
  * SUITE — Catálogo de módulos read-only (compra-only, plan estrategia 03 / F1.2).
  *
  * Settings > Módulos dejó de ser self-toggle: es un catálogo read-only con badge
- * Activo/Disponible, pitch + superficies y CTA por contexto. Verifica que NINGÚN coach
+ * Activo/De pago, pitch + superficies y CTA por contexto. Verifica que NINGÚN coach
  * pueda activarse módulos desde la UI (cero switches / botón Guardar) y que el CTA
  * sea el correcto por rol:
  *   - teamCoach (miembro sin gestión) -> "Pídelo al owner de tu equipo." (sin link)
@@ -60,11 +60,11 @@ test.describe('Catálogo módulos — team member (e2e-team-coach)', () => {
     test.skip(!personaReady(PERSONAS.teamCoach), SKIP_MSG)
     test.use({ storageState: PERSONAS.teamCoach?.storageState ?? EMPTY_STATE })
 
-    test('C1: read-only, badge Disponible y "Pídelo al owner" (sin CTA mailto)', async ({ page }) => {
+    test('C1: read-only, badge De pago y "Pídelo al owner" (sin CTA mailto)', async ({ page }) => {
         await gotoModules(page)
         await expectReadOnlyCatalog(page)
-        // Al menos un módulo Disponible (las personas de la matriz no tienen módulos ON).
-        await expect(page.getByText('Disponible').first()).toBeVisible()
+        // Al menos un módulo De pago (las personas de la matriz no tienen módulos ON).
+        await expect(page.getByText('De pago').first()).toBeVisible()
         await expect(page.getByText('Pídelo al owner de tu equipo.').first()).toBeVisible()
         // Miembro sin gestión NO ve CTA conversacional con mailto.
         await expect(page.locator(CONTACT_MAILTO)).toHaveCount(0)
@@ -102,7 +102,7 @@ test.describe('Catálogo módulos — standalone (e2e-solo-coach)', () => {
         await expectReadOnlyCatalog(page)
         // CTA interino self-service OFF -> mailto a contacto@eva-app.cl.
         await expect(page.locator(CONTACT_MAILTO).first()).toBeVisible()
-        await expect(page.getByText('Disponible').first()).toBeVisible()
+        await expect(page.getByText('De pago').first()).toBeVisible()
         // Standalone no es team -> no aparece el texto del miembro de equipo.
         await expect(page.getByText('Pídelo al owner de tu equipo.')).toHaveCount(0)
         await expectNoRuntimeError(page)

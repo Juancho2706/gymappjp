@@ -96,7 +96,7 @@ export default async function CoachSettingsPage() {
 
     if (!capabilities.canUseBranding) {
         return (
-            <div className="p-4 md:p-8 max-w-2xl mx-auto animate-fade-in space-y-4">
+            <div className="p-4 md:p-8 max-w-3xl mx-auto animate-fade-in space-y-4">
             <UpgradeGateTracker gate="branding" currentTier={tier} />
                 {/* Hero */}
                 <div className="relative overflow-hidden rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-500/10 via-card to-card p-6">

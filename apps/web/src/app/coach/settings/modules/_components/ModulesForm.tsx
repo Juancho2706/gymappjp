@@ -1,7 +1,6 @@
 'use client'
 
-import { CheckCircle2, Sparkles, Mail, Wrench } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { CheckCircle2, Lock, Mail, Wrench } from 'lucide-react'
 import { SELF_SERVICE_ADDONS_ENABLED, type SubscriptionTier } from '@/lib/constants'
 import { useCaptureModuleInterest } from '@/lib/posthog/events'
 import { MODULE_CATALOG_KEYS, MODULE_CATALOG, type ModuleKey } from '@eva/module-catalog'
@@ -14,7 +13,7 @@ const MAILTO_TEAM =
 /**
  * Settings > Módulos — CATÁLOGO READ-ONLY (compra-only, plan estrategia 03 / F1.2).
  * Ya no hay switches ni guardado: el coach NO se auto-activa módulos (la escritura quedó
- * SOLO en service-role — override admin del CEO). Por cada módulo: badge Activo/Disponible,
+ * SOLO en service-role — override admin del CEO). Por cada módulo: badge Activo/De pago,
  * pitch + superficies (copy canónico en @eva/module-catalog) y CTA por contexto. Cada click
  * de CTA captura `module_interest_cta_clicked` (telemetría de intención, PostHog ya gated
  * por consentimiento de cookies). Anti-hostigamiento: 1 de las 2 únicas superficies de venta.
@@ -55,7 +54,7 @@ export function ModulesForm({
                                     </span>
                                 ) : (
                                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
-                                        <Sparkles className="h-3.5 w-3.5" /> Disponible
+                                        <Lock className="h-3.5 w-3.5" /> De pago
                                     </span>
                                 )}
                             </div>
@@ -148,7 +147,7 @@ function ModuleCta({
                 className={CTA_LINK_CLASS}
                 onClick={() => onCapture(moduleKey, 'self_service', tier)}
             >
-                <Sparkles className="h-4 w-4" /> Agregar
+                <Lock className="h-4 w-4" /> Desbloquear
             </a>
         )
     }
@@ -160,7 +159,7 @@ function ModuleCta({
             className={CTA_LINK_CLASS}
             onClick={() => onCapture(moduleKey, 'standalone_mailto', tier)}
         >
-            <Mail className="h-4 w-4" /> Agregar — escríbenos a contacto@eva-app.cl
+            <Mail className="h-4 w-4" /> Desbloquear — escríbenos a contacto@eva-app.cl
         </a>
     )
 }
