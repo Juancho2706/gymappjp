@@ -7,7 +7,7 @@ export async function getActiveNutritionPlanFull(clientId: string) {
       id, name, description, order_index, day_of_week,
       nutrition_meal_food_items (
         id, quantity, unit, swap_options,
-        foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit )
+        foods ( id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, household_grams, household_label )
       )
     )
   `).eq('client_id', clientId).eq('is_active', true).maybeSingle()
@@ -83,8 +83,18 @@ export async function toggleMealCompletion(
   return { success: true, logId }
 }
 
-/** Porción consumida (0-100%) de una comida completada. El motor de macros la usa como multiplicador. */
-export async function updateMealConsumedPortion(dailyLogId: string, mealId: string, pct: number) {
+/**
+ * Porción consumida (0-100%) de una comida completada. El motor de macros la usa como multiplicador.
+ * `null` = "Plan completo" (limpia el override → vuelve al 100% del plan, espejo de la web).
+ */
+export async function updateMealConsumedPortion(dailyLogId: string, mealId: string, pct: number | null) {
+  if (pct === null) {
+    return supabase
+      .from('nutrition_meal_logs')
+      .update({ consumed_quantity: null })
+      .eq('daily_log_id', dailyLogId)
+      .eq('meal_id', mealId)
+  }
   return supabase.from('nutrition_meal_logs').upsert(
     { daily_log_id: dailyLogId, meal_id: mealId, consumed_quantity: pct },
     { onConflict: 'daily_log_id,meal_id' }

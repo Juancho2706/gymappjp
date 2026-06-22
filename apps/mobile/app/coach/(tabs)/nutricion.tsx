@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Alert, FlatList, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Alert, FlatList, Image, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { Apple, BadgeCheck, ChefHat, CheckCircle2, ChevronRight, Copy, HelpCircle, Layers, LayoutGrid, Link2, Lock, Pencil, Plus, Trash2, Users, UtensilsCrossed } from 'lucide-react-native'
+import { Apple, BadgeCheck, BookOpen, ChefHat, CheckCircle2, ChevronRight, Copy, HelpCircle, Layers, LayoutGrid, Link2, Lock, Pencil, Plus, Search, Trash2, Users, UtensilsCrossed, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
@@ -12,12 +12,51 @@ import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { deletePlan, duplicatePlanToClient, getClientPlans, getNutritionBoard, listCoachFoods, setPlanActive, type NutritionBoardRow, type PlanSummary } from '../../../lib/nutrition-builder'
 import { Sparkline } from '../../../components/Sparkline'
-import { assignTemplateToClients, deleteTemplate, listTemplates, type TemplateSummary } from '../../../lib/nutrition-templates'
+import { assignTemplateToClients, deleteTemplate, duplicateTemplate, listTemplates, type TemplateSummary } from '../../../lib/nutrition-templates'
+import { listCoachRecipes, type RecipeRow } from '../../../lib/recipes'
 import { canUseNutrition, type SubscriptionTier } from '../../../lib/coach-tiers'
 import { getApiBaseUrl } from '../../../lib/api'
 
 interface Client { id: string; full_name: string }
-type HubTab = 'templates' | 'clients' | 'foods'
+type HubTab = 'templates' | 'clients' | 'foods' | 'recipes'
+type BoardSort = 'name' | 'plan' | 'updated'
+
+// Espejo de goalLabel (TemplateLibrary.tsx web): normaliza goal_type a etiqueta es-CL.
+function goalLabel(goal: string | null | undefined): string | null {
+  if (!goal) return null
+  const g = goal.toLowerCase()
+  if (g.includes('deficit') || g === 'cut') return 'Déficit'
+  if (g.includes('surplus') || g.includes('bulk') || g === 'volume') return 'Volumen'
+  if (g.includes('maint')) return 'Mantenimiento'
+  return goal.replace(/_/g, ' ')
+}
+
+// Espejo de macroCalorieSplit (TemplateLibrary.tsx web): % de kcal por macro para la barra.
+function macroCalorieSplit(calories: number, p: number, c: number, f: number) {
+  const fromMacros = p * 4 + c * 4 + f * 9
+  const denom = calories > 0 ? calories : fromMacros
+  if (denom <= 0) return { pPct: 33, cPct: 34, fPct: 33 }
+  const pPct = Math.round(((p * 4) / denom) * 100)
+  const cPct = Math.round(((c * 4) / denom) * 100)
+  const fPct = Math.max(0, 100 - pPct - cPct)
+  return { pPct, cPct, fPct }
+}
+
+// Espejo de COACH_NUTRITION_ONBOARDING_STEPS + NUTRITION_SURFACES (web).
+const ONBOARDING_STEPS = [
+  { number: 1, icon: Apple, color: '#10B981', title: 'Agrega tus alimentos', description: 'Busca en el catálogo (~250 alimentos chilenos y globales) o crea los tuyos propios. Los alimentos son la base de todos tus planes.', cta: 'Ir al catálogo', route: '/coach/foods' },
+  { number: 2, icon: BookOpen, color: '#8B5CF6', title: 'Crea tu primera plantilla', description: 'Una plantilla es un modelo de plan reutilizable. Arma las comidas con sus alimentos y cantidades. Tarda menos de 5 minutos.', cta: 'Crear plantilla', route: '/coach/nutrition-builder?mode=template' },
+  { number: 3, icon: Users, color: '#0EA5E9', title: 'Asigna el plan a un alumno', description: 'Una vez tengas una plantilla lista, asígnala a tus alumnos. Puedes asignar la misma plantilla a varios a la vez.', cta: 'Asignar plan', route: null },
+] as const
+
+const NUTRITION_SURFACES = [
+  { label: 'Recetas', description: 'Ideas de recetas para inspirar a tus alumnos. No afectan macros ni adherencia.', tier: 'base' as const },
+  { label: 'Micronutrientes', description: 'Vitaminas y minerales estimados del plan, sin trabajo extra de tu parte.', tier: 'base' as const },
+  { label: 'Notas', description: 'Notas y recordatorios que dejas a un alumno sobre su nutrición.', tier: 'base' as const },
+  { label: 'Lista de compras', description: 'Lista de compras generada desde el plan del alumno, agrupada por categoría.', tier: 'base' as const },
+  { label: 'Objetivos', description: 'Calorías y macros objetivo calculados a partir de los datos del alumno.', tier: 'base' as const },
+  { label: 'Intercambios', description: 'Sistema de equivalencias para que el alumno arme comidas con flexibilidad.', tier: 'pro' as const },
+]
 
 export default function CoachNutricionScreen() {
   const { theme } = useTheme()
@@ -41,6 +80,13 @@ export default function CoachNutricionScreen() {
   const [tier, setTier] = useState<SubscriptionTier>('free')
   const [clientsWithPlan, setClientsWithPlan] = useState<Set<string>>(new Set())
   const [board, setBoard] = useState<NutritionBoardRow[]>([])
+  const [recipes, setRecipes] = useState<RecipeRow[]>([])
+  const [dupBusy, setDupBusy] = useState<string | null>(null)
+  // Board (tab Alumnos): búsqueda + orden, espejo de ActivePlansBoard (web).
+  const [boardQuery, setBoardQuery] = useState('')
+  const [boardSort, setBoardSort] = useState<BoardSort>('name')
+  // Onboarding empty-state (tab Plantillas sin plantillas) — descartable en sesión.
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false)
 
   useEffect(() => { loadAll() }, [])
 
@@ -62,9 +108,20 @@ export default function CoachNutricionScreen() {
     setFoodsCount(foods.length)
     setClientsWithPlan(new Set(((activePlans ?? []) as any[]).map((p) => p.client_id).filter(Boolean)))
     setLoading(false)
-    // N-F6-full: board de adherencia (en paralelo, no bloquea el render).
+    // N-F6-full: board de adherencia + recetas (en paralelo, no bloquea el render).
     getNutritionBoard().then(setBoard).catch(() => {})
+    listCoachRecipes().then(setRecipes).catch(() => {})
   }
+
+  async function duplicate(t: TemplateSummary) {
+    setDupBusy(t.id)
+    const r = await duplicateTemplate(t.id)
+    setDupBusy(null)
+    if (!r.ok) { Alert.alert('Error', r.error ?? 'No se pudo duplicar.'); return }
+    setTemplates(await listTemplates())
+  }
+
+  const hasClients = clients.length > 0
 
   const loadPlans = useCallback(async (clientId: string) => {
     setLoadingPlans(true)
@@ -80,6 +137,10 @@ export default function CoachNutricionScreen() {
 
   useFocusEffect(useCallback(() => {
     if (selectedClient) loadPlans(selectedClient.id)
+    // Al volver del builder/recetas/alimentos, refrescá listas (cuentas + tarjetas) sin spinner.
+    listTemplates().then(setTemplates).catch(() => {})
+    listCoachRecipes().then(setRecipes).catch(() => {})
+    listCoachFoods().then((f) => setFoodsCount(f.length)).catch(() => {})
   }, [selectedClient, loadPlans]))
 
   function openBuilder(planId?: string) {
@@ -140,7 +201,29 @@ export default function CoachNutricionScreen() {
     { key: 'templates', label: 'Plantillas', icon: Layers },
     { key: 'clients', label: 'Alumnos', icon: Users },
     { key: 'foods', label: 'Alimentos', icon: Apple },
+    { key: 'recipes', label: 'Recetas', icon: ChefHat },
   ]
+
+  // Board filtrado + ordenado (espejo de ActivePlansBoard.filtered).
+  const boardFiltered = useMemo(() => {
+    const q = boardQuery.trim().toLowerCase()
+    let list = board.filter((row) => {
+      if (!q) return true
+      return row.clientName.toLowerCase().includes(q) || (row.planName ?? '').toLowerCase().includes(q)
+    })
+    list = [...list].sort((a, b) => {
+      if (boardSort === 'plan') return (a.planName ?? '').localeCompare(b.planName ?? '')
+      if (boardSort === 'updated') return b.avg7d - a.avg7d
+      return a.clientName.localeCompare(b.clientName)
+    })
+    return list
+  }, [board, boardQuery, boardSort])
+
+  // Alumnos sin plan activo (espejo de clientsWithoutPlan).
+  const clientsWithoutPlan = useMemo(
+    () => clients.filter((c) => !clientsWithPlan.has(c.id)),
+    [clients, clientsWithPlan]
+  )
 
   return (
     <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
@@ -196,27 +279,147 @@ export default function CoachNutricionScreen() {
 
           {tab === 'templates' ? (
             <ScrollView contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
+              {/* Section heading (espejo SectionHeading web) */}
+              <View style={[styles.sectionHead, { borderBottomColor: theme.primary + '33' }]}>
+                <View style={[styles.sectionIcon, { backgroundColor: theme.primary + '1A' }]}><Layers size={18} color={theme.primary} /></View>
+                <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>Protocolos maestros</Text>
+              </View>
+
               <Button label="Nueva plantilla" leftIcon={Plus} onPress={() => router.push('/coach/nutrition-builder?mode=template')} full />
-              {templates.length === 0 ? (
-                <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans, marginTop: 8 }]}>Aún no tenés plantillas. Creá una para reutilizar planes entre alumnos.</Text>
-              ) : (
-                templates.map((t) => (
-                  <View key={t.id} style={[styles.tplCard, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.lg }]}>
-                    <Text style={[styles.tplName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{t.name}</Text>
-                    <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{t.daily_calories ?? 0} kcal · {t.mealCount} comida{t.mealCount !== 1 ? 's' : ''}</Text>
-                    <View style={styles.tplActions}>
-                      <TouchableOpacity style={styles.tplBtn} activeOpacity={0.8} onPress={() => router.push(`/coach/nutrition-builder?templateId=${t.id}`)}>
-                        <Pencil size={14} color={theme.foreground} /><Text style={[styles.tplBtnText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>Editar</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.tplBtn} activeOpacity={0.8} onPress={() => { setAssignIds([]); setAssignTemplate(t) }}>
-                        <Users size={14} color={theme.primary} /><Text style={[styles.tplBtnText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Asignar</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.tplBtn} activeOpacity={0.8} onPress={() => confirmDeleteTemplate(t)}>
-                        <Trash2 size={14} color={theme.destructive} /><Text style={[styles.tplBtnText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>Borrar</Text>
-                      </TouchableOpacity>
-                    </View>
+
+              {/* Onboarding 3-pasos (espejo NutritionOnboarding web) cuando no hay plantillas */}
+              {templates.length === 0 && !onboardingDismissed ? (
+                <View style={[styles.onboardCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
+                  <View style={{ gap: 4 }}>
+                    <Text style={[styles.onboardTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>🥗 Bienvenido al módulo de nutrición</Text>
+                    <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Seguí estos 3 pasos para empezar a asignar planes nutricionales a tus alumnos.</Text>
                   </View>
-                ))
+                  {ONBOARDING_STEPS.map((step) => {
+                    const Icon = step.icon
+                    const disabled = step.number === 3 && !hasClients
+                    return (
+                      <View key={step.number} style={[styles.onboardStep, { borderColor: theme.border, backgroundColor: theme.secondary, opacity: disabled ? 0.5 : 1 }]}>
+                        <View style={styles.onboardStepHead}>
+                          <View style={[styles.onboardStepIcon, { backgroundColor: step.color + '1A' }]}><Icon size={16} color={step.color} /></View>
+                          <Text style={[styles.onboardStepNum, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>PASO {step.number}</Text>
+                        </View>
+                        <Text style={[styles.onboardStepTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{step.title}</Text>
+                        <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{step.description}</Text>
+                        <TouchableOpacity disabled={disabled} activeOpacity={0.8}
+                          onPress={() => { if (step.route) router.push(step.route as any); else setTab('clients') }}
+                          style={styles.onboardCta}>
+                          <Text style={[styles.onboardCtaText, { color: disabled ? theme.mutedForeground : step.color, fontFamily: 'Inter_700Bold' }]}>{step.cta}</Text>
+                          <ChevronRight size={14} color={disabled ? theme.mutedForeground : step.color} />
+                        </TouchableOpacity>
+                      </View>
+                    )
+                  })}
+                  <View style={styles.onboardFooter}>
+                    {!hasClients ? <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans, flex: 1 }]}>Necesitás al menos un alumno para el paso 3.</Text> : <View style={{ flex: 1 }} />}
+                    <TouchableOpacity onPress={() => setOnboardingDismissed(true)} activeOpacity={0.8} style={[styles.onboardDismiss, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+                      <CheckCircle2 size={12} color={theme.mutedForeground} />
+                      <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', color: theme.mutedForeground, textTransform: 'uppercase', letterSpacing: 0.5 }}>Entendido, ocultar</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : null}
+
+              {templates.length === 0 ? (
+                onboardingDismissed ? (
+                  <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans, marginTop: 8 }]}>Aún no tenés plantillas. Creá una para reutilizar planes entre alumnos.</Text>
+                ) : null
+              ) : (
+                templates.map((t) => {
+                  const kcal = t.daily_calories ?? 0
+                  const p = t.protein_g ?? 0
+                  const c = t.carbs_g ?? 0
+                  const f = t.fats_g ?? 0
+                  const split = macroCalorieSplit(kcal, p, c, f)
+                  const goal = goalLabel(t.goal_type)
+                  const chips = t.mealNames.slice(0, 8)
+                  return (
+                    <View key={t.id} style={[styles.tplCard, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.xl }]}>
+                      <View style={styles.tplHead}>
+                        <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+                          <View style={styles.tplTitleRow}>
+                            {goal ? (
+                              <View style={[styles.goalBadge, { backgroundColor: theme.secondary }]}>
+                                <Text style={[styles.goalBadgeText, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{goal.toUpperCase()}</Text>
+                              </View>
+                            ) : null}
+                            <Text style={[styles.tplName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{t.name}</Text>
+                          </View>
+                          {t.description ? (
+                            <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={2}>{t.description}</Text>
+                          ) : null}
+                        </View>
+                        <View style={styles.tplHeadActions}>
+                          <TouchableOpacity onPress={() => router.push(`/coach/nutrition-builder?templateId=${t.id}`)} hitSlop={6} style={styles.iconBtnSm}><Pencil size={16} color={theme.mutedForeground} /></TouchableOpacity>
+                          <TouchableOpacity disabled={dupBusy === t.id} onPress={() => duplicate(t)} hitSlop={6} style={styles.iconBtnSm}><Copy size={16} color={dupBusy === t.id ? theme.muted : theme.mutedForeground} /></TouchableOpacity>
+                          <TouchableOpacity onPress={() => confirmDeleteTemplate(t)} hitSlop={6} style={styles.iconBtnSm}><Trash2 size={16} color={theme.destructive} /></TouchableOpacity>
+                        </View>
+                      </View>
+
+                      {/* Macro grid 4 celdas (kcal/P/C/G) */}
+                      <View style={styles.tplMacroGrid}>
+                        <TplMacroCell theme={theme} label="Kcal" value={String(kcal)} color="#F97316" />
+                        <TplMacroCell theme={theme} label="P" value={`${p}g`} color="#3B82F6" />
+                        <TplMacroCell theme={theme} label="C" value={`${c}g`} color="#10B981" />
+                        <TplMacroCell theme={theme} label="G" value={`${f}g`} color="#8B5CF6" />
+                      </View>
+
+                      {/* Barra de split de macros */}
+                      {kcal > 0 ? (
+                        <View style={[styles.splitBar, { backgroundColor: theme.secondary }]}>
+                          <View style={{ width: `${split.pPct}%`, backgroundColor: '#3B82F6CC' }} />
+                          <View style={{ width: `${split.cPct}%`, backgroundColor: '#10B981CC' }} />
+                          <View style={{ width: `${split.fPct}%`, backgroundColor: '#8B5CF6CC' }} />
+                        </View>
+                      ) : null}
+
+                      {/* Chips de comidas */}
+                      <View style={styles.tplChipWrap}>
+                        {chips.length === 0 ? (
+                          <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sin comidas en la plantilla</Text>
+                        ) : (
+                          <>
+                            {chips.map((name, i) => (
+                              <View key={`${t.id}-chip-${i}`} style={[styles.mealChip, { borderColor: theme.border }]}>
+                                <Text style={[styles.mealChipText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>{name}</Text>
+                              </View>
+                            ))}
+                            {t.mealNames.length > 8 ? (
+                              <View style={[styles.mealChip, { borderColor: theme.border }]}><Text style={[styles.mealChipText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>+{t.mealNames.length - 8}</Text></View>
+                            ) : null}
+                          </>
+                        )}
+                      </View>
+
+                      {/* Footer: N comidas + N activos + Asignar + Ver plan */}
+                      <View style={[styles.tplFooter, { borderTopColor: theme.border }]}>
+                        <View style={styles.tplFooterMeta}>
+                          <UtensilsCrossed size={13} color={theme.mutedForeground} />
+                          <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{t.mealCount} comidas</Text>
+                          {t.assignedCount > 0 ? (
+                            <View style={[styles.activeCountPill, { backgroundColor: theme.primary + '1A' }]}>
+                              <Users size={11} color={theme.primary} />
+                              <Text style={[styles.activeCountText, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>{t.assignedCount} activos</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        <View style={styles.tplFooterBtns}>
+                          <TouchableOpacity onPress={() => { setAssignIds([]); setAssignTemplate(t) }} activeOpacity={0.85} style={[styles.tplPrimaryBtn, { backgroundColor: theme.primary }]}>
+                            <Users size={13} color={theme.primaryForeground} />
+                            <Text style={[styles.tplPrimaryBtnText, { color: theme.primaryForeground, fontFamily: 'Inter_700Bold' }]}>Asignar</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => router.push(`/coach/nutrition-builder?templateId=${t.id}`)} activeOpacity={0.85} style={[styles.tplGhostBtn, { borderColor: theme.border }]}>
+                            <Text style={[styles.tplGhostBtnText, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>Ver plan</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  )
+                })
               )}
             </ScrollView>
           ) : tab === 'clients' ? (
@@ -238,8 +441,28 @@ export default function CoachNutricionScreen() {
               {!selectedClient ? (
                 board.length ? (
                   <ScrollView contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
-                    <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Adherencia 7 días · peor primero. Tocá para gestionar el plan.</Text>
-                    {board.map((row) => {
+                    {/* Buscador + orden (espejo ActivePlansBoard web) */}
+                    <View style={[styles.searchBar, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+                      <Search size={16} color={theme.mutedForeground} />
+                      <TextInput value={boardQuery} onChangeText={setBoardQuery} placeholder="Buscar por alumno o plan…" placeholderTextColor={theme.mutedForeground}
+                        autoCapitalize="none" style={[styles.searchInput, { color: theme.foreground, fontFamily: theme.fontSans }]} />
+                      {boardQuery.length > 0 ? <TouchableOpacity onPress={() => setBoardQuery('')} hitSlop={8}><X size={16} color={theme.mutedForeground} /></TouchableOpacity> : null}
+                    </View>
+                    <View style={styles.sortRow}>
+                      {(['name', 'plan', 'updated'] as const).map((k) => {
+                        const on = boardSort === k
+                        return (
+                          <TouchableOpacity key={k} onPress={() => setBoardSort(k)} activeOpacity={0.8}
+                            style={[styles.sortChip, { borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary : 'transparent' }]}>
+                            <Text style={{ fontSize: 10, fontFamily: 'Inter_700Bold', letterSpacing: 0.5, textTransform: 'uppercase', color: on ? theme.primaryForeground : theme.mutedForeground }}>
+                              {k === 'name' ? 'Alumno' : k === 'plan' ? 'Plan' : 'Adherencia'}
+                            </Text>
+                          </TouchableOpacity>
+                        )
+                      })}
+                    </View>
+                    <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Adherencia 7 días. Tocá para gestionar el plan.</Text>
+                    {boardFiltered.map((row) => {
                       const c = adherenceColorFor(row.avg7d)
                       return (
                         <TouchableOpacity key={row.clientId} activeOpacity={0.85}
@@ -256,6 +479,29 @@ export default function CoachNutricionScreen() {
                         </TouchableOpacity>
                       )
                     })}
+
+                    {/* Sin plan activo (espejo clientsWithoutPlan web) */}
+                    {clientsWithoutPlan.length > 0 ? (
+                      <View style={{ gap: 8, marginTop: 8 }}>
+                        <View style={styles.sinPlanHead}>
+                          <Users size={14} color={theme.foreground} />
+                          <Text style={[styles.sinPlanTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>Sin plan activo ({clientsWithoutPlan.length})</Text>
+                        </View>
+                        {clientsWithoutPlan.map((cwp) => (
+                          <TouchableOpacity key={cwp.id} activeOpacity={0.85} onPress={() => selectClient(cwp)}
+                            style={[styles.sinPlanCard, { borderColor: '#F59E0B55', backgroundColor: theme.card, borderRadius: theme.radius.lg }]}>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text style={[styles.boardName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{cwp.full_name}</Text>
+                              <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 10 }]}>Asigná desde Plantillas</Text>
+                            </View>
+                            <View style={[styles.sinPlanBtn, { backgroundColor: theme.primary }]}>
+                              <Plus size={13} color={theme.primaryForeground} />
+                              <Text style={[styles.sinPlanBtnText, { color: theme.primaryForeground, fontFamily: 'Inter_700Bold' }]}>Asignar</Text>
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    ) : null}
                   </ScrollView>
                 ) : (
                   <EmptyState icon={UtensilsCrossed} title="Elegí un alumno" subtitle="Tocá un nombre arriba para ver y crear sus planes." />
@@ -330,24 +576,20 @@ export default function CoachNutricionScreen() {
                 />
               )}
             </View>
-          ) : (
-            <View style={styles.tabBody}>
+          ) : tab === 'foods' ? (
+            <ScrollView contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
+              {/* Section heading (espejo SectionHeading "Biblioteca nutricional") */}
+              <View style={[styles.sectionHead, { borderBottomColor: theme.primary + '33' }]}>
+                <View style={[styles.sectionIcon, { backgroundColor: theme.primary + '1A' }]}><Apple size={18} color={theme.primary} /></View>
+                <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>Biblioteca nutricional</Text>
+              </View>
+
               <TouchableOpacity onPress={() => router.push('/coach/foods')} activeOpacity={0.85}
                 style={[styles.foodsCta, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
                 <View style={[styles.foodsIcon, { backgroundColor: theme.primary + '1A' }]}><Apple size={22} color={theme.primary} /></View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.foodsTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Biblioteca de alimentos</Text>
-                  <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{foodsCount} alimento{foodsCount !== 1 ? 's' : ''} · crear / editar / borrar</Text>
-                </View>
-                <ChevronRight size={20} color={theme.mutedForeground} />
-              </TouchableOpacity>
-
-              <TouchableOpacity onPress={() => router.push('/coach/recipes')} activeOpacity={0.85}
-                style={[styles.foodsCta, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-                <View style={[styles.foodsIcon, { backgroundColor: theme.primary + '1A' }]}><ChefHat size={22} color={theme.primary} /></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.foodsTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Recetas</Text>
-                  <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Ideas inspiracionales para tus alumnos</Text>
+                  <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{foodsCount} alimento{foodsCount !== 1 ? 's' : ''} · catálogo global y tus customs</Text>
                 </View>
                 <ChevronRight size={20} color={theme.mutedForeground} />
               </TouchableOpacity>
@@ -361,7 +603,53 @@ export default function CoachNutricionScreen() {
                 </View>
                 <ChevronRight size={20} color={theme.mutedForeground} />
               </TouchableOpacity>
-            </View>
+            </ScrollView>
+          ) : (
+            // ── Tab Recetas (espejo RecipeLibrary web, BASE tier) ──
+            <ScrollView contentContainerStyle={styles.tabBody} showsVerticalScrollIndicator={false}>
+              <View style={[styles.sectionHead, { borderBottomColor: theme.primary + '33' }]}>
+                <View style={[styles.sectionIcon, { backgroundColor: theme.primary + '1A' }]}><ChefHat size={18} color={theme.primary} /></View>
+                <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>Recetas</Text>
+                <View style={[styles.tierBadge, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
+                  <Text style={[styles.tierBadgeText, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>BASE</Text>
+                </View>
+              </View>
+              <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                Ideas de recetas para inspirar a tus alumnos. Viene incluido en el módulo de nutrición (Base). No afectan macros ni adherencia.
+              </Text>
+
+              <TouchableOpacity onPress={() => router.push('/coach/recipes')} activeOpacity={0.85}
+                style={[styles.newPlanBtn, { borderColor: theme.primary + '55', marginBottom: 4 }]}>
+                <Plus size={16} color={theme.primary} />
+                <Text style={[styles.newPlanText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Nueva receta</Text>
+              </TouchableOpacity>
+
+              {recipes.length === 0 ? (
+                <View style={{ paddingTop: 24 }}>
+                  <EmptyState icon={ChefHat} title="Todavía no tienes recetas" subtitle="Toca el botón para crear ideas de recetas que inspiren a tus alumnos." />
+                </View>
+              ) : (
+                recipes.map((r) => (
+                  <TouchableOpacity key={r.id} activeOpacity={0.85} onPress={() => router.push('/coach/recipes')}
+                    style={[styles.recipeCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+                    {r.image_url ? (
+                      <Image source={{ uri: r.image_url }} style={styles.recipeImage} resizeMode="cover" />
+                    ) : (
+                      <View style={[styles.recipeImagePlaceholder, { backgroundColor: theme.primary + '14' }]}>
+                        <ChefHat size={26} color={theme.primary + '88'} />
+                      </View>
+                    )}
+                    <View style={styles.recipeBody}>
+                      <Text style={[styles.recipeName, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]} numberOfLines={2}>{r.name}</Text>
+                      {r.ingredients_text ? (
+                        <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={2}>{r.ingredients_text}</Text>
+                      ) : null}
+                    </View>
+                    <ChevronRight size={18} color={theme.mutedForeground} />
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
           )}
         </View>
       )}
@@ -414,14 +702,42 @@ export default function CoachNutricionScreen() {
       </NativeDialog>
 
       {/* Guía: logística synced/custom */}
-      <NativeDialog open={guideOpen} title="Cómo funciona" onClose={() => setGuideOpen(false)}>
-        <View style={{ gap: 12 }}>
+      <NativeDialog open={guideOpen} title="Guía rápida — Nutrición" onClose={() => setGuideOpen(false)}>
+        <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ gap: 12 }} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Tres pasos para sacar provecho al módulo. Podés volver acá cuando quieras.</Text>
           <GuideRow theme={theme} color={theme.primary} title="1. Plantillas (moldes)" text="Son moldes reutilizables. No pertenecen a un alumno hasta que las asignás. Si editás una plantilla, los alumnos SINCRONIZADOS se actualizan con ese molde." />
           <GuideRow theme={theme} color={theme.success} title="2. Alumnos (planes activos)" text="Al asignar una plantilla, el plan del alumno queda SINCRONIZADO con el molde." />
           <GuideRow theme={theme} color="#F59E0B" title="3. Edición individual (custom)" text="Si ajustás el plan solo para un alumno, pasa a PERSONALIZADO y deja de seguir el molde (editar la plantilla ya no lo cambia)." />
-        </View>
+
+          {/* Qué incluye nutrición (espejo NUTRITION_SURFACES web) */}
+          <View style={[styles.guideDivider, { borderTopColor: theme.border }]} />
+          <Text style={[styles.guideSectionTitle, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>QUÉ INCLUYE NUTRICIÓN</Text>
+          {NUTRITION_SURFACES.map((s) => {
+            const isPro = s.tier === 'pro'
+            return (
+              <View key={s.label} style={styles.surfaceRow}>
+                <View style={[styles.tierBadge, { backgroundColor: isPro ? theme.primary + '1A' : theme.secondary, borderColor: isPro ? theme.primary + '55' : theme.border }]}>
+                  <Text style={[styles.tierBadgeText, { color: isPro ? theme.primary : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{isPro ? 'PRO' : 'BASE'}</Text>
+                </View>
+                <View style={{ flex: 1, gap: 1 }}>
+                  <Text style={[styles.surfaceLabel, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{s.label}</Text>
+                  <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{s.description}</Text>
+                </View>
+              </View>
+            )
+          })}
+        </ScrollView>
       </NativeDialog>
     </SafeAreaView>
+  )
+}
+
+function TplMacroCell({ theme, label, value, color }: { theme: any; label: string; value: string; color: string }) {
+  return (
+    <View style={[styles.tplMacroCell, { backgroundColor: color + '14', borderColor: color + '33' }]}>
+      <Text style={[styles.tplMacroLabel, { color, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+      <Text style={[styles.tplMacroValue, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{value}</Text>
+    </View>
   )
 }
 
@@ -492,13 +808,73 @@ const styles = StyleSheet.create({
   actionText: { fontSize: 13 },
   copyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
   copyName: { fontSize: 14, flex: 1 },
-  tplCard: { borderWidth: 1, padding: 12, gap: 4 },
-  tplName: { fontSize: 15 },
-  tplActions: { flexDirection: 'row', gap: 14, marginTop: 6 },
-  tplBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  tplBtnText: { fontSize: 13 },
+  tplCard: { borderWidth: 1, padding: 14, gap: 10 },
+  tplName: { fontSize: 16, flexShrink: 1 },
+  tplHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  tplTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  tplHeadActions: { flexDirection: 'row', gap: 2 },
+  iconBtnSm: { padding: 5 },
+  goalBadge: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  goalBadgeText: { fontSize: 8.5, letterSpacing: 0.5 },
+  tplMacroGrid: { flexDirection: 'row', gap: 6 },
+  tplMacroCell: { flex: 1, borderWidth: 1, borderRadius: 9, paddingVertical: 6, alignItems: 'center', gap: 1 },
+  tplMacroLabel: { fontSize: 8.5, textTransform: 'uppercase', letterSpacing: 0.3 },
+  tplMacroValue: { fontSize: 13 },
+  splitBar: { flexDirection: 'row', height: 7, borderRadius: 999, overflow: 'hidden' },
+  tplChipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  mealChip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, maxWidth: 150 },
+  mealChipText: { fontSize: 10 },
+  tplFooter: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10, gap: 8 },
+  tplFooterMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  activeCountPill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  activeCountText: { fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.5 },
+  tplFooterBtns: { flexDirection: 'row', gap: 8 },
+  tplPrimaryBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, height: 36, borderRadius: 10 },
+  tplPrimaryBtnText: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  tplGhostBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 36, borderWidth: 1, borderRadius: 10 },
+  tplGhostBtnText: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
   foodsCta: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, padding: 16 },
   foodsIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   foodsTitle: { fontSize: 15 },
   guideTitle: { fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.3 },
+  // Section headings
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: 2, paddingBottom: 8, marginBottom: 4 },
+  sectionIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  sectionTitle: { fontSize: 17, textTransform: 'uppercase', letterSpacing: -0.3 },
+  tierBadge: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  tierBadgeText: { fontSize: 8.5, letterSpacing: 0.5 },
+  // Onboarding
+  onboardCard: { borderWidth: 1, borderStyle: 'dashed', borderRadius: 16, padding: 16, gap: 12 },
+  onboardTitle: { fontSize: 16, letterSpacing: -0.3 },
+  onboardStep: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 6 },
+  onboardStepHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  onboardStepIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  onboardStepNum: { fontSize: 9.5, letterSpacing: 0.8 },
+  onboardStepTitle: { fontSize: 13.5 },
+  onboardCta: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  onboardCtaText: { fontSize: 12 },
+  onboardFooter: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  onboardDismiss: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 6 },
+  // Board search/sort
+  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, height: 44 },
+  searchInput: { flex: 1, fontSize: 15 },
+  sortRow: { flexDirection: 'row', gap: 8 },
+  sortChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  // Sin plan activo
+  sinPlanHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sinPlanTitle: { fontSize: 13, textTransform: 'uppercase', letterSpacing: -0.2 },
+  sinPlanCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, padding: 12 },
+  sinPlanBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7 },
+  sinPlanBtnText: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  // Recipes tab
+  recipeCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, padding: 10 },
+  recipeImage: { width: 64, height: 64, borderRadius: 10 },
+  recipeImagePlaceholder: { width: 64, height: 64, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  recipeBody: { flex: 1, minWidth: 0, gap: 3 },
+  recipeName: { fontSize: 15, lineHeight: 19 },
+  // Guide surfaces
+  guideDivider: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 2 },
+  guideSectionTitle: { fontSize: 10.5, letterSpacing: 0.8 },
+  surfaceRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  surfaceLabel: { fontSize: 13 },
 })

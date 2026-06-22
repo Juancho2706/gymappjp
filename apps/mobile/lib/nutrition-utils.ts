@@ -7,6 +7,8 @@ export type FoodMacrosRow = {
   fats_g: number
   serving_size: number
   serving_unit: string | null
+  household_grams?: number | null
+  household_label?: string | null
 }
 
 export type FoodItemForMacros = {
@@ -48,6 +50,8 @@ export type NutritionMealMacroSource = {
       fats_g?: number
       serving_size?: number
       serving_unit?: string | null
+      household_grams?: number | null
+      household_label?: string | null
     } | null
   }>
 }
@@ -84,6 +88,66 @@ export function coerceSwapOptionUnit(unit: string | null | undefined, isLiquid: 
   const u = String(unit ?? '').toLowerCase()
   if (allowed.includes(u)) return u as 'g' | 'un' | 'ml'
   return isLiquid ? 'ml' : 'g'
+}
+
+// ─── Medidas caseras (household) — espejo verbatim de @eva/nutrition-engine#gramsToHousehold ──
+const COMMON_FRACTIONS: Array<{ value: number; glyph: string }> = [
+  { value: 0.25, glyph: '¼' },
+  { value: 0.333, glyph: '⅓' },
+  { value: 0.5, glyph: '½' },
+  { value: 0.667, glyph: '⅔' },
+  { value: 0.75, glyph: '¾' },
+]
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10
+}
+
+function pluralizeLabel(label: string, count: number): string {
+  if (count <= 1) return label
+  const last = label.slice(-1).toLowerCase()
+  if ('aeiou'.includes(last)) return `${label}s`
+  return `${label}es`
+}
+
+function formatHouseholdCount(count: number, label: string): string {
+  if (!Number.isFinite(count) || count <= 0) return ''
+  if (count < 1) {
+    let best: string | null = null
+    let bestDiff = Infinity
+    for (const f of COMMON_FRACTIONS) {
+      const diff = Math.abs(count - f.value)
+      if (diff < bestDiff && diff <= 0.06) {
+        bestDiff = diff
+        best = f.glyph
+      }
+    }
+    if (best) return `${best} ${label}`
+    return `${round1(count)} ${pluralizeLabel(label, count)}`
+  }
+  const rounded = Math.round(count)
+  const value = Math.abs(count - rounded) <= 0.06 ? rounded : round1(count)
+  return `${value} ${pluralizeLabel(label, value)}`
+}
+
+/**
+ * Rotula una cantidad en gramos con su equivalente casero aproximado.
+ * Ej.: household_grams=120, household_label='taza', grams=120 → '120 g (1 taza)'.
+ * Sin household_grams/label válidos → solo la masa: '120 g'.
+ */
+export function gramsToHousehold(
+  food: { household_grams?: number | null; household_label?: string | null },
+  grams: number
+): string {
+  const g = Number(grams)
+  const safeG = Number.isFinite(g) ? Math.round(g) : 0
+  const base = `${safeG} g`
+  const hg = Number(food.household_grams)
+  const label = typeof food.household_label === 'string' ? food.household_label.trim() : ''
+  if (!Number.isFinite(hg) || hg <= 0 || !label) return base
+  const count = g / hg
+  const rotulo = formatHouseholdCount(count, label)
+  return rotulo ? `${base} (${rotulo})` : base
 }
 
 export function sumMealMacros(meal: { food_items: FoodItemForMacros[] }) {
@@ -155,6 +219,8 @@ export function normalizeMealForMacros(meal: NutritionMealMacroSource): MealWith
         fats_g: fi.foods?.fats_g ?? 0,
         serving_size: fi.foods?.serving_size ?? 100,
         serving_unit: fi.foods?.serving_unit ?? null,
+        household_grams: fi.foods?.household_grams ?? null,
+        household_label: fi.foods?.household_label ?? null,
       },
     })),
   }

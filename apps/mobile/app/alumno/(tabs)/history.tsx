@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react'
 import {
-  SectionList,
+  FlatList,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native'
-import { History } from 'lucide-react-native'
+import { Dumbbell, History } from 'lucide-react-native'
+import { MotiView } from 'moti'
 import { getClientProfile } from '../../../lib/client'
 import {
   getWorkoutDaySummaries,
+  type DaySummary,
   HISTORY_DAYS_DEFAULT,
   HISTORY_DAYS_EXTENDED,
 } from '../../../lib/history.queries'
@@ -24,7 +26,7 @@ export default function HistoryScreen() {
   const [loading, setLoading] = useState(true)
   const [expanding, setExpanding] = useState(false)
   const [daysBack, setDaysBack] = useState(HISTORY_DAYS_DEFAULT)
-  const [sections, setSections] = useState<{ title: string; subtitle: string; data: string[] }[]>([])
+  const [items, setItems] = useState<DaySummary[]>([])
 
   useEffect(() => { load(HISTORY_DAYS_DEFAULT).catch(() => setLoading(false)) }, [])
 
@@ -35,11 +37,7 @@ export default function HistoryScreen() {
 
     // Conteo de series por día agregado en DB (RPC) — 90d por defecto, 180d al "ver más".
     const summaries = await getWorkoutDaySummaries(client.id, days)
-    setSections(summaries.map((s) => ({
-      title: s.dateLabel,
-      subtitle: s.subtitle,
-      data: [s.dayKey],
-    })))
+    setItems(summaries)
     setDaysBack(days)
     setLoading(false)
   }
@@ -63,7 +61,7 @@ export default function HistoryScreen() {
     )
   }
 
-  if (sections.length === 0) {
+  if (items.length === 0) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <AppBackground />
@@ -76,35 +74,45 @@ export default function HistoryScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => item}
+      <FlatList
+        data={items}
+        keyExtractor={(item) => item.dayKey}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
-          <ScreenHeader title="Historial" subtitle={`${sections.length} días de entrenamiento`} />
+          <ScreenHeader title="Historial" subtitle={`${items.length} días de entrenamiento`} />
         }
-        renderSectionHeader={({ section }) => (
-          <View style={[styles.sectionHeader, { backgroundColor: theme.background }]}>
-            <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-              {section.title}
-            </Text>
-            <Text style={[styles.sectionSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              {section.subtitle}
-            </Text>
-          </View>
+        renderItem={({ item, index }) => (
+          <MotiView
+            from={{ opacity: 0, translateY: 8 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 280, delay: Math.min(index * 30, 240) }}
+          >
+            <View
+              style={[
+                styles.row,
+                index < items.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
+              ]}
+            >
+              <View style={[styles.icon, { backgroundColor: theme.primary + '1A', borderRadius: theme.radius.md }]}>
+                <Dumbbell size={16} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={[styles.dateLabel, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>
+                  {item.dateLabel}
+                </Text>
+                <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                  {item.subtitle}
+                </Text>
+              </View>
+              <Text style={[styles.count, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
+                {item.sets} {item.sets === 1 ? 'serie' : 'series'}
+              </Text>
+            </View>
+          </MotiView>
         )}
-        renderItem={({ item }) => (
-          <View style={[styles.dayCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-            <View style={[styles.dayDot, { backgroundColor: theme.primary }]} />
-            <Text style={[styles.dayLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              {item}
-            </Text>
-          </View>
-        )}
-        SectionSeparatorComponent={() => <View style={{ height: 4 }} />}
         ListFooterComponent={
-          daysBack < HISTORY_DAYS_EXTENDED && sections.length > 0 ? (
+          daysBack < HISTORY_DAYS_EXTENDED && items.length > 0 ? (
             <TouchableOpacity
               activeOpacity={0.82}
               onPress={showMore}
@@ -125,12 +133,11 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   list: { paddingHorizontal: 16, paddingBottom: 40 },
-  sectionHeader: { paddingTop: 16, paddingBottom: 6 },
-  sectionTitle: { fontSize: 17, letterSpacing: -0.2 },
-  sectionSub: { fontSize: 12, marginTop: 2 },
-  dayCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderWidth: 1, marginBottom: 4 },
-  dayDot: { width: 8, height: 8, borderRadius: 4 },
-  dayLabel: { fontSize: 13 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  icon: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  dateLabel: { fontSize: 14 },
+  subtitle: { fontSize: 10, marginTop: 1 },
+  count: { fontSize: 12 },
   moreBtn: { marginTop: 14, paddingVertical: 13, alignItems: 'center', borderWidth: 1 },
   moreTxt: { fontSize: 14 },
 })

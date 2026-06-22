@@ -5,7 +5,7 @@ import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import QRCode from 'react-native-qrcode-svg'
-import { Camera, Check, ImageIcon, Info, Lock, Palette, Share2, Sparkles, Type } from 'lucide-react-native'
+import { Camera, Check, ImageIcon, Info, Lock, MessageSquare, Palette, RotateCcw, Share2, Smartphone, Sparkles, Type, Zap } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, ScreenHeader, Section, InfoRow } from '../../../components'
 import { EvaLoader, EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -22,8 +22,56 @@ import {
 } from '../../../lib/coach-brand'
 import { saveStoredBranding, type CoachBranding } from '../../../lib/branding'
 
-const COLOR_PRESETS = ['#007AFF', '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#06B6D4', '#F97316']
+// Espejo del PRESET_COLORS de la web (BrandSettingsForm) — 8 presets, sin #007AFF (es el default,
+// se restaura con el boton "Restaurar por defecto"). El hue grid extra (M-F9) se mantiene debajo.
+const COLOR_PRESETS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#06B6D4', '#F97316']
+const DEFAULT_BRAND_COLOR = '#007AFF'
 const WORDMARK_COLORS = ['#8B5CF6', '#06B6D4', '#10B981']
+
+// Espejo de generateBrandPalette (web src/lib/color-utils.ts): paleta auto desde el color primario.
+function hexToHslArr(hex: string): [number, number, number] {
+  const clean = hex.replace('#', '')
+  const r = parseInt(clean.substring(0, 2), 16) / 255
+  const g = parseInt(clean.substring(2, 4), 16) / 255
+  const b = parseInt(clean.substring(4, 6), 16) / 255
+  const max = Math.max(r, g, b), min = Math.min(r, g, b)
+  let h = 0, s = 0
+  const l = (max + min) / 2
+  if (max !== min) {
+    const d = max - min
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break
+      case g: h = (b - r) / d + 2; break
+      case b: h = (r - g) / d + 4; break
+    }
+    h *= 60
+  }
+  return [Math.round(h), Math.round(s * 100), Math.round(l * 100)]
+}
+function hslToHex2(h: number, s: number, l: number): string {
+  const sN = s / 100, lN = l / 100
+  const c = (1 - Math.abs(2 * lN - 1)) * sN
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const m = lN - c / 2
+  let r = 0, g = 0, b = 0
+  if (h < 60) { r = c; g = x } else if (h < 120) { r = x; g = c }
+  else if (h < 180) { g = c; b = x } else if (h < 240) { g = x; b = c }
+  else if (h < 300) { r = x; b = c } else { r = c; b = x }
+  const toHex = (n: number) => { const v = Math.round((n + m) * 255).toString(16); return v.length === 1 ? '0' + v : v }
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+}
+function brandPalette(primaryHex: string) {
+  const safe = /^#[0-9a-fA-F]{6}$/.test(primaryHex) ? primaryHex : DEFAULT_BRAND_COLOR
+  const [h, s, l] = hexToHslArr(safe)
+  return {
+    primary: safe,
+    primaryDark: hslToHex2(h, Math.min(s + 10, 100), Math.max(l - 15, 10)),
+    primaryLight: hslToHex2(h, Math.max(s - 10, 0), Math.min(l + 20, 95)),
+    primarySurface: hslToHex2(h, Math.max(s - 20, 0), Math.min(l + 35, 97)),
+    primaryGlow: hslToHex2(h, s, Math.min(l + 10, 90)),
+  }
+}
 
 // M-F8: contraste WCAG del color de marca como fondo de botón (texto blanco vs negro).
 function relLuminance(hex: string): number | null {
@@ -117,15 +165,19 @@ export default function MiMarcaScreen() {
   }, [])
 
   const isGradient = !loaderTextColor
+  // Espejo EXACTO del brandScore de la web (BrandSettingsForm): logo 25 · color≠default 20 ·
+  // mensaje bienvenida 15 · loader custom + texto 15 · modal bienvenida + contenido 15 ·
+  // marca distinta del nombre completo 10.
   const brandScore = useMemo(() => {
     let s = 0
     if (logoUrl) s += 25
-    if (color && color.toLowerCase() !== '#007aff') s += 20
+    if (color && color.toLowerCase() !== DEFAULT_BRAND_COLOR.toLowerCase()) s += 20
     if (welcomeMessage.trim()) s += 15
-    if (useCustomLoader && loaderText.trim()) s += 20
-    if (brandName.trim().length >= 2) s += 20
+    if (useCustomLoader && loaderText.trim()) s += 15
+    if (welcomeModalEnabled && welcomeModalContent.trim()) s += 15
+    if (brandName && brandName !== fullName) s += 10
     return Math.min(100, s)
-  }, [logoUrl, color, welcomeMessage, useCustomLoader, loaderText, brandName])
+  }, [logoUrl, color, welcomeMessage, useCustomLoader, loaderText, welcomeModalEnabled, welcomeModalContent, brandName, fullName])
 
   async function pickLogo() {
     setError(null)
@@ -223,6 +275,15 @@ export default function MiMarcaScreen() {
       <ScreenHeader title="Mi Marca" subtitle="Personalizá la app de tus alumnos" />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Intro (espejo web: page.tsx header + WhatChangesList) */}
+        <Text style={[styles.introTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+          Personaliza la app de tus alumnos
+        </Text>
+        <Text style={[styles.introBody, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          Tus alumnos instalan tu app como si fuera tuya. Aquí defines cómo se ve: logo, colores, nombre y mensajes. Cada alumno ve TU marca, no la de EVA.
+        </Text>
+        <WhatChangesList theme={theme} />
+
         {/* Brand score */}
         <View style={styles.scoreRow}>
           <Text style={[styles.scoreLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Marca completada</Text>
@@ -336,16 +397,56 @@ export default function MiMarcaScreen() {
                 ))}
               </View>
               <Field theme={theme} label="Hex personalizado" value={color} onChangeText={(v: string) => setColor(v.startsWith('#') ? v : `#${v}`)} placeholder="#007AFF" autoCapitalize="characters" />
+              <View style={styles.contrastRow}>
+                {(() => {
+                  const ci = contrastInfo(color)
+                  if (!ci) return null
+                  const okColor = ci.aa ? theme.success : ci.aaLarge ? '#F59E0B' : theme.destructive
+                  return (
+                    <Text style={{ flex: 1, fontSize: 12, color: okColor, fontFamily: 'Inter_600SemiBold' }}>
+                      Texto {ci.txt} sobre tu color: {ci.ratio.toFixed(1)}:1 · {ci.aa ? 'AA ✓' : ci.aaLarge ? 'AA solo texto grande' : 'contraste bajo ⚠'}
+                    </Text>
+                  )
+                })()}
+                {color.toLowerCase() !== DEFAULT_BRAND_COLOR.toLowerCase() ? (
+                  <TouchableOpacity onPress={() => setColor(DEFAULT_BRAND_COLOR)} activeOpacity={0.7} style={styles.resetBtn} hitSlop={6}>
+                    <RotateCcw size={12} color={theme.mutedForeground} />
+                    <Text style={{ fontSize: 12, color: theme.mutedForeground, fontFamily: theme.fontSans }}>Restaurar por defecto</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              {/* Paleta generada automáticamente (espejo web) */}
+              <Text style={[styles.paletteLabel, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>PALETA GENERADA AUTOMÁTICAMENTE</Text>
               {(() => {
-                const ci = contrastInfo(color)
-                if (!ci) return null
-                const okColor = ci.aa ? theme.success : ci.aaLarge ? '#F59E0B' : theme.destructive
+                const p = brandPalette(color)
+                const cells = [
+                  { label: 'Primario', c: p.primary },
+                  { label: 'Oscuro', c: p.primaryDark },
+                  { label: 'Claro', c: p.primaryLight },
+                  { label: 'Superficie', c: p.primarySurface },
+                  { label: 'Brillo', c: p.primaryGlow },
+                ]
                 return (
-                  <Text style={{ fontSize: 12, color: okColor, fontFamily: 'Inter_600SemiBold' }}>
-                    Texto {ci.txt} sobre tu color: {ci.ratio.toFixed(1)}:1 · {ci.aa ? 'AA ✓' : ci.aaLarge ? 'AA solo texto grande' : 'contraste bajo ⚠'}
-                  </Text>
+                  <View style={styles.paletteRow}>
+                    {cells.map((cell) => (
+                      <View key={cell.label} style={styles.paletteCell}>
+                        <View style={[styles.paletteSwatch, { backgroundColor: cell.c, borderColor: theme.border }]} />
+                        <Text style={[styles.paletteCellLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{cell.label}</Text>
+                      </View>
+                    ))}
+                  </View>
                 )
               })()}
+
+              {/* Vista previa del botón principal (espejo web) */}
+              <View style={[styles.btnPreviewWrap, { borderColor: theme.border, backgroundColor: theme.muted }]}>
+                <Text style={[styles.btnPreviewLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Vista previa del botón principal</Text>
+                <View style={[styles.btnPreview, { backgroundColor: /^#[0-9a-fA-F]{6}$/.test(color) ? color : DEFAULT_BRAND_COLOR }]}>
+                  <Text style={{ color: '#fff', fontSize: 14, fontFamily: 'Montserrat_700Bold' }}>Ingresar al Panel</Text>
+                </View>
+              </View>
+
               <Toggle theme={theme} label="Aplicar mis colores a la app del alumno" on={useBrandColors} onPress={() => setUseBrandColors((v) => !v)} />
             </SectionCard>
 
@@ -362,13 +463,31 @@ export default function MiMarcaScreen() {
                     value={loaderIconMode} onChange={(v) => setLoaderIconMode(v as 'eva' | 'coach' | 'none')} />
 
                   <Label theme={theme}>Estilo del texto</Label>
-                  <Segmented theme={theme}
-                    options={[{ value: 'gradient', label: 'Gradiente' }, { value: 'solid', label: 'Color sólido' }]}
-                    value={isGradient ? 'gradient' : 'solid'}
-                    onChange={(v) => setLoaderTextColor(v === 'gradient' ? '' : (loaderTextColor || color))} />
+                  {/* Espejo web: dos cards con preview en vivo del wordmark (gradiente vs sólido). */}
+                  <View style={styles.styleCardRow}>
+                    <TouchableOpacity
+                      onPress={() => setLoaderTextColor('')}
+                      activeOpacity={0.85}
+                      style={[styles.styleCard, { borderColor: isGradient ? theme.primary : theme.border, backgroundColor: isGradient ? theme.primary + '0D' : theme.card }]}
+                    >
+                      <BrandWordmark text={(loaderText || 'EVA').toUpperCase()} gradient solidColor={color} />
+                      <Text style={[styles.styleCardLabel, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>GRADIENTE ANIMADO</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setLoaderTextColor(loaderTextColor || color)}
+                      activeOpacity={0.85}
+                      style={[styles.styleCard, { borderColor: !isGradient ? theme.primary : theme.border, backgroundColor: !isGradient ? theme.primary + '0D' : theme.card }]}
+                    >
+                      <BrandWordmark text={(loaderText || 'EVA').toUpperCase()} gradient={false} solidColor={loaderTextColor || color} />
+                      <Text style={[styles.styleCardLabel, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>COLOR SÓLIDO</Text>
+                    </TouchableOpacity>
+                  </View>
                   {!isGradient ? (
                     <Field theme={theme} label="Color del texto (hex)" value={loaderTextColor} onChangeText={(v: string) => setLoaderTextColor(v.startsWith('#') || v === '' ? v : `#${v}`)} placeholder={color} autoCapitalize="characters" />
                   ) : null}
+                  <Text style={{ fontSize: 11, color: theme.mutedForeground, fontFamily: theme.fontSans, lineHeight: 15 }}>
+                    Gradiente: el mismo estilo animado que usa EVA. Color sólido: tu color de marca con animación de pulso.
+                  </Text>
                 </>
               ) : null}
             </SectionCard>
@@ -448,6 +567,34 @@ function BrandWordmark({ text, gradient, solidColor }: { text: string; gradient:
   )
 }
 
+// Espejo de WhatChangesList.tsx (web): grid de 6 items de "qué cambia" con tu marca.
+const WHAT_CHANGES_ITEMS = [
+  { icon: Palette, label: 'Color de marca', desc: 'Botones, activos, gráficos y brillos' },
+  { icon: ImageIcon, label: 'Logo', desc: 'Login, navegación e instalación' },
+  { icon: Type, label: 'Nombre', desc: 'Título de la app y pestaña' },
+  { icon: MessageSquare, label: 'Mensaje de bienvenida', desc: 'Pantalla de login del alumno' },
+  { icon: Zap, label: 'Loader animado', desc: 'Transiciones de carga' },
+  { icon: Smartphone, label: 'Icono de app', desc: 'Pantalla de inicio del teléfono' },
+]
+
+function WhatChangesList({ theme }: { theme: any }) {
+  return (
+    <View style={styles.whatGrid}>
+      {WHAT_CHANGES_ITEMS.map(({ icon: Icon, label, desc }) => (
+        <View key={label} style={[styles.whatItem, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+          <View style={[styles.whatIcon, { backgroundColor: theme.primary + '1A' }]}>
+            <Icon size={16} color={theme.primary} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={[styles.whatLabel, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{label}</Text>
+            <Text style={[styles.whatDesc, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{desc}</Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  )
+}
+
 function SectionCard({ theme, icon: Icon, title, children }: { theme: any; icon: any; title: string; children: React.ReactNode }) {
   return (
     <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
@@ -516,6 +663,26 @@ const styles = StyleSheet.create({
   qrHint: { fontSize: 11.5, textAlign: 'center' },
   dangerText: { fontSize: 12.5, lineHeight: 18 },
   scroll: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 120, gap: 14 },
+  introTitle: { fontSize: 20, letterSpacing: -0.3, lineHeight: 26 },
+  introBody: { fontSize: 13, lineHeight: 19, marginTop: -6 },
+  whatGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  whatItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, borderWidth: 1, padding: 12, width: '48.5%' },
+  whatIcon: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  whatLabel: { fontSize: 12.5 },
+  whatDesc: { fontSize: 11, lineHeight: 14, marginTop: 2 },
+  contrastRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' },
+  resetBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  paletteLabel: { fontSize: 10, letterSpacing: 0.8, marginTop: 2 },
+  paletteRow: { flexDirection: 'row', gap: 12 },
+  paletteCell: { alignItems: 'center', gap: 4 },
+  paletteSwatch: { width: 34, height: 34, borderRadius: 9, borderWidth: 1 },
+  paletteCellLabel: { fontSize: 9 },
+  btnPreviewWrap: { borderWidth: 1, borderRadius: 12, padding: 14, gap: 10 },
+  btnPreviewLabel: { fontSize: 12 },
+  btnPreview: { alignSelf: 'flex-start', paddingHorizontal: 20, paddingVertical: 11, borderRadius: 12 },
+  styleCardRow: { flexDirection: 'row', gap: 8 },
+  styleCard: { flex: 1, borderWidth: 2, borderRadius: 12, paddingVertical: 14, alignItems: 'center', gap: 6 },
+  styleCardLabel: { fontSize: 9, letterSpacing: 0.5 },
   scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   scoreLabel: { fontSize: 12 },
   scoreValue: { fontSize: 14 },

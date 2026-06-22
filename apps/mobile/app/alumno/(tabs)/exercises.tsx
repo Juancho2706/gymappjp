@@ -14,7 +14,6 @@ import { MotiView } from 'moti'
 import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
-import { exerciseHasVideo } from '../../../lib/exercises'
 import { useTheme } from '../../../context/ThemeContext'
 import { BottomSheet, EmptyState, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -37,7 +36,6 @@ export default function ExercisesScreen() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null)
-  const [videoOnly, setVideoOnly] = useState(false)
   const [selected, setSelected] = useState<Exercise | null>(null)
 
   useEffect(() => { load().catch(() => setLoading(false)) }, [])
@@ -74,21 +72,20 @@ export default function ExercisesScreen() {
   const filtered = exercises.filter((e) => {
     const matchSearch = !search || e.name.toLowerCase().includes(search.toLowerCase())
     const matchMuscle = !selectedMuscle || selectedMuscle === 'Todos' || e.muscle_group === selectedMuscle
-    const matchVideo = !videoOnly || exerciseHasVideo(e)
-    return matchSearch && matchMuscle && matchVideo
+    return matchSearch && matchMuscle
   })
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
-      <ScreenHeader title="Aprender Técnica" subtitle="Catálogo de ejercicios" />
+      <ScreenHeader title="Aprender Técnica" subtitle="Catálogo completo de ejercicios" />
 
       <View style={styles.searchWrap}>
         <View style={[styles.searchBox, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
           <Search size={16} color={theme.mutedForeground} strokeWidth={2} />
           <TextInput
             style={[styles.searchInput, { color: theme.foreground, fontFamily: theme.fontSans }]}
-            placeholder="Buscar ejercicio..."
+            placeholder="Buscar por nombre de ejercicio..."
             placeholderTextColor={theme.mutedForeground}
             value={search}
             onChangeText={setSearch}
@@ -99,18 +96,6 @@ export default function ExercisesScreen() {
             </TouchableOpacity>
           )}
         </View>
-      </View>
-
-      <View style={styles.toggleRow}>
-        <TouchableOpacity
-          onPress={() => setVideoOnly((v) => !v)}
-          activeOpacity={0.8}
-          style={[styles.muscleChip, { backgroundColor: videoOnly ? theme.primary : theme.card, borderColor: videoOnly ? theme.primary : theme.border, borderRadius: theme.radius.lg }]}
-        >
-          <Text style={[styles.muscleChipText, { color: videoOnly ? theme.primaryForeground : theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-            Con video
-          </Text>
-        </TouchableOpacity>
       </View>
 
       {muscleGroups.length > 1 && (
@@ -147,7 +132,7 @@ export default function ExercisesScreen() {
       {loading ? (
         <EvaLoaderScreen subtitle="Cargando ejercicios…" />
       ) : filtered.length === 0 ? (
-        <EmptyState icon={BookOpen} title="Sin resultados" subtitle="Intenta con otra búsqueda o músculo." />
+        <EmptyState icon={BookOpen} title="Sin resultados" subtitle="No encontramos ejercicios que coincidan con tu búsqueda." />
       ) : (
         <FlatList
           data={filtered}
@@ -198,7 +183,11 @@ export default function ExercisesScreen() {
 }
 
 function ExerciseDetail({ exercise, theme }: { exercise: Exercise; theme: any }) {
-  const instructions = (exercise.instructions ?? '').split('\n').filter(Boolean)
+  // Paridad con web: limpia el prefijo "Step:N" que viene de algunos datasets.
+  const instructions = (exercise.instructions ?? '')
+    .split('\n')
+    .map((l) => l.replace(/^Step:\d+\s*/i, '').trim())
+    .filter(Boolean)
 
   return (
     <View style={styles.detail}>
@@ -212,8 +201,11 @@ function ExerciseDetail({ exercise, theme }: { exercise: Exercise; theme: any })
       {exercise.gif_url && (
         <Image source={{ uri: exercise.gif_url }} style={styles.detailGif} resizeMode="contain" />
       )}
-      {instructions.length > 0 && (
+      {instructions.length > 0 ? (
         <View style={styles.instructionsList}>
+          <Text style={[styles.instructionsHeading, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
+            Instrucciones paso a paso
+          </Text>
           {instructions.map((line, i) => (
             <View key={i} style={styles.instructionRow}>
               <Text style={[styles.instructionBullet, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
@@ -225,6 +217,10 @@ function ExerciseDetail({ exercise, theme }: { exercise: Exercise; theme: any })
             </View>
           ))}
         </View>
+      ) : (
+        <Text style={[styles.instructionText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          El entrenador aún no ha añadido instrucciones específicas para este ejercicio.
+        </Text>
       )}
     </View>
   )
@@ -250,6 +246,7 @@ const styles = StyleSheet.create({
   detail: { gap: 14 },
   detailGif: { width: '100%', height: 200, borderRadius: 12 },
   instructionsList: { gap: 10 },
+  instructionsHeading: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6 },
   instructionRow: { flexDirection: 'row', gap: 8 },
   instructionBullet: { fontSize: 14, width: 22, flexShrink: 0 },
   instructionText: { flex: 1, fontSize: 14, lineHeight: 20 },

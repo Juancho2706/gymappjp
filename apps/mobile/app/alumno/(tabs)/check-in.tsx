@@ -17,10 +17,12 @@ import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
 import { ArrowLeft, ArrowRight, Camera, Check, Scale, Zap } from 'lucide-react-native'
 import { MotiView } from 'moti'
+import { Confetti } from 'react-native-fast-confetti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { getTodayInSantiago, formatRelativeDate } from '../../../lib/date-utils'
 import { useTheme } from '../../../context/ThemeContext'
+import { useEvaMotion } from '../../../lib/motion'
 import { Button, ScreenHeader } from '../../../components'
 import { AppBackground } from '../../../components/AppBackground'
 
@@ -35,7 +37,9 @@ interface LastCheckIn {
 
 export default function CheckInScreen() {
   const { theme } = useTheme()
+  const motion = useEvaMotion()
   const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [celebrateKey, setCelebrateKey] = useState(0)
   const [weight, setWeight] = useState('')
   const [energyLevel, setEnergyLevel] = useState<number | null>(null)
   const [frontPhotoUri, setFrontPhotoUri] = useState<string | null>(null)
@@ -176,6 +180,7 @@ export default function CheckInScreen() {
       Alert.alert('Error', 'No se pudo guardar el check-in. Intenta de nuevo.')
     } else {
       setDone(true)
+      setCelebrateKey((k) => k + 1)
       setStep(1)
       setWeight('')
       setEnergyLevel(null)
@@ -241,7 +246,7 @@ export default function CheckInScreen() {
             >
               <Check size={16} color={theme.success} strokeWidth={2.5} />
               <Text style={[styles.successText, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>
-                Check-in registrado
+                ¡Check-in enviado!
               </Text>
             </MotiView>
           )}
@@ -298,7 +303,7 @@ export default function CheckInScreen() {
             <View style={{ flex: 1 }} />
           )}
           <Button
-            label={step === 3 ? 'Enviar check-in' : 'Continuar'}
+            label={step === 3 ? 'Enviar Check-in' : 'Continuar'}
             rightIcon={step === 3 ? Check : ArrowRight}
             onPress={goNext}
             loading={submitting}
@@ -308,6 +313,9 @@ export default function CheckInScreen() {
           />
         </View>
       </KeyboardAvoidingView>
+      {done && celebrateKey > 0 && !motion.reduced ? (
+        <Confetti key={celebrateKey} autoplay fadeOutOnEnd colors={[theme.primary, '#F59E0B', '#10B981', theme.success]} />
+      ) : null}
     </SafeAreaView>
   )
 }
@@ -348,6 +356,17 @@ function StepOne({
               </View>
             )}
           </View>
+        </View>
+      )}
+
+      {!lastCheckIn && (
+        <View style={[styles.firstCard, { borderColor: theme.border, backgroundColor: theme.muted + '66', borderRadius: theme.radius.lg }]}>
+          <Text style={[styles.firstCardTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            Tu primer check-in
+          </Text>
+          <Text style={[styles.firstCardBody, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Registra peso y energía; las fotos ayudan a tu coach a ver el progreso.
+          </Text>
         </View>
       )}
 
@@ -551,6 +570,9 @@ const styles = StyleSheet.create({
   stepHeading: { fontSize: 18, letterSpacing: -0.3 },
   stepSubtext: { fontSize: 13, lineHeight: 20, marginTop: -12 },
   lastCard: { borderWidth: 1, padding: 14, gap: 8 },
+  firstCard: { borderWidth: 1, borderStyle: 'dashed', padding: 16, gap: 4 },
+  firstCardTitle: { fontSize: 14 },
+  firstCardBody: { fontSize: 12, lineHeight: 18 },
   lastCardLabel: { fontSize: 12 },
   lastCardRow: { flexDirection: 'row', gap: 16 },
   lastCardItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },

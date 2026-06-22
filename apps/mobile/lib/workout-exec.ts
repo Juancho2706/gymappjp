@@ -233,25 +233,25 @@ export function executionAreaGroupsFor<T extends AreaResolvableBlock>(
   )
 }
 
-/** Etiquetas/subtitulos de secciones legacy (es-neutro) — espejo de WorkoutExecutionClient. */
+/** Etiquetas/subtitulos de secciones legacy — copy EXACTO de WorkoutExecutionClient (web). */
 export const LEGACY_SECTION_TITLE: Record<LegacyExecutionSection, string> = {
   warmup: 'Calentamiento',
-  main: 'Bloque principal',
-  cooldown: 'Vuelta a la calma',
+  main: 'Bloque Principal',
+  cooldown: 'Enfriamiento',
   other: 'Otros bloques',
 }
 
 export const LEGACY_SECTION_SUBTITLE: Record<LegacyExecutionSection, string> = {
-  warmup: 'Movilidad y activacion antes del trabajo intenso.',
+  warmup: 'Movilidad y activación suave antes del trabajo intenso.',
   main: 'Bloque de mayor esfuerzo: respeta series, reps y descansos.',
-  cooldown: 'Baja la intensidad y cierra la sesion con control.',
-  other: 'Ejercicios sin seccion definida. Si no estas seguro, consulta a tu coach.',
+  cooldown: 'Baja la intensidad y cierra la sesión con control.',
+  other: 'Ejercicios sin sección definida. Si no estás seguro, consulta a tu coach.',
 }
 
-/** Subtitulos de las areas system no clasicas (por slug). */
+/** Subtitulos de las areas system no clasicas (por slug) — copy EXACTO de la web. */
 export const SYSTEM_AREA_SUBTITLE: Record<string, string> = {
   mobility: 'Trabajo de movilidad y rango articular, controlado y sin prisa.',
   core_activation: 'Activa la zona media antes del trabajo principal.',
   power: 'Movimientos explosivos: calidad antes que cantidad, descansos completos.',
-  conditioning: 'Acondicionamiento metabolico: manten el ritmo que te indique tu coach.',
+  conditioning: 'Acondicionamiento metabólico: mantén el ritmo que te indique tu coach.',
 }

@@ -6,6 +6,7 @@ import { ScaleDecorator } from 'react-native-draggable-flatlist'
 import { useTheme } from '../../context/ThemeContext'
 import { exerciseThumb } from '../../lib/exercises'
 import { getMuscleColor } from '../../lib/muscle-colors'
+import { effectiveExerciseType, typedBlockSummary } from '../../lib/workout-exercise-type'
 import type { BuilderBlock, BuilderSection } from '../../lib/plan-builder/types'
 
 function hexToRgba(hex: string, a: number): string {
@@ -47,6 +48,17 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
   const sec: BuilderSection = block.section === 'warmup' || block.section === 'cooldown' ? block.section : 'main'
   const secC = sec === 'warmup' ? '#F59E0B' : sec === 'cooldown' ? '#38BDF8' : theme.primary
   const thumb = exerciseThumb({ gif_url: block.gif_url ?? catGif ?? null, image_url: catImage ?? null, video_url: block.video_url ?? catVideo ?? null })
+  // Resumen por tipo (specs/movida-entrenamiento, 1:1 web ExerciseBlock): null en strength sin
+  // prescripción tipada ⇒ se renderiza el chip legacy "sets × reps" exactamente como hoy (AC3).
+  // En cardio/movilidad/roller (o farmer carry) muestra el resumen tipado y nunca quick-edit.
+  const blockType = effectiveExerciseType(block, { exercise_type: block.exercise_type })
+  const typedSummary = (() => {
+    const dist = parseFloat((block.distance_value || '').replace(',', '.'))
+    return typedBlockSummary(
+      { ...block, distance_value: Number.isFinite(dist) ? dist : null, load_value: null },
+      blockType,
+    )
+  })()
   const complete = (block.sets ?? 0) > 0 && !!block.reps
 
   function saveQuick() { onUpdate({ ...block, sets: qs, reps: qr }); setEditing(false) }
@@ -82,7 +94,12 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
               </View>
             ) : null}
 
-            {editing ? (
+            {typedSummary ? (
+              // Bloque tipado (cardio/movilidad/roller o farmer carry): resumen, sin quick-edit.
+              <View style={[styles.badge, { backgroundColor: hexToRgba(theme.foreground, 0.06) }]}>
+                <Text style={[styles.badgeT, { color: theme.foreground }]}>{typedSummary}</Text>
+              </View>
+            ) : editing ? (
               <View style={styles.qrow}>
                 <TouchableOpacity onPress={() => setQs((s) => Math.max(1, s - 1))} hitSlop={6} style={styles.qbtn}><Minus size={12} color={theme.primary} /></TouchableOpacity>
                 <Text style={[styles.qval, { color: theme.foreground }]}>{qs}</Text>

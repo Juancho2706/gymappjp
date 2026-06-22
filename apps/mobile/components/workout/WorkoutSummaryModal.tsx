@@ -6,6 +6,7 @@ import { Confetti } from 'react-native-fast-confetti'
 import { useTheme } from '../../context/ThemeContext'
 import { useEvaMotion } from '../../lib/motion'
 import { haptics } from '../../lib/haptics'
+import { epleyOneRM } from '../../lib/profile-analytics'
 import { AnimatedNumber } from '../AnimatedNumber'
 
 interface LogEntry {
@@ -32,6 +33,8 @@ export interface WorkoutSummaryModalProps {
   planTitle: string
   blocks: Block[]
   logs: Record<string, LogEntry[]>
+  /** Máximos históricos por ejercicio (kg) — para detectar récords (espejo web). */
+  exerciseMaxes?: Record<string, number>
   onDone: () => void
   onClose?: () => void
 }
@@ -41,6 +44,7 @@ export function WorkoutSummaryModal({
   planTitle,
   blocks,
   logs,
+  exerciseMaxes = {},
   onDone,
   onClose,
 }: WorkoutSummaryModalProps) {
@@ -64,23 +68,64 @@ export function WorkoutSummaryModal({
   }, [allLogs])
 
   const exerciseBreakdown = useMemo(() => {
-    const result: Array<{ name: string; muscleGroup: string; sets: number; volume: number }> = []
+    const result: Array<{
+      exerciseId: string
+      name: string
+      muscleGroup: string
+      sets: number
+      volume: number
+      maxWeight: number
+    }> = []
     for (const block of blocks) {
       const blockLogs = logs[block.id] ?? []
       if (!blockLogs.length || !block.exercises) continue
-      const volume = blockLogs.reduce(
-        (acc, l) => acc + (parseFloat(l.weightKg) || 0) * (parseInt(l.repsDone) || 0),
-        0,
-      )
+      let volume = 0
+      let maxWeight = 0
+      for (const l of blockLogs) {
+        const w = parseFloat(l.weightKg) || 0
+        const r = parseInt(l.repsDone) || 0
+        volume += w * r
+        if (w > maxWeight) maxWeight = w
+      }
       result.push({
+        exerciseId: block.exercises.id,
         name: block.exercises.name,
         muscleGroup: block.exercises.muscle_group ?? 'General',
         sets: blockLogs.length,
         volume,
+        maxWeight,
       })
     }
     return result
   }, [blocks, logs])
+
+  // Récords personales: peso máximo de hoy supera el máximo histórico (espejo WorkoutSummaryOverlay web).
+  const detectedPRs = useMemo(() => {
+    return exerciseBreakdown
+      .filter((ex) => {
+        const historicMax = exerciseMaxes[ex.exerciseId]
+        return historicMax != null && ex.maxWeight > historicMax
+      })
+      .map((ex) => {
+        const blockLogs = blocks
+          .filter((b) => b.exercises?.id === ex.exerciseId)
+          .flatMap((b) => logs[b.id] ?? [])
+        const setAtMax = blockLogs.reduce(
+          (best, cur) => ((parseFloat(cur.weightKg) || 0) > (parseFloat(best.weightKg) || 0) ? cur : best),
+          blockLogs[0],
+        )
+        const repsAtMax = parseInt(setAtMax?.repsDone ?? '') || 1
+        const prevKg = exerciseMaxes[ex.exerciseId]!
+        const pct = prevKg > 0 ? Math.round(((ex.maxWeight - prevKg) / prevKg) * 1000) / 10 : 100
+        return {
+          exerciseName: ex.name,
+          newWeightKg: ex.maxWeight,
+          prevWeightKg: prevKg,
+          pct,
+          estimated1RM: Math.round(epleyOneRM(ex.maxWeight, Math.max(1, repsAtMax)) * 10) / 10,
+        }
+      })
+  }, [exerciseBreakdown, exerciseMaxes, blocks, logs])
 
   const muscleGroupVolume = useMemo(() => {
     const map = new Map<string, number>()
@@ -93,7 +138,8 @@ export function WorkoutSummaryModal({
   }, [exerciseBreakdown])
 
   async function handleShare() {
-    const text = `¡Completé "${planTitle}"! 💪 ${stats.completedSets} series · ${stats.totalReps} reps · ${Math.round(stats.totalVolume)} kg`
+    const prText = detectedPRs.length > 0 ? ` 🏆 ${detectedPRs.length} récord${detectedPRs.length > 1 ? 's' : ''}!` : ''
+    const text = `¡Completé "${planTitle}"! 💪 ${stats.completedSets} series · ${stats.totalReps} reps · ${Math.round(stats.totalVolume)} kg${prText}`
     try {
       await Share.share({ message: text })
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -147,6 +193,27 @@ export function WorkoutSummaryModal({
             <StatCard label="Reps" value={stats.totalReps} theme={theme} />
             <StatCard label="Volumen" value={Math.round(stats.totalVolume)} suffix=" kg" theme={theme} />
           </View>
+
+          {/* Récords personales */}
+          {detectedPRs.length > 0 && (
+            <View style={[styles.prCard, { borderColor: '#FACC1566', backgroundColor: '#F59E0B1F', borderRadius: theme.radius.xl }]}>
+              <Text style={[styles.prHeading, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+                🏆 {detectedPRs.length} {detectedPRs.length === 1 ? 'récord personal' : 'récords personales'}
+              </Text>
+              {detectedPRs.map((pr) => (
+                <View key={pr.exerciseName} style={[styles.prRow, { borderColor: '#FACC154D', backgroundColor: theme.background + '99', borderRadius: theme.radius.lg }]}>
+                  <Text style={[styles.prName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{pr.exerciseName}</Text>
+                  <Text style={[styles.prDelta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                    {pr.prevWeightKg} kg → {pr.newWeightKg} kg{pr.pct > 0 ? ` (+${pr.pct}%)` : ''}
+                  </Text>
+                  <Text style={[styles.prOneRm, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                    1RM estimado:{' '}
+                    <Text style={{ color: theme.foreground, fontFamily: 'Montserrat_700Bold' }}>{pr.estimated1RM} kg</Text>
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
 
           {/* Exercise breakdown */}
           {exerciseBreakdown.length > 0 && (
@@ -276,6 +343,12 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 18 },
   section: { gap: 8 },
   sectionTitle: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.2 },
+  prCard: { borderWidth: 1, padding: 14, gap: 10 },
+  prHeading: { fontSize: 14, letterSpacing: -0.2 },
+  prRow: { borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9, gap: 2 },
+  prName: { fontSize: 13 },
+  prDelta: { fontSize: 12 },
+  prOneRm: { fontSize: 11, marginTop: 2 },
   exRow: {
     flexDirection: 'row',
     alignItems: 'center',

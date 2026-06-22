@@ -13,11 +13,17 @@ import { emptyPlanDraft, parseSwapOptions, serializeSwapOptions, type DraftMeal,
 export interface TemplateSummary {
   id: string
   name: string
+  description: string | null
+  goal_type: string | null
   daily_calories: number | null
   protein_g: number | null
   carbs_g: number | null
   fats_g: number | null
   mealCount: number
+  /** Nombres de las comidas de la plantilla (para chips, espejo web). */
+  mealNames: string[]
+  /** Cantidad de alumnos con esta plantilla como plan activo (SINCRONIZADO). */
+  assignedCount: number
 }
 
 function uid(prefix: string): string {
@@ -45,18 +51,55 @@ export async function listTemplates(): Promise<TemplateSummary[]> {
   if (!coachId) return []
   // N-F5/TX-4: scoping de org explícito (fallback seguro si no existe la columna org_id).
   const { orgId } = await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))
-  const cols = 'id, name, daily_calories, protein_g, carbs_g, fats_g, template_meals ( id )'
-  const { data } = await selectWithFallback<any>(
-    () => {
-      const q = supabase.from('nutrition_plan_templates').select(cols).eq('coach_id', coachId)
-      return (orgId ? q.eq('org_id', orgId) : q.is('org_id', null)).order('updated_at', { ascending: false })
-    },
-    () => supabase.from('nutrition_plan_templates').select(cols).eq('coach_id', coachId).order('updated_at', { ascending: false })
-  )
-  return (data ?? []).map((t: any) => ({
-    id: t.id, name: t.name, daily_calories: t.daily_calories, protein_g: t.protein_g,
-    carbs_g: t.carbs_g, fats_g: t.fats_g, mealCount: t.template_meals?.length ?? 0,
-  }))
+  // `description`/`goal_type` pueden no existir en schemas viejos → fallback al set mínimo.
+  const colsFull = 'id, name, description, goal_type, daily_calories, protein_g, carbs_g, fats_g, template_meals ( id, name, order_index )'
+  const colsMin = 'id, name, daily_calories, protein_g, carbs_g, fats_g, template_meals ( id, name, order_index )'
+  const runQuery = (cols: string) =>
+    selectWithFallback<any>(
+      () => {
+        const q = supabase.from('nutrition_plan_templates').select(cols).eq('coach_id', coachId)
+        return (orgId ? q.eq('org_id', orgId) : q.is('org_id', null)).order('updated_at', { ascending: false })
+      },
+      () => supabase.from('nutrition_plan_templates').select(cols).eq('coach_id', coachId).order('updated_at', { ascending: false })
+    )
+  let res = await runQuery(colsFull)
+  if (res.error) res = await runQuery(colsMin)
+  const data = res.data
+
+  // Conteo de alumnos SINCRONIZADOS por plantilla (plan activo, no custom).
+  const assignedByTemplate = new Map<string, number>()
+  try {
+    const { data: synced } = await supabase
+      .from('nutrition_plans')
+      .select('template_id')
+      .eq('coach_id', coachId)
+      .eq('is_active', true)
+      .eq('is_custom', false)
+      .not('template_id', 'is', null)
+    for (const row of (synced ?? []) as any[]) {
+      const tid = row.template_id as string
+      assignedByTemplate.set(tid, (assignedByTemplate.get(tid) ?? 0) + 1)
+    }
+  } catch { /* best-effort: 0 activos */ }
+
+  return (data ?? []).map((t: any) => {
+    const meals = [...(t.template_meals ?? [])].sort((a: any, b: any) => (a.order_index ?? 0) - (b.order_index ?? 0))
+    return {
+      id: t.id, name: t.name, description: t.description ?? null, goal_type: t.goal_type ?? null,
+      daily_calories: t.daily_calories, protein_g: t.protein_g, carbs_g: t.carbs_g, fats_g: t.fats_g,
+      mealCount: meals.length, mealNames: meals.map((m: any) => m.name).filter(Boolean),
+      assignedCount: assignedByTemplate.get(t.id) ?? 0,
+    }
+  })
+}
+
+/** Duplica una plantilla (nombre + " (copia)") con sus comidas e items. Espejo de duplicateNutritionTemplate (web). */
+export async function duplicateTemplate(templateId: string): Promise<{ ok: boolean; error?: string }> {
+  const coachId = await currentCoachId()
+  if (!coachId) return { ok: false, error: 'No autenticado.' }
+  const draft = await getTemplateDraft(templateId)
+  if (!draft) return { ok: false, error: 'Plantilla no encontrada.' }
+  return saveTemplate({ ...draft, id: null, name: `${draft.name} (copia)` })
 }
 
 /** First saved-meal group's items flattened (basic case = 1 group/meal). */

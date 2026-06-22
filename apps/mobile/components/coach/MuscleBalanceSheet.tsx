@@ -4,6 +4,7 @@ import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import Svg, { Line, Polygon, Text as SvgText } from 'react-native-svg'
 import { useTheme } from '../../context/ThemeContext'
 import { getMuscleColor } from '../../lib/muscle-colors'
+import { effectiveExerciseType } from '../../lib/workout-exercise-type'
 import type { DayState } from '../../lib/plan-builder/types'
 
 interface Props { days: DayState[] }
@@ -26,7 +27,10 @@ export const MuscleBalanceSheet = forwardRef<BottomSheetModal, Props>(function M
     for (const d of days) {
       if (d.is_rest) continue
       for (const b of d.blocks) {
-        const m = b.muscle_group || 'General'
+        // F4.5 (1:1 web buildMuscleBalance): solo bloques fuerza inflan el volumen muscular.
+        // Cardio/movilidad/roller no cuentan; legacy sin tipo resuelve 'strength' y sí cuenta.
+        if (effectiveExerciseType(b, { exercise_type: b.exercise_type }) !== 'strength') continue
+        const m = b.muscle_group || 'Otro'
         setMap.set(m, (setMap.get(m) ?? 0) + (b.sets ?? 0))
         exMap.set(m, (exMap.get(m) ?? 0) + 1)
       }

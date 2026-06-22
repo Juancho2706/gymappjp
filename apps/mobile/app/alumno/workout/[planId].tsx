@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Image,
   KeyboardAvoidingView,
@@ -14,13 +14,14 @@ import {
 } from 'react-native'
 import { useKeepAwake } from 'expo-keep-awake'
 import * as Haptics from 'expo-haptics'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Confetti } from 'react-native-fast-confetti'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Check, Dumbbell, Info, Timer, Trophy } from 'lucide-react-native'
+import { Check, Dumbbell, Info, Settings, Timer, Trophy } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
-import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '../../../lib/date-utils'
+import { getTodayInSantiago, getSantiagoUtcBoundsForDay, formatRelativeDate } from '../../../lib/date-utils'
 import { cachePlan, enqueueLog, getCachedPlan } from '../../../lib/offline-cache'
 import { haptics } from '../../../lib/haptics'
 import { useEvaMotion } from '../../../lib/motion'
@@ -33,6 +34,7 @@ import { HoldTimer } from '../../../components/workout/HoldTimer'
 import { IntervalTimer } from '../../../components/workout/IntervalTimer'
 import { Stopwatch } from '../../../components/workout/Stopwatch'
 import { WorkoutSummaryModal } from '../../../components/workout/WorkoutSummaryModal'
+import { WorkoutTimerSettingsPanel } from '../../../components/workout/WorkoutTimerSettingsPanel'
 import { formatPace, type HrZoneRange } from '../../../lib/cardio'
 import {
   buildIntervalPhases,
@@ -161,6 +163,9 @@ export default function WorkoutExecutionScreen() {
   const [isOnline, setIsOnline] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [prCelebration, setPrCelebration] = useState(false)
+  const [exerciseMaxes, setExerciseMaxes] = useState<Record<string, number>>({})
+  const [autoTimerEnabled, setAutoTimerEnabled] = useState(true)
+  const [showTimerSettings, setShowTimerSettings] = useState(false)
   const motion = useEvaMotion()
   const scrollRef = useRef<ScrollView>(null)
   const sectionY = useRef<Record<string, number>>({})
@@ -169,6 +174,21 @@ export default function WorkoutExecutionScreen() {
   useEffect(() => {
     loadPlan()
   }, [planId])
+
+  // Preferencia de cronómetro automático (espejo de localStorage 'omni_autotimer' en web).
+  useEffect(() => {
+    AsyncStorage.getItem('omni_autotimer').then((v) => {
+      if (v != null) setAutoTimerEnabled(v === 'true')
+    })
+  }, [])
+
+  function toggleAutoTimer() {
+    setAutoTimerEnabled((prev) => {
+      const next = !prev
+      AsyncStorage.setItem('omni_autotimer', String(next))
+      return next
+    })
+  }
 
   async function loadPlan() {
     setLoading(true)
@@ -310,9 +330,13 @@ export default function WorkoutExecutionScreen() {
       .limit(160)
 
     const history: Record<string, PreviousHistory[]> = {}
+    const maxes: Record<string, number> = {}
     for (const log of data ?? []) {
       const exId = (log as any).workout_blocks?.exercise_id
       if (!exId) continue
+      // Máximo histórico por ejercicio (todas las sesiones del rango) → detección de PR en el resumen.
+      const w = log.weight_kg ?? 0
+      if (w > (maxes[exId] ?? 0)) maxes[exId] = w
       if (!history[exId]) history[exId] = []
       const date = String((log as any).logged_at).split('T')[0]
       const existingDates = history[exId].map((h) => h.date)
@@ -321,6 +345,7 @@ export default function WorkoutExecutionScreen() {
       }
     }
     setPreviousHistory(history)
+    setExerciseMaxes(maxes)
   }
 
   // ── Timers (un solo activo; espejo de WorkoutTimerProvider.replaceWith) ──
@@ -445,7 +470,8 @@ export default function WorkoutExecutionScreen() {
     }
 
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-    if (block.rest_time) startRest(block.rest_time)
+    // Cronómetro automático: el descanso empieza solo al guardar (si está activado, espejo web).
+    if (autoTimerEnabled && block.rest_time) startRest(block.rest_time)
   }
 
   function parseRestTime(restTime: string): number {
@@ -474,18 +500,24 @@ export default function WorkoutExecutionScreen() {
   }
 
   function renderGroup(group: (typeof groups)[number]) {
+    const supersetRuns = groupSupersets(group.blocks)
     return (
       <View key={group.key} style={styles.section} onLayout={(e) => { sectionY.current[group.key] = e.nativeEvent.layout.y }}>
         <View style={styles.sectionHeader}>
           <View style={[styles.sectionRail, { backgroundColor: group.muted ? theme.primary + '55' : theme.primary }]} />
           <View style={styles.sectionCopy}>
-            <Text style={[styles.sectionLabel, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{group.title}</Text>
+            <View style={styles.sectionTitleRow}>
+              <Text style={[styles.sectionLabel, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{group.title}</Text>
+              <Text style={[styles.sectionCount, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                {supersetRuns.length} bloque(s)
+              </Text>
+            </View>
             {group.subtitle ? (
               <Text style={[styles.sectionSubtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{group.subtitle}</Text>
             ) : null}
           </View>
         </View>
-        {groupSupersets(group.blocks).map((ss, groupIndex) => (
+        {supersetRuns.map((ss, groupIndex) => (
           <View
             key={ss.key}
             style={[
@@ -497,14 +529,22 @@ export default function WorkoutExecutionScreen() {
               },
             ]}
           >
-            {ss.superset ? (
-              <View style={styles.supersetHeader}>
-                <Text style={[styles.supersetTitle, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Superserie {ss.key}</Text>
-                <Text style={[styles.supersetHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                  Completa una serie de cada ejercicio y repite.
-                </Text>
-              </View>
-            ) : null}
+            <View style={styles.groupTitleWrap}>
+              <Text style={[styles.groupTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+                {ss.superset ? `Superserie (grupo ${ss.supersetLetter ?? ss.key})` : `Ejercicio ${groupIndex + 1}`}
+              </Text>
+              {ss.superset ? (
+                <View style={[styles.supersetHowto, { borderColor: theme.primary + '40', backgroundColor: theme.primary + '0F', borderRadius: theme.radius.lg }]}>
+                  <Text style={[styles.supersetHowtoTitle, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Cómo hacerla</Text>
+                  <HowtoStep n={1} theme={theme}>Completa una serie del primer ejercicio y regístrala abajo.</HowtoStep>
+                  <HowtoStep n={2} theme={theme}>Completa una serie del siguiente ejercicio y regístrala.</HowtoStep>
+                  <HowtoStep n={3} theme={theme}>Respeta los descansos que indique cada ejercicio; repite hasta terminar todas las series de cada ejercicio.</HowtoStep>
+                  <Text style={[styles.supersetHowtoFoot, { color: theme.mutedForeground, borderTopColor: theme.border, fontFamily: theme.fontSans }]}>
+                    Cada ejercicio tiene sus propias series: el contador superior suma todas las series de la rutina.
+                  </Text>
+                </View>
+              ) : null}
+            </View>
             {ss.blocks.map((block, index) => (
               <MotiView
                 key={block.id}
@@ -513,11 +553,19 @@ export default function WorkoutExecutionScreen() {
                 transition={{ type: 'timing', duration: 350, delay: Math.min((groupIndex + index) * 50, 400) }}
                 onLayout={(e) => { blockY.current[block.id] = e.nativeEvent.layout.y }}
               >
+                {index > 0 && ss.superset ? (
+                  <View style={styles.luegoRow}>
+                    <View style={[styles.luegoLine, { backgroundColor: theme.border }]} />
+                    <Text style={[styles.luegoText, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Luego</Text>
+                    <View style={[styles.luegoLine, { backgroundColor: theme.border }]} />
+                  </View>
+                ) : null}
                 <BlockCard
                   block={block}
                   logged={logs[block.id] ?? []}
                   previous={block.exercises?.id ? previousHistory[block.exercises.id] ?? [] : []}
                   cardioZones={cardio.enabled ? cardio.zones : null}
+                  supersetBadge={ss.superset ? `${ss.supersetLetter ?? 'SS'}-${index + 1}` : null}
                   onLogSet={logSet}
                   onOpenTechnique={() => setTechniqueExercise(block.exercises)}
                   onStartHold={startHold}
@@ -560,11 +608,24 @@ export default function WorkoutExecutionScreen() {
       )}
       {activeTimer?.kind === 'stopwatch' && <Stopwatch onClose={() => setActiveTimer(null)} />}
 
-      <OfflineBanner visible={!isOnline} />
+      <OfflineBanner visible={!isOnline} message="Sin conexión — los datos se guardarán al reconectar." />
       <TopBar back title={planTitle || 'Workout'} onBack={() => router.back()} />
 
       {loading ? (
         <EvaLoaderScreen subtitle="Cargando rutina…" />
+      ) : blocks.length === 0 ? (
+        <View style={styles.emptyWrap}>
+          <View style={[styles.emptyIcon, { backgroundColor: theme.secondary }]}>
+            <Dumbbell size={32} color={theme.mutedForeground} />
+          </View>
+          <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            Rutina sin ejercicios
+          </Text>
+          <Text style={[styles.emptyBody, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Esta rutina ya no tiene ejercicios asociados. Tu coach probablemente esté actualizando tu plan.
+          </Text>
+          <Button label="Volver al inicio" onPress={() => router.replace('/alumno/home')} style={{ marginTop: 20 }} />
+        </View>
       ) : (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <View style={[styles.progressHeader, { borderBottomColor: theme.border }]}>
@@ -572,14 +633,29 @@ export default function WorkoutExecutionScreen() {
               <Text style={[styles.progressText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
                 {completedSetCount}/{requiredSets} series
               </Text>
-              <Text style={[styles.progressPct, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
-                {Math.round(completion * 100)}%
-              </Text>
+              <View style={styles.progressRight}>
+                {activeWeekVariant ? (
+                  <View style={[styles.weekBadge, { borderColor: theme.primary + '66' }]}>
+                    <Text style={[styles.weekBadgeText, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}>
+                      Semana {activeWeekVariant}
+                    </Text>
+                  </View>
+                ) : null}
+                <Text style={[styles.progressPct, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
+                  {Math.round(completion * 100)}%
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setShowTimerSettings(true)}
+                  hitSlop={10}
+                  style={styles.settingsBtn}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Descanso y alarma"
+                >
+                  <Settings size={20} color={theme.mutedForeground} />
+                </TouchableOpacity>
+              </View>
             </View>
             <ProgressBar value={completion} />
-            {activeWeekVariant ? (
-              <Text style={[styles.variantText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Semana {activeWeekVariant}</Text>
-            ) : null}
           </View>
 
           <ScrollView
@@ -606,17 +682,27 @@ export default function WorkoutExecutionScreen() {
               </MotiView>
             )}
             {groups.map((g) => renderGroup(g))}
+          </ScrollView>
+
+          {/* Footer fijo: descanso manual + finalizar (espejo del footer web). */}
+          <View style={[styles.footer, { borderTopColor: theme.border, backgroundColor: theme.background }]}>
+            <TouchableOpacity
+              style={[styles.footerRestBtn, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}
+              onPress={() => startRest('90')}
+              activeOpacity={0.8}
+            >
+              <Timer size={15} color={theme.foreground} />
+              <Text style={[styles.footerRestText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Descanso (90s)</Text>
+            </TouchableOpacity>
             <Button
               label="Finalizar entrenamiento"
               leftIcon={allDone ? Trophy : Check}
               variant={allDone ? 'primary' : 'secondary'}
               onPress={() => setSummaryOpen(true)}
-              disabled={blocks.length === 0}
-              full
               size="lg"
-              style={{ marginTop: 8 }}
+              style={{ flex: 1 }}
             />
-          </ScrollView>
+          </View>
         </KeyboardAvoidingView>
       )}
 
@@ -625,9 +711,16 @@ export default function WorkoutExecutionScreen() {
         planTitle={planTitle}
         blocks={blocks}
         logs={logs}
+        exerciseMaxes={exerciseMaxes}
         onDone={() => router.replace('/alumno/home')}
         onClose={() => setSummaryOpen(false)}
       />
+
+      {/* Descanso, alarma y cronómetro automático (tuerca del header) */}
+      <NativeDialog open={showTimerSettings} title="Descanso y alarma" onClose={() => setShowTimerSettings(false)}>
+        <WorkoutTimerSettingsPanel autoTimerEnabled={autoTimerEnabled} onToggleAutoTimer={toggleAutoTimer} />
+        <Button label="Cerrar" variant="secondary" onPress={() => setShowTimerSettings(false)} full style={{ marginTop: 6 }} />
+      </NativeDialog>
 
       <TechniqueDialog exercise={techniqueExercise} onClose={() => setTechniqueExercise(null)} />
     </SafeAreaView>
@@ -638,15 +731,34 @@ function planHasCardioFields(blocks: Block[]): boolean {
   return blocks.some((b) => b.hr_zone != null || (b.duration_sec ?? 0) > 0 || b.interval_config != null)
 }
 
-function groupSupersets(blocks: Block[]): Array<{ key: string; superset: boolean; blocks: Block[] }> {
-  const out: Array<{ key: string; superset: boolean; blocks: Block[] }> = []
-  for (const block of blocks) {
-    const last = out[out.length - 1]
-    if (block.superset_group && last?.key === block.superset_group) {
-      last.blocks.push(block)
-    } else {
-      out.push({ key: block.superset_group ?? block.id, superset: Boolean(block.superset_group), blocks: [block] })
+/**
+ * Agrupa superseries en tramos CONTIGUOS (mismo superset_group y order_index +1) — espejo
+ * de groupContiguousSupersetRuns (web). supersetLetter = el valor de superset_group (A, B…).
+ */
+function groupSupersets(blocks: Block[]): Array<{ key: string; superset: boolean; supersetLetter?: string; blocks: Block[] }> {
+  const out: Array<{ key: string; superset: boolean; supersetLetter?: string; blocks: Block[] }> = []
+  let i = 0
+  while (i < blocks.length) {
+    const b = blocks[i]
+    const g = b.superset_group?.trim()
+    if (!g) {
+      out.push({ key: `single-${b.id}`, superset: false, blocks: [b] })
+      i += 1
+      continue
     }
+    const run: Block[] = [b]
+    let j = i + 1
+    while (j < blocks.length) {
+      const next = blocks[j]
+      const ng = next.superset_group?.trim()
+      const prev = run[run.length - 1]
+      if (ng === g && next.order_index === prev.order_index + 1) {
+        run.push(next)
+        j += 1
+      } else break
+    }
+    out.push({ key: `ss-${g}-${b.id}`, superset: true, supersetLetter: g, blocks: run })
+    i = j
   }
   return out
 }
@@ -657,6 +769,7 @@ function BlockCard({
   logged,
   previous,
   cardioZones,
+  supersetBadge,
   onLogSet,
   onOpenTechnique,
   onStartHold,
@@ -668,6 +781,7 @@ function BlockCard({
   logged: LogEntry[]
   previous: PreviousHistory[]
   cardioZones: HrZoneRange[] | null
+  supersetBadge: string | null
   onLogSet: (
     block: Block,
     setNumber: number,
@@ -695,7 +809,7 @@ function BlockCard({
       <View style={styles.blockHeader}>
         <View style={styles.exerciseCopy}>
           <Text style={[styles.exerciseMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            {block.exercises?.muscle_group ?? 'Ejercicio'}
+            {supersetBadge ?? block.exercises?.muscle_group ?? 'Ejercicio'}
           </Text>
           <Text style={[styles.exerciseName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={2}>
             {block.exercises?.name ?? 'Ejercicio'}
@@ -706,11 +820,20 @@ function BlockCard({
             <Info size={17} color={theme.primary} />
           </TouchableOpacity>
         ) : null}
-        {done ? (
-          <View style={[styles.doneBadge, { backgroundColor: theme.success + '22', borderRadius: theme.radius.sm }]}>
-            <Trophy size={13} color={theme.success} />
-          </View>
-        ) : null}
+        <View
+          style={[
+            styles.statusPill,
+            {
+              borderColor: done ? theme.success + '66' : theme.border,
+              backgroundColor: done ? theme.success + '26' : theme.secondary,
+              borderRadius: 999,
+            },
+          ]}
+        >
+          <Text style={[styles.statusPillText, { color: done ? theme.success : theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
+            {done ? 'Completado' : 'Pendiente'}
+          </Text>
+        </View>
       </View>
 
       {kind === 'strength' ? (
@@ -729,24 +852,23 @@ function BlockCard({
         </View>
       ) : null}
 
-      {block.progression_type && block.progression_value != null ? (
-        <Text style={[styles.progression, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
-          Progresion: +{block.progression_value} {block.progression_type === 'weight' ? 'kg' : 'reps'}
-        </Text>
-      ) : null}
-
       {block.notes ? (
-        <Text style={[styles.notes, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{block.notes}</Text>
+        <View style={[styles.noteBox, { borderColor: '#F59E0B4D', backgroundColor: '#F59E0B1A', borderRadius: theme.radius.lg }]}>
+          <Text style={[styles.noteBoxTitle, { color: '#B45309', fontFamily: 'Montserrat_700Bold' }]}>Nota del coach</Text>
+          <Text style={[styles.noteBoxText, { color: theme.foreground, fontFamily: theme.fontSans }]}>{block.notes}</Text>
+        </View>
       ) : null}
 
       {kind === 'strength' && previous.length > 0 ? (
         <View style={[styles.previousWrap, { borderColor: theme.primary + '30', backgroundColor: theme.primary + '08', borderRadius: theme.radius.lg }]}>
-          <Text style={[styles.previousTitle, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Sesion anterior · {previous[0]?.date}</Text>
+          <Text style={[styles.previousTitle, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
+            Sesión anterior · {previous[0]?.date ? formatRelativeDate(previous[0].date) : ''}
+          </Text>
           <View style={styles.previousChips}>
-            {previous.slice(0, block.sets).map((log, index) => (
+            {previous.map((log, index) => (
               <View key={`${log.date}-${index}`} style={[styles.previousChip, { backgroundColor: theme.background, borderColor: theme.border, borderRadius: theme.radius.sm }]}>
                 <Text style={[styles.previousText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
-                  S{index + 1}: {log.weight_kg ?? '-'}kg x {log.reps_done ?? '-'}
+                  S{index + 1}: {log.weight_kg ? `${log.weight_kg}kg` : '-'} x {log.reps_done || '-'}
                 </Text>
               </View>
             ))}
@@ -1042,6 +1164,16 @@ function Metric({ label, value }: { label: string; value: string }) {
   return <MetricCard label={label} value={value} />
 }
 
+/** Paso numerado de la guía "Cómo hacerla" de superserie (espejo de la lista ordenada web). */
+function HowtoStep({ n, theme, children }: { n: number; theme: any; children: ReactNode }) {
+  return (
+    <View style={styles.howtoStep}>
+      <Text style={[styles.howtoStepNum, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>{n}.</Text>
+      <Text style={[styles.howtoStepText, { color: theme.foreground, fontFamily: theme.fontSans }]}>{children}</Text>
+    </View>
+  )
+}
+
 function MetricCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   const { theme } = useTheme()
   return (
@@ -1057,13 +1189,13 @@ function TechniqueDialog({ exercise, onClose }: { exercise: Exercise | null; onC
   const mediaUrl = exercise?.gif_url ?? exercise?.video_url
 
   return (
-    <NativeDialog open={Boolean(exercise)} title={exercise?.name ?? 'Tecnica'} onClose={onClose}>
+    <NativeDialog open={Boolean(exercise)} title={exercise?.name ?? 'Técnica'} onClose={onClose}>
       <View style={styles.techBody}>
         {exercise?.gif_url ? (
           <Image source={{ uri: exercise.gif_url }} resizeMode="contain" style={[styles.techImage, { backgroundColor: theme.secondary, borderRadius: theme.radius.xl }]} />
         ) : null}
         {mediaUrl ? (
-          <Button label="Abrir video tecnica" leftIcon={Dumbbell} variant="secondary" onPress={() => Linking.openURL(mediaUrl)} full />
+          <Button label="Abrir video técnica" leftIcon={Dumbbell} variant="secondary" onPress={() => Linking.openURL(mediaUrl)} full />
         ) : null}
         {exercise?.instructions?.length ? (
           <View style={styles.instructions}>
@@ -1077,8 +1209,9 @@ function TechniqueDialog({ exercise, onClose }: { exercise: Exercise | null; onC
             ))}
           </View>
         ) : (
-          <Text style={[styles.techHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>No hay instrucciones detalladas disponibles.</Text>
+          <Text style={[styles.techHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>No hay instrucciones detalladas disponibles para este ejercicio.</Text>
         )}
+        <Button label="Entendido" variant="secondary" onPress={onClose} full style={{ marginTop: 6 }} />
       </View>
     </NativeDialog>
   )
@@ -1093,8 +1226,26 @@ const styles = StyleSheet.create({
   progressTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   progressText: { fontSize: 13 },
   progressPct: { fontSize: 13 },
-  variantText: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 },
-  scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 40, gap: 14 },
+  progressRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  weekBadge: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  weekBadgeText: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.2 },
+  settingsBtn: { padding: 2 },
+  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  emptyIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  emptyTitle: { fontSize: 18, marginBottom: 8, textAlign: 'center' },
+  emptyBody: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  footerRestBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 14, height: 52 },
+  footerRestText: { fontSize: 12 },
+  scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 24, gap: 14 },
   doneBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderWidth: 1, padding: 16 },
   doneBannerTitle: { fontSize: 15 },
   doneBannerSub: { fontSize: 12, lineHeight: 17, marginTop: 2 },
@@ -1102,19 +1253,30 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   sectionRail: { width: 4, minHeight: 34, borderRadius: 2 },
   sectionCopy: { flex: 1, gap: 2 },
-  sectionLabel: { fontSize: 13, textTransform: 'uppercase', letterSpacing: 1 },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  sectionLabel: { fontSize: 13, textTransform: 'uppercase', letterSpacing: 1, flexShrink: 1 },
+  sectionCount: { fontSize: 12 },
   sectionSubtitle: { fontSize: 12, lineHeight: 17 },
   groupCard: { borderWidth: 1, padding: 8, gap: 8 },
-  supersetHeader: { paddingHorizontal: 4, paddingTop: 4, gap: 2 },
-  supersetTitle: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
-  supersetHint: { fontSize: 12, lineHeight: 17 },
+  groupTitleWrap: { paddingHorizontal: 4, paddingTop: 4, gap: 8 },
+  groupTitle: { fontSize: 14 },
+  supersetHowto: { borderWidth: 1, padding: 12, gap: 9 },
+  supersetHowtoTitle: { fontSize: 13 },
+  howtoStep: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  howtoStepNum: { fontSize: 13, width: 16 },
+  howtoStepText: { flex: 1, fontSize: 13, lineHeight: 19 },
+  supersetHowtoFoot: { fontSize: 12, lineHeight: 17, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 9 },
+  luegoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 6 },
+  luegoLine: { height: StyleSheet.hairlineWidth, width: 72 },
+  luegoText: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5 },
   blockCard: { padding: 16, gap: 10 },
   blockHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   exerciseCopy: { flex: 1, minWidth: 0, gap: 2 },
   exerciseMeta: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 },
   exerciseName: { fontSize: 17, letterSpacing: -0.2 },
   iconBtn: { width: 36, height: 36, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  doneBadge: { paddingHorizontal: 8, paddingVertical: 7 },
+  statusPill: { borderWidth: 1, paddingHorizontal: 9, paddingVertical: 4, alignSelf: 'flex-start' },
+  statusPillText: { fontSize: 11 },
   metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   metric: { borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8, minWidth: '30%', flexGrow: 1 },
   metricLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6 },
@@ -1125,8 +1287,9 @@ const styles = StyleSheet.create({
   instructionBox: { borderWidth: 1, padding: 10, gap: 3 },
   instructionBoxTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6 },
   instructionBoxText: { fontSize: 13, lineHeight: 18 },
-  progression: { fontSize: 12 },
-  notes: { fontSize: 12, fontStyle: 'italic', lineHeight: 17 },
+  noteBox: { borderWidth: 1, padding: 10, gap: 3 },
+  noteBoxTitle: { fontSize: 12 },
+  noteBoxText: { fontSize: 13, lineHeight: 18 },
   previousWrap: { borderWidth: 1, padding: 10, gap: 8 },
   previousTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 },
   previousChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },

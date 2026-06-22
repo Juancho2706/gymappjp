@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import {
   ActivityIndicator,
   StyleSheet,
@@ -24,9 +24,17 @@ interface Props {
   onToggle: () => void
   onSatisfaction?: (score: 1 | 2 | 3 | null) => void
   activeSwapMealIds?: Set<string>
-  /** Porción consumida (0-100). null = 100% por defecto. */
+  /** Porción consumida (0-100). null = "Plan completo" (100% del plan). */
   consumedPct?: number | null
-  onPortionChange?: (pct: number) => void
+  onPortionChange?: (pct: number | null) => void
+  /** Favoritos de alimentos (heart) — espejo web MealIngredientRow. */
+  favoriteFoodIds?: Set<string>
+  onToggleFoodFavorite?: (foodId: string) => void
+  /**
+   * Módulo nutrition_exchanges: macros derivados de porciones cuando la comida no tiene alimentos.
+   * Espejo del `macroOverride` de la web (se muestran en el header).
+   */
+  macroOverride?: { calories: number; protein: number; carbs: number; fats: number } | null
 }
 
 export function MealCardExpandable({
@@ -40,12 +48,20 @@ export function MealCardExpandable({
   activeSwapMealIds,
   consumedPct,
   onPortionChange,
+  favoriteFoodIds,
+  onToggleFoodFavorite,
+  macroOverride,
 }: Props) {
   const { theme } = useTheme()
   const [expanded, setExpanded] = useState(false)
   const [contentHeight, setContentHeight] = useState(0)
   const hasFoodItems = meal.food_items.length > 0
-  const macros = hasFoodItems ? sumMealMacros(meal) : null
+  const baseMacros = macroOverride ?? (hasFoodItems ? sumMealMacros(meal) : null)
+  // Escala de macros mostrada por la porción consumida (igual que la web).
+  const macroScale = isCompleted && consumedPct != null ? consumedPct / 100 : 1
+  const showPct = isCompleted && consumedPct != null && consumedPct < 100
+  // El cuerpo expandible aplica también para comidas con override (sin alimentos: solo porción/satisfacción).
+  const hasBody = hasFoodItems || (isToday && isCompleted)
 
   async function handleToggle() {
     if (isToday) {
@@ -82,14 +98,14 @@ export function MealCardExpandable({
           <Text style={[styles.mealName, { color: isCompleted ? theme.success : theme.foreground, fontFamily: 'Montserrat_600SemiBold' }]} numberOfLines={1}>
             {meal.name}
           </Text>
-          {macros && (
+          {baseMacros && (
             <Text style={[styles.macrosSummary, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              {Math.round(macros.calories)} kcal · P {Math.round(macros.protein)}g · C {Math.round(macros.carbs)}g · G {Math.round(macros.fats)}g
+              {Math.round(baseMacros.calories * macroScale)} kcal{showPct ? ` (${consumedPct}%)` : ''} · P {Math.round(baseMacros.protein * macroScale)}g · C {Math.round(baseMacros.carbs * macroScale)}g · G {Math.round(baseMacros.fats * macroScale)}g
             </Text>
           )}
         </View>
 
-        {hasFoodItems && (
+        {hasBody && (
           <TouchableOpacity
             onPress={() => setExpanded(!expanded)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -103,8 +119,8 @@ export function MealCardExpandable({
         )}
       </TouchableOpacity>
 
-      {/* Expandable food items */}
-      {hasFoodItems && (
+      {/* Expandable body */}
+      {hasBody && (
         <MotiView
           animate={{ height: expanded ? contentHeight : 0, opacity: expanded ? 1 : 0 }}
           transition={{ type: 'timing', duration: 220 }}
@@ -116,18 +132,20 @@ export function MealCardExpandable({
                 key={item.id ?? i}
                 item={item}
                 hasActiveSwap={activeSwapMealIds?.has(item.foods.id ?? '')}
+                isFavorite={item.foods.id ? favoriteFoodIds?.has(item.foods.id) : false}
+                onToggleFavorite={onToggleFoodFavorite}
               />
             ))}
 
-            {/* Porción consumida — solo si completado y es hoy */}
+            {/* Porción del plan — solo si completado y es hoy */}
             {isCompleted && isToday && onPortionChange && (
               <View style={styles.satisfaction}>
                 <Text style={[styles.satisfactionLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                  ¿Cuánto comiste?
+                  Porción del plan
                 </Text>
-                <View style={styles.satisfactionRow}>
+                <View style={styles.portionRow}>
                   {[25, 50, 75, 100].map((pct) => {
-                    const active = (consumedPct ?? 100) === pct
+                    const active = consumedPct === pct
                     return (
                       <TouchableOpacity
                         key={pct}
@@ -143,15 +161,29 @@ export function MealCardExpandable({
                       </TouchableOpacity>
                     )
                   })}
+                  <TouchableOpacity
+                    style={[styles.portionBtn, styles.portionFull, {
+                      backgroundColor: consumedPct == null ? theme.success + '20' : theme.secondary,
+                      borderColor: consumedPct == null ? theme.success : theme.border,
+                      borderRadius: theme.radius.md,
+                    }]}
+                    onPress={() => onPortionChange(null)}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={{ color: consumedPct == null ? theme.success : theme.mutedForeground, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>Plan completo</Text>
+                  </TouchableOpacity>
                 </View>
+                <Text style={[styles.portionHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                  «Plan completo» usa el 100% de macros del plan. Ajusta % si comiste menos.
+                </Text>
               </View>
             )}
 
-            {/* Satisfaction — solo si completado y es hoy */}
+            {/* Satisfacción — solo si completado y es hoy */}
             {isCompleted && isToday && onSatisfaction && (
               <View style={styles.satisfaction}>
                 <Text style={[styles.satisfactionLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                  ¿Cómo te quedó?
+                  ¿Cómo estuvo?
                 </Text>
                 <View style={styles.satisfactionRow}>
                   {([
@@ -192,11 +224,14 @@ const styles = StyleSheet.create({
   headerMid: { flex: 1, gap: 2 },
   mealName: { fontSize: 15 },
   macrosSummary: { fontSize: 11 },
-  foodItems: { borderTopWidth: 1, paddingHorizontal: 14, paddingBottom: 12 },
+  foodItems: { borderTopWidth: 1, paddingHorizontal: 14, paddingBottom: 12, paddingTop: 4 },
   satisfaction: { marginTop: 10, gap: 8 },
   satisfactionLabel: { fontSize: 12 },
   satisfactionRow: { flexDirection: 'row', gap: 8 },
   satisfactionBtn: { width: 44, height: 44, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   satisfactionEmoji: { fontSize: 22 },
-  portionBtn: { flex: 1, height: 38, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  portionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  portionBtn: { minWidth: 48, height: 38, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
+  portionFull: { flexGrow: 1 },
+  portionHint: { fontSize: 10, lineHeight: 14 },
 })

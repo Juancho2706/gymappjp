@@ -6,15 +6,17 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native'
-import { Apple, ArrowLeftRight, Share2 } from 'lucide-react-native'
+import * as Clipboard from 'expo-clipboard'
+import { Apple, ArrowLeftRight, FileDown, Share2 as ShareIcon } from 'lucide-react-native'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
+import { getClientFoodFavorites, toggleClientFoodFavorite } from '../../../lib/nutrition-favorites'
+import { buildDayDetailText, buildDayShortText, downloadNutritionDayPdf } from '../../../lib/nutrition-share'
 import { useOnline } from '../../../lib/use-online'
 import { Accordion } from '../../../components/Accordion'
 import { getTodayInSantiago, isoDateAddDays, nutritionMealApplies } from '../../../lib/date-utils'
@@ -62,6 +64,7 @@ import {
   FoodSwapSheet,
   MicrosPanel,
   NotesThread,
+  NutritionStreakBanner,
   OffPlanLogger,
   PlatePanel,
   RecipeIdeasSection,
@@ -139,6 +142,8 @@ interface RawFoodItem {
     fats_g: number
     serving_size: number
     serving_unit: string | null
+    household_grams: number | null
+    household_label: string | null
   } | null
 }
 
@@ -165,22 +170,6 @@ interface AdherenceDay {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function buildShareText(
-  plan: NutritionPlan,
-  mealsForDay: RawMeal[],
-  completedIds: Set<string>,
-  dateLabel: string
-): string {
-  const completedMeals = mealsForDay.filter((m) => completedIds.has(m.id))
-  const lines = [
-    `*${plan.name}* — ${dateLabel}`,
-    `✅ ${completedIds.size}/${mealsForDay.length} comidas`,
-    '',
-    ...completedMeals.map((m) => `• ${m.name}`),
-  ]
-  return lines.join('\n')
-}
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
@@ -214,6 +203,8 @@ export default function AlumnoNutricionScreen() {
   const [offPlanRecents, setOffPlanRecents] = useState<IntakeFoodRef[]>([])
   const [notes, setNotes] = useState<NotesThreadComment[]>([])
   const [weeklyRecap, setWeeklyRecap] = useState<WeeklyRecap | null>(null)
+  const [favoriteFoodIds, setFavoriteFoodIds] = useState<Set<string>>(new Set())
+  const [exporting, setExporting] = useState(false)
   // Sheets
   const [equivalenceGroup, setEquivalenceGroup] = useState<ExchangeGroup | null>(null)
   const [swapMealId, setSwapMealId] = useState<string | null>(null)
@@ -287,6 +278,7 @@ export default function AlumnoNutricionScreen() {
       recipesData,
       recents,
       notesData,
+      favoriteIds,
     ] = await Promise.all([
       getNutritionLogForDate(client.id, planData.id, todayIso),
       getNutritionAdherence30d(client.id, planData.id, since30),
@@ -314,6 +306,7 @@ export default function AlumnoNutricionScreen() {
       prefs.sections.recipes ? getAssignedRecipesForClient(client.id) : Promise.resolve([] as RecipeRow[]),
       prefs.sections.off_plan_log ? getRecentIntakeFoods(client.id, 10) : Promise.resolve([] as IntakeFoodRef[]),
       prefs.sections.notes ? listMealComments(client.id, todayIso) : Promise.resolve([]),
+      getClientFoodFavorites(client.id),
     ])
 
     setCurrentLog(logResult.data as unknown as DailyLog | null)
@@ -326,6 +319,7 @@ export default function AlumnoNutricionScreen() {
     setRecipes(recipesData)
     setOffPlanRecents(recents)
     setNotes(toNotesComments(notesData))
+    setFavoriteFoodIds(new Set(favoriteIds))
 
     // Plate + weekly recap (puros sobre data ya cargada).
     if (prefs.sections.plate) {
@@ -436,7 +430,7 @@ export default function AlumnoNutricionScreen() {
     await updateMealSatisfaction(currentLog.id, mealId, score)
   }
 
-  async function handlePortion(mealId: string, pct: number) {
+  async function handlePortion(mealId: string, pct: number | null) {
     if (!currentLog?.id) return
     setCurrentLog((prev) => prev ? {
       ...prev,
@@ -492,15 +486,69 @@ export default function AlumnoNutricionScreen() {
     setNotes(toNotesComments(dayNotes))
   }
 
-  async function handleShare() {
-    if (!plan || !mealsForDay) return
-    const completedIds = new Set(
-      (currentLog?.nutrition_meal_logs ?? [])
-        .filter((l) => l.is_completed)
-        .map((l) => l.meal_id)
-    )
-    const text = buildShareText(plan, mealsForDay, completedIds, selectedDate === todayIso ? 'Hoy' : selectedDate)
-    await Share.share({ message: text })
+  function handleToggleFoodFavorite(foodId: string) {
+    if (!clientId) return
+    // Optimista + rollback en fallo (espejo web).
+    setFavoriteFoodIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(foodId)) next.delete(foodId)
+      else next.add(foodId)
+      return next
+    })
+    toggleClientFoodFavorite(clientId, foodId).then((res) => {
+      if (!res.success) {
+        setFavoriteFoodIds((prev) => {
+          const next = new Set(prev)
+          if (next.has(foodId)) next.delete(foodId)
+          else next.add(foodId)
+          return next
+        })
+      }
+    })
+  }
+
+  // Comidas del día (con swaps) en el shape del exportador. Se evalúa al presionar (normalizedMeals/goals
+  // ya están en scope), por eso no es un useMemo (evita TDZ contra los derived de más abajo).
+  function buildExportMeals() {
+    return normalizedMeals.map((m) => ({ id: m.id, food_items: m.food_items, name: m.name }))
+  }
+
+  async function handleCopyDetail() {
+    if (!plan) return
+    const text = buildDayDetailText({
+      planName: plan.name,
+      date: selectedDate,
+      instructions: plan.instructions,
+      meals: buildExportMeals(),
+      goals,
+    })
+    await Clipboard.setStringAsync(text)
+    Alert.alert('Copiado', 'Detalle del día copiado — listo para WhatsApp.')
+  }
+
+  async function handleCopyShort() {
+    if (!plan) return
+    const text = buildDayShortText({ planName: plan.name, date: selectedDate, meals: buildExportMeals(), goals })
+    await Clipboard.setStringAsync(text)
+    Alert.alert('Copiado', 'Resumen corto copiado.')
+  }
+
+  async function handleDownloadPdf() {
+    if (!plan || exporting) return
+    setExporting(true)
+    try {
+      await downloadNutritionDayPdf({
+        planName: plan.name,
+        date: selectedDate,
+        instructions: plan.instructions,
+        meals: buildExportMeals(),
+        goals,
+      })
+    } catch {
+      Alert.alert('PDF', 'No se pudo generar el PDF. Intenta de nuevo.')
+    } finally {
+      setExporting(false)
+    }
   }
 
   const refreshOffPlanRecents = useCallback(() => {
@@ -561,28 +609,13 @@ export default function AlumnoNutricionScreen() {
   const adherenceDates = new Set(adherence.map((a) => a.log_date))
   const completedCount = completedMealIds.size
   const totalCount = mealsForDay.length
+  const totalPlanMeals = (plan?.nutrition_meals ?? []).length
   const isToday = selectedDate === todayIso
 
   const variantNameById = useMemo(
     () => new Map((exchange.variants ?? []).map((v) => [v.id, v.name])),
     [exchange.variants]
   )
-
-  // ─── Streak ────────────────────────────────────────────────────────────────
-  let streak = 0
-  if (adherence.length > 0 && plan) {
-    let cursor = isoDateAddDays(todayIso, -1)
-    for (let i = 0; i < 60; i++) {
-      const dayMeals = (plan.nutrition_meals ?? []).filter((m) => nutritionMealApplies(m, cursor))
-      if (dayMeals.length === 0) { cursor = isoDateAddDays(cursor, -1); continue }
-      const logDay = adherence.find((a) => a.log_date === cursor)
-      if (!logDay) break
-      const completedDay = logDay.nutrition_meal_logs.filter((l) => l.is_completed).length
-      if (completedDay / dayMeals.length < 0.5) break
-      streak++
-      cursor = isoDateAddDays(cursor, -1)
-    }
-  }
 
   const microsVisible = sectionFlags.micros_base || sectionFlags.micros_advanced
 
@@ -623,15 +656,7 @@ export default function AlumnoNutricionScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScreenHeader
-          title="Nutrición"
-          subtitle={plan.name}
-          trailing={
-            <TouchableOpacity onPress={handleShare} style={styles.shareBtn} activeOpacity={0.75} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Share2 size={18} color={theme.foreground} strokeWidth={2} />
-            </TouchableOpacity>
-          }
-        />
+        <ScreenHeader title="Nutrición" subtitle={plan.name} />
 
         <ScrollView
           contentContainerStyle={styles.scroll}
@@ -654,19 +679,26 @@ export default function AlumnoNutricionScreen() {
           />
 
           {!isToday && (
-            <View style={[styles.readOnlyBanner, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-              <Text style={[styles.readOnlyText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                Día histórico — solo lectura
+            <View style={[styles.readOnlyBanner, { backgroundColor: '#f59e0b' + '1A', borderColor: '#f59e0b' + '33', borderRadius: theme.radius.lg }]}>
+              <Text style={[styles.readOnlyText, { color: '#b45309', fontFamily: theme.fontSans }]}>
+                Estás viendo un día histórico. Puedes revisar adherencia y hábitos, pero no editar registros.
               </Text>
             </View>
           )}
 
-          {streak >= 2 && (
-            <View style={[styles.streakBanner, { backgroundColor: '#f97316' + '1A', borderColor: '#f97316' + '40', borderRadius: theme.radius.lg }]}>
-              <Text style={[styles.streakText, { color: '#f97316', fontFamily: 'Montserrat_700Bold' }]}>
-                🔥 {streak} días de racha
+          {totalPlanMeals > totalCount && totalCount > 0 && (
+            <View style={[styles.infoBanner, { backgroundColor: '#0ea5e9' + '1A', borderColor: '#0ea5e9' + '33', borderRadius: theme.radius.lg }]}>
+              <Text style={[styles.infoBannerText, { color: '#0369a1', fontFamily: theme.fontSans }]}>
+                Hoy ves {totalCount} de {totalPlanMeals} comidas del plan. Las demás están fijadas a otro día de la semana en el plan del coach; prueba otra fecha en el calendario o consulta con tu coach.
               </Text>
             </View>
+          )}
+
+          {adherence.length > 0 && totalCount > 0 && (
+            <NutritionStreakBanner
+              adherenceData={adherence}
+              planMeals={plan.nutrition_meals.map((m) => ({ id: m.id, day_of_week: m.day_of_week }))}
+            />
           )}
 
           <MacroRingSummary
@@ -740,12 +772,19 @@ export default function AlumnoNutricionScreen() {
                     satisfactionScore={mealLog?.satisfaction_score ?? null}
                     consumedPct={mealLog?.consumed_quantity ?? null}
                     activeSwapMealIds={activeSwapMealIds}
+                    favoriteFoodIds={favoriteFoodIds}
+                    onToggleFoodFavorite={handleToggleFoodFavorite}
+                    macroOverride={
+                      derived
+                        ? { calories: derived.calories, protein: derived.proteinG, carbs: derived.carbsG, fats: derived.fatsG }
+                        : null
+                    }
                     onToggle={() => handleToggle(meal.id, completedMealIds.has(meal.id))}
                     onSatisfaction={(score) => handleSatisfaction(meal.id, score)}
                     onPortionChange={(pct) => handlePortion(meal.id, pct)}
                   />
 
-                  {/* Chips de intercambios (Nutricion Pro) — debajo de la comida. */}
+                  {/* Chips de intercambios (Nutricion Pro) — debajo de la comida (variant badge + chips). */}
                   {exchange.enabled && hasExchangeTargets && (
                     <View style={styles.exchangeRow}>
                       {variantName && (
@@ -756,11 +795,6 @@ export default function AlumnoNutricionScreen() {
                         </View>
                       )}
                       <ExchangeMealChips targets={mealTargets} groups={exchange.groups} onChipTap={setEquivalenceGroup} />
-                      {derived && (
-                        <Text style={[styles.derivedMacros, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                          ≈ {Math.round(derived.calories)} kcal · P {Math.round(derived.proteinG)}g · C {Math.round(derived.carbsG)}g · G {Math.round(derived.fatsG)}g
-                        </Text>
-                      )}
                     </View>
                   )}
 
@@ -810,6 +844,46 @@ export default function AlumnoNutricionScreen() {
                 onSubmit={handleAddNote}
                 emptyHint="Escribe una nota a tu coach sobre tu día (antojos, cómo te sentiste, dudas)."
               />
+            </View>
+          )}
+
+          {/* Exportar el día (WhatsApp detalle / resumen / PDF) — espejo de la grilla web. */}
+          {totalCount > 0 && (
+            <View style={styles.exportRow}>
+              <View style={styles.exportCol}>
+                <Text style={[styles.exportLabel, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>WhatsApp detalle</Text>
+                <TouchableOpacity
+                  onPress={handleCopyDetail}
+                  activeOpacity={0.75}
+                  style={[styles.exportBtn, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}
+                >
+                  <ShareIcon size={14} color={theme.mutedForeground} />
+                  <Text style={[styles.exportBtnText, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Copiar detalle</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.exportCol}>
+                <Text style={[styles.exportLabel, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>WhatsApp resumen</Text>
+                <TouchableOpacity
+                  onPress={handleCopyShort}
+                  activeOpacity={0.75}
+                  style={[styles.exportBtn, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}
+                >
+                  <ShareIcon size={14} color={theme.mutedForeground} />
+                  <Text style={[styles.exportBtnText, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Copiar resumen</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.exportCol}>
+                <Text style={[styles.exportLabel, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Exportar PDF</Text>
+                <TouchableOpacity
+                  onPress={handleDownloadPdf}
+                  disabled={exporting}
+                  activeOpacity={0.75}
+                  style={[styles.exportBtn, { backgroundColor: theme.primary + '1A', borderColor: theme.primary + '33', borderRadius: theme.radius['2xl'], opacity: exporting ? 0.5 : 1 }]}
+                >
+                  <FileDown size={14} color={theme.primary} />
+                  <Text style={[styles.exportBtnText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Descargar PDF</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
 
@@ -867,21 +941,32 @@ function toNotesComments(
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { paddingHorizontal: 16, paddingBottom: 40, gap: 12 },
-  shareBtn: { padding: 8 },
   readOnlyBanner: {
     borderWidth: 1,
     paddingVertical: 8,
     paddingHorizontal: 14,
-    alignItems: 'center',
   },
-  readOnlyText: { fontSize: 13 },
-  streakBanner: {
+  readOnlyText: { fontSize: 12, lineHeight: 16 },
+  infoBanner: {
     borderWidth: 1,
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 14,
-    alignItems: 'center',
   },
-  streakText: { fontSize: 14 },
+  infoBannerText: { fontSize: 12, lineHeight: 16 },
+  exportRow: { flexDirection: 'row', gap: 8 },
+  exportCol: { flex: 1, gap: 4, alignItems: 'center' },
+  exportLabel: { fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase', textAlign: 'center' },
+  exportBtn: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+  },
+  exportBtnText: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.3 },
   progressRow: { gap: 6 },
   progressLabel: { fontSize: 12 },
   noMeals: { paddingVertical: 32, alignItems: 'center', gap: 8 },
@@ -890,7 +975,6 @@ const styles = StyleSheet.create({
   exchangeRow: { gap: 4, paddingHorizontal: 2 },
   variantBadge: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   variantText: { fontSize: 9, letterSpacing: 0.5, textTransform: 'uppercase' },
-  derivedMacros: { fontSize: 11, marginTop: 2 },
   swapTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
