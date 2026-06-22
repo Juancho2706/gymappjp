@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { apiFetch } from './api'
 
 // Mi Equipo (mobile) — espejo user-scoped de apps/web .../coach/team.
 // "team" = pool plano de coaches (feature PERMANENTE de EVA, aislada de enterprise).
@@ -158,49 +159,21 @@ export async function addExistingCoach(teamId: string, seatLimit: number, email:
     return { ok: false, error: `Límite de ${seatLimit} cupos alcanzado.` }
   }
 
-  const { data: targetCoachId } = await (supabase.rpc as unknown as (fn: string, args: Record<string, string>) => PromiseLike<{ data: string | null }>)(
-    'get_coach_id_by_email', { p_email: clean },
-  )
-  if (!targetCoachId) return { ok: false, error: 'No existe un coach con ese email.' }
-
-  // Aislamiento team<->enterprise: no absorber a un coach que ya está en una organización.
-  const { data: orgMember } = await supabase
-    .from('organization_members')
-    .select('id')
-    .eq('user_id', targetCoachId)
-    .eq('status', 'active')
-    .is('deleted_at', null)
-    .maybeSingle()
-  if (orgMember) return { ok: false, error: 'Ese coach pertenece a una organización; no se puede sumar a un equipo.' }
-
-  const { data: existing } = await supabase
-    .from('team_members')
-    .select('id, status, deleted_at')
-    .eq('team_id', teamId)
-    .eq('coach_id', targetCoachId)
-    .maybeSingle()
-
-  if (existing && (existing as any).status === 'active' && !(existing as any).deleted_at) {
-    return { ok: false, error: 'Ese coach ya es miembro del equipo.' }
-  }
-
-  if (existing) {
-    const { error } = await supabase
-      .from('team_members')
-      .update({ status: 'active', deleted_at: null, display_role: displayRole.trim() || null })
-      .eq('id', (existing as any).id)
-    if (error) return { ok: false, error: friendlyError(error.message) }
-  } else {
-    const { error } = await supabase.from('team_members').insert({
-      team_id: teamId,
-      coach_id: targetCoachId as string,
-      display_role: displayRole.trim() || null,
-      can_manage: false,
-      status: 'active',
+  // El lookup por email (RPC SECURITY DEFINER) + el aislamiento team<->enterprise
+  // (lee organization_members, RLS no se lo deja al coach) requieren service-role →
+  // van por el endpoint /api/mobile/team/add-coach, que ademas escribe team_members
+  // user-scoped (dispara seat_guard + team_members_guard). Antes esto fallaba con
+  // 42501/RLS al hacerlo por PostgREST directo desde el device.
+  try {
+    await apiFetch('/api/mobile/team/add-coach', {
+      method: 'POST',
+      authenticated: true,
+      body: { teamId, email: clean, display_role: displayRole.trim() },
     })
-    if (error) return { ok: false, error: friendlyError(error.message) }
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: (e as Error)?.message ?? 'No se pudo agregar el coach.' }
   }
-  return { ok: true }
 }
 
 /** Saca a un miembro del pool (soft-delete: status='revoked' + deleted_at). El owner no se puede sacar. */
