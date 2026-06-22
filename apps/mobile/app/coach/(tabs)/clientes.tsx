@@ -50,6 +50,9 @@ import { MotiView } from 'moti'
 import * as Clipboard from 'expo-clipboard'
 import { BlurView } from 'expo-blur'
 import { LinearGradient } from 'expo-linear-gradient'
+import LottieView from 'lottie-react-native'
+import DateTimePicker from '@react-native-community/datetimepicker'
+import { Calendar } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { AnimatedNumber, Button, NativeDialog } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -659,6 +662,105 @@ const sheetStyles = StyleSheet.create({
   checkDot: { width: 8, height: 8, borderRadius: 4 },
 })
 
+// ─── DateField (picker nativo, persiste string 'YYYY-MM-DD' en hora local) ──────
+
+// Date → 'YYYY-MM-DD' sin shift de TZ (usa componentes locales, NO toISOString que es UTC).
+function toLocalIso(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+// 'YYYY-MM-DD' → Date local (mediodía para evitar bordes de DST/TZ); null si vacío/inválido.
+function parseLocalIso(s: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.trim())
+  if (!m) return null
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0)
+  return isNaN(d.getTime()) ? null : d
+}
+
+function DateField({
+  label, value, onChange, placeholder = 'Seleccionar fecha', theme, minimumDate, maximumDate,
+}: {
+  label: string
+  value: string // 'YYYY-MM-DD' o ''
+  onChange: (v: string) => void
+  placeholder?: string
+  theme: any
+  minimumDate?: Date
+  maximumDate?: Date
+}) {
+  const [open, setOpen] = useState(false)
+  const selected = parseLocalIso(value) ?? new Date()
+
+  // Android: el picker es un modal nativo que se cierra solo al elegir/cancelar.
+  function openAndroid() {
+    setOpen(true)
+  }
+
+  return (
+    <View style={createStyles.fieldWrap}>
+      <Text style={[createStyles.label, { color: theme.foreground }]}>{label}</Text>
+      <TouchableOpacity
+        style={[createStyles.input, dateFieldStyles.control, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}
+        onPress={Platform.OS === 'android' ? openAndroid : () => setOpen((o) => !o)}
+        activeOpacity={0.75}
+      >
+        <Text style={[dateFieldStyles.valueTxt, { color: value ? theme.foreground : theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          {value || placeholder}
+        </Text>
+        <Calendar size={16} color={theme.mutedForeground} />
+      </TouchableOpacity>
+
+      {/* Android: picker como overlay nativo (display='default'); se autocierra. */}
+      {open && Platform.OS === 'android' ? (
+        <DateTimePicker
+          value={selected}
+          mode="date"
+          display="default"
+          minimumDate={minimumDate}
+          maximumDate={maximumDate}
+          onChange={(event, date) => {
+            setOpen(false)
+            if (event.type === 'set' && date) onChange(toLocalIso(date))
+          }}
+        />
+      ) : null}
+
+      {/* iOS: spinner inline dentro de la tarjeta + botón Listo. */}
+      {open && Platform.OS === 'ios' ? (
+        <View style={[dateFieldStyles.iosWrap, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+          <DateTimePicker
+            value={selected}
+            mode="date"
+            display="spinner"
+            minimumDate={minimumDate}
+            maximumDate={maximumDate}
+            onChange={(_event, date) => { if (date) onChange(toLocalIso(date)) }}
+            style={dateFieldStyles.iosPicker}
+          />
+          <TouchableOpacity
+            style={[dateFieldStyles.iosDone, { backgroundColor: theme.primary, borderRadius: theme.radius.lg }]}
+            onPress={() => setOpen(false)}
+            activeOpacity={0.85}
+          >
+            <Text style={[dateFieldStyles.iosDoneTxt, { fontFamily: 'Inter_700Bold' }]}>Listo</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+const dateFieldStyles = StyleSheet.create({
+  control: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  valueTxt: { fontSize: 15, flex: 1 },
+  iosWrap: { marginTop: 8, borderWidth: 1, paddingHorizontal: 8, paddingTop: 4, paddingBottom: 10, gap: 6 },
+  iosPicker: { alignSelf: 'stretch' },
+  iosDone: { height: 40, alignItems: 'center', justifyContent: 'center' },
+  iosDoneTxt: { color: '#fff', fontSize: 13, letterSpacing: 0.5 },
+})
+
 // ─── Create Client Modal ──────────────────────────────────────────────────────
 
 interface CreateForm {
@@ -888,18 +990,13 @@ function CreateClientModal({
                 />
               </View>
 
-              <View style={createStyles.fieldWrap}>
-                <Text style={[createStyles.label, { color: theme.foreground }]}>Inicio de mensualidad</Text>
-                <TextInput
-                  style={[createStyles.input, { backgroundColor: theme.secondary, borderColor: theme.border, color: theme.foreground, fontFamily: theme.fontSans, borderRadius: theme.radius.lg }]}
-                  value={form.subscriptionStartDate}
-                  onChangeText={(v) => setForm((f) => ({ ...f, subscriptionStartDate: v }))}
-                  placeholder="AAAA-MM-DD"
-                  placeholderTextColor={theme.mutedForeground}
-                  keyboardType="numbers-and-punctuation"
-                  autoCorrect={false}
-                />
-              </View>
+              <DateField
+                label="Inicio de mensualidad"
+                value={form.subscriptionStartDate}
+                onChange={(v) => setForm((f) => ({ ...f, subscriptionStartDate: v }))}
+                placeholder="Seleccionar fecha"
+                theme={theme}
+              />
 
               <View style={createStyles.fieldWrap}>
                 <Text style={[createStyles.label, { color: theme.foreground }]}>Contraseña temporal</Text>
@@ -1645,11 +1742,15 @@ export default function ClientesScreen() {
       </Text>
     </View>
   ) : (
-    // 1:1 web ClientsDirectoryEmpty: "Tu equipo te espera" + CTA Nuevo alumno.
+    // 1:1 web ClientsDirectoryEmpty: animación Lottie clipboard + "Tu equipo te espera" + CTA Nuevo alumno.
     <View style={styles.emptyWrap}>
-      <View style={[styles.emptyIconBox, { backgroundColor: hexToRgba(theme.primary, 0.08) }]}>
-        <Users size={48} color={hexToRgba(theme.primary, 0.4)} strokeWidth={1} />
-      </View>
+      {/* Lazy remote (mismo asset que la web). Si la carga remota falla, no renderiza nada (no crashea). */}
+      <LottieView
+        source={{ uri: 'https://assets2.lottiefiles.com/packages/lf20_m6cuL6.json' }}
+        autoPlay
+        loop
+        style={{ width: 160, height: 160 }}
+      />
       <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
         Tu equipo te espera
       </Text>
