@@ -292,7 +292,7 @@ const BREADTHS: FieldDef[] = [
   { name: 'apChestDepthCm', label: 'Tórax A-P (profundidad)' },
 ]
 
-const STEPS = ['Base + pliegues', 'Perímetros', 'Diámetros', 'Revisión']
+const STEPS = ['Datos base + pliegues', 'Perímetros', 'Diámetros', 'Revisión']
 
 function isakToNum(v: unknown): number | undefined {
   if (v === '' || v == null) return undefined
@@ -374,7 +374,7 @@ function IsakCaptureForm({ theme, clientId, onSaved }: { theme: ThemeT; clientId
     }
     const validated = BodyCompositionCreateSchema.safeParse(payload)
     if (!validated.success) {
-      setError('Revisá los datos: hay valores fuera de rango.')
+      setError('Revisa los datos: hay valores fuera de rango.')
       return
     }
     setSaving(true)
@@ -467,9 +467,9 @@ function IsakCaptureForm({ theme, clientId, onSaved }: { theme: ThemeT; clientId
           <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>ECUACIÓN DE % GRASA</Text>
           <View style={styles.eqRow}>
             {([
-              { v: 'durnin_womersley', l: 'Durnin-W.' },
-              { v: 'yuhasz', l: 'Yuhasz' },
-              { v: 'faulkner', l: 'Faulkner' },
+              { v: 'durnin_womersley', l: 'Durnin-Womersley (general)' },
+              { v: 'yuhasz', l: 'Yuhasz (atletas)' },
+              { v: 'faulkner', l: 'Faulkner (atletas)' },
             ] as const).map((e) => (
               <Toggle key={e.v} theme={theme} label={e.l} active={equation === e.v} onPress={() => setEquation(e.v)} />
             ))}
@@ -479,7 +479,7 @@ function IsakCaptureForm({ theme, clientId, onSaved }: { theme: ThemeT; clientId
             <IsakResultCard theme={theme} view={previewView} isValidated={false} title="Vista previa" />
           ) : (
             <Text style={[styles.warnText, { color: theme.mutedForeground, borderColor: theme.border, fontFamily: theme.fontSans }]}>
-              Completá todas las medidas para ver el cálculo. Faltan datos o hay valores fuera de rango.
+              Completa todas las medidas para ver el cálculo. Faltan datos o hay valores fuera de rango.
             </Text>
           )}
         </>
@@ -492,7 +492,7 @@ function IsakCaptureForm({ theme, clientId, onSaved }: { theme: ThemeT; clientId
         {step < STEPS.length - 1 ? (
           <Button label="Siguiente" size="sm" onPress={() => goStep(step + 1)} />
         ) : (
-          <Button label="Guardar ISAK" size="sm" loading={saving} disabled={!previewView} onPress={handleSave} />
+          <Button label="Guardar medición ISAK" size="sm" loading={saving} disabled={!previewView} onPress={handleSave} />
         )}
       </View>
     </View>
@@ -627,8 +627,8 @@ function BiaTrendPanel({ theme, rows, onDeleted }: { theme: ThemeT; rows: BodyCo
 type IsakSeriesKey = 'bodyFat' | 'muscle' | 'adipose'
 const ISAK_SERIES: { key: IsakSeriesKey; label: string; pct: boolean; read: (v: IsakMetricsView) => number }[] = [
   { key: 'bodyFat', label: '% Grasa', pct: true, read: (v) => v.bodyFat.percent },
-  { key: 'muscle', label: 'M. muscular', pct: false, read: (v) => v.fractionation.muscle.kg },
-  { key: 'adipose', label: 'M. adiposa', pct: false, read: (v) => v.fractionation.adipose.kg },
+  { key: 'muscle', label: 'Masa muscular', pct: false, read: (v) => v.fractionation.muscle.kg },
+  { key: 'adipose', label: 'Masa adiposa', pct: false, read: (v) => v.fractionation.adipose.kg },
 ]
 
 function IsakTrendPanel({ theme, rows, onDeleted }: { theme: ThemeT; rows: BodyCompositionRow[]; onDeleted: () => void }) {
@@ -825,7 +825,7 @@ const styles = StyleSheet.create({
   chipRow: { gap: 8, paddingVertical: 2 },
   stepChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
   toggle: { flexGrow: 1, borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, alignItems: 'center' },
-  eqRow: { flexDirection: 'row', gap: 8 },
+  eqRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   navRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 4 },
   errorText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
   warnText: { fontSize: 12, lineHeight: 17, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },

@@ -22,7 +22,7 @@ import {
 type Method = 'bia' | 'isak'
 
 const DISCLAIMER =
-  'Estas mediciones son una estimación de composición corporal con fines de seguimiento, no un diagnóstico médico. Consultá a tu coach o a un profesional de salud para interpretarlas.'
+  'Las mediciones de composición corporal son referenciales y no constituyen un diagnóstico clínico. Consulta a un profesional de la salud ante cualquier duda.'
 
 // ── BIA: métricas a mostrar (espejo de StudentBiaSummary) ──
 const fmtPct = (v: number) => `${v.toFixed(1)}%`
@@ -94,13 +94,16 @@ export default function AlumnoBodyCompScreen() {
           <Text style={{ color: theme.mutedForeground, fontFamily: theme.fontSans, fontSize: 14 }}>Volver</Text>
         </TouchableOpacity>
       </View>
-      <ScreenHeader title="Composición corporal" subtitle="Tus mediciones y tendencia" />
+      <ScreenHeader
+        title="Tu composición corporal"
+        subtitle="Tus mediciones de composición corporal y su evolución. Tu coach las usa para ajustar tu plan."
+      />
 
       {!hasBia && !hasIsak ? (
         <EmptyState
           icon={Scale}
-          title="Sin mediciones aún"
-          subtitle="Tu coach aún no registró tu composición corporal. Cuando lo haga, vas a ver acá tus mediciones y tu evolución."
+          title="Aún no tienes mediciones de composición corporal registradas."
+          subtitle="Cuando tu coach registre tus mediciones, vas a ver acá tu evolución."
         />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -193,7 +196,7 @@ function BiaTrend({ theme, rows }: { theme: any; rows: BodyCompositionRow[] }) {
   if (series.bodyFat.length < 2 && series.muscle.length < 2) return <NeedTwo theme={theme} />
   return (
     <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}>
-      <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Tendencia</Text>
+      <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Evolución</Text>
       {series.bodyFat.length >= 2 ? (
         <TrendRow theme={theme} label="% grasa" values={series.bodyFat} format={fmtPct} color="#F59E0B" />
       ) : null}
@@ -284,7 +287,7 @@ function IsakTrend({ theme, rows }: { theme: any; rows: BodyCompositionRow[] }) 
   if (series.bodyFat.length < 2 && series.muscle.length < 2) return <NeedTwo theme={theme} />
   return (
     <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}>
-      <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Tendencia</Text>
+      <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Evolución</Text>
       {series.bodyFat.length >= 2 ? (
         <TrendRow theme={theme} label="% grasa" values={series.bodyFat} format={fmtPct} color="#F59E0B" />
       ) : null}
@@ -332,7 +335,7 @@ function Delta({ theme, delta, higherIsBetter, fmt }: { theme: any; delta: numbe
 function NeedTwo({ theme }: { theme: any }) {
   return (
     <Text style={[styles.needTwo, { color: theme.mutedForeground, backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl, fontFamily: theme.fontSans }]}>
-      Necesitás al menos dos mediciones para ver tu evolución.
+      Con dos o más mediciones verás aquí tu evolución.
     </Text>
   )
 }

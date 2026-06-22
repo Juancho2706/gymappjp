@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import { Activity, Apple, ChevronLeft, ChevronRight, Check, Droplets, Flame, Footprints, Heart, History, Lock, MessageCircle, Moon, Pencil, Salad, Scale, Send, Target } from 'lucide-react-native'
+import { Activity, Apple, ChevronLeft, ChevronRight, Check, Droplets, Flame, Footprints, Heart, History, Lock, MessageCircle, Moon, Pencil, Salad, Scale, Send } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, EmptyState, ComplianceRing, ProgressBar, MacroPill } from '../../../components'
 import { EvaLoader } from '../../../components/EvaLoader'
@@ -9,6 +9,7 @@ import { StatCard, CardHeader, MetricBox, cd, formatDate, adherenceColor } from 
 import { deriveNutritionCoachAlerts, type NutritionCoachAlert } from '../../../lib/nutrition-coach-alerts'
 import { getTodayInSantiago } from '../../../lib/date-utils'
 import { getCoachProfile } from '../../../lib/coach'
+import { hasModule } from '../../../lib/entitlements'
 import {
   addCoachMealComment,
   getClientNutrientTargets,
@@ -21,6 +22,9 @@ import {
   type NutritionCycleRow,
   type PrivateNoteRow,
 } from '../../../lib/coach-nutrition-notes'
+import { CoachNutrientTargetsEditor } from './CoachNutrientTargetsEditor'
+import { ClientFoodRestrictionsCard } from './ClientFoodRestrictionsCard'
+import { ClientFeaturePrefsPanel } from './ClientFeaturePrefsPanel'
 import type { ClientDayDetail, CoachClientDetailData } from '../../../lib/coach-client-detail'
 
 const ALERT_COLORS: Record<NutritionCoachAlert['variant'], string> = { danger: '#EF4444', warning: '#F59E0B', info: '#3B82F6' }
@@ -190,14 +194,14 @@ export function NutricionTab({
   )
 }
 
-// ── Zona C (coach): hilo bidireccional + nota privada + micros + ciclos ───────
+// ── Zona C (coach): hilo + nota privada + restricciones + micros + funciones + ciclos ──
 function NutritionCoachZoneC({ clientId, todayIso }: { clientId: string; todayIso: string }) {
-  const { theme } = useTheme()
   const [coachId, setCoachId] = useState<string | null>(null)
   const [comments, setComments] = useState<MealCommentRow[]>([])
   const [notes, setNotes] = useState<PrivateNoteRow[]>([])
   const [targets, setTargets] = useState<NutrientTargetRow[]>([])
   const [cycles, setCycles] = useState<NutritionCycleRow[]>([])
+  const [proEnabled, setProEnabled] = useState(false)
 
   async function reload() {
     const [c, n, t, cy] = await Promise.all([
@@ -215,6 +219,7 @@ function NutritionCoachZoneC({ clientId, todayIso }: { clientId: string; todayIs
   useEffect(() => {
     let cancelled = false
     getCoachProfile().then((p) => { if (!cancelled) setCoachId(p?.id ?? null) }).catch(() => {})
+    hasModule('nutrition_exchanges').then((v) => { if (!cancelled) setProEnabled(v) }).catch(() => {})
     reload()
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -224,7 +229,9 @@ function NutritionCoachZoneC({ clientId, todayIso }: { clientId: string; todayIs
     <View style={{ gap: 14 }}>
       <NotesThread comments={comments} clientId={clientId} todayIso={todayIso} onSent={reload} />
       <PrivateNotePanel notes={notes} coachId={coachId} clientId={clientId} onSaved={reload} />
-      {targets.length ? <NutrientTargetsCard targets={targets} /> : null}
+      <ClientFoodRestrictionsCard clientId={clientId} />
+      <CoachNutrientTargetsEditor clientId={clientId} initial={targets} proEnabled={proEnabled} onSaved={reload} />
+      <ClientFeaturePrefsPanel clientId={clientId} />
       {cycles.length ? <CycleHistoryCard cycles={cycles} /> : null}
     </View>
   )
@@ -336,31 +343,6 @@ function PrivateNotePanel({ notes, coachId, clientId, onSaved }: { notes: Privat
         </View>
       ) : null}
     </View>
-  )
-}
-
-function NutrientTargetsCard({ targets }: { targets: NutrientTargetRow[] }) {
-  const { theme } = useTheme()
-  return (
-    <StatCard>
-      <CardHeader icon={Target} title="Umbrales de micronutrientes" />
-      {targets.map((t) => {
-        const range = t.floor_value != null && t.ceiling_value != null
-          ? `${t.floor_value}–${t.ceiling_value}`
-          : t.target_value != null ? String(t.target_value)
-          : t.floor_value != null ? `≥ ${t.floor_value}`
-          : t.ceiling_value != null ? `≤ ${t.ceiling_value}` : '—'
-        return (
-          <View key={t.id} style={cd.row}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{t.nutrient_key}</Text>
-              {t.intent ? <Text style={[cd.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{t.intent}</Text> : null}
-            </View>
-            <Text style={[cd.rowMetric, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>{range}</Text>
-          </View>
-        )
-      })}
-    </StatCard>
   )
 }
 

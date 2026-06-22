@@ -156,8 +156,8 @@ export default function CardioHubScreen() {
               <View style={[styles.selInfo, { borderColor: theme.border }]}>
                 <Text style={[styles.selInfoText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
                   {selected.birth_date
-                    ? `Edad ${ageFromBirthDate(selected.birth_date) ?? '—'} · FC reposo ${selected.resting_hr ?? '—'}${selected.max_hr_override ? ` · FCmax ${selected.max_hr_override}` : ''}`
-                    : 'Sin fecha de nacimiento registrada.'}
+                    ? `Edad ${ageFromBirthDate(selected.birth_date) ?? '—'} · FC reposo ${selected.resting_hr ?? '—'}${selected.max_hr_override ? ` · FCmax medida ${selected.max_hr_override}` : ''}`
+                    : 'Este alumno no tiene fecha de nacimiento registrada.'}
                 </Text>
                 <TouchableOpacity
                   onPress={() => router.push(`/coach/cardio/${selected.id}`)}
@@ -174,9 +174,9 @@ export default function CardioHubScreen() {
               <>
                 <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
                   FCmax <Text style={{ color: theme.foreground, fontFamily: 'Montserrat_700Bold' }}>{zonesResult.maxHr} bpm</Text>{' '}
-                  ({zonesResult.maxHrMethod === 'override' ? 'medida' : 'Tanaka'})
-                  {classicRef != null && zonesResult.maxHrMethod !== 'override' ? ` · clásica ${classicRef}` : ''}
-                  {' · '}{zonesResult.zoneMethod === 'karvonen' ? `Karvonen (reposo ${zonesResult.restingHr})` : '%FCmax'}
+                  ({zonesResult.maxHrMethod === 'override' ? 'medida por el coach' : 'Tanaka 208 − 0.7·edad'})
+                  {classicRef != null && zonesResult.maxHrMethod !== 'override' ? ` · clásica 220−edad: ${classicRef}` : ''}
+                  {' · '}rangos por {zonesResult.zoneMethod === 'karvonen' ? `Karvonen (reposo ${zonesResult.restingHr})` : '%FCmax'}
                 </Text>
                 <View style={styles.zoneGrid}>
                   {zonesResult.zones.map((z) => (
@@ -190,7 +190,7 @@ export default function CardioHubScreen() {
               </>
             ) : (
               <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                {selected ? 'Sin fecha de nacimiento ni FCmax no se derivan zonas — editá el perfil.' : 'Ingresá una edad válida.'}
+                {selected ? 'Sin fecha de nacimiento ni FCmax medida no se pueden derivar zonas — edita el perfil del alumno.' : 'Ingresa una edad válida para calcular las zonas.'}
               </Text>
             )}
           </View>
@@ -226,8 +226,8 @@ export default function CardioHubScreen() {
               <View style={styles.metricGrid}>
                 <Metric theme={theme} label="Tiempo total" value={formatDuration(paceToTimeSec(paceSec, distKm))} />
                 <Metric theme={theme} label="Velocidad" value={`${kmhFromPace(paceSec)} km/h`} />
-                <Metric theme={theme} label="Pace /milla" value={`${formatPace(paceKmToMile(paceSec))}`} />
-                <Metric theme={theme} label="Pace /km" value={`${formatPace(paceSec)}`} />
+                <Metric theme={theme} label="Pace por milla" value={`${formatPace(paceKmToMile(paceSec))} /mi`} />
+                <Metric theme={theme} label="Pace por km" value={`${formatPace(paceSec)} /km`} />
               </View>
             ) : (
               <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Pace en formato m:ss y distancia mayor a 0.</Text>
@@ -241,7 +241,7 @@ export default function CardioHubScreen() {
               <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Plantillas de intervalos</Text>
             </View>
             <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              Disponibles en el builder al prescribir un bloque cardio.
+              Disponibles en el builder al prescribir un bloque cardio (botón "Aplicar plantilla").
             </Text>
             {INTERVAL_TEMPLATES.map((tpl) => {
               const total = intervalTotalDurationSec(tpl.config)

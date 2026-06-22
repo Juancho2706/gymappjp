@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
-import { Activity, GitCompare, Scale, TrendingUp, Zap } from 'lucide-react-native'
+import { Activity, GitCompare, Scale, Target, TrendingUp, Zap } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { EmptyState } from '../../../components'
+import { updateCoachClient } from '../../../lib/coach-client-detail'
 import { AreaTrend, type AreaPoint } from '../charts/AreaTrend'
 import { RadialGauge } from '../charts/RadialGauge'
 import { StatCard, CardHeader, MetricBox, Pill, cd, formatDate } from './shared'
@@ -25,7 +26,7 @@ const BMI_SEGMENTS = [
   { upTo: 40, color: '#EF4444' },
 ]
 
-export function ProgresoTab({ data, onOpenPhoto }: { data: CoachClientDetailData; onOpenPhoto: (photos: string[], index: number) => void }) {
+export function ProgresoTab({ data, onOpenPhoto, onReload }: { data: CoachClientDetailData; onOpenPhoto: (photos: string[], index: number) => void; onReload?: () => void }) {
   const { theme } = useTheme()
   const { client, checkIns } = data
   const [activeIdx, setActiveIdx] = useState<number | null>(null)
@@ -90,6 +91,9 @@ export function ProgresoTab({ data, onOpenPhoto }: { data: CoachClientDetailData
         </StatCard>
       ) : null}
 
+      {/* Peso objetivo (inline editor) — paridad con el header del Panel de Progreso (web) */}
+      <GoalWeightEditor clientId={client?.id ?? ''} current={client?.goal_weight_kg ?? null} onSaved={onReload} />
+
       {/* Stats de composición */}
       <View style={cd.grid2}>
         <MetricBox value={initial != null ? `${initial} kg` : '—'} label="Peso inicial" />
@@ -129,6 +133,42 @@ export function ProgresoTab({ data, onOpenPhoto }: { data: CoachClientDetailData
         ))}
       </View>
     </View>
+  )
+}
+
+function GoalWeightEditor({ clientId, current, onSaved }: { clientId: string; current: number | null; onSaved?: () => void }) {
+  const { theme } = useTheme()
+  const [value, setValue] = useState(current != null ? String(current) : '')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    if (!clientId) return
+    const n = parseFloat(value)
+    const newVal = Number.isFinite(n) && n > 0 ? n : null
+    setSaving(true)
+    const r = await updateCoachClient(clientId, { goal_weight_kg: newVal })
+    setSaving(false)
+    if (r.ok) onSaved?.()
+  }
+
+  return (
+    <StatCard>
+      <CardHeader icon={Target} title="Peso objetivo" />
+      <View style={styles.goalRow}>
+        <TextInput
+          value={value}
+          onChangeText={setValue}
+          keyboardType="decimal-pad"
+          placeholder="—"
+          placeholderTextColor={theme.mutedForeground}
+          style={[styles.goalInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
+        />
+        <Text style={[styles.goalUnit, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>kg</Text>
+        <TouchableOpacity activeOpacity={0.85} onPress={save} disabled={saving} style={[styles.goalBtn, { backgroundColor: theme.primary, opacity: saving ? 0.6 : 1, borderRadius: theme.radius.lg }]}>
+          <Text style={[styles.goalBtnTxt, { color: theme.primaryForeground, fontFamily: 'Inter_700Bold' }]}>{saving ? '…' : 'Guardar'}</Text>
+        </TouchableOpacity>
+      </View>
+    </StatCard>
   )
 }
 
@@ -278,4 +318,9 @@ const styles = StyleSheet.create({
   ciEnergyVal: { fontSize: 12, width: 38, textAlign: 'right' },
   ciPhotos: { flexDirection: 'row', gap: 8, marginTop: 2 },
   ciPhoto: { width: 64, height: 80, borderRadius: 10 },
+  goalRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  goalInput: { flex: 1, height: 46, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, fontSize: 16, textAlign: 'center' },
+  goalUnit: { fontSize: 13 },
+  goalBtn: { paddingHorizontal: 16, paddingVertical: 13 },
+  goalBtnTxt: { fontSize: 13 },
 })

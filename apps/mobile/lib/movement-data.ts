@@ -40,10 +40,10 @@ export const MOVEMENT_PATTERN_ORDER: readonly MovementPatternSlug[] = [
 export const PATTERN_LABELS: Record<MovementPatternSlug, string> = {
   deep_squat: 'Sentadilla profunda',
   hurdle_step: 'Paso de valla',
-  inline_lunge: 'Desplante en línea',
+  inline_lunge: 'Estocada en línea',
   shoulder_mobility: 'Movilidad de hombro',
-  active_straight_leg_raise: 'Elevación de pierna activa',
-  trunk_stability_pushup: 'Estabilidad de tronco (flexión)',
+  active_straight_leg_raise: 'Elevación activa de pierna recta',
+  trunk_stability_pushup: 'Estabilidad de tronco en empuje',
   rotary_stability: 'Estabilidad rotatoria',
 }
 

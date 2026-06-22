@@ -18,7 +18,7 @@ import {
 } from '../../lib/movement-data'
 
 const DISCLAIMER =
-  'Este screening evalúa la PRIORIDAD de trabajo correctivo, no un diagnóstico ni un riesgo de lesión. Consultá a tu coach o a un profesional de salud ante cualquier molestia.'
+  'Tamizaje de priorización de trabajo correctivo; no es diagnóstico ni predice lesiones; no sustituye evaluación clínica.'
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -62,13 +62,16 @@ export default function AlumnoMovimientoScreen() {
       <View style={styles.backRow}>
         <Back theme={theme} onPress={() => router.back()} />
       </View>
-      <ScreenHeader title="Screening de movimiento" subtitle="Tu evaluación de patrones de movimiento" />
+      <ScreenHeader
+        title="Tu screening de movimiento"
+        subtitle="Resultado de tu evaluación de movimiento de ingreso y su evolución. Tu equipo lo usa para priorizar tu trabajo correctivo."
+      />
 
       {!latest ? (
         <EmptyState
           icon={Activity}
-          title="Sin evaluaciones aún"
-          subtitle="Tu coach aún no registró tu screening de movimiento. Cuando lo haga, vas a ver acá tu reporte y tu evolución."
+          title="Aún no tienes evaluaciones de movimiento finalizadas."
+          subtitle="Cuando tu coach registre tu screening, vas a ver acá tu reporte y tu evolución."
         />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -77,7 +80,7 @@ export default function AlumnoMovimientoScreen() {
           {finals.length >= 2 && compositeSeries.length >= 2 ? (
             <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}>
               <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-                Evolución del compuesto
+                Evolución
               </Text>
               <View style={styles.trendRow}>
                 <Sparkline values={compositeSeries} width={220} height={56} color={theme.primary} />
@@ -94,7 +97,7 @@ export default function AlumnoMovimientoScreen() {
             </View>
           ) : (
             <Text style={[styles.needTwo, { color: theme.mutedForeground, backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl, fontFamily: theme.fontSans }]}>
-              Necesitás al menos dos evaluaciones para ver tu evolución.
+              Con dos o más evaluaciones finales verás aquí la evolución.
             </Text>
           )}
 
@@ -113,7 +116,7 @@ function ReportCard({ theme, assessment }: { theme: any; assessment: MovementFin
       {/* Encabezado: banda + compuesto */}
       <View style={styles.cardHead}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>PRIORIDAD</Text>
+          <Text style={[styles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>PRIORIDAD DE TRABAJO CORRECTIVO</Text>
           {band ? (
             <View style={[styles.bandChip, { backgroundColor: band.color + '1A', borderColor: band.color + '4D' }]}>
               <View style={[styles.bandDot, { backgroundColor: band.color }]} />
@@ -127,7 +130,7 @@ function ReportCard({ theme, assessment }: { theme: any; assessment: MovementFin
           </Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
-          <Text style={[styles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>COMPUESTO</Text>
+          <Text style={[styles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>PUNTAJE COMPUESTO</Text>
           <Text style={[styles.composite, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
             {assessment.composite_score ?? '—'}
             <Text style={{ color: theme.mutedForeground, fontSize: 16, fontFamily: theme.fontSans }}>/21</Text>
@@ -141,7 +144,7 @@ function ReportCard({ theme, assessment }: { theme: any; assessment: MovementFin
           {assessment.has_pain && (
             <View style={[styles.flag, { backgroundColor: '#EF44441A' }]}>
               <AlertTriangle size={13} color="#EF4444" />
-              <Text style={[styles.flagText, { color: '#EF4444', fontFamily: 'Inter_600SemiBold' }]}>Dolor reportado</Text>
+              <Text style={[styles.flagText, { color: '#EF4444', fontFamily: 'Inter_600SemiBold' }]}>Dolor</Text>
             </View>
           )}
           {assessment.has_asymmetry && (
@@ -204,7 +207,7 @@ function ItemRow({ theme, item }: { theme: any; item: MovementItem }) {
             )}
             {item.clearing_positive === true && (
               <View style={[styles.miniFlag, { backgroundColor: '#EF44441A' }]}>
-                <Text style={[styles.miniFlagText, { color: '#EF4444', fontFamily: 'Inter_600SemiBold' }]}>Descarte +</Text>
+                <Text style={[styles.miniFlagText, { color: '#EF4444', fontFamily: 'Inter_600SemiBold' }]}>Descarte: Positivo</Text>
               </View>
             )}
           </View>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { Apple, Archive, ArchiveRestore, BarChart3, ClipboardList, Clock, CreditCard, Dumbbell, HeartPulse, LayoutGrid, MessageCircle, Pencil, Plus, Salad, Scale, TrendingUp, User, X } from 'lucide-react-native'
@@ -24,11 +24,14 @@ import {
   getCoachClientDetail,
   getCoachClientDayDetail,
   setCoachClientArchived,
-  updateCoachClient,
   type ClientDayDetail,
   type CoachClientDetail,
   type CoachClientDetailData,
 } from '../../../lib/coach-client-detail'
+import {
+  getClientIntake,
+  updateClientIntake,
+} from '../../../lib/coach-client-extras'
 import {
   avgEnergySince,
   bmiCategory,
@@ -271,7 +274,7 @@ export default function ClientDetailScreen() {
           {tab === 'overview' ? (
             <OverviewTab data={data} reload={load} onOpenPhoto={onOpenPhoto} onEditProgram={openBuilder} />
           ) : tab === 'progreso' ? (
-            <ProgresoTab data={data} onOpenPhoto={onOpenPhoto} />
+            <ProgresoTab data={data} onOpenPhoto={onOpenPhoto} onReload={load} />
           ) : tab === 'analisis' ? (
             <AnalisisTab data={data} selectedDate={selectedDate} onSelectDate={setSelectedDate} dayDetail={dayDetail} dayLoading={dayLoading} />
           ) : tab === 'plan' ? (
@@ -411,22 +414,113 @@ function PaymentForm({ clientId, onDone, onCancel }: { clientId: string; onDone:
   )
 }
 
+const GOAL_OPTIONS = [
+  'Perder grasa',
+  'Aumentar masa muscular',
+  'Recomposición corporal',
+  'Mantenimiento general',
+  'Rendimiento deportivo',
+]
+const GOAL_LABELS: Record<string, string> = {
+  'Perder grasa': 'Perder grasa / Definición',
+  'Aumentar masa muscular': 'Aumentar masa muscular / Volumen',
+  'Recomposición corporal': 'Recomposición corporal',
+  'Mantenimiento general': 'Mantenimiento general / Salud',
+  'Rendimiento deportivo': 'Mejorar rendimiento deportivo',
+}
+const EXPERIENCE_OPTIONS = ['Principiante', 'Intermedio', 'Avanzado']
+const AVAILABILITY_OPTIONS = ['2 días', '3 días', '4 días', '5 días', '6+ días']
+
+function OptionPicker({ label, value, options, labels, onChange, theme }: {
+  label: string
+  value: string
+  options: string[]
+  labels?: Record<string, string>
+  onChange: (v: string) => void
+  theme: any
+}) {
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={{ fontSize: 13, color: theme.mutedForeground, fontFamily: theme.fontSans }}>{label}</Text>
+      <View style={styles.optWrap}>
+        {options.map((o) => {
+          const on = value === o
+          return (
+            <TouchableOpacity key={o} activeOpacity={0.8} onPress={() => onChange(on ? '' : o)}
+              style={[styles.optChip, { borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : theme.secondary, borderRadius: theme.radius.lg }]}>
+              <Text style={{ fontSize: 12.5, fontFamily: on ? 'Inter_700Bold' : theme.fontSans, color: on ? theme.primary : theme.foreground }}>{labels?.[o] ?? o}</Text>
+            </TouchableOpacity>
+          )
+        })}
+      </View>
+    </View>
+  )
+}
+
+function MultilineField({ label, value, onChangeText, theme, placeholder }: any) {
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={{ fontSize: 13, color: theme.mutedForeground, fontFamily: theme.fontSans }}>{label}</Text>
+      <TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor={theme.mutedForeground} multiline
+        style={{ minHeight: 64, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.lg, backgroundColor: theme.secondary, color: theme.foreground, paddingHorizontal: 12, paddingVertical: 10, fontFamily: theme.fontSans, textAlignVertical: 'top' }} />
+    </View>
+  )
+}
+
 function EditClientForm({ client, onDone, onCancel }: { client: CoachClientDetail; onDone: () => void; onCancel: () => void }) {
   const { theme } = useTheme()
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [fullName, setFullName] = useState(client.full_name)
   const [phone, setPhone] = useState(client.phone ?? '')
+  const [weight, setWeight] = useState('')
+  const [height, setHeight] = useState('')
+  const [goals, setGoals] = useState('')
+  const [experience, setExperience] = useState('')
+  const [availability, setAvailability] = useState('')
+  const [injuries, setInjuries] = useState('')
+  const [medical, setMedical] = useState('')
   const [goalWeight, setGoalWeight] = useState(client.goal_weight_kg != null ? String(client.goal_weight_kg) : '')
   const [startDate, setStartDate] = useState(client.subscription_start_date ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  useEffect(() => {
+    let cancelled = false
+    getClientIntake(client.id).then(({ data, error }) => {
+      if (cancelled) return
+      if (error) setLoadError(error)
+      else if (data) {
+        setFullName(data.full_name)
+        setPhone(data.phone ?? '')
+        setWeight(data.weight_kg != null ? String(data.weight_kg) : '')
+        setHeight(data.height_cm != null ? String(data.height_cm) : '')
+        setGoals(data.goals ?? '')
+        setExperience(data.experience_level ?? '')
+        setAvailability(data.availability ?? '')
+        setInjuries(data.injuries ?? '')
+        setMedical(data.medical_conditions ?? '')
+      }
+      setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [client.id])
+
   async function submit() {
     setError(null)
     if (fullName.trim().length < 2) { setError('Indica el nombre.'); return }
     setSaving(true)
-    const r = await updateCoachClient(client.id, {
+    const r = await updateClientIntake({
+      clientId: client.id,
       full_name: fullName.trim(),
       phone: phone.trim() || null,
+      weight_kg: weight.trim() ? Number(weight) : null,
+      height_cm: height.trim() ? Number(height) : null,
+      goals: goals.trim() || null,
+      experience_level: experience.trim() || null,
+      availability: availability.trim() || null,
+      injuries: injuries.trim() || null,
+      medical_conditions: medical.trim() || null,
       goal_weight_kg: goalWeight.trim() ? Number(goalWeight) : null,
       subscription_start_date: startDate.trim() || null,
     })
@@ -435,18 +529,32 @@ function EditClientForm({ client, onDone, onCancel }: { client: CoachClientDetai
     else onDone()
   }
 
+  if (loading) {
+    return <View style={{ paddingVertical: 28, alignItems: 'center' }}><ActivityIndicator color={theme.primary} /></View>
+  }
+
   return (
-    <View style={{ gap: 12 }}>
-      <Field label="Nombre" value={fullName} onChangeText={setFullName} theme={theme} />
-      <Field label="Teléfono" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+56 9 ..." theme={theme} />
-      <Field label="Peso objetivo (kg)" value={goalWeight} onChangeText={setGoalWeight} keyboardType="decimal-pad" placeholder="75" theme={theme} />
+    <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 12 }} showsVerticalScrollIndicator={false}>
+      {loadError ? <Text style={{ color: theme.destructive, fontSize: 13, fontFamily: theme.fontSans }}>{loadError}</Text> : null}
+      <Field label="Nombre completo" value={fullName} onChangeText={setFullName} theme={theme} />
+      <Field label="Teléfono (WhatsApp)" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+56 9 ..." theme={theme} />
+      <View style={styles.formRow}>
+        <View style={{ flex: 1 }}><Field label="Peso (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="75.5" theme={theme} /></View>
+        <View style={{ flex: 1 }}><Field label="Estatura (cm)" value={height} onChangeText={setHeight} keyboardType="number-pad" placeholder="178" theme={theme} /></View>
+      </View>
+      <OptionPicker label="Objetivo principal" value={goals} options={GOAL_OPTIONS} labels={GOAL_LABELS} onChange={setGoals} theme={theme} />
+      <OptionPicker label="Experiencia" value={experience} options={EXPERIENCE_OPTIONS} onChange={setExperience} theme={theme} />
+      <OptionPicker label="Días/semana" value={availability} options={AVAILABILITY_OPTIONS} onChange={setAvailability} theme={theme} />
+      <MultilineField label="Lesiones / Limitaciones" value={injuries} onChangeText={setInjuries} placeholder="Ninguna" theme={theme} />
+      <MultilineField label="Condiciones médicas" value={medical} onChangeText={setMedical} placeholder="Ninguna" theme={theme} />
+      <Field label="Peso objetivo (kg)" value={goalWeight} onChangeText={setGoalWeight} keyboardType="decimal-pad" placeholder="72" theme={theme} />
       <Field label="Alumno desde" value={startDate} onChangeText={setStartDate} placeholder="2026-01-15" theme={theme} />
       {error ? <Text style={{ color: theme.destructive, fontSize: 13 }}>{error}</Text> : null}
       <View style={styles.formActions}>
         <Button label="Cancelar" variant="secondary" onPress={onCancel} disabled={saving} style={{ flex: 1 }} />
-        <Button label={saving ? 'Guardando...' : 'Guardar'} onPress={submit} disabled={saving} style={{ flex: 1 }} />
+        <Button label={saving ? 'Guardando...' : 'Guardar cambios'} onPress={submit} disabled={saving} style={{ flex: 1 }} />
       </View>
-    </View>
+    </ScrollView>
   )
 }
 
@@ -455,6 +563,9 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 96, gap: 14 },
   tabContent: { gap: 14, paddingTop: 14 },
   formActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  formRow: { flexDirection: 'row', gap: 10 },
+  optWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  optChip: { borderWidth: 1, paddingHorizontal: 11, paddingVertical: 8 },
   fabWrap: { position: 'absolute', right: 18, bottom: 28, alignItems: 'flex-end', gap: 12 },
   fab: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
   fabAction: { flexDirection: 'row', alignItems: 'center', gap: 10 },

@@ -561,10 +561,10 @@ function itemRowToCalcInput(item: MovementAssessmentItemRow): MovementItemInput 
 export const PATTERN_LABELS: Record<MovementPatternSlug, string> = {
   deep_squat: 'Sentadilla profunda',
   hurdle_step: 'Paso de valla',
-  inline_lunge: 'Zancada en linea',
+  inline_lunge: 'Estocada en línea',
   shoulder_mobility: 'Movilidad de hombro',
-  active_straight_leg_raise: 'Elevacion activa de pierna',
-  trunk_stability_pushup: 'Estabilidad de tronco (flexion)',
+  active_straight_leg_raise: 'Elevación activa de pierna recta',
+  trunk_stability_pushup: 'Estabilidad de tronco en empuje',
   rotary_stability: 'Estabilidad rotatoria',
 }
 
@@ -575,4 +575,4 @@ export const BAND_LABELS: Record<PriorityBand, string> = {
 }
 
 export const MOVEMENT_DISCLAIMER =
-  'Tamizaje de movimiento orientativo para priorizar trabajo correctivo. No es un diagnostico clinico ni una prediccion de lesion. Ante dolor o molestia, derivar a un profesional de salud.'
+  'Tamizaje de priorización de trabajo correctivo; no es diagnóstico ni predice lesiones; no sustituye evaluación clínica.'

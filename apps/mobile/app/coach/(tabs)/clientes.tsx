@@ -45,7 +45,7 @@ import {
 import { MotiView } from 'moti'
 import * as Clipboard from 'expo-clipboard'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, NativeDialog, ScreenHeader } from '../../../components'
+import { AnimatedNumber, Button, NativeDialog, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { ClientCard, CLIENT_CARD_HEIGHT } from '../../../components/coach/ClientCard'
@@ -54,9 +54,12 @@ import {
   buildStats,
   defaultSortDir,
   filterClients,
+  getClientIntake,
   getCoachDirectoryClients,
   getCoachDirectoryPulse,
   sortClients,
+  updateClientData,
+  type ClientIntakeData,
   type DirectoryClient,
   type DirectoryRiskFilter,
   type DirectorySortKey,
@@ -194,9 +197,15 @@ function StatTile({
         <View style={[statStyles.iconWrap, { backgroundColor: color + '1A' }]}>
           <Icon size={13} color={color} />
         </View>
-        <Text style={[statStyles.value, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-          {sub}{value}{suffix}
-        </Text>
+        {/* 1:1 web AnimatedNumber: solo el número hace count-up; sub (emoji) y suffix (%) quedan estáticos. */}
+        <View style={statStyles.valueRow}>
+          {sub ? <Text style={[statStyles.valueSub, { color: theme.foreground }]}>{sub}</Text> : null}
+          <AnimatedNumber
+            value={value}
+            style={[statStyles.value, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
+          />
+          {suffix ? <Text style={[statStyles.value, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{suffix}</Text> : null}
+        </View>
       </View>
       <Text style={[statStyles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
         {label}
@@ -215,6 +224,8 @@ const statStyles = StyleSheet.create({
     gap: 3,
   },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  valueRow: { flexDirection: 'row', alignItems: 'baseline' },
+  valueSub: { fontSize: 15, marginRight: 2 },
   iconWrap: {
     width: 24,
     height: 24,
@@ -765,6 +776,266 @@ const createStyles = StyleSheet.create({
   btnText: { color: '#fff', fontSize: 14, letterSpacing: 1, textTransform: 'uppercase' },
 })
 
+// ─── Edit Client Data Modal (1:1 web EditClientDataModal: intake completo) ──────
+
+const GOAL_OPTIONS: { label: string; value: string }[] = [
+  { label: 'Sin especificar', value: '' },
+  { label: 'Perder grasa / Definición', value: 'Perder grasa' },
+  { label: 'Aumentar masa muscular / Volumen', value: 'Aumentar masa muscular' },
+  { label: 'Recomposición corporal', value: 'Recomposición corporal' },
+  { label: 'Mantenimiento general / Salud', value: 'Mantenimiento general' },
+  { label: 'Mejorar rendimiento deportivo', value: 'Rendimiento deportivo' },
+]
+const EXPERIENCE_OPTIONS: { label: string; value: string }[] = [
+  { label: 'Sin especificar', value: '' },
+  { label: 'Principiante', value: 'Principiante' },
+  { label: 'Intermedio', value: 'Intermedio' },
+  { label: 'Avanzado', value: 'Avanzado' },
+]
+const AVAILABILITY_OPTIONS: { label: string; value: string }[] = [
+  { label: 'Sin especificar', value: '' },
+  { label: '2 días', value: '2 días' },
+  { label: '3 días', value: '3 días' },
+  { label: '4 días', value: '4 días' },
+  { label: '5 días', value: '5 días' },
+  { label: '6+ días', value: '6+ días' },
+]
+
+function PickerField({
+  label, value, options, onSelect, theme,
+}: {
+  label: string; value: string; options: { label: string; value: string }[]
+  onSelect: (v: string) => void; theme: any
+}) {
+  const [open, setOpen] = useState(false)
+  const current = options.find((o) => o.value === value) ?? options[0]
+  return (
+    <View style={editStyles.fieldWrap}>
+      <Text style={[editStyles.label, { color: theme.foreground }]}>{label}</Text>
+      <TouchableOpacity
+        style={[editStyles.select, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}
+        onPress={() => setOpen(true)}
+        activeOpacity={0.75}
+      >
+        <Text style={[editStyles.selectTxt, { color: current.value ? theme.foreground : theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
+          {current.label}
+        </Text>
+        <ChevronRight size={16} color={theme.mutedForeground} style={{ transform: [{ rotate: '90deg' }] }} />
+      </TouchableOpacity>
+      <OptionSheet
+        visible={open}
+        title={label}
+        options={options}
+        selected={value}
+        onSelect={onSelect}
+        onClose={() => setOpen(false)}
+        theme={theme}
+      />
+    </View>
+  )
+}
+
+function EditClientDataModal({
+  visible, clientId, clientName, onClose, onSaved, theme,
+}: {
+  visible: boolean; clientId: string | null; clientName: string
+  onClose: () => void; onSaved: () => void; theme: any
+}) {
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [form, setForm] = useState<ClientIntakeData | null>(null)
+
+  useEffect(() => {
+    if (!visible || !clientId) return
+    setLoading(true)
+    setError(null)
+    setForm(null)
+    getClientIntake(clientId)
+      .then(({ data, error }) => {
+        if (error) setError(error)
+        else setForm(data ?? null)
+      })
+      .catch((e: any) => setError(e?.message ?? 'No se pudo cargar.'))
+      .finally(() => setLoading(false))
+  }, [visible, clientId])
+
+  const set = (patch: Partial<ClientIntakeData>) => setForm((f) => (f ? { ...f, ...patch } : f))
+
+  async function handleSave() {
+    if (!form || !clientId) return
+    if (!form.full_name.trim()) { setError('El nombre es obligatorio.'); return }
+    setSaving(true)
+    setError(null)
+    const r = await updateClientData(clientId, { ...form, full_name: form.full_name.trim() })
+    setSaving(false)
+    if (!r.ok) { setError(r.error ?? 'No se pudo guardar.'); return }
+    onSaved()
+    onClose()
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <Pressable style={sheetStyles.overlay} onPress={onClose} />
+        <View style={[editStyles.sheet, { backgroundColor: theme.card, maxHeight: '90%' }]}>
+          <View style={sheetStyles.handle} />
+          <View style={editStyles.header}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[editStyles.title, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]} numberOfLines={1}>
+                Editar datos — {clientName}
+              </Text>
+              <Text style={[editStyles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                Modifica el nombre, teléfono y datos de onboarding del alumno.
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} hitSlop={8}>
+              <X size={20} color={theme.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+
+          {loading ? (
+            <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+              <ActivityIndicator color={theme.primary} />
+            </View>
+          ) : error && !form ? (
+            <View style={[editStyles.errorBox, { backgroundColor: theme.destructive + '18', borderColor: theme.destructive + '40' }]}>
+              <Text style={{ color: theme.destructive, fontSize: 13 }}>{error}</Text>
+            </View>
+          ) : form ? (
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <View style={{ gap: 12, paddingBottom: 8 }}>
+                <View style={editStyles.fieldWrap}>
+                  <Text style={[editStyles.label, { color: theme.foreground }]}>Nombre completo</Text>
+                  <TextInput
+                    style={[editStyles.input, { backgroundColor: theme.secondary, borderColor: theme.border, color: theme.foreground, fontFamily: theme.fontSans, borderRadius: theme.radius.lg }]}
+                    value={form.full_name}
+                    onChangeText={(v) => set({ full_name: v })}
+                    autoCapitalize="words"
+                  />
+                </View>
+                <View style={editStyles.fieldWrap}>
+                  <Text style={[editStyles.label, { color: theme.foreground }]}>Teléfono (WhatsApp)</Text>
+                  <TextInput
+                    style={[editStyles.input, { backgroundColor: theme.secondary, borderColor: theme.border, color: theme.foreground, fontFamily: theme.fontSans, borderRadius: theme.radius.lg }]}
+                    value={form.phone ?? ''}
+                    onChangeText={(v) => set({ phone: v })}
+                    placeholder="+56xxxxxxxxx"
+                    placeholderTextColor={theme.mutedForeground}
+                    keyboardType="phone-pad"
+                    autoCorrect={false}
+                  />
+                </View>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={[editStyles.fieldWrap, { flex: 1 }]}>
+                    <Text style={[editStyles.label, { color: theme.foreground }]}>Peso (kg)</Text>
+                    <TextInput
+                      style={[editStyles.input, { backgroundColor: theme.secondary, borderColor: theme.border, color: theme.foreground, fontFamily: theme.fontSans, borderRadius: theme.radius.lg }]}
+                      value={form.weight_kg != null ? String(form.weight_kg) : ''}
+                      onChangeText={(v) => set({ weight_kg: v.trim() ? Number(v.replace(',', '.')) : null })}
+                      placeholder="75.5"
+                      placeholderTextColor={theme.mutedForeground}
+                      keyboardType="decimal-pad"
+                    />
+                  </View>
+                  <View style={[editStyles.fieldWrap, { flex: 1 }]}>
+                    <Text style={[editStyles.label, { color: theme.foreground }]}>Estatura (cm)</Text>
+                    <TextInput
+                      style={[editStyles.input, { backgroundColor: theme.secondary, borderColor: theme.border, color: theme.foreground, fontFamily: theme.fontSans, borderRadius: theme.radius.lg }]}
+                      value={form.height_cm != null ? String(form.height_cm) : ''}
+                      onChangeText={(v) => set({ height_cm: v.trim() ? Number(v) : null })}
+                      placeholder="178"
+                      placeholderTextColor={theme.mutedForeground}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                </View>
+                <PickerField label="Objetivo principal" value={form.goals ?? ''} options={GOAL_OPTIONS} onSelect={(v) => set({ goals: v })} theme={theme} />
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <PickerField label="Experiencia" value={form.experience_level ?? ''} options={EXPERIENCE_OPTIONS} onSelect={(v) => set({ experience_level: v })} theme={theme} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <PickerField label="Días/semana" value={form.availability ?? ''} options={AVAILABILITY_OPTIONS} onSelect={(v) => set({ availability: v })} theme={theme} />
+                  </View>
+                </View>
+                <View style={editStyles.fieldWrap}>
+                  <Text style={[editStyles.label, { color: theme.foreground }]}>Lesiones / Limitaciones</Text>
+                  <TextInput
+                    style={[editStyles.input, editStyles.textarea, { backgroundColor: theme.secondary, borderColor: theme.border, color: theme.foreground, fontFamily: theme.fontSans, borderRadius: theme.radius.lg }]}
+                    value={form.injuries ?? ''}
+                    onChangeText={(v) => set({ injuries: v })}
+                    placeholder="Ninguna"
+                    placeholderTextColor={theme.mutedForeground}
+                    multiline
+                    textAlignVertical="top"
+                  />
+                </View>
+                <View style={editStyles.fieldWrap}>
+                  <Text style={[editStyles.label, { color: theme.foreground }]}>Condiciones médicas</Text>
+                  <TextInput
+                    style={[editStyles.input, editStyles.textarea, { backgroundColor: theme.secondary, borderColor: theme.border, color: theme.foreground, fontFamily: theme.fontSans, borderRadius: theme.radius.lg }]}
+                    value={form.medical_conditions ?? ''}
+                    onChangeText={(v) => set({ medical_conditions: v })}
+                    placeholder="Ninguna"
+                    placeholderTextColor={theme.mutedForeground}
+                    multiline
+                    textAlignVertical="top"
+                  />
+                </View>
+
+                {error ? (
+                  <View style={[editStyles.errorBox, { backgroundColor: theme.destructive + '18', borderColor: theme.destructive + '40' }]}>
+                    <Text style={{ color: theme.destructive, fontSize: 13 }}>{error}</Text>
+                  </View>
+                ) : null}
+
+                <View style={{ flexDirection: 'row', gap: 12, paddingTop: 4 }}>
+                  <TouchableOpacity
+                    style={[editStyles.cancelBtn, { borderColor: theme.border, borderRadius: theme.radius.xl }]}
+                    onPress={onClose}
+                    disabled={saving}
+                  >
+                    <Text style={[editStyles.cancelTxt, { color: theme.mutedForeground }]}>Cancelar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[editStyles.saveBtn, { backgroundColor: theme.primary, opacity: saving ? 0.7 : 1, borderRadius: theme.radius.xl }]}
+                    onPress={handleSave}
+                    disabled={saving}
+                  >
+                    {saving ? <ActivityIndicator color="#fff" size="small" /> : (
+                      <Text style={[editStyles.saveTxt, { fontFamily: 'Montserrat_700Bold' }]}>Guardar cambios</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+                <View style={{ height: 16 }} />
+              </View>
+            </ScrollView>
+          ) : null}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  )
+}
+
+const editStyles = StyleSheet.create({
+  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 0 },
+  header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 },
+  title: { fontSize: 17 },
+  subtitle: { fontSize: 12.5, marginTop: 2 },
+  fieldWrap: { gap: 5 },
+  label: { fontSize: 13, fontWeight: '600' },
+  input: { minHeight: 44, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15 },
+  textarea: { minHeight: 60 },
+  select: { height: 44, borderWidth: 1, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  selectTxt: { fontSize: 15, flex: 1 },
+  errorBox: { borderRadius: 10, borderWidth: 1, padding: 12 },
+  cancelBtn: { flex: 1, height: 46, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  cancelTxt: { fontSize: 14, fontWeight: '600' },
+  saveBtn: { flex: 1, height: 46, alignItems: 'center', justifyContent: 'center' },
+  saveTxt: { color: '#fff', fontSize: 14, letterSpacing: 0.5 },
+})
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ClientesScreen() {
@@ -783,6 +1054,7 @@ export default function ClientesScreen() {
   const [showFilterSheet, setShowFilterSheet] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const [editClient, setEditClient] = useState<DirectoryClient | null>(null)
   const [dismissed, setDismissed] = useState<Record<string, { date: string; count: number }>>({})
   // Vista por defecto = 'table' (1:1 web). list/cards/table.
   const [viewMode, setViewMode] = useState<'list' | 'cards' | 'table'>('table')
@@ -972,10 +1244,9 @@ export default function ClientesScreen() {
     )
   }
   function handleEdit(c: DirectoryClient) {
-    // La edición completa de datos del alumno (nombre/teléfono/intake) requiere un endpoint
-    // mobile que aún no existe (la web usa server actions intake). De momento, abrir el perfil
-    // donde el coach edita esos datos. Ver residualGaps: endpoint de edición.
-    router.push(`/coach/cliente/${c.id}`)
+    // 1:1 web: abre EditClientDataModal inline (intake completo) sin salir de la lista.
+    // Escribe clients + client_intake bajo la sesión RLS del coach (sin service-role).
+    setEditClient(c)
   }
   const goProfile = (c: DirectoryClient) => router.push(`/coach/cliente/${c.id}`)
   const goWorkout = (c: DirectoryClient) => router.push(`/coach/program-builder?clientId=${c.id}&clientName=${encodeURIComponent(c.fullName)}`)
@@ -1295,6 +1566,14 @@ export default function ClientesScreen() {
         visible={showCreate}
         onClose={() => setShowCreate(false)}
         onCreated={() => load()}
+        theme={theme}
+      />
+      <EditClientDataModal
+        visible={editClient !== null}
+        clientId={editClient?.id ?? null}
+        clientName={editClient?.fullName ?? ''}
+        onClose={() => setEditClient(null)}
+        onSaved={() => load(true)}
         theme={theme}
       />
 

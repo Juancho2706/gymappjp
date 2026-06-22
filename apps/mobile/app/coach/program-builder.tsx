@@ -33,6 +33,7 @@ import { BuilderOnboardingTour, type TourStep } from '../../components/coach/Bui
 import { getMuscleColor } from '../../lib/muscle-colors'
 import { listCoachExercises, type ExerciseRow } from '../../lib/exercises'
 import { listAreas, buildAreaVMs, type AreaVM } from '../../lib/areas'
+import { moveBlockToArea } from '../../lib/workout-areas-grouping'
 import { legacyRepsSummaryFor, effectiveExerciseType, EXERCISE_TYPE_LABEL } from '../../lib/workout-exercise-type'
 import { resolveClientZones, type HrZoneRange } from '../../lib/cardio'
 import { exportProgramPdf } from '../../lib/program-pdf'
@@ -618,6 +619,19 @@ export default function ProgramBuilderScreen() {
     searchRef.current?.snapToIndex(2)
   }
 
+  // Mover un bloque a un área (espejo del onSetBlockArea web → SET_BLOCK_AREA). El reducer de
+  // mobile no tiene esa acción, así que recomponemos el día con la función pura compartida.
+  // Estables (referenciadas en el memo del card): leen de refs/state, sin deps cambiantes.
+  const setBlockArea = useCallback((uid: string, areaId: string) => {
+    const day = liveDays.current.find((d) => d.id === activeDayIdRef.current)
+    if (!day) return
+    setDayBlocks(day.id, moveBlockToArea(day.blocks, uid, areaId, areaVMs))
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+  }, [setDayBlocks, areaVMs])
+  const goManageAreas = useCallback(() => {
+    router.push('/coach/settings/areas')
+  }, [router])
+
   // P8: render de un bloque dentro de su sección (incluye el conector de superserie).
   function renderSectionBlock({ item, drag, isActive }: { item: BuilderBlock; drag: () => void; isActive: boolean }) {
     const block = item
@@ -657,6 +671,9 @@ export default function ProgramBuilderScreen() {
           onUpdate={updateBlock}
           onSetSection={(uid, s) => setBlockSection(activeDayId, uid, s)}
           onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)}
+          areas={areaVMs}
+          onSetArea={setBlockArea}
+          onManageAreas={goManageAreas}
           catGif={cat?.gif_url}
           catImage={cat?.image_url}
           catVideo={cat?.video_url}
@@ -1151,7 +1168,7 @@ export default function ProgramBuilderScreen() {
       <TemplatePickerSheet ref={templateRef} onSelect={loadTemplate} />
       <AssignClientsSheet ref={assignRef} onAssign={(ids) => { assignRef.current?.dismiss(); assignToClients(ids) }} saving={saving} />
       <MuscleBalanceSheet ref={balanceRef} days={days} />
-      <ProgramPreviewSheet ref={previewRef} days={days} name={name} />
+      <ProgramPreviewSheet ref={previewRef} days={days} name={name} areas={areaVMs} />
       <ProgramConfigSheet ref={configRef}
         name={name} setName={setName}
         structureType={structureType} setStructureType={setStructureType}

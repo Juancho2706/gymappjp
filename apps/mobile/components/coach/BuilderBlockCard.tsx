@@ -1,12 +1,14 @@
-import { memo, useEffect, useState } from 'react'
-import { Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { memo, useEffect, useMemo, useState } from 'react'
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
-import { CircleHelp, GripVertical, Minus, Plus, X } from 'lucide-react-native'
+import { Check, ChevronDown, CircleHelp, GripVertical, Minus, Plus, Settings2, X } from 'lucide-react-native'
 import { ScaleDecorator } from 'react-native-draggable-flatlist'
 import { useTheme } from '../../context/ThemeContext'
 import { exerciseThumb } from '../../lib/exercises'
 import { getMuscleColor } from '../../lib/muscle-colors'
 import { effectiveExerciseType, typedBlockSummary } from '../../lib/workout-exercise-type'
+import type { AreaVM } from '../../lib/areas'
+import { effectiveAreaKey } from '../../lib/workout-areas-grouping'
 import type { BuilderBlock, BuilderSection } from '../../lib/plan-builder/types'
 
 function hexToRgba(hex: string, a: number): string {
@@ -27,6 +29,12 @@ interface Props {
   onUpdate: (block: BuilderBlock) => void
   onSetSection: (uid: string, section: BuilderSection) => void
   onToggleSuperset: (uid: string) => void
+  /** Áreas visibles (system + custom) ya como VM (chips del area-picker on-card). */
+  areas?: AreaVM[]
+  /** Mover el bloque a un área (espejo del popover web "Mover a área"). */
+  onSetArea?: (uid: string, areaId: string) => void
+  /** Navegar a gestionar áreas (espejo del link "Gestionar áreas" → /coach/settings/areas). */
+  onManageAreas?: () => void
   /** Fallback de media desde el catálogo (por exercise_id) cuando el bloque no la trae. */
   catGif?: string | null
   catImage?: string | null
@@ -36,13 +44,24 @@ interface Props {
 /** Card de ejercicio 1:1 con la web (ExerciseBlock): borde por músculo, miniatura,
  *  badges (sección, sets×reps con quick-edit, descanso, superserie, progresión, músculo)
  *  + botones CAL/PRI/ENF + eliminar. */
-function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpdate, onSetSection, onToggleSuperset, catGif, catImage, catVideo }: Props) {
+function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpdate, onSetSection, onToggleSuperset, areas, onSetArea, onManageAreas, catGif, catImage, catVideo }: Props) {
   const { theme } = useTheme()
   const [editing, setEditing] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [areaPickerOpen, setAreaPickerOpen] = useState(false)
   const [qs, setQs] = useState(block.sets ?? 3)
   const [qr, setQr] = useState(block.reps ?? '8-10')
   useEffect(() => { setQs(block.sets ?? 3); setQr(block.reps ?? '8-10') }, [block.uid])
+
+  // Área efectiva del bloque (espejo de ExerciseBlock web): section_template_id → área system del
+  // section legacy. Si el id no está en la lista conocida, cae al área legacy del bloque.
+  const areaVMs = areas ?? []
+  const areaPickerEnabled = !!onSetArea && areaVMs.length > 0
+  const areaKey = useMemo(
+    () => effectiveAreaKey(block, new Set(areaVMs.map((a) => a.id))),
+    [block, areaVMs],
+  )
+  const currentArea = areaVMs.find((a) => a.id === areaKey) ?? areaVMs.find((a) => a.slug === 'main') ?? areaVMs[0]
 
   const muscle = getMuscleColor(block.muscle_group)
   const sec: BuilderSection = block.section === 'warmup' || block.section === 'cooldown' ? block.section : 'main'
@@ -128,6 +147,19 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
               <View style={[styles.badge, { backgroundColor: 'rgba(16,185,129,0.1)', borderColor: 'rgba(16,185,129,0.25)' }]}><Text style={[styles.badgeT, { color: '#10B981' }]}>↑{block.progression_type === 'weight' ? `${block.progression_value ?? '?'}kg` : `${block.progression_value ?? '?'}r`}</Text></View>
             ) : null}
             <View style={[styles.badge, { backgroundColor: muscle, borderColor: 'transparent', maxWidth: 120 }]}><Text style={[styles.badgeT, { color: '#fff' }]} numberOfLines={1}>{block.muscle_group}</Text></View>
+
+            {/* Area-picker on-card (espejo del popover web "Mover a área" + "Gestionar áreas"). */}
+            {areaPickerEnabled && currentArea ? (
+              <TouchableOpacity
+                onPress={() => setAreaPickerOpen(true)}
+                activeOpacity={0.8}
+                style={[styles.areaChip, { borderColor: currentArea.color + '66', backgroundColor: currentArea.color + '1A' }]}
+              >
+                <View style={[styles.areaDot, { backgroundColor: currentArea.color }]} />
+                <Text style={[styles.areaChipT, { color: currentArea.color }]} numberOfLines={1}>{currentArea.shortLabel}</Text>
+                <ChevronDown size={11} color={currentArea.color} strokeWidth={3} />
+              </TouchableOpacity>
+            ) : null}
           </View>
 
           <View style={styles.secSwitch}>
@@ -159,6 +191,42 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
           </Pressable>
         </Modal>
 
+        {/* Picker de área (espejo del popover web): "Mover a área" + lista de chips + "Gestionar áreas". */}
+        <Modal visible={areaPickerOpen} transparent animationType="fade" onRequestClose={() => setAreaPickerOpen(false)}>
+          <Pressable style={styles.helpBackdrop} onPress={() => setAreaPickerOpen(false)}>
+            <Pressable style={[styles.areaCard, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => {}}>
+              <Text style={[styles.areaPickerTitle, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>MOVER A ÁREA</Text>
+              <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+                {areaVMs.map((area) => {
+                  const on = area.id === areaKey
+                  return (
+                    <TouchableOpacity
+                      key={area.id}
+                      activeOpacity={0.8}
+                      onPress={() => { setAreaPickerOpen(false); if (!on) onSetArea?.(block.uid, area.id) }}
+                      style={[styles.areaRow, on && { backgroundColor: theme.primary + '14' }]}
+                    >
+                      <View style={[styles.areaRowBadge, { borderColor: area.color + '66', backgroundColor: area.color + '1A' }]}>
+                        <Text style={[styles.areaRowBadgeT, { color: area.color }]}>{area.shortLabel}</Text>
+                      </View>
+                      <Text style={[styles.areaRowName, { color: on ? theme.primary : theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>{area.name}</Text>
+                      {on ? <Check size={15} color={theme.primary} /> : null}
+                    </TouchableOpacity>
+                  )
+                })}
+              </ScrollView>
+              <TouchableOpacity
+                onPress={() => { setAreaPickerOpen(false); onManageAreas?.() }}
+                activeOpacity={0.8}
+                style={[styles.areaManage, { borderColor: theme.border }]}
+              >
+                <Settings2 size={13} color={theme.mutedForeground} />
+                <Text style={[styles.areaManageT, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Gestionar áreas</Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
         <TouchableOpacity onPress={() => onRemove(block.uid)} hitSlop={6} style={styles.del}>
           <X size={18} color={theme.mutedForeground} />
         </TouchableOpacity>
@@ -177,6 +245,9 @@ export const BuilderBlockCard = memo(
     a.catGif === b.catGif &&
     a.catImage === b.catImage &&
     a.catVideo === b.catVideo &&
+    a.areas === b.areas &&
+    a.onSetArea === b.onSetArea &&
+    a.onManageAreas === b.onManageAreas &&
     a.drag === b.drag,
 )
 
@@ -203,4 +274,15 @@ const styles = StyleSheet.create({
   helpTitle: { fontSize: 14 },
   helpLine: { fontSize: 12.5, lineHeight: 18 },
   helpClose: { marginTop: 10, borderRadius: 10, paddingVertical: 11, alignItems: 'center' },
+  areaChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2, maxWidth: 110 },
+  areaDot: { width: 6, height: 6, borderRadius: 3 },
+  areaChipT: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 0.2, textTransform: 'uppercase' },
+  areaCard: { width: '100%', maxWidth: 340, borderWidth: 1, borderRadius: 16, padding: 12, gap: 4 },
+  areaPickerTitle: { fontSize: 9.5, letterSpacing: 0.8, paddingHorizontal: 6, paddingBottom: 6, paddingTop: 2 },
+  areaRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 8, paddingVertical: 11, borderRadius: 9 },
+  areaRowBadge: { borderWidth: 1, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
+  areaRowBadgeT: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 0.2, textTransform: 'uppercase' },
+  areaRowName: { flex: 1, fontSize: 13.5 },
+  areaManage: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 6, borderWidth: 1, borderStyle: 'dashed', borderRadius: 10, paddingVertical: 11 },
+  areaManageT: { fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase' },
 })

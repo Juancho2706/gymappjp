@@ -76,7 +76,7 @@ export default function MovementHubScreen() {
           <Text style={{ color: theme.mutedForeground, fontFamily: theme.fontSans, fontSize: 14 }}>Volver</Text>
         </TouchableOpacity>
       </View>
-      <ScreenHeader title="Screening de movimiento" subtitle="Prioridad de trabajo correctivo por alumno" />
+      <ScreenHeader title="Screening de Movimiento de Ingreso" subtitle="Evaluación de ingreso de 7 patrones con semáforo de prioridad y evolución." />
 
       {!entitled ? (
         <View style={styles.offWrap}>
@@ -94,7 +94,7 @@ export default function MovementHubScreen() {
           {clients.length === 0 ? (
             <View style={[styles.emptyCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}>
               <Text style={[styles.emptyText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                No tenés alumnos para evaluar todavía.
+                No hay alumnos en este espacio de trabajo.
               </Text>
             </View>
           ) : (
@@ -129,13 +129,13 @@ export default function MovementHubScreen() {
                           </>
                         ) : (
                           <Text style={[styles.metaSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                            Sin evaluación
+                            Sin screening
                           </Text>
                         )}
                         {c.draft_id ? (
                           <View style={[styles.draftChip, { backgroundColor: theme.primary + '1A' }]}>
                             <FilePen size={11} color={theme.primary} />
-                            <Text style={[styles.draftText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Borrador</Text>
+                            <Text style={[styles.draftText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Borrador en curso</Text>
                           </View>
                         ) : null}
                       </View>
@@ -147,7 +147,7 @@ export default function MovementHubScreen() {
                     >
                       <ClipboardList size={14} color={theme.primaryForeground} />
                       <Text style={[styles.evalText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>
-                        {c.draft_id ? 'Continuar' : 'Evaluar'}
+                        {c.draft_id ? 'Retomar' : 'Evaluar'}
                       </Text>
                     </TouchableOpacity>
                   </View>

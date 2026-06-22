@@ -274,7 +274,7 @@ export default function MovementWizardScreen() {
                 <View style={{ flex: 1 }}>
                   <Segmented
                     theme={theme}
-                    label="IZQUIERDO"
+                    label="IZQUIERDA"
                     value={items[def.slug].score_left}
                     onChange={(v) => patch(def.slug, { score_left: v })}
                   />
@@ -282,7 +282,7 @@ export default function MovementWizardScreen() {
                 <View style={{ flex: 1 }}>
                   <Segmented
                     theme={theme}
-                    label="DERECHO"
+                    label="DERECHA"
                     value={items[def.slug].score_right}
                     onChange={(v) => patch(def.slug, { score_right: v })}
                   />
@@ -297,11 +297,11 @@ export default function MovementWizardScreen() {
               />
             )}
 
-            <Toggle theme={theme} label="Dolor durante la prueba" checked={items[def.slug].pain} onChange={(v) => patch(def.slug, { pain: v })} danger />
+            <Toggle theme={theme} label="Hubo dolor durante el patrón" checked={items[def.slug].pain} onChange={(v) => patch(def.slug, { pain: v })} danger />
             {def.hasClearing ? (
               <Toggle
                 theme={theme}
-                label="Prueba de descarte positiva"
+                label="Prueba de descarte positiva (dolor)"
                 checked={items[def.slug].clearing_positive === true}
                 onChange={(v) => patch(def.slug, { clearing_positive: v })}
                 danger
@@ -309,7 +309,7 @@ export default function MovementWizardScreen() {
             ) : null}
 
             <View style={{ gap: 6 }}>
-              <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>COMENTARIO (OPCIONAL)</Text>
+              <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>OBSERVACIONES (COMPENSACIONES, NOTAS)</Text>
               <TextInput
                 value={items[def.slug].comment}
                 onChangeText={(v) => patch(def.slug, { comment: v })}
@@ -364,7 +364,7 @@ export default function MovementWizardScreen() {
             {!allComplete ? (
               <View style={[styles.warn, { backgroundColor: '#F59E0B1A', borderColor: '#F59E0B4D' }]}>
                 <Text style={[styles.warnText, { color: '#B45309', fontFamily: theme.fontSans }]}>
-                  Faltan patrones por completar. Tocá un patrón arriba para editarlo.
+                  Faltan patrones por puntuar para finalizar.
                 </Text>
               </View>
             ) : null}
@@ -372,7 +372,7 @@ export default function MovementWizardScreen() {
             {previewSummary ? (
               <View style={[styles.previewCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>PRIORIDAD ESTIMADA</Text>
+                  <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>VISTA PREVIA DEL SEMÁFORO</Text>
                   <View style={[styles.bandChipLg, { backgroundColor: BAND_COLOR[previewSummary.band] + '1A', borderColor: BAND_COLOR[previewSummary.band] + '4D' }]}>
                     <View style={[styles.dotLg, { backgroundColor: BAND_COLOR[previewSummary.band] }]} />
                     <Text style={[styles.bandTextLg, { color: BAND_COLOR[previewSummary.band], fontFamily: 'Montserrat_700Bold' }]}>
@@ -388,7 +388,7 @@ export default function MovementWizardScreen() {
             ) : null}
 
             <View style={{ gap: 6 }}>
-              <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>NOTAS GENERALES (OPCIONAL)</Text>
+              <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>NOTAS DE LA EVALUACIÓN (OPCIONAL)</Text>
               <TextInput
                 value={notes}
                 onChangeText={setNotes}
@@ -408,7 +408,7 @@ export default function MovementWizardScreen() {
                 {consentAttested ? <Check size={13} color={theme.primaryForeground} /> : null}
               </View>
               <Text style={[styles.consentText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
-                Atesto que el alumno consintió el tratamiento de sus datos de salud para este screening.
+                Atesto que el alumno consintió el tratamiento de sus datos de salud para esta evaluación.
               </Text>
             </TouchableOpacity>
 
@@ -447,7 +447,7 @@ export default function MovementWizardScreen() {
               style={[styles.navBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
             >
               <ArrowLeft size={15} color={theme.foreground} />
-              <Text style={[styles.navText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Atrás</Text>
+              <Text style={[styles.navText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Anterior</Text>
             </TouchableOpacity>
           ) : null}
           {!isReview && def ? (
@@ -458,7 +458,7 @@ export default function MovementWizardScreen() {
               style={[styles.navBtnPrimary, { backgroundColor: theme.primary, opacity: !isComplete(def, items[def.slug]) || saving ? 0.5 : 1 }]}
             >
               <Text style={[styles.navText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>
-                {saving ? 'Guardando…' : step === totalSteps - 1 ? 'Revisar' : 'Siguiente'}
+                {saving ? 'Guardando…' : step === totalSteps - 1 ? 'Revisión' : 'Siguiente'}
               </Text>
               {!saving ? <ArrowRight size={15} color={theme.primaryForeground} /> : null}
             </TouchableOpacity>

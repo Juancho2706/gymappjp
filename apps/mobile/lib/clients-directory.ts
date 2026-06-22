@@ -94,6 +94,79 @@ export async function getCoachDirectoryPulse(): Promise<Map<string, PulseRow>> {
   }
 }
 
+// ─── Edición de datos del alumno (1:1 web EditClientDataModal: clients + client_intake) ──
+// La web usa server actions (getClientIntakeAction / updateClientDataAction). En mobile leemos/
+// escribimos vía la sesión RLS del coach: clients tiene GRANT UPDATE(full_name, phone, …) para
+// authenticated y client_intake tiene GRANT ALL para authenticated (RLS = coach sobre su alumno).
+// NUNCA service-role.
+export interface ClientIntakeData {
+  full_name: string
+  phone: string | null
+  weight_kg: number | null
+  height_cm: number | null
+  goals: string | null
+  experience_level: string | null
+  availability: string | null
+  injuries: string | null
+  medical_conditions: string | null
+}
+
+/** Lee nombre/teléfono + intake completo del alumno (1:1 web getClientIntakeAction). */
+export async function getClientIntake(clientId: string): Promise<{ data?: ClientIntakeData; error?: string }> {
+  const { data, error } = await supabase
+    .from('clients')
+    .select('full_name, phone, client_intake(weight_kg, height_cm, goals, experience_level, availability, injuries, medical_conditions)')
+    .eq('id', clientId)
+    .maybeSingle()
+  if (error) return { error: error.message }
+  if (!data) return { error: 'Alumno no encontrado.' }
+  const ci = Array.isArray((data as any).client_intake) ? (data as any).client_intake[0] : (data as any).client_intake
+  return {
+    data: {
+      full_name: (data as any).full_name,
+      phone: (data as any).phone ?? null,
+      weight_kg: ci?.weight_kg ?? null,
+      height_cm: ci?.height_cm ?? null,
+      goals: ci?.goals ?? null,
+      experience_level: ci?.experience_level ?? null,
+      availability: ci?.availability ?? null,
+      injuries: ci?.injuries ?? null,
+      medical_conditions: ci?.medical_conditions ?? null,
+    },
+  }
+}
+
+/** Actualiza nombre/teléfono (clients) + upsert de intake (1:1 web updateClientDataAction). */
+export async function updateClientData(
+  clientId: string,
+  values: Omit<ClientIntakeData, never>
+): Promise<{ ok: boolean; error?: string }> {
+  const { error: clientErr } = await supabase
+    .from('clients')
+    .update({ full_name: values.full_name, phone: values.phone || null })
+    .eq('id', clientId)
+  if (clientErr) return { ok: false, error: 'Error al actualizar datos del alumno.' }
+
+  // Espejo exacto del payload web: numéricos a 0 si vacíos, strings a '' (columnas NOT NULL).
+  const { error: intakeErr } = await supabase
+    .from('client_intake')
+    .upsert(
+      {
+        client_id: clientId,
+        weight_kg: values.weight_kg != null ? Number(values.weight_kg) : 0,
+        height_cm: values.height_cm != null ? Number(values.height_cm) : 0,
+        goals: values.goals || '',
+        experience_level: values.experience_level || '',
+        availability: values.availability || '',
+        injuries: values.injuries || null,
+        medical_conditions: values.medical_conditions || null,
+      },
+      { onConflict: 'client_id' }
+    )
+  if (intakeErr) return { ok: false, error: 'Error al actualizar datos de onboarding.' }
+  return { ok: true }
+}
+
 export interface DirectoryStats {
   total: number
   active: number

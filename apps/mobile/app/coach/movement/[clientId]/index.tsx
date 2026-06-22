@@ -82,7 +82,7 @@ export default function MovementReportScreen() {
   function confirmDelete(id: string) {
     Alert.alert(
       'Eliminar evaluación',
-      'Las evaluaciones finales son inmutables. Para corregir, eliminá y volvé a evaluar. ¿Eliminar?',
+      '¿Eliminar esta evaluación? La acción queda registrada en la bitácora y no se puede deshacer.',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -144,14 +144,14 @@ export default function MovementReportScreen() {
           >
             <ClipboardList size={16} color={theme.primaryForeground} />
             <Text style={[styles.ctaText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>
-              {draftId ? 'Continuar borrador' : 'Nueva evaluación'}
+              {draftId ? 'Retomar borrador' : 'Nueva evaluación'}
             </Text>
           </TouchableOpacity>
 
           {!latest ? (
             <View style={[styles.emptyCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}>
               <Text style={[styles.emptyText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                Este alumno aún no tiene evaluaciones finalizadas.
+                Este alumno aún no tiene screening de movimiento.
               </Text>
             </View>
           ) : (
@@ -170,7 +170,7 @@ export default function MovementReportScreen() {
 
               {/* Historial */}
               <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}>
-                <Text style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>HISTORIAL</Text>
+                <Text style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>HISTORIAL DE EVALUACIONES</Text>
                 {[...finals].reverse().map((a, i) => (
                   <View
                     key={a.id}
@@ -227,7 +227,7 @@ function ReportCard({ assessment, theme }: { assessment: MovementAssessmentWithI
     <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}>
       <View style={styles.reportHead}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.reportLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>PRIORIDAD CORRECTIVA</Text>
+          <Text style={[styles.reportLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>PRIORIDAD DE TRABAJO CORRECTIVO</Text>
           {assessment.risk_band ? (
             <View style={[styles.bandChipLg, { backgroundColor: BAND_COLOR[assessment.risk_band] + '1A', borderColor: BAND_COLOR[assessment.risk_band] + '4D' }]}>
               <View style={[styles.dotLg, { backgroundColor: BAND_COLOR[assessment.risk_band] }]} />
@@ -241,7 +241,7 @@ function ReportCard({ assessment, theme }: { assessment: MovementAssessmentWithI
           </Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
-          <Text style={[styles.reportLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>COMPUESTO</Text>
+          <Text style={[styles.reportLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>PUNTAJE COMPUESTO</Text>
           <Text style={[styles.composite, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
             {assessment.composite_score ?? '—'}
             <Text style={[styles.compositeMax, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>/21</Text>
@@ -284,7 +284,7 @@ function ReportCard({ assessment, theme }: { assessment: MovementAssessmentWithI
                 <View style={styles.patternFlags}>
                   {item.pain ? <Text style={[styles.tinyFlag, { color: '#EF4444', fontFamily: 'Inter_600SemiBold' }]}>Dolor</Text> : null}
                   {item.clearing_positive === true ? (
-                    <Text style={[styles.tinyFlag, { color: '#EF4444', fontFamily: 'Inter_600SemiBold' }]}>Descarte +</Text>
+                    <Text style={[styles.tinyFlag, { color: '#EF4444', fontFamily: 'Inter_600SemiBold' }]}>Descarte: Positivo</Text>
                   ) : null}
                 </View>
               </View>
@@ -336,7 +336,8 @@ function EvolutionSection({ finals, theme }: { finals: MovementAssessmentWithIte
 
   return (
     <View style={[styles.section, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}>
-      <Text style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>EVOLUCIÓN DEL COMPUESTO</Text>
+      <Text style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>EVOLUCIÓN</Text>
+      <Text style={[styles.cmpHeadCell, { color: theme.mutedForeground, fontFamily: theme.fontSans, marginBottom: 2 }]}>COMPUESTO</Text>
       <TrendChart points={points} color={theme.primary} suffix="" decimals={0} />
 
       <Text style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold', marginTop: 12 }]}>
