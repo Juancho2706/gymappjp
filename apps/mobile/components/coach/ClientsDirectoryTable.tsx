@@ -1,5 +1,5 @@
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { FlashList } from '@shopify/flash-list'
+import React, { useCallback } from 'react'
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { ArrowUpDown, Apple, Eye, Pencil, Archive, ArchiveRestore, Trash2 } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
 import {
@@ -68,7 +68,7 @@ function ScoreBadge({ score }: { score: number }) {
   )
 }
 
-function HeaderCell({
+const HeaderCell = React.memo(function HeaderCell({
   label, col, width, sortKey, sortDir, onSort, theme,
 }: {
   label: string; col: ColId; width: number; sortKey: DirectorySortKey; sortDir: SortDir
@@ -81,23 +81,20 @@ function HeaderCell({
   const active = sortKey === sk
   return (
     <TouchableOpacity
-      style={{ width, flexDirection: 'row', alignItems: 'center', gap: 3 }}
+      style={{ width, flexDirection: 'row', alignItems: 'center', gap: 3, minHeight: 44 }}
       activeOpacity={0.7}
       onPress={() => onSort(sk, active ? (sortDir === 'asc' ? 'desc' : 'asc') : defaultSortDir(sk))}
+      accessibilityRole="button"
+      accessibilityLabel={`Ordenar por ${label}${active ? (sortDir === 'asc' ? ', ascendente' : ', descendente') : ''}`}
     >
       <Text style={[s.headerTxt, { color: active ? theme.primary : theme.mutedForeground }]} numberOfLines={1}>{label}</Text>
       <ArrowUpDown size={11} color={active ? theme.primary : theme.mutedForeground} style={{ opacity: active ? 1 : 0.4 }} />
       {active ? <Text style={[s.headerArrow, { color: theme.primary }]}>{sortDir === 'asc' ? '↑' : '↓'}</Text> : null}
     </TouchableOpacity>
   )
-}
+})
 
-// Umbral de virtualización (1:1 web: react-virtual con max-height cuando hay muchas filas).
-// ≤20 filas → render directo (sin overhead de virtualización). >20 → FlashList con altura tope.
-const VIRTUALIZE_THRESHOLD = 20
 const ROW_HEIGHT = 56
-// Altura tope de la zona scrollable de filas (≈ 60% del alto de pantalla), como el max-h web.
-const VIRTUAL_BODY_MAX_HEIGHT = Math.round(Dimensions.get('window').height * 0.6)
 
 interface RowProps {
   client: DirectoryClient
@@ -112,7 +109,7 @@ interface RowProps {
   onDelete: (c: DirectoryClient) => void
 }
 
-function TableRow({ client: c, pulse: p, theme, coachSlug, onRowPress, onProfile, onWhatsApp, onEdit, onArchive, onDelete }: RowProps) {
+const TableRow = React.memo(function TableRow({ client: c, pulse: p, theme, coachSlug, onRowPress, onProfile, onWhatsApp, onEdit, onArchive, onDelete }: RowProps) {
   const score = p?.attentionScore ?? c.attentionScore
   const adh = p?.percentage ?? 0
   const nutriRisk = p?.attentionFlags?.includes('NUTRICION_RIESGO') ?? false
@@ -172,27 +169,58 @@ function TableRow({ client: c, pulse: p, theme, coachSlug, onRowPress, onProfile
       </View>
       {/* Acc. */}
       <View style={[s.cell, { width: COL_W.actions, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 }]}>
-        <TouchableOpacity hitSlop={6} style={s.iconAct} onPress={() => onProfile(c)}>
+        <TouchableOpacity
+          hitSlop={10}
+          style={s.iconAct}
+          onPress={() => onProfile(c)}
+          accessibilityRole="button"
+          accessibilityLabel={`Ver perfil de ${c.fullName}`}
+        >
           <Eye size={16} color={theme.mutedForeground} />
         </TouchableOpacity>
         {c.phone && coachSlug ? (
-          <TouchableOpacity style={[s.waBtn]} onPress={() => onWhatsApp(c)}>
+          <TouchableOpacity
+            hitSlop={8}
+            style={[s.waBtn]}
+            onPress={() => onWhatsApp(c)}
+            accessibilityRole="button"
+            accessibilityLabel={`Enviar WhatsApp a ${c.fullName}`}
+          >
             <Text style={s.waTxt}>WA</Text>
           </TouchableOpacity>
         ) : null}
-        <TouchableOpacity hitSlop={6} style={s.iconAct} onPress={() => onEdit(c)}>
+        <TouchableOpacity
+          hitSlop={10}
+          style={s.iconAct}
+          onPress={() => onEdit(c)}
+          accessibilityRole="button"
+          accessibilityLabel={`Editar datos de ${c.fullName}`}
+        >
           <Pencil size={16} color={theme.mutedForeground} />
         </TouchableOpacity>
-        <TouchableOpacity hitSlop={6} style={s.iconAct} onPress={() => onArchive(c)}>
+        <TouchableOpacity
+          hitSlop={10}
+          style={s.iconAct}
+          onPress={() => onArchive(c)}
+          accessibilityRole="button"
+          accessibilityLabel={c.isArchived ? `Reactivar a ${c.fullName}` : `Archivar a ${c.fullName}`}
+        >
           {c.isArchived ? <ArchiveRestore size={16} color={theme.mutedForeground} /> : <Archive size={16} color={theme.mutedForeground} />}
         </TouchableOpacity>
-        <TouchableOpacity hitSlop={6} style={s.iconAct} onPress={() => onDelete(c)}>
+        {/* Acción destructiva separada (margen extra) para evitar mis-taps. */}
+        <TouchableOpacity
+          hitSlop={10}
+          style={[s.iconAct, s.iconActDestructive]}
+          onPress={() => onDelete(c)}
+          accessibilityRole="button"
+          accessibilityLabel={`Eliminar a ${c.fullName}`}
+        >
           <Trash2 size={16} color={theme.destructive} />
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
   )
-}
+})
 
 interface Props {
   clients: DirectoryClient[]
@@ -218,12 +246,10 @@ export function ClientsDirectoryTable({
     COL_W.name + COL_W.status + COL_W.score + COL_W.adherence + COL_W.weight +
     COL_W.last + COL_W.program + COL_W.days + COL_W.actions + 9 * 8
 
-  // Virtualización: con muchas filas la zona de filas se vuelve un FlashList vertical con altura
-  // tope (espejo del react-virtual + max-height de la web). Pocas filas → render directo, sin
-  // anidar listas (el FlatList del screen ya scrollea el conjunto). Las columnas siempre van en
-  // el mismo ScrollView horizontal.
-  const virtualize = clients.length > VIRTUALIZE_THRESHOLD
-
+  // Un solo virtualizador vertical: el FlatList del screen (que envuelve esta tabla) es el único
+  // que virtualiza. Aquí las filas se renderizan directo con .map dentro del ScrollView HORIZONTAL
+  // (horizontal + vertical NO anidan virtualización → sin warning "VirtualizedLists nested" ni
+  // gesto robado). Sin altura tope: la tabla crece y la página entera scrollea.
   const headerRow = (
     <View style={[s.headerRow, { borderBottomColor: theme.border, backgroundColor: theme.card }]}>
       <HeaderCell label="Alumno" col="name" width={COL_W.name} sortKey={sortKey} sortDir={sortDir} onSort={onSortChange} theme={theme} />
@@ -238,20 +264,23 @@ export function ClientsDirectoryTable({
     </View>
   )
 
-  const renderRow = (c: DirectoryClient) => (
-    <TableRow
-      key={c.id}
-      client={c}
-      pulse={pulseById.get(c.id)}
-      theme={theme}
-      coachSlug={coachSlug}
-      onRowPress={onRowPress}
-      onProfile={onProfile}
-      onWhatsApp={onWhatsApp}
-      onEdit={onEdit}
-      onArchive={onArchive}
-      onDelete={onDelete}
-    />
+  const renderRow = useCallback(
+    (c: DirectoryClient) => (
+      <TableRow
+        key={c.id}
+        client={c}
+        pulse={pulseById.get(c.id)}
+        theme={theme}
+        coachSlug={coachSlug}
+        onRowPress={onRowPress}
+        onProfile={onProfile}
+        onWhatsApp={onWhatsApp}
+        onEdit={onEdit}
+        onArchive={onArchive}
+        onDelete={onDelete}
+      />
+    ),
+    [pulseById, theme, coachSlug, onRowPress, onProfile, onWhatsApp, onEdit, onArchive, onDelete]
   )
 
   return (
@@ -259,18 +288,7 @@ export function ClientsDirectoryTable({
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth }}>
         <View style={{ minWidth }}>
           {headerRow}
-          {virtualize ? (
-            <View style={{ height: VIRTUAL_BODY_MAX_HEIGHT }}>
-              <FlashList
-                data={clients}
-                keyExtractor={(c) => c.id}
-                renderItem={({ item }) => renderRow(item)}
-                showsVerticalScrollIndicator
-              />
-            </View>
-          ) : (
-            clients.map(renderRow)
-          )}
+          {clients.map(renderRow)}
         </View>
       </ScrollView>
       <Text style={[s.hint, { color: theme.mutedForeground, borderTopColor: theme.border }]}>
@@ -299,7 +317,9 @@ const s = StyleSheet.create({
   barTrack: { flex: 1, height: 6, borderRadius: 99, overflow: 'hidden' },
   tnum: { fontSize: 11.5, fontFamily: 'Inter_700Bold' },
   dim: { fontSize: 9.5 },
-  iconAct: { padding: 6, borderRadius: 8 },
+  iconAct: { padding: 8, borderRadius: 8 },
+  // Separación de la acción destructiva (eliminar) para evitar mis-taps con archivar/editar.
+  iconActDestructive: { marginLeft: 6 },
   waBtn: { backgroundColor: '#25D366', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5 },
   waTxt: { color: '#fff', fontSize: 9.5, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.4 },
   hint: { fontSize: 10, paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1 },

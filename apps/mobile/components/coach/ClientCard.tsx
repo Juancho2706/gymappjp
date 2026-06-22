@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Dimensions, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
 import { Apple, Calendar, Dumbbell, Eye, MoreHorizontal, Pause, Play, Smartphone, Star, Trash2, KeyRound } from 'lucide-react-native'
@@ -54,7 +54,7 @@ function attentionMeta(score: number, streak: number): { label: string; color: s
   return { label: 'On track', color: '#10B981' }
 }
 
-export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, onToggleStatus, onResetPw, onDelete, onWorkout, onNutrition }: Props) {
+export const ClientCard = React.memo(function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, onToggleStatus, onResetPw, onDelete, onWorkout, onNutrition }: Props) {
   const { theme } = useTheme()
   const [menu, setMenu] = useState(false)
   const adherence = pulse?.percentage ?? 0
@@ -106,16 +106,16 @@ export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, o
 
       {/* Acciones inline visibles en el header (1:1 web: reset llave indigo · pausa ámbar · eliminar rojo · menú) */}
       <View style={styles.headerActions}>
-        <TouchableOpacity onPress={onResetPw} activeOpacity={0.8} style={[styles.hAct, { backgroundColor: '#6366F11A' }]}>
+        <TouchableOpacity onPress={onResetPw} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Restablecer contraseña" hitSlop={{ top: 4, bottom: 4, left: 3, right: 3 }} style={[styles.hAct, { backgroundColor: '#6366F11A' }]}>
           <KeyRound size={17} color="#6366F1" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={onToggleStatus} activeOpacity={0.8} style={[styles.hAct, { backgroundColor: (client.isActive ? '#F59E0B' : '#10B981') + '1A' }]}>
+        <TouchableOpacity onPress={onToggleStatus} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={client.isActive ? 'Pausar alumno' : 'Reactivar alumno'} hitSlop={{ top: 4, bottom: 4, left: 3, right: 3 }} style={[styles.hAct, { backgroundColor: (client.isActive ? '#F59E0B' : '#10B981') + '1A' }]}>
           {client.isActive ? <Pause size={17} color="#F59E0B" /> : <Play size={17} color="#10B981" />}
         </TouchableOpacity>
-        <TouchableOpacity onPress={onDelete} activeOpacity={0.8} style={[styles.hAct, { backgroundColor: theme.destructive + '1A', borderColor: theme.destructive + '4D', borderWidth: 1 }]}>
+        <TouchableOpacity onPress={onDelete} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Eliminar alumno" hitSlop={{ top: 4, bottom: 4, left: 3, right: 3 }} style={[styles.hAct, { backgroundColor: theme.destructive + '1A', borderColor: theme.destructive + '4D', borderWidth: 1 }]}>
           <Trash2 size={17} color={theme.destructive} />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setMenu(true)} activeOpacity={0.8} style={[styles.hAct, { backgroundColor: theme.secondary, borderColor: theme.border, borderWidth: 1 }]}>
+        <TouchableOpacity onPress={() => setMenu(true)} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Más opciones" hitSlop={{ top: 4, bottom: 4, left: 3, right: 3 }} style={[styles.hAct, { backgroundColor: theme.secondary, borderColor: theme.border, borderWidth: 1 }]}>
           <MoreHorizontal size={17} color={theme.foreground} />
         </TouchableOpacity>
       </View>
@@ -199,10 +199,10 @@ export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, o
 
       {/* Footer actions (1:1 web: WA · Perfil · Workout · Nutri) */}
       <View style={[styles.footer, { borderTopColor: theme.border }]}>
-        {onWhatsApp ? <FootBtn theme={theme} icon={Smartphone} label="WA" color="#10B981" filled onPress={onWhatsApp} /> : null}
-        <FootBtn theme={theme} icon={Eye} label="Perfil" onPress={onPress} />
-        <FootBtn theme={theme} icon={Dumbbell} label="Workout" onPress={onWorkout} />
-        <FootBtn theme={theme} icon={Apple} label="Nutri" onPress={onNutrition} />
+        {onWhatsApp ? <FootBtn theme={theme} icon={Smartphone} label="WA" a11yLabel="Enviar WhatsApp" color="#10B981" filled onPress={onWhatsApp} /> : null}
+        <FootBtn theme={theme} icon={Eye} label="Perfil" a11yLabel="Ver perfil" onPress={onPress} />
+        <FootBtn theme={theme} icon={Dumbbell} label="Workout" a11yLabel="Entrenamiento" onPress={onWorkout} />
+        <FootBtn theme={theme} icon={Apple} label="Nutri" a11yLabel="Nutrición" onPress={onNutrition} />
       </View>
 
       <Modal visible={menu} transparent animationType="fade" onRequestClose={() => setMenu(false)}>
@@ -211,7 +211,7 @@ export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, o
             {menuItems.map((it) => {
               const Icon = it.icon
               return (
-                <TouchableOpacity key={it.label} onPress={it.on} activeOpacity={0.8} style={styles.menuItem}>
+                <TouchableOpacity key={it.label} onPress={it.on} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={it.label} style={styles.menuItem}>
                   <Icon size={17} color={theme.foreground} />
                   <Text style={[styles.menuItemTxt, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{it.label}</Text>
                 </TouchableOpacity>
@@ -222,7 +222,7 @@ export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, o
       </Modal>
     </View>
   )
-}
+})
 
 function Bar({ value, color, theme }: { value: number; color: string; theme: any }) {
   return (
@@ -242,10 +242,10 @@ function Mini({ theme, label, value, sub }: { theme: any; label: string; value: 
   )
 }
 
-function FootBtn({ theme, icon: Icon, label, color, filled, onPress }: { theme: any; icon: any; label: string; color?: string; filled?: boolean; onPress: () => void }) {
+function FootBtn({ theme, icon: Icon, label, a11yLabel, color, filled, onPress }: { theme: any; icon: any; label: string; a11yLabel?: string; color?: string; filled?: boolean; onPress: () => void }) {
   const fg = filled ? '#fff' : (color ?? theme.foreground)
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={[styles.footBtn, filled && color ? { backgroundColor: color } : { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel={a11yLabel ?? label} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }} style={[styles.footBtn, filled && color ? { backgroundColor: color } : { borderColor: theme.border, backgroundColor: theme.secondary }]}>
       <Icon size={14} color={fg} />
       <Text style={[styles.footTxt, { color: fg, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
     </TouchableOpacity>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -100,6 +100,29 @@ function StackCardItem({ index, scrollY, headerH, children }: { index: number; s
     return { transform: [{ translateY }, { scale }], opacity }
   })
   return <Animated.View style={[{ marginBottom: CARD_GAP }, animStyle]}>{children}</Animated.View>
+}
+
+// Barra glass: en iOS usa expo-blur (BlurView real); en Android usa un fondo sólido
+// semi-opaco (theme.card con alpha alto) — el backdrop-blur es caro en Android y degrada
+// el scroll. El look iOS se mantiene 1:1.
+function GlassBar({ isDark, theme, children }: { isDark: boolean; theme: any; children: React.ReactNode }) {
+  if (Platform.OS === 'ios') {
+    return (
+      <BlurView intensity={isDark ? 28 : 36} tint={isDark ? 'dark' : 'light'} style={styles.glassBar}>
+        {/* Veil de legibilidad sobre el blur (glass best-practice 10–40% tint). */}
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(16,18,24,0.32)' : 'rgba(255,255,255,0.42)' }]} />
+        <View style={[StyleSheet.absoluteFill, styles.glassBarBorder, { borderBottomColor: theme.border }]} pointerEvents="none" />
+        {children}
+      </BlurView>
+    )
+  }
+  // Android: fondo sólido semi-opaco (card con alpha alto) en vez de blur.
+  return (
+    <View style={[styles.glassBar, { backgroundColor: hexToRgba(theme.card, 0.96) }]}>
+      <View style={[StyleSheet.absoluteFill, styles.glassBarBorder, { borderBottomColor: theme.border }]} pointerEvents="none" />
+      {children}
+    </View>
+  )
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -336,8 +359,11 @@ const alertStyles = StyleSheet.create({
 
 // ─── Client Row ───────────────────────────────────────────────────────────────
 
-function ClientRow({ item, index, theme, router, pulse }: { item: DirectoryClient; index: number; theme: any; router: any; pulse?: PulseRow }) {
+const ClientRow = React.memo(function ClientRow({ item, index, theme, onPress, pulse }: { item: DirectoryClient; index: number; theme: any; onPress: (c: DirectoryClient) => void; pulse?: PulseRow }) {
   const planLabel = daysLabel(item.planDaysRemaining)
+  // Solo las primeras filas animan la entrada; el resto entra sin animación para no
+  // re-animar al reciclar/scrollear y mantener el scroll fluido.
+  const animate = index < 8
   // A-F4: métricas en la fila (antes solo en cards). Adherencia + peso±Δ + último log.
   const adherence = pulse?.percentage ?? null
   const adherenceColor = adherence == null ? theme.mutedForeground : adherence >= 70 ? '#10B981' : adherence >= 40 ? '#F59E0B' : '#EF4444'
@@ -353,9 +379,9 @@ function ClientRow({ item, index, theme, router, pulse }: { item: DirectoryClien
 
   return (
     <MotiView
-      from={{ opacity: 0, translateY: 10 }}
+      from={animate ? { opacity: 0, translateY: 10 } : { opacity: 1, translateY: 0 }}
       animate={{ opacity: 1, translateY: 0 }}
-      transition={{ type: 'timing', duration: 300, delay: Math.min(index * 40, 320) }}
+      transition={animate ? { type: 'timing', duration: 300, delay: index * 40 } : { type: 'timing', duration: 0 }}
     >
       <TouchableOpacity
         style={[
@@ -366,8 +392,10 @@ function ClientRow({ item, index, theme, router, pulse }: { item: DirectoryClien
             borderRadius: theme.radius.xl,
           },
         ]}
-        onPress={() => router.push(`/coach/cliente/${item.id}`)}
+        onPress={() => onPress(item)}
         activeOpacity={0.75}
+        accessibilityRole="button"
+        accessibilityLabel={`Ver perfil de ${item.fullName}`}
       >
         {/* Left: avatar + info */}
         <View style={rowStyles.left}>
@@ -436,7 +464,7 @@ function ClientRow({ item, index, theme, router, pulse }: { item: DirectoryClien
       </TouchableOpacity>
     </MotiView>
   )
-}
+})
 
 const rowStyles = StyleSheet.create({
   card: {
@@ -1516,31 +1544,33 @@ export default function ClientesScreen() {
     riskFilter === 'all' ? tile.key === 'total' : tile.filter !== 'all' && tile.filter === riskFilter
 
   // ── Acciones rápidas por alumno ──────────────────────────────────────────
-  function handleWhatsApp(c: DirectoryClient) {
+  // Callbacks ESTABLES (useCallback) → con React.memo en las filas, escribir en el buscador
+  // no recrea estas refs y NO re-renderiza la grilla entera.
+  const handleWhatsApp = useCallback((c: DirectoryClient) => {
     if (!c.phone || !coachSlug) return
     openWhatsApp(c.phone, c.fullName, clientLoginUrl(coachSlug)).catch(() => {})
-  }
-  function handleShare(c: DirectoryClient) {
+  }, [coachSlug])
+  const handleShare = useCallback((c: DirectoryClient) => {
     if (!coachSlug) return
     shareLogin(c.fullName, clientLoginUrl(coachSlug)).catch(() => {})
-  }
+  }, [coachSlug])
   // Las acciones sensibles abren el diálogo branded (NativeDialog) en vez del Alert del OS.
-  function handleToggle(c: DirectoryClient) {
+  const handleToggle = useCallback((c: DirectoryClient) => {
     setConfirmError(null)
     setConfirmDialog({ kind: 'toggle', client: c })
-  }
-  function handleReset(c: DirectoryClient) {
+  }, [])
+  const handleReset = useCallback((c: DirectoryClient) => {
     setConfirmError(null)
     setConfirmDialog({ kind: 'reset', client: c })
-  }
-  function handleDelete(c: DirectoryClient) {
+  }, [])
+  const handleDelete = useCallback((c: DirectoryClient) => {
     setConfirmError(null)
     setConfirmDialog({ kind: 'delete', client: c })
-  }
-  function handleArchive(c: DirectoryClient) {
+  }, [])
+  const handleArchive = useCallback((c: DirectoryClient) => {
     setConfirmError(null)
     setConfirmDialog({ kind: 'archive', client: c })
-  }
+  }, [])
 
   // Reset de contraseña: corre de inmediato (sin paso de confirmación, 1:1 web genera y MUESTRA la clave).
   async function runReset(c: DirectoryClient) {
@@ -1584,14 +1614,45 @@ export default function ClientesScreen() {
     setResetCopied(true)
     setTimeout(() => setResetCopied(false), 2000)
   }
-  function handleEdit(c: DirectoryClient) {
+  const handleEdit = useCallback((c: DirectoryClient) => {
     // 1:1 web: abre EditClientDataModal inline (intake completo) sin salir de la lista.
     // Escribe clients + client_intake bajo la sesión RLS del coach (sin service-role).
     setEditClient(c)
-  }
-  const goProfile = (c: DirectoryClient) => router.push(`/coach/cliente/${c.id}`)
-  const goWorkout = (c: DirectoryClient) => router.push(`/coach/program-builder?clientId=${c.id}&clientName=${encodeURIComponent(c.fullName)}`)
-  const goNutrition = () => router.push('/coach/nutricion')
+  }, [])
+  const goProfile = useCallback((c: DirectoryClient) => router.push(`/coach/cliente/${c.id}`), [router])
+  const goWorkout = useCallback((c: DirectoryClient) => router.push(`/coach/program-builder?clientId=${c.id}&clientName=${encodeURIComponent(c.fullName)}`), [router])
+  const goNutrition = useCallback(() => router.push('/coach/nutricion'), [router])
+  const handleRefresh = useCallback(() => { load(true) }, [])
+  const handleSortChange = useCallback((k: DirectorySortKey, d: SortDir) => { setSortKey(k); setSortDir(d) }, [])
+
+  // ── renderItems ESTABLES ───────────────────────────────────────────────────
+  // El input de búsqueda escribe `search` → cambia `displayed`, pero estas refs NO cambian,
+  // así FlatList no recrea cada celda y React.memo en las filas evita el re-render storm.
+  const renderCard = useCallback(
+    ({ item, index }: { item: DirectoryClient; index: number }) => (
+      <StackCardItem index={index} scrollY={scrollY} headerH={headerH}>
+        <ClientCard
+          client={item}
+          pulse={pulseById.get(item.id)}
+          onPress={() => goProfile(item)}
+          onWhatsApp={item.phone && coachSlug ? () => handleWhatsApp(item) : undefined}
+          onShareLogin={() => handleShare(item)}
+          onToggleStatus={() => handleToggle(item)}
+          onResetPw={() => handleReset(item)}
+          onDelete={() => handleDelete(item)}
+          onWorkout={() => goWorkout(item)}
+          onNutrition={goNutrition}
+        />
+      </StackCardItem>
+    ),
+    [scrollY, headerH, pulseById, coachSlug, goProfile, handleWhatsApp, handleShare, handleToggle, handleReset, handleDelete, goWorkout, goNutrition]
+  )
+  const renderListRow = useCallback(
+    ({ item, index }: { item: DirectoryClient; index: number }) => (
+      <ClientRow item={item} index={index} theme={theme} onPress={goProfile} pulse={pulseById.get(item.id)} />
+    ),
+    [theme, goProfile, pulseById]
+  )
 
   // War Room top (1:1 web CoachWarRoom): título, subtítulo, sync, portal copy chip.
   const warRoomTop = (
@@ -1744,9 +1805,9 @@ export default function ClientesScreen() {
   ) : (
     // 1:1 web ClientsDirectoryEmpty: animación Lottie clipboard + "Tu equipo te espera" + CTA Nuevo alumno.
     <View style={styles.emptyWrap}>
-      {/* Lazy remote (mismo asset que la web). Si la carga remota falla, no renderiza nada (no crashea). */}
+      {/* Asset LOCAL bundleado (sin URI remota) — sin dependencia de red ni CDN externo. */}
       <LottieView
-        source={{ uri: 'https://assets2.lottiefiles.com/packages/lf20_m6cuL6.json' }}
+        source={require('../../../assets/lottie/clipboard-list.json')}
         autoPlay
         loop
         style={{ width: 160, height: 160 }}
@@ -1779,11 +1840,8 @@ export default function ClientesScreen() {
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
 
-      {/* Search + action bar — glass sticky (espejo web action bar sticky backdrop-blur). */}
-      <BlurView intensity={isDark ? 28 : 36} tint={isDark ? 'dark' : 'light'} style={styles.glassBar}>
-        {/* Veil de legibilidad sobre el blur (glass best-practice 10–40% tint). */}
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(16,18,24,0.32)' : 'rgba(255,255,255,0.42)' }]} />
-        <View style={[StyleSheet.absoluteFill, styles.glassBarBorder, { borderBottomColor: theme.border }]} pointerEvents="none" />
+      {/* Search + action bar — glass sticky (iOS: blur real; Android: sólido semi-opaco). */}
+      <GlassBar isDark={isDark} theme={theme}>
         <View style={styles.actionBar}>
           <View
             style={[
@@ -1816,6 +1874,8 @@ export default function ClientesScreen() {
           ]}
           onPress={() => setShowFilterSheet(true)}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={hasActiveFilters ? 'Filtros (activos)' : 'Filtros'}
         >
           <SlidersHorizontal size={15} color={hasActiveFilters ? theme.primary : theme.mutedForeground} />
           <Text style={[styles.labeledBtnTxt, { color: hasActiveFilters ? theme.primary : theme.foreground }]}>Filtros</Text>
@@ -1825,6 +1885,8 @@ export default function ClientesScreen() {
           onPress={() => setShowSortSheet(true)}
           onLongPress={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={`Orden: ${sortLabel}. Mantén pulsado para invertir dirección.`}
         >
           <ArrowUpDown size={15} color={theme.foreground} />
           <Text style={[styles.labeledBtnTxt, { color: theme.foreground }]} numberOfLines={1}>{sortLabel}</Text>
@@ -1835,50 +1897,44 @@ export default function ClientesScreen() {
           <TouchableOpacity
             style={[styles.viewSeg, viewMode === 'cards' ? { backgroundColor: hexToRgba(theme.primary, 0.15) } : null]}
             onPress={() => setView('cards')}
+            accessibilityRole="button"
+            accessibilityLabel="Ver como tarjetas"
+            accessibilityState={{ selected: viewMode === 'cards' }}
           >
             <LayoutGrid size={17} color={viewMode === 'cards' ? theme.primary : theme.mutedForeground} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.viewSeg, viewMode === 'table' ? { backgroundColor: hexToRgba(theme.primary, 0.15) } : null]}
             onPress={() => setView('table')}
+            accessibilityRole="button"
+            accessibilityLabel="Ver como tabla"
+            accessibilityState={{ selected: viewMode === 'table' }}
           >
             <Table2 size={17} color={viewMode === 'table' ? theme.primary : theme.mutedForeground} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.viewSeg, viewMode === 'list' ? { backgroundColor: hexToRgba(theme.primary, 0.15) } : null]}
             onPress={() => setView('list')}
+            accessibilityRole="button"
+            accessibilityLabel="Ver como lista"
+            accessibilityState={{ selected: viewMode === 'list' }}
           >
             <ListIcon size={17} color={viewMode === 'list' ? theme.primary : theme.mutedForeground} />
           </TouchableOpacity>
         </View>
         </View>
-      </BlurView>
+      </GlassBar>
 
       {viewMode === 'cards' ? (
         <Animated.FlatList
           data={gridClients}
           keyExtractor={(c) => c.id}
-          renderItem={({ item, index }) => (
-            <StackCardItem index={index} scrollY={scrollY} headerH={headerH}>
-              <ClientCard
-                client={item}
-                pulse={pulseById.get(item.id)}
-                onPress={() => goProfile(item)}
-                onWhatsApp={item.phone && coachSlug ? () => handleWhatsApp(item) : undefined}
-                onShareLogin={() => handleShare(item)}
-                onToggleStatus={() => handleToggle(item)}
-                onResetPw={() => handleReset(item)}
-                onDelete={() => handleDelete(item)}
-                onWorkout={() => goWorkout(item)}
-                onNutrition={goNutrition}
-              />
-            </StackCardItem>
-          )}
+          renderItem={renderCard}
           contentContainerStyle={styles.cardsList}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={16}
-          onRefresh={() => load(true)}
+          onRefresh={handleRefresh}
           refreshing={refreshing}
           ListHeaderComponent={<View onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}>{headerNode}</View>}
           ListEmptyComponent={emptyNode}
@@ -1909,7 +1965,7 @@ export default function ClientesScreen() {
                 pulseById={pulseById}
                 sortKey={sortKey}
                 sortDir={sortDir}
-                onSortChange={(k, d) => { setSortKey(k); setSortDir(d) }}
+                onSortChange={handleSortChange}
                 onRowPress={goProfile}
                 onProfile={goProfile}
                 onWhatsApp={handleWhatsApp}
@@ -1922,7 +1978,7 @@ export default function ClientesScreen() {
           }
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
-          onRefresh={() => load(true)}
+          onRefresh={handleRefresh}
           refreshing={refreshing}
           ListHeaderComponent={headerNode}
         />
@@ -1930,12 +1986,10 @@ export default function ClientesScreen() {
       <FlatList
         data={displayed}
         keyExtractor={(c) => c.id}
-        renderItem={({ item, index }) => (
-          <ClientRow item={item} index={index} theme={theme} router={router} pulse={pulseById.get(item.id)} />
-        )}
+        renderItem={renderListRow}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
-        onRefresh={() => load(true)}
+        onRefresh={handleRefresh}
         refreshing={refreshing}
         ListHeaderComponent={headerNode}
         ListEmptyComponent={emptyNode}
@@ -1947,6 +2001,8 @@ export default function ClientesScreen() {
         style={[styles.fabSecondary, { backgroundColor: theme.card, borderColor: theme.border }]}
         onPress={() => router.push('/coach/clients-import')}
         activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Importar alumnos desde CSV"
       >
         <Upload size={20} color={theme.primary} />
       </TouchableOpacity>
@@ -1956,6 +2012,8 @@ export default function ClientesScreen() {
         style={[styles.fab, { backgroundColor: theme.primary }]}
         onPress={() => setShowCreate(true)}
         activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Agregar nuevo alumno"
       >
         <UserPlus size={22} color="#fff" />
       </TouchableOpacity>
@@ -2227,7 +2285,8 @@ function ImportClientsForm({ theme, onDone, onCancel }: { theme: any; onDone: ()
   const [ageOk, setAgeOk] = useState(false)
   const [busy, setBusy] = useState(false)
   const [showAll, setShowAll] = useState(false)
-  const [result, setResult] = useState<{ ok: number; fail: number; errors: string[] } | null>(null)
+  const [result, setResult] = useState<{ ok: number; fail: number; errors: string[]; credentials: { email: string; password: string }[] } | null>(null)
+  const [credsCopied, setCredsCopied] = useState(false)
 
   const validRows = useMemo(() => rows.filter((r) => r.valid), [rows])
   const invalidCount = rows.length - validRows.length
@@ -2260,20 +2319,35 @@ function ImportClientsForm({ theme, onDone, onCancel }: { theme: any; onDone: ()
     if (!validRows.length) { Alert.alert('Sin filas válidas', 'Cada fila debe tener nombre y email válido.'); return }
     setBusy(true)
     let ok = 0, fail = 0; const errors: string[] = []
+    const credentials: { email: string; password: string }[] = []
     for (const r of validRows) {
+      // Clave temporal generada localmente (la misma que enviamos al endpoint) → la mostramos
+      // al coach al final, si no la cuenta queda inusable (no la conoce nadie).
+      const email = r.email.toLowerCase()
+      const password = `Eva${Math.floor(100000 + Math.random() * 900000)}!`
       try {
         await apiFetch('/api/mobile/coach/clients', {
           method: 'POST', authenticated: true,
-          body: { fullName: r.name, email: r.email.toLowerCase(), phone: r.phone, subscriptionStartDate: new Date().toISOString().slice(0, 10), tempPassword: `Eva${Math.floor(100000 + Math.random() * 900000)}!`, ageConfirmed: true },
+          body: { fullName: r.name, email, phone: r.phone, subscriptionStartDate: new Date().toISOString().slice(0, 10), tempPassword: password, ageConfirmed: true },
         })
         ok += 1
+        credentials.push({ email, password })
       } catch (e: any) {
         fail += 1
         if (errors.length < 5) errors.push(`${r.name}: ${e?.message ?? 'error'}`)
       }
     }
     setBusy(false)
-    setResult({ ok, fail, errors })
+    setCredsCopied(false)
+    setResult({ ok, fail, errors, credentials })
+  }
+
+  function copyAllCreds() {
+    if (!result?.credentials.length) return
+    const txt = result.credentials.map((c) => `${c.email} — ${c.password}`).join('\n')
+    Clipboard.setStringAsync(txt).catch(() => {})
+    setCredsCopied(true)
+    setTimeout(() => setCredsCopied(false), 2000)
   }
 
   if (result) {
@@ -2281,6 +2355,39 @@ function ImportClientsForm({ theme, onDone, onCancel }: { theme: any; onDone: ()
       <View style={{ gap: 12 }}>
         <Text style={{ color: theme.foreground, fontFamily: 'Montserrat_700Bold', fontSize: 16 }}>{result.ok} creados · {result.fail} con error</Text>
         {result.errors.map((e, i) => <Text key={i} style={{ color: theme.destructive, fontSize: 12 }}>{e}</Text>)}
+        {result.credentials.length ? (
+          <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <Text style={{ color: theme.foreground, fontFamily: 'Inter_700Bold', fontSize: 13, flex: 1 }}>
+                Contraseñas temporales (compártelas con cada alumno):
+              </Text>
+              <TouchableOpacity
+                onPress={copyAllCreds}
+                activeOpacity={0.8}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Copiar todas las credenciales"
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 6, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.border }}
+              >
+                {credsCopied ? <Check size={14} color="#10B981" /> : <Copy size={14} color={theme.foreground} />}
+                <Text style={{ color: credsCopied ? '#10B981' : theme.foreground, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>{credsCopied ? 'Copiado' : 'Copiar'}</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator>
+              <View style={{ gap: 6 }}>
+                {result.credentials.map((c, i) => (
+                  <View key={i} style={{ borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.md, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: theme.secondary }}>
+                    <Text numberOfLines={1} style={{ color: theme.foreground, fontSize: 12.5, fontFamily: theme.fontSans }}>{c.email}</Text>
+                    <Text selectable style={{ color: theme.primary, fontSize: 13, fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }), letterSpacing: 1, marginTop: 1 }}>{c.password}</Text>
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+            <Text style={{ color: theme.mutedForeground, fontSize: 11, fontFamily: theme.fontSans }}>
+              Cada alumno deberá cambiar su contraseña en el primer ingreso.
+            </Text>
+          </View>
+        ) : null}
         <Button label="Listo" onPress={onDone} full />
       </View>
     )
@@ -2327,9 +2434,16 @@ function ImportClientsForm({ theme, onDone, onCancel }: { theme: any; onDone: ()
         </View>
       ) : null}
 
-      <TouchableOpacity activeOpacity={0.82} onPress={() => setAgeOk((v) => !v)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.lg, padding: 12, backgroundColor: theme.secondary }}>
+      <TouchableOpacity
+        activeOpacity={0.82}
+        onPress={() => setAgeOk((v) => !v)}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.lg, padding: 12, backgroundColor: theme.secondary }}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: ageOk }}
+        accessibilityLabel="Confirmo que los alumnos son mayores de 14 o cuentan con consentimiento de tutor legal"
+      >
         <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 1, borderColor: ageOk ? theme.primary : theme.border, backgroundColor: ageOk ? theme.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-          {ageOk ? <X size={14} color="#fff" /> : null}
+          {ageOk ? <Check size={14} color="#fff" /> : null}
         </View>
         <Text style={{ color: theme.mutedForeground, fontSize: 12.5, flex: 1, fontFamily: theme.fontSans }}>Alumnos 14+ o con consentimiento de tutor legal.</Text>
       </TouchableOpacity>
@@ -2377,7 +2491,7 @@ const styles = StyleSheet.create({
   labeledBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: 12, borderWidth: 1 },
   labeledBtnTxt: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
   viewToggle: { flexDirection: 'row', borderWidth: 1, height: 40, alignItems: 'center', paddingHorizontal: 2, gap: 1 },
-  viewSeg: { width: 32, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  viewSeg: { width: 38, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
   warRoom: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10, gap: 5 },
   warTitle: { fontSize: 28, lineHeight: 32, letterSpacing: -1, textTransform: 'uppercase' },
   warSub: { fontSize: 12.5 },
