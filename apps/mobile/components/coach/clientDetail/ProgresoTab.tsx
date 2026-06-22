@@ -129,12 +129,41 @@ export function ProgresoTab({ data, onOpenPhoto, onReload }: { data: CoachClient
       <PhotoComparator checkIns={checkIns} onOpenPhoto={onOpenPhoto} />
 
       {/* Línea de tiempo de check-ins */}
-      <View style={{ gap: 10 }}>
-        <Text style={[cd.listHeading, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Línea de tiempo de check-ins</Text>
-        {checkIns.map((c) => (
-          <CheckInRow key={c.id} c={c} onOpenPhoto={onOpenPhoto} />
-        ))}
-      </View>
+      <CheckInTimeline checkIns={checkIns} onOpenPhoto={onOpenPhoto} />
+    </View>
+  )
+}
+
+// Render acotado: hasta TIMELINE_PAGE check-ins de golpe (evita el pico de
+// memoria/jank de montar 200 <Image> al abrir Progreso). "Ver más" expande
+// en bloques del mismo tamaño.
+const TIMELINE_PAGE = 40
+
+function CheckInTimeline({ checkIns, onOpenPhoto }: { checkIns: CheckInEntry[]; onOpenPhoto: (photos: string[], index: number) => void }) {
+  const { theme } = useTheme()
+  const [visible, setVisible] = useState(TIMELINE_PAGE)
+  const shown = checkIns.slice(0, visible)
+  const remaining = checkIns.length - shown.length
+
+  return (
+    <View style={{ gap: 10 }}>
+      <Text style={[cd.listHeading, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Línea de tiempo de check-ins</Text>
+      {shown.map((c) => (
+        <CheckInRow key={c.id} c={c} onOpenPhoto={onOpenPhoto} />
+      ))}
+      {remaining > 0 ? (
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => setVisible((v) => v + TIMELINE_PAGE)}
+          accessibilityRole="button"
+          accessibilityLabel={`Ver más check-ins, ${remaining} restantes`}
+          style={[styles.moreBtn, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}
+        >
+          <Text style={[styles.moreBtnTxt, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>
+            Ver más ({remaining})
+          </Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   )
 }
@@ -266,7 +295,12 @@ function CompCol({ label, c, onOpen }: { label: string; c: CheckInEntry; onOpen:
   return (
     <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
       <Text style={[styles.compLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
-      <TouchableOpacity activeOpacity={0.85} onPress={onOpen}>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={onOpen}
+        accessibilityRole="button"
+        accessibilityLabel={`Ampliar foto ${label} del ${formatDate(c.date)}`}
+      >
         <Image source={{ uri: c.front_photo_url! }} style={[styles.compPhoto, { borderColor: theme.border }]} contentFit="cover" transition={150} />
       </TouchableOpacity>
       <Text style={[styles.compMeta, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{c.weight != null ? `${c.weight} kg` : '—'}</Text>
@@ -306,7 +340,13 @@ function CheckInRow({ c, onOpenPhoto }: { c: CheckInEntry; onOpenPhoto: (photos:
       {photos.length ? (
         <View style={styles.ciPhotos}>
           {photos.map((p, i) => (
-            <TouchableOpacity key={i} activeOpacity={0.85} onPress={() => onOpenPhoto(photos, i)}>
+            <TouchableOpacity
+              key={i}
+              activeOpacity={0.85}
+              onPress={() => onOpenPhoto(photos, i)}
+              accessibilityRole="button"
+              accessibilityLabel={`Ampliar foto ${i === 0 ? 'frontal' : 'posterior'} del check-in ${formatDate(c.date)}`}
+            >
               <Image source={{ uri: p }} style={styles.ciPhoto} contentFit="cover" transition={150} />
             </TouchableOpacity>
           ))}
@@ -347,6 +387,8 @@ const styles = StyleSheet.create({
   ciEnergyVal: { fontSize: 12, width: 38, textAlign: 'right' },
   ciPhotos: { flexDirection: 'row', gap: 8, marginTop: 2 },
   ciPhoto: { width: 64, height: 80, borderRadius: 10 },
+  moreBtn: { borderWidth: 1, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', minHeight: 44 },
+  moreBtnTxt: { fontSize: 13 },
   goalRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   goalInput: { flex: 1, height: 46, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, fontSize: 16, textAlign: 'center' },
   goalUnit: { fontSize: 13 },

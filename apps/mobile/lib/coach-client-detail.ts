@@ -22,6 +22,7 @@ import {
   type MealWithFoodItems,
 } from './nutrition-utils'
 import { supabase } from './supabase'
+import { apiFetch } from './api'
 
 // Coach-side client detail data. Reads via Supabase (RLS: coach sees own clients).
 // Mutations (update/archive/review) also use the coach session. Service-role never runs in RN.
@@ -576,6 +577,33 @@ function mapWeeklyPrsRpc(rows: any[]): WeeklyWeightPR[] {
     .sort((a, b) => b.newOneRm - a.newOneRm)
 }
 
+/**
+ * Reemplaza in-place las URLs de fotos de check-in por URLs FIRMADAS (bucket privado).
+ * Batch-firma vía el endpoint server (service-role) que valida el acceso del coach.
+ * Fail-OPEN: ante cualquier error deja las URLs como estaban (no rompe la carga).
+ */
+async function signCheckinPhotosInPlace(clientId: string, checkIns: CheckInEntry[]): Promise<void> {
+  const refs: string[] = []
+  for (const c of checkIns) {
+    if (c.front_photo_url) refs.push(c.front_photo_url)
+    if (c.back_photo_url) refs.push(c.back_photo_url)
+  }
+  if (!refs.length) return
+  try {
+    const { urls } = await apiFetch<{ urls: Record<string, string | null> }>(
+      '/api/mobile/coach/checkin-photos',
+      { method: 'POST', authenticated: true, body: { clientId, refs } }
+    )
+    if (!urls) return
+    for (const c of checkIns) {
+      if (c.front_photo_url && c.front_photo_url in urls) c.front_photo_url = urls[c.front_photo_url]
+      if (c.back_photo_url && c.back_photo_url in urls) c.back_photo_url = urls[c.back_photo_url]
+    }
+  } catch {
+    // fail-open: dejar las URLs originales
+  }
+}
+
 export async function getCoachClientDetail(clientId: string): Promise<{
   client: CoachClientDetail | null
   checkIns: CheckInEntry[]
@@ -800,6 +828,11 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     : null
 
   const checkIns = (checkInRes.data as CheckInEntry[] | null) ?? []
+  // Fotos de check-in: el bucket `checkins` es PRIVADO y el coach NO tiene Storage SELECT sobre
+  // las fotos de sus alumnos (policy owner-only) → las URLs `getPublicUrl` que guardó el alumno dan
+  // 403. Las firmamos por server (service-role) vía /api/mobile/coach/checkin-photos (verifica acceso
+  // del coach). Fail-OPEN: si falla, deja las URLs originales (no rompe la carga del detalle).
+  await signCheckinPhotosInPlace(clientId, checkIns)
   // Días con series (30d) — la RPC ya devuelve `day` en zona Santiago (YYYY-MM-DD).
   const workoutDays30 = new Set<string>()
   for (const row of (dayCounts30Res.data as { day: string; sets: number }[] | null) ?? []) {

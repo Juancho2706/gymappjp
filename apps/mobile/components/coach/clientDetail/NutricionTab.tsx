@@ -269,7 +269,7 @@ export function NutricionTab({
           icon={Apple}
           title={`Plan activo · ${activeNutrition.name}`}
           right={
-            onEditNutrition ? <TouchableOpacity onPress={onEditNutrition} hitSlop={8}><Pencil size={16} color={theme.primary} /></TouchableOpacity> : undefined
+            onEditNutrition ? <TouchableOpacity onPress={onEditNutrition} hitSlop={12} accessibilityRole="button" accessibilityLabel="Editar plan de nutrición" style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Pencil size={16} color={theme.primary} /></TouchableOpacity> : undefined
           }
         />
         {kcal > 0 ? (
@@ -361,40 +361,53 @@ function NutritionCoachZoneC({ clientId, todayIso, sectionFlags }: { clientId: s
   // Restricciones: el web no la gatea por seccion, solo la oculta cuando el dominio esta OFF.
   const showRestrictions = domainEnabled
 
-  async function reload() {
+  // Carga de datos de la Zona C (comments/notes/targets/cycles). Toma un flag externo
+  // `isCancelled` para abortar los setState si el effect que la disparó fue limpiado
+  // (cambio de clientId/dia o unmount) — evita setState tras unmount / last-writer-wins.
+  async function reload(isCancelled?: () => boolean) {
     const [c, n, t, cy] = await Promise.all([
       listCoachMealComments(clientId, todayIso),
       getCoachPrivateNotes(clientId),
       getClientNutrientTargets(clientId),
       getNutritionPlanCycles(clientId),
     ])
+    if (isCancelled?.()) return
     setComments(c)
     setNotes(n)
     setTargets(t)
     setCycles(cy)
   }
 
+  // Resolución de coachId + entitlement "Nutrición Pro": mount-only (no depende del día).
+  // No re-fetchear al cambiar de día — solo al cambiar de alumno.
   useEffect(() => {
     let cancelled = false
     getCoachProfile().then((p) => { if (!cancelled) setCoachId(p?.id ?? null) }).catch(() => {})
     hasModule('nutrition_exchanges').then((v) => { if (!cancelled) setProEnabled(v) }).catch(() => {})
-    reload()
+    return () => { cancelled = true }
+  }, [clientId])
+
+  // Carga de datos por alumno+día con cancel-flag (mismo patrón que el effect de
+  // getAppConfig/featurePrefs): bailea los setState si el effect fue cancelado.
+  useEffect(() => {
+    let cancelled = false
+    reload(() => cancelled).catch(() => {})
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, todayIso])
 
   return (
     <View style={{ gap: 14 }}>
-      {/* Hilo bidireccional: gateado por `notes` (la superficie de notas del alumno). */}
-      {showNotesThread ? <NotesThread comments={comments} clientId={clientId} todayIso={todayIso} onSent={reload} /> : null}
-      {/* Nota privada del coach — el alumno nunca la ve (feature E). No se gatea. */}
-      <PrivateNotePanel notes={notes} coachId={coachId} clientId={clientId} onSaved={reload} />
+      {/* Panel de override por-alumno: SIEMPRE visible (escape hatch para re-activar funciones). PRIMERO (espejo web). */}
+      <ClientFeaturePrefsPanel clientId={clientId} />
       {/* Restricciones: visible salvo que el dominio Nutricion este apagado para el alumno. */}
       {showRestrictions ? <ClientFoodRestrictionsCard clientId={clientId} /> : null}
+      {/* Hilo bidireccional: gateado por `notes` (la superficie de notas del alumno). */}
+      {showNotesThread ? <NotesThread comments={comments} clientId={clientId} todayIso={todayIso} onSent={reload} /> : null}
       {/* Umbrales de micros: gateado por micros_base/micros_advanced (espejo de lo que ve el alumno). */}
       {showMicros ? <CoachNutrientTargetsEditor clientId={clientId} initial={targets} proEnabled={proEnabled} onSaved={reload} /> : null}
-      {/* Panel de override por-alumno: SIEMPRE visible (escape hatch para re-activar funciones). */}
-      <ClientFeaturePrefsPanel clientId={clientId} />
+      {/* Nota privada del coach — el alumno nunca la ve (feature E). No se gatea. */}
+      <PrivateNotePanel notes={notes} coachId={coachId} clientId={clientId} onSaved={reload} />
       {cycles.length ? <CycleHistoryCard cycles={cycles} /> : null}
     </View>
   )
@@ -441,7 +454,7 @@ function NotesThread({ comments, clientId, todayIso, onSent }: { comments: MealC
           multiline
           style={[styles.threadInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]}
         />
-        <TouchableOpacity activeOpacity={0.85} onPress={send} disabled={sending || !body.trim()} style={[styles.sendBtn, { backgroundColor: theme.primary, opacity: sending || !body.trim() ? 0.5 : 1 }]}>
+        <TouchableOpacity activeOpacity={0.85} onPress={send} disabled={sending || !body.trim()} accessibilityRole="button" accessibilityLabel="Enviar nota al alumno" style={[styles.sendBtn, { backgroundColor: theme.primary, opacity: sending || !body.trim() ? 0.5 : 1 }]}>
           <Send size={18} color={theme.primaryForeground} />
         </TouchableOpacity>
       </View>
@@ -561,9 +574,9 @@ function DayNutritionDetail({ timeline, selectedDate, onSelectDate, dayDetail, l
       <StatCard>
         <CardHeader icon={Apple} title="Día seleccionado" />
         <View style={styles.navRow}>
-          <TouchableOpacity onPress={() => go(-1)} disabled={sidx <= 0} hitSlop={8}><ChevronLeft size={22} color={sidx <= 0 ? theme.muted : theme.foreground} /></TouchableOpacity>
+          <TouchableOpacity onPress={() => go(-1)} disabled={sidx <= 0} hitSlop={16} accessibilityRole="button" accessibilityLabel="Día anterior" style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><ChevronLeft size={22} color={sidx <= 0 ? theme.muted : theme.foreground} /></TouchableOpacity>
           <Text style={[styles.navDate, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{formatDate(selectedDate)}</Text>
-          <TouchableOpacity onPress={() => go(1)} disabled={sidx >= days.length - 1} hitSlop={8}><ChevronRight size={22} color={sidx >= days.length - 1 ? theme.muted : theme.foreground} /></TouchableOpacity>
+          <TouchableOpacity onPress={() => go(1)} disabled={sidx >= days.length - 1} hitSlop={16} accessibilityRole="button" accessibilityLabel="Día siguiente" style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><ChevronRight size={22} color={sidx >= days.length - 1 ? theme.muted : theme.foreground} /></TouchableOpacity>
         </View>
         {loading ? (
           <View style={{ paddingVertical: 20 }}><EvaLoader size="sm" subtitle="Cargando día…" /></View>

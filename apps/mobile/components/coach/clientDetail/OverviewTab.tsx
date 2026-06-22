@@ -81,12 +81,18 @@ export function OverviewTab({
     if (ws.length < 2) return null
     return Math.round((Number(ws[ws.length - 1]!.weight) - Number(ws[ws.length - 2]!.weight)) * 10) / 10
   }, [checkIns])
-  // Δ peso 30d: peso actual − peso del check-in más viejo dentro de 30 días.
+  // Δ peso 30d (espejo web B3): peso más reciente − baseline, donde baseline = primer
+  // check-in (orden descendente) con fecha <= hace 30 días (peso de ~hace 30d), NO el
+  // check-in más viejo dentro de los últimos 30 días.
   const delta30 = useMemo(() => {
+    const withWeight = [...checkIns].filter((c) => c.weight != null)
+    if (withWeight.length < 2) return null
+    const desc = withWeight.sort((a, b) => b.date.localeCompare(a.date))
     const cutoff = Date.now() - 30 * 86400000
-    const within = [...checkIns].filter((c) => c.weight != null && new Date(c.date).getTime() >= cutoff).sort((a, b) => a.date.localeCompare(b.date))
-    if (within.length < 2) return null
-    return Math.round((Number(within[within.length - 1]!.weight) - Number(within[0]!.weight)) * 10) / 10
+    const latest = desc[0]?.weight
+    const baseline = desc.find((c) => new Date(c.date).getTime() <= cutoff)?.weight
+    if (latest == null || baseline == null) return null
+    return Math.round((Number(latest) - Number(baseline)) * 10) / 10
   }, [checkIns])
 
   const currentWeek = activeProgram ? resolveProgramWeek(activeProgram) : null
@@ -102,6 +108,9 @@ export function OverviewTab({
 
   const workoutPct = Math.min(1, compliance.workoutsThisWeek / Math.max(1, compliance.workoutsTarget))
   const workoutPctInt = Math.round(workoutPct * 100)
+  // Delta de adherencia entreno (espejo web B3): workoutPct − prevWorkoutPct (ambos clampados).
+  const prevWorkoutPctInt = Math.round(Math.min(1, compliance.workoutsPrevWeek / Math.max(1, compliance.workoutsTarget)) * 100)
+  const workoutDelta = workoutPctInt - prevWorkoutPctInt
   const nutritionPct = Math.min(1, compliance.nutritionWeeklyAvgPct / 100)
   const checkPct = Math.min(1, compliance.checkInCompliancePercent / 100)
 
@@ -144,7 +153,7 @@ export function OverviewTab({
             hint={`${compliance.workoutsThisWeek}/${compliance.workoutsTarget}`}
             value={workoutPct}
             color={theme.primary}
-            delta={workoutPctInt - Math.round(Math.min(1, compliance.workoutsPrevWeek / Math.max(1, compliance.workoutsTarget)) * 100)}
+            delta={workoutDelta}
           />
           <Ring
             label="Nutrición (7d)"
@@ -169,7 +178,7 @@ export function OverviewTab({
       <View style={cd.grid2}>
         <KpiBox icon={Star} label="Mejor racha" value={`${bestStreak} día${bestStreak === 1 ? '' : 's'}`} hint="histórico" />
         <KpiBox icon={Dumbbell} label="Sesiones" value={String(sessions30d)} hint="últimos 30 días" />
-        <KpiBox icon={PieChart} label="Adherencia entreno" value={`${workoutPctInt}%`} hint="esta semana" />
+        <KpiBox icon={PieChart} label="Adherencia entreno" value={`${workoutPctInt}%`} hint={workoutDelta >= 0 ? `+${workoutDelta}% vs sem. ant.` : `${workoutDelta}% vs sem. ant.`} />
         <KpiBox icon={Scale} label="Δ Peso (30d)" value={delta30 != null ? `${delta30 > 0 ? '+' : ''}${delta30} kg` : '—'} hint="check-ins" />
         <KpiBox icon={CalendarRange} label="Sem. programa" value={currentWeek && activeProgram ? `${currentWeek} / ${activeProgram.weeks_to_repeat}` : '—'} hint="ciclo activo" />
       </View>
@@ -202,7 +211,12 @@ export function OverviewTab({
 
       {/* Programa */}
       {activeProgram ? (
-        <TouchableOpacity activeOpacity={0.85} onPress={onEditProgram}>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={onEditProgram}
+          accessibilityRole="button"
+          accessibilityLabel={`Editar programa ${activeProgram.name}`}
+        >
           <StatCard>
             <CardHeader icon={ListChecks} title={activeProgram.name} />
             {activeProgram.phases.length > 0 ? (
@@ -293,7 +307,14 @@ export function OverviewTab({
             {recentPhotos.map((c) => {
               const photos = [c.front_photo_url, c.back_photo_url].filter(Boolean) as string[]
               return (
-                <TouchableOpacity key={c.id} activeOpacity={0.85} onPress={() => onOpenPhoto(photos, 0)} style={styles.photoCell}>
+                <TouchableOpacity
+                  key={c.id}
+                  activeOpacity={0.85}
+                  onPress={() => onOpenPhoto(photos, 0)}
+                  style={styles.photoCell}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ver foto de check-in del ${formatDate(c.date)}`}
+                >
                   <Image source={{ uri: c.front_photo_url! }} style={[styles.photo, { borderColor: theme.border }]} contentFit="cover" transition={150} />
                   <Text style={[styles.photoDate, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{formatDate(c.date)}</Text>
                 </TouchableOpacity>
@@ -316,7 +337,12 @@ function Ring({ label, hint, value, color, delta, linkLabel, onPress }: { label:
   const d = delta ?? 0
   const Wrapper: any = onPress ? TouchableOpacity : View
   return (
-    <Wrapper style={styles.ringItem} {...(onPress ? { activeOpacity: 0.85, onPress } : {})}>
+    <Wrapper
+      style={styles.ringItem}
+      {...(onPress
+        ? { activeOpacity: 0.85, onPress, accessibilityRole: 'button', accessibilityLabel: `${label}: ${hint}. Ver nutrición` }
+        : {})}
+    >
       <ComplianceRing value={value} label={label} color={color} size={68} />
       <Text style={[styles.ringHint, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{hint}</Text>
       <Text style={[styles.ringDelta, { color: d > 0 ? theme.success : d < 0 ? theme.destructive : theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
@@ -398,7 +424,12 @@ function CheckInSnapshot({ checkIn, clientId, reload, onOpenPhoto }: { checkIn: 
       } />
       <View style={styles.snapRow}>
         {checkIn.front_photo_url ? (
-          <TouchableOpacity activeOpacity={0.85} onPress={() => onOpenPhoto(photos, 0)}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => onOpenPhoto(photos, 0)}
+            accessibilityRole="button"
+            accessibilityLabel="Ver foto del último check-in"
+          >
             <Image source={{ uri: checkIn.front_photo_url }} style={[styles.snapPhoto, { borderColor: theme.border }]} contentFit="cover" transition={150} />
           </TouchableOpacity>
         ) : null}
@@ -443,7 +474,15 @@ function BiometriaCard({ client, currentWeight, reload }: { client: NonNullable<
   return (
     <StatCard>
       <CardHeader icon={Ruler} title="Biometría" right={
-        <TouchableOpacity onPress={() => setEditing((v) => !v)} hitSlop={8}><Pencil size={16} color={theme.primary} /></TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setEditing((v) => !v)}
+          hitSlop={14}
+          accessibilityRole="button"
+          accessibilityLabel={editing ? 'Cerrar edición de biometría' : 'Editar biometría'}
+          style={{ minWidth: 44, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
+        >
+          <Pencil size={16} color={theme.primary} />
+        </TouchableOpacity>
       } />
       {editing ? (
         <View style={{ gap: 10 }}>

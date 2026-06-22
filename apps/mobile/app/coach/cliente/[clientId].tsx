@@ -133,8 +133,14 @@ export default function ClientDetailScreen() {
     async function loadDay() {
       if (!clientId || !selectedDate) return
       setDayLoading(true)
-      const detail = await getCoachClientDayDetail(clientId, selectedDate)
-      if (!cancelled) { setDayDetail(detail); setDayLoading(false) }
+      try {
+        const detail = await getCoachClientDayDetail(clientId, selectedDate)
+        if (!cancelled) setDayDetail(detail)
+      } catch (e) {
+        console.warn('[client-detail] loadDay failed', e)
+      } finally {
+        if (!cancelled) setDayLoading(false)
+      }
     }
     loadDay()
     return () => { cancelled = true }
@@ -228,7 +234,20 @@ export default function ClientDetailScreen() {
       lastCheckInUnreviewed,
     })
 
-    return { series, currentWeight, initialWeight, weightDelta, streak, trainingAge, today, weeklyPRs, pendingPays, attention, attentionScore, lastActivityIso, programWeek, programWeekCur, programWeekTot }
+    // Días de ENTRENO de la variante activa del programa (espejo de
+    // programTrainingDayCount de la web: solo planes con bloques que matchean la
+    // variante activa del microciclo A/B). Sin A/B ⇒ solo variante A (o sin variante).
+    const abModeProgram = !!data.activeProgram?.ab_mode
+    const activeVariant: 'A' | 'B' = abModeProgram
+      ? programWeekCur % 2 === 1 ? 'A' : 'B'
+      : 'A'
+    const programTrainingDayCount = (data.activeProgram?.workoutPlans ?? []).filter((p) => {
+      if ((p.blocks?.length ?? 0) <= 0) return false
+      const pVar = (String(p.week_variant || 'A') as 'A' | 'B')
+      return abModeProgram ? pVar === activeVariant : pVar === 'A'
+    }).length
+
+    return { series, currentWeight, initialWeight, weightDelta, streak, trainingAge, today, weeklyPRs, pendingPays, attention, attentionScore, lastActivityIso, programWeek, programWeekCur, programWeekTot, programTrainingDayCount }
   }, [data, client])
 
   async function onExportPdf() {
@@ -324,9 +343,9 @@ export default function ClientDetailScreen() {
   const tabs: TabItem[] = [
     { value: 'overview', label: 'Overview', icon: LayoutDashboard },
     { value: 'progreso', label: 'Progreso', icon: TrendingUp, badge: data.checkIns.length || null },
-    { value: 'analisis', label: 'Análisis', icon: BarChart3, badge: derived.weeklyPRs.length || null },
-    { value: 'plan', label: 'Plan', icon: LayoutGrid, badge: data.activeProgram?.planCount || null },
-    { value: 'nutricion', label: 'Nutrición', icon: Apple, badge: derived.attention && data.activeNutrition && (data.compliance?.nutritionWeeklyAvgPct ?? 0) < 60 ? '!' : null },
+    { value: 'analisis', label: 'Análisis', icon: BarChart3, badge: data.personalRecords.length || null },
+    { value: 'plan', label: 'Plan', icon: LayoutGrid, badge: derived.programTrainingDayCount || null },
+    { value: 'nutricion', label: 'Nutrición', icon: Apple, badge: (data.compliance?.nutritionWeeklyAvgPct ?? 0) < 60 ? '!' : data.nutritionMeals.length || null },
     { value: 'facturacion', label: 'Facturación', icon: CreditCard, badge: derived.pendingPays || null },
   ]
 
@@ -370,7 +389,7 @@ export default function ClientDetailScreen() {
             </View>
           ) : null}
           {tab === 'overview' ? (
-            <OverviewTab data={data} reload={load} onOpenPhoto={onOpenPhoto} onEditProgram={openBuilder} />
+            <OverviewTab data={data} reload={load} onOpenPhoto={onOpenPhoto} onEditProgram={openBuilder} onViewNutrition={() => setTab('nutricion')} />
           ) : tab === 'progreso' ? (
             <ProgresoTab data={data} onOpenPhoto={onOpenPhoto} onReload={load} />
           ) : tab === 'analisis' ? (
@@ -381,7 +400,7 @@ export default function ClientDetailScreen() {
             <NutricionTab data={data} selectedDate={selectedDate} onSelectDate={setSelectedDate} dayDetail={dayDetail} dayLoading={dayLoading}
               onEditNutrition={() => router.push(`/coach/nutrition-builder?clientId=${client.id}&clientName=${encodeURIComponent(client.full_name)}`)} />
           ) : (
-            <FacturacionTab data={data} reload={load} onAddPayment={() => setPayOpen(true)} onOpenPhoto={onOpenPhoto} />
+            <FacturacionTab data={data} reload={load} onAddPayment={() => setPayOpen(true)} onOpenPhoto={onOpenPhoto} onViewHistory={() => setTab('progreso')} />
           )}
 
           {tab === 'overview' ? (
@@ -446,13 +465,27 @@ function Fab({ open, onToggle, actions }: { open: boolean; onToggle: () => void;
             <View style={[styles.fabLabel, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <Text style={[styles.fabLabelTxt, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{a.label}</Text>
             </View>
-            <TouchableOpacity activeOpacity={0.85} onPress={a.onPress} style={[styles.fabMini, { backgroundColor: a.color ?? theme.primary }]}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={a.onPress}
+              accessibilityRole="button"
+              accessibilityLabel={a.label}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              style={[styles.fabMini, { backgroundColor: a.color ?? theme.primary }]}
+            >
               <Icon size={18} color="#FFFFFF" />
             </TouchableOpacity>
           </MotiView>
         )
       }) : null}
-      <TouchableOpacity activeOpacity={0.85} onPress={() => { onToggle(); Haptics.selectionAsync().catch(() => {}) }} style={[styles.fab, { backgroundColor: theme.primary }, theme.shadowGlowBlue]}>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => { onToggle(); Haptics.selectionAsync().catch(() => {}) }}
+        accessibilityRole="button"
+        accessibilityLabel={open ? 'Cerrar acciones rápidas' : 'Abrir acciones rápidas'}
+        accessibilityState={{ expanded: open }}
+        style={[styles.fab, { backgroundColor: theme.primary }, theme.shadowGlowBlue]}
+      >
         <MotiView animate={{ rotate: open ? '45deg' : '0deg' }} transition={{ type: 'timing', duration: 180 }}>
           {open ? <X size={24} color={theme.primaryForeground} /> : <Plus size={24} color={theme.primaryForeground} />}
         </MotiView>
