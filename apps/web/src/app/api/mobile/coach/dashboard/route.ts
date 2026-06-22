@@ -24,12 +24,6 @@ function normalizeSubscriptionTier(raw: string | null | undefined): Subscription
 export async function GET(request: NextRequest) {
     const token = bearerToken(request)
     if (!token) {
-        // DIAG [mobile-auth-401] temporal: ¿llega el header Authorization?
-        const rawAuth = request.headers.get('authorization') || request.headers.get('Authorization')
-        console.error('[mobile-auth-401] route MISSING_TOKEN', {
-            hasAuthHeader: !!rawAuth,
-            authPrefix: rawAuth ? rawAuth.slice(0, 10) : null,
-        })
         return NextResponse.json({ error: 'Unauthorized', code: 'MISSING_TOKEN' }, { status: 401 })
     }
 
@@ -37,7 +31,6 @@ export async function GET(request: NextRequest) {
     // Los POST/mutaciones de abajo NO se migran (revocation-sensitive) -> siguen con getUser.
     const auth = await verifyMobileBearer(token)
     if (!auth.ok) {
-        console.error('[mobile-auth-401] route INVALID_TOKEN (verifyMobileBearer !ok)')
         return NextResponse.json({ error: 'Unauthorized', code: 'INVALID_TOKEN' }, { status: 401 })
     }
     const userId = auth.userId

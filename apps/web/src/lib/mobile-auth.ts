@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify, decodeJwt, decodeProtectedHeader, errors as joseErrors } from 'jose'
+import { createRemoteJWKSet, jwtVerify, errors as joseErrors } from 'jose'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 
 /**
@@ -60,14 +60,10 @@ async function verifyViaGetUser(token: string): Promise<MobileAuthResult> {
     try {
         const admin = createServiceRoleClient()
         const { data, error } = await admin.auth.getUser(token)
-        if (error || !data.user) {
-            console.error('[mobile-auth-401] getUser RECHAZO', { err: error?.message ?? 'no user' })
-            return UNAUTHORIZED
-        }
+        if (error || !data.user) return UNAUTHORIZED
         return { ok: true, userId: data.user.id, via: 'getUser' }
-    } catch (e) {
+    } catch {
         // GoTrue caído: no podemos afirmar identidad -> 401 (no abrir acceso).
-        console.error('[mobile-auth-401] getUser THREW', { err: (e as Error)?.message })
         return UNAUTHORIZED
     }
 }
@@ -75,31 +71,7 @@ async function verifyViaGetUser(token: string): Promise<MobileAuthResult> {
 export async function verifyMobileBearer(token: string): Promise<MobileAuthResult> {
     if (!token) return UNAUTHORIZED
     const url = supabaseUrl()
-
-    // DIAG [mobile-auth-401] TEMPORAL: decodificar (SIN verificar) el token para ver sus claims
-    // reales vs lo esperado. iss/aud/alg/exp revelan el mismatch de una. No loguea el token.
-    try {
-        const h = decodeProtectedHeader(token)
-        const c = decodeJwt(token)
-        console.error('[mobile-auth-401] token claims', {
-            alg: h.alg,
-            kid: h.kid,
-            iss: c.iss,
-            aud: c.aud,
-            sub: c.sub ? 'present' : 'MISSING',
-            exp: c.exp,
-            now: Math.floor(Date.now() / 1000),
-            expectedIss: `${url}/auth/v1`,
-            expectedAud: AUDIENCE,
-        })
-    } catch (e) {
-        console.error('[mobile-auth-401] decode FALLO (token no es JWT?)', { err: (e as Error)?.message })
-    }
-
-    if (!url) {
-        console.error('[mobile-auth-401] sin NEXT_PUBLIC_SUPABASE_URL -> getUser directo')
-        return verifyViaGetUser(token) // sin URL no se puede armar el JWKS
-    }
+    if (!url) return verifyViaGetUser(token) // sin URL no se puede armar el JWKS
 
     try {
         const { payload } = await jwtVerify(token, getJwks(url), {
@@ -109,19 +81,10 @@ export async function verifyMobileBearer(token: string): Promise<MobileAuthResul
         if (typeof payload.sub === 'string' && payload.sub) {
             return { ok: true, userId: payload.sub, via: 'jose' }
         }
-        console.error('[mobile-auth-401] jose OK pero payload SIN sub -> 401')
         return UNAUTHORIZED // token válido pero sin sub -> no es una sesión de usuario
     } catch (err) {
-        const name = (err as Error)?.constructor?.name
-        if (isUnambiguousTokenError(err)) {
-            console.error('[mobile-auth-401] hard 401 (token EXPIRADO)', { name })
-            return UNAUTHORIZED
-        }
-        // claim iss/aud (drift de env) o JWKS/red/kid/alg/firma: que decida GoTrue (autoritativo).
-        console.error('[mobile-auth-401] jose lanzo, degrado a getUser', {
-            name,
-            claim: (err as { claim?: string })?.claim,
-        })
+        if (isUnambiguousTokenError(err)) return UNAUTHORIZED
+        // claim iss/aud (drift de env) o JWKS/red/kid/alg/firma -> que decida GoTrue (autoritativo).
         return verifyViaGetUser(token)
     }
 }
