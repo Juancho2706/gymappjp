@@ -1,9 +1,17 @@
 'use client'
 
-import { CheckCircle2, Lock, Mail, Wrench } from 'lucide-react'
+import Link from 'next/link'
+import { CheckCircle2, Lock, Mail, Wrench, Eye, EyeOff } from 'lucide-react'
 import { SELF_SERVICE_ADDONS_ENABLED, type SubscriptionTier } from '@/lib/constants'
 import { useCaptureModuleInterest } from '@/lib/posthog/events'
 import { MODULE_CATALOG_KEYS, MODULE_CATALOG, type ModuleKey } from '@eva/module-catalog'
+
+/** Precio de lista en CLP (es-CL: punto como separador de miles, sin decimales). */
+const clpFormatter = new Intl.NumberFormat('es-CL', {
+    style: 'currency',
+    currency: 'CLP',
+    maximumFractionDigits: 0,
+})
 
 const MAILTO_STANDALONE =
     'mailto:contacto@eva-app.cl?subject=Quiero%20activar%20un%20m%C3%B3dulo'
@@ -24,12 +32,15 @@ export function ModulesForm({
     isTeamManager,
     scope,
     tier,
+    nutritionVisible,
 }: {
     modules: Record<ModuleKey, boolean>
     killedByOperator: Record<ModuleKey, boolean>
     isTeamManager: boolean
     scope: 'team' | 'standalone'
     tier: SubscriptionTier
+    /** ¿Está visible el dominio Nutrición? Solo aplica a `nutrition_exchanges` (cross-link a Funciones). */
+    nutritionVisible: boolean
 }) {
     const captureInterest = useCaptureModuleInterest()
 
@@ -82,8 +93,35 @@ export function ModulesForm({
                                 </p>
                             )}
 
+                            {/* Cross-link a Funciones — solo Nutrición Pro tiene capa de visibilidad. */}
+                            {active && key === 'nutrition_exchanges' && (
+                                nutritionVisible ? (
+                                    <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+                                        <Eye className="h-3.5 w-3.5 shrink-0" />
+                                        Visible para tus alumnos.
+                                    </p>
+                                ) : (
+                                    <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                                        <EyeOff className="h-3.5 w-3.5 shrink-0" />
+                                        Activo pero oculto.
+                                        <Link
+                                            href="/coach/settings/funciones"
+                                            className="font-semibold underline underline-offset-2 hover:no-underline"
+                                        >
+                                            Mostrar en Funciones →
+                                        </Link>
+                                    </p>
+                                )
+                            )}
+
                             {!active && (
-                                <div className="mt-3">
+                                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                                    {scope === 'standalone' && (
+                                        <span className="text-sm font-extrabold text-foreground">
+                                            {clpFormatter.format(entry.priceClp)}
+                                            <span className="text-xs font-normal text-muted-foreground"> / mes</span>
+                                        </span>
+                                    )}
                                     <ModuleCta
                                         moduleKey={key}
                                         scope={scope}

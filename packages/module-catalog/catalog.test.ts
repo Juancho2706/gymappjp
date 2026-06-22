@@ -16,7 +16,7 @@ describe('@eva/module-catalog', () => {
         expect(entryKeys).toEqual(declaredKeys)
     })
 
-    it.each(MODULE_CATALOG_KEYS)('módulo "%s": label, pitch y surfaces no vacíos', (key) => {
+    it.each(MODULE_CATALOG_KEYS)('módulo "%s": label, pitch, surfaces y precio válidos', (key) => {
         const entry = getModuleCatalogEntry(key)
         expect(entry.label.trim().length).toBeGreaterThan(0)
         expect(entry.pitch.trim().length).toBeGreaterThan(0)
@@ -24,5 +24,7 @@ describe('@eva/module-catalog', () => {
         for (const surface of entry.surfaces) {
             expect(surface.trim().length).toBeGreaterThan(0)
         }
+        expect(entry.priceClp).toBeGreaterThan(0)
+        expect(Number.isInteger(entry.priceClp)).toBe(true)
     })
 })

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Dumbbell, Hash, Layers, ListChecks, Plus } from 'lucide-react'
+import { Dumbbell, Hash, Layers, LayoutList, ListChecks, Plus } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
@@ -69,6 +69,18 @@ export function LibraryHeader({
                 >
                     <Dumbbell className="size-4" />
                     Lista de ejercicios
+                </Link>
+                {/* Reestructura settings F6: "Áreas del builder" sale del hub Opciones y vive acá,
+                    junto al builder donde se usan. La ruta /coach/settings/areas sigue viva (deep links). */}
+                <Link
+                    href="/coach/settings/areas"
+                    className={cn(
+                        buttonVariants({ variant: 'outline' }),
+                        'h-11 w-full gap-2 rounded-xl px-4 sm:h-10 sm:w-auto sm:rounded-lg'
+                    )}
+                >
+                    <LayoutList className="size-4" />
+                    Áreas del builder
                 </Link>
                 <Button
                     type="button"

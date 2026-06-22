@@ -35,6 +35,12 @@ export interface ModuleCatalogEntry {
     pitch: string
     /** Dónde viven sus utilidades cuando el módulo está activo. */
     surfaces: string[]
+    /**
+     * Precio mensual self-service en CLP para el coach standalone (precio de lista, uniforme).
+     * Solo informativo en la UI de catálogo; el cobro real lo congela `coach_addons.price_clp`
+     * por compra (webhook). En modo team el precio es por contrato (no se usa este valor).
+     */
+    priceClp: number
 }
 
 /** Copy base — español latam neutro. Indexado por ModuleKey (D3 i18n: locales paralelos por key). */
@@ -49,6 +55,7 @@ export const MODULE_CATALOG: Record<ModuleKey, ModuleCatalogEntry> = {
             'Bloques de cardio en el builder',
             'Timers y registro de cardio en la app del alumno',
         ],
+        priceClp: 9990,
     },
     movement_assessment: {
         label: 'Evaluación de movimiento',
@@ -60,6 +67,7 @@ export const MODULE_CATALOG: Record<ModuleKey, ModuleCatalogEntry> = {
             'Card de última evaluación en la ficha del alumno',
             'Pestaña de resultados en la app del alumno',
         ],
+        priceClp: 9990,
     },
     body_composition: {
         label: 'Composición corporal',
@@ -68,6 +76,7 @@ export const MODULE_CATALOG: Record<ModuleKey, ModuleCatalogEntry> = {
         surfaces: [
             'Sección Composición corporal en la ficha del alumno (pestañas BIA / ISAK)',
         ],
+        priceClp: 9990,
     },
     nutrition_exchanges: {
         label: 'Nutrición Pro',
@@ -81,6 +90,7 @@ export const MODULE_CATALOG: Record<ModuleKey, ModuleCatalogEntry> = {
             'Objetivos por composición corporal',
             'PDF de pauta con tu marca',
         ],
+        priceClp: 9990,
     },
 }
 

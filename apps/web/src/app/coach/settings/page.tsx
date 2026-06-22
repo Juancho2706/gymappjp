@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
-import { Check, Palette, Package, ChevronRight, Users, LayoutList, CreditCard, SlidersHorizontal } from 'lucide-react'
+import { Check, Palette, Package, ChevronRight, Users, CreditCard, SlidersHorizontal, type LucideIcon } from 'lucide-react'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 import { DangerZone } from './_components/DangerZone'
 import { getCoachSettingsForUser } from './_data/settings.queries'
@@ -9,6 +9,35 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
     title: 'Opciones | EVA',
+}
+
+/** Card del hub "Opciones" — patrón único (tile de icono + título + descripción + chevron). */
+function HubCard({
+    href,
+    icon: Icon,
+    title,
+    desc,
+}: {
+    href: string
+    icon: LucideIcon
+    title: string
+    desc: string
+}) {
+    return (
+        <Link
+            href={href}
+            className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
+        >
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+                <Icon className="h-5 w-5 text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
+                <h3 className="font-semibold text-foreground">{title}</h3>
+                <p className="text-xs text-muted-foreground">{desc}</p>
+            </div>
+            <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+        </Link>
+    )
 }
 
 export default async function CoachSettingsPage() {
@@ -29,62 +58,28 @@ export default async function CoachSettingsPage() {
                     </p>
                 </div>
 
-                <Link
-                    href="/coach/settings/modules"
-                    className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
-                >
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
-                        <Package className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-foreground">Módulos del equipo</h3>
-                        <p className="text-xs text-muted-foreground">Cardio, evaluación de movimiento, composición corporal, intercambios</p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                </Link>
-
-                <Link
-                    href="/coach/settings/areas"
-                    className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
-                >
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
-                        <LayoutList className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-foreground">Áreas del builder</h3>
-                        <p className="text-xs text-muted-foreground">Áreas del equipo para armar los días (Movilidad, Potencia, custom…)</p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                </Link>
-
-                <Link
+                <HubCard
                     href="/coach/team"
-                    className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
-                >
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
-                        <Users className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-foreground">Mi Equipo</h3>
-                        <p className="text-xs text-muted-foreground">Marca del equipo, miembros, accesos de alumnos y código de invitación</p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                </Link>
+                    icon={Users}
+                    title="Mi Equipo"
+                    desc="Marca del equipo, miembros, accesos de alumnos y código de invitación"
+                />
 
                 {/* Funciones del equipo — visibilidad de nutrición (solo gestores; la query/RLS gatean) */}
-                <Link
+                <HubCard
+                    href="/coach/settings/modules"
+                    icon={Package}
+                    title="Módulos del equipo"
+                    desc="Cardio, evaluación de movimiento, composición corporal, intercambios"
+                />
+                <HubCard
                     href="/coach/settings/funciones"
-                    className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
-                >
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
-                        <SlidersHorizontal className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-foreground">Funciones del equipo</h3>
-                        <p className="text-xs text-muted-foreground">Qué tan a fondo trabaja el equipo la nutrición y qué secciones ven los alumnos</p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                </Link>
+                    icon={SlidersHorizontal}
+                    title="Funciones del equipo"
+                    desc="Qué tan a fondo trabaja el equipo la nutrición y qué secciones ven los alumnos"
+                />
+
+                {/* Áreas del builder se gestionan ahora desde el builder de entrenamiento. */}
 
                 <DangerZone />
             </div>
@@ -190,8 +185,8 @@ export default async function CoachSettingsPage() {
         )
     }
 
-    // Standalone con branding: hub "Opciones" de 3 cards grandes (mismo patrón que team_managed).
-    // El branding deja de vivir inline — ahora es su propia página /coach/settings/brand.
+    // Standalone con branding: hub "Opciones" aplanado (un solo patrón de card).
+    // Marca · [Suscripción + Módulos = "lo que pagas"] · Funciones. Áreas vive en el builder.
     return (
         <div className="px-4 py-6 md:px-8 max-w-3xl animate-fade-in mx-auto space-y-6">
             <div>
@@ -201,91 +196,36 @@ export default async function CoachSettingsPage() {
                 </p>
             </div>
 
-            {/* 1. Mi Marca → branding (logo, colores, nombre, mensajes) */}
-            <Link
+            <HubCard
                 href="/coach/settings/brand"
-                className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
-            >
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
-                    <Palette className="h-5 w-5 text-primary" />
-                </div>
-                <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-foreground">Mi Marca</h3>
-                    <p className="text-xs text-muted-foreground">Logo, colores, nombre y mensajes de la app de tus alumnos</p>
-                </div>
-                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-            </Link>
+                icon={Palette}
+                title="Mi Marca"
+                desc="Logo, colores, nombre y mensajes de la app de tus alumnos"
+            />
 
-            {/* 2. Suscripción → /coach/subscription (sin cambios funcionales) */}
-            <Link
-                href="/coach/subscription"
-                className="group flex items-center gap-4 rounded-2xl border border-border bg-card p-4 transition-all hover:border-primary/30 hover:bg-card/80"
-            >
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
-                    <CreditCard className="h-5 w-5 text-primary" />
-                </div>
-                <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-foreground">Suscripción</h3>
-                    <p className="text-xs text-muted-foreground">Tu plan, facturación, alumnos activos y métodos de pago</p>
-                </div>
-                <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-            </Link>
+            {/* Lo que pagas: suscripción base + módulos de pago, juntos. */}
+            <div className="space-y-3">
+                <p className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Lo que pagas</p>
+                <HubCard
+                    href="/coach/subscription"
+                    icon={CreditCard}
+                    title="Suscripción"
+                    desc="Tu plan, facturación, alumnos activos y métodos de pago"
+                />
+                <HubCard
+                    href="/coach/settings/modules"
+                    icon={Package}
+                    title="Módulos"
+                    desc="Cardio, evaluación de movimiento, composición corporal, nutrición por intercambios"
+                />
+            </div>
 
-            {/* 3. Opciones Coach → módulos (entitlements) + áreas del builder.
-                NOTA: esta card alojará la zona "Funciones" (toggles de visibilidad) en Fase C.
-                NO construir toggles ahora — solo dejar el espacio agrupado. */}
-            <section className="rounded-2xl border border-border bg-card overflow-hidden">
-                <div className="flex items-center gap-4 px-4 pt-4 pb-2">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
-                        <SlidersHorizontal className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-foreground">Opciones Coach</h3>
-                        <p className="text-xs text-muted-foreground">Tus módulos y la configuración del builder</p>
-                    </div>
-                </div>
-
-                <div className="divide-y divide-border border-t border-border">
-                    {/* Módulos (entitlements) — catálogo read-only, compra-only */}
-                    <Link
-                        href="/coach/settings/modules"
-                        className="group flex items-center gap-4 px-4 py-3.5 transition-colors hover:bg-card/60"
-                    >
-                        <Package className="h-5 w-5 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                            <h4 className="text-sm font-medium text-foreground">Módulos</h4>
-                            <p className="text-xs text-muted-foreground">Cardio, evaluación de movimiento, composición corporal, nutrición por intercambios</p>
-                        </div>
-                        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                    </Link>
-
-                    {/* Áreas custom del builder */}
-                    <Link
-                        href="/coach/settings/areas"
-                        className="group flex items-center gap-4 px-4 py-3.5 transition-colors hover:bg-card/60"
-                    >
-                        <LayoutList className="h-5 w-5 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                            <h4 className="text-sm font-medium text-foreground">Áreas del builder</h4>
-                            <p className="text-xs text-muted-foreground">Organizá los días con tus propias áreas (Movilidad, Core, HYROX…)</p>
-                        </div>
-                        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                    </Link>
-
-                    {/* Funciones — toggles de visibilidad (qué se muestra de lo que tienes) */}
-                    <Link
-                        href="/coach/settings/funciones"
-                        className="group flex items-center gap-4 px-4 py-3.5 transition-colors hover:bg-card/60"
-                    >
-                        <SlidersHorizontal className="h-5 w-5 shrink-0 text-muted-foreground" />
-                        <div className="min-w-0 flex-1">
-                            <h4 className="text-sm font-medium text-foreground">Funciones</h4>
-                            <p className="text-xs text-muted-foreground">Qué tan a fondo trabajas la nutrición y qué secciones ven tus alumnos</p>
-                        </div>
-                        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-                    </Link>
-                </div>
-            </section>
+            <HubCard
+                href="/coach/settings/funciones"
+                icon={SlidersHorizontal}
+                title="Funciones"
+                desc="Qué tan a fondo trabajas la nutrición y qué secciones ven tus alumnos"
+            />
 
             {/* Danger zone — account deletion (siempre alcanzable) */}
             <DangerZone />

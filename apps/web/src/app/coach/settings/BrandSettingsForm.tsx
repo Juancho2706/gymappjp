@@ -6,7 +6,7 @@ import { useFormStatus } from 'react-dom'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Loader2, Save, Palette, ExternalLink, Copy, Check, ImageIcon, Type, MessageSquare, SlidersHorizontal, QrCode, Play, FileText, RotateCcw, ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react'
+import { Loader2, Save, Palette, ExternalLink, Copy, Check, ImageIcon, Type, MessageSquare, SlidersHorizontal, QrCode, Play, FileText, RotateCcw, ShieldCheck, ShieldAlert, ShieldX, Maximize2, X } from 'lucide-react'
 import { updateBrandSettingsAction, type BrandSettingsState } from './_actions/settings.actions'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/database.types'
@@ -60,6 +60,8 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     const [welcomeModalContent, setWelcomeModalContent] = useState(coach.welcome_modal_content ?? '')
     const [welcomeModalType, setWelcomeModalType] = useState<'text' | 'video'>(coach.welcome_modal_type as 'text' | 'video' ?? 'text')
     const [welcomeMessageInput, setWelcomeMessageInput] = useState(coach.welcome_message ?? '')
+    // Vista previa a pantalla completa (mismo componente fiel que el sticky — refleja lo que editás).
+    const [previewExpanded, setPreviewExpanded] = useState(false)
 
     const palette = generateBrandPalette(selectedColor ?? '#007AFF')
     const publicStudentIdentifier = getCoachPublicIdentifier(coach)
@@ -139,6 +141,14 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
         window.addEventListener('beforeunload', handler)
         return () => window.removeEventListener('beforeunload', handler)
     }, [isDirty]);
+
+    // Cerrar la vista previa expandida con Escape.
+    useEffect(() => {
+        if (!previewExpanded) return
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPreviewExpanded(false) }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [previewExpanded]);
 
     const handleCopyLink = async () => {
         try {
@@ -747,17 +757,50 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         </div>
                     )}
                     <div className="flex items-center gap-2">
-                        <a
-                            href="/coach/settings/preview"
+                        <button
+                            type="button"
+                            onClick={() => setPreviewExpanded(true)}
                             className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 shadow-lg"
                         >
-                            <ExternalLink className="w-4 h-4" />
-                            <span className="hidden sm:inline">Vista previa</span>
-                        </a>
+                            <Maximize2 className="w-4 h-4" />
+                            <span className="hidden sm:inline">Expandir vista</span>
+                        </button>
                         <SaveButton />
                     </div>
                 </div>
             </div>
+
+            {/* Vista previa expandida — el MISMO preview fiel (refleja lo que editás), a pantalla completa */}
+            {previewExpanded && (
+                <div
+                    className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+                    onClick={() => setPreviewExpanded(false)}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Vista previa de tu marca"
+                >
+                    <div className="relative w-full max-w-sm max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <button
+                            type="button"
+                            onClick={() => setPreviewExpanded(false)}
+                            className="absolute -right-2 -top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-lg transition-colors hover:text-foreground"
+                            aria-label="Cerrar vista previa"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
+                        <BrandThemePreview
+                            brandName={coach.brand_name}
+                            primaryColor={selectedColor}
+                            logoUrl={coach.logo_url}
+                            welcomeMessage={welcomeMessageInput}
+                            loaderText={loaderText}
+                            useCustomLoader={useCustomLoader}
+                            loaderTextColor={loaderTextColor}
+                            loaderIconMode={loaderIconMode}
+                        />
+                    </div>
+                </div>
+            )}
         </form>
     )
 }
