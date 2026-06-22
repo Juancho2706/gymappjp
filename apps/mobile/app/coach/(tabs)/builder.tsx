@@ -38,11 +38,28 @@ import { useTheme } from '../../../context/ThemeContext'
 import { Button, EmptyState, NativeDialog, ScreenHeader, SegmentedTabs } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { listAreas, buildAreaVMs, type WorkoutArea, type AreaVM } from '../../../lib/areas'
+import {
+  executionAreaGroupsFor,
+  groupContiguousSupersetRuns,
+  type SupersetGroupRow,
+} from '../../../lib/workout-areas-grouping'
 
 type FilterType = 'all' | 'templates' | 'assigned'
 type FilterStatus = 'all' | 'active' | 'inactive'
 type FilterStructure = 'all' | 'weekly' | 'cycle'
 type FilterPhases = 'all' | 'with' | 'without'
+type AssignStartMode = 'today' | 'custom' | 'flexible'
+
+const ASSIGN_DAY_OPTIONS: { id: number; label: string }[] = [
+  { id: 1, label: 'Lun' },
+  { id: 2, label: 'Mar' },
+  { id: 3, label: 'Mie' },
+  { id: 4, label: 'Jue' },
+  { id: 5, label: 'Vie' },
+  { id: 6, label: 'Sab' },
+  { id: 7, label: 'Dom' },
+]
 
 type ClientLite = {
   id: string
@@ -62,6 +79,7 @@ type ProgramBlock = {
   rest_time: string | null
   notes: string | null
   superset_group: string | null
+  section_template_id?: string | null
   target_weight_kg?: number | null
   progression_type?: string | null
   progression_value?: number | null
@@ -118,6 +136,7 @@ export default function BuilderScreen() {
   const router = useRouter()
   const [programs, setPrograms] = useState<ProgramItem[]>([])
   const [clients, setClients] = useState<ClientLite[]>([])
+  const [areas, setAreas] = useState<WorkoutArea[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState<FilterType>('all')
@@ -129,6 +148,9 @@ export default function BuilderScreen() {
   const [assignProgram, setAssignProgram] = useState<ProgramItem | null>(null)
   const [selectedClientIds, setSelectedClientIds] = useState<string[]>([])
   const [assignDurationWeeks, setAssignDurationWeeks] = useState('4')
+  const [assignStartMode, setAssignStartMode] = useState<AssignStartMode>('today')
+  const [assignStartDate, setAssignStartDate] = useState(todayIso())
+  const [assignDays, setAssignDays] = useState<number[]>([])
   const [duplicateProgram, setDuplicateProgram] = useState<ProgramItem | null>(null)
   const [duplicateName, setDuplicateName] = useState('')
   const [actionBusy, setActionBusy] = useState<string | null>(null)
@@ -150,7 +172,7 @@ export default function BuilderScreen() {
           workout_plans (
             id, day_of_week, title, group_name, week_variant, assigned_date,
             workout_blocks (
-              id, exercise_id, order_index, sets, reps, target_weight_kg, section, tempo, rir, rest_time, notes,
+              id, exercise_id, order_index, sets, reps, target_weight_kg, section, section_template_id, tempo, rir, rest_time, notes,
               superset_group, progression_type, progression_value, is_override,
               exercise:exercises(name)
             )
@@ -163,7 +185,7 @@ export default function BuilderScreen() {
           ab_mode, duration_type, source_template_id,${planBlock}`
     const minCols = `${baseCols},${planBlock}`
 
-    const [programRes, clientsRes] = await Promise.all([
+    const [programRes, clientsRes, areasRes] = await Promise.all([
       // Rich (con org_id) → fallback sin org_id para prod standalone.
       selectWithFallback<any>(
         () => supabase.from('workout_programs').select(richCols).eq('coach_id', coach.id).order('updated_at', { ascending: false }),
@@ -175,10 +197,13 @@ export default function BuilderScreen() {
         .eq('coach_id', coach.id)
         .eq('is_archived', false)
         .order('full_name'),
+      // Areas visibles del coach — titulan el preview por area (fallback legacy si vienen vacias).
+      listAreas(),
     ])
 
     setPrograms(((programRes.data as unknown as ProgramItem[] | null) ?? []).map(normalizeProgram))
     setClients((clientsRes.data as unknown as ClientLite[] | null) ?? [])
+    setAreas(areasRes)
     setLoading(false)
   }
 
@@ -194,6 +219,13 @@ export default function BuilderScreen() {
       matchesProgram(program, { search, filterType, filterStatus, filterStructure, filterPhases })
     )
   }, [programs, search, filterType, filterStatus, filterStructure, filterPhases])
+
+  // Espejo web: si hay dias marcados pero NINGUNO coincide con un dia de la plantilla, bloquea.
+  const assignDaysMismatch = useMemo(() => {
+    if (!assignProgram || assignDays.length === 0) return false
+    const planDays = new Set((assignProgram.workout_plans ?? []).map((p) => p.day_of_week))
+    return !assignDays.some((d) => planDays.has(d))
+  }, [assignProgram, assignDays])
 
   function openNewTemplate() {
     router.push({ pathname: '/coach/program-builder', params: { mode: 'template' } })
@@ -216,6 +248,13 @@ export default function BuilderScreen() {
     setAssignProgram(program)
     setSelectedClientIds([])
     setAssignDurationWeeks(String(program.weeks_to_repeat ?? 4))
+    setAssignStartMode('today')
+    setAssignStartDate(todayIso())
+    setAssignDays([])
+  }
+
+  function toggleAssignDay(dayId: number) {
+    setAssignDays((prev) => (prev.includes(dayId) ? prev.filter((d) => d !== dayId) : [...prev, dayId]))
   }
 
   function openDuplicate(program: ProgramItem) {
@@ -248,9 +287,26 @@ export default function BuilderScreen() {
       Alert.alert('Selecciona alumnos', 'Elige al menos un alumno para asignar esta plantilla.')
       return
     }
+    if (assignDaysMismatch) {
+      Alert.alert(
+        'Dias sin coincidencia',
+        'Los dias marcados no coinciden con ningun dia de esta plantilla. Quita la seleccion o elige otros.'
+      )
+      return
+    }
     const weeks = Math.max(1, Math.min(52, Number(assignDurationWeeks) || assignProgram.weeks_to_repeat || 4))
+    // Espejo web: today → start_date_flexible undefined (toma el de la plantilla);
+    // custom → fecha fija + flexible false; flexible → flexible true.
+    const startDateFlexible =
+      assignStartMode === 'flexible' ? true : assignStartMode === 'custom' ? false : undefined
+    const startDate = assignStartMode === 'custom' ? assignStartDate : undefined
     setActionBusy(`assign-${assignProgram.id}`)
-    const result = await assignTemplateToClients(assignProgram, selectedClientIds, { durationWeeks: weeks })
+    const result = await assignTemplateToClients(assignProgram, selectedClientIds, {
+      durationWeeks: weeks,
+      startDate,
+      startDateFlexible,
+      selectedDays: assignDays.length ? assignDays : undefined,
+    })
     setActionBusy(null)
     if (!result.ok) {
       Alert.alert('No se pudo asignar', result.error ?? 'Intenta nuevamente.')
@@ -422,6 +478,7 @@ export default function BuilderScreen() {
         {preview ? (
           <ProgramPreview
             program={preview}
+            areas={areas}
             theme={theme}
             onEdit={() => { const p = preview; setPreview(null); editProgram(p) }}
             onAssign={() => { const p = preview; setPreview(null); openAssign(p) }}
@@ -437,9 +494,16 @@ export default function BuilderScreen() {
             clients={clients}
             selectedClientIds={selectedClientIds}
             durationWeeks={assignDurationWeeks}
+            startMode={assignStartMode}
+            startDate={assignStartDate}
+            selectedDays={assignDays}
+            daysMismatch={assignDaysMismatch}
             busy={actionBusy === `assign-${assignProgram.id}`}
             onToggleClient={toggleSelectedClient}
             onDurationChange={setAssignDurationWeeks}
+            onStartModeChange={setAssignStartMode}
+            onStartDateChange={setAssignStartDate}
+            onToggleDay={toggleAssignDay}
             onCancel={() => setAssignProgram(null)}
             onConfirm={confirmAssign}
             theme={theme}
@@ -618,10 +682,53 @@ function StatusBadge({ program, theme }: { program: ProgramItem; theme: any }) {
   )
 }
 
-function ProgramPreview({ program, theme, onEdit, onAssign, onDuplicate }: { program: ProgramItem; theme: any; onEdit: () => void; onAssign: () => void; onDuplicate: () => void }) {
+/** Seccion del preview agrupada por AREA (espejo de buildLibrarySections web): label + grupos de superserie. */
+type PreviewSectionVM = {
+  key: string
+  short: string
+  label: string
+  color: string
+  groups: SupersetGroupRow<ProgramBlock>[]
+}
+
+const LEGACY_SECTION_LABEL: Record<'warmup' | 'main' | 'cooldown' | 'other', { short: string; label: string }> = {
+  warmup: { short: 'CAL', label: 'Calentamiento' },
+  main: { short: 'PRI', label: 'Bloque principal' },
+  cooldown: { short: 'ENF', label: 'Enfriamiento' },
+  other: { short: 'OTR', label: 'Otros bloques' },
+}
+
+/**
+ * Secciones del preview agrupadas por AREA con fallback legacy (mismo helper que la ejecucion del
+ * alumno, executionAreaGroupsFor). Programa SOLO clasico → CAL/PRI/ENF de siempre. Bloques en areas
+ * custom/extra → header con el nombre real del area + color de buildAreaVMs. Espejo 1:1 de la web.
+ */
+function ProgramPreview({ program, areas, theme, onEdit, onAssign, onDuplicate }: { program: ProgramItem; areas: WorkoutArea[]; theme: any; onEdit: () => void; onAssign: () => void; onDuplicate: () => void }) {
   const plans = sortedPlans(program)
   const stats = getProgramStats(program)
   const phases = program.program_phases ?? []
+  const vmById = useMemo(() => new Map(buildAreaVMs(areas).map((vm) => [vm.id, vm])), [areas])
+
+  function sectionsFor(plan: ProgramPlan): PreviewSectionVM[] {
+    const blocks = sortedBlocks(plan)
+    return executionAreaGroupsFor(blocks, areas).map((areaGroup) => {
+      const groups = groupContiguousSupersetRuns(
+        areaGroup.blocks.map((b) => ({ ...b, superset_group: b.superset_group ?? null }))
+      )
+      if (areaGroup.legacySection) {
+        const meta = LEGACY_SECTION_LABEL[areaGroup.legacySection]
+        return { key: areaGroup.key, short: meta.short, label: meta.label, color: theme.mutedForeground, groups }
+      }
+      const vm = vmById.get(areaGroup.key)
+      return {
+        key: areaGroup.key,
+        short: vm?.shortLabel ?? '???',
+        label: areaGroup.name ?? 'Area',
+        color: vm?.color ?? theme.primary,
+        groups,
+      }
+    })
+  }
 
   return (
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.previewScroll}>
@@ -647,30 +754,58 @@ function ProgramPreview({ program, theme, onEdit, onAssign, onDuplicate }: { pro
 
       <View style={{ gap: 12 }}>
         <Text style={[styles.previewSectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>ESTRUCTURA</Text>
-        {plans.length ? plans.map((plan) => (
-          <View key={plan.id} style={[styles.previewDay, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-            <View style={styles.previewDayHead}>
-              <View style={[styles.previewDayIndex, { backgroundColor: theme.primary }]}>
-                <Text style={[styles.previewDayIndexText, { color: theme.primaryForeground, fontFamily: 'Montserrat_800ExtraBold' }]}>{dayLabel(plan.day_of_week)}</Text>
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text numberOfLines={1} style={[styles.previewDayTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{plan.title}</Text>
-                <Text style={[styles.cardMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{plan.workout_blocks?.length ?? 0} ejercicios</Text>
-              </View>
-            </View>
-            {sortedBlocks(plan).slice(0, 8).map((block, i) => (
-              <View key={block.id} style={[styles.blockRow, i < Math.min(sortedBlocks(plan).length, 8) - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text numberOfLines={1} style={[styles.blockName, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{block.exercise?.name ?? 'Ejercicio'}</Text>
-                  <Text numberOfLines={1} style={[styles.cardMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                    {[block.tempo && `Tempo ${block.tempo}`, block.rir && `${block.rir} RIR`, block.rest_time && `Desc. ${block.rest_time}`].filter(Boolean).join(' · ') || 'Bloque principal'}
-                  </Text>
+        {plans.length ? plans.map((plan) => {
+          const sections = sectionsFor(plan)
+          return (
+            <View key={plan.id} style={[styles.previewDay, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+              <View style={styles.previewDayHead}>
+                <View style={[styles.previewDayIndex, { backgroundColor: theme.primary }]}>
+                  <Text style={[styles.previewDayIndexText, { color: theme.primaryForeground, fontFamily: 'Montserrat_800ExtraBold' }]}>{dayLabel(plan.day_of_week)}</Text>
                 </View>
-                <Text style={[styles.blockDose, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}>{block.sets}x{block.reps}</Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text numberOfLines={1} style={[styles.previewDayTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{plan.title}</Text>
+                  <Text style={[styles.cardMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{plan.workout_blocks?.length ?? 0} ejercicios</Text>
+                </View>
               </View>
-            ))}
-          </View>
-        )) : (
+
+              {sections.length ? sections.map((section) => (
+                <View key={section.key} style={{ gap: 6 }}>
+                  <View style={[styles.previewSecHead, { borderColor: section.color + '44', backgroundColor: section.color + '12', borderRadius: theme.radius.sm }]}>
+                    <View style={[styles.previewSecShort, { borderColor: section.color + '55' }]}>
+                      <Text style={[styles.previewSecShortText, { color: section.color, fontFamily: 'Inter_800ExtraBold' }]}>{section.short}</Text>
+                    </View>
+                    <Text numberOfLines={1} style={[styles.previewSecLabel, { color: section.color, fontFamily: 'Inter_700Bold' }]}>{section.label}</Text>
+                  </View>
+                  <View style={{ gap: 6 }}>
+                    {section.groups.map((group) => (
+                      <View
+                        key={group.key}
+                        style={group.type === 'superset' ? [styles.ssGroup, { borderColor: theme.primary + '40', backgroundColor: theme.primary + '0E', borderRadius: theme.radius.md }] : undefined}
+                      >
+                        {group.type === 'superset' ? (
+                          <Text style={[styles.ssLabel, { color: theme.primary, fontFamily: 'Inter_800ExtraBold' }]}>Superserie · grupo {group.supersetLetter ?? '?'}</Text>
+                        ) : null}
+                        {group.blocks.map((block) => (
+                          <View key={block.id} style={styles.previewBlockRow}>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text numberOfLines={1} style={[styles.blockName, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{block.exercise?.name ?? 'Ejercicio'}</Text>
+                              <Text numberOfLines={1} style={[styles.cardMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                                {[block.tempo && `Tempo ${block.tempo}`, block.rir && `${block.rir} RIR`, block.rest_time && `Desc. ${block.rest_time}`].filter(Boolean).join(' · ') || 'Bloque'}
+                              </Text>
+                            </View>
+                            <Text style={[styles.blockDose, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}>{block.sets}x{block.reps}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )) : (
+                <Text style={[styles.cardMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sin ejercicios.</Text>
+              )}
+            </View>
+          )
+        }) : (
           <Text style={[styles.cardMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Este programa aun no tiene dias configurados.</Text>
         )}
       </View>
@@ -694,14 +829,27 @@ function PreviewMetric({ icon: Icon, label, value, theme }: { icon: any; label: 
   )
 }
 
+const START_MODE_LABEL: Record<AssignStartMode, string> = {
+  today: 'Hoy (fecha por defecto)',
+  custom: 'Fecha especifica',
+  flexible: 'Inicio flexible',
+}
+
 function AssignTemplateDialog({
   program,
   clients,
   selectedClientIds,
   durationWeeks,
+  startMode,
+  startDate,
+  selectedDays,
+  daysMismatch,
   busy,
   onToggleClient,
   onDurationChange,
+  onStartModeChange,
+  onStartDateChange,
+  onToggleDay,
   onCancel,
   onConfirm,
   theme,
@@ -710,9 +858,16 @@ function AssignTemplateDialog({
   clients: ClientLite[]
   selectedClientIds: string[]
   durationWeeks: string
+  startMode: AssignStartMode
+  startDate: string
+  selectedDays: number[]
+  daysMismatch: boolean
   busy: boolean
   onToggleClient: (clientId: string) => void
   onDurationChange: (value: string) => void
+  onStartModeChange: (value: AssignStartMode) => void
+  onStartDateChange: (value: string) => void
+  onToggleDay: (dayId: number) => void
   onCancel: () => void
   onConfirm: () => void
   theme: any
@@ -720,20 +875,8 @@ function AssignTemplateDialog({
   return (
     <View style={{ gap: 12 }}>
       <Text style={[styles.dialogText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-        Copia la plantilla como programa activo para cada alumno. Si ya tiene un plan activo, se desactiva y se conserva el historial.
+        Duplicas la plantilla en cada alumno; ajusta inicio, semanas y dias aqui. Si ya tiene un plan activo, se desactiva y se conserva el historial.
       </Text>
-
-      <View style={[styles.inputWrap, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}>
-        <Text style={[styles.inputLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Duracion semanas</Text>
-        <TextInput
-          value={durationWeeks}
-          onChangeText={onDurationChange}
-          keyboardType="number-pad"
-          placeholder="4"
-          placeholderTextColor={theme.mutedForeground}
-          style={[styles.inlineInput, { color: theme.foreground, fontFamily: theme.fontSans }]}
-        />
-      </View>
 
       <ScrollView style={styles.assignList} showsVerticalScrollIndicator={false}>
         {clients.map((client) => {
@@ -760,12 +903,93 @@ function AssignTemplateDialog({
         })}
       </ScrollView>
 
+      {/* Configuracion de asignacion (espejo web) */}
+      <View style={{ gap: 10, borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 }}>
+        <Text style={[styles.assignConfigTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>Configuracion de asignacion</Text>
+
+        {/* Modo de inicio: Hoy / Fecha especifica / Flexible */}
+        <View style={{ gap: 5 }}>
+          <Text style={[styles.inputLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Inicio</Text>
+          <View style={styles.startModeRow}>
+            {(['today', 'custom', 'flexible'] as AssignStartMode[]).map((mode) => {
+              const active = startMode === mode
+              const shortLabel = mode === 'today' ? 'Hoy' : mode === 'custom' ? 'Fecha' : 'Flexible'
+              return (
+                <TouchableOpacity
+                  key={mode}
+                  onPress={() => onStartModeChange(mode)}
+                  activeOpacity={0.85}
+                  style={[styles.startModeChip, { backgroundColor: active ? theme.primary : theme.secondary, borderColor: active ? theme.primary : theme.border, borderRadius: theme.radius.lg }]}
+                >
+                  <Text style={[styles.startModeChipText, { color: active ? theme.primaryForeground : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{shortLabel}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+          <Text style={[styles.startModeHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{START_MODE_LABEL[startMode]}</Text>
+        </View>
+
+        {/* Date picker (solo en modo Fecha especifica) */}
+        {startMode === 'custom' ? (
+          <View style={[styles.inputWrap, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}>
+            <Text style={[styles.inputLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Fecha de inicio</Text>
+            <TextInput
+              value={startDate}
+              onChangeText={onStartDateChange}
+              placeholder="AAAA-MM-DD"
+              placeholderTextColor={theme.mutedForeground}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[styles.inlineInput, { color: theme.foreground, fontFamily: theme.fontSans }]}
+            />
+          </View>
+        ) : null}
+
+        {/* Duracion en semanas */}
+        <View style={[styles.inputWrap, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}>
+          <Text style={[styles.inputLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Duracion (semanas)</Text>
+          <TextInput
+            value={durationWeeks}
+            onChangeText={onDurationChange}
+            keyboardType="number-pad"
+            placeholder="4"
+            placeholderTextColor={theme.mutedForeground}
+            style={[styles.inlineInput, { color: theme.foreground, fontFamily: theme.fontSans }]}
+          />
+        </View>
+
+        {/* Filtro de dias Lun-Dom */}
+        <View style={{ gap: 6 }}>
+          <Text style={[styles.inputLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Dias a copiar (opcional)</Text>
+          {daysMismatch ? (
+            <Text style={[styles.dayMismatch, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>
+              Ningun dia marcado coincide con esta plantilla. Desmarca todo para copiar todos los dias.
+            </Text>
+          ) : null}
+          <View style={styles.dayPickRow}>
+            {ASSIGN_DAY_OPTIONS.map((day) => {
+              const active = selectedDays.includes(day.id)
+              return (
+                <TouchableOpacity
+                  key={day.id}
+                  onPress={() => onToggleDay(day.id)}
+                  activeOpacity={0.85}
+                  style={[styles.dayPickChip, { backgroundColor: active ? theme.primary + '20' : theme.secondary, borderColor: active ? theme.primary + '66' : theme.border, borderRadius: theme.radius.md }]}
+                >
+                  <Text style={[styles.dayPickText, { color: active ? theme.primary : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{day.label}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        </View>
+      </View>
+
       <View style={styles.dialogActions}>
         <Button label="Cancelar" variant="secondary" onPress={onCancel} disabled={busy} style={{ flex: 1 }} />
         <Button
           label={busy ? 'Asignando...' : `Asignar ${selectedClientIds.length || ''}`.trim()}
           onPress={onConfirm}
-          disabled={busy || !selectedClientIds.length || !program.workout_plans?.length}
+          disabled={busy || !selectedClientIds.length || !program.workout_plans?.length || daysMismatch}
           style={{ flex: 1 }}
         />
       </View>
@@ -949,6 +1173,8 @@ function programInsertFromTemplate(program: ProgramItem, input: {
   startDate: string | null
   endDate: string | null
   weeks?: number
+  /** Override del modo de inicio (asignacion). undefined → hereda de la plantilla (espejo web). */
+  startDateFlexible?: boolean
 }) {
   return {
     coach_id: input.coachId,
@@ -963,7 +1189,11 @@ function programInsertFromTemplate(program: ProgramItem, input: {
     duration_days: program.duration_days ?? null,
     program_structure_type: program.program_structure_type ?? 'weekly',
     cycle_length: program.cycle_length ?? null,
-    start_date_flexible: input.clientId ? false : (program.start_date_flexible ?? true),
+    // Asignacion: el modo de inicio (Hoy/Fecha/Flexible) manda; si no se pasa, hereda de la plantilla.
+    start_date_flexible:
+      typeof input.startDateFlexible === 'boolean'
+        ? input.startDateFlexible
+        : (program.start_date_flexible ?? true),
     program_notes: program.program_notes ?? null,
     ab_mode: program.ab_mode ?? false,
     program_phases: program.program_phases ?? [],
@@ -988,6 +1218,8 @@ function blockInsertFromSource(block: ProgramBlock, planId: string) {
     progression_type: block.progression_type ?? null,
     progression_value: block.progression_value ?? null,
     section: ['warmup', 'main', 'cooldown'].includes(String(block.section)) ? block.section : 'main',
+    // Preserva el area del bloque al copiar plantilla → alumno (espejo web; el GRANT de columna ya existe).
+    section_template_id: block.section_template_id ?? null,
     is_override: false,
   }
 }
@@ -1069,8 +1301,14 @@ async function syncProgramFromTemplate(program: ProgramItem): Promise<{ ok: bool
   return { ok: true }
 }
 
-async function copyPlansAndBlocks(source: ProgramItem, newProgramId: string, coachId: string, clientId: string | null, assignedDate: string | null): Promise<{ ok: boolean; error?: string }> {
-  for (const plan of sortedPlans(source)) {
+async function copyPlansAndBlocks(source: ProgramItem, newProgramId: string, coachId: string, clientId: string | null, assignedDate: string | null, selectedDays?: number[]): Promise<{ ok: boolean; error?: string }> {
+  // Filtro de dias (espejo web): si hay dias marcados, solo se copian esos day_of_week (1-28).
+  const daysSet = new Set((selectedDays ?? []).filter((d) => d >= 1 && d <= 28))
+  const plansToCopy = sortedPlans(source).filter((plan) => {
+    if (!daysSet.size) return true
+    return plan.day_of_week != null && daysSet.has(plan.day_of_week)
+  })
+  for (const plan of plansToCopy) {
     const { data: newPlan, error: planError } = await supabase
       .from('workout_plans')
       .insert({
@@ -1131,12 +1369,25 @@ async function duplicateProgramAsTemplate(program: ProgramItem, name: string): P
   return { ok: true }
 }
 
-async function assignTemplateToClients(template: ProgramItem, clientIds: string[], options: { durationWeeks: number }): Promise<{ ok: boolean; error?: string }> {
+async function assignTemplateToClients(
+  template: ProgramItem,
+  clientIds: string[],
+  options: {
+    durationWeeks: number
+    /** Fecha de inicio fija (modo "Fecha especifica"); sin esto se usa hoy. */
+    startDate?: string
+    /** Modo de inicio: true=flexible, false=fecha fija, undefined=hereda de la plantilla. */
+    startDateFlexible?: boolean
+    /** Filtro de dias (1-7); vacio/undefined copia todos los dias de la plantilla. */
+    selectedDays?: number[]
+  }
+): Promise<{ ok: boolean; error?: string }> {
   const coach = await getCoachProfile()
   if (!coach) return { ok: false, error: 'Coach no encontrado.' }
   const { orgId } = await getCoachOrgContext()
-  const start = todayIso()
-  const end = addDays(start, options.durationWeeks * 7)
+  const start = options.startDate || todayIso()
+  // Espejo web: end = start + (semanas*7) - 1.
+  const end = addDays(start, options.durationWeeks * 7 - 1)
 
   for (const clientId of clientIds) {
     const insert = programInsertFromTemplate(template, {
@@ -1149,11 +1400,12 @@ async function assignTemplateToClients(template: ProgramItem, clientIds: string[
       startDate: start,
       endDate: end,
       weeks: options.durationWeeks,
+      startDateFlexible: options.startDateFlexible,
     })
     const { data: newProgram, error } = await supabase.from('workout_programs').insert(insert as any).select('id').single()
     if (error || !newProgram) return { ok: false, error: error?.message ?? 'No se pudo asignar el programa.' }
 
-    const copied = await copyPlansAndBlocks(template, newProgram.id, coach.id, clientId, start)
+    const copied = await copyPlansAndBlocks(template, newProgram.id, coach.id, clientId, start, options.selectedDays)
     if (!copied.ok) {
       await supabase.from('workout_programs').delete().eq('id', newProgram.id)
       return copied
@@ -1254,10 +1506,26 @@ const styles = StyleSheet.create({
   inputWrap: { borderWidth: 1, paddingHorizontal: 12, paddingVertical: 9, gap: 4 },
   inputLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.7 },
   inlineInput: { fontSize: 15, paddingVertical: 0, minHeight: 28 },
-  assignList: { maxHeight: 320 },
+  assignList: { maxHeight: 240 },
   assignClientRow: { borderWidth: 1, padding: 10, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
   checkBox: { width: 24, height: 24, borderRadius: 7, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   assignClientName: { fontSize: 13 },
+  assignConfigTitle: { fontSize: 13 },
+  startModeRow: { flexDirection: 'row', gap: 6 },
+  startModeChip: { flex: 1, borderWidth: 1, paddingVertical: 9, alignItems: 'center', justifyContent: 'center' },
+  startModeChipText: { fontSize: 12 },
+  startModeHint: { fontSize: 11, lineHeight: 15 },
+  dayPickRow: { flexDirection: 'row', gap: 5 },
+  dayPickChip: { flex: 1, borderWidth: 1, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', minWidth: 0 },
+  dayPickText: { fontSize: 11 },
+  dayMismatch: { fontSize: 11, lineHeight: 15 },
+  previewSecHead: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 5 },
+  previewSecShort: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1.5 },
+  previewSecShortText: { fontSize: 8.5, letterSpacing: 0.8 },
+  previewSecLabel: { flex: 1, fontSize: 11.5, letterSpacing: 0.2 },
+  previewBlockRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, paddingHorizontal: 2 },
+  ssGroup: { borderWidth: 1, padding: 8, gap: 4 },
+  ssLabel: { fontSize: 8.5, letterSpacing: 0.6, textTransform: 'uppercase' },
   dialogActions: { flexDirection: 'row', gap: 10, paddingTop: 2 },
   fab: {
     position: 'absolute',

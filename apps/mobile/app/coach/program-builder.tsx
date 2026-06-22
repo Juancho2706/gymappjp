@@ -33,7 +33,12 @@ import { BuilderOnboardingTour, type TourStep } from '../../components/coach/Bui
 import { getMuscleColor } from '../../lib/muscle-colors'
 import { listCoachExercises, type ExerciseRow } from '../../lib/exercises'
 import { listAreas, buildAreaVMs, type AreaVM } from '../../lib/areas'
-import { moveBlockToArea } from '../../lib/workout-areas-grouping'
+import {
+  moveBlockToArea,
+  effectiveAreaKey,
+  orderedAreaIds,
+  classicSlugForAreaId,
+} from '../../lib/workout-areas-grouping'
 import { legacyRepsSummaryFor, effectiveExerciseType, EXERCISE_TYPE_LABEL } from '../../lib/workout-exercise-type'
 import { resolveClientZones, type HrZoneRange } from '../../lib/cardio'
 import { exportProgramPdf } from '../../lib/program-pdf'
@@ -44,7 +49,6 @@ import type { BuilderBlock, BuilderCardioContext, BuilderSection, DayState, Dura
 
 const DAY_SHORT = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const SLIDE = Math.round(Dimensions.get('window').width * 0.22) // desplazamiento del slide de día
-const SECTION_ORDER: BuilderSection[] = ['warmup', 'main', 'cooldown']
 const SECTION_LABEL: Record<BuilderSection, string> = { warmup: 'Calentamiento', main: 'Principal', cooldown: 'Enfriamiento' }
 
 // Una superserie no puede cruzar secciones → limpiar grupos que quedaron repartidos.
@@ -369,7 +373,8 @@ export default function ProgramBuilderScreen() {
   const [editingUid, setEditingUid] = useState<string | null>(null)
   const [copyOpen, setCopyOpen] = useState(false)
   const [durationDays, setDurationDays] = useState<number | null>(null) // para duración async / días corridos
-  const [pendingSection, setPendingSection] = useState<BuilderSection>('main') // sección destino al agregar ejercicio
+  const [pendingSection, setPendingSection] = useState<BuilderSection>('main') // sección legacy destino al agregar ejercicio
+  const [pendingAreaId, setPendingAreaId] = useState<string | null>(null) // área (section_template_id) destino al agregar
 
   const builder = usePlanBuilder(initial)
   const { days, addExercise, removeBlock, updateBlock, setDayBlocks, transferBlock, updateDayTitle, toggleRestDay, copyDay, toggleSuperset, setBlockSection, toggleBlockOverride, undo, redo, canUndo, canRedo, setDays } = builder
@@ -596,26 +601,87 @@ export default function ProgramBuilderScreen() {
     )
   }
 
-  // P8: bloques de una sección (orden estable). El drag SOLO reordena dentro de su sección;
-  // el cambio de sección se hace con los botones CAL/PRI/ENF (setBlockSection) → invariante imposible de romper.
-  const blocksInSection = useCallback(
-    (section: BuilderSection) => (currentDay?.blocks ?? []).filter((b) => (b.section ?? 'main') === section),
-    [currentDay],
+  // Agrupación por ÁREA efectiva (espejo 1:1 de la web DayColumn): el día se reparte por
+  // `effectiveAreaKey` (section_template_id → área system del section legacy) en orden `orderedAreaIds`.
+  // Las 3 áreas system clásicas (warmup/main/cooldown) actúan como las secciones por defecto/fallback,
+  // por lo que un programa solo-clásico produce EXACTAMENTE Calentamiento → Principal → Enfriamiento.
+  const knownAreaIds = useMemo(() => new Set(areaVMs.map((a) => a.id)), [areaVMs])
+  const areaKeyOf = useCallback(
+    (b: BuilderBlock) => effectiveAreaKey(b, knownAreaIds),
+    [knownAreaIds],
+  )
+  // VM de un área efectiva por key. Para las 3 clásicas hay un fallback de etiqueta/color aunque
+  // no estén en areaVMs (cuando el catálogo de áreas no cargó), para no perder el header del día.
+  const CLASSIC_FALLBACK: Record<BuilderSection, { name: string; color: string }> = {
+    warmup: { name: 'Calentamiento', color: '#F59E0B' },
+    main: { name: 'Principal', color: theme.primary },
+    cooldown: { name: 'Enfriamiento', color: '#38BDF8' },
+  }
+  const areaVMForKey = useCallback(
+    (key: string): { id: string; name: string; color: string; shortLabel: string } => {
+      const vm = areaById.get(key)
+      if (vm) return { id: vm.id, name: vm.name, color: vm.color, shortLabel: vm.shortLabel }
+      const classic = classicSlugForAreaId(key)
+      if (classic) {
+        const f = CLASSIC_FALLBACK[classic]
+        return { id: key, name: f.name, color: f.color, shortLabel: SECTION_LABEL[classic].slice(0, 3).toUpperCase() }
+      }
+      const f = CLASSIC_FALLBACK.main
+      return { id: key, name: f.name, color: f.color, shortLabel: 'PRI' }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [areaById, theme.primary],
   )
 
-  // Al soltar dentro de una sección: recomponer el día preservando el orden del resto de secciones.
-  function reorderSection(section: BuilderSection, reordered: BuilderBlock[]) {
+  // Día agrupado por área en orden de render. Cada grupo conserva el orden relativo de los bloques
+  // (order_index implícito en el array). Áreas vacías NO se muestran (header solo si hay bloques).
+  const dayAreaGroups = useMemo(() => {
+    const blocks = currentDay?.blocks ?? []
+    const order = orderedAreaIds(areaVMs)
+    const buckets = new Map<string, BuilderBlock[]>()
+    for (const b of blocks) {
+      const key = areaKeyOf(b)
+      const arr = buckets.get(key)
+      if (arr) arr.push(b)
+      else buckets.set(key, [b])
+    }
+    const groups: { key: string; vm: ReturnType<typeof areaVMForKey>; blocks: BuilderBlock[] }[] = []
+    const used = new Set<string>()
+    for (const id of order) {
+      const arr = buckets.get(id)
+      if (arr?.length) { groups.push({ key: id, vm: areaVMForKey(id), blocks: arr }); used.add(id) }
+    }
+    // Cualquier área desconocida (no en el orden) cae al final, estable por inserción.
+    for (const [id, arr] of buckets) {
+      if (!used.has(id) && arr.length) groups.push({ key: id, vm: areaVMForKey(id), blocks: arr })
+    }
+    return groups
+  }, [currentDay, areaVMs, areaKeyOf, areaVMForKey])
+
+  // Al soltar dentro de un área: recomponer el día preservando el orden del resto de áreas.
+  // El drag SOLO reordena dentro de su área (mover entre áreas se hace con el picker on-card).
+  function reorderArea(areaKey: string, reordered: BuilderBlock[]) {
     if (!currentDay) return
     const rebuilt: BuilderBlock[] = []
-    for (const sec of SECTION_ORDER) {
-      rebuilt.push(...(sec === section ? reordered : (currentDay.blocks ?? []).filter((b) => (b.section ?? 'main') === sec)))
+    for (const g of dayAreaGroups) {
+      rebuilt.push(...(g.key === areaKey ? reordered : g.blocks))
     }
     setDayBlocks(currentDay.id, clearCrossSectionSupersets(rebuilt))
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
   }
 
+  // Agregar ejercicio a un área: traduce el área destino a su section legacy (bucket) para que el
+  // bloque nuevo persista bien aun sin las columnas tipadas. `pendingSection` espeja el section;
+  // `pendingAreaId` espeja el section_template_id (lo aplica el onSelect del catálogo).
+  function addToArea(areaKey: string) {
+    const classic = classicSlugForAreaId(areaKey)
+    setPendingSection(classic ?? 'main')
+    setPendingAreaId(knownAreaIds.has(areaKey) && !classic ? areaKey : null)
+    searchRef.current?.snapToIndex(2)
+  }
   function addToSection(section: BuilderSection) {
     setPendingSection(section)
+    setPendingAreaId(null)
     searchRef.current?.snapToIndex(2)
   }
 
@@ -632,34 +698,57 @@ export default function ProgramBuilderScreen() {
     router.push('/coach/settings/areas')
   }, [router])
 
-  // P8: render de un bloque dentro de su sección (incluye el conector de superserie).
-  function renderSectionBlock({ item, drag, isActive }: { item: BuilderBlock; drag: () => void; isActive: boolean }) {
+  // Reordena los bloques de un día para que queden contiguos por área (orden de render). Estable y
+  // sin romper superseries existentes (solo reagrupa). Necesario tras ADD_BLOCK (que appendea al
+  // final): garantiza que el array plano siga contiguo por área → el `idx+1` del reducer TOGGLE_SUPERSET
+  // coincide con el "siguiente visible" del grupo (scope de superserie = área efectiva).
+  const regroupDayByArea = useCallback((blocks: readonly BuilderBlock[]): BuilderBlock[] => {
+    const order = orderedAreaIds(areaVMs)
+    const known = new Set(order)
+    const buckets = new Map<string, BuilderBlock[]>()
+    for (const b of blocks) {
+      const key = effectiveAreaKey(b, known)
+      const arr = buckets.get(key)
+      if (arr) arr.push(b)
+      else buckets.set(key, [b])
+    }
+    const out: BuilderBlock[] = []
+    const used = new Set<string>()
+    for (const id of order) {
+      const arr = buckets.get(id)
+      if (arr) { out.push(...arr); used.add(id) }
+    }
+    for (const [id, arr] of buckets) if (!used.has(id)) out.push(...arr)
+    return out
+  }, [areaVMs])
+
+  // Añade un ejercicio y normaliza el día a orden por área en un solo paso (sin dejar el bloque
+  // nuevo huérfano al final). El bloque ya trae section + section_template_id del área destino.
+  const addExerciseGrouped = useCallback((dayId: number, block: BuilderBlock) => {
+    const day = liveDays.current.find((d) => d.id === dayId)
+    if (!day) { addExercise(dayId, block); return }
+    setDayBlocks(dayId, regroupDayByArea([...day.blocks, block]))
+  }, [addExercise, setDayBlocks, regroupDayByArea])
+
+  // Render de un bloque dentro de su ÁREA (incluye el conector de superserie). El conector solo
+  // aparece entre bloques contiguos de la MISMA área (scope de superserie = área efectiva, 1:1 web).
+  function renderAreaBlock(areaBlocks: BuilderBlock[]) {
+    return ({ item, drag, isActive }: { item: BuilderBlock; drag: () => void; isActive: boolean }) => {
     const block = item
-    const section = block.section ?? 'main'
-    const cat = catById.get(block.exercise_id)
-    const secBlocks = (currentDay?.blocks ?? []).filter((b) => (b.section ?? 'main') === section)
-    const pos = secBlocks.findIndex((b) => b.uid === block.uid)
-    const next = secBlocks[pos + 1]
-    const isLastInSec = pos === secBlocks.length - 1
+    const pos = areaBlocks.findIndex((b) => b.uid === block.uid)
+    const next = areaBlocks[pos + 1]
+    const isLastInArea = pos === areaBlocks.length - 1
     const linkedToNext = !!block.superset_group && block.superset_group === next?.superset_group
-    const area = block.section_template_id ? areaById.get(block.section_template_id) : null
+    const cat = catById.get(block.exercise_id)
     const blockType = effectiveExerciseType(block, { exercise_type: block.exercise_type })
     const typeChip = blockType !== 'strength' ? EXERCISE_TYPE_LABEL[blockType] : null
     return (
       <View>
-        {area || typeChip ? (
+        {typeChip ? (
           <View style={styles.blockTagRow}>
-            {area ? (
-              <View style={[styles.blockTag, { borderColor: area.color + '66', backgroundColor: area.color + '1A' }]}>
-                <View style={[styles.blockTagDot, { backgroundColor: area.color }]} />
-                <Text style={[styles.blockTagTxt, { color: area.color, fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>{area.name}</Text>
-              </View>
-            ) : null}
-            {typeChip ? (
-              <View style={[styles.blockTag, { borderColor: theme.primary + '55', backgroundColor: theme.primary + '14' }]}>
-                <Text style={[styles.blockTagTxt, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>{typeChip.toUpperCase()}</Text>
-              </View>
-            ) : null}
+            <View style={[styles.blockTag, { borderColor: theme.primary + '55', backgroundColor: theme.primary + '14' }]}>
+              <Text style={[styles.blockTagTxt, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>{typeChip.toUpperCase()}</Text>
+            </View>
           </View>
         ) : null}
         <BuilderBlockCard
@@ -678,7 +767,7 @@ export default function ProgramBuilderScreen() {
           catImage={cat?.image_url}
           catVideo={cat?.video_url}
         />
-        {!isLastInSec ? (
+        {!isLastInArea ? (
           linkedToNext ? (
             <View style={styles.ssConnector}>
               <View style={[styles.ssLine, { backgroundColor: theme.primary + '33' }]} />
@@ -698,34 +787,33 @@ export default function ProgramBuilderScreen() {
         ) : null}
       </View>
     )
+    }
   }
 
-  // P8: encabezado fijo + lista draggable acotada a una sola sección.
-  function renderSection(section: BuilderSection) {
-    const secColor = section === 'warmup' ? '#F59E0B' : section === 'cooldown' ? '#38BDF8' : theme.primary
-    const blocks = blocksInSection(section)
+  // Encabezado de área (1:1 web AreaDropZone) + lista draggable acotada a esa área.
+  function renderAreaGroup(group: { key: string; vm: { id: string; name: string; color: string }; blocks: BuilderBlock[] }) {
+    const { vm, blocks } = group
+    const areaColor = vm.color
     return (
-      <View key={section} style={{ gap: 8 }}>
-        <View style={[styles.sectionHeader, { borderColor: secColor + '55', backgroundColor: secColor + '12' }]}>
-          <View style={[styles.sectionDot, { backgroundColor: secColor }]} />
-          <Text style={[styles.sectionTitle, { color: secColor, fontFamily: 'Montserrat_700Bold' }]}>{SECTION_LABEL[section].toUpperCase()}</Text>
-          <View style={[styles.sectionCount, { borderColor: secColor + '55' }]}>
-            <Text style={[styles.sectionCountText, { color: secColor, fontFamily: theme.fontSans }]}>{blocks.length}</Text>
+      <View key={group.key} style={{ gap: 8 }}>
+        <View style={[styles.sectionHeader, { borderColor: areaColor + '55', backgroundColor: areaColor + '12' }]}>
+          <View style={[styles.sectionDot, { backgroundColor: areaColor }]} />
+          <Text style={[styles.sectionTitle, { color: areaColor, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{vm.name.toUpperCase()}</Text>
+          <View style={[styles.sectionCount, { borderColor: areaColor + '55' }]}>
+            <Text style={[styles.sectionCountText, { color: areaColor, fontFamily: theme.fontSans }]}>{blocks.length}</Text>
           </View>
-          <TouchableOpacity onPress={() => addToSection(section)} hitSlop={8} activeOpacity={0.8} style={[styles.sectionAdd, { borderColor: secColor + '55' }]}>
-            <Plus size={14} color={secColor} />
+          <TouchableOpacity onPress={() => addToArea(group.key)} hitSlop={8} activeOpacity={0.8} style={[styles.sectionAdd, { borderColor: areaColor + '55' }]}>
+            <Plus size={14} color={areaColor} />
           </TouchableOpacity>
         </View>
-        {blocks.length ? (
-          <NestableDraggableFlatList
-            data={blocks}
-            keyExtractor={(b) => b.uid}
-            onDragBegin={() => Haptics.selectionAsync().catch(() => {})}
-            onDragEnd={({ data }) => reorderSection(section, data)}
-            activationDistance={14}
-            renderItem={renderSectionBlock}
-          />
-        ) : null}
+        <NestableDraggableFlatList
+          data={blocks}
+          keyExtractor={(b) => b.uid}
+          onDragBegin={() => Haptics.selectionAsync().catch(() => {})}
+          onDragEnd={({ data }) => reorderArea(group.key, data)}
+          activationDistance={14}
+          renderItem={renderAreaBlock(blocks)}
+        />
       </View>
     )
   }
@@ -1138,7 +1226,26 @@ export default function ProgramBuilderScreen() {
             </View>
           ) : (
             <View style={{ gap: 14 }}>
-              {SECTION_ORDER.map(renderSection)}
+              {dayAreaGroups.length ? (
+                dayAreaGroups.map(renderAreaGroup)
+              ) : (
+                // Día vacío: mostrar las áreas disponibles como zonas para agregar (1:1 web).
+                <View style={{ gap: 8 }}>
+                  {orderedAreaIds(areaVMs).map((id) => {
+                    const vm = areaVMForKey(id)
+                    return (
+                      <TouchableOpacity key={id} onPress={() => addToArea(id)} activeOpacity={0.8}
+                        style={[styles.sectionHeader, { borderColor: vm.color + '55', backgroundColor: vm.color + '12' }]}>
+                        <View style={[styles.sectionDot, { backgroundColor: vm.color }]} />
+                        <Text style={[styles.sectionTitle, { color: vm.color, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{vm.name.toUpperCase()}</Text>
+                        <View style={[styles.sectionAdd, { borderColor: vm.color + '55', marginLeft: 'auto' }]}>
+                          <Plus size={14} color={vm.color} />
+                        </View>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </View>
+              )}
               <TouchableOpacity onPress={() => addToSection('main')} activeOpacity={0.8}
                 style={[styles.addBtn, { borderColor: theme.border, backgroundColor: theme.card }]}>
                 <Plus size={18} color={theme.primary} />
@@ -1157,7 +1264,7 @@ export default function ProgramBuilderScreen() {
         dayBlockCount={currentDay?.blocks.length ?? 0}
         dayName={currentDay?.name ?? ''}
         simpleMode={isSimpleMode}
-        onSelect={(block) => { addExercise(activeDayId, { ...block, dayId: activeDayId, section: pendingSection, exercise_type: (exTypeById.get(block.exercise_id) as BuilderBlock['exercise_type']) ?? null }); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}) }}
+        onSelect={(block) => { addExerciseGrouped(activeDayId, { ...block, dayId: activeDayId, section: pendingSection, section_template_id: pendingAreaId, exercise_type: (exTypeById.get(block.exercise_id) as BuilderBlock['exercise_type']) ?? null }); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}) }}
       />
       <BlockEditorSheet ref={editorRef} block={editingBlock} onChange={updateBlock} onRemove={(uid) => { removeBlock(activeDayId, uid); editorRef.current?.dismiss() }}
         onSetSection={setBlockSection.bind(null, activeDayId)} onToggleOverride={toggleBlockOverride} onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)} onClose={() => setEditingUid(null)}
