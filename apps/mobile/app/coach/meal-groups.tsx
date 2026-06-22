@@ -13,6 +13,7 @@ import {
   calculateGroupTotals,
   deleteMealGroup,
   listMealGroups,
+  mealGroupItemFactor,
   saveMealGroup,
   type MealGroup,
   type MealGroupItem,
@@ -216,7 +217,9 @@ function MacroCell({ theme, label, value }: { theme: any; label: string; value: 
 
 // ── Form (crear/editar) ─────────────────────────────────────────────────────
 
-type DraftItem = { food_id: string; quantity: number; unit: 'g' | 'un'; food: FoodRow }
+// Unidad ESPEJO de la web: 'g' (gramos), 'u' (unidades) — el literal de unidad es
+// 'u', NO 'un'. Persistir/leer el mismo valor que la web evita corrupción cruzada.
+type DraftItem = { food_id: string; quantity: number; unit: 'g' | 'u'; food: FoodRow }
 
 function MealGroupForm({
   theme,
@@ -234,7 +237,9 @@ function MealGroupForm({
     (group?.items ?? []).map((it) => ({
       food_id: it.food_id,
       quantity: Number(it.quantity) || 0,
-      unit: (it.unit === 'un' ? 'un' : 'g') as 'g' | 'un',
+      // Espejo web: conserva el literal guardado ('u' = unidad, 'g'/'ml'); solo
+      // un valor vacío cae a 'g'. NUNCA mapear 'u'→'g' (corromperia el factor).
+      unit: (it.unit ? it.unit : 'g') as 'g' | 'u',
       food: {
         id: it.food.id,
         name: it.food.name,
@@ -308,12 +313,14 @@ function MealGroupForm({
     const q = Number(raw.replace(',', '.')) || 0
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, quantity: q } : it)))
   }
-  function updateUnit(index: number, unit: 'g' | 'un') {
+  function updateUnit(index: number, unit: 'g' | 'u') {
     setItems((prev) =>
       prev.map((it, i) => {
         if (i !== index) return it
         let quantity = it.quantity
-        if (unit === 'un' && it.quantity === 100) quantity = 1
+        // Espejo web (MealGroupModal.handleUpdateUnit): al pasar a unidades default 1,
+        // al volver a gramos default 100 — solo si la cantidad estaba en el default opuesto.
+        if (unit === 'u' && it.quantity === 100) quantity = 1
         else if (unit === 'g' && it.quantity === 1) quantity = 100
         return { ...it, unit, quantity }
       })
@@ -420,7 +427,7 @@ function MealGroupForm({
             </View>
             <View style={styles.itemControls}>
               <View style={[styles.unitWrap, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
-                {(['g', 'un'] as const).map((u) => (
+                {(['g', 'u'] as const).map((u) => (
                   <TouchableOpacity key={u} onPress={() => updateUnit(index, u)} activeOpacity={0.8} style={[styles.unitChip, it.unit === u && { backgroundColor: theme.primary }]}>
                     <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: it.unit === u ? theme.primaryForeground : theme.mutedForeground }}>{u === 'g' ? 'G' : 'U'}</Text>
                   </TouchableOpacity>
@@ -460,7 +467,9 @@ function MealGroupForm({
 }
 
 function macroPreview(it: DraftItem): string {
-  const factor = it.unit === 'g' ? it.quantity / 100 : it.quantity * (it.food.serving_size || 100) / 100
+  // Espejo web (MealGroupModal preview por item): factor = unit==='g'||'ml' ? q/100 : q.
+  // En unidad la cantidad es CRUDA (no se multiplica por serving_size).
+  const factor = mealGroupItemFactor(it.quantity, it.unit)
   const cal = Math.round((it.food.calories || 0) * factor)
   const p = Math.round((it.food.protein_g || 0) * factor)
   const c = Math.round((it.food.carbs_g || 0) * factor)

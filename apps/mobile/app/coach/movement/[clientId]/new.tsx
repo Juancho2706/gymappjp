@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ArrowLeft, ArrowRight, Check, ChevronLeft, Info, Lock } from 'lucide-react-native'
+import { ArrowLeft, ArrowRight, Check, ChevronLeft, Info } from 'lucide-react-native'
 import { useTheme } from '../../../../context/ThemeContext'
 import { ScreenHeader, Button } from '../../../../components'
 import { EvaLoaderScreen } from '../../../../components/EvaLoader'
 import { AppBackground } from '../../../../components/AppBackground'
+import { ModuleOffNotice } from '../../../../components/coach/ModuleOffNotice'
 import { hasModule } from '../../../../lib/entitlements'
 import {
   getDraftWithItems,
@@ -220,15 +221,7 @@ export default function MovementWizardScreen() {
             <Text style={{ color: theme.mutedForeground, fontFamily: theme.fontSans, fontSize: 14 }}>Volver</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.offWrap}>
-          <View style={[styles.offCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-            <Lock size={26} color={theme.mutedForeground} />
-            <Text style={[styles.offTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Módulo no habilitado</Text>
-            <Text style={[styles.offText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              El screening de movimiento es un módulo de pago.
-            </Text>
-          </View>
-        </View>
+        <ModuleOffNotice moduleKey="movement_assessment" />
       </SafeAreaView>
     )
   }
@@ -567,8 +560,4 @@ const styles = StyleSheet.create({
   navBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11 },
   navBtnPrimary: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 12, paddingHorizontal: 18, paddingVertical: 11 },
   navText: { fontSize: 13.5 },
-  offWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
-  offCard: { borderWidth: 1, padding: 24, alignItems: 'center', gap: 12 },
-  offTitle: { fontSize: 18 },
-  offText: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
 })

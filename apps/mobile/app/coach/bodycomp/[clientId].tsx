@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft, Lock, Plus, Ruler, Trash2, X } from 'lucide-react-native'
+import { ChevronLeft, Plus, Ruler, Trash2, X } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { ScreenHeader, Button, SegmentedTabs } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { ModuleOffNotice } from '../../../components/coach/ModuleOffNotice'
 import { TrendChart, type TrendPoint } from '../../../components/coach/TrendChart'
 import { hasModule } from '../../../lib/entitlements'
 import {
@@ -97,17 +98,7 @@ export default function BodyCompositionScreen() {
       <ScreenHeader title="Composición corporal" subtitle={client?.full_name ?? undefined} />
 
       {!entitled ? (
-        <View style={styles.offWrap}>
-          <View style={[styles.offCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-            <Lock size={26} color={theme.mutedForeground} />
-            <Text style={[styles.offTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Módulo no habilitado</Text>
-            <Text style={[styles.offText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              Composición corporal es un módulo de pago. Activalo desde la web para capturar
-              bioimpedancia y antropometría (ISAK) con fraccionamiento de 5 componentes y somatotipo.
-            </Text>
-            <Button label="Ver en la web" onPress={() => Linking.openURL('https://eva-app.cl/coach/subscription').catch(() => {})} full />
-          </View>
-        </View>
+        <ModuleOffNotice moduleKey="body_composition" />
       ) : !client ? (
         <View style={styles.offWrap}>
           <Text style={[styles.offText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Alumno no encontrado.</Text>
@@ -856,7 +847,5 @@ const styles = StyleSheet.create({
   delBtn: { padding: 6 },
   // off
   offWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, alignItems: 'center', gap: 8 },
-  offCard: { borderWidth: 1, padding: 24, alignItems: 'center', gap: 12 },
-  offTitle: { fontSize: 18 },
   offText: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
 })

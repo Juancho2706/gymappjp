@@ -25,9 +25,21 @@ import {
 import { CoachNutrientTargetsEditor } from './CoachNutrientTargetsEditor'
 import { ClientFoodRestrictionsCard } from './ClientFoodRestrictionsCard'
 import { ClientFeaturePrefsPanel } from './ClientFeaturePrefsPanel'
+import {
+  getNutritionPrefs,
+  resolveClientNutritionSections,
+  type ClientNutritionSectionFlags,
+} from '../../../lib/feature-prefs'
+import { getClientFeaturePrefsOverride } from '../../../lib/coach-client-extras'
 import type { ClientDayDetail, CoachClientDetailData } from '../../../lib/coach-client-detail'
 
 const ALERT_COLORS: Record<NutritionCoachAlert['variant'], string> = { danger: '#EF4444', warning: '#F59E0B', info: '#3B82F6' }
+
+// Espejo del flag `FEATURE_PREFS_ENABLED` (Edge Config, server-only en web → no legible desde RN).
+// La web es fail-OPEN: flag OFF/ausente ⇒ se IGNORAN las prefs y se muestra TODO lo entitled
+// (grandfathering transicional). Para mantener 1:1 con prod, mobile NO aplica el gating de Zona C
+// hasta que el flag esté ON en web. Cuando se flipee (o se exponga vía endpoint mobile), poner true.
+const FEATURE_PREFS_ENABLED = false
 
 export function NutricionTab({
   data,
@@ -47,6 +59,26 @@ export function NutricionTab({
   const { theme } = useTheme()
   const { activeNutrition, nutritionTimeline, nutritionMonthlyAvgPct, nutritionStreakDays, compliance, favoriteFoods, checkIns } = data
   const todayIso = getTodayInSantiago().iso
+  const clientId = data.client?.id ?? null
+
+  // Feature-prefs por-alumno (espejo web): visible = ENTITLED (billing) AND ENABLED (pref
+  // coach/alumno). Gobierna que superficies de la Zona C (hilo, micros, restricciones, habitos)
+  // se muestran. `null` mientras carga / sin clientId => no gatear (mostrar todo, como hoy).
+  const [sectionFlags, setSectionFlags] = useState<ClientNutritionSectionFlags | null>(null)
+  useEffect(() => {
+    if (!FEATURE_PREFS_ENABLED || !clientId) return
+    let cancelled = false
+    Promise.all([getNutritionPrefs(), getClientFeaturePrefsOverride(clientId)])
+      .then(([prefs, override]) => {
+        if (!cancelled) setSectionFlags(resolveClientNutritionSections(prefs, override))
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [clientId])
+
+  // Helpers de visibilidad: `null` (sin resolver / sin clientId) => mostrar (comportamiento de hoy).
+  const showSection = (key: string): boolean => (sectionFlags ? sectionFlags.sections[key] === true : true)
+  const showHabits = showSection('habits')
 
   const alerts = useMemo(
     () => deriveNutritionCoachAlerts({
@@ -158,6 +190,7 @@ export function NutricionTab({
         onSelectDate={onSelectDate}
         dayDetail={dayDetail}
         loading={dayLoading}
+        showHabits={showHabits}
       />
 
       {/* Check-in context */}
@@ -189,19 +222,29 @@ export function NutricionTab({
       ) : null}
 
       {/* Zona C · Alertas y contexto del coach (hilo, nota privada, micros, ciclos) */}
-      {data.client ? <NutritionCoachZoneC clientId={data.client.id} todayIso={todayIso} /> : null}
+      {data.client ? <NutritionCoachZoneC clientId={data.client.id} todayIso={todayIso} sectionFlags={sectionFlags} /> : null}
     </View>
   )
 }
 
 // ── Zona C (coach): hilo + nota privada + restricciones + micros + funciones + ciclos ──
-function NutritionCoachZoneC({ clientId, todayIso }: { clientId: string; todayIso: string }) {
+function NutritionCoachZoneC({ clientId, todayIso, sectionFlags }: { clientId: string; todayIso: string; sectionFlags: ClientNutritionSectionFlags | null }) {
   const [coachId, setCoachId] = useState<string | null>(null)
   const [comments, setComments] = useState<MealCommentRow[]>([])
   const [notes, setNotes] = useState<PrivateNoteRow[]>([])
   const [targets, setTargets] = useState<NutrientTargetRow[]>([])
   const [cycles, setCycles] = useState<NutritionCycleRow[]>([])
   const [proEnabled, setProEnabled] = useState(false)
+
+  // Gating por seccion (espejo web): `null` (sin resolver) => mostrar (comportamiento de hoy).
+  const showSection = (key: string): boolean => (sectionFlags ? sectionFlags.sections[key] === true : true)
+  const domainEnabled = sectionFlags ? sectionFlags.domainEnabled : true
+  // El hilo bidireccional cae bajo `notes` (la superficie de notas/comentarios del alumno).
+  const showNotesThread = showSection('notes')
+  // El editor de umbrales cae bajo micros_base (base) y se enriquece con micros_advanced (Pro).
+  const showMicros = showSection('micros_base') || showSection('micros_advanced')
+  // Restricciones: el web no la gatea por seccion, solo la oculta cuando el dominio esta OFF.
+  const showRestrictions = domainEnabled
 
   async function reload() {
     const [c, n, t, cy] = await Promise.all([
@@ -227,10 +270,15 @@ function NutritionCoachZoneC({ clientId, todayIso }: { clientId: string; todayIs
 
   return (
     <View style={{ gap: 14 }}>
-      <NotesThread comments={comments} clientId={clientId} todayIso={todayIso} onSent={reload} />
+      {/* Hilo bidireccional: gateado por `notes` (la superficie de notas del alumno). */}
+      {showNotesThread ? <NotesThread comments={comments} clientId={clientId} todayIso={todayIso} onSent={reload} /> : null}
+      {/* Nota privada del coach — el alumno nunca la ve (feature E). No se gatea. */}
       <PrivateNotePanel notes={notes} coachId={coachId} clientId={clientId} onSaved={reload} />
-      <ClientFoodRestrictionsCard clientId={clientId} />
-      <CoachNutrientTargetsEditor clientId={clientId} initial={targets} proEnabled={proEnabled} onSaved={reload} />
+      {/* Restricciones: visible salvo que el dominio Nutricion este apagado para el alumno. */}
+      {showRestrictions ? <ClientFoodRestrictionsCard clientId={clientId} /> : null}
+      {/* Umbrales de micros: gateado por micros_base/micros_advanced (espejo de lo que ve el alumno). */}
+      {showMicros ? <CoachNutrientTargetsEditor clientId={clientId} initial={targets} proEnabled={proEnabled} onSaved={reload} /> : null}
+      {/* Panel de override por-alumno: SIEMPRE visible (escape hatch para re-activar funciones). */}
       <ClientFeaturePrefsPanel clientId={clientId} />
       {cycles.length ? <CycleHistoryCard cycles={cycles} /> : null}
     </View>
@@ -361,12 +409,14 @@ function CycleHistoryCard({ cycles }: { cycles: NutritionCycleRow[] }) {
   )
 }
 
-function DayNutritionDetail({ timeline, selectedDate, onSelectDate, dayDetail, loading }: {
+function DayNutritionDetail({ timeline, selectedDate, onSelectDate, dayDetail, loading, showHabits = true }: {
   timeline: CoachClientDetailData['nutritionTimeline']
   selectedDate: string
   onSelectDate: (date: string) => void
   dayDetail: ClientDayDetail | null
   loading: boolean
+  /** Gating por feature-prefs: `false` oculta la card de habitos (espejo web `showSection('habits')`). */
+  showHabits?: boolean
 }) {
   const { theme } = useTheme()
   const [openMeals, setOpenMeals] = useState<Set<number>>(() => new Set())
@@ -425,7 +475,7 @@ function DayNutritionDetail({ timeline, selectedDate, onSelectDate, dayDetail, l
         )}
       </StatCard>
 
-      {habits ? (
+      {habits && showHabits ? (
         <StatCard>
           <CardHeader icon={Flame} title="Hábitos del día" />
           <View style={styles.habitGrid}>

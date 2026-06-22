@@ -145,6 +145,67 @@ async function resolveEntitlement(): Promise<Partial<Record<ModuleKey, boolean>>
   return out
 }
 
+// ── Resolver por-alumno (visible = ENTITLED AND ENABLED) ──────────────────────
+// Espejo VERBATIM de `resolveSections` + `resolveDomainEnabled` (@eva/feature-prefs),
+// igual que el resto de este archivo (el package no esta en las paths de mobile). Mobile
+// coach standalone v1: la base es SIEMPRE el coach (sin team base), encima el override del
+// alumno (capa mas especifica). Invariante de oro: la preferencia SOLO achica, nunca amplia.
+
+/** Resultado efectivo por-alumno de la Zona C: visibilidad por seccion + master switch. */
+export interface ClientNutritionSectionFlags {
+  /** `true` = el dominio Nutricion esta prendido para este alumno (master switch `_enabled`). */
+  domainEnabled: boolean
+  /** Visibilidad efectiva por seccion (`core OR (entitled AND wants)`), `false` si dominio OFF. */
+  sections: Record<string, boolean>
+}
+
+/**
+ * Resuelve la visibilidad efectiva de cada seccion de Nutricion para ESTE alumno, combinando:
+ *   base coach (`coach_feature_prefs`, ya cargada en `prefs`) + override por-alumno
+ *   (`client_feature_prefs.sections`, `clientSections`) + entitlement por modulo.
+ *
+ * Master switch del dominio (`_enabled`): `clientSections._enabled ?? coachSections._enabled ?? true`.
+ * Si esta apagado, TODAS las secciones (incluidas las `core`) resuelven `false` (la web oculta la
+ * tab entera). Por seccion con el dominio prendido:
+ *   - core => SIEMPRE `true`.
+ *   - entitled = requiresModule ? entitledByModule[requiresModule] === true : true.
+ *   - wants = clientSections[k] ?? coachSections[k] ?? section.presets[preset].
+ *   - resultado = core || (entitled && wants === true).
+ *
+ * NO lee la DB: recibe `prefs` (coach base + entitlement, de `getNutritionPrefs`) y el override
+ * crudo del alumno (`getClientFeaturePrefsOverride`) ya cargados por el caller.
+ */
+export function resolveClientNutritionSections(
+  prefs: NutritionPrefs,
+  clientSections: SectionPrefs | null | undefined,
+): ClientNutritionSectionFlags {
+  const coachSections = prefs.sections
+  const preset = normalizePreset(prefs.preset)
+
+  const domainEnabled =
+    clientSections?.[DOMAIN_ENABLED_KEY] ?? coachSections[DOMAIN_ENABLED_KEY] ?? true
+
+  const sections: Record<string, boolean> = {}
+  if (!domainEnabled) {
+    for (const section of NUTRITION_SECTIONS) sections[section.key] = false
+    return { domainEnabled: false, sections }
+  }
+
+  for (const section of NUTRITION_SECTIONS) {
+    if (section.core) {
+      sections[section.key] = true
+      continue
+    }
+    const entitled = section.requiresModule
+      ? prefs.entitledByModule[section.requiresModule] === true
+      : true
+    const wants = clientSections?.[section.key] ?? coachSections[section.key] ?? section.presets[preset]
+    sections[section.key] = entitled && wants === true
+  }
+
+  return { domainEnabled: true, sections }
+}
+
 export type SavePrefsResult = { ok: true } | { ok: false; error: string }
 
 /**

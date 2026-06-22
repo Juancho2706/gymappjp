@@ -61,7 +61,7 @@ const NUTRITION_SURFACES = [
 export default function CoachNutricionScreen() {
   const { theme } = useTheme()
   const router = useRouter()
-  const [tab, setTab] = useState<HubTab>('templates')
+  const [tab, setTab] = useState<HubTab>('clients')
   const [clients, setClients] = useState<Client[]>([])
   const [templates, setTemplates] = useState<TemplateSummary[]>([])
   const [foodsCount, setFoodsCount] = useState(0)

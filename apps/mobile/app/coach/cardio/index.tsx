@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, HeartPulse, Lock, Pencil, Timer, Users } from 'lucide-react-native'
+import { ChevronLeft, HeartPulse, Pencil, Timer, Users } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
-import { ScreenHeader, Button } from '../../../components'
+import { ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { ModuleOffNotice } from '../../../components/coach/ModuleOffNotice'
 import { hasModule } from '../../../lib/entitlements'
 import { listCardioClients, type CardioClientRow } from '../../../lib/cardio-data'
 import {
@@ -102,16 +103,7 @@ export default function CardioHubScreen() {
       <ScreenHeader title="Cardio" subtitle="Zonas FC · pace · intervalos" />
 
       {!entitled ? (
-        <View style={styles.offWrap}>
-          <View style={[styles.offCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-            <Lock size={26} color={theme.mutedForeground} />
-            <Text style={[styles.offTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Módulo no habilitado</Text>
-            <Text style={[styles.offText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              Cardio es un módulo de pago. Activalo desde la web para usar las zonas de frecuencia cardiaca, el calculador de pace y las plantillas de intervalos.
-            </Text>
-            <Button label="Ver en la web" onPress={() => Linking.openURL('https://eva-app.cl/coach/subscription').catch(() => {})} full />
-          </View>
-        </View>
+        <ModuleOffNotice moduleKey="cardio" />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* ── Zonas FC ── */}
@@ -312,8 +304,4 @@ const styles = StyleSheet.create({
   tplName: { fontSize: 14 },
   tplDesc: { fontSize: 12, lineHeight: 16 },
   tplMeta: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.3, marginTop: 2 },
-  offWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
-  offCard: { borderWidth: 1, padding: 24, alignItems: 'center', gap: 12 },
-  offTitle: { fontSize: 18 },
-  offText: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
 })

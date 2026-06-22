@@ -45,6 +45,9 @@ export interface FoodRow {
   is_liquid: boolean
   category: string | null
   brand: string | null
+  // Origen del alimento (espejo web FoodListCompact): coach_id == sesión → "Propio"
+  // (Star), null/otro → "Global" (Globe). Opcional: no todos los call-sites lo traen.
+  coach_id?: string | null
   // Medida casera (espejo web bf90571c): render "120 g (1 taza)". Opcionales: no
   // todos los call-sites que construyen un FoodRow las traen (ej. meal-groups).
   household_grams?: number | null
@@ -263,6 +266,10 @@ export interface CustomFoodInput {
   serving_size: number
   serving_unit: FoodUnit
   category: string
+  // Medida casera (espejo web saveCustomFood): SOLO aplica con unidad 'g' y solo si
+  // hay etiqueta + gramos > 0. En 'un'/'ml' la unidad ya ES la medida. Opcionales.
+  household_label?: string | null
+  household_grams?: number | null
 }
 
 /** Create a coach-owned food and return it ready to add to a meal. */
@@ -271,6 +278,8 @@ export async function createCustomFood(input: CustomFoodInput): Promise<{ ok: bo
   if (!coachId) return { ok: false, error: 'No autenticado.' }
   if (input.name.trim().length < 2) return { ok: false, error: 'Indicá el nombre del alimento.' }
   if (!Number.isFinite(input.calories) || input.calories < 0) return { ok: false, error: 'Calorías inválidas.' }
+
+  const household = resolveHousehold(input)
 
   const { data, error } = await supabase
     .from('foods')
@@ -285,12 +294,26 @@ export async function createCustomFood(input: CustomFoodInput): Promise<{ ok: bo
       is_liquid: input.serving_unit === 'ml',
       category: input.category,
       coach_id: coachId,
+      household_grams: household.grams,
+      household_label: household.label,
     })
-    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand, household_grams, household_label')
+    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand, coach_id, household_grams, household_label')
     .single()
 
   if (error) return { ok: false, error: error.message }
   return { ok: true, food: data as FoodRow }
+}
+
+/**
+ * Medida casera para persistir (espejo web saveCustomFood): SOLO con unidad 'g',
+ * etiqueta no vacía y gramos > 0. En cualquier otro caso se limpia a null (incluido
+ * al editar un alimento que tenía medida y se le cambia la unidad).
+ */
+function resolveHousehold(input: CustomFoodInput): { grams: number | null; label: string | null } {
+  const label = (input.household_label ?? '').trim()
+  const grams = Number(input.household_grams)
+  const hasHousehold = input.serving_unit === 'g' && label.length > 0 && Number.isFinite(grams) && grams > 0
+  return hasHousehold ? { grams: Math.round(grams), label } : { grams: null, label: null }
 }
 
 /** Coach-owned foods for the management screen (editable; system foods excluded). */
@@ -299,7 +322,7 @@ export async function listCoachFoods(): Promise<FoodRow[]> {
   if (!coachId) return []
   const { data } = await supabase
     .from('foods')
-    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand, household_grams, household_label')
+    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand, coach_id, household_grams, household_label')
     .eq('coach_id', coachId)
     .order('name')
   return (data as FoodRow[] | null) ?? []
@@ -309,6 +332,7 @@ export async function updateFood(id: string, input: CustomFoodInput): Promise<{ 
   const coachId = await currentCoachId()
   if (!coachId) return { ok: false, error: 'No autenticado.' }
   if (input.name.trim().length < 2) return { ok: false, error: 'Indicá el nombre del alimento.' }
+  const household = resolveHousehold(input)
   const { error } = await supabase
     .from('foods')
     .update({
@@ -321,6 +345,8 @@ export async function updateFood(id: string, input: CustomFoodInput): Promise<{ 
       serving_unit: input.serving_unit,
       is_liquid: input.serving_unit === 'ml',
       category: input.category,
+      household_grams: household.grams,
+      household_label: household.label,
     })
     .eq('id', id)
     .eq('coach_id', coachId)
@@ -351,7 +377,7 @@ export async function searchFoods(query: string, opts: SearchFoodsOptions = {}):
   const { category, scope = 'all', maxCalories, limit = 500 } = opts
   let q = supabase
     .from('foods')
-    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand, household_grams, household_label')
+    .select('id, name, calories, protein_g, carbs_g, fats_g, serving_size, serving_unit, is_liquid, category, brand, coach_id, household_grams, household_label')
   if (scope === 'mine' && coachId) q = q.eq('coach_id', coachId)
   else if (scope === 'system') q = q.is('coach_id', null)
   else q = q.or(coachId ? `coach_id.is.null,coach_id.eq.${coachId}` : 'coach_id.is.null')

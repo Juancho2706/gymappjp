@@ -1,10 +1,18 @@
 import { supabase } from './supabase'
-import { calculateFoodItemMacros, type FoodItemForMacros } from './nutrition-utils'
 
 // Meal Groups (grupos de comidas reutilizables) — mirror de la web
 // apps/web/.../coach/meal-groups. Tablas saved_meals (cabecera por coach,
 // org_id null en standalone) → saved_meal_items (ingredientes). Escribe bajo la
 // sesión del coach (RLS coach_id = auth.uid()). NO service-role.
+//
+// Unidad: la web persiste 'g' | 'u' | 'ml' (el toggle escribe 'u' para
+// unidades, NO 'un'). Guardamos y leemos el MISMO literal que la web para evitar
+// corrupción cross-plataforma; NO se coacciona el valor leído.
+//
+// Macros por item: la web (MealGroupModal/MealGroupLibraryClient) usa una fórmula
+// PROPIA — distinta del motor general calculateFoodItemMacros: en unidad el factor
+// es la cantidad CRUDA (los valores per-100g se tratan como per-unidad), NO se
+// multiplica por serving_size. Replicamos esa fórmula exacta acá.
 
 export type MealGroupFood = {
   id: string
@@ -21,7 +29,7 @@ export type MealGroupItem = {
   id?: string
   food_id: string
   quantity: number
-  unit: string // 'g' | 'ml' | 'un'
+  unit: string // 'g' | 'ml' | 'u'  (espejo verbatim de la web)
   food: MealGroupFood
 }
 
@@ -38,28 +46,27 @@ async function currentCoachId(): Promise<string | null> {
   return data.user?.id ?? null
 }
 
-/** Suma macros de un grupo usando el motor canónico (calculateFoodItemMacros). */
+/**
+ * Factor de macros por item, ESPEJO VERBATIM de la web (meal-groups):
+ * MealGroupModal / MealGroupLibraryClient → `unit === 'g' || 'ml' ? quantity / 100 : quantity`.
+ * En unidad el factor es la cantidad cruda (per-100g tratado como per-unidad);
+ * NO se multiplica por serving_size. Distinto del motor general nutrition-utils.
+ */
+export function mealGroupItemFactor(quantity: number, unit: string | null | undefined): number {
+  const q = Number(quantity) || 0
+  const u = (unit ?? 'g').toLowerCase()
+  return u === 'g' || u === 'ml' ? q / 100 : q
+}
+
+/** Suma macros de un grupo con la fórmula de la web (meal-groups). */
 export function calculateGroupTotals(items: MealGroupItem[]): MacroTotals {
   return items.reduce<MacroTotals>(
     (acc, item) => {
-      const fi: FoodItemForMacros = {
-        quantity: Number(item.quantity) || 0,
-        unit: item.unit ?? 'g',
-        foods: {
-          name: item.food?.name ?? '',
-          calories: Number(item.food?.calories) || 0,
-          protein_g: Number(item.food?.protein_g) || 0,
-          carbs_g: Number(item.food?.carbs_g) || 0,
-          fats_g: Number(item.food?.fats_g) || 0,
-          serving_size: Number(item.food?.serving_size) || 100,
-          serving_unit: item.food?.serving_unit ?? null,
-        },
-      }
-      const m = calculateFoodItemMacros(fi)
-      acc.calories += m.calories
-      acc.protein += m.protein
-      acc.carbs += m.carbs
-      acc.fats += m.fats
+      const factor = mealGroupItemFactor(item.quantity, item.unit)
+      acc.calories += (Number(item.food?.calories) || 0) * factor
+      acc.protein += (Number(item.food?.protein_g) || 0) * factor
+      acc.carbs += (Number(item.food?.carbs_g) || 0) * factor
+      acc.fats += (Number(item.food?.fats_g) || 0) * factor
       return acc
     },
     { calories: 0, protein: 0, carbs: 0, fats: 0 }
@@ -80,6 +87,7 @@ function normalizeGroup(raw: any): MealGroup {
             id: it.id,
             food_id: it.food_id ?? it.food?.id,
             quantity: Number(it.quantity) || 0,
+            // Verbatim de la web ('g' | 'u' | 'ml'); NO coaccionar a 'g'.
             unit: it.unit ?? 'g',
             food: {
               id: it.food.id,

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { ChevronLeft, ClipboardList, FilePen, Info, Lock } from 'lucide-react-native'
+import { ChevronLeft, ClipboardList, FilePen, Info } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
-import { ScreenHeader, Button } from '../../../components'
+import { ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { ModuleOffNotice } from '../../../components/coach/ModuleOffNotice'
 import { hasModule } from '../../../lib/entitlements'
 import {
   listMovementHub,
@@ -79,16 +80,7 @@ export default function MovementHubScreen() {
       <ScreenHeader title="Screening de Movimiento de Ingreso" subtitle="Evaluación de ingreso de 7 patrones con semáforo de prioridad y evolución." />
 
       {!entitled ? (
-        <View style={styles.offWrap}>
-          <View style={[styles.offCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-            <Lock size={26} color={theme.mutedForeground} />
-            <Text style={[styles.offTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Módulo no habilitado</Text>
-            <Text style={[styles.offText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              El screening de movimiento es un módulo de pago. Activalo desde la web para evaluar los 7 patrones, ver la banda de prioridad y la evolución de cada alumno.
-            </Text>
-            <Button label="Ver en la web" onPress={() => Linking.openURL('https://eva-app.cl/coach/subscription').catch(() => {})} full />
-          </View>
-        </View>
+        <ModuleOffNotice moduleKey="movement_assessment" />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {clients.length === 0 ? (
@@ -190,8 +182,4 @@ const styles = StyleSheet.create({
   evalText: { fontSize: 12.5, letterSpacing: 0.2 },
   disclaimer: { flexDirection: 'row', gap: 8, borderWidth: 1, padding: 12 },
   disclaimerText: { flex: 1, fontSize: 11, lineHeight: 16 },
-  offWrap: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
-  offCard: { borderWidth: 1, padding: 24, alignItems: 'center', gap: 12 },
-  offTitle: { fontSize: 18 },
-  offText: { fontSize: 13, lineHeight: 19, textAlign: 'center' },
 })

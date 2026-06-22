@@ -316,7 +316,13 @@ function MobileBanner({
 
 function formatDateES(isoDate: string): string {
   const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
-  const d = new Date(isoDate)
+  // Las fechas de pago/renovacion llegan como 'YYYY-MM-DD' (columna `date` de Postgres).
+  // `new Date('YYYY-MM-DD')` las interpreta como UTC medianoche y corre off-by-one en zonas
+  // al oeste de UTC (Chile). Parseamos los componentes en hora LOCAL para que coincida con la web.
+  const dateOnly = isoDate.slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const d = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(isoDate)
   return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`
 }
 
