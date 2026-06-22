@@ -232,12 +232,12 @@ export default function ClientDetailScreen() {
   if (derived.programWeek) chips.push({ icon: LayoutGrid, label: 'Programa', value: `Sem ${derived.programWeek}` })
 
   const tabs: TabItem[] = [
-    { value: 'overview', label: 'Resumen', icon: LayoutGrid },
+    { value: 'overview', label: 'Overview', icon: LayoutGrid },
     { value: 'progreso', label: 'Progreso', icon: TrendingUp, badge: data.checkIns.length || null },
     { value: 'analisis', label: 'Análisis', icon: BarChart3, badge: derived.weeklyPRs.length || null },
     { value: 'plan', label: 'Plan', icon: Dumbbell, badge: data.activeProgram?.planCount || null },
     { value: 'nutricion', label: 'Nutrición', icon: Apple, badge: derived.attention && data.activeNutrition && (data.compliance?.nutritionWeeklyAvgPct ?? 0) < 60 ? '!' : null },
-    { value: 'facturacion', label: 'Pagos', icon: CreditCard, badge: derived.pendingPays || null },
+    { value: 'facturacion', label: 'Facturación', icon: CreditCard, badge: derived.pendingPays || null },
   ]
 
   function onOpenPhoto(photos: string[], index: number) { setLightbox({ photos, index }) }
@@ -287,14 +287,14 @@ export default function ClientDetailScreen() {
             <>
               {mods.cardio || mods.movement || mods.bodycomp ? (
                 <View style={{ gap: 8, marginTop: 8 }}>
+                  {mods.cardio ? (
+                    <Button label="Perfil cardio" variant="outline" leftIcon={HeartPulse} onPress={() => router.push(`/coach/cardio/${client.id}`)} full />
+                  ) : null}
                   {mods.movement ? (
                     <Button label="Screening de movimiento" variant="outline" leftIcon={ClipboardList} onPress={() => router.push(`/coach/movement/${client.id}`)} full />
                   ) : null}
                   {mods.bodycomp ? (
                     <Button label="Composición corporal" variant="outline" leftIcon={Scale} onPress={() => router.push(`/coach/bodycomp/${client.id}`)} full />
-                  ) : null}
-                  {mods.cardio ? (
-                    <Button label="Perfil cardio" variant="outline" leftIcon={HeartPulse} onPress={() => router.push(`/coach/cardio/${client.id}`)} full />
                   ) : null}
                 </View>
               ) : null}

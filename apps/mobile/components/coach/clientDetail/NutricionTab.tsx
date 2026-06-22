@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { Activity, Apple, ChevronLeft, ChevronRight, Check, Droplets, Flame, Footprints, Heart, Moon, Pencil, Salad, Scale } from 'lucide-react-native'
+import { useEffect, useMemo, useState } from 'react'
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Activity, Apple, ChevronLeft, ChevronRight, Check, Droplets, Flame, Footprints, Heart, History, Lock, MessageCircle, Moon, Pencil, Salad, Scale, Send, Target } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, EmptyState, ComplianceRing, ProgressBar, MacroPill } from '../../../components'
 import { EvaLoader } from '../../../components/EvaLoader'
@@ -8,6 +8,19 @@ import { BarComposed, type BarComposedPoint } from '../charts/BarComposed'
 import { StatCard, CardHeader, MetricBox, cd, formatDate, adherenceColor } from './shared'
 import { deriveNutritionCoachAlerts, type NutritionCoachAlert } from '../../../lib/nutrition-coach-alerts'
 import { getTodayInSantiago } from '../../../lib/date-utils'
+import { getCoachProfile } from '../../../lib/coach'
+import {
+  addCoachMealComment,
+  getClientNutrientTargets,
+  getCoachPrivateNotes,
+  getNutritionPlanCycles,
+  listCoachMealComments,
+  upsertCoachPrivateNote,
+  type MealCommentRow,
+  type NutrientTargetRow,
+  type NutritionCycleRow,
+  type PrivateNoteRow,
+} from '../../../lib/coach-nutrition-notes'
 import type { ClientDayDetail, CoachClientDetailData } from '../../../lib/coach-client-detail'
 
 const ALERT_COLORS: Record<NutritionCoachAlert['variant'], string> = { danger: '#EF4444', warning: '#F59E0B', info: '#3B82F6' }
@@ -170,7 +183,199 @@ export function NutricionTab({
           </View>
         </StatCard>
       ) : null}
+
+      {/* Zona C · Alertas y contexto del coach (hilo, nota privada, micros, ciclos) */}
+      {data.client ? <NutritionCoachZoneC clientId={data.client.id} todayIso={todayIso} /> : null}
     </View>
+  )
+}
+
+// ── Zona C (coach): hilo bidireccional + nota privada + micros + ciclos ───────
+function NutritionCoachZoneC({ clientId, todayIso }: { clientId: string; todayIso: string }) {
+  const { theme } = useTheme()
+  const [coachId, setCoachId] = useState<string | null>(null)
+  const [comments, setComments] = useState<MealCommentRow[]>([])
+  const [notes, setNotes] = useState<PrivateNoteRow[]>([])
+  const [targets, setTargets] = useState<NutrientTargetRow[]>([])
+  const [cycles, setCycles] = useState<NutritionCycleRow[]>([])
+
+  async function reload() {
+    const [c, n, t, cy] = await Promise.all([
+      listCoachMealComments(clientId, todayIso),
+      getCoachPrivateNotes(clientId),
+      getClientNutrientTargets(clientId),
+      getNutritionPlanCycles(clientId),
+    ])
+    setComments(c)
+    setNotes(n)
+    setTargets(t)
+    setCycles(cy)
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    getCoachProfile().then((p) => { if (!cancelled) setCoachId(p?.id ?? null) }).catch(() => {})
+    reload()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, todayIso])
+
+  return (
+    <View style={{ gap: 14 }}>
+      <NotesThread comments={comments} clientId={clientId} todayIso={todayIso} onSent={reload} />
+      <PrivateNotePanel notes={notes} coachId={coachId} clientId={clientId} onSaved={reload} />
+      {targets.length ? <NutrientTargetsCard targets={targets} /> : null}
+      {cycles.length ? <CycleHistoryCard cycles={cycles} /> : null}
+    </View>
+  )
+}
+
+function NotesThread({ comments, clientId, todayIso, onSent }: { comments: MealCommentRow[]; clientId: string; todayIso: string; onSent: () => void }) {
+  const { theme } = useTheme()
+  const [body, setBody] = useState('')
+  const [sending, setSending] = useState(false)
+
+  async function send() {
+    const trimmed = body.trim()
+    if (!trimmed) return
+    setSending(true)
+    const r = await addCoachMealComment(clientId, todayIso, trimmed)
+    setSending(false)
+    if (r.ok) { setBody(''); onSent() }
+  }
+
+  return (
+    <StatCard>
+      <CardHeader icon={MessageCircle} title="Hilo con el alumno (hoy)" />
+      {comments.length ? (
+        <View style={{ gap: 8 }}>
+          {comments.map((c) => {
+            const mine = c.author_role === 'coach'
+            return (
+              <View key={c.id} style={[styles.bubble, { alignSelf: mine ? 'flex-end' : 'flex-start', backgroundColor: mine ? theme.primary + '18' : theme.secondary, borderColor: mine ? theme.primary + '40' : theme.border, borderRadius: theme.radius.lg }]}>
+                <Text style={[styles.bubbleRole, { color: mine ? theme.primary : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{mine ? 'Tú' : 'Alumno'}</Text>
+                <Text style={[styles.bubbleBody, { color: theme.foreground, fontFamily: theme.fontSans }]}>{c.body}</Text>
+              </View>
+            )
+          })}
+        </View>
+      ) : (
+        <Text style={[cd.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sin comentarios para hoy. Escribile al alumno.</Text>
+      )}
+      <View style={styles.threadInputRow}>
+        <TextInput
+          value={body}
+          onChangeText={setBody}
+          placeholder="Responder al alumno…"
+          placeholderTextColor={theme.mutedForeground}
+          multiline
+          style={[styles.threadInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]}
+        />
+        <TouchableOpacity activeOpacity={0.85} onPress={send} disabled={sending || !body.trim()} style={[styles.sendBtn, { backgroundColor: theme.primary, opacity: sending || !body.trim() ? 0.5 : 1 }]}>
+          <Send size={18} color={theme.primaryForeground} />
+        </TouchableOpacity>
+      </View>
+    </StatCard>
+  )
+}
+
+function PrivateNotePanel({ notes, coachId, clientId, onSaved }: { notes: PrivateNoteRow[]; coachId: string | null; clientId: string; onSaved: () => void }) {
+  const { theme } = useTheme()
+  const latest = notes[0] ?? null
+  const [body, setBody] = useState(latest?.body ?? '')
+  const [saving, setSaving] = useState(false)
+  const [touched, setTouched] = useState(false)
+
+  // Sincroniza el textarea con la nota cargada (solo si el coach no escribió aún).
+  useEffect(() => { if (!touched) setBody(latest?.body ?? '') }, [latest?.body, touched])
+
+  async function save() {
+    if (!coachId) return
+    setSaving(true)
+    const r = await upsertCoachPrivateNote(coachId, clientId, body)
+    setSaving(false)
+    if (r.ok) { setTouched(false); onSaved() }
+  }
+
+  const olderNotes = notes.slice(1)
+
+  return (
+    <View style={[styles.privateCard, { backgroundColor: '#F59E0B0A', borderColor: '#F59E0B40', borderRadius: theme.radius.xl }]}>
+      <View style={styles.privateHead}>
+        <Lock size={14} color="#F59E0B" />
+        <Text style={[styles.privateTitle, { color: '#F59E0B', fontFamily: 'Montserrat_700Bold' }]}>Nota privada</Text>
+      </View>
+      <View style={[styles.privateBadge, { backgroundColor: '#F59E0B18' }]}>
+        <Text style={[styles.privateBadgeTxt, { color: '#F59E0B', fontFamily: 'Inter_700Bold' }]}>Privada — el alumno no la ve</Text>
+      </View>
+      <TextInput
+        value={body}
+        onChangeText={(t) => { setBody(t); setTouched(true) }}
+        placeholder="Observaciones internas: adherencia, ajustes pendientes, contexto del alumno…"
+        placeholderTextColor={theme.mutedForeground}
+        multiline
+        maxLength={5000}
+        style={[styles.privateInput, { borderColor: theme.border, backgroundColor: theme.background, color: theme.foreground, fontFamily: theme.fontSans }]}
+      />
+      <View style={styles.privateActions}>
+        <Text style={[styles.privateCount, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{body.length}/5000</Text>
+        <Button label={saving ? 'Guardando…' : 'Guardar nota'} onPress={save} disabled={saving || !body.trim() || !coachId} />
+      </View>
+      {latest?.updated_at ? (
+        <Text style={[styles.privateMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Última actualización: {formatDate(latest.updated_at)}</Text>
+      ) : null}
+      {olderNotes.length ? (
+        <View style={{ gap: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border, paddingTop: 10 }}>
+          <Text style={[styles.privateOlderHead, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Notas anteriores</Text>
+          {olderNotes.map((n) => (
+            <View key={n.id} style={[styles.privateOlder, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+              <Text style={[styles.bubbleBody, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{n.body}</Text>
+              <Text style={[styles.privateMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{formatDate(n.updated_at ?? n.created_at)}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
+function NutrientTargetsCard({ targets }: { targets: NutrientTargetRow[] }) {
+  const { theme } = useTheme()
+  return (
+    <StatCard>
+      <CardHeader icon={Target} title="Umbrales de micronutrientes" />
+      {targets.map((t) => {
+        const range = t.floor_value != null && t.ceiling_value != null
+          ? `${t.floor_value}–${t.ceiling_value}`
+          : t.target_value != null ? String(t.target_value)
+          : t.floor_value != null ? `≥ ${t.floor_value}`
+          : t.ceiling_value != null ? `≤ ${t.ceiling_value}` : '—'
+        return (
+          <View key={t.id} style={cd.row}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{t.nutrient_key}</Text>
+              {t.intent ? <Text style={[cd.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{t.intent}</Text> : null}
+            </View>
+            <Text style={[cd.rowMetric, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>{range}</Text>
+          </View>
+        )
+      })}
+    </StatCard>
+  )
+}
+
+function CycleHistoryCard({ cycles }: { cycles: NutritionCycleRow[] }) {
+  const { theme } = useTheme()
+  return (
+    <StatCard>
+      <CardHeader icon={History} title="Historial de ciclos del plan" />
+      {cycles.map((c) => (
+        <View key={c.id} style={cd.row}>
+          <Text numberOfLines={1} style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold', flex: 1 }]}>{c.label ?? 'Ciclo'}</Text>
+          <Text style={[cd.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{formatDate(c.created_at)}</Text>
+        </View>
+      ))}
+    </StatCard>
   )
 }
 
@@ -285,4 +490,21 @@ const styles = StyleSheet.create({
   favWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   favChip: { maxWidth: '48%', borderWidth: 1, paddingHorizontal: 8, paddingVertical: 5 },
   favTxt: { fontSize: 11 },
+  bubble: { maxWidth: '85%', borderWidth: 1, paddingHorizontal: 11, paddingVertical: 8, gap: 2 },
+  bubbleRole: { fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.6 },
+  bubbleBody: { fontSize: 13, lineHeight: 18 },
+  threadInputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 2 },
+  threadInput: { flex: 1, minHeight: 44, maxHeight: 110, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13.5 },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  privateCard: { borderWidth: 1, padding: 16, gap: 10 },
+  privateHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  privateTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 },
+  privateBadge: { alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  privateBadgeTxt: { fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.5 },
+  privateInput: { minHeight: 96, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13.5, textAlignVertical: 'top' },
+  privateActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  privateCount: { fontSize: 11 },
+  privateMeta: { fontSize: 10.5 },
+  privateOlderHead: { fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.6 },
+  privateOlder: { borderWidth: 1, padding: 10, gap: 4 },
 })

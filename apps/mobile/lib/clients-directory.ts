@@ -43,15 +43,19 @@ export interface PulseRow {
   lastWorkoutDate: string | null
 }
 
+// 1:1 con web (directory-types.ts). Las keys legacy mobile quedan como alias para no romper consumidores previos.
 export type DirectorySortKey =
   | 'attention_score'
   | 'name_asc'
-  | 'last_workout'
+  | 'last_activity'
+  | 'adherence_desc'
+  | 'weight_delta'
   | 'plan_days'
-  | 'adherence'
-  | 'weight_change'
 
 export type StatusFilter = 'any' | 'active' | 'paused' | 'archived' | 'pending_sync'
+
+/** 1:1 con web ProgramDirectoryFilter (filtro de programa del action bar). */
+export type ProgramFilter = 'any' | 'with_program' | 'no_program' | 'expired'
 
 export interface DirectoryClient {
   id: string
@@ -215,7 +219,8 @@ export function filterClients(
   search: string,
   riskFilter: DirectoryRiskFilter,
   statusFilter: StatusFilter,
-  pulseById?: Map<string, PulseRow>
+  pulseById?: Map<string, PulseRow>,
+  programFilter: ProgramFilter = 'any'
 ): DirectoryClient[] {
   return clients.filter((c) => {
     const q = search.toLowerCase()
@@ -244,40 +249,62 @@ export function filterClients(
       matchesRisk = !!p && (p.attentionFlags?.includes('NUTRICION_RIESGO') || (p.nutritionPercentage > 0 && p.nutritionPercentage < 60))
     }
 
-    return matchesSearch && matchesStatus && matchesRisk
+    // Filtro de programa (1:1 web matchesProgramFilter): with_program / no_program / expired.
+    let matchesProgram = true
+    if (programFilter === 'with_program') matchesProgram = c.hasActiveProgram
+    else if (programFilter === 'no_program') matchesProgram = !c.hasActiveProgram
+    else if (programFilter === 'expired') matchesProgram = c.planDaysRemaining !== null && c.planDaysRemaining <= 0
+
+    return matchesSearch && matchesStatus && matchesRisk && matchesProgram
   })
 }
 
+/** Dirección por defecto al elegir una key (1:1 web defaultSortDir). */
+export function defaultSortDir(key: DirectorySortKey): SortDir {
+  if (key === 'name_asc' || key === 'plan_days') return 'asc'
+  return 'desc'
+}
+
+// 1:1 web sortClientsByKey: calcula cmp "ascendente" por key y aplica dir al final.
+// Usa el attentionScore del pulse (autoritativo) cuando existe, con fallback al local.
 export function sortClients(
   clients: DirectoryClient[],
   key: DirectorySortKey,
   dir: SortDir = 'desc',
   pulseById?: Map<string, PulseRow>
 ): DirectoryClient[] {
-  const sign = dir === 'asc' ? -1 : 1
+  const p = (id: string) => pulseById?.get(id)
   return [...clients].sort((a, b) => {
-    if (key === 'name_asc') return a.fullName.localeCompare(b.fullName) * (dir === 'asc' ? 1 : -1)
-    if (key === 'plan_days') {
-      const da = a.planDaysRemaining ?? 9999
-      const db = b.planDaysRemaining ?? 9999
-      return (da - db) * (dir === 'asc' ? 1 : -1)
+    let cmp = 0
+    switch (key) {
+      case 'attention_score':
+        cmp = (p(a.id)?.attentionScore ?? a.attentionScore ?? 0) - (p(b.id)?.attentionScore ?? b.attentionScore ?? 0)
+        break
+      case 'name_asc':
+        cmp = a.fullName.localeCompare(b.fullName, 'es')
+        break
+      case 'last_activity': {
+        const ta = (p(a.id)?.lastWorkoutDate ?? a.lastWorkoutDate) ? new Date((p(a.id)?.lastWorkoutDate ?? a.lastWorkoutDate)!).getTime() : 0
+        const tb = (p(b.id)?.lastWorkoutDate ?? b.lastWorkoutDate) ? new Date((p(b.id)?.lastWorkoutDate ?? b.lastWorkoutDate)!).getTime() : 0
+        cmp = ta - tb
+        break
+      }
+      case 'adherence_desc':
+        cmp = (p(a.id)?.percentage ?? 0) - (p(b.id)?.percentage ?? 0)
+        break
+      case 'weight_delta':
+        cmp = Math.abs(p(a.id)?.weightDelta7d ?? 0) - Math.abs(p(b.id)?.weightDelta7d ?? 0)
+        break
+      case 'plan_days': {
+        const na = a.planDaysRemaining ?? 99999
+        const nb = b.planDaysRemaining ?? 99999
+        cmp = na - nb
+        break
+      }
+      default:
+        cmp = 0
     }
-    if (key === 'last_workout') {
-      const da = a.lastWorkoutDate ? new Date(a.lastWorkoutDate).getTime() : 0
-      const db = b.lastWorkoutDate ? new Date(b.lastWorkoutDate).getTime() : 0
-      return (db - da) * sign
-    }
-    if (key === 'adherence') {
-      const da = pulseById?.get(a.id)?.percentage ?? -1
-      const db = pulseById?.get(b.id)?.percentage ?? -1
-      return (db - da) * sign
-    }
-    if (key === 'weight_change') {
-      const da = Math.abs(pulseById?.get(a.id)?.weightDelta7d ?? 0)
-      const db = Math.abs(pulseById?.get(b.id)?.weightDelta7d ?? 0)
-      return (db - da) * sign
-    }
-    // attention_score
-    return (b.attentionScore - a.attentionScore) * sign
+    if (dir === 'desc') cmp = -cmp
+    return cmp
   })
 }

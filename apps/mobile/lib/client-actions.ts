@@ -34,3 +34,7 @@ export async function resetClientPassword(clientId: string): Promise<string> {
 export async function setClientStatus(clientId: string, body: { is_active?: boolean; is_archived?: boolean }): Promise<void> {
   await apiFetch(`/api/mobile/coach/clients/${clientId}`, { method: 'PATCH', authenticated: true, body })
 }
+
+export async function setClientArchived(clientId: string, isArchived: boolean): Promise<void> {
+  await apiFetch(`/api/mobile/coach/clients/${clientId}`, { method: 'PATCH', authenticated: true, body: { is_archived: isArchived } })
+}

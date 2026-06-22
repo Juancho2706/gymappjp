@@ -7,6 +7,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -20,29 +21,38 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
 import {
   AlertTriangle,
+  Archive,
+  Check,
   ChevronRight,
+  Copy,
   Dumbbell,
   EyeOff,
   Flame,
   LayoutGrid,
   List as ListIcon,
   RefreshCw,
+  Salad,
   Search,
   ShieldCheck,
   SlidersHorizontal,
+  Star,
+  Table2,
   Upload,
   Users,
   UserPlus,
   X,
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
+import * as Clipboard from 'expo-clipboard'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, NativeDialog, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { ClientCard, CLIENT_CARD_HEIGHT } from '../../../components/coach/ClientCard'
+import { ClientsDirectoryTable } from '../../../components/coach/ClientsDirectoryTable'
 import {
   buildStats,
+  defaultSortDir,
   filterClients,
   getCoachDirectoryClients,
   getCoachDirectoryPulse,
@@ -50,11 +60,12 @@ import {
   type DirectoryClient,
   type DirectoryRiskFilter,
   type DirectorySortKey,
+  type ProgramFilter,
   type PulseRow,
   type SortDir,
   type StatusFilter,
 } from '../../../lib/clients-directory'
-import { clientLoginUrl, deleteClient, openWhatsApp, resetClientPassword, setClientStatus, shareLogin } from '../../../lib/client-actions'
+import { clientLoginUrl, deleteClient, openWhatsApp, resetClientPassword, setClientArchived, setClientStatus, shareLogin } from '../../../lib/client-actions'
 import { getCoachProfile } from '../../../lib/coach'
 import { apiFetch } from '../../../lib/api'
 import * as DocumentPicker from 'expo-document-picker'
@@ -63,6 +74,8 @@ import { parseClientsCsv, type ParsedClientRow } from '../../../lib/import-clien
 
 const CARD_GAP = 12
 const CARD_STEP = CLIENT_CARD_HEIGHT + CARD_GAP
+// Una sola fila ficticia para que la vista TABLA reúse el FlatList (pull-to-refresh) sin VirtualizedList anidada.
+const EMPTY_DATA: { id: string }[] = [{ id: 'table' }]
 
 // Item con animación de "stack": al scrollear abajo las cards se apilan arriba; al subir, salen y bajan.
 function StackCardItem({ index, scrollY, headerH, children }: { index: number; scrollY: SharedValue<number>; headerH: number; children: React.ReactNode }) {
@@ -151,6 +164,7 @@ function StatTile({
   selected,
   onPress,
   sub,
+  suffix,
 }: {
   value: number
   label: string
@@ -159,6 +173,7 @@ function StatTile({
   selected: boolean
   onPress: () => void
   sub?: string
+  suffix?: string
 }) {
   const { theme } = useTheme()
   return (
@@ -180,7 +195,7 @@ function StatTile({
           <Icon size={13} color={color} />
         </View>
         <Text style={[statStyles.value, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-          {sub}{value}
+          {sub}{value}{suffix}
         </Text>
       </View>
       <Text style={[statStyles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
@@ -404,13 +419,14 @@ const rowStyles = StyleSheet.create({
 
 // ─── Sort Sheet ───────────────────────────────────────────────────────────────
 
+// 1:1 con web directory-types.ts SORT_OPTIONS.
 const SORT_OPTIONS: { label: string; value: DirectorySortKey }[] = [
   { label: 'Urgencia (default)', value: 'attention_score' },
   { label: 'Nombre A→Z', value: 'name_asc' },
-  { label: 'Última sesión', value: 'last_workout' },
-  { label: 'Días plan restantes', value: 'plan_days' },
-  { label: 'Adherencia', value: 'adherence' },
-  { label: 'Peso: mayor cambio', value: 'weight_change' },
+  { label: 'Última actividad', value: 'last_activity' },
+  { label: 'Adherencia ↓', value: 'adherence_desc' },
+  { label: 'Peso: mayor cambio', value: 'weight_delta' },
+  { label: 'Días programa', value: 'plan_days' },
 ]
 
 const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = [
@@ -419,6 +435,23 @@ const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = [
   { label: 'Pausados', value: 'paused' },
   { label: 'Cambio de contraseña pendiente', value: 'pending_sync' },
   { label: 'Archivados', value: 'archived' },
+]
+
+// 1:1 con web DirectoryActionBar grupo "Riesgo".
+const RISK_OPTIONS: { label: string; value: DirectoryRiskFilter }[] = [
+  { label: 'Todos', value: 'all' },
+  { label: 'Atención urgente', value: 'urgent' },
+  { label: 'En riesgo', value: 'review' },
+  { label: 'On track', value: 'on_track' },
+  { label: 'Nutrición baja (<60%)', value: 'nutrition_low' },
+]
+
+// 1:1 con web DirectoryActionBar grupo "Programa".
+const PROGRAM_OPTIONS: { label: string; value: ProgramFilter }[] = [
+  { label: 'Todos', value: 'any' },
+  { label: 'Con programa', value: 'with_program' },
+  { label: 'Sin programa', value: 'no_program' },
+  { label: 'Vencido', value: 'expired' },
 ]
 
 function OptionSheet({
@@ -480,6 +513,92 @@ function OptionSheet({
     </Modal>
   )
 }
+
+// ─── Filter Sheet (3 grupos: Estado · Riesgo · Programa) — 1:1 web Filtros dropdown ──
+function FilterSheet({
+  visible,
+  onClose,
+  theme,
+  statusFilter,
+  onStatusChange,
+  riskFilter,
+  onRiskChange,
+  programFilter,
+  onProgramChange,
+  archivedCount,
+}: {
+  visible: boolean
+  onClose: () => void
+  theme: any
+  statusFilter: StatusFilter
+  onStatusChange: (v: StatusFilter) => void
+  riskFilter: DirectoryRiskFilter
+  onRiskChange: (v: DirectoryRiskFilter) => void
+  programFilter: ProgramFilter
+  onProgramChange: (v: ProgramFilter) => void
+  archivedCount: number
+}) {
+  const groupRow = (opts: { label: string; value: string }[], selected: string, onSelect: (v: string) => void, archived?: boolean) =>
+    opts.map((opt) => (
+      <TouchableOpacity
+        key={opt.value}
+        style={[
+          sheetStyles.option,
+          { backgroundColor: selected === opt.value ? hexToRgba(theme.primary, 0.1) : 'transparent', borderRadius: theme.radius.lg },
+        ]}
+        onPress={() => onSelect(opt.value)}
+      >
+        <Text
+          style={[
+            sheetStyles.optionText,
+            { color: selected === opt.value ? theme.primary : theme.foreground, fontFamily: theme.fontSans, fontWeight: selected === opt.value ? '700' : '400' },
+          ]}
+        >
+          {opt.label}
+        </Text>
+        {opt.value === 'archived' && archived && archivedCount > 0 ? (
+          <View style={[filterSheetStyles.countPill, { backgroundColor: theme.secondary }]}>
+            <Text style={[filterSheetStyles.countTxt, { color: theme.mutedForeground }]}>{archivedCount}</Text>
+          </View>
+        ) : selected === opt.value ? (
+          <View style={[sheetStyles.checkDot, { backgroundColor: theme.primary }]} />
+        ) : null}
+      </TouchableOpacity>
+    ))
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable style={sheetStyles.overlay} onPress={onClose} />
+      <View style={[sheetStyles.sheet, { backgroundColor: theme.card, maxHeight: '80%' }]}>
+        <View style={sheetStyles.handle} />
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <Text style={[filterSheetStyles.groupLabel, { color: theme.mutedForeground }]}>Estado</Text>
+          {groupRow(STATUS_OPTIONS, statusFilter, (v) => onStatusChange(v as StatusFilter), true)}
+          <View style={[filterSheetStyles.sep, { backgroundColor: theme.border }]} />
+          <Text style={[filterSheetStyles.groupLabel, { color: theme.mutedForeground }]}>Riesgo</Text>
+          {groupRow(RISK_OPTIONS, riskFilter, (v) => onRiskChange(v as DirectoryRiskFilter))}
+          <View style={[filterSheetStyles.sep, { backgroundColor: theme.border }]} />
+          <Text style={[filterSheetStyles.groupLabel, { color: theme.mutedForeground }]}>Programa</Text>
+          {groupRow(PROGRAM_OPTIONS, programFilter, (v) => onProgramChange(v as ProgramFilter))}
+          <View style={{ height: 12 }} />
+          <TouchableOpacity style={[filterSheetStyles.done, { backgroundColor: theme.primary, borderRadius: theme.radius.xl }]} onPress={onClose}>
+            <Text style={[filterSheetStyles.doneTxt, { fontFamily: 'Montserrat_700Bold' }]}>Listo</Text>
+          </TouchableOpacity>
+          <View style={{ height: 16 }} />
+        </ScrollView>
+      </View>
+    </Modal>
+  )
+}
+
+const filterSheetStyles = StyleSheet.create({
+  groupLabel: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 6, marginBottom: 2, paddingHorizontal: 12 },
+  sep: { height: StyleSheet.hairlineWidth, marginVertical: 6 },
+  countPill: { borderRadius: 99, paddingHorizontal: 7, paddingVertical: 1 },
+  countTxt: { fontSize: 10, fontWeight: '800' },
+  done: { height: 46, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
+  doneTxt: { color: '#fff', fontSize: 13, letterSpacing: 1, textTransform: 'uppercase' },
+})
 
 const sheetStyles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
@@ -658,30 +777,53 @@ export default function ClientesScreen() {
   const [search, setSearch] = useState('')
   const [riskFilter, setRiskFilter] = useState<DirectoryRiskFilter>('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('any')
+  const [programFilter, setProgramFilter] = useState<ProgramFilter>('any')
   const [sortKey, setSortKey] = useState<DirectorySortKey>('attention_score')
   const [showSortSheet, setShowSortSheet] = useState(false)
   const [showFilterSheet, setShowFilterSheet] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [dismissed, setDismissed] = useState<Record<string, { date: string; count: number }>>({})
-  const [viewMode, setViewMode] = useState<'list' | 'cards'>('list')
+  // Vista por defecto = 'table' (1:1 web). list/cards/table.
+  const [viewMode, setViewMode] = useState<'list' | 'cards' | 'table'>('table')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [pulseById, setPulseById] = useState<Map<string, PulseRow>>(new Map())
   const [pulseError, setPulseError] = useState(false)
   const [coachSlug, setCoachSlug] = useState<string>('')
+  const [copied, setCopied] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [gridVisibleCount, setGridVisibleCount] = useState(48)
   const scrollY = useSharedValue(0)
   const [headerH, setHeaderH] = useState(0)
   const onScroll = useAnimatedScrollHandler((e) => { scrollY.value = e.contentOffset.y })
 
   useEffect(() => { load() }, [])
   useEffect(() => {
-    AsyncStorage.getItem('eva_alumnos_view').then((v) => { if (v === 'cards' || v === 'list') setViewMode(v) })
+    AsyncStorage.getItem('eva_alumnos_view').then((v) => { if (v === 'cards' || v === 'list' || v === 'table') setViewMode(v) })
     getCoachProfile().then((c) => { if (c?.slug) setCoachSlug(c.slug) }).catch(() => {})
   }, [])
-  function toggleView() {
-    const next = viewMode === 'list' ? 'cards' : 'list'
+  // Reset de paginación grid al cambiar filtros/orden/vista (1:1 web).
+  useEffect(() => { setGridVisibleCount(48) }, [search, riskFilter, statusFilter, programFilter, sortKey, sortDir, viewMode])
+  function setView(next: 'list' | 'cards' | 'table') {
     setViewMode(next)
     AsyncStorage.setItem('eva_alumnos_view', next).catch(() => {})
+  }
+  // Cicla table → cards → list → table (botón único del action bar, además del toggle grid/tabla).
+  function toggleView() {
+    const next = viewMode === 'list' ? 'cards' : 'list'
+    setView(next)
+  }
+  const loginUrl = coachSlug ? clientLoginUrl(coachSlug) : ''
+  function handleCopyPortal() {
+    if (!loginUrl) return
+    Clipboard.setStringAsync(loginUrl).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  function handleSync() {
+    setSyncing(true)
+    load(true)
+    setTimeout(() => setSyncing(false), 800)
   }
   useEffect(() => {
     AsyncStorage.getItem('eva_alumnos_alerts_dismissed').then((raw) => {
@@ -711,16 +853,29 @@ export default function ClientesScreen() {
   const stats = useMemo(() => buildStats(clients), [clients])
 
   const displayed = useMemo(() => {
-    const filtered = filterClients(clients, search, riskFilter, statusFilter, pulseById)
+    const filtered = filterClients(clients, search, riskFilter, statusFilter, pulseById, programFilter)
     return sortClients(filtered, sortKey, sortDir, pulseById)
-  }, [clients, search, riskFilter, statusFilter, sortKey, sortDir, pulseById])
+  }, [clients, search, riskFilter, statusFilter, programFilter, sortKey, sortDir, pulseById])
+
+  // Cards: paginado "Cargar más" (1:1 web gridVisibleCount, slices de 48).
+  const gridClients = useMemo(() => displayed.slice(0, gridVisibleCount), [displayed, gridVisibleCount])
 
   const urgentBanner = stats.urgentCount > 0
   const expiredBanner = stats.expiredProgramCount > 0
   const syncBanner = stats.pendingSyncCount > 0
+  // Avg adherencia (1:1 web War Room tile) — promedio del pulse.
+  const avgAdherence = useMemo(() => {
+    const arr = [...pulseById.values()]
+    return arr.length > 0 ? Math.round(arr.reduce((a, p) => a + (p.percentage ?? 0), 0) / arr.length) : 0
+  }, [pulseById])
   // A-F10: contador de adherencia nutricional baja (desde el pulse) para banner de triage.
   const nutritionLowCount = useMemo(
     () => [...pulseById.values()].filter((p) => (p.attentionFlags?.includes('NUTRICION_RIESGO')) || (p.nutritionPercentage > 0 && p.nutritionPercentage < 60)).length,
+    [pulseById]
+  )
+  // Banner web: alumnos >1 mes sin check-in (solo si no hay urgentes).
+  const noCheckin1m = useMemo(
+    () => [...pulseById.values()].filter((p) => (p.attentionFlags ?? []).includes('SIN_CHECKIN_1M')).length,
     [pulseById]
   )
 
@@ -736,17 +891,21 @@ export default function ClientesScreen() {
     AsyncStorage.setItem('eva_alumnos_alerts_dismissed', JSON.stringify(next)).catch(() => {})
   }
 
-  const hasActiveFilters = riskFilter !== 'all' || statusFilter !== 'any'
+  const hasActiveFilters = riskFilter !== 'all' || statusFilter !== 'any' || programFilter !== 'any'
   const sortLabel = SORT_OPTIONS.find((o) => o.value === sortKey)?.label ?? 'Urgencia'
 
+  // 6 tiles 1:1 web War Room: Total · Activos · Atención · Riesgo · Avg Adher. · Nutri. baja.
   const STAT_TILES = [
     { key: 'total', label: 'Total', value: stats.total, icon: Users, color: '#6B7280', filter: 'all' as DirectoryRiskFilter },
     { key: 'active', label: 'Activos', value: stats.active, icon: ShieldCheck, color: '#10B981', filter: 'all' as DirectoryRiskFilter },
     { key: 'review', label: 'Atención', value: stats.reviewCount, icon: AlertTriangle, color: '#F59E0B', filter: 'review' as DirectoryRiskFilter, sub: '⚠️ ' },
     { key: 'urgent', label: 'Riesgo', value: stats.urgentCount, icon: Flame, color: '#EF4444', filter: 'urgent' as DirectoryRiskFilter, sub: '🔴 ' },
-    { key: 'ontrack', label: 'On track', value: stats.onTrackCount, icon: LayoutGrid, color: '#3B82F6', filter: 'on_track' as DirectoryRiskFilter },
-    { key: 'noprogram', label: 'Sin plan', value: stats.noProgramCount, icon: Dumbbell, color: '#8B5CF6', filter: 'no_program' as DirectoryRiskFilter },
+    { key: 'avg', label: 'Avg Adher.', value: avgAdherence, icon: Star, color: '#10B981', filter: 'all' as DirectoryRiskFilter, suffix: '%' },
+    { key: 'nutrition_low', label: 'Nutri. baja', value: nutritionLowCount, icon: Salad, color: '#EF4444', filter: 'nutrition_low' as DirectoryRiskFilter, sub: '🥗 ' },
   ]
+  // Selección del tile = 1:1 web: con filtro 'all' resaltar 'total'; si no, el tile cuyo filter === riskFilter.
+  const tileSelected = (tile: { key: string; filter: DirectoryRiskFilter }) =>
+    riskFilter === 'all' ? tile.key === 'total' : tile.filter !== 'all' && tile.filter === riskFilter
 
   // ── Acciones rápidas por alumno ──────────────────────────────────────────
   function handleWhatsApp(c: DirectoryClient) {
@@ -796,17 +955,72 @@ export default function ClientesScreen() {
       { text: 'Eliminar', style: 'destructive', onPress: () => deleteClient(c.id).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')) },
     ])
   }
+  function handleArchive(c: DirectoryClient) {
+    const archiving = !c.isArchived
+    Alert.alert(
+      archiving ? 'Archivar alumno' : 'Desarchivar alumno',
+      archiving
+        ? `${c.fullName} se moverá a Archivados. Podrás restaurarlo cuando quieras.`
+        : `${c.fullName} volverá al directorio activo.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: archiving ? 'Archivar' : 'Desarchivar',
+          onPress: () => setClientArchived(c.id, archiving).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
+        },
+      ]
+    )
+  }
+  function handleEdit(c: DirectoryClient) {
+    // La edición completa de datos del alumno (nombre/teléfono/intake) requiere un endpoint
+    // mobile que aún no existe (la web usa server actions intake). De momento, abrir el perfil
+    // donde el coach edita esos datos. Ver residualGaps: endpoint de edición.
+    router.push(`/coach/cliente/${c.id}`)
+  }
   const goProfile = (c: DirectoryClient) => router.push(`/coach/cliente/${c.id}`)
   const goWorkout = (c: DirectoryClient) => router.push(`/coach/program-builder?clientId=${c.id}&clientName=${encodeURIComponent(c.fullName)}`)
   const goNutrition = () => router.push('/coach/nutricion')
 
+  // War Room top (1:1 web CoachWarRoom): título, subtítulo, sync, portal copy chip.
+  const warRoomTop = (
+    <View style={styles.warRoom}>
+      <Text style={[styles.warTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+        Directorio de Alumnos
+      </Text>
+      <Text style={[styles.warSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        Gestión centralizada · panel operativo tipo War Room
+      </Text>
+      <View style={styles.warSyncRow}>
+        <Text style={[styles.warSyncLabel, { color: theme.mutedForeground }]}>Actualizado al cargar la página</Text>
+        <TouchableOpacity style={styles.warSyncBtn} onPress={handleSync} disabled={syncing} activeOpacity={0.7}>
+          <RefreshCw size={12} color={theme.primary} />
+          <Text style={[styles.warSyncTxt, { color: theme.primary }]}>sync</Text>
+        </TouchableOpacity>
+      </View>
+      {loginUrl ? (
+        <TouchableOpacity
+          style={[styles.portalChip, { backgroundColor: theme.card, borderColor: theme.border }]}
+          onPress={handleCopyPortal}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.portalLabel, { color: theme.mutedForeground }]}>Portal alumnos:</Text>
+          <Text style={[styles.portalUrl, { color: theme.primary }]} numberOfLines={1}>{loginUrl}</Text>
+          <View style={[styles.portalIcon, { backgroundColor: hexToRgba(theme.primary, 0.1) }]}>
+            {copied ? <Check size={12} color={theme.primary} /> : <Copy size={12} color={theme.primary} />}
+          </View>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  )
+
   const headerNode = (
     <>
+      {warRoomTop}
       <View style={styles.statsGrid}>
         {STAT_TILES.map((tile) => (
           <StatTile key={tile.key} value={tile.value} label={tile.label} icon={tile.icon} color={tile.color}
-            selected={riskFilter === tile.filter && tile.filter !== 'all'}
-            onPress={() => setRiskFilter(riskFilter === tile.filter ? 'all' : tile.filter)} sub={tile.sub} />
+            selected={tileSelected(tile)}
+            onPress={() => setRiskFilter(tile.filter)} sub={tile.sub} suffix={tile.suffix} />
         ))}
       </View>
       {urgentBanner && !isDismissed('urgent', stats.urgentCount) && (
@@ -819,13 +1033,38 @@ export default function ClientesScreen() {
         <AlertBanner message={`${stats.pendingSyncCount} alumno${stats.pendingSyncCount !== 1 ? 's' : ''} con cambio de contraseña pendiente`} color="#F59E0B" onPress={() => setRiskFilter('password_reset')} onDismiss={() => dismissAlert('sync', stats.pendingSyncCount)} />
       )}
       {nutritionLowCount > 0 && !isDismissed('nutrition_low', nutritionLowCount) && (
-        <AlertBanner message={`🥗 ${nutritionLowCount} alumno${nutritionLowCount !== 1 ? 's' : ''} con adherencia nutricional baja`} color="#10B981" onPress={() => setRiskFilter('nutrition_low')} onDismiss={() => dismissAlert('nutrition_low', nutritionLowCount)} />
+        <AlertBanner message={`🥗 ${nutritionLowCount} alumno${nutritionLowCount !== 1 ? 's' : ''} con cumplimiento nutricional bajo (<60%)`} color="#EF4444" onPress={() => setRiskFilter('nutrition_low')} onDismiss={() => dismissAlert('nutrition_low', nutritionLowCount)} />
+      )}
+      {noCheckin1m > 0 && stats.urgentCount === 0 && !isDismissed('checkin', noCheckin1m) && (
+        <AlertBanner message={`ALERTA: ${noCheckin1m} alumno${noCheckin1m !== 1 ? 's' : ''} llevan más de 1 mes sin check-in`} color="#F59E0B" onPress={() => setRiskFilter('urgent')} onDismiss={() => dismissAlert('checkin', noCheckin1m)} />
       )}
       {pulseError && (
         <TouchableOpacity activeOpacity={0.85} onPress={loadPulse} style={[styles.pulseErr, { backgroundColor: '#EF444414', borderColor: '#EF444440' }]}>
           <Text style={[styles.pulseErrTxt, { color: '#EF4444', fontFamily: 'Inter_600SemiBold' }]}>No se pudieron cargar las métricas (peso/adherencia).</Text>
           <Text style={[styles.pulseErrAction, { color: '#EF4444', fontFamily: 'Inter_700Bold' }]}>Reintentar</Text>
         </TouchableOpacity>
+      )}
+      {hasActiveFilters && (
+        <View style={styles.chipRow}>
+          {riskFilter !== 'all' && (
+            <TouchableOpacity style={[styles.filterChip, { borderColor: hexToRgba(theme.primary, 0.3), backgroundColor: hexToRgba(theme.primary, 0.1) }]} onPress={() => setRiskFilter('all')}>
+              <Text style={[styles.filterChipText, { color: theme.primary }]}>{RISK_OPTIONS.find((o) => o.value === riskFilter)?.label ?? riskFilter}</Text>
+              <X size={11} color={theme.primary} />
+            </TouchableOpacity>
+          )}
+          {statusFilter !== 'any' && (
+            <TouchableOpacity style={[styles.filterChip, { borderColor: hexToRgba(theme.primary, 0.3), backgroundColor: hexToRgba(theme.primary, 0.1) }]} onPress={() => setStatusFilter('any')}>
+              <Text style={[styles.filterChipText, { color: theme.primary }]}>{STATUS_OPTIONS.find((o) => o.value === statusFilter)?.label}</Text>
+              <X size={11} color={theme.primary} />
+            </TouchableOpacity>
+          )}
+          {programFilter !== 'any' && (
+            <TouchableOpacity style={[styles.filterChip, { borderColor: hexToRgba(theme.primary, 0.3), backgroundColor: hexToRgba(theme.primary, 0.1) }]} onPress={() => setProgramFilter('any')}>
+              <Text style={[styles.filterChipText, { color: theme.primary }]}>{PROGRAM_OPTIONS.find((o) => o.value === programFilter)?.label}</Text>
+              <X size={11} color={theme.primary} />
+            </TouchableOpacity>
+          )}
+        </View>
       )}
       <View style={styles.sortRow}>
         <Text style={[styles.sortLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -881,12 +1120,27 @@ export default function ClientesScreen() {
             clearButtonMode="while-editing"
           />
         </View>
-        <TouchableOpacity
-          style={[styles.iconBtn, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}
-          onPress={toggleView}
-        >
-          {viewMode === 'list' ? <LayoutGrid size={18} color={theme.mutedForeground} /> : <ListIcon size={18} color={theme.mutedForeground} />}
-        </TouchableOpacity>
+        {/* Toggle de vista (1:1 web: tabla/cuadrícula) + lista compacta extra mobile */}
+        <View style={[styles.viewToggle, { borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+          <TouchableOpacity
+            style={[styles.viewSeg, viewMode === 'table' ? { backgroundColor: hexToRgba(theme.primary, 0.15) } : null]}
+            onPress={() => setView('table')}
+          >
+            <Table2 size={17} color={viewMode === 'table' ? theme.primary : theme.mutedForeground} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.viewSeg, viewMode === 'cards' ? { backgroundColor: hexToRgba(theme.primary, 0.15) } : null]}
+            onPress={() => setView('cards')}
+          >
+            <LayoutGrid size={17} color={viewMode === 'cards' ? theme.primary : theme.mutedForeground} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.viewSeg, viewMode === 'list' ? { backgroundColor: hexToRgba(theme.primary, 0.15) } : null]}
+            onPress={() => setView('list')}
+          >
+            <ListIcon size={17} color={viewMode === 'list' ? theme.primary : theme.mutedForeground} />
+          </TouchableOpacity>
+        </View>
         <TouchableOpacity
           style={[
             styles.iconBtn,
@@ -911,7 +1165,7 @@ export default function ClientesScreen() {
 
       {viewMode === 'cards' ? (
         <Animated.FlatList
-          data={displayed}
+          data={gridClients}
           keyExtractor={(c) => c.id}
           renderItem={({ item, index }) => (
             <StackCardItem index={index} scrollY={scrollY} headerH={headerH}>
@@ -937,6 +1191,49 @@ export default function ClientesScreen() {
           refreshing={refreshing}
           ListHeaderComponent={<View onLayout={(e) => setHeaderH(e.nativeEvent.layout.height)}>{headerNode}</View>}
           ListEmptyComponent={emptyNode}
+          ListFooterComponent={
+            displayed.length > gridVisibleCount ? (
+              <TouchableOpacity
+                style={[styles.loadMore, { borderColor: theme.border, backgroundColor: theme.secondary }]}
+                onPress={() => setGridVisibleCount((n) => Math.min(n + 48, displayed.length))}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.loadMoreTxt, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>
+                  Cargar más ({displayed.length - gridVisibleCount} restantes)
+                </Text>
+              </TouchableOpacity>
+            ) : null
+          }
+        />
+      ) : viewMode === 'table' ? (
+        <FlatList
+          data={EMPTY_DATA}
+          keyExtractor={(it) => it.id}
+          renderItem={() =>
+            displayed.length === 0 ? (
+              emptyNode
+            ) : (
+              <ClientsDirectoryTable
+                clients={displayed}
+                pulseById={pulseById}
+                sortKey={sortKey}
+                sortDir={sortDir}
+                onSortChange={(k, d) => { setSortKey(k); setSortDir(d) }}
+                onRowPress={goProfile}
+                onProfile={goProfile}
+                onWhatsApp={handleWhatsApp}
+                onEdit={handleEdit}
+                onArchive={handleArchive}
+                onDelete={handleDelete}
+                coachSlug={coachSlug}
+              />
+            )
+          }
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          onRefresh={() => load(true)}
+          refreshing={refreshing}
+          ListHeaderComponent={headerNode}
         />
       ) : (
       <FlatList
@@ -949,99 +1246,8 @@ export default function ClientesScreen() {
         showsVerticalScrollIndicator={false}
         onRefresh={() => load(true)}
         refreshing={refreshing}
-        ListHeaderComponent={
-          <>
-            {/* Stats grid */}
-            <View style={styles.statsGrid}>
-              {STAT_TILES.map((tile) => (
-                <StatTile
-                  key={tile.key}
-                  value={tile.value}
-                  label={tile.label}
-                  icon={tile.icon}
-                  color={tile.color}
-                  selected={riskFilter === tile.filter && tile.filter !== 'all'}
-                  onPress={() => setRiskFilter(riskFilter === tile.filter ? 'all' : tile.filter)}
-                  sub={tile.sub}
-                />
-              ))}
-            </View>
-
-            {/* Alert banners */}
-            {urgentBanner && !isDismissed('urgent', stats.urgentCount) && (
-              <AlertBanner
-                message={`🔴 ${stats.urgentCount} alumno${stats.urgentCount !== 1 ? 's' : ''} con atención urgente`}
-                color="#EF4444"
-                onPress={() => setRiskFilter('urgent')}
-                onDismiss={() => dismissAlert('urgent', stats.urgentCount)}
-              />
-            )}
-            {expiredBanner && !isDismissed('expired', stats.expiredProgramCount) && (
-              <AlertBanner
-                message={`${stats.expiredProgramCount} programa${stats.expiredProgramCount !== 1 ? 's' : ''} vencido${stats.expiredProgramCount !== 1 ? 's' : ''}`}
-                color="#F97316"
-                onPress={() => setRiskFilter('expired_program')}
-                onDismiss={() => dismissAlert('expired', stats.expiredProgramCount)}
-              />
-            )}
-            {syncBanner && !isDismissed('sync', stats.pendingSyncCount) && (
-              <AlertBanner
-                message={`${stats.pendingSyncCount} alumno${stats.pendingSyncCount !== 1 ? 's' : ''} con cambio de contraseña pendiente`}
-                color="#F59E0B"
-                onPress={() => setRiskFilter('password_reset')}
-                onDismiss={() => dismissAlert('sync', stats.pendingSyncCount)}
-              />
-            )}
-
-            {/* Active filter chips */}
-            {hasActiveFilters && (
-              <View style={styles.chipRow}>
-                {riskFilter !== 'all' && (
-                  <TouchableOpacity
-                    style={[styles.filterChip, { borderColor: hexToRgba(theme.primary, 0.3), backgroundColor: hexToRgba(theme.primary, 0.1) }]}
-                    onPress={() => setRiskFilter('all')}
-                  >
-                    <Text style={[styles.filterChipText, { color: theme.primary }]}>
-                      {riskFilter}
-                    </Text>
-                    <X size={11} color={theme.primary} />
-                  </TouchableOpacity>
-                )}
-                {statusFilter !== 'any' && (
-                  <TouchableOpacity
-                    style={[styles.filterChip, { borderColor: hexToRgba(theme.primary, 0.3), backgroundColor: hexToRgba(theme.primary, 0.1) }]}
-                    onPress={() => setStatusFilter('any')}
-                  >
-                    <Text style={[styles.filterChipText, { color: theme.primary }]}>
-                      {STATUS_OPTIONS.find((o) => o.value === statusFilter)?.label}
-                    </Text>
-                    <X size={11} color={theme.primary} />
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-
-            {/* Sort label */}
-            <View style={styles.sortRow}>
-              <Text style={[styles.sortLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                {displayed.length} resultado{displayed.length !== 1 ? 's' : ''} · Orden: {sortLabel}
-              </Text>
-            </View>
-          </>
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <Users size={36} color={theme.mutedForeground} strokeWidth={1.5} />
-            <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-              {search || hasActiveFilters ? 'Sin resultados' : 'Sin alumnos aún'}
-            </Text>
-            <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              {search || hasActiveFilters
-                ? 'Probá ajustando los filtros o la búsqueda.'
-                : 'Usa el botón + para agregar tu primer alumno.'}
-            </Text>
-          </View>
-        }
+        ListHeaderComponent={headerNode}
+        ListEmptyComponent={emptyNode}
       />
       )}
 
@@ -1069,18 +1275,21 @@ export default function ClientesScreen() {
         title="Ordenar"
         options={SORT_OPTIONS}
         selected={sortKey}
-        onSelect={(v) => setSortKey(v as DirectorySortKey)}
+        onSelect={(v) => { const k = v as DirectorySortKey; setSortKey(k); setSortDir(defaultSortDir(k)) }}
         onClose={() => setShowSortSheet(false)}
         theme={theme}
       />
-      <OptionSheet
+      <FilterSheet
         visible={showFilterSheet}
-        title="Estado"
-        options={STATUS_OPTIONS}
-        selected={statusFilter}
-        onSelect={(v) => setStatusFilter(v as StatusFilter)}
         onClose={() => setShowFilterSheet(false)}
         theme={theme}
+        statusFilter={statusFilter}
+        onStatusChange={setStatusFilter}
+        riskFilter={riskFilter}
+        onRiskChange={setRiskFilter}
+        programFilter={programFilter}
+        onProgramChange={setProgramFilter}
+        archivedCount={clients.filter((c) => c.isArchived).length}
       />
       <CreateClientModal
         visible={showCreate}
@@ -1238,6 +1447,21 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, height: 40, fontSize: 14 },
   iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  viewToggle: { flexDirection: 'row', borderWidth: 1, height: 40, alignItems: 'center', paddingHorizontal: 2, gap: 1 },
+  viewSeg: { width: 32, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
+  warRoom: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8, gap: 4 },
+  warTitle: { fontSize: 24, letterSpacing: -0.5, textTransform: 'uppercase' },
+  warSub: { fontSize: 12.5 },
+  warSyncRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+  warSyncLabel: { fontSize: 9.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  warSyncBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  warSyncTxt: { fontSize: 9.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
+  portalChip: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, marginTop: 8 },
+  portalLabel: { fontSize: 9, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, flexShrink: 0 },
+  portalUrl: { flex: 1, fontSize: 11.5, fontFamily: 'Inter_700Bold' },
+  portalIcon: { borderRadius: 999, padding: 4, flexShrink: 0 },
+  loadMore: { alignSelf: 'center', borderWidth: 1, borderRadius: 999, paddingHorizontal: 24, paddingVertical: 9, marginTop: 12 },
+  loadMoreTxt: { fontSize: 13 },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

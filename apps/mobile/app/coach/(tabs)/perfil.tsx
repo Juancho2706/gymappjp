@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Linking, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
+import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Apple, Bell, ClipboardList, CreditCard, ExternalLink, HeartPulse, LayoutList, LogOut, Package, SlidersHorizontal, User, Users } from 'lucide-react-native'
+import { Apple, Bell, ClipboardList, CreditCard, ExternalLink, HeartPulse, LayoutList, LogOut, Package, Palette, SlidersHorizontal, User, Users } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { hasModule } from '../../../lib/entitlements'
@@ -129,7 +129,7 @@ export default function CoachPerfilScreen() {
       <AppBackground />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={[styles.pageTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-          Perfil
+          Opciones
         </Text>
 
         <MotiView
@@ -195,7 +195,7 @@ export default function CoachPerfilScreen() {
             ) : null}
             <TouchableOpacity
               style={[styles.webLink, { borderTopColor: theme.border }]}
-              onPress={() => Linking.openURL('https://eva-app.cl/coach/subscription')}
+              onPress={() => router.push('/coach/subscription')}
               activeOpacity={0.7}
             >
               <View style={styles.webLinkLeft}>
@@ -280,6 +280,18 @@ export default function CoachPerfilScreen() {
         </Section>
 
         <Section title="Configuración">
+          {!org?.isOrgManaged ? (
+            <TouchableOpacity
+              style={[styles.linkRow, { borderColor: theme.border }]}
+              onPress={() => router.push('/coach/settings')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.linkText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+                Mi Marca
+              </Text>
+              <Palette size={14} color={theme.mutedForeground} />
+            </TouchableOpacity>
+          ) : null}
           {hasTeam ? (
             <TouchableOpacity
               style={[styles.linkRow, { borderColor: theme.border }]}

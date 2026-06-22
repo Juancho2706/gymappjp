@@ -75,7 +75,7 @@ export default function CoachHomeScreen() {
   const pendingCount = data.agenda.length + data.topRiskClients.length
   const showTierBanners =
     data.coach.subscriptionTier === 'free' ||
-    (data.coach.subscriptionTier === 'elite' && data.kpi.totalClients >= 48)
+    (data.coach.subscriptionTier === 'elite' && data.kpi.totalClients >= 80)
 
   return (
     <CoachMainWrapper

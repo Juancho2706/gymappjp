@@ -56,16 +56,16 @@ export function FacturacionTab({
   return (
     <View style={{ gap: 14 }}>
       <View style={cd.grid2}>
-        <MetricBox value={formatCurrency(totalCobrado)} label="Total cobrado" color={theme.success} />
-        <MetricBox value={last ? relativeDays(last.payment_date) : '—'} label="Último pago" />
-        <MetricBox value={nextRenewal ? formatDate(nextRenewal) : '—'} label="Próx. renovación" />
+        <MetricBox value={formatCurrency(totalCobrado)} label="Total cobrado" color={theme.success} sub="Pagos marcados como pagados" />
+        <MetricBox value={last ? relativeDays(last.payment_date) : '—'} label="Último pago" sub={last ? `${formatDate(last.payment_date)} · ${formatCurrency(last.amount)}` : undefined} />
+        <MetricBox value={nextRenewal ? formatDate(nextRenewal) : '—'} label="Próx. renovación (estim.)" sub="Desde último pago + meses" />
       </View>
 
       <Button label="Registrar pago" leftIcon={CreditCard} onPress={onAddPayment} full />
 
       {payments.length ? (
         <StatCard>
-          <CardHeader icon={Receipt} title="Historial de pagos" />
+          <CardHeader icon={Receipt} title="Línea de tiempo" />
           {payments.map((p, i) => {
             const si = statusInfo(p.status, theme)
             return (

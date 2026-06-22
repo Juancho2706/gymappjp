@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   CalendarClock,
   Camera,
+  CheckCircle,
   CheckCircle2,
   ChevronRight,
   Clock,
@@ -210,7 +211,7 @@ function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
     >
       <View style={styles.tierMain}>
         <Text style={[styles.tierTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
-          {used}/{max} alumnos - Plan gratuito
+          {used}/{max} alumnos · Plan gratuito
         </Text>
         <View style={[styles.usageTrack, { backgroundColor: theme.muted }]}>
           <View
@@ -225,7 +226,7 @@ function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
         </View>
       </View>
       <Text style={[styles.tierAction, { color: full ? '#F59E0B' : theme.primary, fontFamily: 'Inter_700Bold' }]}>
-        {full ? 'Expandir limite' : 'Ver planes'}
+        {full ? 'Expandir límite →' : 'Ver planes →'}
       </Text>
     </TouchableOpacity>
   )
@@ -258,14 +259,14 @@ function MobileTeamsBridgeBanner({ totalClients }: { totalClients: number }) {
     >
       <View style={styles.tierMain}>
         <Text style={[styles.tierTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
-          {totalClients}/{max} alumnos - {pct}% de tu plan Elite
+          {totalClients}/{max} alumnos · {pct}% de tu plan Elite
         </Text>
         <Text style={[styles.tierSubtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          ¿Más de 100 alumnos o trabajas con otros profesionales? Conoce EVA Teams. Te contactamos a la brevedad.
+          ¿Más de 100 alumnos o trabajas con otros profesionales? Conoce EVA Teams
         </Text>
       </View>
       <Text style={[styles.tierAction, { color: '#10B981', fontFamily: 'Inter_700Bold' }]}>
-        Conocer Teams
+        Conversemos →
       </Text>
     </TouchableOpacity>
   )
@@ -449,7 +450,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
             <Sparkles size={31} color="#10B981" />
           </View>
           <Text style={[styles.freeWelcomeTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
-            Bienvenido a EVA
+            ¡Bienvenido a EVA!
           </Text>
           <Text style={[styles.freeWelcomeSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
             Tu plan gratuito esta activo. Puedes empezar ahora mismo.
@@ -462,7 +463,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
           </Text>
           <WelcomeStep icon={Users} color="#38BDF8" title="Agrega tu primer alumno" subtitle="Hasta 3 alumnos en el plan Free" />
           <WelcomeStep icon={Zap} color="#8B5CF6" title="Crea tu primera rutina" subtitle="Constructor de programas sin limites" />
-          <WelcomeStep icon={Palette} color="#F59E0B" title="Personaliza tu app con Starter" subtitle="Tu logo y colores desde el siguiente plan" />
+          <WelcomeStep icon={Palette} color="#F59E0B" title="Personaliza tu app con Starter" subtitle="Tu logo y colores desde $19.990/mes" />
         </View>
 
         <View style={styles.freeWelcomeSection}>
@@ -503,7 +504,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
         </View>
 
         <View style={styles.freeWelcomeActions}>
-          <Button label="Empezar ahora" onPress={dismiss} full />
+          <Button label="Empezar ahora →" onPress={dismiss} full />
           <Button
             label="Ver todos los planes"
             variant="ghost"
@@ -1471,7 +1472,8 @@ export function MobileGreetingHeader({ coachName, pendingCount }: { coachName: s
   }).format(new Date())
 
   const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Buenos dias' : hour < 20 ? 'Buenas tardes' : 'Buenas noches'
+  const greeting =
+    hour < 6 ? 'Buenas noches' : hour < 13 ? 'Buenos dias' : hour < 20 ? 'Buenas tardes' : 'Buenas noches'
 
   return (
     <View style={styles.greeting}>
@@ -1497,10 +1499,12 @@ export function MobileKpiStrip({
   kpi,
   onMrrPress,
   onAdherencePress,
+  onRiskPress,
 }: {
   kpi: MobileKpiSummary
   onMrrPress?: () => void
   onAdherencePress?: () => void
+  onRiskPress?: () => void
 }) {
   const router = useRouter()
   return (
@@ -1524,7 +1528,7 @@ export function MobileKpiStrip({
         value={String(kpi.riskCount)}
         hint={kpi.riskCount > 0 ? 'Requieren atencion inmediata' : 'Todos al dia'}
         icon={TriangleAlert}
-        onPress={onAdherencePress}
+        onPress={onRiskPress ?? (() => router.push('/coach/(tabs)/clientes'))}
       />
       <MobileKpiTile
         label="Adherencia"
@@ -1934,7 +1938,7 @@ export function MobileExpiringPrograms({ items }: { items: MobileExpiringProgram
 
 function ActivityTypeIcon({ type, size, color }: { type: MobileActivityItem['type']; size: number; color: string }) {
   if (type === 'nuevo alumno') return <UserPlus size={size} color={color} />
-  if (type === 'check-in') return <Camera size={size} color={color} />
+  if (type === 'check-in') return <CheckCircle size={size} color={color} />
   return <Dumbbell size={size} color={color} />
 }
 
@@ -1959,7 +1963,6 @@ export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
       ) : (
         <View style={styles.rows}>
           {items.map((item, index) => {
-            const iconColor = item.type === 'nuevo alumno' ? '#10B981' : item.type === 'check-in' ? '#3B82F6' : theme.primary
             return (
               <TouchableOpacity
                 key={item.id}
@@ -1968,16 +1971,16 @@ export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
                 onPress={() => item.clientId && router.push(`/coach/cliente/${item.clientId}`)}
                 style={[styles.row, index < items.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
               >
-                {item.type === 'check-in' && item.photoUrl ? (
+                {item.photoUrl ? (
                   <Image
                     source={{ uri: item.photoUrl }}
-                    style={[styles.activityPhoto, { borderRadius: theme.radius.lg }]}
+                    style={styles.activityPhoto}
                     contentFit="cover"
                     transition={200}
                   />
                 ) : (
-                  <View style={[styles.activityIcon, { backgroundColor: hexToRgba(iconColor, 0.11) }]}>
-                    <ActivityTypeIcon type={item.type} size={16} color={iconColor} />
+                  <View style={[styles.activityIcon, { backgroundColor: hexToRgba(theme.primary, 0.1) }]}>
+                    <ActivityTypeIcon type={item.type} size={16} color={theme.primary} />
                   </View>
                 )}
                 <View style={styles.rowCopy}>
@@ -3353,8 +3356,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   activityPhoto: {
-    width: 38,
-    height: 38,
+    width: 32,
+    height: 32,
+    borderRadius: 999,
   },
   statsExtras: {
     flexDirection: 'row',
