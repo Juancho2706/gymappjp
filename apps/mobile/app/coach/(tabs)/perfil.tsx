@@ -4,15 +4,17 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { Apple, Bell, ClipboardList, CreditCard, ExternalLink, HeartPulse, LayoutList, LogOut, Package, Palette, SlidersHorizontal, User, Users } from 'lucide-react-native'
+import { Apple, ArrowRight, Bell, Check, ClipboardList, CreditCard, ExternalLink, HeartPulse, LayoutList, LogOut, Package, Palette, SlidersHorizontal, User, Users } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { hasModule } from '../../../lib/entitlements'
 import { getMyTeamOverview } from '../../../lib/team'
 import { signOutAndCleanup } from '../../../lib/auth-actions'
 import { getCoachProfile, CoachProfile } from '../../../lib/coach'
+import { canUseBranding } from '../../../lib/coach-tiers'
 import { getCoachOrgContext, CoachOrgContext, orgRoleLabel } from '../../../lib/org'
 import { useTheme } from '../../../context/ThemeContext'
+import type { Theme } from '../../../lib/theme'
 import { Button, InfoRow, Section } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
@@ -279,6 +281,12 @@ export default function CoachPerfilScreen() {
           </TouchableOpacity>
         </Section>
 
+        {/* Upsell de Mi Marca para coach free (espejo web hub !canUseBranding).
+            Coach con branding no ve nada nuevo: solo el link "Mi Marca" de abajo. */}
+        {!org?.isOrgManaged && coach && !canUseBranding(coach.subscriptionTier) ? (
+          <BrandingUpsellCard theme={theme} onUpgrade={() => router.push('/coach/subscription')} />
+        ) : null}
+
         <Section title="Configuración">
           {!org?.isOrgManaged ? (
             <TouchableOpacity
@@ -349,6 +357,124 @@ export default function CoachPerfilScreen() {
   )
 }
 
+// Espejo del hero-upsell de la web (apps/web/.../coach/settings/page.tsx, rama !canUseBranding):
+// before/after de la app, precio $19.990 ($15.992 anual −20%), 4 features y CTA a suscripción.
+// Colores sky fijos (NO theme.primary) para igualar el accent de la web; #007AFF = "sin marca".
+const SKY = '#0EA5E9' // sky-500
+const SKY_LIGHT = '#38BDF8' // sky-400
+const SYSTEM_BLUE = '#007AFF'
+
+const UPSELL_FEATURES = [
+  'Tu logo en la app del alumno',
+  'Colores y nombre de tu marca',
+  'Loader y pantalla de carga personalizados',
+  'Hasta 10 alumnos activos',
+]
+
+function BrandingUpsellCard({ theme, onUpgrade }: { theme: Theme; onUpgrade: () => void }) {
+  return (
+    <Section title="Mi Marca">
+      <View style={styles.upsellInner}>
+        {/* Hero */}
+        <View
+          style={[
+            styles.upsellHero,
+            { borderColor: SKY + '33', backgroundColor: SKY + '14', borderRadius: theme.radius.lg },
+          ]}
+        >
+          <View style={[styles.upsellHeroIcon, { backgroundColor: SKY + '26', borderColor: SKY + '33' }]}>
+            <Palette size={22} color={SKY_LIGHT} strokeWidth={1.75} />
+          </View>
+          <Text style={[styles.upsellTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            Mi Marca
+          </Text>
+          <Text style={[styles.upsellSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Tus alumnos entran a{' '}
+            <Text style={{ color: theme.foreground, fontFamily: 'Montserrat_700Bold' }}>tu app</Text>
+            {' '}— con tu logo, tus colores y tu nombre. Disponible en Starter.
+          </Text>
+        </View>
+
+        {/* Before / after */}
+        <View style={styles.upsellMockRow}>
+          {/* Sin tu marca (ahora) */}
+          <View style={[styles.upsellMock, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.lg }]}>
+            <View style={[styles.upsellMockBar, { backgroundColor: SYSTEM_BLUE }]}>
+              <View style={styles.upsellMockAvatar}>
+                <Text style={styles.upsellMockAvatarTxt}>E</Text>
+              </View>
+              <Text style={styles.upsellMockBarTxt} numberOfLines={1}>EVA Fitness</Text>
+            </View>
+            <View style={styles.upsellMockBody}>
+              <View style={[styles.upsellMockLine, { width: '100%', backgroundColor: SYSTEM_BLUE + '26' }]} />
+              <View style={[styles.upsellMockLine, { width: '75%', backgroundColor: theme.muted }]} />
+              <View style={[styles.upsellMockLine, { width: '50%', backgroundColor: theme.muted }]} />
+              <View style={[styles.upsellMockBtn, { backgroundColor: SYSTEM_BLUE + '1A', borderColor: SYSTEM_BLUE + '33' }]} />
+              <View style={[styles.upsellMockBtn, { backgroundColor: theme.muted + '99', borderColor: 'transparent' }]} />
+            </View>
+            <Text style={[styles.upsellMockCaption, { color: theme.mutedForeground }]}>Sin tu marca (ahora)</Text>
+          </View>
+
+          {/* Con Starter */}
+          <View style={[styles.upsellMock, { borderColor: SKY_LIGHT + '66', backgroundColor: theme.card, borderRadius: theme.radius.lg }]}>
+            <View style={[styles.upsellMockBar, { backgroundColor: SKY }]}>
+              <View style={styles.upsellMockAvatar}>
+                <Text style={styles.upsellMockAvatarTxt}>T</Text>
+              </View>
+              <Text style={styles.upsellMockBarTxt} numberOfLines={1}>Tu Marca</Text>
+            </View>
+            <View style={styles.upsellMockBody}>
+              <View style={[styles.upsellMockLine, { width: '100%', backgroundColor: SKY_LIGHT + '40' }]} />
+              <View style={[styles.upsellMockLine, { width: '75%', backgroundColor: SKY_LIGHT + '26' }]} />
+              <View style={[styles.upsellMockLine, { width: '50%', backgroundColor: theme.muted }]} />
+              <View style={[styles.upsellMockBtn, { backgroundColor: SKY + '26', borderColor: SKY + '40' }]} />
+              <View style={[styles.upsellMockBtn, { backgroundColor: theme.muted + '99', borderColor: 'transparent' }]} />
+            </View>
+            <Text style={[styles.upsellMockCaption, { color: SKY_LIGHT, fontFamily: 'Montserrat_700Bold' }]}>Con Starter ✓</Text>
+          </View>
+        </View>
+
+        {/* Pricing + features + CTA */}
+        <View style={[styles.upsellPricing, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.lg }]}>
+          <Text style={[styles.upsellEyebrow, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
+            DISPONIBLE EN STARTER
+          </Text>
+          <View style={styles.upsellPriceRow}>
+            <Text style={[styles.upsellPrice, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>$19.990</Text>
+            <Text style={[styles.upsellPriceUnit, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>/mes</Text>
+            <Text style={[styles.upsellPriceUnit, { color: theme.mutedForeground + '99', fontFamily: theme.fontSans }]}>·</Text>
+            <Text style={[styles.upsellPriceAnnual, { color: SKY_LIGHT, fontFamily: 'Montserrat_700Bold' }]}>$15.992/mes anual</Text>
+            <View style={[styles.upsellBadge, { backgroundColor: SKY + '26' }]}>
+              <Text style={[styles.upsellBadgeTxt, { color: SKY }]}>−20%</Text>
+            </View>
+          </View>
+
+          <View style={styles.upsellFeatures}>
+            {UPSELL_FEATURES.map((feat) => (
+              <View key={feat} style={styles.upsellFeatureRow}>
+                <Check size={16} color={SKY_LIGHT} strokeWidth={2.5} style={{ marginTop: 1 }} />
+                <Text style={[styles.upsellFeatureTxt, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{feat}</Text>
+              </View>
+            ))}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.upsellCta, { backgroundColor: SKY }]}
+            onPress={onUpgrade}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.upsellCtaTxt}>Personalizá tu app con Starter</Text>
+            <ArrowRight size={16} color="#fff" strokeWidth={2.5} />
+          </TouchableOpacity>
+          <Text style={[styles.upsellFinePrint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Sin permanencia · Cancelá cuando quieras
+          </Text>
+        </View>
+      </View>
+    </Section>
+  )
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 40, gap: 16 },
@@ -393,4 +519,62 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   linkText: { fontSize: 14 },
+  // Branding upsell (espejo web hero-upsell)
+  upsellInner: { padding: 16, gap: 14 },
+  upsellHero: { padding: 16, borderWidth: 1, gap: 8 },
+  upsellHeroIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  upsellTitle: { fontSize: 20, letterSpacing: -0.3 },
+  upsellSub: { fontSize: 13, lineHeight: 19 },
+  upsellMockRow: { flexDirection: 'row', gap: 12 },
+  upsellMock: { flex: 1, borderWidth: 1, overflow: 'hidden' },
+  upsellMockBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  upsellMockAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  upsellMockAvatarTxt: { color: '#fff', fontSize: 9, fontFamily: 'Montserrat_800ExtraBold' },
+  upsellMockBarTxt: { flex: 1, color: '#fff', fontSize: 11, fontFamily: 'Montserrat_700Bold' },
+  upsellMockBody: { padding: 10, gap: 7 },
+  upsellMockLine: { height: 7, borderRadius: 99 },
+  upsellMockBtn: { height: 26, borderRadius: 8, borderWidth: 1, marginTop: 2 },
+  upsellMockCaption: { fontSize: 10, paddingHorizontal: 10, paddingBottom: 10 },
+  upsellPricing: { padding: 16, borderWidth: 1, gap: 16 },
+  upsellEyebrow: { fontSize: 10, letterSpacing: 0.8 },
+  upsellPriceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: 6, marginTop: -8 },
+  upsellPrice: { fontSize: 24, letterSpacing: -0.5 },
+  upsellPriceUnit: { fontSize: 14 },
+  upsellPriceAnnual: { fontSize: 14 },
+  upsellBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  upsellBadgeTxt: { fontSize: 10, fontFamily: 'Montserrat_800ExtraBold' },
+  upsellFeatures: { gap: 10 },
+  upsellFeatureRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  upsellFeatureTxt: { flex: 1, fontSize: 14, lineHeight: 19 },
+  upsellCta: {
+    height: 46,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  upsellCtaTxt: { color: '#fff', fontSize: 14, fontFamily: 'Montserrat_700Bold' },
+  upsellFinePrint: { fontSize: 12, textAlign: 'center', marginTop: -8 },
 })

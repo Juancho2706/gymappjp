@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { CalendarClock, CreditCard, ExternalLink, Gift, Layers, Lock, Receipt, Users } from 'lucide-react-native'
+import { CalendarClock, Check, CreditCard, ExternalLink, Gift, Layers, Lock, Puzzle, Receipt, Sparkles, Users } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Badge, Button, ProgressBar, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -13,8 +13,27 @@ import {
   getCoachSubscriptionOverview,
   type CoachSubscriptionOverview,
 } from '../../../lib/coach-subscription'
+// Catálogos informativos (read-only, paridad con la web). La compra/cambio sigue web-only (Linking).
+import {
+  SALE_TIERS,
+  TIER_CONFIG,
+  TIER_STUDENT_RANGE_LABEL,
+  getTierBillingCycleSummary,
+  getTierNutritionSummary,
+  getTierPriceClp,
+  getTierCapabilities,
+} from '@eva/tiers'
+import {
+  MODULE_CATALOG,
+  MODULE_CATALOG_KEYS,
+  ADDON_MONTHLY_PRICE_CLP,
+  addonRequiresNutritionTier,
+} from '../../../lib/modules-catalog'
 
 const MANAGE_URL = 'https://eva-app.cl/coach/subscription'
+const MANAGE_ADDONS_URL = 'https://eva-app.cl/coach/subscription#addons'
+// Espejo de Tailwind amber-500 (badge "Sin módulo de nutrición" de la web). No hay token de tema warning.
+const AMBER = '#F59E0B'
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—'
@@ -77,6 +96,13 @@ export default function SubscriptionScreen() {
       : profile.subscriptionStatus === 'canceled' ? 'Acceso hasta'
         : 'Próxima renovación'
   const renewDate = profile.subscriptionStatus === 'trialing' ? profile.trialEndsAt : profile.currentPeriodEnd
+
+  // Catálogo informativo de módulos: solo los NO contratados (sin fila viva en coach_addons).
+  // El precio/estado son display; la compra/baja sigue web-only (Linking).
+  const liveModuleKeys = new Set(addons.map((a) => a.moduleKey))
+  const availableModules = MODULE_CATALOG_KEYS.filter((k) => !liveModuleKeys.has(k))
+  // ¿El tier del coach soporta nutrición (Pro+)? Gatea el estado "Requiere Pro+" de Nutrición Pro.
+  const coachHasNutrition = getTierCapabilities(profile.subscriptionTier).canUseNutrition
 
   return (
     <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
@@ -200,6 +226,130 @@ export default function SubscriptionScreen() {
           </View>
         ) : null}
 
+        {/* ── Planes disponibles (catálogo informativo · cambio web-only) ── */}
+        {!orgManaged ? (
+          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl, gap: 14 }]}>
+            <View style={styles.iconRow}>
+              <Sparkles size={16} color={theme.primary} />
+              <Text style={[styles.cardLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>PLANES DISPONIBLES</Text>
+            </View>
+            {SALE_TIERS.filter((t) => t !== 'free').map((tier) => {
+              const cfg = TIER_CONFIG[tier]
+              const monthly = getTierPriceClp(tier, 'monthly')
+              const hasNutrition = !getTierNutritionSummary(tier).startsWith('Sin')
+              const isCurrent = profile.subscriptionTier === tier
+              const features = cfg.features.slice(0, 3)
+              return (
+                <View
+                  key={tier}
+                  style={[
+                    styles.tierCard,
+                    {
+                      borderColor: isCurrent ? theme.primary : theme.border,
+                      backgroundColor: isCurrent ? theme.primary + '0D' : 'transparent',
+                      borderRadius: theme.radius.lg,
+                    },
+                  ]}
+                >
+                  <View style={styles.tierHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.tierName, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+                        {cfg.label}
+                      </Text>
+                      <Text style={[styles.tierRange, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                        {TIER_STUDENT_RANGE_LABEL[tier]}
+                      </Text>
+                    </View>
+                    {isCurrent ? <Badge label="Tu plan" tone="primary" /> : null}
+                  </View>
+                  <View style={styles.tierPriceRow}>
+                    <Text style={[styles.tierPrice, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+                      {formatClp(monthly)}
+                    </Text>
+                    <Text style={[styles.tierPriceUnit, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}> CLP/mes</Text>
+                  </View>
+                  <View style={{ gap: 6 }}>
+                    {features.map((f) => (
+                      <View key={f} style={styles.featureRow}>
+                        <Check size={12} color={theme.success} />
+                        <Text style={[styles.featureText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{f}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={styles.tierBadges}>
+                    <View style={[styles.tierTag, { backgroundColor: theme.secondary }]}>
+                      <Text style={[styles.tierTagText, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>
+                        {getTierBillingCycleSummary(tier)}
+                      </Text>
+                    </View>
+                    <View style={[styles.tierTag, { backgroundColor: (hasNutrition ? theme.success : AMBER) + '26' }]}>
+                      <Text style={[styles.tierTagText, { color: hasNutrition ? theme.success : AMBER, fontFamily: 'Inter_600SemiBold' }]}>
+                        {getTierNutritionSummary(tier)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )
+            })}
+            <Button
+              label="Cambiar de plan en la web"
+              variant="outline"
+              rightIcon={ExternalLink}
+              onPress={() => Linking.openURL(MANAGE_URL).catch(() => {})}
+              full
+            />
+          </View>
+        ) : null}
+
+        {/* ── Módulos disponibles (no contratados · catálogo informativo) ── */}
+        {!orgManaged && availableModules.length > 0 ? (
+          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl, gap: 12 }]}>
+            <View style={styles.iconRow}>
+              <Puzzle size={16} color={theme.primary} />
+              <Text style={[styles.cardLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>MÓDULOS DISPONIBLES</Text>
+            </View>
+            <Text style={[styles.modulesIntro, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              Suma módulos a tu plan según los necesites. Se cobran junto a tu suscripción y puedes quitarlos cuando quieras.
+            </Text>
+            {availableModules.map((key) => {
+              const entry = MODULE_CATALOG[key]
+              const requiresPro = addonRequiresNutritionTier(key) && !coachHasNutrition
+              return (
+                <View key={key} style={[styles.moduleCard, { borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+                  <View style={styles.moduleHeader}>
+                    <Text style={[styles.moduleName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+                      {entry.label}
+                    </Text>
+                    {requiresPro ? (
+                      <View style={[styles.modulePill, { backgroundColor: theme.muted }]}>
+                        <Lock size={11} color={theme.mutedForeground} />
+                        <Text style={[styles.modulePillText, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>Requiere Pro+</Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.modulePill, { backgroundColor: theme.secondary }]}>
+                        <Text style={[styles.modulePillText, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>Disponible</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={[styles.modulePitch, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                    {entry.pitch}
+                  </Text>
+                  <Text style={[styles.modulePrice, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+                    {formatClp(ADDON_MONTHLY_PRICE_CLP)} CLP / mes
+                  </Text>
+                </View>
+              )
+            })}
+            <Button
+              label="Gestionar módulos en la web"
+              variant="outline"
+              rightIcon={ExternalLink}
+              onPress={() => Linking.openURL(MANAGE_ADDONS_URL).catch(() => {})}
+              full
+            />
+          </View>
+        ) : null}
+
         {orgManaged ? (
           <View style={[styles.lockCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
             <Lock size={18} color={theme.mutedForeground} />
@@ -256,4 +406,26 @@ const styles = StyleSheet.create({
   eventDate: { fontSize: 13 },
   eventStatus: { fontSize: 11, marginTop: 1 },
   eventAmount: { fontSize: 14, letterSpacing: -0.3 },
+  // Catálogo de planes (informativo)
+  tierCard: { borderWidth: 1, padding: 14, gap: 10 },
+  tierHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  tierName: { fontSize: 18, letterSpacing: -0.3 },
+  tierRange: { fontSize: 11, marginTop: 1 },
+  tierPriceRow: { flexDirection: 'row', alignItems: 'baseline' },
+  tierPrice: { fontSize: 22, letterSpacing: -0.5 },
+  tierPriceUnit: { fontSize: 12 },
+  featureRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  featureText: { fontSize: 12, flex: 1, lineHeight: 16 },
+  tierBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  tierTag: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
+  tierTagText: { fontSize: 9, letterSpacing: 0.3, textTransform: 'uppercase' },
+  // Catálogo de módulos (informativo)
+  modulesIntro: { fontSize: 12, lineHeight: 17 },
+  moduleCard: { borderWidth: 1, padding: 14, gap: 6 },
+  moduleHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
+  moduleName: { fontSize: 14, flex: 1 },
+  modulePill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
+  modulePillText: { fontSize: 11 },
+  modulePitch: { fontSize: 12, lineHeight: 17 },
+  modulePrice: { fontSize: 13, marginTop: 2 },
 })

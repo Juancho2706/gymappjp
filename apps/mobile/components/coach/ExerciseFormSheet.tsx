@@ -8,11 +8,15 @@ import { useTheme } from '../../context/ThemeContext'
 import {
   DIFFICULTY_OPTIONS,
   EQUIPMENT_OPTIONS,
+  EXERCISE_TYPE_OPTIONS,
   MUSCLE_GROUPS,
   createExercise,
   deleteExercise,
+  mmssToSeconds,
+  secondsToMmss,
   updateExercise,
   uploadExerciseImage,
+  youtubeId,
   type ExerciseRow,
 } from '../../lib/exercises'
 
@@ -32,11 +36,14 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
 
   const [name, setName] = useState('')
   const [muscle, setMuscle] = useState('')
+  const [exerciseType, setExerciseType] = useState<string>('strength')
   const [equipment, setEquipment] = useState<string | null>(null)
   const [difficulty, setDifficulty] = useState<string | null>(null)
   const [secondary, setSecondary] = useState('')
   const [instructions, setInstructions] = useState('')
   const [videoUrl, setVideoUrl] = useState('')
+  const [videoStart, setVideoStart] = useState('')
+  const [videoEnd, setVideoEnd] = useState('')
   const [gifUrl, setGifUrl] = useState('')
   const [imageUrl, setImageUrl] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -63,11 +70,14 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
     setSaving(false)
     setName(exercise?.name ?? '')
     setMuscle(exercise?.muscle_group ?? '')
+    setExerciseType(exercise?.exercise_type ?? 'strength')
     setEquipment(exercise?.equipment ?? null)
     setDifficulty(exercise?.difficulty ?? null)
     setSecondary(exercise?.secondary_muscles?.join(', ') ?? '')
     setInstructions(exercise?.instructions?.join('\n') ?? '')
     setVideoUrl(exercise?.video_url ?? '')
+    setVideoStart(secondsToMmss(exercise?.video_start_time))
+    setVideoEnd(secondsToMmss(exercise?.video_end_time))
     setGifUrl(exercise?.gif_url ?? '')
     setImageUrl(exercise?.image_url ?? '')
   }, [exercise])
@@ -76,17 +86,28 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
     setError(null)
     if (name.trim().length < 2) { setError('El nombre debe tener al menos 2 caracteres.'); return }
     if (!muscle) { setError('Seleccioná un grupo muscular.'); return }
+    const cleanVideo = videoUrl.trim() || null
+    // El recorte solo aplica a un YouTube válido (1:1 web).
+    const isYoutube = !!cleanVideo && !!youtubeId(cleanVideo)
+    const startSec = isYoutube ? mmssToSeconds(videoStart) : null
+    const endSec = isYoutube ? mmssToSeconds(videoEnd) : null
+    if (startSec != null && endSec != null && endSec <= startSec) {
+      setError('El tiempo de fin debe ser mayor que el de inicio.'); return
+    }
     setSaving(true)
     const input = {
       name: name.trim(),
       muscle_group: muscle,
+      exercise_type: exerciseType,
       equipment,
       difficulty,
       secondary_muscles: secondary.split(',').map((s) => s.trim()).filter(Boolean),
       instructions: instructions.split('\n').map((s) => s.trim()).filter(Boolean),
-      video_url: videoUrl.trim() || null,
+      video_url: cleanVideo,
       gif_url: gifUrl.trim() || null,
       image_url: imageUrl.trim() || null,
+      video_start_time: startSec,
+      video_end_time: endSec,
     }
     const res = editing ? await updateExercise(exercise!.id, input) : await createExercise(input)
     setSaving(false)
@@ -134,6 +155,12 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
         <Label theme={theme}>Grupo muscular *</Label>
         <Chips theme={theme} options={MUSCLE_GROUPS as readonly string[]} value={muscle} onSelect={setMuscle} />
 
+        <Label theme={theme}>Tipo de ejercicio</Label>
+        <TypePicker theme={theme} value={exerciseType} onChange={setExerciseType} />
+        <Text style={[styles.helper, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          Define qué campos muestra el builder y la app del alumno.
+        </Text>
+
         <Label theme={theme}>Equipo</Label>
         <Chips theme={theme} options={EQUIPMENT_OPTIONS as readonly string[]} value={equipment} onSelect={(v) => setEquipment(v === equipment ? null : v)} />
 
@@ -143,6 +170,24 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
         <Field theme={theme} label="Músculos secundarios" value={secondary} onChangeText={setSecondary} placeholder="Tríceps, Deltoides (separados por coma)" />
 
         <Field theme={theme} label="Video (YouTube)" value={videoUrl} onChangeText={setVideoUrl} placeholder="https://youtu.be/..." autoCapitalize="none" keyboardType="url" />
+
+        {/* Recorte del video de YouTube (start/end) — loopea el tramo (salta intro). 1:1 web. */}
+        {videoUrl.trim() && youtubeId(videoUrl.trim()) ? (
+          <View style={{ gap: 6 }}>
+            <View style={styles.timeRow}>
+              <View style={{ flex: 1 }}>
+                <Field theme={theme} label="Empieza en (m:ss)" value={videoStart} onChangeText={setVideoStart} placeholder="0:20" keyboardType="numbers-and-punctuation" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Field theme={theme} label="Termina en (opcional)" value={videoEnd} onChangeText={setVideoEnd} placeholder="1:30" keyboardType="numbers-and-punctuation" />
+              </View>
+            </View>
+            <Text style={[styles.helper, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              El video loopea ese tramo (salta intro/charla). Vacío = video completo.
+            </Text>
+          </View>
+        ) : null}
+
         <Field theme={theme} label="GIF (URL)" value={gifUrl} onChangeText={setGifUrl} placeholder="https://..." autoCapitalize="none" keyboardType="url" />
 
         {/* E-F1: imagen desde el device */}
@@ -216,6 +261,25 @@ function Chips({ theme, options, value, onSelect }: { theme: any; options: reado
   )
 }
 
+function TypePicker({ theme, value, onChange }: { theme: any; value: string; onChange: (v: string) => void }) {
+  return (
+    <View style={{ gap: 8 }}>
+      {EXERCISE_TYPE_OPTIONS.map((o) => {
+        const active = o.value === value
+        return (
+          <TouchableOpacity key={o.value} onPress={() => onChange(o.value)} activeOpacity={0.8}
+            style={[styles.typeOption, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary + '12' : 'transparent' }]}>
+            <View style={[styles.radio, { borderColor: active ? theme.primary : theme.border }]}>
+              {active ? <View style={[styles.radioDot, { backgroundColor: theme.primary }]} /> : null}
+            </View>
+            <Text style={{ flex: 1, fontSize: 13.5, fontFamily: 'Inter_600SemiBold', color: active ? theme.primary : theme.foreground }}>{o.label}</Text>
+          </TouchableOpacity>
+        )
+      })}
+    </View>
+  )
+}
+
 function Segmented({ theme, options, value, onChange }: { theme: any; options: readonly { value: string; label: string }[]; value: string | null; onChange: (v: string) => void }) {
   return (
     <View style={[styles.segmented, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
@@ -238,6 +302,11 @@ const styles = StyleSheet.create({
   errorBox: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   label: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 4 },
   fieldLabel: { fontSize: 12 },
+  helper: { fontSize: 11.5, lineHeight: 16 },
+  timeRow: { flexDirection: 'row', gap: 12 },
+  typeOption: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 13, paddingVertical: 12 },
+  radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  radioDot: { width: 8, height: 8, borderRadius: 4 },
   imgRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   imgThumb: { width: 64, height: 64, borderRadius: 10, borderWidth: 1 },
   imgClear: { position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },

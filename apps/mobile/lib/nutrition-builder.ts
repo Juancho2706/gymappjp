@@ -465,6 +465,36 @@ export async function getNutritionBoard(): Promise<NutritionBoardRow[]> {
   }).sort((a, b) => a.avg7d - b.avg7d) // peor adherencia primero (triage)
 }
 
+/** Un día de adherencia (espejo de la fila `daily_nutrition_logs` web). */
+export interface ClientAdherenceDay {
+  log_date: string
+  nutrition_meal_logs: { meal_id: string; is_completed: boolean }[]
+}
+
+/**
+ * Adherencia de los últimos 30 días de un alumno para un plan (espejo de `getClientAdherence` web:
+ * lee `daily_nutrition_logs` + `nutrition_meal_logs` del plan, RLS coach-scoped). La pinta el
+ * `AdherenceStrip` junto con el día-de-semana de cada comida del plan.
+ */
+export async function getClientAdherence(clientId: string, planId: string): Promise<ClientAdherenceDay[]> {
+  const { iso: today } = getTodayInSantiago()
+  const dateFrom = isoDateAddDays(today, -30)
+  const { data } = await supabase
+    .from('daily_nutrition_logs')
+    .select('log_date, nutrition_meal_logs ( meal_id, is_completed )')
+    .eq('client_id', clientId)
+    .eq('plan_id', planId)
+    .gte('log_date', dateFrom)
+    .order('log_date', { ascending: true })
+  return ((data ?? []) as any[]).map((d) => ({
+    log_date: d.log_date as string,
+    nutrition_meal_logs: ((d.nutrition_meal_logs ?? []) as any[]).map((l) => ({
+      meal_id: l.meal_id as string,
+      is_completed: !!l.is_completed,
+    })),
+  }))
+}
+
 export async function getClientPlans(clientId: string): Promise<PlanSummary[]> {
   const { data } = await supabase
     .from('nutrition_plans')

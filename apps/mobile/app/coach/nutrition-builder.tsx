@@ -11,6 +11,7 @@ import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { calcMacros, ACTIVITY_LABELS, GOAL_ADJUSTMENTS, type ActivityKey, type GoalKey } from '../../lib/macro-calculator'
 import { FoodSearchSheet } from '../../components/coach/FoodSearchSheet'
 import { FoodSwapSheet } from '../../components/coach/FoodSwapSheet'
+import { AdherenceStrip } from '../../components/AdherenceStrip'
 import { ExchangeModePanel } from '../../components/coach/ExchangeModePanel'
 import { ExchangeTargetsEditor, type ExchangeTargetDraft } from '../../components/coach/ExchangeTargetsEditor'
 import { BodyCompGoalsSheet } from '../../components/coach/BodyCompGoalsSheet'
@@ -22,6 +23,7 @@ import {
   draftTotals,
   emptyPlanDraft,
   foodToDraftItem,
+  getClientAdherence,
   getClientBodyProfile,
   getClientFoodFavorites,
   getClientFoodRestrictions,
@@ -35,6 +37,7 @@ import {
   setMealDayVariantDb,
   setPlanModeDb,
   EMPTY_RESTRICTIONS,
+  type ClientAdherenceDay,
   type ClientBodyProfile,
   type ClientFoodRestrictions,
   type DayVariant,
@@ -97,6 +100,8 @@ export default function NutritionBuilderScreen() {
   // Perfil corporal del alumno (calculadora por composición corporal).
   const [bodyProfile, setBodyProfile] = useState<ClientBodyProfile>({ weightKg: null, heightCm: null })
   const [bcOpen, setBcOpen] = useState(false)
+  // Adherencia 30d del alumno (solo plan-de-alumno ya guardado) — espejo del aside web.
+  const [adherence, setAdherence] = useState<ClientAdherenceDay[]>([])
 
   const exchangeEnabled = !isTemplate && !!clientId && proExchanges
   const exchangeActive = exchangeEnabled && planMode === 'exchanges'
@@ -157,6 +162,21 @@ export default function NutritionBuilderScreen() {
       } catch { /* fail-closed: superficie Pro oculta */ }
     })()
   }, [clientId, isTemplate])
+
+  // Adherencia 30d del alumno (espejo del aside web "Alumno — 30 días"): solo plan ya guardado
+  // con ≥1 comida persistida en DB. Plantillas no tienen alumno → no aplica.
+  const persistedPlanId = planId ?? draft.id
+  const hasPersistedMeals = draft.meals.some((m) => !!m.id)
+  useEffect(() => {
+    if (isTemplate || !clientId || !persistedPlanId || !hasPersistedMeals) { setAdherence([]); return }
+    getClientAdherence(clientId, persistedPlanId).then(setAdherence).catch(() => setAdherence([]))
+  }, [clientId, isTemplate, persistedPlanId, hasPersistedMeals])
+
+  // Comidas del plan (con day_of_week) para el strip — solo las ya persistidas en DB (las que
+  // pueden tener logs). Mismo criterio que el aside web (plan.nutrition_meals).
+  const planMealsStrip = draft.meals
+    .filter((m) => !!m.id)
+    .map((m) => ({ id: m.id as string, day_of_week: m.day_of_week ?? null }))
 
   // En modo porciones los objetivos son el REQUERIMIENTO de la nutri (no autosync con gramos).
   useEffect(() => {
@@ -577,6 +597,14 @@ export default function NutritionBuilderScreen() {
             <UtensilsCrossed size={17} color={theme.foreground} />
             <Text style={[styles.addMealText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Agregar comida</Text>
           </TouchableOpacity>
+
+          {/* Adherencia 30d del alumno (espejo del aside web "Alumno — 30 días") */}
+          {!isTemplate && adherence.length > 0 && planMealsStrip.length > 0 ? (
+            <View style={{ gap: 8, marginTop: 8 }}>
+              <Label theme={theme}>{clientName ? `${clientName} — 30 días` : 'Alumno — 30 días'}</Label>
+              <AdherenceStrip adherence={adherence} planMeals={planMealsStrip} />
+            </View>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -585,6 +613,9 @@ export default function NutritionBuilderScreen() {
         onSelect={handleFoodSelected}
         excludedIds={searchMode === 'swap' ? swapExcluded : undefined}
         favoriteIds={!isTemplate && favoriteIds.size ? favoriteIds : undefined}
+        allergyIds={!isTemplate && restrictions.allergy.size ? restrictions.allergy : undefined}
+        intoleranceIds={!isTemplate && restrictions.intolerance.size ? restrictions.intolerance : undefined}
+        dislikeIds={!isTemplate && restrictions.dislike.size ? restrictions.dislike : undefined}
         title={searchMode === 'swap' ? 'Agregar alternativa' : undefined}
       />
       <FoodSwapSheet ref={swapSheetRef} item={swapItem} onAddPress={onAddSwapPress} onUpdateSwap={updateSwap} onRemoveSwap={removeSwap} />

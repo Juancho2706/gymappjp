@@ -10,10 +10,13 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
-import { Activity, Calendar, Camera, X } from 'lucide-react-native'
+import { useRouter } from 'expo-router'
+import { Activity, Calendar, Camera, CheckCircle2, ChevronRight, Loader2, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
+import { markCoachCheckInReviewed } from '../../../lib/coach-client-detail'
+import { selectWithFallback } from '../../../lib/db-compat'
 import { useTheme } from '../../../context/ThemeContext'
 import { EmptyState, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -26,8 +29,10 @@ interface CheckIn {
   weight: number | null
   energy_level: number | null
   front_photo_url: string | null
+  side_photo_url: string | null
   back_photo_url: string | null
   notes: string | null
+  reviewed_at: string | null
   clients: { full_name: string } | null
 }
 
@@ -45,9 +50,11 @@ function formatDate(iso: string): string {
 
 export default function CheckInsScreen() {
   const { theme } = useTheme()
+  const router = useRouter()
   const [checkIns, setCheckIns] = useState<CheckIn[]>([])
   const [loading, setLoading] = useState(true)
   const [viewerUrl, setViewerUrl] = useState<string | null>(null)
+  const [reviewingId, setReviewingId] = useState<string | null>(null)
 
   useEffect(() => {
     load().catch(() => setLoading(false))
@@ -67,14 +74,28 @@ export default function CheckInsScreen() {
     const clientIds = (clientRows ?? []).map((c) => c.id)
     if (!clientIds.length) { setLoading(false); return }
 
-    const { data } = await supabase
-      .from('check_ins')
-      .select('id, client_id, date, weight, energy_level, front_photo_url, back_photo_url, notes, clients ( full_name )')
-      .in('client_id', clientIds)
-      .order('date', { ascending: false })
-      .limit(40)
+    // Rich select (cols enterprise v2: side_photo_url + reviewed_at). Si la prod
+    // standalone no las tiene, cae al mínimo via db-compat (mismo patrón que coach-client-detail).
+    const { data } = await selectWithFallback<Record<string, unknown>[]>(
+      () =>
+        supabase
+          .from('check_ins')
+          .select('id, client_id, date, weight, energy_level, front_photo_url, side_photo_url, back_photo_url, notes, reviewed_at, clients ( full_name )')
+          .in('client_id', clientIds)
+          .order('date', { ascending: false })
+          .limit(40),
+      () =>
+        supabase
+          .from('check_ins')
+          .select('id, client_id, date, weight, energy_level, front_photo_url, back_photo_url, notes, clients ( full_name )')
+          .in('client_id', clientIds)
+          .order('date', { ascending: false })
+          .limit(40),
+    )
 
     const rows = (data ?? []).map((row) => ({
+      side_photo_url: null,
+      reviewed_at: null,
       ...row,
       clients: Array.isArray(row.clients) ? row.clients[0] ?? null : row.clients,
     }))
@@ -82,18 +103,38 @@ export default function CheckInsScreen() {
     setLoading(false)
   }
 
+  function handleMarkReviewed(item: CheckIn) {
+    if (reviewingId || item.reviewed_at) return
+    setReviewingId(item.id)
+    markCoachCheckInReviewed(item.client_id, item.id)
+      .then((res) => {
+        if (res.ok) {
+          const now = new Date().toISOString()
+          setCheckIns((prev) =>
+            prev.map((c) => (c.id === item.id ? { ...c, reviewed_at: now } : c)),
+          )
+        }
+      })
+      .catch(() => { /* swallow — la card queda sin revisar */ })
+      .finally(() => setReviewingId(null))
+  }
+
   function renderCheckIn({ item, index }: { item: CheckIn; index: number }) {
     const eColor = energyColor(item.energy_level)
+    const isReviewed = Boolean(item.reviewed_at)
+    const isReviewing = reviewingId === item.id
+    const photos = [item.front_photo_url, item.side_photo_url, item.back_photo_url].filter(Boolean) as string[]
     return (
       <MotiView
         from={{ opacity: 0, translateY: 12 }}
         animate={{ opacity: 1, translateY: 0 }}
         transition={{ type: 'timing', duration: 350, delay: Math.min(index * 50, 400) }}
       >
-        <View
-          style={[
+        <Pressable
+          onPress={() => router.push(`/coach/cliente/${item.client_id}`)}
+          style={({ pressed }) => [
             styles.card,
-            { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl },
+            { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl, opacity: pressed ? 0.92 : 1 },
           ]}
         >
           <View style={styles.cardTop}>
@@ -125,6 +166,7 @@ export default function CheckInsScreen() {
                   </Text>
                 </View>
               )}
+              <ChevronRight size={16} color={theme.mutedForeground} />
             </View>
           </View>
 
@@ -134,9 +176,9 @@ export default function CheckInsScreen() {
             </View>
           )}
 
-          {(item.front_photo_url || item.back_photo_url) ? (
+          {photos.length ? (
             <View style={styles.photoThumbs}>
-              {([item.front_photo_url, item.back_photo_url].filter(Boolean) as string[]).map((url, i) => (
+              {photos.map((url, i) => (
                 <TouchableOpacity key={i} onPress={() => setViewerUrl(url)} activeOpacity={0.85}>
                   <Image source={{ uri: url }} style={[styles.thumb, { borderColor: theme.border }]} contentFit="cover" transition={150} />
                 </TouchableOpacity>
@@ -148,7 +190,31 @@ export default function CheckInsScreen() {
               {item.notes}
             </Text>
           ) : null}
-        </View>
+
+          {/* Marcar como revisado — tracking de tiempo de respuesta (espejo de ProfileCheckInSnapshot web) */}
+          {isReviewed ? (
+            <View style={styles.reviewedRow}>
+              <CheckCircle2 size={14} color="#10B981" />
+              <Text style={[styles.reviewedText, { fontFamily: 'Montserrat_700Bold' }]}>Revisado</Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={() => handleMarkReviewed(item)}
+              disabled={isReviewing}
+              activeOpacity={0.85}
+              style={[styles.reviewBtn, { borderColor: theme.border, borderRadius: theme.radius.md, opacity: isReviewing ? 0.6 : 1 }]}
+            >
+              {isReviewing ? (
+                <Loader2 size={14} color={theme.mutedForeground} />
+              ) : (
+                <CheckCircle2 size={14} color={theme.foreground} />
+              )}
+              <Text style={[styles.reviewBtnText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+                Marcar como revisado
+              </Text>
+            </TouchableOpacity>
+          )}
+        </Pressable>
       </MotiView>
     )
   }
@@ -212,6 +278,19 @@ const styles = StyleSheet.create({
   photoThumbs: { flexDirection: 'row', gap: 8 },
   thumb: { width: 64, height: 80, borderRadius: 10, borderWidth: 1 },
   notes: { fontSize: 13, lineHeight: 18 },
+  reviewedRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  reviewedText: { fontSize: 11, letterSpacing: 0.6, color: '#10B981', textTransform: 'uppercase' },
+  reviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    marginTop: 2,
+  },
+  reviewBtnText: { fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase' },
   viewerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', alignItems: 'center', justifyContent: 'center' },
   viewerImg: { width: '100%', height: '82%' },
   viewerClose: { position: 'absolute', top: 48, right: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' },

@@ -46,10 +46,50 @@ export const DIFFICULTY_OPTIONS = [
   { value: 'advanced', label: 'Avanzado' },
 ] as const
 
+/**
+ * Tipos polimórficos (specs/movida-entrenamiento, espejo de la web): deciden los
+ * ejes del builder/alumno. default `strength` = comportamiento de siempre.
+ */
+export const EXERCISE_TYPE_OPTIONS = [
+  { value: 'strength', label: 'Fuerza (series × reps)' },
+  { value: 'cardio', label: 'Cardio (duración / distancia / zona FC)' },
+  { value: 'mobility', label: 'Movilidad (holds por lado)' },
+  { value: 'roller', label: 'Foam roller (duración o pasadas)' },
+] as const
+
+export type ExerciseType = (typeof EXERCISE_TYPE_OPTIONS)[number]['value']
+
+/**
+ * Diccionario de sinónimos de músculo (1:1 web `MUSCLE_MAPPING` en lib/constants).
+ * Expande el término de búsqueda con alias EN/ES + abreviaturas del catálogo ExerciseDB
+ * para que "delts", "abs", "quads", etc. encuentren los ejercicios igual que en la web.
+ */
+export const MUSCLE_MAPPING: Record<string, string[]> = {
+  'hombros': ['delts', 'shoulders', 'deltoides'],
+  'biceps': ['biceps', 'bíceps'],
+  'triceps': ['triceps', 'tríceps'],
+  'antebrazos': ['forearms', 'antebrazos'],
+  'cuadriceps': ['quads', 'cuadriceps', 'cuádriceps'],
+  'gluteos': ['glutes', 'glúteos'],
+  'abductores': ['abductors', 'abductores'],
+  'aductores': ['adductors', 'aductores'],
+  'pantorrillas': ['calves', 'pantorrillas', 'gemelos'],
+  'lumbar': ['lower back', 'lumbar'],
+  'abdominales': ['abs', 'core', 'abdominales', 'abdomen'],
+  'cardio': ['cardio', 'cardiovascular system'],
+  'dorsales': ['lats', 'dorsales'],
+  'espalda alta': ['upper back', 'espalda alta'],
+  'isquiotibiales': ['hamstrings', 'isquiotibiales', 'isquios'],
+  'pectorales': ['pectoral', 'pecho', 'chest', 'pectorales'],
+  'trapecios': ['traps', 'trapecios', 'trapecio'],
+}
+
 export interface ExerciseRow {
   id: string
   name: string
   muscle_group: string
+  /** Polimórfico: strength | cardio | mobility | roller (default strength). */
+  exercise_type: string | null
   equipment: string | null
   difficulty: string | null
   body_part: string | null
@@ -58,6 +98,9 @@ export interface ExerciseRow {
   video_url: string | null
   gif_url: string | null
   image_url: string | null
+  /** Recorte del video de YouTube (segundos enteros). El player loopea [start, end]. */
+  video_start_time: number | null
+  video_end_time: number | null
   coach_id: string | null
   org_id: string | null
   /** true when owned by the current coach (custom), false for system catalog. */
@@ -67,6 +110,7 @@ export interface ExerciseRow {
 export interface ExerciseInput {
   name: string
   muscle_group: string
+  exercise_type?: string | null
   equipment?: string | null
   difficulty?: string | null
   body_part?: string | null
@@ -75,6 +119,60 @@ export interface ExerciseInput {
   video_url?: string | null
   gif_url?: string | null
   image_url?: string | null
+  video_start_time?: number | null
+  video_end_time?: number | null
+}
+
+/** Segundos → "m:ss" para los inputs de recorte de video (vacío si null). */
+export function secondsToMmss(sec: number | null | undefined): string {
+  if (sec == null) return ''
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+/** "m:ss" o segundos sueltos → número de segundos (null si vacío/inválido). 1:1 web. */
+export function mmssToSeconds(str: string): number | null {
+  const t = (str ?? '').trim()
+  if (!t) return null
+  if (t.includes(':')) {
+    const [m, s] = t.split(':')
+    const mi = parseInt(m, 10)
+    const se = parseInt(s, 10)
+    if (isNaN(mi) || isNaN(se)) return null
+    return mi * 60 + se
+  }
+  const n = parseInt(t, 10)
+  return isNaN(n) ? null : n
+}
+
+/**
+ * Embed CANÓNICO de un video de EJERCICIO (1:1 web `exerciseEmbedUrl`): silencioso,
+ * en loop, sin controles de YouTube (se comporta como un GIF). `start`/`end` recortan
+ * el tramo. youtube-nocookie (sin tracking). Devuelve null si no es un YouTube válido.
+ */
+export function exerciseEmbedUrl(
+  idOrUrl: string,
+  opts?: { start?: number | null; end?: number | null }
+): string | null {
+  const id = /^[A-Za-z0-9_-]{11}$/.test(idOrUrl) ? idOrUrl : youtubeId(idOrUrl)
+  if (!id) return null
+  const params = new URLSearchParams({
+    autoplay: '1',
+    mute: '1',
+    loop: '1',
+    playlist: id,
+    controls: '0',
+    modestbranding: '1',
+    rel: '0',
+    playsinline: '1',
+    disablekb: '1',
+    iv_load_policy: '3',
+    fs: '0',
+  })
+  if (opts?.start != null && opts.start > 0) params.set('start', String(Math.floor(opts.start)))
+  if (opts?.end != null && opts.end > 0) params.set('end', String(Math.floor(opts.end)))
+  return `https://www.youtube-nocookie.com/embed/${id}?${params.toString()}`
 }
 
 /** Extrae el ID (11 chars) de una URL de YouTube (watch, youtu.be, embed, shorts). */
@@ -121,7 +219,7 @@ export function normalizeString(str: string): string {
   return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 }
 
-/** Filtra ejercicios por término + grupo muscular (1:1 web `filterExercises`, sin el diccionario de sinónimos). */
+/** Filtra ejercicios por término + grupo muscular (1:1 web `filterExercises`, con expansión de sinónimos). */
 export function filterExercises<T extends {
   name: string
   muscle_group: string | null
@@ -131,6 +229,8 @@ export function filterExercises<T extends {
 }>(exercises: T[], searchTerm: string, selectedMuscleGroup: string): T[] {
   const search = normalizeString(searchTerm)
   const group = normalizeString(selectedMuscleGroup)
+  // Términos expandidos por el diccionario de sinónimos (1:1 web: "delts" → hombros, "abs" → core, …).
+  const searchTerms = search ? [search, ...(MUSCLE_MAPPING[search] ?? [])] : []
   return exercises.filter((ex) => {
     const muscle = normalizeString(ex.muscle_group ?? '')
     const secondary = (ex.secondary_muscles ?? []).map((m) => normalizeString(m))
@@ -140,21 +240,21 @@ export function filterExercises<T extends {
     const name = normalizeString(ex.name)
     const bodyPart = normalizeString(ex.body_part ?? '')
     const equipment = normalizeString(ex.equipment ?? '')
-    return (
-      name.includes(search) ||
-      muscle.includes(search) ||
-      bodyPart.includes(search) ||
-      equipment.includes(search) ||
-      secondary.some((sm) => sm.includes(search))
+    return searchTerms.some((term) =>
+      name.includes(term) ||
+      muscle.includes(term) ||
+      bodyPart.includes(term) ||
+      equipment.includes(term) ||
+      secondary.some((sm) => sm.includes(term))
     )
   })
 }
 
 const SELECT_COLUMNS =
-  'id, name, muscle_group, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, coach_id, org_id'
+  'id, name, muscle_group, exercise_type, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, video_start_time, video_end_time, coach_id, org_id'
 // Sin columnas enterprise (org_id) — para prod standalone que aún no las tiene.
 const SELECT_COLUMNS_MIN =
-  'id, name, muscle_group, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, coach_id'
+  'id, name, muscle_group, exercise_type, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, video_start_time, video_end_time, coach_id'
 
 /** Free tier cannot create custom exercises (mirrors web getTierCapabilities). */
 export function canCreateCustomExercises(tier: string | null | undefined): boolean {
@@ -183,8 +283,14 @@ export async function listCoachExercises(): Promise<{ exercises: ExerciseRow[]; 
     () => supabase.from('exercises').select(SELECT_COLUMNS_MIN).or(minFilter).order('muscle_group').order('name')
   )
 
-  const rows = (res.data as Omit<ExerciseRow, 'isOwn'>[] | null) ?? []
-  const exercises = rows.map((r) => ({ ...r, isOwn: !!coachId && r.coach_id === coachId }))
+  const rows = (res.data as Partial<ExerciseRow>[] | null) ?? []
+  const exercises = rows.map((r) => ({
+    ...r,
+    exercise_type: r.exercise_type ?? 'strength',
+    video_start_time: r.video_start_time ?? null,
+    video_end_time: r.video_end_time ?? null,
+    isOwn: !!coachId && r.coach_id === coachId,
+  })) as ExerciseRow[]
   return { exercises, coachId }
 }
 
@@ -220,6 +326,11 @@ export async function createExercise(input: ExerciseInput): Promise<{ ok: boolea
     .ilike('name', name)
   if ((count ?? 0) > 0) return { ok: false, error: 'Ya existe un ejercicio con ese nombre.' }
 
+  // start/end solo aplican al recorte de YouTube; con otra media (o sin video) van NULL (1:1 web).
+  const isYoutube = !!input.video_url && !!youtubeId(input.video_url)
+  const videoStart = isYoutube ? (input.video_start_time ?? null) : null
+  const videoEnd = isYoutube ? (input.video_end_time ?? null) : null
+
   const { data, error } = await supabase
     .from('exercises')
     .insert({
@@ -227,6 +338,7 @@ export async function createExercise(input: ExerciseInput): Promise<{ ok: boolea
       org_id: null,
       name,
       muscle_group: input.muscle_group,
+      exercise_type: input.exercise_type ?? 'strength',
       equipment: input.equipment ?? null,
       difficulty: input.difficulty ?? null,
       body_part: input.body_part ?? null,
@@ -235,6 +347,8 @@ export async function createExercise(input: ExerciseInput): Promise<{ ok: boolea
       video_url: input.video_url ?? null,
       gif_url: input.gif_url ?? null,
       image_url: input.image_url ?? null,
+      video_start_time: videoStart,
+      video_end_time: videoEnd,
       source: 'coach',
     })
     .select('id')
@@ -264,11 +378,17 @@ export async function updateExercise(
     .neq('id', id)
   if ((count ?? 0) > 0) return { ok: false, error: 'Ya existe un ejercicio con ese nombre.' }
 
+  // start/end solo aplican al recorte de YouTube; con otra media (o sin video) van NULL (1:1 web).
+  const isYoutube = !!input.video_url && !!youtubeId(input.video_url)
+  const videoStart = isYoutube ? (input.video_start_time ?? null) : null
+  const videoEnd = isYoutube ? (input.video_end_time ?? null) : null
+
   const { error } = await supabase
     .from('exercises')
     .update({
       name,
       muscle_group: input.muscle_group,
+      exercise_type: input.exercise_type ?? 'strength',
       equipment: input.equipment ?? null,
       difficulty: input.difficulty ?? null,
       body_part: input.body_part ?? null,
@@ -277,6 +397,8 @@ export async function updateExercise(
       video_url: input.video_url ?? null,
       gif_url: input.gif_url ?? null,
       image_url: input.image_url ?? null,
+      video_start_time: videoStart,
+      video_end_time: videoEnd,
     })
     .eq('id', id)
     .eq('coach_id', coachId)
@@ -314,6 +436,7 @@ export async function cloneExercise(row: ExerciseRow): Promise<{ ok: boolean; id
   return createExercise({
     name: `${row.name} (copia)`,
     muscle_group: row.muscle_group ?? '',
+    exercise_type: row.exercise_type ?? 'strength',
     equipment: row.equipment ?? null,
     difficulty: (row.difficulty as ExerciseInput['difficulty']) ?? null,
     body_part: row.body_part ?? null,
@@ -321,6 +444,8 @@ export async function cloneExercise(row: ExerciseRow): Promise<{ ok: boolean; id
     instructions: row.instructions ?? [],
     video_url: row.video_url ?? null,
     gif_url: row.gif_url ?? null,
+    video_start_time: row.video_start_time ?? null,
+    video_end_time: row.video_end_time ?? null,
   })
 }
 

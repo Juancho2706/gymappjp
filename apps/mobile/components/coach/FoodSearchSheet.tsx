@@ -27,11 +27,17 @@ interface Props {
   excludedIds?: string[]
   /** Resalta ★ y ordena arriba los favoritos del alumno. */
   favoriteIds?: Set<string>
+  /** Restricciones del alumno: badge rojo "Alergia" + ordena abajo (espejo web A3). */
+  allergyIds?: Set<string>
+  /** Restricciones del alumno: badge ámbar "Intolerancia" + ordena abajo. */
+  intoleranceIds?: Set<string>
+  /** Restricciones del alumno: badge gris "No le gusta" + ordena abajo. */
+  dislikeIds?: Set<string>
   /** Título opcional del header (p. ej. "Agregar alternativa"). */
   title?: string
 }
 
-export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function FoodSearchSheet({ onSelect, excludedIds, favoriteIds, title }, ref) {
+export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function FoodSearchSheet({ onSelect, excludedIds, favoriteIds, allergyIds, intoleranceIds, dislikeIds, title }, ref) {
   const { theme } = useTheme()
   const [mode, setMode] = useState<'search' | 'create'>('search')
   const [query, setQuery] = useState('')
@@ -41,14 +47,25 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
   const [scope, setScope] = useState<FoodScope>('all')
   const snapPoints = useMemo(() => ['75%', '95%'], [])
 
+  // Rank de afinidad (1:1 web FoodSearchDrawer): favorito arriba, alergia/dislike abajo
+  // (favorito +2 · dislike/intolerancia -1 · alergia -2).
+  const affinityRank = useCallback((id: string): number => {
+    if (allergyIds?.has(id)) return -2
+    if (favoriteIds?.has(id)) return 2
+    if (intoleranceIds?.has(id) || dislikeIds?.has(id)) return -1
+    return 0
+  }, [favoriteIds, allergyIds, intoleranceIds, dislikeIds])
+
+  const hasAffinity = !!(favoriteIds?.size || allergyIds?.size || intoleranceIds?.size || dislikeIds?.size)
+
   const displayed = useMemo(() => {
     const ex = excludedIds && excludedIds.length ? new Set(excludedIds) : null
     let list = ex ? results.filter((r) => !ex.has(r.id)) : results
-    if (favoriteIds && favoriteIds.size) {
-      list = [...list].sort((a, b) => (favoriteIds.has(b.id) ? 1 : 0) - (favoriteIds.has(a.id) ? 1 : 0))
+    if (hasAffinity) {
+      list = [...list].sort((a, b) => affinityRank(b.id) - affinityRank(a.id))
     }
     return list
-  }, [results, excludedIds, favoriteIds])
+  }, [results, excludedIds, hasAffinity, affinityRank])
 
   const run = useCallback(async (text: string, cat: string = category, sc: FoodScope = scope) => {
     setQuery(text)
@@ -130,14 +147,24 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
             ) : null}
             renderItem={({ item }) => {
               const fav = favoriteIds?.has(item.id)
+              // Prioridad espejo web: alergia > intolerancia > "no le gusta".
+              const restriction: 'allergy' | 'intolerance' | 'dislike' | null =
+                allergyIds?.has(item.id) ? 'allergy'
+                : intoleranceIds?.has(item.id) ? 'intolerance'
+                : dislikeIds?.has(item.id) ? 'dislike'
+                : null
+              const isAllergy = restriction === 'allergy'
+              const rowBorder = isAllergy ? theme.destructive + '66' : fav ? theme.primary + '66' : theme.border
+              const rowBg = isAllergy ? theme.destructive + '0D' : fav ? theme.primary + '0D' : 'transparent'
               return (
-                <TouchableOpacity style={[styles.row, { borderColor: fav ? theme.primary + '66' : theme.border, backgroundColor: fav ? theme.primary + '0D' : 'transparent' }]} onPress={() => pick(item)} activeOpacity={0.7}>
+                <TouchableOpacity style={[styles.row, { borderColor: rowBorder, backgroundColor: rowBg }]} onPress={() => pick(item)} activeOpacity={0.7}>
                   <View style={{ flex: 1 }}>
                     <View style={styles.nameRow}>
                       {fav ? <Star size={13} color={theme.primary} fill={theme.primary} /> : null}
                       <Text style={[styles.foodName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>
                         {item.name}{item.brand ? ` · ${item.brand}` : ''}
                       </Text>
+                      {restriction ? <RestrictionBadge theme={theme} type={restriction} /> : null}
                     </View>
                     <View style={styles.macroLine}>
                       <Text style={[styles.macroSeg, { color: MACRO_COLORS.kcal }]}>{item.calories} kcal</Text>
@@ -246,6 +273,20 @@ function CreateFoodForm({ theme, initialName, onCancel, onCreated }: { theme: an
   )
 }
 
+/** Badge de restricción dietaria del alumno en el buscador (espejo web FoodSearchDrawer A3). */
+function RestrictionBadge({ theme, type }: { theme: any; type: 'allergy' | 'intolerance' | 'dislike' }) {
+  const cfg = type === 'allergy'
+    ? { label: 'Alergia', color: theme.destructive }
+    : type === 'intolerance'
+      ? { label: 'Intolerancia', color: '#F59E0B' }
+      : { label: 'No le gusta', color: theme.mutedForeground }
+  return (
+    <View style={[styles.restrictionBadge, { borderColor: cfg.color + '66', backgroundColor: cfg.color + '14' }]}>
+      <Text style={{ fontSize: 9, fontFamily: 'Inter_600SemiBold', color: cfg.color }}>{cfg.label}</Text>
+    </View>
+  )
+}
+
 function FField({ theme, label, center, ...rest }: any) {
   return (
     <View style={{ flex: 1, gap: 5 }}>
@@ -270,8 +311,9 @@ const styles = StyleSheet.create({
   catRow: { paddingHorizontal: 16, gap: 6, alignItems: 'center' },
   catFilterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 5 },
   row: { paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1, borderRadius: 10 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   foodName: { fontSize: 14, flexShrink: 1 },
+  restrictionBadge: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 },
   macroLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' },
   macroSeg: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   macroServing: { fontSize: 12 },

@@ -17,6 +17,7 @@ import {
   Moon,
   Sun,
   LogOut,
+  Building2,
   type LucideIcon,
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
@@ -48,6 +49,9 @@ const PUSH_ROUTES: Record<string, string> = {
 }
 // "Reactivar" → la gestión de pago vive en la web (mobile es display-only para billing).
 const REACTIVATE_URL = 'https://eva-app.cl/coach/reactivate'
+// "Panel empresa" → el panel org admin (/org/[slug]) es web-only; el coach org_owner/org_admin
+// lo abre en el navegador (espejo del link de CoachSidebar web).
+const ORG_PANEL_BASE_URL = 'https://eva-app.cl/org'
 
 function hexToRgba(hex: string, alpha: number): string {
   const clean = hex.replace('#', '')
@@ -65,6 +69,9 @@ export function CoachMobileHeader() {
   const colorScheme = useColorScheme()
   const { theme, branding, mode, toggleTheme } = useTheme()
   const [coach, setCoach] = useState<CoachProfile | null>(null)
+  // Slug de la org cuando el coach es org_owner/org_admin (gate del link "Panel empresa",
+  // espejo de CoachSidebar web: enterpriseContext && orgRole in {org_owner,org_admin}).
+  const [orgPanelSlug, setOrgPanelSlug] = useState<string | null>(null)
   const nav = useCoachNavContext()
 
   useEffect(() => {
@@ -77,9 +84,43 @@ export function CoachMobileHeader() {
     }
   }, [])
 
+  // Acceso "Panel empresa": leer org_id/org_role del JWT (app_metadata, NUNCA del body) y, si el
+  // rol es admin, resolver el slug de la org. El panel org vive en la web → se abre vía Linking.
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const meta = session?.user?.app_metadata as Record<string, string> | undefined
+        const orgId = meta?.org_id ?? null
+        const orgRole = meta?.org_role ?? null
+        if (!orgId || (orgRole !== 'org_owner' && orgRole !== 'org_admin')) {
+          if (mounted) setOrgPanelSlug(null)
+          return
+        }
+        const { data } = await supabase
+          .from('organizations')
+          .select('slug')
+          .eq('id', orgId)
+          .maybeSingle()
+        if (mounted) setOrgPanelSlug((data as { slug?: string | null } | null)?.slug ?? null)
+      } catch {
+        if (mounted) setOrgPanelSlug(null)
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   async function handleSignOut() {
     await signOutAndCleanup()
     router.replace('/')
+  }
+
+  function openOrgPanel() {
+    if (!orgPanelSlug) return
+    Linking.openURL(`${ORG_PANEL_BASE_URL}/${orgPanelSlug}`).catch(() => {})
   }
 
   const title = coach?.brandName || coach?.fullName || branding?.displayName || 'EVA'
@@ -118,6 +159,25 @@ export function CoachMobileHeader() {
           currentKey={nav.activeWorkspaceKey}
           onSelect={nav.selectWorkspace}
         />
+        {/* "Panel empresa": solo org_owner/org_admin; abre /org/[slug] en la web (espejo del
+            link primario de CoachSidebar). El panel org no existe en mobile. */}
+        {orgPanelSlug && (
+          <TouchableOpacity
+            activeOpacity={0.75}
+            style={[
+              styles.orgPanelButton,
+              {
+                backgroundColor: hexToRgba(theme.primary, 0.1),
+                borderColor: hexToRgba(theme.primary, 0.22),
+              },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Panel empresa"
+            onPress={openOrgPanel}
+          >
+            <Building2 size={18} color={theme.primary} strokeWidth={2.2} />
+          </TouchableOpacity>
+        )}
         {/* Campana de novedades — espejo de NewsBellButton (web). */}
         <NewsBell />
         <TouchableOpacity
@@ -368,6 +428,14 @@ const styles = StyleSheet.create({
   headerTitle: { maxWidth: 150, fontSize: 16, lineHeight: 20, fontWeight: '700' },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerButton: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  orgPanelButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tabShell: { borderTopWidth: StyleSheet.hairlineWidth },
   tabRow: { flexDirection: 'row', paddingHorizontal: 6, paddingTop: 8 },
   tabPressable: { flex: 1 },

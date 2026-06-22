@@ -5,7 +5,8 @@ import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import QRCode from 'react-native-qrcode-svg'
-import { Camera, Check, ImageIcon, Info, Lock, MessageSquare, Palette, RotateCcw, Share2, Smartphone, Sparkles, Type, Zap } from 'lucide-react-native'
+import { AlertTriangle, Camera, Check, ImageIcon, Info, Lock, MessageSquare, Moon, Palette, RotateCcw, Share2, Smartphone, Sparkles, Sun, Type, Zap } from 'lucide-react-native'
+import { resolveBrandTheme, contrastReport } from '@eva/brand-kit'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, ScreenHeader, Section, InfoRow } from '../../../components'
 import { EvaLoader, EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -20,6 +21,14 @@ import {
   uploadCoachLogo,
   type CoachBrandSettings,
 } from '../../../lib/coach-brand'
+import {
+  CURATED_FONTS,
+  FONT_KEY_TUPLE,
+  LOADER_VARIANTS,
+  LOADER_VARIANT_TUPLE,
+  type FontKey,
+  type LoaderVariant,
+} from '../../../lib/brand-advanced'
 import { saveStoredBranding, type CoachBranding } from '../../../lib/branding'
 
 // Espejo del PRESET_COLORS de la web (BrandSettingsForm) — 8 presets, sin #007AFF (es el default,
@@ -27,6 +36,7 @@ import { saveStoredBranding, type CoachBranding } from '../../../lib/branding'
 const COLOR_PRESETS = ['#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#06B6D4', '#F97316']
 const DEFAULT_BRAND_COLOR = '#007AFF'
 const WORDMARK_COLORS = ['#8B5CF6', '#06B6D4', '#10B981']
+const HEX_RE = /^#[0-9a-fA-F]{6}$/
 
 // Espejo de generateBrandPalette (web src/lib/color-utils.ts): paleta auto desde el color primario.
 function hexToHslArr(hex: string): [number, number, number] {
@@ -133,6 +143,16 @@ export default function MiMarcaScreen() {
   const [welcomeModalContent, setWelcomeModalContent] = useState('')
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
 
+  // ── white-label v2 — branding avanzado (Pro+) ──
+  const [secondaryColor, setSecondaryColor] = useState('')
+  const [accentLight, setAccentLight] = useState('')
+  const [accentDark, setAccentDark] = useState('')
+  const [neutralTint, setNeutralTint] = useState(false)
+  const [fontKey, setFontKey] = useState<FontKey | ''>('')
+  const [loaderVariant, setLoaderVariant] = useState<LoaderVariant>('eva')
+  const [advancedAccentOpen, setAdvancedAccentOpen] = useState(false)
+  const [previewMode, setPreviewMode] = useState<'light' | 'dark'>('light')
+
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -159,6 +179,14 @@ export default function MiMarcaScreen() {
         setWelcomeModalType(s.welcomeModalType)
         setWelcomeModalContent(s.welcomeModalContent ?? '')
         setLogoUrl(s.logoUrl)
+        // white-label v2 (Pro+)
+        setSecondaryColor(s.brandSecondaryColor ?? '')
+        setAccentLight(s.accentLight ?? '')
+        setAccentDark(s.accentDark ?? '')
+        setNeutralTint(s.neutralTint)
+        setFontKey(s.brandFontKey ?? '')
+        setLoaderVariant(s.loaderVariant)
+        setAdvancedAccentOpen(Boolean(s.accentLight || s.accentDark))
       }
       setLoading(false)
     })()
@@ -178,6 +206,24 @@ export default function MiMarcaScreen() {
     if (brandName && brandName !== fullName) s += 10
     return Math.min(100, s)
   }, [logoUrl, color, welcomeMessage, useCustomLoader, loaderText, welcomeModalEnabled, welcomeModalContent, brandName, fullName])
+
+  // Branding avanzado: tema derivado en vivo (mismo motor @eva/brand-kit que el render real) →
+  // preview claro/oscuro + guardia WCAG. Espejo EXACTO de BrandAdvancedSection (web).
+  const advTheme = useMemo(() => {
+    const base = HEX_RE.test(color) ? color : '#10B981'
+    const opt = (v: string) => (HEX_RE.test(v) ? v : null)
+    return resolveBrandTheme({
+      brandColor: base,
+      accentLight: opt(accentLight),
+      accentDark: opt(accentDark),
+      neutralTint,
+      secondaryLight: opt(secondaryColor),
+      secondaryDark: opt(secondaryColor),
+    })
+  }, [color, accentLight, accentDark, neutralTint, secondaryColor])
+  const advReport = useMemo(() => contrastReport(advTheme), [advTheme])
+  const advFailing = advReport.items.filter((i) => !i.passes)
+  const advPreview = advTheme[previewMode]
 
   async function pickLogo() {
     setError(null)
@@ -220,6 +266,18 @@ export default function MiMarcaScreen() {
       welcomeModalEnabled,
       welcomeModalContent: welcomeModalContent || null,
       welcomeModalType,
+      // white-label v2 (Pro+): solo se mandan si el coach puede brandear (la UI también lo gatea);
+      // el lib re-verifica el tier antes de tocar las columnas.
+      ...(canUseBranding(tier)
+        ? {
+            brandSecondaryColor: secondaryColor || null,
+            accentLight: accentLight || null,
+            accentDark: accentDark || null,
+            neutralTint,
+            brandFontKey: fontKey || null,
+            loaderVariant,
+          }
+        : {}),
     })
     setSaving(false)
     if (!r.ok) { setError(r.error ?? 'No se pudo guardar.'); return }
@@ -450,6 +508,32 @@ export default function MiMarcaScreen() {
               <Toggle theme={theme} label="Aplicar mis colores a la app del alumno" on={useBrandColors} onPress={() => setUseBrandColors((v) => !v)} />
             </SectionCard>
 
+            {/* white-label v2 — Branding avanzado (Pro+). Espejo de BrandAdvancedSection (web). */}
+            {canUseBranding(tier) ? (
+              <BrandAdvancedSection
+                theme={theme}
+                primaryColor={color}
+                secondaryColor={secondaryColor}
+                setSecondaryColor={setSecondaryColor}
+                accentLight={accentLight}
+                setAccentLight={setAccentLight}
+                accentDark={accentDark}
+                setAccentDark={setAccentDark}
+                neutralTint={neutralTint}
+                setNeutralTint={setNeutralTint}
+                fontKey={fontKey}
+                setFontKey={setFontKey}
+                loaderVariant={loaderVariant}
+                setLoaderVariant={setLoaderVariant}
+                advancedAccentOpen={advancedAccentOpen}
+                setAdvancedAccentOpen={setAdvancedAccentOpen}
+                previewMode={previewMode}
+                setPreviewMode={setPreviewMode}
+                preview={advPreview}
+                failingCount={advFailing.length}
+              />
+            ) : null}
+
             {/* Loader */}
             <SectionCard theme={theme} icon={Sparkles} title="Loader animado">
               <Toggle theme={theme} label="Usar loader personalizado" on={useCustomLoader} onPress={() => setUseCustomLoader((v) => !v)} />
@@ -552,6 +636,197 @@ export default function MiMarcaScreen() {
         </SectionCard>
       </ScrollView>
     </SafeAreaView>
+  )
+}
+
+// ── white-label v2: "Branding avanzado (Pro)" ────────────────────────────────────────────────
+// Espejo de apps/web/.../BrandAdvancedSection.tsx: color2 + fuente curada (12) + tinte neutro +
+// acento por modo + loader, con preview claro/oscuro y guardia WCAG (mismo motor @eva/brand-kit).
+type AdvProps = {
+  theme: any
+  primaryColor: string
+  secondaryColor: string
+  setSecondaryColor: (v: string) => void
+  accentLight: string
+  setAccentLight: (v: string) => void
+  accentDark: string
+  setAccentDark: (v: string) => void
+  neutralTint: boolean
+  setNeutralTint: (fn: (v: boolean) => boolean) => void
+  fontKey: FontKey | ''
+  setFontKey: (v: FontKey | '') => void
+  loaderVariant: LoaderVariant
+  setLoaderVariant: (v: LoaderVariant) => void
+  advancedAccentOpen: boolean
+  setAdvancedAccentOpen: (fn: (v: boolean) => boolean) => void
+  previewMode: 'light' | 'dark'
+  setPreviewMode: (v: 'light' | 'dark') => void
+  preview: { bg: string; text: string; textMuted: string; accent: string; accentText: string; accent2: string; accent2Text: string }
+  failingCount: number
+}
+
+function BrandAdvancedSection(p: AdvProps) {
+  const { theme } = p
+  const normalizeHex = (v: string) => (v.startsWith('#') || v === '' ? v : `#${v}`)
+  return (
+    <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+      {/* Header con badge Pro */}
+      <View style={styles.advHead}>
+        <Sparkles size={15} color={theme.primary} />
+        <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Branding avanzado</Text>
+        <View style={[styles.proBadge, { backgroundColor: theme.primary + '1A' }]}>
+          <Text style={[styles.proBadgeText, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}>PRO</Text>
+        </View>
+      </View>
+      <Text style={[styles.advIntro, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        Profundidad visual para que la app se sienta 100% tuya. Tus alumnos siempre la ven; vos elegís cómo.
+      </Text>
+
+      {/* ── Color secundario ── */}
+      <Text style={[styles.advGroupTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Color secundario</Text>
+      <Text style={[styles.advHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        Para badges, etiquetas, macros de nutrición y la 2ª serie de gráficos. Independiente del principal.
+      </Text>
+      <View style={styles.advColorRow}>
+        <View style={[styles.advSwatchPreview, { backgroundColor: HEX_RE.test(p.secondaryColor) ? p.secondaryColor : '#00C7BE', borderColor: theme.border }]} />
+        <TextInput
+          value={p.secondaryColor}
+          onChangeText={(v: string) => p.setSecondaryColor(normalizeHex(v))}
+          placeholder="#00C7BE (opcional)"
+          placeholderTextColor={theme.mutedForeground}
+          autoCapitalize="characters"
+          style={[styles.advHexInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}
+        />
+        {p.secondaryColor ? (
+          <TouchableOpacity onPress={() => p.setSecondaryColor('')} hitSlop={6}>
+            <Text style={{ fontSize: 12, color: theme.mutedForeground, textDecorationLine: 'underline', fontFamily: theme.fontSans }}>Quitar</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      {/* ── Fuente de títulos ── */}
+      <Text style={[styles.advGroupTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Fuente de títulos</Text>
+      <Text style={[styles.advHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        Se aplica a los títulos de tu app. El cuerpo queda en Inter para máxima legibilidad.
+      </Text>
+      <View style={styles.advGrid}>
+        {FONT_KEY_TUPLE.map((k) => {
+          const f = CURATED_FONTS[k]
+          const selected = p.fontKey === k
+          return (
+            <TouchableOpacity
+              key={k}
+              activeOpacity={0.85}
+              onPress={() => p.setFontKey(selected ? '' : k)}
+              style={[styles.advCell, { borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? theme.primary + '0D' : theme.card }]}
+            >
+              <Text style={[styles.advCellSample, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Aa</Text>
+              <Text numberOfLines={1} style={[styles.advCellLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>{f.label}</Text>
+              <Text numberOfLines={1} style={[styles.advCellNote, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{f.note}</Text>
+            </TouchableOpacity>
+          )
+        })}
+      </View>
+
+      {/* ── Tinte de marca + acento por modo (avanzado) ── */}
+      <Toggle theme={theme} label="Tinte de marca en los fondos" on={p.neutralTint} onPress={() => p.setNeutralTint((v) => !v)} />
+      <TouchableOpacity onPress={() => p.setAdvancedAccentOpen((v) => !v)} hitSlop={6}>
+        <Text style={{ fontSize: 12, color: theme.primary, textDecorationLine: 'underline', fontFamily: 'Inter_600SemiBold' }}>
+          {p.advancedAccentOpen ? 'Ocultar acento por modo' : 'Ajustar acento por modo (avanzado)'}
+        </Text>
+      </TouchableOpacity>
+      {p.advancedAccentOpen ? (
+        <View style={styles.advAccentRow}>
+          <View style={styles.advAccentCol}>
+            <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Acento claro</Text>
+            <View style={styles.advColorRow}>
+              <View style={[styles.advSwatchPreview, { backgroundColor: HEX_RE.test(p.accentLight) ? p.accentLight : '#047857', borderColor: theme.border }]} />
+              <TextInput value={p.accentLight} onChangeText={(v: string) => p.setAccentLight(normalizeHex(v))} placeholder="#047857 (auto)" placeholderTextColor={theme.mutedForeground} autoCapitalize="characters"
+                style={[styles.advHexInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} />
+            </View>
+          </View>
+          <View style={styles.advAccentCol}>
+            <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Acento oscuro</Text>
+            <View style={styles.advColorRow}>
+              <View style={[styles.advSwatchPreview, { backgroundColor: HEX_RE.test(p.accentDark) ? p.accentDark : '#34d399', borderColor: theme.border }]} />
+              <TextInput value={p.accentDark} onChangeText={(v: string) => p.setAccentDark(normalizeHex(v))} placeholder="#34D399 (auto)" placeholderTextColor={theme.mutedForeground} autoCapitalize="characters"
+                style={[styles.advHexInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} />
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      {/* ── Pantalla de carga (loader variant) ── */}
+      <Text style={[styles.advGroupTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Pantalla de carga</Text>
+      <View style={styles.advGrid}>
+        {LOADER_VARIANT_TUPLE.map((v) => {
+          const meta = LOADER_VARIANTS[v]
+          const selected = p.loaderVariant === v
+          return (
+            <TouchableOpacity
+              key={v}
+              activeOpacity={0.85}
+              onPress={() => p.setLoaderVariant(v)}
+              style={[styles.advCell, { borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? theme.primary + '0D' : theme.card }]}
+            >
+              <Text numberOfLines={1} style={[styles.advCellLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>{meta.label}</Text>
+              <Text numberOfLines={1} style={[styles.advCellNote, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{meta.note}</Text>
+            </TouchableOpacity>
+          )
+        })}
+      </View>
+
+      {/* ── Preview + guardia WCAG ── */}
+      <View style={[styles.advPreviewWrap, { borderColor: theme.border }]}>
+        <View style={styles.advPreviewHead}>
+          <Text style={[styles.fieldLabel, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Vista previa</Text>
+          <View style={[styles.advModeToggle, { backgroundColor: theme.muted }]}>
+            {(['light', 'dark'] as const).map((m) => {
+              const active = p.previewMode === m
+              const Icon = m === 'light' ? Sun : Moon
+              return (
+                <TouchableOpacity key={m} onPress={() => p.setPreviewMode(m)} activeOpacity={0.8}
+                  style={[styles.advModeBtn, active && { backgroundColor: theme.card }]}>
+                  <Icon size={12} color={active ? theme.foreground : theme.mutedForeground} />
+                  <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: active ? theme.foreground : theme.mutedForeground }}>
+                    {m === 'light' ? 'Claro' : 'Oscuro'}
+                  </Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        </View>
+        <View style={[styles.advPreviewCanvas, { backgroundColor: p.preview.bg }]}>
+          <Text style={{ fontSize: 13, fontFamily: 'Montserrat_700Bold', color: p.preview.text }}>
+            Tu marca, {p.previewMode === 'light' ? 'modo claro' : 'modo oscuro'}
+          </Text>
+          <View style={styles.advPreviewChips}>
+            <View style={[styles.advChip, { backgroundColor: p.preview.accent }]}>
+              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: p.preview.accentText }}>Botón</Text>
+            </View>
+            <View style={[styles.advChipRound, { backgroundColor: p.preview.accent2 }]}>
+              <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: p.preview.accent2Text }}>Etiqueta</Text>
+            </View>
+            <Text style={{ fontSize: 12, color: p.preview.textMuted, fontFamily: theme.fontSans }}>texto secundario</Text>
+          </View>
+        </View>
+        {p.failingCount === 0 ? (
+          <View style={styles.advWcagRow}>
+            <Check size={13} color={theme.success} />
+            <Text style={{ fontSize: 11.5, color: theme.success, fontFamily: 'Inter_600SemiBold', flex: 1 }}>
+              Contraste legible (WCAG AA) en claro y oscuro.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.advWcagRow}>
+            <AlertTriangle size={13} color="#F59E0B" />
+            <Text style={{ fontSize: 11.5, color: '#F59E0B', fontFamily: 'Inter_600SemiBold', flex: 1 }}>
+              Ajustamos tus colores para que el texto siempre se lea ({p.failingCount} alerta{p.failingCount > 1 ? 's' : ''} rescatada{p.failingCount > 1 ? 's' : ''}).
+            </Text>
+          </View>
+        )}
+      </View>
+    </View>
   )
 }
 
@@ -718,4 +993,30 @@ const styles = StyleSheet.create({
   toggleText: { fontSize: 14, flex: 1 },
   switch: { width: 46, height: 28, borderRadius: 14, padding: 3, justifyContent: 'center' },
   knob: { width: 22, height: 22, borderRadius: 11 },
+  // ── white-label v2 — branding avanzado ──
+  advHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  proBadge: { marginLeft: 'auto', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99 },
+  proBadgeText: { fontSize: 9, letterSpacing: 0.5 },
+  advIntro: { fontSize: 12, lineHeight: 17, marginTop: -4 },
+  advGroupTitle: { fontSize: 13, marginTop: 4 },
+  advHint: { fontSize: 11.5, lineHeight: 16, marginTop: -6 },
+  advColorRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  advSwatchPreview: { width: 40, height: 40, borderRadius: 10, borderWidth: 1 },
+  advHexInput: { flex: 1, height: 40, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 14, textTransform: 'uppercase' },
+  advGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  advCell: { width: '31.5%', borderWidth: 1.5, borderRadius: 12, padding: 10, gap: 2 },
+  advCellSample: { fontSize: 18, lineHeight: 20 },
+  advCellLabel: { fontSize: 11.5 },
+  advCellNote: { fontSize: 9.5 },
+  advAccentRow: { flexDirection: 'row', gap: 10 },
+  advAccentCol: { flex: 1, gap: 6 },
+  advPreviewWrap: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 10, marginTop: 2 },
+  advPreviewHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  advModeToggle: { flexDirection: 'row', borderRadius: 9, padding: 2, gap: 2 },
+  advModeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 7 },
+  advPreviewCanvas: { borderRadius: 10, padding: 14, gap: 10 },
+  advPreviewChips: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  advChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
+  advChipRound: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 99 },
+  advWcagRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 })

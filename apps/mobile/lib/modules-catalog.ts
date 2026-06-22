@@ -67,3 +67,20 @@ export const MODULE_CATALOG: Record<ModuleKey, ModuleCatalogEntry> = {
     ],
   },
 }
+
+/**
+ * Precio MENSUAL de lista de un add-on, CLP. UNIFORME para los 4 módulos (decisión dueño 2026-06-11,
+ * NO re-litigar) — espejo de ADDON_MONTHLY_PRICE_CLP en apps/web/src/lib/constants.ts (ADDON_CONFIG).
+ * Mobile NO arrastra @/lib/constants (acopla Next/Supabase); se inlinea el mismo número canónico.
+ * Display informativo: la compra/baja sigue web-only.
+ */
+export const ADDON_MONTHLY_PRICE_CLP = 9990 as const
+
+/**
+ * ¿La key de add-on requiere un plan con nutrición (Pro+)? Solo `nutrition_exchanges` (D8 web).
+ * Espejo del gate `requiresNutritionTier` de /coach/subscription: cuando es true y el tier del coach
+ * NO soporta nutrición, el catálogo muestra "Requiere plan Pro+" en vez de "Disponible".
+ */
+export function addonRequiresNutritionTier(key: ModuleKey): boolean {
+  return key === 'nutrition_exchanges'
+}
