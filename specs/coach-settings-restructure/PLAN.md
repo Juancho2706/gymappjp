@@ -28,15 +28,15 @@ Invariantes que NO se tocan:
 | Action | Path | Notes |
 |---|---|---|
 | UPDATE | `apps/web/src/app/coach/settings/page.tsx` | Aplanar: quitar `<section> "Opciones Coach"`; promover Módulos/Áreas/Funciones a cards de 1er nivel; co-locar Suscripción+Módulos; mismo patrón visual; aplica a variante standalone (y revisar team_managed que ya es plano). |
-| UPDATE | `apps/web/src/app/coach/settings/modules/_components/ModulesForm.tsx` | Cross-link: por módulo activo, mostrar estado de visibilidad ("Activo · Visible" / "Activo · Oculto → Mostrar" link a Funciones). Sigue read-only. |
+| UPDATE | `apps/web/src/app/coach/settings/modules/_components/ModulesForm.tsx` | Cross-link: por módulo activo, mostrar estado de visibilidad ("Activo · Visible" / "Activo · Oculto → Mostrar" link a Funciones). **Mostrar precio mensual** junto al CTA "Desbloquear". Sigue read-only. |
 | UPDATE | `apps/web/src/app/coach/settings/modules/_data/modules.queries.ts` | Aportar el estado de visibilidad por módulo (lee feature-prefs vía service; sin Supabase directo). |
-| UPDATE | `apps/web/src/components/coach/FeaturePrefsPanel.tsx` | Toggles de módulos NO comprados → deshabilitados con "Comprar en Módulos →"; rename de copy si se decide "Visibilidad de nutrición". |
-| UPDATE | `apps/web/src/app/coach/settings/funciones/page.tsx` | Posible rename de título/desc (Open Question). |
+| UPDATE | `packages/module-catalog/catalog.ts` | **Cablear `price` por módulo** (decisión CEO: exponer precio). Pre-req: precio firme + disclosure SERNAC (Open Question). |
+| UPDATE | `apps/web/src/components/coach/FeaturePrefsPanel.tsx` | Toggles de módulos NO comprados → deshabilitados con "Comprar en Módulos →". (Nombre "Funciones" se MANTIENE — sin rename.) |
 | UPDATE | `services/billing/addons.service.ts` (o el materializador del webhook) | **Auto-ON visibilidad:** al activar un módulo, set `_enabled`/sección del dominio correspondiente en feature-prefs (service-role, idempotente). |
 | UPDATE | superficies de módulo: `app/coach/cardio/**`, `app/coach/movement/**` (+ nutrición Pro) | Empty-state: distinguir "oculto por toggle" (banner "Mostrar →") de "0 alumnos" (empty-state propio, no crash). Cierra bug conocido. |
-| UPDATE | `apps/web/src/app/coach/settings/BrandSettingsForm.tsx` | Quitar el link "Vista previa" del FAB (o convertir en toggle "Expandir" del preview inline). |
-| DELETE/UPDATE | `apps/web/src/app/coach/settings/preview/*` | Borrar la ruta /preview (o dejar redirect). Ajustar guard de team. |
-| UPDATE | `apps/web/src/app/coach/settings/areas/*` + hub | Mover acceso a Áreas hacia builder/Entrenamiento; mantener ruta viva (deep-links). |
+| UPDATE | `apps/web/src/app/coach/settings/BrandSettingsForm.tsx` | Convertir el link "Vista previa" del FAB en **toggle "Expandir"** que muestra el preview inline en full-screen (mismo componente). |
+| DELETE | `apps/web/src/app/coach/settings/preview/*` | **Borrar la ruta /preview** (decisión: consolidar en el inline). Ajustar el guard de team que la testeaba. |
+| UPDATE | `apps/web/src/app/coach/settings/areas/*` + hub + pantalla del builder | **Acceso a Áreas desde el builder**; sacarla del hub de settings; mantener `/coach/settings/areas` viva (deep-links). |
 | UPDATE | `tests/separation/*.spec.ts`, `tests/separation/awareness.spec.ts` | Sincronizar asserts de IA/labels y del guard /preview. |
 | UPDATE | `docs/architecture/FLOWS_AND_COMPONENTS.md` | Reflejar nueva IA del hub + flujo compra→visibilidad. |
 
@@ -63,12 +63,12 @@ Invariantes que NO se tocan:
 
 ## Phases
 
-1. **F1 — Flatten hub (presentación pura).** Quitar wrapper "Opciones Coach", promover a 5 cards, co-locar Suscripción+Módulos, igualar patrón visual. Sincronizar specs de IA. Bajo riesgo.
-2. **F2 — Preview único.** Consolidar en el inline live; remover/*redirect* `/preview` + link del FAB; ajustar guard de team. Bajo riesgo.
-3. **F3 — Cross-link Módulos↔Funciones (read-only).** Módulos muestra estado de visibilidad por módulo; Funciones deshabilita toggles no comprados con CTA a Módulos. Medio.
+1. **F1 — Flatten hub (presentación pura).** Quitar wrapper "Opciones Coach", promover a 5 cards aplanadas, co-locar Suscripción+Módulos ("lo que pago"), igualar patrón visual. Sincronizar specs de IA. Bajo riesgo.
+2. **F2 — Preview único.** Convertir el FAB en toggle "Expandir" del preview inline; **borrar** la ruta `/preview`; ajustar guard de team. Bajo riesgo.
+3. **F3 — Cross-link Módulos↔Funciones (read-only) + precio.** Módulos muestra estado de visibilidad por módulo y **precio** junto al CTA; Funciones deshabilita toggles no comprados con CTA a Módulos. (Precio bloqueado solo hasta confirmar valor firme + SERNAC.) Medio.
 4. **F4 — Empty-states de módulo.** "Oculto → Mostrar" vs "0 alumnos"; cierra el crash conocido. Medio.
 5. **F5 — Auto-ON visibilidad en compra (billing path).** Aditivo, idempotente, service-role. **Mayor riesgo — va último, con su propio gate.**
-6. **F6 — Mover Áreas + renames (según Open Questions resueltas).**
+6. **F6 — Mover Áreas al builder.** Acceso desde la pantalla del builder; ruta vieja viva. (Sin renames — "Funciones" se mantiene.)
 
 ## Test Plan
 

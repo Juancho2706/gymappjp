@@ -71,10 +71,14 @@ El hub de configuración del coach (`/coach/settings`, etiqueta de nav "Opciones
 | Remover `/coach/settings/preview` rompe el guard de team (`awareness.spec` "preview DENEGADO en team") | Bajo | Si se borra la ruta, borrar/ajustar el test; si se conserva como redirect, mantener el guard. |
 | Flatten cambia labels que asserts E2E usan | Bajo | Sincronizar specs de `tests/separation/*` en la misma tanda. |
 
+## Resolved Decisions (2026-06-22, CEO)
+
+- [x] **Layout desktop del hub:** **cards aplanadas** (sin wrapper "Opciones Coach"; 5 cards de 1er nivel; Suscripción+Módulos agrupadas como "lo que pago"). Left-rail descartado por ahora (cambio chico primero). → F1.
+- [x] **/preview:** **convertir en toggle "Expandir"** del preview inline (full-screen del MISMO componente fiel). Borrar la ruta separada `/coach/settings/preview`. → F2.
+- [x] **Nombre "Funciones":** **mantener "Funciones"** (catch-all que crecerá a otros dominios). NO renombrar. → elimina la sub-tarea de rename.
+- [x] **Áreas:** **acceso desde la pantalla del builder** (sale del bucket de módulos/entitlements). Mantener `/coach/settings/areas` viva (deep-links). → F6.
+- [x] **Precio de módulos:** **SÍ mostrar el precio mensual** junto al CTA en `Módulos` (objetivo: el coach no escribe mail para saber cuánto). Requiere cablear un `price` en `@eva/module-catalog` (scope extra). **Pre-requisito:** confirmar el precio firme ($9.990/mód uniforme, ref. estrategia teams-first) + el disclosure SERNAC correspondiente antes de publicar números. → F3 (ampliado).
+
 ## Open Questions
 
-- [ ] **Layout desktop del hub:** ¿cards-only (como hoy, aplanado) o left-rail persistente + panel de detalle? Research 2026 favorece left-rail para switching frecuente en desktop y cards para mobile (una IA, dos layouts). Default propuesto: **aplanar a cards** ahora (cambio chico), evaluar left-rail después.
-- [ ] **Rename "Funciones":** ¿pasar a "Visibilidad de nutrición" (alcance real hoy) o mantener "Funciones" como catch-all que crecerá? Default propuesto: **renombrar** hasta que cubra más dominios.
-- [ ] **Precio de módulos:** ¿exponer el precio mensual junto al CTA en `Módulos`? Hoy el catálogo no tiene price field (diferido a plan 05). Default: **no** hasta decisión de negocio.
-- [ ] **Áreas — destino exacto:** ¿acceso desde la pantalla del builder, o un grupo "Entrenamiento" en settings? Requiere card-sort mental con el CEO.
-- [ ] **/preview:** ¿borrar la ruta o conservarla como "Expandir" full-screen del componente inline?
+- [ ] **Precio — fuente y disclosure:** confirmar valor firme y el texto legal/SERNAC antes de exponerlo en UI (bloquea solo la parte de precio de F3, no el resto).
