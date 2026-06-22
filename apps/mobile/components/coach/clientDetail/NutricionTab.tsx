@@ -31,15 +31,10 @@ import {
   type ClientNutritionSectionFlags,
 } from '../../../lib/feature-prefs'
 import { getClientFeaturePrefsOverride } from '../../../lib/coach-client-extras'
+import { getAppConfig } from '../../../lib/app-config'
 import type { ClientDayDetail, CoachClientDetailData } from '../../../lib/coach-client-detail'
 
 const ALERT_COLORS: Record<NutritionCoachAlert['variant'], string> = { danger: '#EF4444', warning: '#F59E0B', info: '#3B82F6' }
-
-// Espejo del flag `FEATURE_PREFS_ENABLED` (Edge Config, server-only en web → no legible desde RN).
-// La web es fail-OPEN: flag OFF/ausente ⇒ se IGNORAN las prefs y se muestra TODO lo entitled
-// (grandfathering transicional). Para mantener 1:1 con prod, mobile NO aplica el gating de Zona C
-// hasta que el flag esté ON en web. Cuando se flipee (o se exponga vía endpoint mobile), poner true.
-const FEATURE_PREFS_ENABLED = false
 
 export function NutricionTab({
   data,
@@ -61,12 +56,24 @@ export function NutricionTab({
   const todayIso = getTodayInSantiago().iso
   const clientId = data.client?.id ?? null
 
+  // Flag `featurePrefsEnabled` (Edge Config en web, server-only) leido via `GET /api/mobile/config`.
+  // fail-OPEN: default `false` hasta resolver => mostrar TODO (comportamiento de hoy). Cuando es
+  // `true`, se aplica el gating de Zona C. Espejo del contrato fail-OPEN de feature-prefs.service.ts.
+  const [featurePrefsEnabled, setFeaturePrefsEnabled] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    getAppConfig()
+      .then((cfg) => { if (!cancelled) setFeaturePrefsEnabled(cfg.featurePrefsEnabled) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+
   // Feature-prefs por-alumno (espejo web): visible = ENTITLED (billing) AND ENABLED (pref
   // coach/alumno). Gobierna que superficies de la Zona C (hilo, micros, restricciones, habitos)
-  // se muestran. `null` mientras carga / sin clientId => no gatear (mostrar todo, como hoy).
+  // se muestran. `null` mientras carga / flag OFF / sin clientId => no gatear (mostrar todo, como hoy).
   const [sectionFlags, setSectionFlags] = useState<ClientNutritionSectionFlags | null>(null)
   useEffect(() => {
-    if (!FEATURE_PREFS_ENABLED || !clientId) return
+    if (!featurePrefsEnabled || !clientId) { setSectionFlags(null); return }
     let cancelled = false
     Promise.all([getNutritionPrefs(), getClientFeaturePrefsOverride(clientId)])
       .then(([prefs, override]) => {
@@ -74,7 +81,7 @@ export function NutricionTab({
       })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [clientId])
+  }, [clientId, featurePrefsEnabled])
 
   // Helpers de visibilidad: `null` (sin resolver / sin clientId) => mostrar (comportamiento de hoy).
   const showSection = (key: string): boolean => (sectionFlags ? sectionFlags.sections[key] === true : true)
