@@ -20,32 +20,33 @@ export function ClientTabBar({ items, value, onChange }: { items: TabItem[]; val
           const on = it.value === value
           const Icon = it.icon
           const attention = it.badge === '!'
-          const badgeColor = attention ? theme.destructive : theme.primary
+          const color = on ? theme.primary : theme.mutedForeground
           return (
             <TouchableOpacity
               key={it.value}
               activeOpacity={0.8}
               onPress={() => { onChange(it.value); Haptics.selectionAsync().catch(() => {}) }}
-              style={[
-                styles.tab,
-                {
-                  backgroundColor: on ? theme.primary : theme.secondary,
-                  borderColor: on ? theme.primary : theme.border,
-                  borderRadius: theme.radius.lg,
-                },
-              ]}
+              style={styles.tab}
             >
-              <Icon size={15} color={on ? theme.primaryForeground : theme.mutedForeground} strokeWidth={2.1} />
-              <Text style={[styles.label, { color: on ? theme.primaryForeground : theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>
+              <Icon size={14} color={color} strokeWidth={2.1} />
+              <Text style={[styles.label, { color, fontFamily: 'Inter_700Bold' }]}>
                 {it.label}
               </Text>
               {it.badge != null && it.badge !== 0 ? (
-                <View style={[styles.badge, { backgroundColor: on ? theme.primaryForeground : badgeColor }]}>
-                  <Text style={[styles.badgeTxt, { color: on ? theme.primary : '#FFFFFF', fontFamily: 'Inter_700Bold' }]}>
+                <View
+                  style={[
+                    styles.badge,
+                    attention
+                      ? { backgroundColor: '#F59E0B22', borderColor: '#F59E0B59' }
+                      : { backgroundColor: theme.primary + '1F', borderColor: theme.primary + '40' },
+                  ]}
+                >
+                  <Text style={[styles.badgeTxt, { color: attention ? '#D97706' : theme.primary, fontFamily: 'Inter_700Bold' }]}>
                     {attention ? '!' : String(it.badge)}
                   </Text>
                 </View>
               ) : null}
+              {on ? <View style={[styles.indicator, { backgroundColor: theme.primary }]} /> : null}
             </TouchableOpacity>
           )
         })}
@@ -56,9 +57,10 @@ export function ClientTabBar({ items, value, onChange }: { items: TabItem[]; val
 
 const styles = StyleSheet.create({
   wrap: { borderBottomWidth: StyleSheet.hairlineWidth, marginHorizontal: -16 },
-  scroll: { gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
-  tab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 13, paddingVertical: 8, borderWidth: 1 },
-  label: { fontSize: 13 },
-  badge: { minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center' },
-  badgeTxt: { fontSize: 9.5 },
+  scroll: { paddingHorizontal: 12 },
+  tab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 13, position: 'relative' },
+  label: { fontSize: 10.5, letterSpacing: 0.8, textTransform: 'uppercase' },
+  badge: { minWidth: 18, height: 18, borderRadius: 6, borderWidth: 1, paddingHorizontal: 5, alignItems: 'center', justifyContent: 'center' },
+  badgeTxt: { fontSize: 9 },
+  indicator: { position: 'absolute', left: 8, right: 8, bottom: 0, height: 2.5, borderRadius: 2 },
 })

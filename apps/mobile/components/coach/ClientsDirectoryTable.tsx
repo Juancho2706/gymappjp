@@ -1,6 +1,6 @@
 import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { FlashList } from '@shopify/flash-list'
-import { ArrowUpDown, Apple, Eye, Pencil, Archive, Trash2 } from 'lucide-react-native'
+import { ArrowUpDown, Apple, Eye, Pencil, Archive, ArchiveRestore, Trash2 } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
 import {
   defaultSortDir,
@@ -184,7 +184,7 @@ function TableRow({ client: c, pulse: p, theme, coachSlug, onRowPress, onProfile
           <Pencil size={16} color={theme.mutedForeground} />
         </TouchableOpacity>
         <TouchableOpacity hitSlop={6} style={s.iconAct} onPress={() => onArchive(c)}>
-          <Archive size={16} color={theme.mutedForeground} />
+          {c.isArchived ? <ArchiveRestore size={16} color={theme.mutedForeground} /> : <Archive size={16} color={theme.mutedForeground} />}
         </TouchableOpacity>
         <TouchableOpacity hitSlop={6} style={s.iconAct} onPress={() => onDelete(c)}>
           <Trash2 size={16} color={theme.destructive} />
@@ -274,9 +274,7 @@ export function ClientsDirectoryTable({
         </View>
       </ScrollView>
       <Text style={[s.hint, { color: theme.mutedForeground, borderTopColor: theme.border }]}>
-        {virtualize
-          ? `${clients.length} alumnos · desliza horizontal para ver columnas, vertical dentro de la tabla.`
-          : 'Desliza horizontalmente para ver todas las columnas.'}
+        Desliza horizontalmente en móvil para ver todas las columnas.
       </Text>
     </View>
   )

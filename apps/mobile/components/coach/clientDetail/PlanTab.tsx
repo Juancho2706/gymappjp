@@ -2,12 +2,16 @@ import { useMemo, useRef, useState } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
-import { ChevronDown, Dumbbell, LayoutGrid, Moon, Pencil } from 'lucide-react-native'
+import { ChevronDown, ChevronUp, Dumbbell, LayoutGrid, Pencil, Target, Timer, Trash2 } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, EmptyState, ProgressBar } from '../../../components'
-import { StatCard, CardHeader, Pill, cd, dayName } from './shared'
+import { Button, EmptyState, NativeDialog, ProgressBar } from '../../../components'
+import { StatCard, CardHeader, Pill, cd } from './shared'
+import { supabase } from '../../../lib/supabase'
 import { filterPlansForStructureView, resolveActiveWeekVariantForDisplay } from '../../../lib/program-week-variant'
 import type { CoachClientDetailData, ProgramBlock, ProgramDay } from '../../../lib/coach-client-detail'
+
+// Espejo del WEEKDAY_LONG de la web (ProgramTabB7): microciclo Lunes→Domingo.
+const WEEKDAY_LONG = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 
 function resolveProgramWeek(program: NonNullable<CoachClientDetailData['activeProgram']>): number | null {
   if (!program.start_date) return null
@@ -17,27 +21,68 @@ function resolveProgramWeek(program: NonNullable<CoachClientDetailData['activePr
   return Math.min(Math.max(1, Math.ceil((diffDays + 1) / 7)), Math.max(1, program.weeks_to_repeat))
 }
 
+// Días restantes hasta end_date (espejo de planDaysRemaining web). null = sin fecha fin.
+function resolveDaysRemaining(program: NonNullable<CoachClientDetailData['activeProgram']>): number | null {
+  if (!program.end_date) return null
+  const end = new Date(`${program.end_date}T12:00:00`).getTime()
+  if (!Number.isFinite(end)) return null
+  return Math.max(0, Math.ceil((end - Date.now()) / 86400000))
+}
+
+// Grupos musculares únicos de los bloques (espejo de uniqueMuscleGroupsFromBlocks web).
+function uniqueMuscleGroups(blocks: ProgramBlock[]): string[] {
+  const seen: string[] = []
+  for (const b of blocks) {
+    const g = b.muscleGroup?.trim()
+    if (g && !seen.includes(g)) seen.push(g)
+  }
+  return seen
+}
+
 export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit: () => void }) {
   const { theme } = useTheme()
   const program = data.activeProgram
   const sheetRef = useRef<BottomSheetModal>(null)
   const [selected, setSelected] = useState<ProgramBlock | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+  // Días eliminados localmente (sin prop reload disponible): optimistic remove tras borrar.
+  const [deletedPlanIds, setDeletedPlanIds] = useState<Set<string>>(() => new Set())
+  const [pendingDelete, setPendingDelete] = useState<ProgramDay | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const todayDow = new Date().getDay() === 0 ? 7 : new Date().getDay()
+
+  const structure = (program?.program_structure_type as 'weekly' | 'cycle' | null) || 'weekly'
+  const isWeekly = structure === 'weekly'
+  const abMode = !!program?.ab_mode
+  const currentWeek = program ? resolveProgramWeek(program) : null
+  const activeVariant = resolveActiveWeekVariantForDisplay(program ?? undefined, currentWeek)
+  const plansView = useMemo(
+    () =>
+      filterPlansForStructureView(program?.workoutPlans, structure, { abMode, activeVariant }).filter(
+        (p) => !deletedPlanIds.has(p.id)
+      ),
+    [program?.workoutPlans, structure, abMode, activeVariant, deletedPlanIds]
+  )
+
+  // Mapa día-de-semana → plan (primer plan de cada día), para el grid L–D.
+  const planByDow = useMemo(() => {
+    const m = new Map<number, ProgramDay>()
+    for (const p of plansView) {
+      const d = Number(p.day_of_week)
+      if (!m.has(d)) m.set(d, p)
+    }
+    return m
+  }, [plansView])
 
   if (!program) {
     return <EmptyState icon={Dumbbell} title="Sin programa activo" subtitle="Este alumno no tiene un programa asignado." />
   }
-  const currentWeek = resolveProgramWeek(program)
 
-  // A-F2: resolver variante AB/cíclica activa (no renderizar planes crudo).
-  const structure = (program.program_structure_type as 'weekly' | 'cycle' | null) || 'weekly'
-  const abMode = !!program.ab_mode
-  const activeVariant = resolveActiveWeekVariantForDisplay(program, currentWeek)
-  const plansView = useMemo(
-    () => filterPlansForStructureView(program.workoutPlans, structure, { abMode, activeVariant }),
-    [program.workoutPlans, structure, abMode, activeVariant]
-  )
+  const weeksRepeat = Math.max(1, Number(program.weeks_to_repeat) || 1)
+  const hasSchedule = !!(program.start_date && program.end_date)
+  const daysRemaining = resolveDaysRemaining(program)
+  const weekProgressPct = currentWeek && weeksRepeat > 0 ? Math.min(1, currentWeek / weeksRepeat) : 0
 
   function openBlock(block: ProgramBlock) {
     setSelected(block)
@@ -47,38 +92,105 @@ export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit:
     setExpanded((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
 
+  async function confirmDelete() {
+    if (!pendingDelete) return
+    setDeleting(true)
+    setDeleteError(null)
+    const { error } = await supabase.from('workout_plans').delete().eq('id', pendingDelete.id)
+    setDeleting(false)
+    if (error) {
+      setDeleteError(error.message)
+      return
+    }
+    setDeletedPlanIds((prev) => new Set(prev).add(pendingDelete.id))
+    setPendingDelete(null)
+  }
+
   return (
     <View style={{ gap: 14 }}>
+      {/* Header del programa — nombre + badges + progreso (espejo del GlassCard header web) */}
       <StatCard>
-        <CardHeader icon={LayoutGrid} title="Programa" right={
-          <TouchableOpacity onPress={onEdit} hitSlop={8}><Pencil size={16} color={theme.primary} /></TouchableOpacity>
-        } />
-        <Text numberOfLines={1} style={[cd.big, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{program.name}</Text>
-        <View style={cd.metaRow}>
-          <Pill label={program.program_structure_type === 'cycle' ? 'Cíclico' : 'Semanal'} />
-          {program.ab_mode ? <Pill label={`A/B · ${activeVariant} esta sem.`} tone="warning" /> : null}
-          <Pill label={`${program.weeks_to_repeat} sem.`} />
-          {program.cycle_length ? <Pill label={`Ciclo ${program.cycle_length}d`} /> : null}
-          <Pill label={`${program.planCount} días`} />
+        <View style={styles.headerTop}>
+          <Text numberOfLines={2} style={[styles.programName, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{program.name}</Text>
+          <TouchableOpacity onPress={onEdit} style={[styles.editChip, { borderColor: theme.primary + '4D' }]} hitSlop={6} activeOpacity={0.8}>
+            <Pencil size={13} color={theme.primary} />
+            <Text style={[styles.editChipTxt, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>Editar en builder</Text>
+          </TouchableOpacity>
         </View>
-        {currentWeek ? (
+        <View style={cd.metaRow}>
+          <Pill label={isWeekly ? 'Semanal' : 'Cíclico'} />
+          {abMode ? <Pill label={`Variante ${activeVariant} · esta semana`} tone="warning" /> : null}
+          <Pill label={`${weeksRepeat} sem. ciclo`} color={theme.mutedForeground} />
+          {program.cycle_length ? <Pill label={`${program.cycle_length} días / ciclo`} color={theme.mutedForeground} /> : null}
+        </View>
+        {hasSchedule && currentWeek ? (
           <View style={{ gap: 6 }}>
             <View style={styles.weekRow}>
-              <Text style={[styles.weekLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Semana del ciclo</Text>
-              <Text style={[styles.weekVal, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{currentWeek}/{program.weeks_to_repeat}</Text>
+              <Text style={[styles.weekLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Semana {currentWeek} / {weeksRepeat}</Text>
+              <Text style={[styles.weekLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{daysRemaining != null && daysRemaining > 0 ? `${daysRemaining} d restantes` : 'En curso'}</Text>
             </View>
-            <ProgressBar value={program.weeks_to_repeat > 0 ? currentWeek / program.weeks_to_repeat : 0} color={theme.primary} height={7} />
+            <ProgressBar value={weekProgressPct} color={theme.primary} height={6} />
           </View>
-        ) : null}
+        ) : (
+          <Text style={[styles.noSchedule, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Sin fechas inicio/fin en el programa · progreso por semanas no disponible</Text>
+        )}
       </StatCard>
 
-      {plansView.length ? plansView.map((plan) => (
-        <DayCard key={plan.id} plan={plan} isToday={structure !== 'cycle' && plan.day_of_week === todayDow} open={expanded.has(plan.id)} onToggle={() => toggle(plan.id)} onBlock={openBlock} />
-      )) : (
-        <Text style={[cd.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Programa sin días cargados.</Text>
-      )}
+      {/* Microciclo (L–D) o Días del programa (cíclico) */}
+      <StatCard>
+        <CardHeader icon={LayoutGrid} title={isWeekly ? 'Microciclo (L–D)' : 'Días del programa'} />
+        {isWeekly ? (
+          <View style={styles.grid}>
+            {Array.from({ length: 7 }, (_, i) => {
+              const dow = i + 1
+              const plan = planByDow.get(dow)
+              return (
+                <DayCard
+                  key={plan?.id ?? `rest-${dow}`}
+                  plan={plan}
+                  label={WEEKDAY_LONG[dow - 1] ?? `Día ${dow}`}
+                  isToday={dow === todayDow}
+                  open={!!plan && expanded.has(plan.id)}
+                  onToggle={() => plan && toggle(plan.id)}
+                  onBlock={openBlock}
+                  onDelete={plan ? () => { setDeleteError(null); setPendingDelete(plan) } : undefined}
+                />
+              )
+            })}
+          </View>
+        ) : plansView.length === 0 ? (
+          <Text style={[cd.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>No hay días con ejercicios en este programa (revisa variantes de semana en el builder).</Text>
+        ) : (
+          <View style={styles.grid}>
+            {plansView.map((plan) => (
+              <DayCard
+                key={plan.id}
+                plan={plan}
+                label={`Día ${plan.day_of_week}`}
+                isToday={false}
+                open={expanded.has(plan.id)}
+                onToggle={() => toggle(plan.id)}
+                onBlock={openBlock}
+                onDelete={() => { setDeleteError(null); setPendingDelete(plan) }}
+              />
+            ))}
+          </View>
+        )}
+      </StatCard>
 
       <Button label="Editar en el builder" variant="outline" leftIcon={Pencil} onPress={onEdit} full />
+
+      {/* Confirmación de borrado — diálogo branded (espejo del AlertDialog web) */}
+      <NativeDialog open={!!pendingDelete} title="Eliminar rutina" onClose={() => !deleting && setPendingDelete(null)}>
+        <Text style={[styles.dialogBody, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          ¿Eliminar <Text style={{ color: theme.foreground, fontFamily: 'Inter_700Bold' }}>“{pendingDelete?.title || 'Entrenamiento'}”</Text>? Esta acción no se puede deshacer.
+        </Text>
+        {deleteError ? <Text style={[styles.dialogErr, { color: theme.destructive, fontFamily: theme.fontSans }]}>{deleteError}</Text> : null}
+        <View style={styles.dialogActions}>
+          <Button label="Cancelar" variant="secondary" onPress={() => setPendingDelete(null)} disabled={deleting} style={{ flex: 1 }} />
+          <Button label={deleting ? 'Eliminando...' : 'Eliminar'} variant="destructive" loading={deleting} onPress={confirmDelete} style={{ flex: 1 }} />
+        </View>
+      </NativeDialog>
 
       <BottomSheetModal ref={sheetRef} index={0} snapPoints={['70%']} enableDynamicSizing={false} enablePanDownToClose
         backgroundStyle={{ backgroundColor: theme.card }} handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}>
@@ -90,98 +202,147 @@ export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit:
   )
 }
 
-function DayCard({ plan, isToday, open, onToggle, onBlock }: { plan: ProgramDay; isToday: boolean; open: boolean; onToggle: () => void; onBlock: (b: ProgramBlock) => void }) {
+function DayCard({ plan, label, isToday, open, onToggle, onBlock, onDelete }: {
+  plan: ProgramDay | undefined
+  label: string
+  isToday: boolean
+  open: boolean
+  onToggle: () => void
+  onBlock: (b: ProgramBlock) => void
+  onDelete?: () => void
+}) {
   const { theme } = useTheme()
-  const isRest = plan.blocks.length === 0
-  return (
-    <View style={[styles.dayCard, { backgroundColor: theme.card, borderColor: isToday ? theme.primary + '66' : theme.border, borderRadius: theme.radius.xl }]}>
-      <TouchableOpacity activeOpacity={0.8} onPress={onToggle} disabled={isRest} style={styles.dayHead}>
-        <View style={[styles.dayBadge, { backgroundColor: isToday ? theme.primary + '18' : theme.secondary, borderColor: isToday ? theme.primary + '44' : theme.border }]}>
-          {isRest ? <Moon size={15} color={theme.mutedForeground} /> : <Dumbbell size={15} color={isToday ? theme.primary : theme.mutedForeground} />}
-        </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <View style={styles.dayTopRow}>
-            <Text style={[styles.dayDow, { color: isToday ? theme.primary : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{plan.day_of_week ? dayName(plan.day_of_week) : 'Día'}</Text>
-            {plan.week_variant ? <Pill label={plan.week_variant} /> : null}
-            {isToday ? <Pill label="Hoy" /> : null}
-          </View>
-          <Text numberOfLines={1} style={[styles.dayTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{isRest ? 'Descanso' : plan.title}</Text>
-          {!isRest ? <Text style={[cd.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{plan.blocks.length} ejercicios</Text> : null}
-        </View>
-        {!isRest ? <ChevronDown size={18} color={theme.mutedForeground} style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }} /> : null}
-      </TouchableOpacity>
+  const blocks = plan?.blocks ?? []
+  const isRest = !plan || blocks.length === 0
+  const groups = uniqueMuscleGroups(blocks)
 
-      {open && !isRest ? (
-        <View style={styles.blockList}>
-          {plan.blocks.map((block) => (
-            <TouchableOpacity key={block.id} activeOpacity={0.75} onPress={() => onBlock(block)} style={[styles.blockRow, { borderColor: theme.border }]}>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text numberOfLines={1} style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{block.exerciseName}</Text>
-                <Text style={[cd.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{block.muscleGroup ?? 'Sin grupo'}</Text>
-              </View>
-              <Text style={[styles.prescription, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>{block.sets}×{block.reps}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : null}
+  return (
+    <View
+      style={[
+        styles.dayCard,
+        {
+          backgroundColor: isRest ? theme.muted + '33' : theme.secondary + '33',
+          borderColor: isToday ? theme.primary + '80' : theme.border,
+          borderStyle: isRest ? 'dashed' : 'solid',
+          borderRadius: theme.radius.lg,
+        },
+        isToday && { borderWidth: 2 },
+      ]}
+    >
+      <View style={styles.dayHeadRow}>
+        <Text style={[styles.dayLabel, { color: isToday ? theme.primary : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+          {label}{isToday ? ' · Hoy' : ''}
+        </Text>
+        {plan && onDelete ? (
+          <TouchableOpacity onPress={onDelete} hitSlop={8} activeOpacity={0.7} style={styles.delBtn}>
+            <Trash2 size={13} color={theme.mutedForeground} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      {isRest ? (
+        <Text style={[styles.restTxt, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Descanso</Text>
+      ) : (
+        <>
+          <Text numberOfLines={2} style={[styles.dayTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>{plan!.title || 'Entrenamiento'}</Text>
+          <Text style={[styles.dayMeta, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+            {blocks.length} ej. · {groups.slice(0, 3).join(', ')}{groups.length > 3 ? '…' : ''}
+          </Text>
+          <TouchableOpacity onPress={onToggle} activeOpacity={0.8} style={[styles.exToggle, { borderColor: theme.border, backgroundColor: theme.background + '80' }]}>
+            <Text style={[styles.exToggleTxt, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>Ejercicios</Text>
+            {open ? <ChevronUp size={14} color={theme.foreground} /> : <ChevronDown size={14} color={theme.foreground} />}
+          </TouchableOpacity>
+          {open ? (
+            <View style={[styles.exList, { borderTopColor: theme.border }]}>
+              {blocks.map((block) => (
+                <TouchableOpacity key={block.id} onPress={() => onBlock(block)} activeOpacity={0.7} style={styles.exItem}>
+                  <Text numberOfLines={1} style={[styles.exItemTxt, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>{block.exerciseName}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+        </>
+      )}
     </View>
   )
 }
 
 function ExerciseDetail({ block }: { block: ProgramBlock }) {
   const { theme } = useTheme()
-  const rows: { label: string; value: string }[] = [
-    { label: 'Series × reps', value: `${block.sets} × ${block.reps}` },
-    block.target_weight_kg != null ? { label: 'Peso objetivo', value: `${block.target_weight_kg} kg` } : null,
-    block.rest_time ? { label: 'Descanso', value: String(block.rest_time) } : null,
-    block.tempo ? { label: 'Tempo', value: String(block.tempo) } : null,
-    block.rir != null ? { label: 'RIR', value: String(block.rir) } : null,
-  ].filter(Boolean) as { label: string; value: string }[]
+  // Prescripción (espejo del Sheet web): series × reps, tempo, RIR, descanso, obj. peso, notas.
+  const rows: { icon?: any; iconColor?: string; text: string }[] = [
+    { icon: Dumbbell, iconColor: theme.primary, text: `${block.sets ?? '—'} × ${block.reps ?? '—'}` },
+    block.tempo ? { icon: Timer, iconColor: '#F59E0B', text: `Tempo ${block.tempo}` } : null,
+    block.rir != null ? { text: `RIR ${block.rir}` } : null,
+    block.rest_time ? { text: `Descanso ${block.rest_time}` } : null,
+    block.target_weight_kg != null ? { text: `Obj. peso ${block.target_weight_kg} kg` } : null,
+  ].filter(Boolean) as { icon?: any; iconColor?: string; text: string }[]
 
   return (
     <View style={{ gap: 14 }}>
-      <Text style={[styles.sheetTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{block.exerciseName}</Text>
-      <Text style={[styles.sheetMuscle, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>{block.muscleGroup ?? 'Sin grupo'}</Text>
+      <Text style={[styles.sheetTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{block.exerciseName || 'Ejercicio'}</Text>
+      {block.muscleGroup ? (
+        <View style={[styles.muscleChip, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+          <Target size={12} color={theme.mutedForeground} />
+          <Text style={[styles.muscleChipTxt, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{block.muscleGroup}</Text>
+        </View>
+      ) : null}
       {block.gifUrl ? (
         <Image source={{ uri: block.gifUrl }} style={[styles.gif, { backgroundColor: theme.secondary, borderColor: theme.border }]} contentFit="contain" transition={150} />
       ) : null}
-      <View style={{ gap: 0 }}>
-        {rows.map((r, i) => (
-          <View key={r.label} style={[styles.detailRow, i < rows.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-            <Text style={[styles.detailLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{r.label}</Text>
-            <Text style={[styles.detailValue, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{r.value}</Text>
-          </View>
-        ))}
-      </View>
-      {block.notes ? (
-        <View style={[styles.notes, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-          <Text style={[styles.notesTxt, { color: theme.foreground, fontFamily: theme.fontSans }]}>{block.notes}</Text>
+      <View style={[styles.prescriptionCard, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+        <Text style={[styles.prescriptionLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Prescripción</Text>
+        <View style={{ gap: 8 }}>
+          {rows.map((r, i) => (
+            <View key={i} style={styles.prescriptionRow}>
+              {r.icon ? <r.icon size={14} color={r.iconColor ?? theme.mutedForeground} /> : null}
+              <Text style={[styles.prescriptionTxt, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{r.text}</Text>
+            </View>
+          ))}
         </View>
-      ) : null}
+        {block.notes ? (
+          <Text style={[styles.notesTxt, { color: theme.mutedForeground, borderTopColor: theme.border, fontFamily: theme.fontSans }]}>{block.notes}</Text>
+        ) : null}
+      </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  headerTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
+  programName: { fontSize: 19, letterSpacing: -0.3, flex: 1, textTransform: 'uppercase' },
+  editChip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
+  editChipTxt: { fontSize: 11 },
   weekRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  weekLabel: { fontSize: 12 },
-  weekVal: { fontSize: 14 },
-  dayCard: { borderWidth: 1, padding: 14, gap: 10 },
-  dayHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  dayBadge: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  dayTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dayDow: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 },
-  dayTitle: { fontSize: 14, marginTop: 2 },
-  blockList: { gap: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'transparent', paddingTop: 2 },
-  blockRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  prescription: { fontSize: 13 },
+  weekLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 },
+  noSchedule: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6 },
+
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  dayCard: { width: '48%', flexGrow: 1, borderWidth: 1, padding: 12, gap: 6, minHeight: 72 },
+  dayHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
+  dayLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.9, flex: 1 },
+  delBtn: { padding: 2 },
+  restTxt: { fontSize: 12 },
+  dayTitle: { fontSize: 12, textTransform: 'uppercase', letterSpacing: -0.2 },
+  dayMeta: { fontSize: 10 },
+  exToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 9, paddingHorizontal: 9, paddingVertical: 7, marginTop: 2 },
+  exToggleTxt: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 },
+  exList: { marginTop: 4, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 4, gap: 2 },
+  exItem: { paddingHorizontal: 6, paddingVertical: 6 },
+  exItemTxt: { fontSize: 11 },
+
+  dialogBody: { fontSize: 14, lineHeight: 20 },
+  dialogErr: { fontSize: 13 },
+  dialogActions: { flexDirection: 'row', gap: 10 },
+
   sheet: { paddingHorizontal: 18, paddingBottom: 40 },
   sheetTitle: { fontSize: 20, letterSpacing: -0.4 },
-  sheetMuscle: { fontSize: 13, marginTop: -8 },
+  muscleChip: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, marginTop: -8 },
+  muscleChipTxt: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 },
   gif: { width: '100%', height: 220, borderRadius: 14, borderWidth: 1 },
-  detailRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 11 },
-  detailLabel: { fontSize: 13 },
-  detailValue: { fontSize: 14 },
-  notes: { borderWidth: 1, padding: 12 },
-  notesTxt: { fontSize: 13, lineHeight: 19 },
+  prescriptionCard: { borderWidth: 1, padding: 14, gap: 10 },
+  prescriptionLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 },
+  prescriptionRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  prescriptionTxt: { fontSize: 13 },
+  notesTxt: { fontSize: 13, lineHeight: 19, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10, marginTop: 2 },
 })

@@ -22,7 +22,9 @@ import { useRouter } from 'expo-router'
 import {
   AlertTriangle,
   Archive,
+  ArrowUpDown,
   Check,
+  CheckCircle2,
   ChevronRight,
   Copy,
   Dumbbell,
@@ -30,6 +32,8 @@ import {
   Flame,
   LayoutGrid,
   List as ListIcon,
+  Lock,
+  MessageCircle,
   RefreshCw,
   Salad,
   Search,
@@ -45,7 +49,7 @@ import {
 import { MotiView } from 'moti'
 import * as Clipboard from 'expo-clipboard'
 import { useTheme } from '../../../context/ThemeContext'
-import { AnimatedNumber, Button, NativeDialog, ScreenHeader } from '../../../components'
+import { AnimatedNumber, Button, NativeDialog } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { ClientCard, CLIENT_CARD_HEIGHT } from '../../../components/coach/ClientCard'
@@ -70,7 +74,7 @@ import {
 } from '../../../lib/clients-directory'
 import { clientLoginUrl, deleteClient, openWhatsApp, resetClientPassword, setClientArchived, setClientStatus, shareLogin } from '../../../lib/client-actions'
 import { getCoachProfile } from '../../../lib/coach'
-import { apiFetch } from '../../../lib/api'
+import { apiFetch, ApiError } from '../../../lib/api'
 import * as DocumentPicker from 'expo-document-picker'
 import * as FileSystem from 'expo-file-system/legacy'
 import { parseClientsCsv, type ParsedClientRow } from '../../../lib/import-clients'
@@ -185,7 +189,8 @@ function StatTile({
         statStyles.tile,
         {
           backgroundColor: theme.card,
-          borderColor: selected ? color : theme.border,
+          // 1:1 web: selección = anillo (ring) en color primary; sin selección, borde neutro.
+          borderColor: selected ? theme.primary : theme.border,
           borderWidth: selected ? 2 : 1,
           borderRadius: theme.radius.xl,
         },
@@ -193,48 +198,53 @@ function StatTile({
       onPress={onPress}
       activeOpacity={0.75}
     >
-      <View style={statStyles.topRow}>
-        <View style={[statStyles.iconWrap, { backgroundColor: color + '1A' }]}>
-          <Icon size={13} color={color} />
-        </View>
-        {/* 1:1 web AnimatedNumber: solo el número hace count-up; sub (emoji) y suffix (%) quedan estáticos. */}
+      {/* 1:1 web: icono en caja a la izquierda + bloque valor/label a la derecha. */}
+      <View style={[statStyles.iconWrap, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <Icon size={20} color={color} />
+      </View>
+      <View style={statStyles.textCol}>
+        {/* AnimatedNumber: solo el número hace count-up; sub (emoji) y suffix (%) estáticos. */}
         <View style={statStyles.valueRow}>
           {sub ? <Text style={[statStyles.valueSub, { color: theme.foreground }]}>{sub}</Text> : null}
           <AnimatedNumber
             value={value}
-            style={[statStyles.value, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
+            style={[statStyles.value, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}
           />
-          {suffix ? <Text style={[statStyles.value, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{suffix}</Text> : null}
+          {suffix ? <Text style={[statStyles.value, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{suffix}</Text> : null}
         </View>
+        <Text style={[statStyles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
+          {label}
+        </Text>
       </View>
-      <Text style={[statStyles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-        {label}
-      </Text>
     </TouchableOpacity>
   )
 }
 const statStyles = StyleSheet.create({
   tile: {
-    // 3 per row, compact (icon + value inline → ~half the height).
-    flexBasis: '31%',
+    // 1:1 web: 2 por fila, más altos (icono en caja + value text-2xl/3xl + label debajo).
+    flexBasis: '47%',
     flexGrow: 1,
-    minWidth: 96,
-    paddingHorizontal: 11,
-    paddingVertical: 9,
-    gap: 3,
+    minWidth: 150,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 12,
   },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  textCol: { minWidth: 0, flexShrink: 1 },
   valueRow: { flexDirection: 'row', alignItems: 'baseline' },
-  valueSub: { fontSize: 15, marginRight: 2 },
+  valueSub: { fontSize: 20, marginRight: 2 },
   iconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 7,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  value: { fontSize: 19, lineHeight: 22 },
-  label: { fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.6 },
+  value: { fontSize: 28, lineHeight: 30, letterSpacing: -0.5 },
+  label: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.4, marginTop: 5 },
 })
 
 // ─── Alert Banner ─────────────────────────────────────────────────────────────
@@ -244,13 +254,23 @@ function AlertBanner({
   color,
   onPress,
   onDismiss,
+  textColor,
+  ctaColor,
+  bgAlpha = 0.1,
+  borderAlpha = 0.3,
 }: {
   message: string
   color: string
   onPress: () => void
   onDismiss: () => void
+  // Override de color de texto/CTA (banner sin-checkin: texto foreground + Ver en primary).
+  textColor?: string
+  ctaColor?: string
+  bgAlpha?: number
+  borderAlpha?: number
 }) {
   const { theme } = useTheme()
+  const cta = ctaColor ?? color
   const hideAction = (side: 'left' | 'right') => (
     <View style={[alertStyles.dismiss, { backgroundColor: color + '22' }, side === 'left' ? { marginLeft: 16, marginRight: 0 } : null]}>
       <EyeOff size={15} color={color} />
@@ -266,16 +286,16 @@ function AlertBanner({
       overshootLeft={false}
       friction={1.6}
     >
-      {/* Fondo OPACO (theme.card) + acento de color a la izquierda → legible sobre cualquier fondo. */}
+      {/* 1:1 web: fondo TINTADO del color + borde del color + texto en el color. */}
       <TouchableOpacity
-        style={[alertStyles.wrap, { backgroundColor: theme.card, borderColor: theme.border, borderLeftWidth: 3, borderLeftColor: color }]}
+        style={[alertStyles.wrap, { backgroundColor: hexToRgba(color, bgAlpha), borderColor: hexToRgba(color, borderAlpha) }]}
         onPress={onPress}
         activeOpacity={0.8}
       >
-        <Text style={[alertStyles.text, { color: theme.foreground, flex: 1 }]} numberOfLines={2}>{message}</Text>
+        <Text style={[alertStyles.text, { color: textColor ?? color, flex: 1 }]} numberOfLines={2}>{message}</Text>
         <View style={alertStyles.cta}>
-          <Text style={[alertStyles.ctaText, { color }]}>Ver</Text>
-          <ChevronRight size={14} color={color} />
+          <Text style={[alertStyles.ctaText, { color: cta }]}>Ver</Text>
+          <ChevronRight size={14} color={cta} />
         </View>
       </TouchableOpacity>
     </Swipeable>
@@ -285,15 +305,15 @@ const alertStyles = StyleSheet.create({
   wrap: {
     marginHorizontal: 16,
     marginBottom: 8,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     gap: 8,
   },
-  text: { fontSize: 13, fontWeight: '600' },
+  text: { fontSize: 13, fontWeight: '700' },
   cta: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   ctaText: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
   dismiss: { width: 96, marginRight: 16, marginBottom: 8, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 3 },
@@ -634,8 +654,11 @@ interface CreateForm {
   fullName: string
   email: string
   phone: string
+  subscriptionStartDate: string
   tempPassword: string
 }
+
+type CreateSuccess = { clientName: string; phone: string | null; loginUrl: string }
 
 function CreateClientModal({
   visible,
@@ -648,109 +671,285 @@ function CreateClientModal({
   onCreated: () => void
   theme: any
 }) {
-  const [form, setForm] = useState<CreateForm>({ fullName: '', email: '', phone: '', tempPassword: '' })
+  const router = useRouter()
+  const [form, setForm] = useState<CreateForm>({ fullName: '', email: '', phone: '', subscriptionStartDate: '', tempPassword: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
+  // Pasos: form → success (CTA WhatsApp) | limit (upgrade requerido). 1:1 web CreateClientModal.
+  const [success, setSuccess] = useState<CreateSuccess | null>(null)
+  const [limitReached, setLimitReached] = useState<number | null>(null)
+
+  function reset() {
+    setForm({ fullName: '', email: '', phone: '', subscriptionStartDate: '', tempPassword: '' })
+    setError(null)
+    setAgeConfirmed(false)
+    setSuccess(null)
+    setLimitReached(null)
+  }
+
+  function handleClose() {
+    reset()
+    onClose()
+  }
 
   async function handleSubmit() {
     if (!form.fullName.trim() || !form.email.trim() || !form.tempPassword.trim()) {
       setError('Nombre, email y contraseña temporal son obligatorios.')
       return
     }
+    if (!ageConfirmed) {
+      setError('Debes confirmar la edad del alumno (Ley 21.719).')
+      return
+    }
     setLoading(true)
     setError(null)
     try {
-      await apiFetch('/api/mobile/coach/clients', {
-        method: 'POST',
-        authenticated: true,
-        body: {
-          fullName: form.fullName.trim(),
-          email: form.email.trim().toLowerCase(),
-          phone: form.phone.trim() || undefined,
-          tempPassword: form.tempPassword,
-          ageConfirmed: true,
-        },
-      })
-      setForm({ fullName: '', email: '', phone: '', tempPassword: '' })
+      const res = await apiFetch<{ ok: boolean; clientName: string; newClientPhone: string | null; loginUrl: string }>(
+        '/api/mobile/coach/clients',
+        {
+          method: 'POST',
+          authenticated: true,
+          body: {
+            fullName: form.fullName.trim(),
+            email: form.email.trim().toLowerCase(),
+            phone: form.phone.trim() || undefined,
+            subscriptionStartDate: form.subscriptionStartDate.trim() || undefined,
+            tempPassword: form.tempPassword,
+            ageConfirmed: true,
+          },
+        }
+      )
       onCreated()
-      onClose()
+      // Si hay teléfono, mostrar paso de éxito con CTA WhatsApp; si no, cerrar (1:1 web).
+      if (res.newClientPhone) {
+        setSuccess({ clientName: res.clientName, phone: res.newClientPhone, loginUrl: res.loginUrl })
+      } else {
+        handleClose()
+      }
     } catch (e: any) {
-      setError(e?.message ?? 'No se pudo crear el alumno.')
+      if (e instanceof ApiError && (e.code === 'UPGRADE_REQUIRED' || e.status === 402)) {
+        const m = /(\d+)/.exec(e.message ?? '')
+        setLimitReached(m ? Number(m[1]) : 0)
+      } else {
+        setError(e?.message ?? 'No se pudo crear el alumno.')
+      }
     } finally {
       setLoading(false)
     }
   }
 
+  // ── Paso ÉXITO (CTA WhatsApp) ──────────────────────────────────────────────
+  if (success) {
+    return (
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+        <Pressable style={sheetStyles.overlay} onPress={handleClose} />
+        <View style={[createStyles.sheet, { backgroundColor: theme.card, paddingBottom: 28 }]}>
+          <View style={sheetStyles.handle} />
+          <View style={createStyles.successWrap}>
+            <View style={[createStyles.successIcon, { backgroundColor: '#10B98126' }]}>
+              <CheckCircle2 size={32} color="#10B981" />
+            </View>
+            <Text style={[createStyles.successTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+              ¡Alumno creado!
+            </Text>
+            <Text style={[createStyles.successSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              Enviá el link de acceso a <Text style={{ color: theme.foreground, fontFamily: 'Inter_700Bold' }}>{success.clientName}</Text> por WhatsApp.
+            </Text>
+            <TouchableOpacity
+              style={createStyles.waBtn}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (success.phone) openWhatsApp(success.phone, success.clientName, success.loginUrl).catch(() => {})
+                handleClose()
+              }}
+            >
+              <MessageCircle size={20} color="#fff" />
+              <Text style={[createStyles.waBtnTxt, { fontFamily: 'Inter_700Bold' }]}>Enviar link por WhatsApp</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
+              <Text style={[createStyles.skipTxt, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Omitir por ahora</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    )
+  }
+
+  // ── Paso LÍMITE (upgrade requerido) ────────────────────────────────────────
+  if (limitReached !== null) {
+    return (
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+        <Pressable style={sheetStyles.overlay} onPress={handleClose} />
+        <View style={[createStyles.sheet, { backgroundColor: theme.card, paddingBottom: 28 }]}>
+          <View style={sheetStyles.handle} />
+          <View style={createStyles.successWrap}>
+            <View style={[createStyles.successIcon, { backgroundColor: '#F59E0B26' }]}>
+              <Lock size={32} color="#F59E0B" />
+            </View>
+            <Text style={[createStyles.successTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+              {`Límite de ${limitReached} alumnos alcanzado`}
+            </Text>
+            <Text style={[createStyles.successSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              Hacé upgrade para seguir creciendo. Tus alumnos actuales no se ven afectados.
+            </Text>
+            <TouchableOpacity
+              style={[createStyles.btn, { backgroundColor: theme.primary, borderRadius: theme.radius.xl, width: '100%' }]}
+              activeOpacity={0.85}
+              onPress={() => { handleClose(); router.push('/coach/subscription') }}
+            >
+              <Text style={[createStyles.btnText, { fontFamily: 'Montserrat_700Bold' }]}>Ver planes →</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
+              <Text style={[createStyles.skipTxt, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Ahora no</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    )
+  }
+
+  // ── Paso FORM ──────────────────────────────────────────────────────────────
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <Pressable style={sheetStyles.overlay} onPress={onClose} />
-        <View style={[createStyles.sheet, { backgroundColor: theme.card }]}>
+        <Pressable style={sheetStyles.overlay} onPress={handleClose} />
+        <View style={[createStyles.sheet, { backgroundColor: theme.card, maxHeight: '92%' }]}>
           <View style={sheetStyles.handle} />
           <View style={createStyles.header}>
-            <Text style={[createStyles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-              Nuevo Alumno
-            </Text>
-            <TouchableOpacity onPress={onClose}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[createStyles.title, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+                Agregar Nuevo Alumno
+              </Text>
+              <Text style={[createStyles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                Se creará una cuenta con contraseña temporal. El alumno deberá cambiarla en su primer ingreso.
+              </Text>
+            </View>
+            <TouchableOpacity onPress={handleClose} hitSlop={8}>
               <X size={20} color={theme.mutedForeground} />
             </TouchableOpacity>
           </View>
 
-          {error && (
-            <View style={[createStyles.errorBox, { backgroundColor: '#EF444418', borderColor: '#EF444440' }]}>
-              <Text style={createStyles.errorText}>{error}</Text>
-            </View>
-          )}
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <View style={{ gap: 12, paddingBottom: 8 }}>
+              {error && (
+                <View style={[createStyles.errorBox, { backgroundColor: '#EF444418', borderColor: '#EF444440' }]}>
+                  <Text style={createStyles.errorText}>{error}</Text>
+                </View>
+              )}
 
-          {(['fullName', 'email', 'phone', 'tempPassword'] as (keyof CreateForm)[]).map((field) => {
-            const labels: Record<keyof CreateForm, string> = {
-              fullName: 'Nombre completo *',
-              email: 'Email *',
-              phone: 'Teléfono (opcional)',
-              tempPassword: 'Contraseña temporal *',
-            }
-            return (
-              <View key={field} style={createStyles.fieldWrap}>
-                <Text style={[createStyles.label, { color: theme.mutedForeground }]}>{labels[field]}</Text>
+              <View style={createStyles.fieldWrap}>
+                <Text style={[createStyles.label, { color: theme.foreground }]}>Nombre completo</Text>
                 <TextInput
-                  style={[
-                    createStyles.input,
-                    {
-                      backgroundColor: theme.secondary,
-                      borderColor: theme.border,
-                      color: theme.foreground,
-                      fontFamily: theme.fontSans,
-                      borderRadius: theme.radius.lg,
-                    },
-                  ]}
-                  value={form[field]}
-                  onChangeText={(v) => setForm((f) => ({ ...f, [field]: v }))}
-                  placeholder={field === 'tempPassword' ? 'Min. 6 caracteres' : ''}
+                  style={[createStyles.input, { backgroundColor: theme.secondary, borderColor: theme.border, color: theme.foreground, fontFamily: theme.fontSans, borderRadius: theme.radius.lg }]}
+                  value={form.fullName}
+                  onChangeText={(v) => setForm((f) => ({ ...f, fullName: v }))}
+                  placeholder="Juan González"
                   placeholderTextColor={theme.mutedForeground}
-                  autoCapitalize={field === 'email' ? 'none' : field === 'tempPassword' ? 'none' : 'words'}
-                  keyboardType={field === 'email' ? 'email-address' : field === 'phone' ? 'phone-pad' : 'default'}
-                  secureTextEntry={field === 'tempPassword'}
+                  autoCapitalize="words"
+                />
+              </View>
+
+              <View style={createStyles.fieldWrap}>
+                <Text style={[createStyles.label, { color: theme.foreground }]}>Email del alumno</Text>
+                <TextInput
+                  style={[createStyles.input, { backgroundColor: theme.secondary, borderColor: theme.border, color: theme.foreground, fontFamily: theme.fontSans, borderRadius: theme.radius.lg }]}
+                  value={form.email}
+                  onChangeText={(v) => setForm((f) => ({ ...f, email: v }))}
+                  placeholder="alumno@ejemplo.com"
+                  placeholderTextColor={theme.mutedForeground}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
                   autoCorrect={false}
                 />
               </View>
-            )
-          })}
 
-          <TouchableOpacity
-            style={[
-              createStyles.btn,
-              { backgroundColor: theme.primary, opacity: loading ? 0.7 : 1, borderRadius: theme.radius.xl },
-            ]}
-            onPress={handleSubmit}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={[createStyles.btnText, { fontFamily: 'Montserrat_700Bold' }]}>Crear Alumno</Text>
-            )}
-          </TouchableOpacity>
-          <View style={{ height: 12 }} />
+              <View style={createStyles.fieldWrap}>
+                <Text style={[createStyles.label, { color: theme.foreground }]}>Teléfono (WhatsApp)</Text>
+                <TextInput
+                  style={[createStyles.input, { backgroundColor: theme.secondary, borderColor: theme.border, color: theme.foreground, fontFamily: theme.fontSans, borderRadius: theme.radius.lg }]}
+                  value={form.phone}
+                  onChangeText={(v) => setForm((f) => ({ ...f, phone: v }))}
+                  placeholder="+56xxxxxxxxx"
+                  placeholderTextColor={theme.mutedForeground}
+                  keyboardType="phone-pad"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <View style={createStyles.fieldWrap}>
+                <Text style={[createStyles.label, { color: theme.foreground }]}>Inicio de mensualidad</Text>
+                <TextInput
+                  style={[createStyles.input, { backgroundColor: theme.secondary, borderColor: theme.border, color: theme.foreground, fontFamily: theme.fontSans, borderRadius: theme.radius.lg }]}
+                  value={form.subscriptionStartDate}
+                  onChangeText={(v) => setForm((f) => ({ ...f, subscriptionStartDate: v }))}
+                  placeholder="AAAA-MM-DD"
+                  placeholderTextColor={theme.mutedForeground}
+                  keyboardType="numbers-and-punctuation"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <View style={createStyles.fieldWrap}>
+                <Text style={[createStyles.label, { color: theme.foreground }]}>Contraseña temporal</Text>
+                <TextInput
+                  style={[createStyles.input, { backgroundColor: theme.secondary, borderColor: theme.border, color: theme.foreground, fontFamily: 'Inter_600SemiBold', borderRadius: theme.radius.lg }]}
+                  value={form.tempPassword}
+                  onChangeText={(v) => setForm((f) => ({ ...f, tempPassword: v }))}
+                  placeholder="Mín. 8 caracteres"
+                  placeholderTextColor={theme.mutedForeground}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text style={[createStyles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                  Comparte esta clave con tu alumno. Se le pedirá cambiarla al entrar.
+                </Text>
+              </View>
+
+              {/* Checkbox legal — Ley 21.719 (1:1 web, NO hardcodeado). */}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setAgeConfirmed((v) => !v)}
+                style={createStyles.legalRow}
+              >
+                <View style={[createStyles.checkbox, { borderColor: ageConfirmed ? '#10B981' : theme.border, backgroundColor: ageConfirmed ? '#10B981' : 'transparent' }]}>
+                  {ageConfirmed ? <Check size={13} color="#fff" /> : null}
+                </View>
+                <Text style={[createStyles.legalTxt, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                  Confirmo que el alumno tiene 14 años o más, o que cuento con el consentimiento de su tutor legal (Ley 21.719).
+                </Text>
+              </TouchableOpacity>
+
+              <View style={{ flexDirection: 'row', gap: 12, paddingTop: 2 }}>
+                <TouchableOpacity
+                  style={[createStyles.cancelBtn, { borderColor: theme.border, borderRadius: theme.radius.xl }]}
+                  onPress={handleClose}
+                  disabled={loading}
+                >
+                  <Text style={[createStyles.cancelTxt, { color: theme.mutedForeground }]}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[createStyles.submitBtn, { opacity: loading ? 0.6 : 1, borderRadius: theme.radius.xl }]}
+                  onPress={handleSubmit}
+                  disabled={loading}
+                  activeOpacity={0.85}
+                >
+                  {loading ? (
+                    <>
+                      <ActivityIndicator color="#fff" size="small" />
+                      <Text style={[createStyles.submitTxt, { fontFamily: 'Inter_700Bold' }]}>Creando alumno...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus size={16} color="#fff" />
+                      <Text style={[createStyles.submitTxt, { fontFamily: 'Inter_700Bold' }]}>Crear Alumno</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+              <View style={{ height: 16 }} />
+            </View>
+          </ScrollView>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -765,15 +964,32 @@ const createStyles = StyleSheet.create({
     paddingTop: 12,
     gap: 12,
   },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 4 },
   title: { fontSize: 18 },
-  errorBox: { borderRadius: 10, borderWidth: 1, padding: 12 },
+  subtitle: { fontSize: 12.5, marginTop: 3, lineHeight: 17 },
+  errorBox: { borderRadius: 12, borderWidth: 1, padding: 12 },
   errorText: { color: '#EF4444', fontSize: 13 },
-  fieldWrap: { gap: 4 },
-  label: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  fieldWrap: { gap: 5 },
+  label: { fontSize: 13, fontWeight: '600' },
   input: { height: 44, borderWidth: 1, paddingHorizontal: 14, fontSize: 15 },
-  btn: { height: 50, alignItems: 'center', justifyContent: 'center' },
-  btnText: { color: '#fff', fontSize: 14, letterSpacing: 1, textTransform: 'uppercase' },
+  hint: { fontSize: 11.5, marginTop: 1, lineHeight: 16 },
+  legalRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 2 },
+  checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginTop: 1, flexShrink: 0 },
+  legalTxt: { flex: 1, fontSize: 12, lineHeight: 17 },
+  btn: { height: 48, alignItems: 'center', justifyContent: 'center' },
+  btnText: { color: '#fff', fontSize: 14, letterSpacing: 0.5, textTransform: 'none' },
+  cancelBtn: { flex: 1, height: 46, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  cancelTxt: { fontSize: 14, fontWeight: '600' },
+  // Botón crear = gradiente esmeralda de la web (hardcodeado allá), sólido esmeralda acá.
+  submitBtn: { flex: 1, height: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#10B981' },
+  submitTxt: { color: '#fff', fontSize: 14 },
+  successWrap: { alignItems: 'center', gap: 16, paddingVertical: 8 },
+  successIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
+  successTitle: { fontSize: 18, textAlign: 'center' },
+  successSub: { fontSize: 14, textAlign: 'center', lineHeight: 20, paddingHorizontal: 8 },
+  waBtn: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, height: 48, borderRadius: 14, backgroundColor: '#25D366' },
+  waBtnTxt: { color: '#fff', fontSize: 14 },
+  skipTxt: { fontSize: 13 },
 })
 
 // ─── Edit Client Data Modal (1:1 web EditClientDataModal: intake completo) ──────
@@ -1169,7 +1385,7 @@ export default function ClientesScreen() {
   // 6 tiles 1:1 web War Room: Total · Activos · Atención · Riesgo · Avg Adher. · Nutri. baja.
   const STAT_TILES = [
     { key: 'total', label: 'Total', value: stats.total, icon: Users, color: '#6B7280', filter: 'all' as DirectoryRiskFilter },
-    { key: 'active', label: 'Activos', value: stats.active, icon: ShieldCheck, color: '#10B981', filter: 'all' as DirectoryRiskFilter },
+    { key: 'active', label: 'Activos', value: stats.active, icon: ShieldCheck, color: theme.primary, filter: 'all' as DirectoryRiskFilter },
     { key: 'review', label: 'Atención', value: stats.reviewCount, icon: AlertTriangle, color: '#F59E0B', filter: 'review' as DirectoryRiskFilter, sub: '⚠️ ' },
     { key: 'urgent', label: 'Riesgo', value: stats.urgentCount, icon: Flame, color: '#EF4444', filter: 'urgent' as DirectoryRiskFilter, sub: '🔴 ' },
     { key: 'avg', label: 'Avg Adher.', value: avgAdherence, icon: Star, color: '#10B981', filter: 'all' as DirectoryRiskFilter, suffix: '%' },
@@ -1295,19 +1511,52 @@ export default function ClientesScreen() {
         ))}
       </View>
       {urgentBanner && !isDismissed('urgent', stats.urgentCount) && (
-        <AlertBanner message={`🔴 ${stats.urgentCount} alumno${stats.urgentCount !== 1 ? 's' : ''} con atención urgente`} color="#EF4444" onPress={() => setRiskFilter('urgent')} onDismiss={() => dismissAlert('urgent', stats.urgentCount)} />
+        <AlertBanner
+          message={`${stats.urgentCount} cliente${stats.urgentCount !== 1 ? 's' : ''} con atención urgente (score ≥ 50)`}
+          color="#F43F5E"
+          textColor="#E11D48"
+          onPress={() => setRiskFilter('urgent')}
+          onDismiss={() => dismissAlert('urgent', stats.urgentCount)}
+        />
       )}
       {expiredBanner && !isDismissed('expired', stats.expiredProgramCount) && (
-        <AlertBanner message={`${stats.expiredProgramCount} programa${stats.expiredProgramCount !== 1 ? 's' : ''} vencido${stats.expiredProgramCount !== 1 ? 's' : ''}`} color="#F97316" onPress={() => setRiskFilter('expired_program')} onDismiss={() => dismissAlert('expired', stats.expiredProgramCount)} />
+        <AlertBanner
+          message={`${stats.expiredProgramCount} programa${stats.expiredProgramCount !== 1 ? 's' : ''} vencido${stats.expiredProgramCount !== 1 ? 's' : ''}`}
+          color="#F97316"
+          textColor="#C2410C"
+          onPress={() => setRiskFilter('expired_program')}
+          onDismiss={() => dismissAlert('expired', stats.expiredProgramCount)}
+        />
       )}
       {syncBanner && !isDismissed('sync', stats.pendingSyncCount) && (
-        <AlertBanner message={`${stats.pendingSyncCount} alumno${stats.pendingSyncCount !== 1 ? 's' : ''} con cambio de contraseña pendiente`} color="#F59E0B" onPress={() => setRiskFilter('password_reset')} onDismiss={() => dismissAlert('sync', stats.pendingSyncCount)} />
+        <AlertBanner
+          message={`${stats.pendingSyncCount} alumno${stats.pendingSyncCount !== 1 ? 's' : ''} con cambio de contraseña pendiente`}
+          color="#F59E0B"
+          textColor="#92400E"
+          onPress={() => setRiskFilter('password_reset')}
+          onDismiss={() => dismissAlert('sync', stats.pendingSyncCount)}
+        />
       )}
       {nutritionLowCount > 0 && !isDismissed('nutrition_low', nutritionLowCount) && (
-        <AlertBanner message={`🥗 ${nutritionLowCount} alumno${nutritionLowCount !== 1 ? 's' : ''} con cumplimiento nutricional bajo (<60%)`} color="#EF4444" onPress={() => setRiskFilter('nutrition_low')} onDismiss={() => dismissAlert('nutrition_low', nutritionLowCount)} />
+        <AlertBanner
+          message={`🥗 ${nutritionLowCount} alumno${nutritionLowCount !== 1 ? 's' : ''} con cumplimiento nutricional bajo (<60%)`}
+          color="#EF4444"
+          textColor="#B91C1C"
+          onPress={() => setRiskFilter('nutrition_low')}
+          onDismiss={() => dismissAlert('nutrition_low', nutritionLowCount)}
+        />
       )}
       {noCheckin1m > 0 && stats.urgentCount === 0 && !isDismissed('checkin', noCheckin1m) && (
-        <AlertBanner message={`ALERTA: ${noCheckin1m} alumno${noCheckin1m !== 1 ? 's' : ''} llevan más de 1 mes sin check-in`} color="#F59E0B" onPress={() => setRiskFilter('urgent')} onDismiss={() => dismissAlert('checkin', noCheckin1m)} />
+        <AlertBanner
+          message={`ALERTA: ${noCheckin1m} cliente${noCheckin1m !== 1 ? 's' : ''} llevan mas de 1 mes sin check-in (desde el ultimo registrado)`}
+          color="#F59E0B"
+          textColor={theme.foreground}
+          ctaColor={theme.primary}
+          bgAlpha={0.05}
+          borderAlpha={0.2}
+          onPress={() => setRiskFilter('urgent')}
+          onDismiss={() => dismissAlert('checkin', noCheckin1m)}
+        />
       )}
       {pulseError && (
         <TouchableOpacity activeOpacity={0.85} onPress={loadPulse} style={[styles.pulseErr, { backgroundColor: '#EF444414', borderColor: '#EF444440' }]}>
@@ -1344,34 +1593,53 @@ export default function ClientesScreen() {
       </View>
     </>
   )
-  const emptyNode = (
+  const isFilteredEmpty = !!search || hasActiveFilters
+  const emptyNode = isFilteredEmpty ? (
+    // 1:1 web ClientsDirectoryClient: empty "sin resultados" con eco del término / filtros.
     <View style={styles.emptyWrap}>
-      <Users size={36} color={theme.mutedForeground} strokeWidth={1.5} />
+      <Search size={36} color={theme.mutedForeground} strokeWidth={1.5} />
       <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-        {search || hasActiveFilters ? 'Sin resultados' : 'Sin alumnos aún'}
+        Sin resultados
       </Text>
       <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-        {search || hasActiveFilters ? 'Probá ajustando los filtros o la búsqueda.' : 'Usa el botón + para agregar tu primer alumno.'}
+        {search
+          ? `Prueba buscando por email o nombre completo. Término: "${search}"`
+          : 'Ningún alumno coincide con los filtros activos.'}
       </Text>
+    </View>
+  ) : (
+    // 1:1 web ClientsDirectoryEmpty: "Tu equipo te espera" + CTA Nuevo alumno.
+    <View style={styles.emptyWrap}>
+      <View style={[styles.emptyIconBox, { backgroundColor: hexToRgba(theme.primary, 0.08) }]}>
+        <Users size={48} color={hexToRgba(theme.primary, 0.4)} strokeWidth={1} />
+      </View>
+      <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+        Tu equipo te espera
+      </Text>
+      <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        Agrega tu primer alumno y empieza a transformar vidas.
+      </Text>
+      <TouchableOpacity
+        style={[styles.emptyCta, { backgroundColor: theme.primary, borderRadius: theme.radius.xl }]}
+        onPress={() => setShowCreate(true)}
+        activeOpacity={0.85}
+      >
+        <Text style={[styles.emptyCtaTxt, { fontFamily: 'Montserrat_700Bold' }]}>Nuevo alumno</Text>
+      </TouchableOpacity>
     </View>
   )
 
   if (loading) {
     return (
-      <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
-        <ScreenHeader title="Alumnos" subtitle="Cargando..." />
+      <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
         <EvaLoaderScreen subtitle="Cargando alumnos…" />
       </SafeAreaView>
     )
   }
 
   return (
-    <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
-      <ScreenHeader
-        title="Alumnos"
-        subtitle={`${stats.active} activos · ${stats.total} total`}
-      />
 
       {/* Search + action bar */}
       <View style={styles.actionBar}>
@@ -1391,19 +1659,48 @@ export default function ClientesScreen() {
             clearButtonMode="while-editing"
           />
         </View>
-        {/* Toggle de vista (1:1 web: tabla/cuadrícula) + lista compacta extra mobile */}
+      </View>
+
+      {/* Fila de controles 1:1 web: Filtros (label) · Orden (ArrowUpDown + sort actual) · toggle vista */}
+      <View style={styles.controlsBar}>
+        <TouchableOpacity
+          style={[
+            styles.labeledBtn,
+            {
+              backgroundColor: hasActiveFilters ? hexToRgba(theme.primary, 0.15) : theme.secondary,
+              borderColor: hasActiveFilters ? theme.primary : theme.border,
+              borderRadius: theme.radius.lg,
+            },
+          ]}
+          onPress={() => setShowFilterSheet(true)}
+          activeOpacity={0.8}
+        >
+          <SlidersHorizontal size={15} color={hasActiveFilters ? theme.primary : theme.mutedForeground} />
+          <Text style={[styles.labeledBtnTxt, { color: hasActiveFilters ? theme.primary : theme.foreground }]}>Filtros</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.labeledBtn, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg, flexShrink: 1 }]}
+          onPress={() => setShowSortSheet(true)}
+          onLongPress={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+          activeOpacity={0.8}
+        >
+          <ArrowUpDown size={15} color={theme.foreground} />
+          <Text style={[styles.labeledBtnTxt, { color: theme.foreground }]} numberOfLines={1}>{sortLabel}</Text>
+        </TouchableOpacity>
+        <View style={{ flex: 1 }} />
+        {/* Toggle de vista (1:1 web: cuadrícula/tabla) + lista compacta extra mobile */}
         <View style={[styles.viewToggle, { borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-          <TouchableOpacity
-            style={[styles.viewSeg, viewMode === 'table' ? { backgroundColor: hexToRgba(theme.primary, 0.15) } : null]}
-            onPress={() => setView('table')}
-          >
-            <Table2 size={17} color={viewMode === 'table' ? theme.primary : theme.mutedForeground} />
-          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.viewSeg, viewMode === 'cards' ? { backgroundColor: hexToRgba(theme.primary, 0.15) } : null]}
             onPress={() => setView('cards')}
           >
             <LayoutGrid size={17} color={viewMode === 'cards' ? theme.primary : theme.mutedForeground} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.viewSeg, viewMode === 'table' ? { backgroundColor: hexToRgba(theme.primary, 0.15) } : null]}
+            onPress={() => setView('table')}
+          >
+            <Table2 size={17} color={viewMode === 'table' ? theme.primary : theme.mutedForeground} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.viewSeg, viewMode === 'list' ? { backgroundColor: hexToRgba(theme.primary, 0.15) } : null]}
@@ -1412,26 +1709,6 @@ export default function ClientesScreen() {
             <ListIcon size={17} color={viewMode === 'list' ? theme.primary : theme.mutedForeground} />
           </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          style={[
-            styles.iconBtn,
-            {
-              backgroundColor: hasActiveFilters ? hexToRgba(theme.primary, 0.15) : theme.secondary,
-              borderColor: hasActiveFilters ? theme.primary : theme.border,
-              borderRadius: theme.radius.lg,
-            },
-          ]}
-          onPress={() => setShowFilterSheet(true)}
-        >
-          <SlidersHorizontal size={18} color={hasActiveFilters ? theme.primary : theme.mutedForeground} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.iconBtn, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}
-          onPress={() => setShowSortSheet(true)}
-          onLongPress={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-        >
-          <RefreshCw size={16} color={theme.mutedForeground} />
-        </TouchableOpacity>
       </View>
 
       {viewMode === 'cards' ? (
@@ -1725,11 +2002,13 @@ const styles = StyleSheet.create({
     height: 40,
   },
   searchInput: { flex: 1, height: 40, fontSize: 14 },
-  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  controlsBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingBottom: 10 },
+  labeledBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 40, paddingHorizontal: 12, borderWidth: 1 },
+  labeledBtnTxt: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
   viewToggle: { flexDirection: 'row', borderWidth: 1, height: 40, alignItems: 'center', paddingHorizontal: 2, gap: 1 },
   viewSeg: { width: 32, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
-  warRoom: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8, gap: 4 },
-  warTitle: { fontSize: 24, letterSpacing: -0.5, textTransform: 'uppercase' },
+  warRoom: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10, gap: 5 },
+  warTitle: { fontSize: 28, lineHeight: 32, letterSpacing: -1, textTransform: 'uppercase' },
   warSub: { fontSize: 12.5 },
   warSyncRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   warSyncLabel: { fontSize: 9.5, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
@@ -1772,9 +2051,12 @@ const styles = StyleSheet.create({
   pulseErrAction: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4 },
   list: { paddingHorizontal: 16, paddingBottom: 100, gap: 8 },
   cardsList: { paddingHorizontal: 16, paddingBottom: 140 },
-  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 32, paddingTop: 40 },
-  emptyTitle: { fontSize: 18 },
-  emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 32, paddingTop: 56 },
+  emptyIconBox: { width: 96, height: 96, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  emptyTitle: { fontSize: 20, textTransform: 'uppercase', letterSpacing: -0.4, textAlign: 'center' },
+  emptySub: { fontSize: 14, textAlign: 'center', lineHeight: 21, maxWidth: 320 },
+  emptyCta: { marginTop: 16, height: 52, paddingHorizontal: 40, alignItems: 'center', justifyContent: 'center' },
+  emptyCtaTxt: { color: '#fff', fontSize: 12, letterSpacing: 1.2, textTransform: 'uppercase' },
   fab: {
     position: 'absolute',
     right: 20,

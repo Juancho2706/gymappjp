@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
-import { Activity, GitCompare, Scale, Target, TrendingUp, Zap } from 'lucide-react-native'
+import { Activity, ArrowRightLeft, Camera, Scale, Target, Zap } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { EmptyState } from '../../../components'
 import { updateCoachClient } from '../../../lib/coach-client-detail'
@@ -17,14 +17,16 @@ import {
 } from '../../../lib/profile-analytics'
 import type { CoachClientDetailData, CheckInEntry } from '../../../lib/coach-client-detail'
 
-const BMI_MIN = 15
-const BMI_MAX = 40
+// Escala IMC espejo de la web (rango 16–36, marcas 18.5/25/30).
+const BMI_MIN = 16
+const BMI_MAX = 36
 const BMI_SEGMENTS = [
-  { upTo: 18.5, color: '#3B82F6' },
-  { upTo: 25, color: '#10B981' },
-  { upTo: 30, color: '#F59E0B' },
-  { upTo: 40, color: '#EF4444' },
+  { upTo: 18.5, color: '#38BDF8' }, // Bajo peso (sky-400)
+  { upTo: 25, color: '#10B981' }, // Normal (emerald-500)
+  { upTo: 30, color: '#F59E0B' }, // Sobrepeso (amber-500)
+  { upTo: 36, color: '#F43F5E' }, // Obesidad (rose-500)
 ]
+const BMI_TICKS = ['16', '18.5', '25', '30', '36']
 
 export function ProgresoTab({ data, onOpenPhoto, onReload }: { data: CoachClientDetailData; onOpenPhoto: (photos: string[], index: number) => void; onReload?: () => void }) {
   const { theme } = useTheme()
@@ -58,10 +60,10 @@ export function ProgresoTab({ data, onOpenPhoto, onReload }: { data: CoachClient
 
   return (
     <View style={{ gap: 14 }}>
-      {/* AreaChart de peso */}
+      {/* Peso y tendencia */}
       {points.length >= 2 ? (
         <StatCard>
-          <CardHeader icon={Scale} title="Evolución de peso" right={
+          <CardHeader icon={Scale} title="Peso y tendencia" right={
             client?.goal_weight_kg != null ? <Pill label={`Objetivo ${client.goal_weight_kg} kg`} /> : null
           } />
           <AreaTrend
@@ -96,18 +98,19 @@ export function ProgresoTab({ data, onOpenPhoto, onReload }: { data: CoachClient
 
       {/* Stats de composición */}
       <View style={cd.grid2}>
-        <MetricBox value={initial != null ? `${initial} kg` : '—'} label="Peso inicial" />
-        <MetricBox value={actual != null ? `${actual} kg` : '—'} label="Peso actual" />
-        <MetricBox value={cambio != null ? `${cambio > 0 ? '+' : ''}${cambio} kg` : '—'} label="Cambio total" color={cambio == null ? undefined : cambio > 0 ? '#EF4444' : theme.success} />
-        <MetricBox value={`${ritmo30 > 0 ? '+' : ''}${ritmo30} kg`} label="Ritmo 30d" color={ritmo30 > 0 ? '#EF4444' : ritmo30 < 0 ? theme.success : undefined} />
-        <MetricBox value={proyeccion4w != null ? `${proyeccion4w} kg` : '—'} label="Proyección 4 sem" sub="regresión lineal" />
+        <MetricBox value={initial != null ? `${Number(initial).toFixed(1)} kg` : '—'} label="Peso inicial" />
+        <MetricBox value={actual != null ? `${actual.toFixed(1)} kg` : '—'} label="Peso actual" />
+        <MetricBox value={cambio != null ? `${cambio > 0 ? '+' : ''}${cambio.toFixed(1)} kg` : '—'} label="Cambio total" color={cambio == null ? undefined : cambio > 0 ? '#EF4444' : theme.success} />
+        <MetricBox value={`${ritmo30 >= 0 ? '+' : ''}${ritmo30.toFixed(2)} kg/mes`} label="Ritmo (30d)" sub="Regresión reciente" color={ritmo30 > 0 ? '#EF4444' : ritmo30 < 0 ? theme.success : undefined} />
+        <MetricBox value={proyeccion4w != null && series.length >= 2 ? `${proyeccion4w.toFixed(1)} kg` : '—'} label="Proyección 4 sem" sub="Si continúa la tendencia" />
       </View>
 
       {/* IMC */}
       {bmi != null ? (
         <StatCard>
-          <CardHeader icon={TrendingUp} title="Índice de masa corporal" right={<Pill label={bmiCategory(bmi)} />} />
+          <CardHeader icon={Scale} title="IMC" />
           <Text style={[styles.bmiValue, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{bmi.toFixed(1)}</Text>
+          <Text style={[styles.bmiCat, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{bmiCategory(bmi)}</Text>
           <BmiBar bmi={bmi} />
         </StatCard>
       ) : null}
@@ -115,19 +118,19 @@ export function ProgresoTab({ data, onOpenPhoto, onReload }: { data: CoachClient
       {/* Gauge energía 7d */}
       {energy7d != null ? (
         <StatCard>
-          <CardHeader icon={Zap} title="Energía promedio (7d)" />
+          <CardHeader icon={Zap} title="Energía media (7 días)" />
           <View style={{ alignItems: 'center' }}>
             <RadialGauge value={energy7d} max={10} label="de 10" display={energy7d.toFixed(1)} color={energyColorHex(Math.round(energy7d))} />
           </View>
         </StatCard>
       ) : null}
 
-      {/* Comparador de fotos */}
+      {/* Comparativa fotos */}
       <PhotoComparator checkIns={checkIns} onOpenPhoto={onOpenPhoto} />
 
-      {/* Timeline de check-ins */}
+      {/* Línea de tiempo de check-ins */}
       <View style={{ gap: 10 }}>
-        <Text style={[cd.listHeading, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Historial de check-ins</Text>
+        <Text style={[cd.listHeading, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Línea de tiempo de check-ins</Text>
         {checkIns.map((c) => (
           <CheckInRow key={c.id} c={c} onOpenPhoto={onOpenPhoto} />
         ))}
@@ -176,7 +179,7 @@ function BmiBar({ bmi }: { bmi: number }) {
   const { theme } = useTheme()
   const pct = Math.max(0, Math.min(1, (bmi - BMI_MIN) / (BMI_MAX - BMI_MIN)))
   return (
-    <View style={{ gap: 6 }}>
+    <View style={{ gap: 8, marginTop: 6 }}>
       <View style={styles.bmiTrack}>
         {BMI_SEGMENTS.map((seg, i) => {
           const lo = i === 0 ? BMI_MIN : BMI_SEGMENTS[i - 1]!.upTo
@@ -186,10 +189,9 @@ function BmiBar({ bmi }: { bmi: number }) {
         <View style={[styles.bmiMarker, { left: `${pct * 100}%` }]} />
       </View>
       <View style={styles.bmiLabels}>
-        <Text style={[styles.bmiLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Bajo</Text>
-        <Text style={[styles.bmiLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Normal</Text>
-        <Text style={[styles.bmiLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sobre</Text>
-        <Text style={[styles.bmiLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Obes.</Text>
+        {BMI_TICKS.map((t) => (
+          <Text key={t} style={[styles.bmiLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{t}</Text>
+        ))}
       </View>
     </View>
   )
@@ -207,32 +209,54 @@ function PhotoComparator({ checkIns, onOpenPhoto }: { checkIns: CheckInEntry[]; 
   if (withPhoto.length < 2) return null
   const a = withPhoto[Math.min(aIdx, withPhoto.length - 1)]!
   const b = withPhoto[Math.min(bIdx, withPhoto.length - 1)]!
+  const sameSel = a.id === b.id
   const dW = a.weight != null && b.weight != null ? Math.round((Number(b.weight) - Number(a.weight)) * 10) / 10 : null
   const dE = a.energy_level != null && b.energy_level != null ? b.energy_level - a.energy_level : null
 
   return (
     <StatCard>
-      <CardHeader icon={GitCompare} title="Comparador antes / después" />
+      <CardHeader icon={Camera} title="Comparativa fotos" />
+
+      {/* Selector: Check-in base */}
+      <Text style={[styles.selLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Check-in base</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+        {withPhoto.map((c, i) => (
+          <SelChip key={`a${c.id}`} label={`${formatDate(c.date)} · ${c.weight != null ? `${c.weight} kg` : '—'}`} on={i === aIdx} onPress={() => setAIdx(i)} />
+        ))}
+      </ScrollView>
+
+      {/* Selector: Comparar con */}
+      <Text style={[styles.selLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Comparar con</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+        {withPhoto.map((c, i) => (
+          <SelChip key={`b${c.id}`} label={`${formatDate(c.date)} · ${c.weight != null ? `${c.weight} kg` : '—'}`} on={i === bIdx} onPress={() => setBIdx(i)} />
+        ))}
+      </ScrollView>
+
       <View style={styles.compRow}>
         <CompCol label="Antes" c={a} onOpen={() => onOpenPhoto([a.front_photo_url!], 0)} />
         <CompCol label="Después" c={b} onOpen={() => onOpenPhoto([b.front_photo_url!], 0)} />
       </View>
-      <View style={cd.grid2}>
-        {dW != null ? <MetricBox value={`${dW > 0 ? '+' : ''}${dW} kg`} label="Δ peso" color={dW > 0 ? '#EF4444' : theme.success} /> : null}
-        {dE != null ? <MetricBox value={`${dE > 0 ? '+' : ''}${dE}`} label="Δ energía" color={dE >= 0 ? theme.success : '#EF4444'} /> : null}
-      </View>
-      <Text style={[styles.compHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Antes</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
-        {withPhoto.map((c, i) => (
-          <SelChip key={`a${c.id}`} label={formatDate(c.date)} on={i === aIdx} onPress={() => setAIdx(i)} />
-        ))}
-      </ScrollView>
-      <Text style={[styles.compHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Después</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
-        {withPhoto.map((c, i) => (
-          <SelChip key={`b${c.id}`} label={formatDate(c.date)} on={i === bIdx} onPress={() => setBIdx(i)} />
-        ))}
-      </ScrollView>
+
+      {!sameSel ? (
+        <View style={[styles.deltaBox, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}>
+          <Text style={[styles.deltaHead, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>Deltas entre selección</Text>
+          <View style={cd.grid2}>
+            {dW != null ? <MetricBox value={`${dW > 0 ? '+' : ''}${dW} kg`} label="Δ peso" color={dW > 0 ? '#EF4444' : theme.success} /> : null}
+            {dE != null ? <MetricBox value={`${dE > 0 ? '+' : ''}${dE}`} label="Δ energía" color={dE >= 0 ? theme.success : '#EF4444'} /> : null}
+          </View>
+        </View>
+      ) : null}
+
+      <TouchableOpacity
+        activeOpacity={0.85}
+        disabled={sameSel || !a.front_photo_url || !b.front_photo_url}
+        onPress={() => onOpenPhoto([a.front_photo_url!, b.front_photo_url!], 0)}
+        style={[styles.openBtn, { backgroundColor: theme.primary, opacity: sameSel ? 0.5 : 1, borderRadius: theme.radius.lg }]}
+      >
+        <ArrowRightLeft size={15} color={theme.primaryForeground} />
+        <Text style={[styles.openBtnTxt, { color: theme.primaryForeground, fontFamily: 'Inter_700Bold' }]}>Abrir comparativa</Text>
+      </TouchableOpacity>
     </StatCard>
   )
 }
@@ -298,15 +322,20 @@ const styles = StyleSheet.create({
   tipDate: { fontSize: 13 },
   tipMeta: { fontSize: 12 },
   bmiValue: { fontSize: 30, letterSpacing: -0.5 },
+  bmiCat: { fontSize: 12, marginTop: -2 },
   bmiTrack: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', position: 'relative' },
   bmiMarker: { position: 'absolute', top: -4, width: 5, height: 20, borderRadius: 3, backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#0F172A', marginLeft: -2.5 },
   bmiLabels: { flexDirection: 'row', justifyContent: 'space-between' },
-  bmiLabel: { fontSize: 9.5 },
-  compRow: { flexDirection: 'row', gap: 14 },
+  bmiLabel: { fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.5 },
+  selLabel: { fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 4 },
+  compRow: { flexDirection: 'row', gap: 14, marginTop: 6 },
   compLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6 },
   compPhoto: { width: 120, height: 150, borderRadius: 12, borderWidth: 1 },
   compMeta: { fontSize: 12 },
-  compHint: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 4 },
+  deltaBox: { borderWidth: 1, padding: 12, gap: 8, marginTop: 4 },
+  deltaHead: { fontSize: 9, textTransform: 'uppercase', letterSpacing: 0.8 },
+  openBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, marginTop: 4 },
+  openBtnTxt: { fontSize: 13 },
   chipScroll: { gap: 6 },
   selChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6 },
   ciCard: { borderWidth: 1, padding: 14, gap: 8 },

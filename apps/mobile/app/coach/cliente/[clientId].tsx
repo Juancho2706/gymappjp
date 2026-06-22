@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Apple, Archive, ArchiveRestore, BarChart3, ClipboardList, Clock, CreditCard, Dumbbell, HeartPulse, LayoutGrid, MessageCircle, Pencil, Plus, Salad, Scale, TrendingUp, User, X } from 'lucide-react-native'
+import { Apple, Archive, ArchiveRestore, BarChart3, ClipboardList, CreditCard, Dumbbell, HeartPulse, LayoutDashboard, LayoutGrid, MessageCircle, Pencil, Plus, Scale, TrendingUp, User, Utensils, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import { useTheme } from '../../../context/ThemeContext'
@@ -10,7 +10,7 @@ import { Button, EmptyState, NativeDialog, TopBar } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { PhotoLightbox } from '../../../components/PhotoLightbox'
-import { ClientHero, type HeroChip } from '../../../components/coach/clientDetail/ClientHero'
+import { ClientHero, type HeroStat } from '../../../components/coach/clientDetail/ClientHero'
 import { ClientTabBar, type ClientTab, type TabItem } from '../../../components/coach/clientDetail/ClientTabBar'
 import { OverviewTab } from '../../../components/coach/clientDetail/OverviewTab'
 import { ProgresoTab } from '../../../components/coach/clientDetail/ProgresoTab'
@@ -48,15 +48,43 @@ import { getTodayInSantiago } from '../../../lib/date-utils'
 
 const round1 = (n: number) => Math.round(n * 10) / 10
 
-// A-F18: etiqueta relativa de "última actividad".
+// Espejo de formatRelativeLastActivity (web profileOverviewUtils): copy verbatim.
 function relActivityLabel(iso: string | null): string {
-  if (!iso) return 'Sin actividad'
-  const d = Math.floor((Date.now() - new Date(`${iso}T12:00:00`).getTime()) / 86400000)
-  if (d <= 0) return 'Hoy'
-  if (d === 1) return 'Ayer'
-  if (d < 30) return `Hace ${d}d`
-  const m = Math.floor(d / 30)
-  return `Hace ${m} mes${m === 1 ? '' : 'es'}`
+  if (!iso) return 'Sin actividad reciente'
+  const ms = new Date(`${iso}T12:00:00`).getTime()
+  if (!Number.isFinite(ms)) return 'Sin actividad reciente'
+  const days = Math.floor((Date.now() - ms) / 86400000)
+  if (days <= 0) return 'Hoy'
+  if (days === 1) return 'Ayer'
+  if (days < 7) return `Hace ${days} días`
+  if (days < 30) return `Hace ${Math.floor(days / 7)} sem.`
+  return new Date(`${iso}T12:00:00`).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+// Mes + año del alumno (espejo del clientSinceLabel de la web).
+function clientSinceLabel(subscriptionStart: string | null, createdAt: string | null): string {
+  const base = subscriptionStart || createdAt
+  if (!base) return '—'
+  const d = new Date(base.length <= 10 ? `${base}T12:00:00` : base)
+  if (!Number.isFinite(d.getTime())) return '—'
+  return d.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' })
+}
+
+// Score de atención 0–100 (mismas señales que la web; sin attentionScore server-side en mobile).
+function computeAttentionScore(args: {
+  checkInCompliancePercent: number
+  nutritionWeeklyAvgPct: number
+  workoutsThisWeek: number
+  hasActiveNutrition: boolean
+  lastCheckInUnreviewed: boolean
+}): number {
+  let score = 0
+  if (args.checkInCompliancePercent < 40) score += 35
+  else if (args.checkInCompliancePercent < 60) score += 15
+  if (args.hasActiveNutrition && args.nutritionWeeklyAvgPct < 60) score += 25
+  if (args.workoutsThisWeek <= 0) score += 25
+  if (args.lastCheckInUnreviewed) score += 15
+  return Math.min(100, score)
 }
 
 export default function ClientDetailScreen() {
@@ -122,6 +150,11 @@ export default function ClientDetailScreen() {
     router.push(`/coach/program-builder?clientId=${client.id}&clientName=${encodeURIComponent(client.full_name)}`)
   }
 
+  function openNutrition() {
+    if (!client) return
+    router.push(`/coach/nutrition-builder?clientId=${client.id}&clientName=${encodeURIComponent(client.full_name)}`)
+  }
+
   function confirmArchive() {
     if (!client) return
     const archiving = !client.is_archived
@@ -164,15 +197,27 @@ export default function ClientDetailScreen() {
     const lastCheckin = data.checkIns[0]?.date ?? null
     const lastActivityIso = [lastWorkout, lastCheckin].filter(Boolean).sort().pop() ?? null
     let programWeek: string | null = null
+    let programWeekCur = 1
+    let programWeekTot = 1
     if (data.activeProgram?.start_date && data.activeProgram.weeks_to_repeat) {
       const start = new Date(`${data.activeProgram.start_date}T12:00:00`).getTime()
       if (Number.isFinite(start)) {
-        const wk = Math.min(Math.max(1, Math.ceil((Math.max(0, (Date.now() - start) / 86400000) + 1) / 7)), Math.max(1, data.activeProgram.weeks_to_repeat))
-        programWeek = `${wk}/${data.activeProgram.weeks_to_repeat}`
+        programWeekTot = Math.max(1, data.activeProgram.weeks_to_repeat)
+        programWeekCur = Math.min(Math.max(1, Math.ceil((Math.max(0, (Date.now() - start) / 86400000) + 1) / 7)), programWeekTot)
+        programWeek = `${programWeekCur}/${programWeekTot}`
       }
     }
 
-    return { series, currentWeight, initialWeight, weightDelta, streak, trainingAge, today, weeklyPRs, pendingPays, attention, lastActivityIso, programWeek }
+    const lastCheckInUnreviewed = !!(data.checkIns[0] && !data.checkIns[0].reviewed_at)
+    const attentionScore = computeAttentionScore({
+      checkInCompliancePercent: data.compliance?.checkInCompliancePercent ?? 0,
+      nutritionWeeklyAvgPct: data.compliance?.nutritionWeeklyAvgPct ?? 0,
+      workoutsThisWeek: data.compliance?.workoutsThisWeek ?? 0,
+      hasActiveNutrition: !!data.activeNutrition,
+      lastCheckInUnreviewed,
+    })
+
+    return { series, currentWeight, initialWeight, weightDelta, streak, trainingAge, today, weeklyPRs, pendingPays, attention, attentionScore, lastActivityIso, programWeek, programWeekCur, programWeekTot }
   }, [data, client])
 
   async function onExportPdf() {
@@ -226,19 +271,50 @@ export default function ClientDetailScreen() {
     )
   }
 
-  const chips: HeroChip[] = []
-  chips.push({ icon: Scale, label: derived.weightDelta != null ? `Δ ${derived.weightDelta > 0 ? '+' : ''}${derived.weightDelta} kg` : 'Peso', value: derived.currentWeight != null ? `${derived.currentWeight} kg` : '—', color: derived.weightDelta == null ? undefined : derived.weightDelta > 0 ? '#EF4444' : theme.success })
-  chips.push({ icon: Apple, label: 'Adherencia', value: `${data.compliance?.nutritionWeeklyAvgPct ?? 0}%` })
-  chips.push({ icon: Dumbbell, label: 'Entrenos sem', value: `${data.compliance?.workoutsThisWeek ?? 0}/${data.compliance?.workoutsTarget ?? 1}` })
-  if (derived.today) chips.push({ icon: Salad, label: 'Comidas hoy', value: `${derived.today.mealsDone}/${derived.today.mealsTotal}` })
-  chips.push({ icon: Clock, label: 'Última actividad', value: relActivityLabel(derived.lastActivityIso) })
-  if (derived.programWeek) chips.push({ icon: LayoutGrid, label: 'Programa', value: `Sem ${derived.programWeek}` })
+  // 5 chips fijos en el orden de la web: Peso · Adherencia · Workouts · Programa · Comidas hoy.
+  const workoutsThisWeek = data.compliance?.workoutsThisWeek ?? 0
+  const workoutsTarget = Math.max(1, data.compliance?.workoutsTarget ?? 1)
+  const adherencePct = Math.min(100, Math.round((workoutsThisWeek / workoutsTarget) * 100))
+  const mealsDone = derived.today?.mealsDone ?? 0
+  const mealsTotal = Math.max(1, derived.today?.mealsTotal ?? 1)
+  const mealsPct = derived.today?.compliancePct ?? 0
+  const stats: HeroStat[] = [
+    {
+      label: 'Peso',
+      value: derived.currentWeight != null && derived.currentWeight > 0 ? `${derived.currentWeight} kg` : '—',
+      sub: { kind: 'weightDelta', delta: derived.weightDelta },
+    },
+    {
+      label: 'Adherencia',
+      value: `${adherencePct}%`,
+      sub: { kind: 'progress', pct: adherencePct },
+    },
+    {
+      label: 'Workouts',
+      value: `${workoutsThisWeek}/${workoutsTarget}`,
+      sub: { kind: 'text', text: 'esta semana' },
+      icon: Dumbbell,
+      iconColor: theme.primary,
+    },
+    {
+      label: 'Programa',
+      value: `Sem ${derived.programWeekCur}/${derived.programWeekTot}`,
+      sub: { kind: 'progress', pct: (derived.programWeekCur / derived.programWeekTot) * 100 },
+    },
+    {
+      label: 'Comidas hoy',
+      value: `${mealsDone}/${mealsTotal}`,
+      sub: { kind: 'text', text: `${mealsPct}% plan`, color: mealsPct >= 80 ? '#10B981' : '#F59E0B' },
+      icon: Utensils,
+      iconColor: '#10B981',
+    },
+  ]
 
   const tabs: TabItem[] = [
-    { value: 'overview', label: 'Overview', icon: LayoutGrid },
+    { value: 'overview', label: 'Overview', icon: LayoutDashboard },
     { value: 'progreso', label: 'Progreso', icon: TrendingUp, badge: data.checkIns.length || null },
     { value: 'analisis', label: 'Análisis', icon: BarChart3, badge: derived.weeklyPRs.length || null },
-    { value: 'plan', label: 'Plan', icon: Dumbbell, badge: data.activeProgram?.planCount || null },
+    { value: 'plan', label: 'Plan', icon: LayoutGrid, badge: data.activeProgram?.planCount || null },
     { value: 'nutricion', label: 'Nutrición', icon: Apple, badge: derived.attention && data.activeNutrition && (data.compliance?.nutritionWeeklyAvgPct ?? 0) < 60 ? '!' : null },
     { value: 'facturacion', label: 'Facturación', icon: CreditCard, badge: derived.pendingPays || null },
   ]
@@ -257,11 +333,16 @@ export default function ClientDetailScreen() {
           email={client.email}
           statusLabel={client.is_archived ? 'Archivado' : client.is_active ? 'Activo' : 'Inactivo'}
           statusTone={client.is_archived ? 'muted' : client.is_active ? 'success' : 'muted'}
-          attention={derived.attention}
+          attentionScore={derived.attentionScore}
+          lastActivityLabel={relActivityLabel(derived.lastActivityIso)}
           trainingAge={derived.trainingAge}
           streak={derived.streak}
-          chips={chips}
+          clientSinceLabel={clientSinceLabel(client.subscription_start_date, client.created_at)}
+          stats={stats}
+          hasPhone={!!(client.phone ?? '').replace(/\D/g, '')}
           onWhatsApp={openWhatsApp}
+          onNutrition={openNutrition}
+          onTraining={openBuilder}
           onExportPdf={onExportPdf}
           exporting={exporting}
         />
@@ -320,12 +401,13 @@ export default function ClientDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* FAB */}
+      {/* FAB — espejo de ProfileFloatingActions de la web (WhatsApp · Builder),
+          más acciones mobile-only que la web resuelve en diálogos/pestañas. */}
       <Fab open={fabOpen} onToggle={() => setFabOpen((v) => !v)} actions={[
         { icon: MessageCircle, label: 'WhatsApp', color: '#25D366', onPress: () => { setFabOpen(false); openWhatsApp() } },
-        { icon: Pencil, label: 'Editar datos', onPress: () => { setFabOpen(false); setEditOpen(true) } },
+        { icon: Dumbbell, label: 'Builder', onPress: () => { setFabOpen(false); openBuilder() } },
         { icon: CreditCard, label: 'Registrar pago', onPress: () => { setFabOpen(false); setPayOpen(true) } },
-        { icon: Dumbbell, label: 'Editar programa', onPress: () => { setFabOpen(false); openBuilder() } },
+        { icon: Pencil, label: 'Editar datos', onPress: () => { setFabOpen(false); setEditOpen(true) } },
       ]} />
 
       <NativeDialog open={payOpen} title="Registrar pago" onClose={() => setPayOpen(false)}>

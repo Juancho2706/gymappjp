@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { Dimensions, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
-import { Apple, Dumbbell, Eye, MoreVertical, Pause, Play, Share2, Smartphone, Star, Trash2, KeyRound } from 'lucide-react-native'
+import { Apple, Calendar, Dumbbell, Eye, MoreHorizontal, Pause, Play, Smartphone, Star, Trash2, KeyRound } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
 import { Sparkline } from '../Sparkline'
 import { subscriptionDaysRemaining, type DirectoryClient, type PulseRow } from '../../lib/clients-directory'
 
 /** Altura fija de la card (modo cards) — usada por la animación de stack. */
-export const CLIENT_CARD_HEIGHT = 362
+export const CLIENT_CARD_HEIGHT = 382
 const CONTENT_W = Dimensions.get('window').width - 32 - 28 // pantalla - margen lista - padding card
 
 interface Props {
@@ -32,7 +32,7 @@ function lastLog(date: string | null): { label: string; days: number } {
 }
 
 function AdherenceRing({ pct, initial, color, theme }: { pct: number; initial: string; color: string; theme: any }) {
-  const size = 60, stroke = 5, r = (size - stroke) / 2, circ = 2 * Math.PI * r
+  const size = 72, stroke = 6, r = (size - stroke) / 2, circ = 2 * Math.PI * r
   const dash = (Math.min(100, Math.max(0, pct)) / 100) * circ
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
@@ -41,15 +41,16 @@ function AdherenceRing({ pct, initial, color, theme }: { pct: number; initial: s
         <Circle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none" strokeLinecap="round"
           strokeDasharray={`${dash} ${circ}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
       </Svg>
-      <Text style={{ fontSize: 20, fontFamily: 'Montserrat_800ExtraBold', color: theme.foreground }}>{initial}</Text>
+      <Text style={{ fontSize: 22, fontFamily: 'Montserrat_800ExtraBold', color: theme.foreground }}>{initial}</Text>
     </View>
   )
 }
 
-function attentionMeta(score: number, streak: number): { label: string; color: string } {
-  if (score >= 50) return { label: 'Urgente', color: '#EF4444' }
+// 1:1 web ClientCardV2AttentionBadge: copy verbatim + estrella en "Destacado".
+function attentionMeta(score: number, streak: number): { label: string; color: string; star?: boolean } {
+  if (score >= 50) return { label: 'Atención urgente', color: '#EF4444' }
   if (score >= 25) return { label: 'Revisar', color: '#F59E0B' }
-  if (score === 0 && streak > 10) return { label: 'Destacado', color: '#F59E0B' }
+  if (score === 0 && streak > 10) return { label: 'Destacado', color: '#10B981', star: true }
   return { label: 'On track', color: '#10B981' }
 }
 
@@ -63,57 +64,92 @@ export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, o
   const llDot = ll.days < 3 ? '#10B981' : ll.days < 7 ? '#F59E0B' : '#EF4444'
   const stars = pulse?.latestEnergyLevel != null ? Math.min(5, Math.max(0, Math.round(pulse.latestEnergyLevel / 2))) : 0
   const weightVals = (pulse?.weightHistory30d ?? []).map((d) => d.value)
+  const weightDelta = pulse?.weightDelta7d
   const nutri = pulse?.nutritionPercentage ?? 0
+  const hasNutritionData = nutri > 0
   const nutriRisk = pulse?.attentionFlags?.includes('NUTRICION_RIESGO') ?? false
   const subDays = subscriptionDaysRemaining(client.subscriptionStartDate)
   const weekCur = pulse?.planCurrentWeek, weekTot = pulse?.planTotalWeeks
 
+  // 1:1 web DropdownMenu: Ver perfil · WhatsApp (si hay teléfono) · Entrenamiento · Nutrición.
   const menuItems = [
-    { icon: Share2, label: 'Compartir acceso', on: () => { setMenu(false); onShareLogin() } },
-    { icon: client.isActive ? Pause : Play, label: client.isActive ? 'Pausar alumno' : 'Activar alumno', on: () => { setMenu(false); onToggleStatus() } },
-    { icon: KeyRound, label: 'Reset contraseña', on: () => { setMenu(false); onResetPw() } },
-    { icon: Trash2, label: 'Eliminar', on: () => { setMenu(false); onDelete() }, danger: true },
+    { icon: Eye, label: 'Ver perfil', on: () => { setMenu(false); onPress() } },
+    ...(onWhatsApp ? [{ icon: Smartphone, label: 'Enviar WhatsApp', on: () => { setMenu(false); onWhatsApp() } }] : []),
+    { icon: Dumbbell, label: 'Entrenamiento', on: () => { setMenu(false); onWorkout() } },
+    { icon: Apple, label: 'Nutrición', on: () => { setMenu(false); onNutrition() } },
   ]
 
   return (
     <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, height: CLIENT_CARD_HEIGHT }]}>
-      {/* Header */}
+      {/* Header: ring + nombre/badge + acciones inline (reset · pausa · eliminar · menú) */}
       <View style={styles.headerRow}>
-        <AdherenceRing pct={adherence} initial={(client.fullName?.[0] ?? '?').toUpperCase()} color={ringColor} theme={theme} />
+        <View style={{ position: 'relative' }}>
+          <AdherenceRing pct={adherence} initial={(client.fullName?.[0] ?? '?').toUpperCase()} color={ringColor} theme={theme} />
+          {/* Badge circular rojo "!" sobre el ring cuando hay riesgo nutricional (1:1 web). */}
+          {nutriRisk && hasNutritionData ? (
+            <View style={styles.riskBadge}>
+              <Text style={styles.riskBadgeTxt}>!</Text>
+            </View>
+          ) : null}
+        </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={styles.nameRow}>
-            <Text numberOfLines={1} style={[styles.name, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} onPress={onPress}>{client.fullName}</Text>
-            <View style={[styles.badge, { backgroundColor: att.color + '22', borderColor: att.color + '44' }]}><Text style={[styles.badgeT, { color: att.color }]}>{att.label}</Text></View>
+            <Text numberOfLines={1} style={[styles.name, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]} onPress={onPress}>{client.fullName}</Text>
+            <View style={[styles.badge, { backgroundColor: att.color + '22', borderColor: att.color + '44' }]}>
+              {att.star ? <Star size={9} color="#F59E0B" fill="#F59E0B" /> : null}
+              <Text style={[styles.badgeT, { color: att.color }]}>{att.label}</Text>
+            </View>
           </View>
           <Text numberOfLines={1} style={[styles.email, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{client.email}</Text>
         </View>
-        <TouchableOpacity onPress={() => setMenu(true)} hitSlop={8} style={styles.menuBtn}><MoreVertical size={20} color={theme.foreground} /></TouchableOpacity>
       </View>
 
-      {/* Mini-stats */}
+      {/* Acciones inline visibles en el header (1:1 web: reset llave indigo · pausa ámbar · eliminar rojo · menú) */}
+      <View style={styles.headerActions}>
+        <TouchableOpacity onPress={onResetPw} activeOpacity={0.8} style={[styles.hAct, { backgroundColor: '#6366F11A' }]}>
+          <KeyRound size={17} color="#6366F1" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onToggleStatus} activeOpacity={0.8} style={[styles.hAct, { backgroundColor: (client.isActive ? '#F59E0B' : '#10B981') + '1A' }]}>
+          {client.isActive ? <Pause size={17} color="#F59E0B" /> : <Play size={17} color="#10B981" />}
+        </TouchableOpacity>
+        <TouchableOpacity onPress={onDelete} activeOpacity={0.8} style={[styles.hAct, { backgroundColor: theme.destructive + '1A', borderColor: theme.destructive + '4D', borderWidth: 1 }]}>
+          <Trash2 size={17} color={theme.destructive} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setMenu(true)} activeOpacity={0.8} style={[styles.hAct, { backgroundColor: theme.secondary, borderColor: theme.border, borderWidth: 1 }]}>
+          <MoreHorizontal size={17} color={theme.foreground} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Mini-stats (1:1 web grid: Adherencia · Peso hoy · Energía · Último log) */}
       <View style={styles.statsRow}>
-        <Mini theme={theme} label="Adherencia" value={`${adherence}%`} />
-        <Mini theme={theme} label="Peso hoy" value={pulse?.currentWeight != null ? `${pulse.currentWeight}` : '—'} sub={pulse?.weightDelta7d != null ? `${pulse.weightDelta7d > 0 ? '↑' : pulse.weightDelta7d < 0 ? '↓' : ''}${Math.abs(pulse.weightDelta7d)} 7d` : undefined} />
+        <View style={[styles.mini, { borderColor: theme.border }]}>
+          <Text style={[styles.miniLabel, { color: theme.mutedForeground }]}>Adherencia</Text>
+          <Text style={[styles.miniVal, { color: theme.foreground }]} numberOfLines={1}>{adherence}%</Text>
+          <View style={[styles.miniBar, { backgroundColor: theme.muted }]}>
+            <View style={{ height: '100%', borderRadius: 99, width: `${Math.min(100, adherence)}%`, backgroundColor: theme.primary }} />
+          </View>
+        </View>
+        <Mini theme={theme} label="Peso hoy" value={pulse?.currentWeight != null ? `${pulse.currentWeight} kg` : '—'} sub={weightDelta != null ? `${weightDelta > 0 ? '↑' : weightDelta < 0 ? '↓' : ''}${Math.abs(weightDelta)} (7d)` : ''} />
         <View style={[styles.mini, { borderColor: theme.border }]}>
           <Text style={[styles.miniLabel, { color: theme.mutedForeground }]}>Energía</Text>
           <View style={{ flexDirection: 'row', gap: 1, marginTop: 2 }}>
-            {[1, 2, 3, 4, 5].map((i) => <Star key={i} size={11} color="#F59E0B" fill={i <= stars ? '#F59E0B' : 'transparent'} />)}
+            {[1, 2, 3, 4, 5].map((i) => <Star key={i} size={11} color={i <= stars ? '#F59E0B' : theme.mutedForeground} fill={i <= stars ? '#F59E0B' : 'transparent'} />)}
           </View>
         </View>
         <View style={[styles.mini, { borderColor: theme.border }]}>
           <Text style={[styles.miniLabel, { color: theme.mutedForeground }]}>Último log</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
             <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: llDot }} />
-            <Text style={[styles.miniVal, { color: theme.foreground }]}>{ll.label}</Text>
+            <Text style={[styles.miniVal2, { color: theme.foreground }]}>{ll.label}</Text>
           </View>
         </View>
       </View>
 
-      {/* Sparklines */}
+      {/* Sparklines (1:1 web: Peso 30d · Adherencia 4 sem) */}
       <View style={styles.sparkRow}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.sparkLabel, { color: theme.mutedForeground }]}>Peso (30d)</Text>
-          {weightVals.length >= 2 ? <Sparkline values={weightVals} width={CONTENT_W / 2 - 6} height={28} color="#3B82F6" /> : <Text style={[styles.sparkEmpty, { color: theme.mutedForeground }]}>Sin datos</Text>}
+          {weightVals.length >= 2 ? <Sparkline values={weightVals} width={CONTENT_W / 2 - 6} height={28} color="#007AFF" /> : <Text style={[styles.sparkEmpty, { color: theme.mutedForeground }]}>Sin datos</Text>}
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.sparkLabel, { color: theme.mutedForeground }]}>Adherencia (4 sem)</Text>
@@ -121,43 +157,51 @@ export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, o
         </View>
       </View>
 
-      {/* Programa (con barra de progreso de semanas) */}
-      {client.activeProgramName ? (
-        <View style={[styles.block, { backgroundColor: theme.primary + '10', borderColor: theme.primary + '22' }]}>
-          <View style={styles.blockTop}>
-            <Dumbbell size={12} color={theme.primary} />
-            <Text numberOfLines={1} style={[styles.blockName, { color: theme.foreground }]}>{client.activeProgramName}</Text>
-            <Text style={[styles.blockDim, { color: theme.foreground }]}>Sem {weekCur ?? '—'}/{weekTot ?? '—'}</Text>
-          </View>
-          <Bar value={weekTot && weekTot > 0 ? Math.min(1, (weekCur ?? 0) / weekTot) : 0} color={theme.primary} theme={theme} />
-        </View>
-      ) : (
-        <View style={[styles.metaPill, { borderColor: theme.border, borderStyle: 'dashed' }]}>
-          <Text style={[styles.metaDim, { color: theme.mutedForeground }]}>Sin programa</Text>
-        </View>
-      )}
-
-      {/* Nutrición (barra de adherencia) */}
-      {nutri > 0 ? (
+      {/* Nutrición (barra de adherencia) — 1:1 web: solo si hay datos */}
+      {hasNutritionData ? (
         <View style={[styles.block, { backgroundColor: (nutriRisk ? '#EF4444' : '#10B981') + '12', borderColor: (nutriRisk ? '#EF4444' : '#10B981') + '28' }]}>
           <View style={styles.blockTop}>
-            <Apple size={12} color={nutriRisk ? '#EF4444' : '#10B981'} />
-            <Text numberOfLines={1} style={[styles.blockName, { color: nutriRisk ? '#EF4444' : theme.foreground }]}>{nutriRisk ? 'Baja adherencia nutricional' : 'Nutrición'}</Text>
+            <Apple size={14} color={nutriRisk ? '#EF4444' : '#10B981'} />
+            <Text numberOfLines={1} style={[styles.blockName, { color: nutriRisk ? '#EF4444' : theme.mutedForeground }]}>{nutriRisk ? 'Baja adherencia nutricional' : 'Nutrición'}</Text>
             <Text style={[styles.blockDim, { color: nutriRisk ? '#EF4444' : theme.foreground }]}>{nutri}%</Text>
           </View>
           <Bar value={Math.min(1, nutri / 100)} color={nutriRisk ? '#EF4444' : '#10B981'} theme={theme} />
         </View>
       ) : null}
 
+      {/* Programa (1:1 web: con barra de semanas, o "Sin programa asignado") */}
+      {client.activeProgramName ? (
+        <View style={[styles.block, { backgroundColor: theme.primary + '0D', borderColor: theme.primary + '26' }]}>
+          <View style={styles.blockTop}>
+            <Calendar size={14} color={theme.primary} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.blockKicker, { color: theme.primary }]}>Programa</Text>
+              <Text numberOfLines={1} style={[styles.blockName, { color: theme.foreground }]}>{client.activeProgramName}</Text>
+            </View>
+            <Text style={[styles.blockDim, { color: theme.foreground }]}>Sem {weekCur ?? '—'}/{weekTot ?? '—'}</Text>
+          </View>
+          <Bar value={weekTot && weekTot > 0 ? Math.min(1, (weekCur ?? 0) / weekTot) : 0} color={theme.primary} theme={theme} />
+          <Text style={[styles.blockMeta, { color: theme.mutedForeground }]}>
+            {client.planDaysRemaining != null ? `${client.planDaysRemaining > 0 ? client.planDaysRemaining : 0} días restantes` : 'Sin fechas de programa'}{weekTot ? ` · ${weekTot} semanas totales` : ''}
+          </Text>
+        </View>
+      ) : (
+        <View style={[styles.metaPill, { borderColor: theme.border, borderStyle: 'dashed' }]}>
+          <Text style={[styles.metaDim, { color: theme.mutedForeground }]}>Sin programa asignado</Text>
+        </View>
+      )}
+
       {subDays != null ? (
-        <Text style={[styles.subTxt, { color: subDays <= 5 ? '#EF4444' : theme.mutedForeground }]}>Suscripción: {subDays > 0 ? `${subDays}d restantes` : 'vencida'}</Text>
+        <Text style={[styles.subTxt, { color: theme.mutedForeground }]}>
+          Suscripción: <Text style={{ color: subDays <= 5 ? '#EF4444' : theme.primary }}>{subDays > 0 ? `${subDays} días` : 'Vencida'}</Text>
+        </Text>
       ) : null}
 
-      {/* Footer actions */}
+      {/* Footer actions (1:1 web: WA · Perfil · Workout · Nutri) */}
       <View style={[styles.footer, { borderTopColor: theme.border }]}>
-        {onWhatsApp ? <FootBtn theme={theme} icon={Smartphone} label="WA" color="#10B981" onPress={onWhatsApp} /> : null}
+        {onWhatsApp ? <FootBtn theme={theme} icon={Smartphone} label="WA" color="#10B981" filled onPress={onWhatsApp} /> : null}
         <FootBtn theme={theme} icon={Eye} label="Perfil" onPress={onPress} />
-        <FootBtn theme={theme} icon={Dumbbell} label="Entreno" onPress={onWorkout} />
+        <FootBtn theme={theme} icon={Dumbbell} label="Workout" onPress={onWorkout} />
         <FootBtn theme={theme} icon={Apple} label="Nutri" onPress={onNutrition} />
       </View>
 
@@ -166,11 +210,10 @@ export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, o
           <View style={[styles.menuCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
             {menuItems.map((it) => {
               const Icon = it.icon
-              const c = it.danger ? theme.destructive : theme.foreground
               return (
                 <TouchableOpacity key={it.label} onPress={it.on} activeOpacity={0.8} style={styles.menuItem}>
-                  <Icon size={17} color={c} />
-                  <Text style={[styles.menuItemTxt, { color: c, fontFamily: 'Inter_600SemiBold' }]}>{it.label}</Text>
+                  <Icon size={17} color={theme.foreground} />
+                  <Text style={[styles.menuItemTxt, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{it.label}</Text>
                 </TouchableOpacity>
               )
             })}
@@ -199,11 +242,12 @@ function Mini({ theme, label, value, sub }: { theme: any; label: string; value: 
   )
 }
 
-function FootBtn({ theme, icon: Icon, label, color, onPress }: { theme: any; icon: any; label: string; color?: string; onPress: () => void }) {
+function FootBtn({ theme, icon: Icon, label, color, filled, onPress }: { theme: any; icon: any; label: string; color?: string; filled?: boolean; onPress: () => void }) {
+  const fg = filled ? '#fff' : (color ?? theme.foreground)
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={[styles.footBtn, { borderColor: theme.border, backgroundColor: color ? color + '14' : 'transparent' }]}>
-      <Icon size={14} color={color ?? theme.foreground} />
-      <Text style={[styles.footTxt, { color: color ?? theme.foreground, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={[styles.footBtn, filled && color ? { backgroundColor: color } : { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+      <Icon size={14} color={fg} />
+      <Text style={[styles.footTxt, { color: fg, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
     </TouchableOpacity>
   )
 }
@@ -212,32 +256,36 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 18, padding: 14, gap: 9, overflow: 'hidden' },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  name: { fontSize: 15, flexShrink: 1 },
-  badge: { borderWidth: 1, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 1 },
+  name: { fontSize: 15, flexShrink: 1, textTransform: 'uppercase', letterSpacing: -0.4 },
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 3, borderWidth: 1, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 1.5 },
   badgeT: { fontSize: 8.5, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.4 },
-  email: { fontSize: 11, marginTop: 1 },
-  menuBtn: { padding: 2 },
+  email: { fontSize: 11, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.4 },
+  riskBadge: { position: 'absolute', top: -3, right: -3, minWidth: 19, height: 19, borderRadius: 10, backgroundColor: '#EF4444', borderWidth: 1, borderColor: '#B91C1C', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 },
+  riskBadgeTxt: { color: '#fff', fontSize: 11, fontFamily: 'Inter_700Bold', lineHeight: 13 },
+  headerActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 6 },
+  hAct: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   statsRow: { flexDirection: 'row', gap: 6 },
   mini: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 6, gap: 1 },
   miniLabel: { fontSize: 8, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.4 },
-  miniVal: { fontSize: 14, fontFamily: 'Montserrat_700Bold' },
+  miniVal: { fontSize: 16, fontFamily: 'Montserrat_800ExtraBold' },
+  miniVal2: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   miniSub: { fontSize: 9 },
+  miniBar: { height: 4, borderRadius: 99, overflow: 'hidden', marginTop: 4 },
   sparkRow: { flexDirection: 'row', gap: 10 },
   sparkLabel: { fontSize: 8, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 },
-  sparkEmpty: { fontSize: 10, height: 28, textAlignVertical: 'center' },
-  metaRow: { flexDirection: 'row' },
-  metaPill: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
-  metaText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', flexShrink: 1 },
-  metaDim: { fontSize: 10, marginLeft: 'auto', fontFamily: 'Inter_600SemiBold' },
-  block: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, gap: 5 },
+  sparkEmpty: { fontSize: 9, height: 28, textAlignVertical: 'center', textTransform: 'uppercase', letterSpacing: 0.6, fontFamily: 'Inter_700Bold' },
+  metaPill: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 9, opacity: 0.7 },
+  metaDim: { fontSize: 9, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.6 },
+  block: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, gap: 5 },
   blockTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  blockName: { fontSize: 11.5, fontFamily: 'Inter_600SemiBold', flexShrink: 1 },
-  blockDim: { fontSize: 10.5, marginLeft: 'auto', fontFamily: 'Montserrat_700Bold' },
-  barTrack: { height: 5, borderRadius: 99, overflow: 'hidden' },
-  subRow: { flexDirection: 'row', gap: 12 },
-  subTxt: { fontSize: 10, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.3 },
+  blockKicker: { fontSize: 8, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.5 },
+  blockName: { fontSize: 11.5, fontFamily: 'Inter_700Bold', flexShrink: 1 },
+  blockDim: { fontSize: 10.5, marginLeft: 'auto', fontFamily: 'Inter_700Bold' },
+  blockMeta: { fontSize: 9.5 },
+  barTrack: { height: 6, borderRadius: 99, overflow: 'hidden' },
+  subTxt: { fontSize: 9, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.4 },
   footer: { flexDirection: 'row', gap: 6, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 9, marginTop: 'auto' },
-  footBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, borderWidth: 1, borderRadius: 10, paddingVertical: 8 },
+  footBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, borderWidth: 1, borderRadius: 10, paddingVertical: 9, borderColor: 'transparent' },
   footTxt: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4 },
   menuBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 },
   menuCard: { width: '100%', maxWidth: 280, borderWidth: 1, borderRadius: 14, paddingVertical: 6 },
