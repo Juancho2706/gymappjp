@@ -5,6 +5,7 @@ export const metadata: Metadata = {
     title: 'Iniciar sesión',
     description:
         'Inicia sesión en EVA para gestionar alumnos, rutinas de entrenamiento, planes de nutrición y la marca de tu coaching.',
+    robots: { index: false, follow: true },
 }
 
 export default function LoginLayout({ children }: { children: ReactNode }) {
