@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Apple, Archive, ArchiveRestore, BarChart3, ClipboardList, CreditCard, Dumbbell, HeartPulse, LayoutDashboard, LayoutGrid, MessageCircle, Pencil, Plus, Scale, TrendingUp, User, Utensils, X } from 'lucide-react-native'
+import { Apple, Archive, ArchiveRestore, BarChart3, Camera, ClipboardList, CreditCard, Dumbbell, HeartPulse, LayoutDashboard, LayoutGrid, MessageCircle, Pencil, Plus, Scale, TrendingUp, User, Utensils, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import { useTheme } from '../../../context/ThemeContext'
@@ -19,7 +19,8 @@ import { PlanTab } from '../../../components/coach/clientDetail/PlanTab'
 import { NutricionTab } from '../../../components/coach/clientDetail/NutricionTab'
 import { FacturacionTab } from '../../../components/coach/clientDetail/FacturacionTab'
 import { hasModule } from '../../../lib/entitlements'
-import { apiFetch } from '../../../lib/api'
+import { apiFetch, getApiBaseUrl } from '../../../lib/api'
+import { getCoachProfile } from '../../../lib/coach'
 import {
   getCoachClientDetail,
   getCoachClientDayDetail,
@@ -92,10 +93,13 @@ export default function ClientDetailScreen() {
   const { theme } = useTheme()
   const router = useRouter()
   const [mods, setMods] = useState<{ cardio: boolean; movement: boolean; bodycomp: boolean }>({ cardio: false, movement: false, bodycomp: false })
+  const [coachSlug, setCoachSlug] = useState<string | null>(null)
   useEffect(() => {
     Promise.all([hasModule('cardio'), hasModule('movement_assessment'), hasModule('body_composition')])
       .then(([cardio, movement, bodycomp]) => setMods({ cardio, movement, bodycomp }))
       .catch(() => {})
+    // Slug del coach para el deep-link de check-in del alumno (espejo de ProfileFloatingActions web).
+    getCoachProfile().then((c) => setCoachSlug(c?.slug ?? null)).catch(() => {})
   }, [])
 
   const [tab, setTab] = useState<ClientTab>('overview')
@@ -148,6 +152,13 @@ export default function ClientDetailScreen() {
   function openBuilder() {
     if (!client) return
     router.push(`/coach/program-builder?clientId=${client.id}&clientName=${encodeURIComponent(client.full_name)}`)
+  }
+
+  // Check-in del alumno (espejo de ProfileFloatingActions web): abre la web del alumno
+  // (/c/[coachSlug]/check-in) — no hay ruta de check-in del alumno dentro de la app del coach.
+  function openCheckIn() {
+    if (!coachSlug) { Alert.alert('No disponible', 'No se pudo resolver el enlace del alumno.'); return }
+    Linking.openURL(`${getApiBaseUrl()}/c/${coachSlug}/check-in`).catch(() => {})
   }
 
   function openNutrition() {
@@ -405,6 +416,7 @@ export default function ClientDetailScreen() {
           más acciones mobile-only que la web resuelve en diálogos/pestañas. */}
       <Fab open={fabOpen} onToggle={() => setFabOpen((v) => !v)} actions={[
         { icon: MessageCircle, label: 'WhatsApp', color: '#25D366', onPress: () => { setFabOpen(false); openWhatsApp() } },
+        ...(coachSlug ? [{ icon: Camera, label: 'Check-in alumno', color: theme.primary, onPress: () => { setFabOpen(false); openCheckIn() } }] : []),
         { icon: Dumbbell, label: 'Builder', onPress: () => { setFabOpen(false); openBuilder() } },
         { icon: CreditCard, label: 'Registrar pago', onPress: () => { setFabOpen(false); setPayOpen(true) } },
         { icon: Pencil, label: 'Editar datos', onPress: () => { setFabOpen(false); setEditOpen(true) } },

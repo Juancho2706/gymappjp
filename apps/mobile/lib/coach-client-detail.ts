@@ -104,6 +104,13 @@ export interface PaymentEntry {
   receipt_url?: string | null
 }
 
+// Fase del programa (espejo de SharedProgramPhase de la web: ProgramPhasesBar).
+export interface ProgramPhase {
+  name: string
+  weeks: number
+  color?: string
+}
+
 export interface ActiveProgramInfo {
   id: string
   name: string
@@ -114,7 +121,20 @@ export interface ActiveProgramInfo {
   program_structure_type: string | null
   ab_mode: boolean | null
   cycle_length: number | null
+  phases: ProgramPhase[]
   workoutPlans: ProgramDay[]
+}
+
+// Espejo de parseProgramPhases (web profileProgramUtils): valida/normaliza el jsonb.
+export function parseProgramPhases(raw: unknown): ProgramPhase[] {
+  if (!raw || !Array.isArray(raw)) return []
+  return raw
+    .map((p: any) => ({
+      name: String(p?.name ?? 'Fase'),
+      weeks: Math.max(1, Number(p?.weeks) || 1),
+      color: typeof p?.color === 'string' ? p.color : undefined,
+    }))
+    .filter((p) => p.name)
 }
 
 export interface ProgramBlock {
@@ -673,7 +693,7 @@ export async function getCoachClientDetail(clientId: string): Promise<{
       supabase
         .from('workout_programs')
         .select(`
-          id, name, start_date, end_date, weeks_to_repeat, program_structure_type, ab_mode, cycle_length,
+          id, name, start_date, end_date, weeks_to_repeat, program_structure_type, ab_mode, cycle_length, program_phases,
           workout_plans (
             id, title, day_of_week, week_variant,
             workout_blocks (
@@ -750,6 +770,7 @@ export async function getCoachClientDetail(clientId: string): Promise<{
         program_structure_type: rawProgram.program_structure_type ?? null,
         ab_mode: rawProgram.ab_mode ?? null,
         cycle_length: rawProgram.cycle_length ?? null,
+        phases: parseProgramPhases(rawProgram.program_phases),
         workoutPlans: ((rawProgram.workout_plans ?? []) as any[])
           .map((plan) => ({
             id: plan.id as string,

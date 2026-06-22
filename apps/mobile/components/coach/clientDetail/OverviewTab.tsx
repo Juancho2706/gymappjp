@@ -29,6 +29,7 @@ import {
   markCoachCheckInReviewed,
   updateCoachClient,
   type CoachClientDetailData,
+  type ProgramPhase,
 } from '../../../lib/coach-client-detail'
 
 function resolveProgramWeek(program: NonNullable<CoachClientDetailData['activeProgram']>): number | null {
@@ -204,6 +205,11 @@ export function OverviewTab({
         <TouchableOpacity activeOpacity={0.85} onPress={onEditProgram}>
           <StatCard>
             <CardHeader icon={ListChecks} title={activeProgram.name} />
+            {activeProgram.phases.length > 0 ? (
+              <View style={{ paddingBottom: 2 }}>
+                <ProgramPhasesBar phases={activeProgram.phases} currentWeek={currentWeek} />
+              </View>
+            ) : null}
             {currentWeek ? (
               <View style={{ gap: 6 }}>
                 <View style={styles.weekRow}>
@@ -320,6 +326,46 @@ function Ring({ label, hint, value, color, delta, linkLabel, onPress }: { label:
         <Text style={[styles.ringLink, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>{linkLabel}</Text>
       ) : null}
     </Wrapper>
+  )
+}
+
+// Barra de fases del programa (espejo de ProgramPhasesBar web): segmentos por fase,
+// ancho proporcional a semanas, fase actual resaltada en theme.primary.
+function ProgramPhasesBar({ phases, currentWeek }: { phases: ProgramPhase[]; currentWeek: number | null }) {
+  const { theme } = useTheme()
+  if (!phases?.length) return null
+  const total = phases.reduce((s, p) => s + Math.max(1, p.weeks), 0) || 1
+  // Índice de la fase activa: primera fase cuya semana acumulada cubre currentWeek.
+  let activeIdx = -1
+  if (currentWeek != null && currentWeek > 0) {
+    let acc = 0
+    for (let i = 0; i < phases.length; i++) {
+      acc += Math.max(1, phases[i]!.weeks)
+      if (currentWeek <= acc) { activeIdx = i; break }
+    }
+    if (activeIdx === -1) activeIdx = phases.length - 1
+  }
+  const activePhase = activeIdx >= 0 ? phases[activeIdx] : null
+  return (
+    <View style={{ gap: 5 }}>
+      <View style={[styles.phasesTrack, { backgroundColor: theme.muted, borderColor: theme.border }]}>
+        {phases.map((p, i) => {
+          const width = (Math.max(1, p.weeks) / total) * 100
+          const isActive = i === activeIdx
+          return (
+            <View
+              key={`${p.name}-${i}`}
+              style={{ width: `${width}%`, height: '100%', backgroundColor: isActive ? theme.primary : (p.color || '#6366F1'), opacity: isActive || activeIdx < 0 ? 1 : 0.55 }}
+            />
+          )
+        })}
+      </View>
+      {activePhase ? (
+        <Text style={[styles.phaseLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>
+          {activePhase.name} · {activePhase.weeks} sem.
+        </Text>
+      ) : null}
+    </View>
   )
 }
 
@@ -457,6 +503,8 @@ const styles = StyleSheet.create({
   keyUnit: { fontSize: 16 },
   keyDelta: { fontSize: 22, letterSpacing: -0.5 },
   // Programa
+  phasesTrack: { flexDirection: 'row', height: 6, borderRadius: 999, overflow: 'hidden', borderWidth: 1 },
+  phaseLabel: { fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.5 },
   weekRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   weekLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6 },
   weekVal: { fontSize: 13 },

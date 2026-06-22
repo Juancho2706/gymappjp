@@ -48,6 +48,8 @@ import {
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import * as Clipboard from 'expo-clipboard'
+import { BlurView } from 'expo-blur'
+import { LinearGradient } from 'expo-linear-gradient'
 import { useTheme } from '../../../context/ThemeContext'
 import { AnimatedNumber, Button, NativeDialog } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -193,11 +195,20 @@ function StatTile({
           borderColor: selected ? theme.primary : theme.border,
           borderWidth: selected ? 2 : 1,
           borderRadius: theme.radius.xl,
+          overflow: 'hidden',
         },
       ]}
       onPress={onPress}
       activeOpacity={0.75}
     >
+      {/* 1:1 web: overlay gradiente sutil from-<color>/10 to-transparent (esquina sup-izq → transparente). */}
+      <LinearGradient
+        colors={[hexToRgba(color, 0.1), 'transparent']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
       {/* 1:1 web: icono en caja a la izquierda + bloque valor/label a la derecha. */}
       <View style={[statStyles.iconWrap, { backgroundColor: theme.card, borderColor: theme.border }]}>
         <Icon size={20} color={color} />
@@ -1255,8 +1266,20 @@ const editStyles = StyleSheet.create({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ClientesScreen() {
-  const { theme } = useTheme()
+  const { theme, mode } = useTheme()
+  const isDark = mode !== 'light'
   const router = useRouter()
+
+  // Diálogos branded de acciones de fila (reemplazan los Alert.alert del OS).
+  // confirm: eliminar/archivar/pausar; resetResult: muestra la clave generada en grande.
+  const [confirmDialog, setConfirmDialog] = useState<{
+    kind: 'delete' | 'archive' | 'toggle' | 'reset'
+    client: DirectoryClient
+  } | null>(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
+  const [confirmError, setConfirmError] = useState<string | null>(null)
+  const [resetResult, setResetResult] = useState<{ clientName: string; tempPassword: string } | null>(null)
+  const [resetCopied, setResetCopied] = useState(false)
 
   const [clients, setClients] = useState<DirectoryClient[]>([])
   const [loading, setLoading] = useState(true)
@@ -1404,60 +1427,65 @@ export default function ClientesScreen() {
     if (!coachSlug) return
     shareLogin(c.fullName, clientLoginUrl(coachSlug)).catch(() => {})
   }
+  // Las acciones sensibles abren el diálogo branded (NativeDialog) en vez del Alert del OS.
   function handleToggle(c: DirectoryClient) {
-    // TX-5: confirmar acción reversible pero sensible (pausa/activa acceso del alumno).
-    const pausing = c.isActive
-    Alert.alert(
-      pausing ? 'Pausar alumno' : 'Activar alumno',
-      pausing ? `${c.fullName} perderá acceso a la app hasta reactivarlo.` : `${c.fullName} recuperará el acceso a la app.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: pausing ? 'Pausar' : 'Activar',
-          style: pausing ? 'destructive' : 'default',
-          onPress: () => setClientStatus(c.id, { is_active: !c.isActive }).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
-        },
-      ]
-    )
+    setConfirmError(null)
+    setConfirmDialog({ kind: 'toggle', client: c })
   }
   function handleReset(c: DirectoryClient) {
-    // TX-5: confirmar — resetear contraseña es irreversible (invalida la actual).
-    Alert.alert(
-      'Resetear contraseña',
-      `Se generará una contraseña temporal para ${c.fullName}. La actual dejará de funcionar.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Resetear',
-          style: 'destructive',
-          onPress: () => resetClientPassword(c.id)
-            .then((temp) => Alert.alert('Contraseña reseteada', `Contraseña temporal de ${c.fullName}: ${temp}\n\nDeberá cambiarla al ingresar.`))
-            .catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
-        },
-      ]
-    )
+    setConfirmError(null)
+    setConfirmDialog({ kind: 'reset', client: c })
   }
   function handleDelete(c: DirectoryClient) {
-    Alert.alert('Eliminar alumno', `¿Eliminar a ${c.fullName}? No se puede deshacer.`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: () => deleteClient(c.id).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')) },
-    ])
+    setConfirmError(null)
+    setConfirmDialog({ kind: 'delete', client: c })
   }
   function handleArchive(c: DirectoryClient) {
-    const archiving = !c.isArchived
-    Alert.alert(
-      archiving ? 'Archivar alumno' : 'Desarchivar alumno',
-      archiving
-        ? `${c.fullName} se moverá a Archivados. Podrás restaurarlo cuando quieras.`
-        : `${c.fullName} volverá al directorio activo.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: archiving ? 'Archivar' : 'Desarchivar',
-          onPress: () => setClientArchived(c.id, archiving).then(() => load(true)).catch((e: any) => Alert.alert('Error', e?.message ?? 'No se pudo.')),
-        },
-      ]
-    )
+    setConfirmError(null)
+    setConfirmDialog({ kind: 'archive', client: c })
+  }
+
+  // Reset de contraseña: corre de inmediato (sin paso de confirmación, 1:1 web genera y MUESTRA la clave).
+  async function runReset(c: DirectoryClient) {
+    setConfirmBusy(true)
+    setConfirmError(null)
+    try {
+      const temp = await resetClientPassword(c.id)
+      setConfirmDialog(null)
+      setResetCopied(false)
+      setResetResult({ clientName: c.fullName, tempPassword: temp })
+    } catch (e: any) {
+      setConfirmError(e?.message ?? 'No se pudo.')
+    } finally {
+      setConfirmBusy(false)
+    }
+  }
+
+  // Confirmar acción del diálogo branded (eliminar/archivar/pausar-activar).
+  async function runConfirm() {
+    if (!confirmDialog) return
+    const { kind, client } = confirmDialog
+    if (kind === 'reset') { runReset(client); return }
+    setConfirmBusy(true)
+    setConfirmError(null)
+    try {
+      if (kind === 'delete') await deleteClient(client.id)
+      else if (kind === 'archive') await setClientArchived(client.id, !client.isArchived)
+      else if (kind === 'toggle') await setClientStatus(client.id, { is_active: !client.isActive })
+      setConfirmDialog(null)
+      await load(true)
+    } catch (e: any) {
+      setConfirmError(e?.message ?? 'No se pudo.')
+    } finally {
+      setConfirmBusy(false)
+    }
+  }
+
+  function copyResetPassword() {
+    if (!resetResult) return
+    Clipboard.setStringAsync(resetResult.tempPassword).catch(() => {})
+    setResetCopied(true)
+    setTimeout(() => setResetCopied(false), 2000)
   }
   function handleEdit(c: DirectoryClient) {
     // 1:1 web: abre EditClientDataModal inline (intake completo) sin salir de la lista.
@@ -1471,6 +1499,15 @@ export default function ClientesScreen() {
   // War Room top (1:1 web CoachWarRoom): título, subtítulo, sync, portal copy chip.
   const warRoomTop = (
     <View style={styles.warRoom}>
+      {/* Glow radial suave detrás del título (espejo web bg-primary/10 blur). */}
+      <LinearGradient
+        colors={[hexToRgba(theme.primary, 0.16), hexToRgba(theme.primary, 0.06), 'transparent']}
+        locations={[0, 0.45, 1]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={styles.warGlow}
+        pointerEvents="none"
+      />
       <Text style={[styles.warTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
         Directorio de Alumnos
       </Text>
@@ -1641,28 +1678,32 @@ export default function ClientesScreen() {
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
 
-      {/* Search + action bar */}
-      <View style={styles.actionBar}>
-        <View
-          style={[
-            styles.searchWrap,
-            { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg },
-          ]}
-        >
-          <Search size={15} color={theme.mutedForeground} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.foreground, fontFamily: theme.fontSans }]}
-            placeholder="Buscar alumno..."
-            placeholderTextColor={theme.mutedForeground}
-            value={search}
-            onChangeText={setSearch}
-            clearButtonMode="while-editing"
-          />
+      {/* Search + action bar — glass sticky (espejo web action bar sticky backdrop-blur). */}
+      <BlurView intensity={isDark ? 28 : 36} tint={isDark ? 'dark' : 'light'} style={styles.glassBar}>
+        {/* Veil de legibilidad sobre el blur (glass best-practice 10–40% tint). */}
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: isDark ? 'rgba(16,18,24,0.32)' : 'rgba(255,255,255,0.42)' }]} />
+        <View style={[StyleSheet.absoluteFill, styles.glassBarBorder, { borderBottomColor: theme.border }]} pointerEvents="none" />
+        <View style={styles.actionBar}>
+          <View
+            style={[
+              styles.searchWrap,
+              { backgroundColor: hexToRgba(theme.secondary, 0.72), borderColor: theme.border, borderRadius: theme.radius.lg },
+            ]}
+          >
+            <Search size={15} color={theme.mutedForeground} />
+            <TextInput
+              style={[styles.searchInput, { color: theme.foreground, fontFamily: theme.fontSans }]}
+              placeholder="Buscar alumno..."
+              placeholderTextColor={theme.mutedForeground}
+              value={search}
+              onChangeText={setSearch}
+              clearButtonMode="while-editing"
+            />
+          </View>
         </View>
-      </View>
 
-      {/* Fila de controles 1:1 web: Filtros (label) · Orden (ArrowUpDown + sort actual) · toggle vista */}
-      <View style={styles.controlsBar}>
+        {/* Fila de controles 1:1 web: Filtros (label) · Orden (ArrowUpDown + sort actual) · toggle vista */}
+        <View style={styles.controlsBar}>
         <TouchableOpacity
           style={[
             styles.labeledBtn,
@@ -1709,7 +1750,8 @@ export default function ClientesScreen() {
             <ListIcon size={17} color={viewMode === 'list' ? theme.primary : theme.mutedForeground} />
           </TouchableOpacity>
         </View>
-      </View>
+        </View>
+      </BlurView>
 
       {viewMode === 'cards' ? (
         <Animated.FlatList
@@ -1857,9 +1899,224 @@ export default function ClientesScreen() {
       <NativeDialog open={showImport} title="Importar alumnos" onClose={() => setShowImport(false)}>
         <ImportClientsForm theme={theme} onDone={() => { setShowImport(false); load() }} onCancel={() => setShowImport(false)} />
       </NativeDialog>
+
+      {/* Diálogo branded de confirmación (eliminar · archivar · pausar/activar) — copy 1:1 web AlertDialog */}
+      <ConfirmActionDialog
+        config={confirmDialog}
+        busy={confirmBusy}
+        error={confirmError}
+        onConfirm={runConfirm}
+        onClose={() => { if (!confirmBusy) { setConfirmDialog(null); setConfirmError(null) } }}
+      />
+
+      {/* Diálogo branded de contraseña restablecida (muestra la clave en grande + copiar) — 1:1 web ResetPasswordButton */}
+      <ResetPasswordResultDialog
+        result={resetResult}
+        copied={resetCopied}
+        onCopy={copyResetPassword}
+        onClose={() => setResetResult(null)}
+      />
     </SafeAreaView>
   )
 }
+
+// ─── ConfirmActionDialog (branded, 1:1 web AlertDialog) ─────────────────────────
+// Eliminar (rojo) · Archivar/Reactivar (ámbar) · Pausar/Reactivar acceso (ámbar/esmeralda).
+
+function ConfirmActionDialog({
+  config,
+  busy,
+  error,
+  onConfirm,
+  onClose,
+}: {
+  config: { kind: 'delete' | 'archive' | 'toggle' | 'reset'; client: DirectoryClient } | null
+  busy: boolean
+  error: string | null
+  onConfirm: () => void
+  onClose: () => void
+}) {
+  const { theme } = useTheme()
+  // 'reset' se resuelve antes de llegar acá (corre de inmediato), pero lo dejamos defensivo.
+  if (!config || config.kind === 'reset') return null
+  const { kind, client } = config
+
+  // Copy VERBATIM de la web (DeleteClientButton / ArchiveClientButton / ToggleStatusButton).
+  let title: string
+  let body: React.ReactNode
+  let actionLabel: string
+  let busyLabel: string
+  let actionColor: string
+  let icon: React.ReactNode
+
+  const nameNode = <Text style={{ color: theme.foreground, fontFamily: 'Inter_600SemiBold' }}>{client.fullName}</Text>
+
+  if (kind === 'delete') {
+    title = 'Eliminar alumno'
+    actionLabel = 'Sí, eliminar'
+    busyLabel = 'Eliminando...'
+    actionColor = '#EF4444'
+    icon = <AlertTriangle size={20} color="#EF4444" />
+    body = (
+      <Text style={[confirmStyles.body, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        ¿Confirmas que deseas eliminar a {nameNode}? Esta acción eliminará su cuenta y todos sus datos asociados. No se puede deshacer.
+      </Text>
+    )
+  } else if (kind === 'archive') {
+    const archiving = !client.isArchived
+    title = archiving ? 'Archivar alumno' : 'Reactivar alumno'
+    actionLabel = archiving ? 'Archivar' : 'Reactivar'
+    busyLabel = archiving ? 'Archivando...' : 'Reactivando...'
+    actionColor = '#F59E0B'
+    icon = <AlertTriangle size={20} color="#F59E0B" />
+    body = archiving ? (
+      <Text style={[confirmStyles.body, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        ¿Archivar a {nameNode}? Perderá acceso a la plataforma temporalmente. Sus datos se conservan. Recibirá un correo de notificación.
+      </Text>
+    ) : (
+      <Text style={[confirmStyles.body, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        ¿Reactivar a {nameNode}? Recuperará acceso a la plataforma y recibirá un correo de notificación.
+      </Text>
+    )
+  } else {
+    // toggle (pausar / reactivar acceso)
+    const pausing = client.isActive
+    title = pausing ? 'Pausar acceso del alumno' : 'Reactivar acceso del alumno'
+    actionLabel = pausing ? 'Pausar' : 'Reactivar'
+    busyLabel = 'Guardando...'
+    actionColor = pausing ? '#F59E0B' : '#10B981'
+    icon = pausing ? <EyeOff size={20} color="#F59E0B" /> : <CheckCircle2 size={20} color="#10B981" />
+    body = pausing ? (
+      <Text style={[confirmStyles.body, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        ¿Confirmas que deseas pausar el acceso de {nameNode}? No podrá ver sus rutinas ni registrar datos, pero su historial se mantendrá intacto.
+      </Text>
+    ) : (
+      <Text style={[confirmStyles.body, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        ¿Confirmas que deseas reactivar el acceso de {nameNode}? Volverá a tener acceso completo a la plataforma.
+      </Text>
+    )
+  }
+
+  return (
+    <NativeDialog open onClose={onClose} showClose={false}>
+      <View style={confirmStyles.titleRow}>
+        {icon}
+        <Text style={[confirmStyles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={2}>
+          {title}
+        </Text>
+      </View>
+      {body}
+      {error ? <Text style={confirmStyles.error}>{error}</Text> : null}
+      <View style={confirmStyles.footer}>
+        <TouchableOpacity
+          style={[confirmStyles.cancelBtn, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.xl }]}
+          onPress={onClose}
+          disabled={busy}
+          activeOpacity={0.8}
+        >
+          <Text style={[confirmStyles.cancelTxt, { color: theme.mutedForeground }]}>Cancelar</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[confirmStyles.actionBtn, { backgroundColor: actionColor, borderRadius: theme.radius.xl, opacity: busy ? 0.6 : 1 }]}
+          onPress={onConfirm}
+          disabled={busy}
+          activeOpacity={0.85}
+        >
+          {busy ? <ActivityIndicator color="#fff" size="small" /> : null}
+          <Text style={[confirmStyles.actionTxt, { fontFamily: 'Inter_700Bold' }]}>{busy ? busyLabel : actionLabel}</Text>
+        </TouchableOpacity>
+      </View>
+    </NativeDialog>
+  )
+}
+
+const confirmStyles = StyleSheet.create({
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { fontSize: 18, flex: 1 },
+  body: { fontSize: 14, lineHeight: 20 },
+  error: { color: '#EF4444', fontSize: 13 },
+  footer: { flexDirection: 'row', gap: 12, marginTop: 2 },
+  cancelBtn: { flex: 1, height: 46, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  cancelTxt: { fontSize: 14, fontWeight: '600' },
+  actionBtn: { flex: 1, height: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  actionTxt: { color: '#fff', fontSize: 14 },
+})
+
+// ─── ResetPasswordResultDialog (branded, 1:1 web ResetPasswordButton resultado) ──
+// Muestra la clave generada en grande (mono + tracking-widest) con botón copiar.
+
+function ResetPasswordResultDialog({
+  result,
+  copied,
+  onCopy,
+  onClose,
+}: {
+  result: { clientName: string; tempPassword: string } | null
+  copied: boolean
+  onCopy: () => void
+  onClose: () => void
+}) {
+  const { theme } = useTheme()
+  if (!result) return null
+  return (
+    <NativeDialog open title="Contraseña restablecida" onClose={onClose} showClose={false}>
+      <Text style={[resetStyles.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        La nueva contraseña temporal para{' '}
+        <Text style={{ color: theme.foreground, fontFamily: 'Inter_600SemiBold' }}>{result.clientName}</Text> es:
+      </Text>
+
+      <View style={[resetStyles.passBox, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+        <Text style={[resetStyles.passTxt, { color: theme.primary }]} selectable numberOfLines={1} adjustsFontSizeToFit>
+          {result.tempPassword}
+        </Text>
+        <TouchableOpacity
+          style={[resetStyles.copyBtn, { backgroundColor: theme.background, borderColor: theme.border, borderRadius: theme.radius.lg }]}
+          onPress={onCopy}
+          activeOpacity={0.8}
+          hitSlop={6}
+        >
+          {copied ? <Check size={18} color="#10B981" /> : <Copy size={18} color={theme.foreground} />}
+        </TouchableOpacity>
+      </View>
+
+      <Text style={[resetStyles.note, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        El alumno deberá cambiar esta contraseña la próxima vez que inicie sesión.
+      </Text>
+
+      <TouchableOpacity
+        style={[resetStyles.okBtn, { backgroundColor: theme.primary, borderRadius: theme.radius.xl }]}
+        onPress={onClose}
+        activeOpacity={0.85}
+      >
+        <Text style={[resetStyles.okTxt, { fontFamily: 'Inter_700Bold' }]}>Entendido</Text>
+      </TouchableOpacity>
+    </NativeDialog>
+  )
+}
+
+const resetStyles = StyleSheet.create({
+  sub: { fontSize: 14, lineHeight: 20 },
+  passBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  passTxt: {
+    flex: 1,
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: 4,
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
+  },
+  copyBtn: { width: 40, height: 40, borderWidth: 1, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  note: { fontSize: 12, textAlign: 'center', lineHeight: 17 },
+  okBtn: { height: 48, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  okTxt: { color: '#fff', fontSize: 14 },
+})
 
 // P3: import por CSV (subir archivo o pegar texto) con preview validado. Reusa el endpoint de crear alumno.
 function ImportClientsForm({ theme, onDone, onCancel }: { theme: any; onDone: () => void; onCancel: () => void }) {
@@ -1985,6 +2242,19 @@ function ImportClientsForm({ theme, onDone, onCancel }: { theme: any; onDone: ()
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  // Contenedor glass de la barra de búsqueda + controles (espejo web action bar sticky backdrop-blur).
+  glassBar: { overflow: 'hidden', paddingTop: 4 },
+  glassBarBorder: { borderBottomWidth: StyleSheet.hairlineWidth },
+  // Glow radial suave detrás del título (espejo web bg-primary/10 blur).
+  warGlow: {
+    position: 'absolute',
+    top: -28,
+    left: '50%',
+    marginLeft: -150,
+    width: 300,
+    height: 150,
+    borderRadius: 150,
+  },
   actionBar: {
     flexDirection: 'row',
     alignItems: 'center',
