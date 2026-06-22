@@ -271,6 +271,12 @@ export default function ClientDetailScreen() {
 
         {/* 2 — Content */}
         <View style={styles.tabContent}>
+          {data.loadError ? (
+            <View style={{ backgroundColor: '#EF444414', borderColor: '#EF444440', borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12, gap: 4 }}>
+              <Text style={{ color: '#EF4444', fontFamily: 'Inter_700Bold', fontSize: 13 }}>No se pudieron cargar algunos datos</Text>
+              <Text style={{ color: theme.foreground, fontFamily: theme.fontSans, fontSize: 11, opacity: 0.7 }}>{data.loadError}</Text>
+            </View>
+          ) : null}
           {tab === 'overview' ? (
             <OverviewTab data={data} reload={load} onOpenPhoto={onOpenPhoto} onEditProgram={openBuilder} />
           ) : tab === 'progreso' ? (

@@ -582,6 +582,7 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   muscleVolumeReps: MuscleVolumeSetsEntry[]
   workoutDates371: string[]
   hasTrained: boolean
+  loadError: string | null
 }> {
   // Cliente primero (independiente) → el detalle SIEMPRE abre, aunque las queries
   // ricas fallen en una prod sin columnas enterprise/Codex.
@@ -619,6 +620,7 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     muscleVolumeReps: [] as MuscleVolumeSetsEntry[],
     workoutDates371: [] as string[],
     hasTrained: false,
+    loadError: null as string | null,
   }
   try {
   const { iso: todayIso } = getTodayInSantiago()
@@ -895,10 +897,14 @@ export async function getCoachClientDetail(clientId: string): Promise<{
       ((exercisePrsRes.data as any[] | null)?.length ?? 0) > 0 ||
       ((muscleVolumeRes.data as any[] | null)?.length ?? 0) > 0 ||
       ((strengthSeriesRes.data as any[] | null)?.length ?? 0) > 0,
+    loadError: null,
   }
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
     console.warn('[coach-client-detail] partial load', e)
-    return EMPTY
+    // Surface el error (en vez de blanco silencioso): el detalle abre con el cliente base
+    // y un banner de diagnostico. La data base (nombre/email) ya vino fuera del try.
+    return { ...EMPTY, loadError: msg }
   }
 }
 
