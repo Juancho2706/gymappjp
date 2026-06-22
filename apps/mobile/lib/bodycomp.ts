@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { apiFetch } from './api'
 import {
   BodyCompositionCreateSchema,
   type BodyFatEquationDto,
@@ -601,8 +602,11 @@ export interface BiaSavePayload {
 }
 
 /**
- * Guarda una medición BIA. Valida con el MISMO schema del servidor (defensa en profundidad) y
- * escribe las MISMAS columnas que el server action web bajo la sesión del coach (RLS = techo).
+ * Guarda una medición BIA. Hardening de gating (#3): la escritura YA NO va por PostgREST directo,
+ * sino por `/api/mobile/bodycomp/bia`, que corre `assertModule('body_composition')` SERVER-SIDE
+ * antes de insertar (la RLS no chequea enabled_modules → sin el endpoint un coach sin el módulo
+ * podría escribir por API directa y evadir el cobro). El server valida con el MISMO schema
+ * (defensa en profundidad). La firma y el shape de retorno NO cambian (las pantallas no se tocan).
  */
 export async function saveBiaMeasurement(
   clientId: string,
@@ -623,39 +627,24 @@ export async function saveBiaMeasurement(
     return { error: 'Revisá los datos: hay valores fuera de rango.' }
   }
   try {
-    const { data: auth } = await supabase.auth.getUser()
-    const userId = auth.user?.id ?? null
-    const nowIso = new Date().toISOString()
-    const { error } = await supabase.from('body_composition_measurements').insert({
-      client_id: clientId,
-      coach_id: userId,
-      team_id: null,
-      org_id: null,
-      method: 'bia',
-      measured_at: nowIso,
-      weight_kg: payload.weightKg ?? null,
-      height_cm: payload.heightCm ?? null,
-      device_brand: payload.deviceBrand ?? null,
-      device_model: payload.deviceModel ?? null,
-      equation_used: null,
-      raw_input: {},
-      metrics: payload.metrics as any,
-      measurement_conditions: {},
-      source: 'manual',
-      is_validated: false,
-      consent_confirmed_at: null,
-      created_by: userId,
-    } as any)
-    return { error: error ? error.message : null }
+    await apiFetch('/api/mobile/bodycomp/bia', {
+      method: 'POST',
+      authenticated: true,
+      body: candidate,
+    })
+    return { error: null }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'No se pudo guardar la medición.' }
   }
 }
 
 /**
- * Guarda una medición ISAK. El cálculo (Kerr 5C + Heath-Carter + %grasa) se ejecuta acá con el
- * MISMO código puro del servidor (`computeIsak`) → `metrics` derivado idéntico. Persiste el crudo
- * en `raw_input` y el derivado en `metrics`. is_validated=false (label "preliminar").
+ * Guarda una medición ISAK. Hardening de gating (#3): la escritura va por
+ * `/api/mobile/bodycomp/isak` (assertModule SERVER-SIDE antes de insertar). CLAVE: el cálculo
+ * (Kerr 5C + Heath-Carter + %grasa) lo hace el SERVER (`computeIsak` dentro del service) — el
+ * cliente solo envía los crudos (`rawInput`) + la ecuación, NUNCA `metrics`. Así el % grasa
+ * persistido no depende de un cálculo del client. La firma y el shape de retorno NO cambian.
+ * El `computeIsak` local que queda en este lib se usa SOLO para la vista previa del wizard.
  */
 export async function saveIsakMeasurement(
   clientId: string,
@@ -675,74 +664,30 @@ export async function saveIsakMeasurement(
     return { error: 'Revisá los datos: hay valores fuera de rango.' }
   }
   try {
-    const result = computeIsak(rawInput as IsakRawInput, { bodyFatEquation })
-    const { data: auth } = await supabase.auth.getUser()
-    const userId = auth.user?.id ?? null
-    const nowIso = new Date().toISOString()
-    const { error } = await supabase.from('body_composition_measurements').insert({
-      client_id: clientId,
-      coach_id: userId,
-      team_id: null,
-      org_id: null,
-      method: 'isak',
-      measured_at: nowIso,
-      weight_kg: rawInput.weightKg,
-      height_cm: rawInput.heightCm,
-      device_brand: null,
-      device_model: null,
-      equation_used: result.equationUsed,
-      raw_input: rawInput as any,
-      metrics: isakResultToMetricsJson(result) as any,
-      measurement_conditions: {},
-      source: 'manual',
-      is_validated: false,
-      consent_confirmed_at: null,
-      created_by: userId,
-    } as any)
-    return { error: error ? error.message : null }
+    await apiFetch('/api/mobile/bodycomp/isak', {
+      method: 'POST',
+      authenticated: true,
+      body: candidate,
+    })
+    return { error: null }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'No se pudo guardar la medición.' }
   }
 }
 
-/** Soft-delete (deleted_at) de una medición. Idempotente. RLS = techo. */
+/**
+ * Soft-delete (deleted_at) de una medición. Hardening de gating (#3): va por
+ * `/api/mobile/bodycomp/[id]` (assertModule SERVER-SIDE antes del soft-delete; RLS = techo).
+ * Idempotente. Firma y shape de retorno sin cambios.
+ */
 export async function deleteMeasurement(id: string): Promise<{ error: string | null }> {
   try {
-    const { error } = await supabase
-      .from('body_composition_measurements')
-      .update({ deleted_at: new Date().toISOString() } as any)
-      .eq('id', id)
-      .is('deleted_at', null)
-    return { error: error ? error.message : null }
+    await apiFetch(`/api/mobile/bodycomp/${id}`, {
+      method: 'DELETE',
+      authenticated: true,
+    })
+    return { error: null }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'No se pudo eliminar la medición.' }
-  }
-}
-
-/** Resultado ISAK derivado -> jsonb `metrics` (espejo de body-composition.mappers.ts). */
-function isakResultToMetricsJson(result: IsakResult): Record<string, unknown> {
-  const f = result.fractionation
-  return {
-    fractionation: {
-      adipose: { kg: f.adipose.kg, pct: f.adipose.pct },
-      muscle: { kg: f.muscle.kg, pct: f.muscle.pct },
-      bone: { kg: f.bone.kg, pct: f.bone.pct },
-      residual: { kg: f.residual.kg, pct: f.residual.pct },
-      skin: { kg: f.skin.kg, pct: f.skin.pct },
-      predictedMassKg: f.predictedMassKg,
-      measuredWeightKg: f.measuredWeightKg,
-      massDifferenceKg: f.massDifferenceKg,
-    },
-    somatotype: {
-      endomorphy: result.somatotype.endomorphy,
-      mesomorphy: result.somatotype.mesomorphy,
-      ectomorphy: result.somatotype.ectomorphy,
-    },
-    bodyFat: {
-      equation: result.bodyFat.equation,
-      percent: result.bodyFat.percent,
-      ...(result.bodyFat.bodyDensity !== undefined ? { bodyDensity: result.bodyFat.bodyDensity } : {}),
-    },
-    equationUsed: result.equationUsed,
   }
 }

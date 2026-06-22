@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { apiFetch, ApiError } from './api'
 import { getCoachOrgContext } from './org'
 import { getTodayInSantiago, isoDateAddDays } from './date-utils'
 import {
@@ -879,59 +880,98 @@ export async function getPlanExchangeData(planId: string): Promise<PlanExchangeD
   }
 }
 
-/** Cambia el modo del plan (gramos ↔ porciones). RLS = techo. */
+/**
+ * Cambia el modo del plan (gramos ↔ porciones). Gating server-side: pega a
+ * /api/mobile/nutrition/exchanges/set-mode que corre `assertModule(nutrition_exchanges)`
+ * ANTES de escribir (la RLS no chequea enabled_modules → sin el endpoint un coach sin el
+ * modulo evadiria el cobro por PostgREST directo). La escritura real sigue user-scoped (RLS = techo).
+ */
 export async function setPlanModeDb(planId: string, mode: NutritionPlanMode): Promise<{ ok: boolean; error?: string }> {
-  const { error } = await supabase.from('nutrition_plans').update({ plan_mode: mode }).eq('id', planId)
-  return error ? { ok: false, error: error.message } : { ok: true }
+  try {
+    await apiFetch<{ ok: true }>('/api/mobile/nutrition/exchanges/set-mode', {
+      method: 'POST',
+      authenticated: true,
+      body: { planId, mode },
+    })
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof ApiError ? e.message : 'No se pudo cambiar el modo del plan.' }
+  }
 }
 
-/** Reemplaza (delete + insert) los targets de UNA comida. Espejo de replaceMealExchangeTargets. */
+/**
+ * Reemplaza (delete + insert) los targets de UNA comida. Gating server-side via
+ * /api/mobile/nutrition/exchanges/targets (assertModule(nutrition_exchanges) antes del
+ * delete+insert). Espejo de replaceMealExchangeTargets; el server filtra portions > 0.
+ */
 export async function saveMealExchangeTargetsDb(
   mealId: string,
   targets: { exchangeGroupId: string; portions: number; notes?: string | null }[]
 ): Promise<{ ok: boolean; error?: string }> {
-  const { error: delErr } = await supabase.from('meal_exchange_targets').delete().eq('meal_id', mealId)
-  if (delErr) return { ok: false, error: delErr.message }
-  const live = targets.filter((t) => t.portions > 0)
-  if (live.length === 0) return { ok: true }
-  const { error: insErr } = await supabase.from('meal_exchange_targets').insert(
-    live.map((t) => ({ meal_id: mealId, exchange_group_id: t.exchangeGroupId, portions: t.portions, notes: t.notes ?? null }))
-  )
-  return insErr ? { ok: false, error: insErr.message } : { ok: true }
+  try {
+    await apiFetch<{ ok: true }>('/api/mobile/nutrition/exchanges/targets', {
+      method: 'POST',
+      authenticated: true,
+      body: { mealId, targets: targets.filter((t) => t.portions > 0) },
+    })
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof ApiError ? e.message : 'No se pudieron guardar las porciones.' }
+  }
 }
 
-/** Asigna/limpia la variante de día de una comida (null = aplica a todas). */
+/**
+ * Asigna/limpia la variante de día de una comida (null = aplica a todas). Gating
+ * server-side via /api/mobile/nutrition/exchanges/meal-variant (assertModule antes del UPDATE).
+ */
 export async function setMealDayVariantDb(mealId: string, variantId: string | null): Promise<{ ok: boolean; error?: string }> {
-  const { error } = await supabase.from('nutrition_meals').update({ day_variant_id: variantId }).eq('id', mealId)
-  return error ? { ok: false, error: error.message } : { ok: true }
+  try {
+    await apiFetch<{ ok: true }>('/api/mobile/nutrition/exchanges/meal-variant', {
+      method: 'POST',
+      authenticated: true,
+      body: { mealId, variantId },
+    })
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof ApiError ? e.message : 'No se pudo asignar la variante.' }
+  }
 }
 
-/** Crea una variante de día. Espejo de createPlanDayVariant (máx 6, sin nombres repetidos). */
+/**
+ * Crea una variante de día. Espejo de createPlanDayVariant (máx 6, sin nombres repetidos —
+ * ambas validaciones viven ahora en el endpoint). Gating server-side via
+ * /api/mobile/nutrition/exchanges/variants (assertModule antes del INSERT).
+ */
 export async function createDayVariantDb(planId: string, name: string): Promise<{ ok: boolean; variant?: DayVariant; error?: string }> {
   const trimmed = name.trim()
   if (trimmed.length < 1) return { ok: false, error: 'Indicá un nombre.' }
-  const { data: existing } = await supabase
-    .from('nutrition_plan_day_variants')
-    .select('id, name, sort_order')
-    .eq('plan_id', planId)
-  const list = (existing ?? []) as any[]
-  if (list.length >= 6) return { ok: false, error: 'Máximo 6 variantes por pauta.' }
-  if (list.some((v) => String(v.name).toLowerCase() === trimmed.toLowerCase())) {
-    return { ok: false, error: 'Ya existe una variante con ese nombre.' }
+  try {
+    const res = await apiFetch<{ ok: true; variant: DayVariant }>('/api/mobile/nutrition/exchanges/variants', {
+      method: 'POST',
+      authenticated: true,
+      body: { planId, name: trimmed },
+    })
+    return { ok: true, variant: res.variant }
+  } catch (e) {
+    return { ok: false, error: e instanceof ApiError ? e.message : 'No se pudo crear la variante.' }
   }
-  const { data, error } = await supabase
-    .from('nutrition_plan_day_variants')
-    .insert({ plan_id: planId, name: trimmed, sort_order: list.length })
-    .select('id, plan_id, name, sort_order')
-    .single()
-  if (error || !data) return { ok: false, error: error?.message ?? 'No se pudo crear la variante.' }
-  return { ok: true, variant: { id: (data as any).id, planId, name: (data as any).name, sortOrder: (data as any).sort_order ?? list.length } }
 }
 
-/** Borra una variante (las comidas asignadas quedan day_variant_id NULL — ON DELETE SET NULL). */
+/**
+ * Borra una variante (las comidas asignadas quedan day_variant_id NULL — ON DELETE SET NULL).
+ * Gating server-side via /api/mobile/nutrition/exchanges/variants (DELETE).
+ */
 export async function deleteDayVariantDb(variantId: string): Promise<{ ok: boolean; error?: string }> {
-  const { error } = await supabase.from('nutrition_plan_day_variants').delete().eq('id', variantId)
-  return error ? { ok: false, error: error.message } : { ok: true }
+  try {
+    await apiFetch<{ ok: true }>('/api/mobile/nutrition/exchanges/variants', {
+      method: 'DELETE',
+      authenticated: true,
+      body: { variantId },
+    })
+    return { ok: true }
+  } catch (e) {
+    return { ok: false, error: e instanceof ApiError ? e.message : 'No se pudo eliminar la variante.' }
+  }
 }
 
 /** Código resumen de una comida en porciones: "2C · 1LAC · 1F" (espejo de portionsSummaryLabel web). */

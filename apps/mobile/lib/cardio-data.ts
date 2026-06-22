@@ -1,11 +1,13 @@
 import { supabase } from './supabase'
+import { apiFetch, ApiError } from './api'
 import { CardioProfileUpdateSchema } from '@eva/schemas'
 
 /**
- * Datos del módulo cardio (mobile). Lecturas/escrituras DIRECTAS por PostgREST bajo
- * la sesión del coach (RLS: clients.coach_id = auth.uid()). El write usa las MISMAS
- * columnas que el server action web (que corre bajo la sesión del coach, no service-role)
- * → los GRANT de columna para `authenticated` ya existen, sin migración. Standalone v1.
+ * Datos del módulo cardio (mobile). Las LECTURAS son DIRECTAS por PostgREST bajo la
+ * sesión del coach (RLS SELECT: clients.coach_id = auth.uid()). La ESCRITURA pasa por
+ * /api/mobile/cardio/profile, que corre assertModule('cardio') SERVER-SIDE antes de
+ * tocar la fila: la RLS de clients NO chequea enabled_modules, así que el PostgREST
+ * directo dejaba a un coach sin el módulo escribir igual (evasión de cobro). Standalone v1.
  */
 
 export interface CardioClientRow {
@@ -68,7 +70,12 @@ export interface CardioProfileFormValues {
   ref_5k_time_sec?: string | null
 }
 
-/** Guarda el perfil cardio (valida con el schema compartido + escribe bajo RLS coach). */
+/**
+ * Guarda el perfil cardio. Valida con el schema compartido (feedback inmediato + mismo
+ * shape de error que el server) y luego escribe vía /api/mobile/cardio/profile, que
+ * gatea el módulo SERVER-SIDE (assertModule) y valida el scope del alumno. El write ya
+ * NO va por PostgREST directo (la RLS no chequea el entitlement → era evasión de cobro).
+ */
 export async function saveCardioProfile(
   clientId: string,
   values: CardioProfileFormValues
@@ -83,7 +90,15 @@ export async function saveCardioProfile(
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }
   }
-  const { clientId: _id, ...patch } = parsed.data
-  const { error } = await supabase.from('clients').update(patch).eq('id', clientId)
-  return { error: error ? error.message : null }
+  try {
+    await apiFetch('/api/mobile/cardio/profile', {
+      method: 'POST',
+      authenticated: true,
+      body: parsed.data,
+    })
+    return { error: null }
+  } catch (e) {
+    if (e instanceof ApiError) return { error: e.message }
+    return { error: e instanceof Error ? e.message : 'No se pudo guardar el perfil.' }
+  }
 }

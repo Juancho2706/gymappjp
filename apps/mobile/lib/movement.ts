@@ -13,6 +13,7 @@
  */
 
 import { supabase } from './supabase'
+import { apiFetch, ApiError } from './api'
 import { MovementItemInputSchema, MovementFinalizeSchema } from '@eva/schemas'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -381,14 +382,13 @@ export interface WizardItemValues {
   comment: string | null
 }
 
-async function getCurrentUserId(): Promise<string | null> {
-  const { data } = await supabase.auth.getUser()
-  return data.user?.id ?? null
-}
-
 /**
- * Autosave por paso: crea el borrador (max 1 por alumno) si no existe y upserta el item
- * con final_score recalculado aca (jamas confiar en el cliente). Espeja upsertDraftItem.
+ * Autosave por paso: crea el borrador (max 1 por alumno) si no existe y upserta el item.
+ *
+ * GATING (#3 hardening): la escritura ya NO pega a PostgREST directo (eso permitia evadir el cobro
+ * escribiendo sin el modulo). Va por /api/mobile/movement/item, que corre assertModule SERVER-SIDE
+ * y recalcula final_score con @eva/calc antes de escribir bajo RLS. La firma y el shape de retorno
+ * se mantienen (los callers no cambian). La validacion Zod local queda como UX (pre-check).
  */
 export async function upsertDraftItem(
   clientId: string,
@@ -408,64 +408,25 @@ export async function upsertDraftItem(
   }
 
   try {
-    const userId = await getCurrentUserId()
-    if (!userId) return { assessmentId: null, error: 'No autenticado.' }
-    const def = movementPatternDef(values.pattern)
-
-    // Borrador existente o nuevo.
-    let assessmentId: string
-    const existing = await getDraftWithItems(clientId)
-    if (existing) {
-      assessmentId = existing.id
-    } else {
-      const { data: created, error: insErr } = await supabase
-        .from('movement_assessments')
-        .insert({ client_id: clientId, coach_id: userId, status: 'draft', last_edited_by: userId })
-        .select('id')
-        .single()
-      if (insErr || !created) return { assessmentId: null, error: insErr?.message ?? 'No se pudo crear el borrador.' }
-      assessmentId = (created as any).id
-    }
-
-    const finalScore = finalItemScore({
-      pattern: def.slug,
-      isPerSide: def.isPerSide,
-      scoreLeft: def.isPerSide ? values.score_left : null,
-      scoreRight: def.isPerSide ? values.score_right : null,
-      scoreSingle: def.isPerSide ? null : values.score_single,
-      pain: values.pain,
-      clearingPositive: def.hasClearing ? (values.clearing_positive ?? false) : null,
+    const res = await apiFetch<{ assessmentId: string }>('/api/mobile/movement/item', {
+      method: 'POST',
+      authenticated: true,
+      body: {
+        client_id: clientId,
+        item: {
+          pattern: values.pattern,
+          score_left: values.score_left,
+          score_right: values.score_right,
+          score_single: values.score_single,
+          pain: values.pain,
+          clearing_positive: values.clearing_positive,
+          comment: values.comment,
+        },
+      },
     })
-
-    // Upsert por (assessment_id, pattern): borra el item previo y reinserta (sin onConflict
-    // server-side disponible via PostgREST sin constraint nombrado garantizado).
-    await supabase
-      .from('movement_assessment_items')
-      .delete()
-      .eq('assessment_id', assessmentId)
-      .eq('pattern', def.slug)
-
-    const { error: itemErr } = await supabase.from('movement_assessment_items').insert({
-      assessment_id: assessmentId,
-      pattern: def.slug,
-      is_per_side: def.isPerSide,
-      score_left: def.isPerSide ? (values.score_left ?? null) : null,
-      score_right: def.isPerSide ? (values.score_right ?? null) : null,
-      score_single: def.isPerSide ? null : (values.score_single ?? null),
-      final_score: finalScore,
-      pain: values.pain,
-      clearing_positive: def.hasClearing ? (values.clearing_positive ?? false) : null,
-      comment: values.comment?.trim() || null,
-    })
-    if (itemErr) return { assessmentId, error: itemErr.message }
-
-    await supabase
-      .from('movement_assessments')
-      .update({ last_edited_by: userId })
-      .eq('id', assessmentId)
-
-    return { assessmentId, error: null }
+    return { assessmentId: res.assessmentId, error: null }
   } catch (e) {
+    if (e instanceof ApiError) return { assessmentId: null, error: e.message }
     return { assessmentId: null, error: e instanceof Error ? e.message : 'Error inesperado.' }
   }
 }
@@ -494,40 +455,23 @@ export async function finalizeAssessment(
   }
 
   try {
-    const userId = await getCurrentUserId()
-    if (!userId) return { error: 'No autenticado.' }
-
-    const draft = await getDraftWithItems(clientId)
-    if (!draft || draft.id !== assessmentId) {
-      return { error: 'Borrador no encontrado (pudo haber sido finalizado o eliminado).' }
-    }
-
-    // Recalculo server SIEMPRE (lanza si el protocolo esta incompleto).
-    let summary: MovementSummary
-    try {
-      summary = summarizeAssessment(draft.items.map(itemRowToCalcInput))
-    } catch (e) {
-      return { error: e instanceof Error ? e.message : 'Protocolo incompleto.' }
-    }
-
-    const now = new Date().toISOString()
-    const { error: updErr } = await supabase
-      .from('movement_assessments')
-      .update({
-        status: 'final',
-        composite_score: summary.composite,
-        has_pain: summary.hasPain,
-        has_asymmetry: summary.hasAsymmetry,
-        risk_band: summary.band,
-        consent_confirmed_at: now,
-        assessed_at: now,
-        notes: notes?.trim() || null,
-        last_edited_by: userId,
-      })
-      .eq('id', assessmentId)
-    if (updErr) return { error: updErr.message }
+    // GATING (#3): la finalizacion va por /api/mobile/movement/finalize, que corre assertModule
+    // SERVER-SIDE, valida el borrador, RECALCULA composite/band/pain/asimetria con @eva/calc y
+    // estampa consentimiento+consent_confirmed_at. El recalculo client-side se elimino (no se
+    // confia en el cliente). Firma y shape de retorno sin cambios.
+    await apiFetch<{ error: null }>('/api/mobile/movement/finalize', {
+      method: 'POST',
+      authenticated: true,
+      body: {
+        client_id: clientId,
+        assessment_id: assessmentId,
+        notes,
+        consent_attested: consentAttested,
+      },
+    })
     return { error: null }
   } catch (e) {
+    if (e instanceof ApiError) return { error: e.message }
     return { error: e instanceof Error ? e.message : 'Error inesperado.' }
   }
 }
@@ -535,22 +479,17 @@ export async function finalizeAssessment(
 /** Final inmutable: corregir = eliminar (cascade borra los items) + re-evaluar. */
 export async function deleteAssessment(assessmentId: string): Promise<{ error: string | null }> {
   try {
-    const { error } = await supabase.from('movement_assessments').delete().eq('id', assessmentId)
-    return { error: error ? error.message : null }
+    // GATING (#3): el borrado va por /api/mobile/movement/assessment (DELETE) con assertModule
+    // SERVER-SIDE; el borrado bajo RLS (cascade de items) sigue siendo el techo. Firma sin cambios.
+    await apiFetch<{ error: null }>('/api/mobile/movement/assessment', {
+      method: 'DELETE',
+      authenticated: true,
+      body: { assessment_id: assessmentId },
+    })
+    return { error: null }
   } catch (e) {
+    if (e instanceof ApiError) return { error: e.message }
     return { error: e instanceof Error ? e.message : 'Error inesperado.' }
-  }
-}
-
-function itemRowToCalcInput(item: MovementAssessmentItemRow): MovementItemInput {
-  return {
-    pattern: item.pattern,
-    isPerSide: item.is_per_side,
-    scoreLeft: item.score_left,
-    scoreRight: item.score_right,
-    scoreSingle: item.score_single,
-    pain: item.pain,
-    clearingPositive: item.clearing_positive,
   }
 }
 
