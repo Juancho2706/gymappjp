@@ -311,6 +311,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.47.0
         version: 2.101.1
+      babel-plugin-react-compiler:
+        specifier: 1.0.0
+        version: 1.0.0
       base64-arraybuffer:
         specifier: ^1.0.2
         version: 1.0.2
@@ -410,6 +413,9 @@ importers:
       react:
         specifier: 19.1.0
         version: 19.1.0
+      react-compiler-runtime:
+        specifier: ^1.0.0
+        version: 1.0.0(react@19.1.0)
       react-native:
         specifier: 0.81.5
         version: 0.81.5(@babel/core@7.29.0)(@react-native/metro-config@0.85.3(@babel/core@7.29.0))(@types/react@19.1.17)(react@19.1.0)
@@ -7385,6 +7391,11 @@ packages:
 
   react-circular-progressbar@2.2.0:
     resolution: {integrity: sha512-cgyqEHOzB0nWMZjKfWN3MfSa1LV3OatcDjPz68lchXQUEiBD5O1WsAtoVK4/DSL0B4USR//cTdok4zCBkq8X5g==}
+    peerDependencies:
+      react: 19.1.0
+
+  react-compiler-runtime@1.0.0:
+    resolution: {integrity: sha512-rRfjYv66HlG8896yPUDONgKzG5BxZD1nV9U6rkm+7VCuvQc903C4MjcoZR4zPw53IKSOX9wMQVpA1IAbRtzQ7w==}
     peerDependencies:
       react: 19.1.0
 
@@ -16816,6 +16827,10 @@ snapshots:
       - react-dom
 
   react-circular-progressbar@2.2.0(react@19.1.0):
+    dependencies:
+      react: 19.1.0
+
+  react-compiler-runtime@1.0.0(react@19.1.0):
     dependencies:
       react: 19.1.0
 
