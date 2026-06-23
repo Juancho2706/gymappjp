@@ -91,4 +91,50 @@ export async function setActiveWorkspace(key: string): Promise<void> {
   } catch {
     // ignore
   }
+  _scopeCache = null // invalidar el scope cacheado al cambiar de contexto
+}
+
+/**
+ * Scope ACTIVO resuelto para que las libs de datos scopeen sus queries (espejo del
+ * resolvePreferredWorkspace de la web). standalone => filtrar por coach_id; coach_team =>
+ * por team_id (POOL compartido del equipo); enterprise_coach => por org_id (+coach).
+ * Cacheado a nivel modulo (TTL corto) para no re-listar workspaces en cada lib; se invalida
+ * en setActiveWorkspace y en clearWorkspaceScopeCache (llamar en signOut).
+ */
+export interface ActiveScope {
+  type: CoachWorkspaceType
+  coachId: string
+  /** teamId del pool activo, o null si no es coach_team. */
+  teamId: string | null
+  /** orgId del enterprise activo, o null. */
+  orgId: string | null
+}
+
+let _scopeCache: { scope: ActiveScope; at: number } | null = null
+const SCOPE_TTL_MS = 60_000
+
+export function clearWorkspaceScopeCache(): void {
+  _scopeCache = null
+}
+
+export async function getActiveScope(): Promise<ActiveScope> {
+  if (_scopeCache && Date.now() - _scopeCache.at < SCOPE_TTL_MS) return _scopeCache.scope
+  const { data: auth } = await supabase.auth.getUser()
+  const coachId = auth.user?.id ?? ''
+  const standalone: ActiveScope = { type: 'coach_standalone', coachId, teamId: null, orgId: null }
+  if (!coachId) return standalone
+  let scope = standalone
+  try {
+    const workspaces = await listWorkspaces()
+    const active = await getActiveWorkspace(workspaces)
+    if (active?.type === 'coach_team' && active.contextId) {
+      scope = { type: 'coach_team', coachId, teamId: active.contextId, orgId: null }
+    } else if (active?.type === 'enterprise_coach' && active.contextId) {
+      scope = { type: 'enterprise_coach', coachId, teamId: null, orgId: active.contextId }
+    }
+  } catch {
+    // fail-safe: standalone (no romper el caso comun ante cualquier error)
+  }
+  _scopeCache = { scope, at: Date.now() }
+  return scope
 }

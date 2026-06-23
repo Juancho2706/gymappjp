@@ -2,6 +2,7 @@ import { supabase } from './supabase'
 import { revokePushToken } from './push'
 import { sessionFlags } from './session-flags'
 import { clearAppConfigCache } from './app-config'
+import { clearWorkspaceScopeCache } from './workspaces'
 
 /**
  * Cierre de sesión central (Ola 0): revoca el push token de ESTE dispositivo
@@ -17,5 +18,6 @@ export async function signOutAndCleanup(): Promise<void> {
   }
   sessionFlags.pwChanged = false
   clearAppConfigCache() // invalida config (kill-switch/prefs) cacheado al cambiar de sesion
+  clearWorkspaceScopeCache() // invalida el scope de workspace cacheado al cambiar de sesion
   await supabase.auth.signOut().catch(() => {})
 }

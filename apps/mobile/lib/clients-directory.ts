@@ -3,6 +3,7 @@ import { getCoachProfile } from './coach'
 import { getCoachOrgContext } from './org'
 import { selectWithFallback } from './db-compat'
 import { apiFetch } from './api'
+import { getActiveScope } from './workspaces'
 
 export type AttentionFlag =
   | 'SIN_WORKOUT_7D'
@@ -197,15 +198,22 @@ export async function getCoachDirectoryClients(): Promise<DirectoryClient[]> {
   // TX-4: scoping de org explícito (no solo RLS). Seguro en standalone vía selectWithFallback:
   // si la columna org_id no existe en una prod vieja, cae a la query sin filtro de org.
   const { orgId } = await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))
+  // Scope de workspace: si el coach opera en un TEAM (pool) activo, ve a TODOS los alumnos del
+  // pool (clients.team_id); en standalone se mantiene EXACTO el scope previo (coach_id + org_id).
+  const scope = await getActiveScope()
+  const isTeam = scope.type === 'coach_team' && !!scope.teamId
   const clientsSelect = 'id, full_name, email, phone, is_active, is_archived, force_password_change, created_at, subscription_start_date, workout_programs(id, name, start_date, weeks_to_repeat, is_active)'
 
   const [clientsRes, workoutLogsRes, checkInsRes] = await Promise.all([
     selectWithFallback<any>(
       () => {
+        if (isTeam) return supabase.from('clients').select(clientsSelect).eq('team_id', scope.teamId as string).order('full_name')
         const q = supabase.from('clients').select(clientsSelect).eq('coach_id', coach.id)
         return (orgId ? q.eq('org_id', orgId) : q.is('org_id', null)).order('full_name')
       },
-      () => supabase.from('clients').select(clientsSelect).eq('coach_id', coach.id).order('full_name')
+      () => isTeam
+        ? supabase.from('clients').select(clientsSelect).eq('team_id', scope.teamId as string).order('full_name')
+        : supabase.from('clients').select(clientsSelect).eq('coach_id', coach.id).order('full_name')
     ),
     supabase
       .from('workout_logs')
