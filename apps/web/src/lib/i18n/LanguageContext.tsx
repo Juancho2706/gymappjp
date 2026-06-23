@@ -45,7 +45,10 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     };
 
     const t = (key: string) => {
-        return dictionaries[language][key] || key;
+        // Usar ?? (no ||): un valor "" intencional (p. ej. landing.typewriter.prefixBefore)
+        // es una traducción válida y NO debe caer al fallback de la key cruda. Solo cuando la
+        // key NO existe (undefined) mostramos la key como tell de traducción faltante.
+        return dictionaries[language][key] ?? key;
     };
 
     // We MUST return the Provider even if not mounted so that children calling
