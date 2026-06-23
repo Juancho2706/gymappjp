@@ -15,6 +15,7 @@ import { Sparkline } from '../../../components/Sparkline'
 import { assignTemplateToClients, deleteTemplate, duplicateTemplate, listTemplates, type TemplateSummary } from '../../../lib/nutrition-templates'
 import { listCoachRecipes, type RecipeRow } from '../../../lib/recipes'
 import { canUseNutrition, type SubscriptionTier } from '../../../lib/coach-tiers'
+import { getActiveScope } from '../../../lib/workspaces'
 import { getApiBaseUrl } from '../../../lib/api'
 
 interface Client { id: string; full_name: string }
@@ -96,12 +97,23 @@ export default function CoachNutricionScreen() {
     if (!coach) { setLoading(false); return }
     setTier(coach.subscriptionTier)
     if (!canUseNutrition(coach.subscriptionTier)) { setLoading(false); return }
+    // Workspace-aware: en contexto team, alumnos y planes activos son del POOL del equipo
+    // (clients.team_id), SIN filtro coach_id — espejo de getCoachClients / getActiveClientPlans
+    // (web). standalone/enterprise = comportamiento actual (coach_id).
+    const scope = await getActiveScope()
+    const isTeam = scope.type === 'coach_team' && !!scope.teamId
+    const clientsQuery = isTeam
+      ? supabase.from('clients').select('id, full_name').eq('team_id', scope.teamId!).is('org_id', null).eq('is_archived', false).eq('is_active', true).order('full_name')
+      : supabase.from('clients').select('id, full_name').eq('coach_id', coach.id).eq('is_archived', false).eq('is_active', true).order('full_name')
     const [{ data: cl }, tpl, foods, { data: activePlans }] = await Promise.all([
-      supabase.from('clients').select('id, full_name').eq('coach_id', coach.id).eq('is_archived', false).eq('is_active', true).order('full_name'),
+      clientsQuery,
       listTemplates(),
       listCoachFoods().catch(() => []),
       // N-F6 (lite): qué alumnos tienen plan de nutrición activo → marcar "sin plan" en el roster.
-      supabase.from('nutrition_plans').select('client_id').eq('coach_id', coach.id).eq('is_active', true),
+      // Team: planes activos del pool (org∅) — el set se intersecta con el roster del pool igual.
+      isTeam
+        ? supabase.from('nutrition_plans').select('client_id').is('org_id', null).eq('is_active', true)
+        : supabase.from('nutrition_plans').select('client_id').eq('coach_id', coach.id).eq('is_active', true),
     ])
     setClients(cl ?? [])
     setTemplates(tpl)

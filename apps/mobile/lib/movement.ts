@@ -15,6 +15,7 @@
 import { supabase } from './supabase'
 import { apiFetch, ApiError } from './api'
 import { MovementItemInputSchema, MovementFinalizeSchema } from '@eva/schemas'
+import { getActiveScope } from './workspaces'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. CALCULO PURO (port verbatim de @eva/calc)
@@ -250,11 +251,18 @@ function mapAssessment(r: any): MovementAssessmentRow {
 /** Hub: alumnos del coach + su ultimo final + borrador pendiente. */
 export async function listMovementHub(): Promise<MovementHubClient[]> {
   try {
-    const { data: clientsData } = await supabase
+    const scope = await getActiveScope()
+    let clientsQuery = supabase
       .from('clients')
       .select('id, full_name')
       .or('is_archived.is.null,is_archived.eq.false')
       .order('full_name')
+    // coach_team => POOL del equipo (espejo web findScopedClientsBasic): team_id + org_id null.
+    // Cualquier otro caso (standalone / enterprise_coach) => comportamiento actual exacto (RLS scopea).
+    if (scope.type === 'coach_team' && scope.teamId) {
+      clientsQuery = clientsQuery.eq('team_id', scope.teamId).is('org_id', null)
+    }
+    const { data: clientsData } = await clientsQuery
     const clients = (clientsData ?? []) as any[]
     if (clients.length === 0) return []
     const ids = clients.map((c) => c.id)

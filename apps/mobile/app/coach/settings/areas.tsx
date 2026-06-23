@@ -24,6 +24,8 @@ import { ScreenHeader, Button } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { getCoachOrgContext } from '../../../lib/org'
+import { getActiveScope } from '../../../lib/workspaces'
+import { getMyTeamOverview } from '../../../lib/team'
 import {
   buildAreaVMs,
   createArea,
@@ -42,6 +44,9 @@ export default function AreasScreen() {
   // El coach gestionado por una org no administra sus áreas (la RLS rechazaría el CRUD). Conservador:
   // solo redirige con CERTEZA (org_id presente en el JWT); si la lectura falla, fail-OPEN (no redirige).
   const [orgManaged, setOrgManaged] = useState(false)
+  // canEdit: standalone => siempre true (comportamiento histórico). coach_team => solo owner/co-gestor
+  // (espejo web getAreasContext.canEdit vía isCurrentUserTeamManager); miembro = read-only.
+  const [canEdit, setCanEdit] = useState(true)
   const [saving, setSaving] = useState(false)
   const [areas, setAreas] = useState<WorkoutArea[]>([])
   const [newName, setNewName] = useState('')
@@ -60,6 +65,14 @@ export default function AreasScreen() {
           setOrgManaged(true)
           router.replace('/coach/home')
           return // no cargamos ni parpadeamos el CRUD; el loader se mantiene hasta el replace
+        }
+        // En contexto team, el CRUD solo lo gestiona owner/co-gestor (espejo web canEdit). El miembro
+        // ve la lista read-only. Standalone: canEdit queda true (sin cambios). Fail-open: ante error
+        // de resolución, no bloqueamos (RLS wst_* sigue siendo el techo real de escritura).
+        const scope = await getActiveScope().catch(() => null)
+        if (scope?.type === 'coach_team' && scope.teamId) {
+          const team = await getMyTeamOverview().catch(() => null)
+          setCanEdit(team?.isManager ?? false)
         }
         setAreas(await listAreas())
       } finally {
@@ -239,7 +252,7 @@ export default function AreasScreen() {
                       </View>
                     </View>
 
-                    {!vm.is_system ? (
+                    {!vm.is_system && canEdit ? (
                       <View style={styles.actions}>
                         {isConfirming ? (
                           <>
@@ -277,26 +290,32 @@ export default function AreasScreen() {
           })}
         </View>
 
-        {/* ── Crear área ── */}
-        <View style={styles.createRow}>
-          <TextInput
-            value={newName}
-            onChangeText={setNewName}
-            maxLength={40}
-            placeholder='Nueva área (ej: "Core", "HYROX")'
-            placeholderTextColor={theme.mutedForeground}
-            onSubmitEditing={handleCreate}
-            returnKeyType="done"
-            style={[styles.createInput, { borderColor: theme.border, backgroundColor: theme.card, color: theme.foreground, fontFamily: theme.fontSans, borderRadius: theme.radius.lg }]}
-          />
-          <Button
-            label="Crear"
-            leftIcon={Plus}
-            onPress={handleCreate}
-            loading={saving}
-            disabled={newName.trim().length < 2}
-          />
-        </View>
+        {/* ── Crear área (solo quien puede editar; en team = owner/co-gestor) ── */}
+        {canEdit ? (
+          <View style={styles.createRow}>
+            <TextInput
+              value={newName}
+              onChangeText={setNewName}
+              maxLength={40}
+              placeholder='Nueva área (ej: "Core", "HYROX")'
+              placeholderTextColor={theme.mutedForeground}
+              onSubmitEditing={handleCreate}
+              returnKeyType="done"
+              style={[styles.createInput, { borderColor: theme.border, backgroundColor: theme.card, color: theme.foreground, fontFamily: theme.fontSans, borderRadius: theme.radius.lg }]}
+            />
+            <Button
+              label="Crear"
+              leftIcon={Plus}
+              onPress={handleCreate}
+              loading={saving}
+              disabled={newName.trim().length < 2}
+            />
+          </View>
+        ) : (
+          <Text style={[styles.footnote, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Solo el owner o co-gestor del equipo puede crear o editar las áreas del pool.
+          </Text>
+        )}
 
         <Text style={[styles.footnote, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
           Las áreas ordenan los ejercicios de cada día en el builder (orden menor = primero). Al eliminar

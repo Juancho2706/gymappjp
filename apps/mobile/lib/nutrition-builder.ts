@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { apiFetch, ApiError } from './api'
 import { getCoachOrgContext } from './org'
+import { getActiveScope } from './workspaces'
 import { getTodayInSantiago, isoDateAddDays } from './date-utils'
 import {
   type ComposedGroupPart,
@@ -407,11 +408,23 @@ export async function getNutritionBoard(): Promise<NutritionBoardRow[]> {
   const { iso: today } = getTodayInSantiago()
   const days = Array.from({ length: 7 }, (_, i) => isoDateAddDays(today, -(6 - i))) // viejo→hoy
 
-  const { data: plans } = await supabase
+  const scope = await getActiveScope()
+
+  let planQuery = supabase
     .from('nutrition_plans')
     .select('id, client_id, name, daily_calories, clients ( full_name )')
-    .eq('coach_id', coachId)
     .eq('is_active', true)
+  if (scope.type === 'coach_team' && scope.teamId) {
+    // Pool colaborativo del team (espejo de getActiveClientPlans web): planes de alumnos del
+    // pool (team_id), SIN filtro coach_id — RLS = techo. Sin alumnos en el pool ⇒ board vacío.
+    const { data: pool } = await supabase.from('clients').select('id').eq('team_id', scope.teamId).is('org_id', null)
+    const poolIds = (pool ?? []).map((c: any) => c.id as string)
+    if (!poolIds.length) return []
+    planQuery = planQuery.is('org_id', null).in('client_id', poolIds)
+  } else {
+    planQuery = planQuery.eq('coach_id', coachId)
+  }
+  const { data: plans } = await planQuery
   const planList = (plans ?? []) as any[]
   if (!planList.length) return []
 
@@ -842,13 +855,15 @@ function mapExchangeGroupRow(r: any): ExchangeGroup {
 
 /**
  * Catálogo de grupos de intercambio visibles para el coach: system + propios + team activo.
- * Espejo de findExchangeGroupsForScope (RLS xg_select = techo). standalone v1: sin team.
+ * Espejo de findExchangeGroupsForScope (RLS xg_select = techo). En contexto team se agrega
+ * `team_id.eq.<teamId>` al or() (catálogo del pool); standalone/enterprise = system + propios.
  */
 export async function getCoachExchangeGroups(): Promise<ExchangeGroup[]> {
   const coachId = await currentCoachId()
   if (!coachId) return []
-  // standalone mobile v1: no hay workspace team activo (igual que el resto de libs coach).
+  const scope = await getActiveScope()
   const filters = ['is_system.eq.true', `coach_id.eq.${coachId}`]
+  if (scope.type === 'coach_team' && scope.teamId) filters.push(`team_id.eq.${scope.teamId}`)
   const { data } = await supabase
     .from('exchange_groups')
     .select(EXCHANGE_GROUP_COLUMNS)

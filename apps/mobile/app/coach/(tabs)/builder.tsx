@@ -33,6 +33,7 @@ import * as Haptics from 'expo-haptics'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { getCoachOrgContext } from '../../../lib/org'
+import { getActiveScope } from '../../../lib/workspaces'
 import { selectWithFallback } from '../../../lib/db-compat'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, EmptyState, NativeDialog, ScreenHeader, SegmentedTabs } from '../../../components'
@@ -184,6 +185,47 @@ export default function BuilderScreen() {
           program_notes, created_at, updated_at, is_active, program_phases, program_structure_type, cycle_length,
           ab_mode, duration_type, source_template_id,${planBlock}`
     const minCols = `${baseCols},${planBlock}`
+
+    // Workspace ACTIVO (espejo de getWorkoutProgramsWithClients web): coach_team scopea la
+    // biblioteca y el picker por el POOL del equipo (team_id), sin filtro coach_id; standalone /
+    // enterprise quedan EXACTOS como hoy (coach_id, con org_id ya cubierto por richCols fallback).
+    const scope = await getActiveScope()
+
+    if (scope.type === 'coach_team' && scope.teamId) {
+      // Pool del equipo: alumnos del team (org∅ + team_id), de cualquier coach del pool.
+      const clientsRes = await supabase
+        .from('clients')
+        .select('id, full_name, workout_programs(id, name, is_active)')
+        .is('org_id', null)
+        .eq('team_id', scope.teamId)
+        .eq('is_archived', false)
+        .order('full_name')
+      const teamClients = (clientsRes.data as unknown as ClientLite[] | null) ?? []
+      const poolIds = teamClients.map((c) => c.id)
+
+      // Pool: plantillas propias (client_id NULL del coach) + programas de alumnos del pool (de
+      // cualquier coach del team). Mismo .or() que la web; sin pool ⇒ solo plantillas propias.
+      const teamFilter = (q: any) => {
+        let scoped = q.is('org_id', null)
+        scoped = poolIds.length > 0
+          ? scoped.or(`and(coach_id.eq.${coach.id},client_id.is.null),client_id.in.(${poolIds.join(',')})`)
+          : scoped.eq('coach_id', coach.id).is('client_id', null)
+        return scoped.order('updated_at', { ascending: false })
+      }
+      const [programRes, areasRes] = await Promise.all([
+        selectWithFallback<any>(
+          () => teamFilter(supabase.from('workout_programs').select(richCols)),
+          () => teamFilter(supabase.from('workout_programs').select(minCols))
+        ),
+        listAreas(),
+      ])
+
+      setPrograms(((programRes.data as unknown as ProgramItem[] | null) ?? []).map(normalizeProgram))
+      setClients(teamClients)
+      setAreas(areasRes)
+      setLoading(false)
+      return
+    }
 
     const [programRes, clientsRes, areasRes] = await Promise.all([
       // Rich (con org_id) → fallback sin org_id para prod standalone.

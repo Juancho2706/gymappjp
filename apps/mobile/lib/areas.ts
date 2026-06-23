@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { getActiveScope } from './workspaces'
 import {
   WorkoutAreaCreateSchema,
   WorkoutAreaUpdateSchema,
@@ -6,13 +7,16 @@ import {
 } from '@eva/schemas'
 
 /**
- * Áreas del builder (workout_section_templates) — CRUD del coach STANDALONE (mobile v1).
- * Lecturas/escrituras DIRECTAS por PostgREST bajo la sesión del coach. RLS (wst_*) es el
- * techo real: el coach solo ve/edita sus áreas custom + las system (read-only). Las MISMAS
- * columnas que escribe el server action web (que corre bajo la sesión del coach, no
- * service-role) → los GRANT de columna para `authenticated` ya existen, sin migración.
+ * Áreas del builder (workout_section_templates) — CRUD team-pool-aware (espejo web
+ * settings/areas + workout-areas.service). Lecturas/escrituras DIRECTAS por PostgREST bajo
+ * la sesión del coach. RLS (wst_*) es el techo real. Las MISMAS columnas que escribe el server
+ * action web (que corre bajo la sesión del coach, no service-role) → los GRANT de columna para
+ * `authenticated` ya existen, sin migración.
  *
- * Sin team-scope (el contexto team/pool no se resuelve acá): coachId = auth.uid(), team_id null.
+ * Scope segun workspace ACTIVO (getActiveScope):
+ *  - coach_team   ⇒ system + las del TEAM (team_id), insert con team_id (pool compartido).
+ *  - standalone / enterprise_coach ⇒ comportamiento HISTÓRICO: system + propias (coach_id =
+ *    auth.uid(), team_id null), insert con coach_id propio + team_id null.
  */
 
 export interface WorkoutArea {
@@ -134,14 +138,28 @@ export function buildAreaVMs(areas: readonly WorkoutArea[]): AreaVM[] {
 
 // ─── CRUD (RLS coach, sin service-role) ──────────────────────────────────────
 
-/** Áreas visibles: system + propias del coach (RLS es el techo). Ordenadas por sort_order. */
+/**
+ * Áreas visibles segun workspace activo (RLS es el techo). Ordenadas por sort_order.
+ * team activo ⇒ system + las del team (espejo web findAvailableSectionTemplates);
+ * standalone/enterprise ⇒ comportamiento HISTÓRICO: system + propias (team_id null).
+ */
 export async function listAreas(): Promise<WorkoutArea[]> {
   try {
-    const { data } = await supabase
+    const scope = await getActiveScope()
+    let query = supabase
       .from('workout_section_templates')
       .select(SELECT_COLS)
       .is('deleted_at', null)
-      .is('team_id', null)
+
+    if (scope.type === 'coach_team' && scope.teamId) {
+      // POOL del equipo: system + áreas del team (mismo filtro que la web para team).
+      query = query.or(`is_system.eq.true,team_id.eq.${scope.teamId}`)
+    } else {
+      // standalone / enterprise_coach: comportamiento histórico (system + propias bajo RLS).
+      query = query.is('team_id', null)
+    }
+
+    const { data } = await query
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true })
     return ((data ?? []) as any[]).map(toArea)
@@ -159,18 +177,21 @@ export async function createArea(
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Datos inválidos' }
 
   try {
-    const { data: auth } = await supabase.auth.getUser()
-    const coachId = auth.user?.id
+    const scope = await getActiveScope()
+    const isTeam = scope.type === 'coach_team' && !!scope.teamId
+    const coachId = isTeam ? scope.coachId : (await supabase.auth.getUser()).data.user?.id
     if (!coachId) return { error: 'No autenticado.' }
 
+    // team ⇒ coach_id null + team_id (pool del equipo); standalone ⇒ coach_id propio + team_id null.
+    // Espejo de createWorkoutArea (workout-areas.service): team gana sobre coach.
     const { data, error } = await supabase
       .from('workout_section_templates')
       .insert({
         name: parsed.data.name,
         slug: slugifyAreaName(parsed.data.name),
         sort_order: nextCustomSortOrder(existing),
-        coach_id: coachId,
-        team_id: null,
+        coach_id: isTeam ? null : coachId,
+        team_id: isTeam ? scope.teamId : null,
         is_system: false,
       })
       .select(SELECT_COLS)

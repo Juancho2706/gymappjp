@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 import { apiFetch, ApiError } from './api'
 import { CardioProfileUpdateSchema } from '@eva/schemas'
+import { getActiveScope } from './workspaces'
 
 /**
  * Datos del módulo cardio (mobile). Las LECTURAS son DIRECTAS por PostgREST bajo la
@@ -22,11 +23,18 @@ export interface CardioClientRow {
 /** Alumnos del coach con su perfil cardio (selector de la calculadora). */
 export async function listCardioClients(): Promise<CardioClientRow[]> {
   try {
-    const { data } = await supabase
+    const scope = await getActiveScope()
+    let query = supabase
       .from('clients')
       .select('id, full_name, birth_date, resting_hr, max_hr_override, ref_5k_time_sec')
       .or('is_archived.is.null,is_archived.eq.false')
       .order('full_name')
+    // coach_team => POOL del equipo (espejo web findCardioClients): team_id + org_id null.
+    // Cualquier otro caso (standalone / enterprise_coach) => comportamiento actual exacto (RLS scopea).
+    if (scope.type === 'coach_team' && scope.teamId) {
+      query = query.eq('team_id', scope.teamId).is('org_id', null)
+    }
+    const { data } = await query
     return ((data ?? []) as any[]).map((c) => ({
       id: c.id,
       full_name: c.full_name ?? null,

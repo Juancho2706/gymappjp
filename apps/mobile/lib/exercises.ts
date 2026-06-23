@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 import { selectWithFallback } from './db-compat'
 import { getCoachProfile } from './coach'
 import { getCoachOrgContext } from './org'
+import { getActiveScope } from './workspaces'
 
 // Coach exercise library. Reads via Supabase (RLS: system exercises +
 // coach-owned). Mutations run under the coach session (RLS enforces coach_id =
@@ -103,6 +104,8 @@ export interface ExerciseRow {
   video_end_time: number | null
   coach_id: string | null
   org_id: string | null
+  /** team_id del pool (workspace coach_team); null en standalone/sistema. */
+  team_id: string | null
   /** true when owned by the current coach (custom), false for system catalog. */
   isOwn: boolean
 }
@@ -251,8 +254,8 @@ export function filterExercises<T extends {
 }
 
 const SELECT_COLUMNS =
-  'id, name, muscle_group, exercise_type, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, video_start_time, video_end_time, coach_id, org_id'
-// Sin columnas enterprise (org_id) — para prod standalone que aún no las tiene.
+  'id, name, muscle_group, exercise_type, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, video_start_time, video_end_time, coach_id, org_id, team_id'
+// Sin columnas enterprise (org_id/team_id) — para prod standalone que aún no las tiene.
 const SELECT_COLUMNS_MIN =
   'id, name, muscle_group, exercise_type, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, video_start_time, video_end_time, coach_id'
 
@@ -268,6 +271,30 @@ async function currentCoachId(): Promise<string | null> {
 
 export async function listCoachExercises(): Promise<{ exercises: ExerciseRow[]; coachId: string | null }> {
   const coachId = await currentCoachId()
+  const scope = await getActiveScope()
+
+  // Workspace team activo: catálogo = sistema + POOL del equipo (team_id), espejo de la web
+  // (getExerciseCatalog). El predicado system exige team_id NULL (sin eso, filas team colarían
+  // como "system"). Los personales NO se listan en contexto team (anti-fantasma; no asignables).
+  if (scope.type === 'coach_team' && scope.teamId) {
+    const teamId = scope.teamId
+    const teamFilter = `and(coach_id.is.null,org_id.is.null,team_id.is.null),team_id.eq.${teamId}`
+    const res = await selectWithFallback<any>(
+      () => supabase.from('exercises').select(SELECT_COLUMNS).or(teamFilter).is('deleted_at', null).order('muscle_group').order('name'),
+      () => supabase.from('exercises').select(SELECT_COLUMNS).or(teamFilter).order('muscle_group').order('name')
+    )
+    const teamRows = (res.data as Partial<ExerciseRow>[] | null) ?? []
+    const exercises = teamRows.map((r) => ({
+      ...r,
+      exercise_type: r.exercise_type ?? 'strength',
+      video_start_time: r.video_start_time ?? null,
+      video_end_time: r.video_end_time ?? null,
+      // En el pool, "propio" = del catálogo del equipo (team_id), espejo de customExercises web.
+      isOwn: r.team_id === teamId,
+    })) as ExerciseRow[]
+    return { exercises, coachId }
+  }
+
   // E-F5: incluir el catálogo de la ORG (coach_id null + org_id = mi org) además del sistema y los propios.
   const { orgId } = await getCoachOrgContext().catch(() => ({ orgId: null as string | null }))
   // Catálogo sistema (coach_id+org_id null) OR org OR propios. Filtro rico usa org_id;
@@ -318,12 +345,19 @@ export async function createExercise(input: ExerciseInput): Promise<{ ok: boolea
   if (name.length < 2) return { ok: false, error: 'El nombre debe tener al menos 2 caracteres.' }
   if (!input.muscle_group) return { ok: false, error: 'Seleccioná un grupo muscular.' }
 
-  // Duplicate-name check scoped to the coach.
-  const { count } = await supabase
+  // Workspace team activo: el ejercicio nace en el catálogo del POOL (team_id), nunca personal
+  // (espejo de resolveExerciseOwner web — AC6/AC11). Standalone/enterprise: coach_id propio.
+  const scope = await getActiveScope()
+  const teamId = scope.type === 'coach_team' ? scope.teamId : null
+
+  // Duplicate-name check scoped al owner (team → por team_id; standalone → por coach_id).
+  const dupQuery = supabase
     .from('exercises')
     .select('id', { count: 'exact', head: true })
-    .eq('coach_id', coachId)
     .ilike('name', name)
+  const { count } = await (teamId
+    ? dupQuery.eq('team_id', teamId)
+    : dupQuery.eq('coach_id', coachId))
   if ((count ?? 0) > 0) return { ok: false, error: 'Ya existe un ejercicio con ese nombre.' }
 
   // start/end solo aplican al recorte de YouTube; con otra media (o sin video) van NULL (1:1 web).
@@ -334,8 +368,9 @@ export async function createExercise(input: ExerciseInput): Promise<{ ok: boolea
   const { data, error } = await supabase
     .from('exercises')
     .insert({
-      coach_id: coachId,
+      coach_id: teamId ? null : coachId,
       org_id: null,
+      team_id: teamId,
       name,
       muscle_group: input.muscle_group,
       exercise_type: input.exercise_type ?? 'strength',
@@ -349,7 +384,7 @@ export async function createExercise(input: ExerciseInput): Promise<{ ok: boolea
       image_url: input.image_url ?? null,
       video_start_time: videoStart,
       video_end_time: videoEnd,
-      source: 'coach',
+      source: teamId ? 'team' : 'coach',
     })
     .select('id')
     .single()
@@ -370,12 +405,19 @@ export async function updateExercise(
   const mediaErr = validateExerciseMedia(input)
   if (mediaErr) return { ok: false, error: mediaErr }
 
-  const { count } = await supabase
+  // Workspace team: el catálogo es del POOL → scope por team_id (espejo applyExerciseOwnerScope web).
+  // Standalone/enterprise: scope por coach_id (comportamiento de siempre).
+  const scope = await getActiveScope()
+  const teamId = scope.type === 'coach_team' ? scope.teamId : null
+
+  const dupQuery = supabase
     .from('exercises')
     .select('id', { count: 'exact', head: true })
-    .eq('coach_id', coachId)
     .ilike('name', name)
     .neq('id', id)
+  const { count } = await (teamId
+    ? dupQuery.eq('team_id', teamId)
+    : dupQuery.eq('coach_id', coachId))
   if ((count ?? 0) > 0) return { ok: false, error: 'Ya existe un ejercicio con ese nombre.' }
 
   // start/end solo aplican al recorte de YouTube; con otra media (o sin video) van NULL (1:1 web).
@@ -383,7 +425,7 @@ export async function updateExercise(
   const videoStart = isYoutube ? (input.video_start_time ?? null) : null
   const videoEnd = isYoutube ? (input.video_end_time ?? null) : null
 
-  const { error } = await supabase
+  const updateQuery = supabase
     .from('exercises')
     .update({
       name,
@@ -401,7 +443,9 @@ export async function updateExercise(
       video_end_time: videoEnd,
     })
     .eq('id', id)
-    .eq('coach_id', coachId)
+  const { error } = await (teamId
+    ? updateQuery.eq('team_id', teamId)
+    : updateQuery.eq('coach_id', coachId))
 
   if (error) return { ok: false, error: error.message }
   return { ok: true }
@@ -453,11 +497,18 @@ export async function deleteExercise(id: string): Promise<{ ok: boolean; error?:
   const coachId = await currentCoachId()
   if (!coachId) return { ok: false, error: 'No autenticado.' }
 
-  const { error } = await supabase
+  // Workspace team: el catálogo es del POOL → scope por team_id (espejo softDeleteExerciseAction
+  // web). Standalone/enterprise: scope por coach_id (comportamiento de siempre).
+  const scope = await getActiveScope()
+  const teamId = scope.type === 'coach_team' ? scope.teamId : null
+
+  const delQuery = supabase
     .from('exercises')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('coach_id', coachId)
+  const { error } = await (teamId
+    ? delQuery.eq('team_id', teamId)
+    : delQuery.eq('coach_id', coachId))
 
   if (error) return { ok: false, error: error.message }
   return { ok: true }
