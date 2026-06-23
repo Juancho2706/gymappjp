@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Swipeable } from 'react-native-gesture-handler'
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue, type SharedValue } from 'react-native-reanimated'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import {
   AlertTriangle,
   Archive,
@@ -1434,6 +1434,14 @@ export default function ClientesScreen() {
   const onScroll = useAnimatedScrollHandler((e) => { scrollY.value = e.contentOffset.y })
 
   useEffect(() => { load() }, [])
+  // Refetch silencioso al volver al Directorio (alta de alumno en otra ruta, cambio de
+  // workspace/team). Salta el primer focus (el mount ya carga).
+  const dirFocusedOnce = useRef(false)
+  useFocusEffect(useCallback(() => {
+    if (!dirFocusedOnce.current) { dirFocusedOnce.current = true; return }
+    load(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []))
   useEffect(() => {
     AsyncStorage.getItem('eva_alumnos_view').then((v) => { if (v === 'cards' || v === 'list' || v === 'table') setViewMode(v) })
     getCoachProfile().then((c) => { if (c?.slug) setCoachSlug(c.slug) }).catch(() => {})

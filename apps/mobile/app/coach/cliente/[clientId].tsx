@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { Apple, Archive, ArchiveRestore, BarChart3, Camera, ClipboardList, CreditCard, Dumbbell, HeartPulse, LayoutDashboard, LayoutGrid, MessageCircle, Pencil, Plus, Scale, TrendingUp, User, Utensils, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
@@ -127,6 +127,14 @@ export default function ClientDetailScreen() {
     }
   }
   useEffect(() => { load() }, [clientId])
+  // Refetch al volver a la ficha (ej. tras editar programa/nutricion en el builder en otra
+  // ruta) -> evita data vieja. Salta el primer focus (el mount ya carga via el effect de arriba).
+  const focusedOnce = useRef(false)
+  useFocusEffect(useCallback(() => {
+    if (!focusedOnce.current) { focusedOnce.current = true; return }
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId]))
 
   useEffect(() => {
     let cancelled = false
