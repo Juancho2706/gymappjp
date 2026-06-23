@@ -24,7 +24,7 @@ import {
 } from '@eva/nutrition-engine'
 import {
     programWeekIndex1Based,
-    resolveActiveWeekVariantForDisplay,
+    resolveEffectiveWeekVariant,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
 import type { HeroBlock } from '../_components/hero/WorkoutHeroCard'
@@ -80,7 +80,14 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
     const { date: userLocalDate, iso: today, dayOfWeek: todayDow } = todayCtx
     const abMode = !!program?.ab_mode
     const weekIdx = program ? programWeekIndex1Based(program, userLocalDate) : null
-    const activeVariant = resolveActiveWeekVariantForDisplay(program, weekIdx, userLocalDate)
+    // Variante EFECTIVA: si la del ciclo no tiene planes (A/B mal armado) cae a la que sí tiene,
+    // para que el hero "hoy / próximo entreno" no quede vacío en semanas "B" de una sola semana cargada.
+    const activeVariant = resolveEffectiveWeekVariant(
+        program,
+        program ? activePlans.filter((p) => p.program_id === program.id) : [],
+        weekIdx,
+        userLocalDate
+    )
 
     let todayPlan = activePlans.find((p) => p.assigned_date === today) ?? null
     if (!todayPlan && program) {

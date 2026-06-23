@@ -5,7 +5,7 @@ import { getActiveProgram, getClientWorkoutPlans, getRecentWorkoutLogs } from '.
 import { getSantiagoIsoYmdForUtcInstant, getTodayInSantiago } from '@/lib/date-utils'
 import {
     programWeekIndex1Based,
-    resolveActiveWeekVariantForDisplay,
+    resolveEffectiveWeekVariant,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
 import { ProgramPhaseBar, type PhaseSeg } from './ProgramPhaseBar'
@@ -34,7 +34,14 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
     const { date: userLocalDate, iso: today, dayOfWeek: todayDow } = getTodayInSantiago()
     const abMode = !!program.ab_mode
     const weekIdx = programWeekIndex1Based(program, userLocalDate)
-    const activeVariant = resolveActiveWeekVariantForDisplay(program, weekIdx, userLocalDate)
+    // Variante EFECTIVA: cae a la que tiene planes si la del ciclo está vacía (A/B mal armado),
+    // así una sola semana cargada no deja al alumno con el dashboard vacío en semanas "B".
+    const activeVariant = resolveEffectiveWeekVariant(
+        program,
+        activePlans.filter((p) => p.program_id === program.id),
+        weekIdx,
+        userLocalDate
+    )
 
     const programPlans = activePlans
         .filter((p) => p.program_id === program.id && workoutPlanMatchesVariant(p, activeVariant, abMode))

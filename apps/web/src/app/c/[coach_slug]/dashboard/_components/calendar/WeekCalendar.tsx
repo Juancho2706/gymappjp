@@ -6,7 +6,7 @@ import {
 import { getSantiagoIsoYmdForUtcInstant, getTodayInSantiago } from '@/lib/date-utils'
 import {
     programWeekIndex1Based,
-    resolveActiveWeekVariantForDisplay,
+    resolveEffectiveWeekVariant,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
 import { CalendarDaysRow, type CalendarDayProps } from './CalendarDay'
@@ -22,7 +22,13 @@ export async function WeekCalendar({ userId }: { userId: string }) {
     const { date: userLocalDate, iso: today } = getTodayInSantiago()
     const abMode = !!program?.ab_mode
     const weekIdx = program ? programWeekIndex1Based(program, userLocalDate) : null
-    const activeVariant = resolveActiveWeekVariantForDisplay(program, weekIdx, userLocalDate)
+    // Variante EFECTIVA (cae a la que tenga planes si la del ciclo está vacía) — consistente con el hero.
+    const activeVariant = resolveEffectiveWeekVariant(
+        program,
+        program ? activePlans.filter((p) => p.program_id === program.id) : [],
+        weekIdx,
+        userLocalDate
+    )
 
     const curr = userLocalDate
     const firstDay = curr.getDate() - curr.getDay() + (curr.getDay() === 0 ? -6 : 1)

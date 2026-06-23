@@ -35,7 +35,7 @@ import {
 import { checkInRegularityPercentAsOf } from '@/app/coach/clients/[clientId]/profileOverviewUtils'
 import {
     programWeekIndex1Based,
-    resolveActiveWeekVariantForDisplay,
+    resolveEffectiveWeekVariant,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
 import { logTeamClientAccess } from '@/services/team/team.service'
@@ -294,7 +294,9 @@ export const getClientProfileData = cache(async (clientId: string) => {
     if (activeProgram?.workout_plans) {
         const abMode = !!activeProgram.ab_mode
         const wkIdx = programWeekIndex1Based(activeProgram, today)
-        const variantLetter = resolveActiveWeekVariantForDisplay(activeProgram, wkIdx, today)
+        // Variante EFECTIVA: el target semanal del coach cuenta los días que el alumno realmente ve
+        // (cae a la variante con planes si la del ciclo está vacía por un A/B mal armado).
+        const variantLetter = resolveEffectiveWeekVariant(activeProgram, activeProgram.workout_plans, wkIdx, today)
         weeklyWorkoutTarget = activeProgram.workout_plans.filter(
             (wp: any) =>
                 wp.workout_blocks &&

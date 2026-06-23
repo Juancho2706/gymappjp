@@ -28,7 +28,7 @@ import { ProgramTabB7 } from './ProgramTabB7'
 import { BillingTabB8 } from './BillingTabB8'
 import { ProfileFloatingActions } from './ProfileFloatingActions'
 import {
-    resolveActiveWeekVariantForDisplay,
+    resolveEffectiveWeekVariant,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
 import { effectiveWorkoutSection } from '@/lib/workout-block-grouping'
@@ -293,8 +293,11 @@ export function ClientProfileDashboard({
     ).length
 
     const abModeProgram = !!data.activeProgram?.ab_mode
-    const programVariantLetter = resolveActiveWeekVariantForDisplay(
+    // Variante EFECTIVA: el contador de días del tab "Programa" refleja lo que el alumno ve (cae a la
+    // variante con planes si la del ciclo está vacía por un A/B mal armado de una sola semana).
+    const programVariantLetter = resolveEffectiveWeekVariant(
         data.activeProgram,
+        (data.activeProgram?.workout_plans as { week_variant?: string | null }[] | undefined) ?? [],
         compliance.planCurrentWeek && compliance.planCurrentWeek > 0
             ? compliance.planCurrentWeek
             : null,

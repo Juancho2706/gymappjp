@@ -58,3 +58,46 @@ export function workoutPlanMatchesVariant(
     if (!abMode) return pVar === 'A'
     return pVar === activeVariant
 }
+
+/**
+ * Dada la variante que toca por CICLO, devuelve la EFECTIVA contra los planes existentes: si esa
+ * variante no tiene NINGÚN plan y la otra sí, cae a la otra. Es el corazón del fix del dead-end de
+ * A/B mal armado (programa con `ab_mode=true` pero una sola semana cargada). Sin A/B → la del ciclo.
+ * Si ninguna variante tiene planes, devuelve la del ciclo (empty legítimo: el coach no cargó nada).
+ */
+export function effectiveWeekVariantFromPlans(
+    plans: ReadonlyArray<{ week_variant?: string | null }>,
+    cycleVariant: WeekVariantLetter,
+    abMode: boolean
+): WeekVariantLetter {
+    if (!abMode) return cycleVariant
+    if (plans.some((p) => workoutPlanMatchesVariant(p, cycleVariant, true))) return cycleVariant
+    const other: WeekVariantLetter = cycleVariant === 'A' ? 'B' : 'A'
+    return plans.some((p) => workoutPlanMatchesVariant(p, other, true)) ? other : cycleVariant
+}
+
+/**
+ * Variante EFECTIVA a renderizar para el alumno. Igual a `resolveActiveWeekVariantForDisplay`
+ * SALVO el caso degenerado de un programa A/B mal armado: si la variante que toca por ciclo no
+ * tiene NINGÚN plan y la otra sí, cae a la que tiene planes. Así un programa con `ab_mode=true`
+ * pero una sola semana cargada (solo A) no deja al alumno con el programa vacío en las semanas "B"
+ * (era un dead-end silencioso: el dashboard no mostraba ninguna card y no había cómo llegar al
+ * entreno).
+ *
+ * `plans` deben ser los planes del programa activo (los del `program_id` en cuestión). Para A/B
+ * BIEN armado (ambas variantes presentes) devuelve EXACTAMENTE la variante del ciclo → cero cambio
+ * de comportamiento; solo corrige el caso vacío.
+ */
+export function resolveEffectiveWeekVariant(
+    program:
+        | { ab_mode?: boolean | null; start_date?: string | null; weeks_to_repeat?: number | null }
+        | null
+        | undefined,
+    plans: ReadonlyArray<{ week_variant?: string | null }>,
+    planCurrentWeekFromCompliance?: number | null,
+    now: Date = new Date()
+): WeekVariantLetter {
+    const active = resolveActiveWeekVariantForDisplay(program, planCurrentWeekFromCompliance, now)
+    if (!program?.ab_mode) return active
+    return effectiveWeekVariantFromPlans(plans, active, true)
+}

@@ -1,6 +1,6 @@
 import type { SharedProgramPhase } from '@/components/shared/ProgramPhasesBar'
 import {
-    resolveActiveWeekVariantForDisplay,
+    resolveEffectiveWeekVariant,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
 
@@ -57,7 +57,9 @@ export function resolveNextProgramWorkout(
     if (!program || !plans?.length) return null
 
     const ab = !!program.ab_mode
-    const v = resolveActiveWeekVariantForDisplay(program, planCurrentWeekFromCompliance, now)
+    // Variante EFECTIVA (cae a la que tenga planes si la del ciclo está vacía) — el "próximo entreno"
+    // del coach no debe quedar en null por un A/B mal armado con una sola semana cargada.
+    const v = resolveEffectiveWeekVariant(program, plans, planCurrentWeekFromCompliance, now)
     const withBlocks = plans.filter(
         (p: any) =>
             p?.workout_blocks?.length > 0 &&

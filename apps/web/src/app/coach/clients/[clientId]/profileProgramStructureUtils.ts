@@ -1,4 +1,5 @@
 import {
+    effectiveWeekVariantFromPlans,
     type WeekVariantLetter,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
@@ -16,7 +17,9 @@ export function filterPlansForStructureView(
 ): any[] {
     const raw = plans || []
     const ab = ctx?.abMode ?? false
-    const v = ctx?.activeVariant ?? 'A'
+    // Variante EFECTIVA: si la del ciclo no tiene planes (A/B mal armado) cae a la que sí los tiene,
+    // para que la vista de estructura no quede vacía en semanas "B" de una sola semana cargada.
+    const v = effectiveWeekVariantFromPlans(raw, ctx?.activeVariant ?? 'A', ab)
     const filtered = raw.filter((p) => workoutPlanMatchesVariant(p, v, ab))
     const sorted = [...filtered].sort(
         (a, b) => (Number(a?.day_of_week) || 0) - (Number(b?.day_of_week) || 0)

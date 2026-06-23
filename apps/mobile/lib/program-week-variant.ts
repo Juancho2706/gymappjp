@@ -46,6 +46,23 @@ export function workoutPlanMatchesVariant(
   return pVar === activeVariant
 }
 
+/**
+ * Dada la variante que toca por CICLO, devuelve la EFECTIVA contra los planes existentes: si esa
+ * variante no tiene NINGÚN plan y la otra sí, cae a la otra. Corrige el dead-end de un programa A/B
+ * mal armado (ab_mode=true pero una sola semana cargada → "Programa sin días" en semanas "B").
+ * Port 1:1 de la web (programWeekVariant.effectiveWeekVariantFromPlans).
+ */
+export function effectiveWeekVariantFromPlans(
+  plans: ReadonlyArray<{ week_variant?: string | null }>,
+  cycleVariant: WeekVariantLetter,
+  abMode: boolean
+): WeekVariantLetter {
+  if (!abMode) return cycleVariant
+  if (plans.some((p) => workoutPlanMatchesVariant(p, cycleVariant, true))) return cycleVariant
+  const other: WeekVariantLetter = cycleVariant === 'A' ? 'B' : 'A'
+  return plans.some((p) => workoutPlanMatchesVariant(p, other, true)) ? other : cycleVariant
+}
+
 /** Filtra+ordena los planes a mostrar según estructura (weekly recorta a días 1–7). */
 export function filterPlansForStructureView<T extends { week_variant?: string | null; day_of_week?: number | null }>(
   plans: T[] | null | undefined,
@@ -54,7 +71,8 @@ export function filterPlansForStructureView<T extends { week_variant?: string | 
 ): T[] {
   const raw = plans || []
   const ab = ctx?.abMode ?? false
-  const v = ctx?.activeVariant ?? 'A'
+  // Variante EFECTIVA: cae a la que tenga planes si la del ciclo está vacía (A/B mal armado).
+  const v = effectiveWeekVariantFromPlans(raw, ctx?.activeVariant ?? 'A', ab)
   const filtered = raw.filter((p) => workoutPlanMatchesVariant(p, v, ab))
   const sorted = [...filtered].sort((a, b) => (Number(a?.day_of_week) || 0) - (Number(b?.day_of_week) || 0))
   if (structureType === 'cycle') return sorted

@@ -2,7 +2,7 @@ import { parseISO, subDays } from 'date-fns'
 import { getNutritionDayOfWeekFromIsoYmdInSantiago, getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import {
     programWeekIndex1Based,
-    resolveActiveWeekVariantForDisplay,
+    resolveEffectiveWeekVariant,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
 
@@ -53,7 +53,15 @@ export function computeWorkoutScore30d(input: {
         const prog = input.program
         if (prog) {
             const weekIdx = programWeekIndex1Based(prog, instant)
-            const activeVariant = resolveActiveWeekVariantForDisplay(prog, weekIdx, instant)
+            // Variante EFECTIVA: alinea el conteo de "días planificados" con lo que el alumno
+            // realmente ve (si A/B mal armado cae a la variante con planes), evitando un score
+            // 0 artificial en semanas "B" de un programa con una sola semana cargada.
+            const activeVariant = resolveEffectiveWeekVariant(
+                prog,
+                input.activePlans.filter((p) => p.program_id === prog.id),
+                weekIdx,
+                instant
+            )
             programPlan =
                 input.activePlans.find(
                     (p) =>

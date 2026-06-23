@@ -29,7 +29,7 @@ import {
     filterPlansForStructureView,
     uniqueMuscleGroupsFromBlocks,
 } from './profileProgramStructureUtils'
-import { resolveActiveWeekVariantForDisplay } from '@/lib/workout/programWeekVariant'
+import { resolveEffectiveWeekVariant } from '@/lib/workout/programWeekVariant'
 import { cn } from '@/lib/utils'
 
 const WEEKDAY_LONG = [
@@ -80,10 +80,13 @@ export function ProgramTabB7({
     const isWeekly = structure === 'weekly'
 
     const abMode = !!activeProgram?.ab_mode
+    // Variante EFECTIVA (cae a la que tenga planes si la del ciclo está vacía) — el badge y los días
+    // mostrados coinciden, y un A/B mal armado de una sola semana no muestra "sin días".
     const activeVariant = useMemo(
         () =>
-            resolveActiveWeekVariantForDisplay(
+            resolveEffectiveWeekVariant(
                 activeProgram,
+                (activeProgram?.workout_plans as { week_variant?: string | null }[] | undefined) ?? [],
                 planCurrentWeek > 0 ? planCurrentWeek : null,
                 new Date()
             ),
