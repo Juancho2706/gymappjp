@@ -80,13 +80,13 @@ export default async function CardioClientPage({ params }: Props) {
                             ))}
                         </div>
                         <p className="text-[10px] text-muted-foreground/70">
-                            El alumno ve estos rangos en los bloques cardio con zona prescrita ("Z4 · {zones.zones[3].minBpm}–{zones.zones[3].maxBpm} bpm").
+                            El alumno ve estos rangos en los bloques cardio con zona prescrita (&quot;Z4 · {zones.zones[3].minBpm}–{zones.zones[3].maxBpm} bpm&quot;).
                         </p>
                     </>
                 ) : (
                     <p className="text-xs text-muted-foreground">
                         Sin fecha de nacimiento ni FCmax medida no se pueden derivar zonas — el alumno
-                        verá solo la zona prescrita ("Z4") sin bpm.
+                        verá solo la zona prescrita (&quot;Z4&quot;) sin bpm.
                     </p>
                 )}
             </section>

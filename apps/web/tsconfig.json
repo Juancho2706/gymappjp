@@ -21,7 +21,6 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@eva/types": ["../../packages/types/index.ts"],
       "@eva/schemas": ["../../packages/schemas/index.ts"],
       "@eva/schemas/screening": ["../../packages/schemas/screening.ts"],
       "@eva/schemas/nutrition-exchanges": ["../../packages/schemas/nutrition-exchanges.ts"],
