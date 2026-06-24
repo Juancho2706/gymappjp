@@ -208,19 +208,35 @@ describe('POST /api/payments/redeem-coupon-signup — gate de estado de registro
         expect(redeemCoupon).toHaveBeenCalledOnce()
     })
 
-    it('rechaza free (aunque esté pending_payment) → 422 NO_PENDING_SIGNUP', async () => {
+    it('acepta free + pending_payment con previewTier (reactivación, caso Ani) → 200 y precia sobre el plan elegido', async () => {
+        // Un coach reactivando queda en tier='free' hasta pagar; el preview se precia sobre el plan
+        // ELEGIDO (no sobre el free persistido $0). El cobro real lo recalcula create-preference.
         coachRow = { ...PENDING_COACH, subscription_tier: 'free' }
         const { POST } = await loadRoute()
-        const res = await POST(makeRequest({ code: 'WELCOME', commit: true }))
-        expect(res.status).toBe(422)
-        expect((await res.json()).code).toBe('NO_PENDING_SIGNUP')
-        expect(redeemCoupon).not.toHaveBeenCalled()
+        const res = await POST(makeRequest({ code: 'WELCOME', commit: true, previewTier: 'pro', previewCycle: 'annual' }))
+        expect(res.status).toBe(200)
+        expect(redeemCoupon).toHaveBeenCalledOnce()
+        const arg = redeemCoupon.mock.calls[0][1] as { tier: string; cycle: string }
+        expect(arg.tier).toBe('pro')
+        expect(arg.cycle).toBe('annual')
     })
 
-    it('rechaza un estado que NO es pending_payment (p.ej. active) → 422 NO_PENDING_SIGNUP', async () => {
+    it('acepta expired y canceled (estados de reactivación pre-checkout) → 200', async () => {
+        for (const status of ['expired', 'canceled'] as const) {
+            vi.clearAllMocks()
+            redeemCoupon.mockResolvedValue({ ok: true, redemptionId: null, preview: PREVIEW })
+            coachRow = { ...PENDING_COACH, subscription_tier: 'free', subscription_status: status }
+            const { POST } = await loadRoute()
+            const res = await POST(makeRequest({ code: 'WELCOME', commit: false, previewTier: 'pro' }))
+            expect(res.status, status).toBe(200)
+        }
+    })
+
+    it('rechaza un estado que NO es pre-checkout (active = coach pago vivo) → 422 NO_PENDING_SIGNUP', async () => {
+        // active/trialing usan /redeem-coupon (PUT al preapproval vivo); acá quedan fuera (no hay hueco).
         coachRow = { ...PENDING_COACH, subscription_status: 'active' }
         const { POST } = await loadRoute()
-        const res = await POST(makeRequest({ code: 'WELCOME', commit: true }))
+        const res = await POST(makeRequest({ code: 'WELCOME', commit: true, previewTier: 'pro' }))
         expect(res.status).toBe(422)
         expect((await res.json()).code).toBe('NO_PENDING_SIGNUP')
         expect(redeemCoupon).not.toHaveBeenCalled()

@@ -26,6 +26,7 @@ import {
     type SubscriptionTier,
 } from '@/lib/constants'
 import type { ModuleKey } from '@/services/entitlements.service'
+import { ReactivateCouponCard } from './_components/ReactivateCouponCard'
 
 // Solo se ofertan tiers a la venta (free/starter/pro/elite). growth/scale quedan fuera (LEGACY).
 const tierOptions = SALE_TIERS.map((key) => [key, TIER_CONFIG[key]] as const)
@@ -40,9 +41,11 @@ interface ReactivateClientProps {
     subscriptionStatus: string | null
     /** Ex-add-ons pagos cancelados recientemente (plan 05 F5.6) — pre-marcados, deseleccionables. */
     recentlyCancelledAddons?: ModuleKey[]
+    /** Flag de cupones (COUPON_REDEMPTION_ENABLED) leído server-side: muestra el canje de código. */
+    couponsEnabled?: boolean
 }
 
-export function ReactivateClient({ currentTier, activeClientCount, subscriptionStatus, recentlyCancelledAddons = [] }: ReactivateClientProps) {
+export function ReactivateClient({ currentTier, activeClientCount, subscriptionStatus, recentlyCancelledAddons = [], couponsEnabled = false }: ReactivateClientProps) {
     const searchParams = useSearchParams()
 
     // Pre-select the minimum viable tier for the coach's current client count,
@@ -499,6 +502,10 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                         ))}
                     </ul>
                 </section>
+
+                {/* Canje de código de descuento (reactivación). Solo con tier pago + flag ON; el monto
+                    descontado lo aplica create-preference al "Continuar al pago". */}
+                <ReactivateCouponCard tier={tier} billingCycle={billingCycle} couponsEnabled={couponsEnabled} />
 
                 {error && (
                     <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">

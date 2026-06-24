@@ -10,6 +10,8 @@ export default async function ReactivatePage() {
 
     const currentTier = (coach?.subscription_tier ?? 'starter') as SubscriptionTier
     const subscriptionStatus = coach?.subscription_status ?? null
+    // Mismo gate de dinero fail-closed que el endpoint redeem-coupon-signup ('=== true' exacto).
+    const couponsEnabled = process.env.COUPON_REDEMPTION_ENABLED === 'true'
 
     return (
         <Suspense>
@@ -18,6 +20,7 @@ export default async function ReactivatePage() {
                 activeClientCount={activeClientCount}
                 subscriptionStatus={subscriptionStatus}
                 recentlyCancelledAddons={recentlyCancelledAddons}
+                couponsEnabled={couponsEnabled}
             />
         </Suspense>
     )

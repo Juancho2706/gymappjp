@@ -8,7 +8,13 @@ import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 import { listLive } from '@/infrastructure/db/coach-addons.repository'
 import { toBillableAddons } from '@/services/billing/addons.service'
 import { redeemCoupon, type RedeemErrorCode } from '@/services/billing/coupons.service'
-import type { BillingCycle, SubscriptionTier } from '@/lib/constants'
+import {
+    getDefaultBillingCycleForTier,
+    isBillingCycleAllowedForTier,
+    isSaleTier,
+    type BillingCycle,
+    type SubscriptionTier,
+} from '@/lib/constants'
 
 // GATE de dinero server-side fail-closed, SEPARADO de NEXT_PUBLIC_SELF_SERVICE_ADDONS_ENABLED. El
 // canje escribe una redención que baja el precio del próximo cobro → es money path. Exacto '=== true'.
@@ -85,11 +91,16 @@ export async function POST(request: Request) {
             .maybeSingle()
         if (!coach) return NextResponse.json({ error: 'Coach no encontrado' }, { status: 404 })
 
-        const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
+        const persistedTier = (coach.subscription_tier ?? 'free') as SubscriptionTier
         const status = coach.subscription_status ?? ''
-        // En el REGISTRO el coach todavía no tiene preapproval: el descuento entra después por
-        // create-preference. Solo aceptamos un alta de plan pago a la espera del primer checkout.
-        if (tier === 'free' || status !== 'pending_payment') {
+        // Pre-checkout SIN preapproval vivo: registro O reactivación. El descuento NO se PUTea acá;
+        // entra después por create-preference contra el tier/ciclo que el coach realmente paga.
+        // Gateamos por ESTADO, no por tier: un coach reactivando se queda en tier='free' hasta que el
+        // pago confirma, pero su estado es pending_payment/expired/canceled (los 3 estados pre-checkout
+        // que create-preference trata como alta/reactivación). Un coach pago ACTIVO (active/trialing) NO
+        // entra acá — usa /redeem-coupon, que PUTea el descuento a su preapproval vivo.
+        const PRE_CHECKOUT_STATUSES = new Set(['pending_payment', 'expired', 'canceled'])
+        if (!PRE_CHECKOUT_STATUSES.has(status)) {
             return NextResponse.json(
                 { code: 'NO_PENDING_SIGNUP', error: 'Necesitas completar el registro de un plan pago para usar un código.' },
                 { status: 422 }
@@ -104,15 +115,29 @@ export async function POST(request: Request) {
             )
         }
 
-        const cycle = normalizeCycle(coach.billing_cycle)
+        // Precio del preview = el plan ELEGIDO en la pantalla (lo que cobrará create-preference). Para un
+        // coach reactivando el tier persistido suele ser 'free' (=> composite $0 => NET no cobrable), por
+        // eso se precia sobre `previewTier`/`previewCycle`. El COBRO real lo recalcula create-preference;
+        // esto solo hace que la disclosure SERNAC muestre el precio que se cobrará. Sin previewTier (flujo
+        // de registro clásico, donde el tier persistido ya es pago) cae al tier/ciclo persistidos.
+        const previewTier = parsed.data.previewTier
+        const pricingTier: SubscriptionTier =
+            previewTier && isSaleTier(previewTier) ? previewTier : persistedTier
+        const persistedCycle = normalizeCycle(coach.billing_cycle)
+        const pricingCycle: BillingCycle =
+            parsed.data.previewCycle && isBillingCycleAllowedForTier(pricingTier, parsed.data.previewCycle)
+                ? parsed.data.previewCycle
+                : isBillingCycleAllowedForTier(pricingTier, persistedCycle)
+                ? persistedCycle
+                : getDefaultBillingCycleForTier(pricingTier)
         const billable = toBillableAddons(await listLive(admin, user.id))
 
         const result = await redeemCoupon(admin, {
             code: parsed.data.code,
             coachId: user.id,
             coachEmail: user.email,
-            tier,
-            cycle,
+            tier: pricingTier,
+            cycle: pricingCycle,
             billable,
             sourceIp: clientIp(request),
             couponTermsText: null, // server-built (evidencia SERNAC desde montos del server)

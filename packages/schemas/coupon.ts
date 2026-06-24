@@ -70,6 +70,15 @@ export const RedeemCouponSchema = z.object({
     code: z.string().min(1).max(60),
     /** false = solo preview (disclosure SERNAC); true/omitido = commit (escribe la redención). */
     commit: z.boolean().optional(),
+    /**
+     * Preview-only: tier/ciclo ELEGIDOS en la pantalla de reactivación. Un coach reactivando sigue
+     * en `tier='free'` en DB hasta que el pago confirma, así que sin esto el preview se calcularía
+     * sobre el plan free ($0). El COBRO real lo recalcula `create-preference` contra el tier/ciclo del
+     * checkout — estos campos solo afinan la disclosure SERNAC (precio mostrado = precio cobrado).
+     * Ignorados en el flujo de registro clásico (cae al tier persistido). Solo tiers a la venta pagos.
+     */
+    previewTier: z.enum(COUPON_TIERS).optional(),
+    previewCycle: z.enum(['monthly', 'quarterly', 'annual']).optional(),
 })
 export type RedeemCouponInput = z.infer<typeof RedeemCouponSchema>
 

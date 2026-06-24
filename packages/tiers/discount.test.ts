@@ -102,6 +102,24 @@ describe('computeDiscountedClp — compone con descuento de ciclo (O8)', () => {
     })
 })
 
+describe('computeDiscountedClp — 50% forever (cupon JHNG3C48AE) nunca pasa del 50% en ningun ciclo', () => {
+    // Espejo del cupon real: percent 50, target=total, forever. Confirma que en mensual/trim/anual
+    // el descuento es exactamente round(composite*0.5) y JAMAS supera la mitad del total (tope duro).
+    const spec: DiscountSpec = { type: 'percent', value: 50, target: 'total', remainingCycles: null }
+    for (const cycle of ['monthly', 'quarterly', 'annual'] as const) {
+        it(`${cycle}: neto = composite - round(composite*0.5), descuento <= ceil(composite/2)`, () => {
+            const base = getTierPriceClp('pro', cycle)
+            const r = computeDiscountedClp({ baseClp: base, addons, spec })
+            const composite = base + 9990 + 9990
+            expect(r.baseBeforeDiscountClp).toBe(composite)
+            expect(r.netClp).toBe(composite - Math.round(composite * 0.5))
+            // tope duro: el descuento no supera la mitad del total (a lo sumo redondea 0.5 peso hacia arriba).
+            expect(r.discountClp).toBeLessThanOrEqual(Math.ceil(composite / 2))
+            expect(r.discountClp).toBe(composite - r.netClp)
+        })
+    }
+})
+
 describe('computeDiscountedClp — margin floor configurable (O8)', () => {
     it('50% + anual clampea al floor cuando el floor supera el neto descontado', () => {
         // pro anual = 287904; 50% → neto natural 143952. Floor 150000 > 143952 → clampea al floor.
