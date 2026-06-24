@@ -71,9 +71,9 @@ const DOMAIN_ICONS: Partial<Record<FeatureDomain, LucideIcon>> = {
 }
 
 const PRESET_OPTIONS: { value: Preset; label: string; hint: string }[] = [
-    { value: 'basico', label: 'Basico', hint: 'Lo esencial: plan, macros y adherencia.' },
-    { value: 'intermedio', label: 'Intermedio', hint: 'Suma micros, habitos, recetas y mas.' },
-    { value: 'profesional', label: 'Profesional', hint: 'Todo, incluido lo de tus modulos Pro.' },
+    { value: 'basico', label: 'Básico', hint: 'Lo esencial: plan, macros y adherencia.' },
+    { value: 'intermedio', label: 'Intermedio', hint: 'Suma micros, hábitos, recetas y más.' },
+    { value: 'profesional', label: 'Profesional', hint: 'Todo, incluido lo de tus módulos Pro.' },
 ]
 
 /** El preset define el estado por defecto de cada seccion toggleable (el catalogo lo declara en `presets`). */
@@ -103,9 +103,9 @@ export function FeaturePrefsPanel({ scope, teamId, domains }: FeaturePrefsPanelP
 
             {/* Explainer Modulos vs Funciones — UNA vez para todo el panel. */}
             <p className="px-1 text-xs leading-relaxed text-muted-foreground">
-                <span className="font-semibold text-foreground">Modulos</span> es lo que compraste
+                <span className="font-semibold text-foreground">Módulos</span> es lo que compraste
                 (entitlements de pago). <span className="font-semibold text-foreground">Funciones</span>{' '}
-                es lo que decides mostrar de eso. Apagar una funcion nunca cancela un modulo ni borra
+                es lo que decides mostrar de eso. Apagar una función nunca cancela un módulo ni borra
                 datos — solo la oculta.
             </p>
         </div>
@@ -249,10 +249,10 @@ function DomainFuncionesGroup({
                             {/* 1. Selector de preset (onboarding-friendly) */}
                             <div className="rounded-2xl border border-border bg-background p-4">
                                 <p className="text-sm font-semibold text-foreground">
-                                    ¿Que tan a fondo trabajas {config.label.toLowerCase()}?
+                                    ¿Qué tan a fondo trabajas {config.label.toLowerCase()}?
                                 </p>
                                 <p className="mt-1 text-xs text-muted-foreground">
-                                    Elige un punto de partida. Puedes ajustar cada seccion despues.
+                                    Elige un punto de partida. Puedes ajustar cada sección después.
                                 </p>
                                 <div
                                     className="mt-3 grid grid-cols-3 gap-2"
@@ -296,8 +296,8 @@ function DomainFuncionesGroup({
                                         </p>
                                     </div>
                                     <p className="mt-1 text-xs text-muted-foreground">
-                                        Apaga esto si no usas el modulo. Oculta el menu y su contenido
-                                        para ti y tus alumnos. No borra ningun dato.
+                                        Apaga esto si no usas el módulo. Oculta el menú y su contenido
+                                        para ti y tus alumnos. No borra ningún dato.
                                     </p>
                                 </div>
                                 <label className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center">

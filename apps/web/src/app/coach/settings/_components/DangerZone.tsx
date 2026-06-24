@@ -36,9 +36,8 @@ export function DangerZone() {
             <div className="rounded-xl border border-destructive/20 bg-card p-4 space-y-2">
                 <p className="text-sm font-semibold text-foreground">Eliminar mi cuenta</p>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                    Se eliminarán tus datos de acceso, los datos personales de tus alumnos serán anonimizados,
-                    y los registros de entrenamiento y nutrición serán borrados. Tu suscripción activa
-                    será cancelada. Esta acción <strong className="text-foreground">no se puede deshacer</strong>.
+                    Borra tu cuenta y cancela tu suscripción activa. Te mostramos todo lo que pasa
+                    antes de confirmar — es <strong className="text-foreground">irreversible</strong>.
                 </p>
                 <button
                     type="button"
@@ -46,7 +45,7 @@ export function DangerZone() {
                     className="mt-2 flex items-center gap-2 rounded-lg border border-destructive/40 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10 transition-colors"
                 >
                     <Trash2 className="h-3.5 w-3.5" />
-                    Eliminar mi cuenta
+                    Eliminar mi cuenta…
                 </button>
             </div>
 

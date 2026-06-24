@@ -45,7 +45,7 @@ export interface DomainMeta {
 }
 
 export const DOMAIN_META: Record<FeatureDomain, DomainMeta> = {
-    nutrition: { label: 'Nutricion', icon: Apple },
+    nutrition: { label: 'Nutrición', icon: Apple },
 }
 
 /** Lista canonica de dominios soportados (orden de presentacion). */

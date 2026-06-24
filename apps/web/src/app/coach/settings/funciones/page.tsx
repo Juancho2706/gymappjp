@@ -42,8 +42,8 @@ export default async function CoachFuncionesPage() {
                     <h1 className="font-display text-2xl font-bold tracking-tight">Funciones</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
                         {ctx.scope === 'team'
-                            ? `Equipo "${ctx.teamName}" — elige que se muestra de la nutricion.`
-                            : 'Elige que tan a fondo trabajas la nutricion y que secciones ves tu y tus alumnos.'}
+                            ? `Equipo "${ctx.teamName}" — elige qué se muestra de la nutrición.`
+                            : 'Elige qué tan a fondo trabajas la nutrición y qué secciones ven tú y tus alumnos.'}
                     </p>
                 </div>
             </div>

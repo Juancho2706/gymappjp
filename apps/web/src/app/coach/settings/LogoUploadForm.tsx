@@ -100,7 +100,12 @@ export function LogoUploadForm({
 
     return (
         <div className="bg-card border border-border rounded-2xl p-6 shadow-sm" data-tour-id="brand-logo">
-            <h2 className="text-base font-bold text-foreground mb-5">Logo de tu marca</h2>
+            <div className="mb-5">
+                <h2 className="text-base font-bold text-foreground">Logo de tu marca</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                    También es el ícono que tus alumnos ven al instalar tu app en el teléfono.
+                </p>
+            </div>
 
             <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
                 {/* Logo preview */}
