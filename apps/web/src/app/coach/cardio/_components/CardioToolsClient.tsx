@@ -110,6 +110,11 @@ export function CardioToolsClient({ clients }: { clients: CardioClientVM[] }) {
                                 <option key={c.id} value={c.id}>{c.full_name ?? 'Sin nombre'}</option>
                             ))}
                         </select>
+                        {clients.length === 0 && (
+                            <p className="text-[10px] text-muted-foreground">
+                                Aún no tienes alumnos. Usa el cálculo manual o agrégalos desde Alumnos.
+                            </p>
+                        )}
                     </div>
                     {!selected && (
                         <>

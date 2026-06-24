@@ -33,9 +33,10 @@
   - Scope: superficies `coach/cardio`, `coach/movement` (+ nutrición Pro): distinguir "oculto por toggle" (banner "lo tenés activo, está oculto — Mostrar →") de "0 alumnos" (empty-state propio). Cierra el crash conocido con 0 alumnos.
   - Verification: typecheck; repro con coach módulo ON + 0 alumnos = empty-state, no crash; módulo ON + toggle OFF = banner.
 
-- [ ] **T6 — Auto-ON visibilidad en compra (F5, billing path)**
-  - Scope: materializador de `coach_addons` (webhook/`services/billing/addons.service.ts`): al activar un módulo, encender la pref de visibilidad del dominio correspondiente en feature-prefs (service-role, idempotente, sin pisar toggles ya elegidos por el coach salvo el `_enabled` del dominio recién comprado). Respetar trigger D1 (no escribir el jsonb de enabled_modules directo).
-  - Verification: typecheck; vitest de idempotencia + dominio correcto; integration mock service-role; flujo sandbox: compra → módulo visible sin tocar Funciones.
+- [ ] **T6 — Auto-ON visibilidad en compra (F5, billing path)** — _DIFERIDO (fuera del scope UI/UX; toca el path de pagos MercadoPago)_
+  - Decisión 2026-06-22 (CEO): este rework es UI/UX puro; no se toca el código de pagos. Se construyó y luego se **revirtió** (commit revert en `ux/coach-settings-restructure`) — `addons.service.ts` quedó byte-identical al base. Retomar en un PR de billing aparte, con su propio gate + sandbox MP.
+  - Scope (si se retoma): materializador de `coach_addons` (webhook/`services/billing/addons.service.ts`): al activar un módulo, encender la pref de visibilidad del dominio correspondiente en feature-prefs (service-role, idempotente, best-effort, sin pisar toggles del coach). Respetar trigger D1.
+  - Mitigación actual: el cross-link de F3 ("Activo pero oculto → Mostrar en Funciones") ya le da al coach la salida manual, sin tocar billing.
 
 - [ ] **T7 — Mover Áreas al builder (F6)** — _decisión: acceso desde el builder; "Funciones" se mantiene (sin rename)_
   - Scope: sacar `Áreas del builder` del bucket de entitlements del hub; agregar acceso desde la pantalla del builder; mantener `/coach/settings/areas` viva (deep-links).

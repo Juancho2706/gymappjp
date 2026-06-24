@@ -8,6 +8,7 @@ import {
     isModuleKilledByOperator,
     type ModuleKey,
 } from '@/services/entitlements.service'
+import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
 import type { SubscriptionTier } from '@/lib/constants'
 
 export type ModulesScope = 'team' | 'standalone'
@@ -27,6 +28,12 @@ export interface ModulesContext {
     modules: Record<ModuleKey, boolean>
     /** Módulos apagados por el kill-switch de operador (entitlement ON pero en mantenimiento). */
     killedByOperator: Record<ModuleKey, boolean>
+    /**
+     * ¿Está VISIBLE el dominio Nutrición (master switch de Funciones)? Solo aplica a
+     * `nutrition_exchanges` (único módulo con capa de visibilidad de Funciones). `false` =>
+     * el coach lo tiene activo pero oculto => cross-link "Mostrar" hacia Funciones.
+     */
+    nutritionVisible: boolean
 }
 
 function normalizeModules(value: unknown): Record<ModuleKey, boolean> {
@@ -57,9 +64,10 @@ export const getModulesContext = cache(async (): Promise<{ coachId: string | nul
 
     if (workspace?.type === 'coach_team') {
         const teamId = workspace.teamId
-        const [{ data: team }, isTeamManager] = await Promise.all([
+        const [{ data: team }, isTeamManager, nutritionVisible] = await Promise.all([
             supabase.from('teams').select('name, enabled_modules').eq('id', teamId).maybeSingle(),
             isCurrentUserTeamManager(supabase, teamId),
+            resolveNutritionDomainEnabled({ coachId: coach.id, clientTeamId: teamId }),
         ])
         return {
             coachId: coach.id,
@@ -72,11 +80,15 @@ export const getModulesContext = cache(async (): Promise<{ coachId: string | nul
                 tier,
                 modules: normalizeModules(team?.enabled_modules),
                 killedByOperator,
+                nutritionVisible,
             },
         }
     }
 
-    const { data: own } = await supabase.from('coaches').select('enabled_modules').eq('id', coach.id).maybeSingle()
+    const [{ data: own }, nutritionVisible] = await Promise.all([
+        supabase.from('coaches').select('enabled_modules').eq('id', coach.id).maybeSingle(),
+        resolveNutritionDomainEnabled({ coachId: coach.id }),
+    ])
     return {
         coachId: coach.id,
         orgManaged,
@@ -88,6 +100,7 @@ export const getModulesContext = cache(async (): Promise<{ coachId: string | nul
             tier,
             modules: normalizeModules(own?.enabled_modules),
             killedByOperator,
+            nutritionVisible,
         },
     }
 })

@@ -639,7 +639,7 @@ function OnboardingGemelliStudentCard({ studentAppPath }: { studentAppPath: stri
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Link
-                    href="/coach/settings/preview"
+                    href="/coach/settings/brand"
                     className={cn(
                         buttonVariants({ variant: 'secondary', size: 'sm' }),
                         'h-10 min-h-10 touch-manipulation inline-flex items-center justify-center px-3'

@@ -42,6 +42,7 @@ export default async function CoachModulesPage() {
                 isTeamManager={ctx.isTeamManager}
                 scope={ctx.scope}
                 tier={ctx.tier}
+                nutritionVisible={ctx.nutritionVisible}
             />
         </div>
     )
