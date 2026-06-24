@@ -25,13 +25,14 @@ export function buildAddonPaymentsPort(): AddonPaymentsPort {
     const provider = getPaymentsProvider() as ProviderWithAddonOps
 
     return {
-        async updateCheckoutAmount(checkoutId: string, amountClp: number): Promise<void> {
+        async updateCheckoutAmount(checkoutId: string, amountClp: number, idempotencyKey?: string): Promise<void> {
             if (typeof provider.updateCheckoutAmount !== 'function') {
                 throw new Error(
                     'PaymentsProvider.updateCheckoutAmount no implementado (pendiente F3 — integración MercadoPago).'
                 )
             }
-            return provider.updateCheckoutAmount(checkoutId, amountClp)
+            // Forward de la idempotency-key (PUTs cupón-driven dedup): los add-on PUTs ahora la mandan.
+            return provider.updateCheckoutAmount(checkoutId, amountClp, idempotencyKey)
         },
         async createOneShotPayment(input) {
             if (typeof provider.createOneShotPayment !== 'function') {

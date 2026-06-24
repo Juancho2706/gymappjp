@@ -9,6 +9,14 @@ vi.mock('@/infrastructure/db/coach-addons.repository', () => ({
     markFirstCharged: vi.fn(),
 }))
 
+// El descuento se resuelve DENTRO de los hooks (resolveActiveDiscountSpec). Default = null (sin cupón)
+// → montos idénticos al legacy. buildAmountPutIdempotencyKey queda REAL (no se mockea).
+const { resolveActiveDiscountSpec } = vi.hoisted(() => ({ resolveActiveDiscountSpec: vi.fn() }))
+vi.mock('@/services/billing/discount.service', async (orig) => {
+    const actual = await orig<typeof import('@/services/billing/discount.service')>()
+    return { ...actual, resolveActiveDiscountSpec }
+})
+
 import * as repo from '@/infrastructure/db/coach-addons.repository'
 import {
     applyFirstChargeToAddons,
@@ -78,6 +86,7 @@ function makeDbStub() {
 
 beforeEach(() => {
     vi.clearAllMocks()
+    resolveActiveDiscountSpec.mockResolvedValue(null) // default: sin cupón vivo
 })
 
 // ── buildAddonBreakdown / tierBaseClp ──────────────────────────────────────────────
@@ -203,10 +212,12 @@ describe('applyFirstChargeToAddons', () => {
         expect(update).toHaveBeenCalled() // expires_at seteado
         expect(updateEqEq).toHaveBeenCalled()
         expect(result.putApplied).toBe(true)
-        // PUT con el monto SIN el add-on de baja (solo la base del tier — cancel_pending ya cobrado no factura)
+        // PUT con el monto SIN el add-on de baja (solo la base del tier — cancel_pending ya cobrado no factura).
+        // Sin cupón vivo → 3er arg (idempotency key) undefined.
         expect(payments.updateCheckoutAmount).toHaveBeenCalledWith(
             'preapproval-1',
-            getTierPriceClp('pro', 'monthly')
+            getTierPriceClp('pro', 'monthly'),
+            undefined
         )
     })
 })

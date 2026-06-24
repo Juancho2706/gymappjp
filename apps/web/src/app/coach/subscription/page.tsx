@@ -1233,6 +1233,17 @@ export default function CoachSubscriptionPage() {
                                     Desde la renovación, el valor del módulo se suma a tu cobro habitual. El monto exacto
                                     del pago inicial se calcula en el checkout seguro de Mercado Pago.
                                 </p>
+                                {activeCoupon &&
+                                    activeCoupon.spec.type === 'percent' &&
+                                    (activeCoupon.spec.target === 'total' ||
+                                        (activeCoupon.spec.target === 'module' &&
+                                            (activeCoupon.spec.moduleKeys?.includes(addonModalKey ?? '') ?? false))) && (
+                                        <p className="pt-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                                            Tu cupón {activeCoupon.code} ({Math.min(100, Math.max(0, activeCoupon.spec.value))}%)
+                                            también se aplica a este módulo: el pago prorrateado y tu cobro mensual vienen con
+                                            el descuento.
+                                        </p>
+                                    )}
                             </div>
 
                             {/* Las 5 reglas textuales (variante por ciclo) */}

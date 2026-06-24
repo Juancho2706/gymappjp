@@ -10,10 +10,20 @@ vi.mock('@/infrastructure/db/coach-addons.repository', () => ({
     revokeAdminGrant: vi.fn(),
 }))
 
+// El descuento se resuelve DENTRO del service (resolveActiveDiscountSpec). Por defecto = sin cupón
+// (null) → montos idénticos al legacy. Los tests de cupón lo overridean. buildAmountPutIdempotencyKey
+// queda REAL (no se mockea) para aseverar el formato de la key.
+const { resolveActiveDiscountSpec } = vi.hoisted(() => ({ resolveActiveDiscountSpec: vi.fn() }))
+vi.mock('@/services/billing/discount.service', async (orig) => {
+    const actual = await orig<typeof import('@/services/billing/discount.service')>()
+    return { ...actual, resolveActiveDiscountSpec }
+})
+
 import * as repo from '@/infrastructure/db/coach-addons.repository'
 import {
     activateAddonForCoach,
     ADMIN_GRANT_TERMS_VERSION,
+    applyCouponToAddonProration,
     canPurchaseAddon,
     getAddonCycleAmountClp,
     getAddonMonthlyPriceClp,
@@ -26,6 +36,7 @@ import {
     toBillableAddons,
     type AddonPaymentsPort,
 } from './addons.service'
+import type { DiscountSpec } from '@/lib/constants'
 import { getTierPriceClp } from '@/lib/constants'
 import type { CoachAddon } from '@/domain/billing/types'
 
@@ -74,6 +85,7 @@ function makeAddon(over: Partial<CoachAddon> = {}): CoachAddon {
 
 beforeEach(() => {
     vi.clearAllMocks()
+    resolveActiveDiscountSpec.mockResolvedValue(null) // default: sin cupón vivo
 })
 
 // ── Precio por ciclo + redondeos ──────────────────────────────────────────────
@@ -508,10 +520,12 @@ describe('requestAddonCancellation', () => {
         expect(requestCancel.mock.calls[0][2]).toMatchObject({
             expiresAt: '2026-07-01T00:00:00.000Z',
         })
-        // PUT con el monto SIN el add-on de baja (solo la base del tier)
+        // PUT con el monto SIN el add-on de baja (solo la base del tier). Sin cupón vivo → 3er arg
+        // (idempotency key) undefined.
         expect(payments.updateCheckoutAmount).toHaveBeenCalledWith(
             'preapproval-1',
-            getTierPriceClp('pro', 'monthly')
+            getTierPriceClp('pro', 'monthly'),
+            undefined
         )
     })
 
@@ -540,6 +554,97 @@ describe('requestAddonCancellation', () => {
         await expect(
             requestAddonCancellation({} as never, payments, ctx, 'cardio')
         ).rejects.toThrow(/módulo/)
+    })
+})
+
+// ── Cupón vivo: el descuento se HONRA en los add-ons (no se pierde la base) ──────
+describe('add-ons con cupón vivo (descuento honrado)', () => {
+    const SPEC: DiscountSpec = { type: 'percent', value: 50, target: 'total', remainingCycles: null }
+
+    describe('applyCouponToAddonProration (matriz tipo/target)', () => {
+        it('percent + total → descuenta la proración', () => {
+            expect(applyCouponToAddonProration(4995, 'cardio', SPEC)).toBe(4995 - Math.round(4995 * 0.5))
+        })
+        it('percent + base → NO descuenta (base no toca add-ons)', () => {
+            expect(
+                applyCouponToAddonProration(4995, 'cardio', { type: 'percent', value: 50, target: 'base', remainingCycles: null })
+            ).toBe(4995)
+        })
+        it('fixed_clp → NO descuenta el one-shot', () => {
+            expect(
+                applyCouponToAddonProration(4995, 'cardio', { type: 'fixed_clp', value: 3000, target: 'total', remainingCycles: null })
+            ).toBe(4995)
+        })
+        it('percent + module con key match → descuenta; sin match → no', () => {
+            const modSpec: DiscountSpec = { type: 'percent', value: 50, target: 'module', moduleKeys: ['cardio'], remainingCycles: null }
+            expect(applyCouponToAddonProration(4995, 'cardio', modSpec)).toBe(4995 - Math.round(4995 * 0.5))
+            expect(applyCouponToAddonProration(4995, 'body_composition', modSpec)).toBe(4995)
+        })
+        it('null → sin cambio', () => {
+            expect(applyCouponToAddonProration(4995, 'cardio', null)).toBe(4995)
+        })
+    })
+
+    it('materialize CON cupón 50%/total → PUT del composite DESCONTADO + idempotency key', async () => {
+        resolveActiveDiscountSpec.mockResolvedValue(SPEC)
+        const { db } = makeDbStub()
+        const payments = makePaymentsStub()
+        listLive.mockResolvedValueOnce([]).mockResolvedValueOnce([makeAddon({ moduleKey: 'cardio' })])
+        insertAddon.mockResolvedValue(makeAddon({ moduleKey: 'cardio' }))
+        await materializeAddonFromOneShot(
+            db,
+            payments,
+            { coachId: 'coach-1', tier: 'pro', cycle: 'monthly', subscriptionMpId: 'pre-1' },
+            'cardio',
+            'v2-2026-06',
+            '2026-06-24T00:00:00.000Z'
+        )
+        const full = getTierPriceClp('pro', 'monthly') + 9990
+        const discounted = full - Math.round(full * 0.5)
+        expect(payments.updateCheckoutAmount).toHaveBeenCalledWith('pre-1', discounted, `coupon-amt|coach-1|${discounted}`)
+    })
+
+    it('activate CON cupón 50%/total → proración descontada al one-shot', async () => {
+        resolveActiveDiscountSpec.mockResolvedValue(SPEC)
+        const { db } = makeDbStub()
+        const createOneShotPayment = vi.fn().mockResolvedValue({ checkoutUrl: 'https://mp.test/x' })
+        const payments = makePaymentsStub({ createOneShotPayment })
+        const now = new Date('2026-06-16T00:00:00.000Z')
+        const currentPeriodEnd = new Date('2026-07-01T00:00:00.000Z')
+        const res = await activateAddonForCoach(
+            db,
+            payments,
+            {
+                coachId: 'coach-1', coachEmail: 'a@b.cl', tier: 'pro', cycle: 'monthly',
+                subscriptionMpId: 'pre-1', currentPeriodEnd,
+                successUrl: 's', failureUrl: 'f', pendingUrl: 'p', webhookUrl: 'w', now,
+            },
+            'cardio',
+            'v2-2026-06'
+        )
+        const full = getAddonProrationClp(9990, 'monthly', now, currentPeriodEnd)
+        const expected = applyCouponToAddonProration(full, 'cardio', SPEC)
+        expect(expected).toBeLessThan(full)
+        expect(res.prorationClp).toBe(expected)
+        expect(createOneShotPayment).toHaveBeenCalledWith(expect.objectContaining({ amountClp: expected }))
+    })
+
+    it('cancel regla 4 CON cupón → PUT-down DESCONTADO (la base conserva el 50%)', async () => {
+        resolveActiveDiscountSpec.mockResolvedValue(SPEC)
+        const payments = makePaymentsStub()
+        const cardio = makeAddon({ moduleKey: 'cardio', status: 'active', firstChargedAt: '2026-06-01T00:00:00.000Z' })
+        listLive.mockResolvedValueOnce([cardio]) // live: encuentra el add-on a bajar
+        requestCancel.mockResolvedValue(makeAddon({ ...cardio, status: 'cancel_pending' }))
+        listLive.mockResolvedValueOnce([]) // liveAfter: sin add-ons → solo la base
+        await requestAddonCancellation(
+            {} as never,
+            payments,
+            { coachId: 'coach-1', tier: 'pro', cycle: 'monthly', subscriptionMpId: 'pre-1', currentPeriodEnd: new Date('2026-07-01T00:00:00.000Z') },
+            'cardio'
+        )
+        const base = getTierPriceClp('pro', 'monthly')
+        const discounted = base - Math.round(base * 0.5)
+        expect(payments.updateCheckoutAmount).toHaveBeenCalledWith('pre-1', discounted, `coupon-amt|coach-1|${discounted}`)
     })
 })
 

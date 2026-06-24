@@ -83,15 +83,23 @@ export function CouponMintForm() {
                         className={inputCls}
                     >
                         <option value="once">1 ciclo</option>
-                        <option value="repeating">N ciclos</option>
-                        <option value="forever">De por vida</option>
+                        <option value="repeating">N ciclos (ej. 1 o 2 meses)</option>
+                        <option value="forever">De por vida (casos especiales)</option>
                     </select>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        De por vida: solo para casos especiales que eliges a mano (aplica al plan y a los
+                        módulos add-on, para siempre). Para promociones usa 1 o N ciclos — el descuento corre
+                        esos cobros y luego vuelve al precio normal.
+                    </p>
                 </div>
 
                 {duration === 'repeating' && (
                     <div>
                         <label className={labelCls}>Ciclos</label>
                         <input name="durationInCycles" type="number" min={1} className={inputCls} placeholder="3" />
+                        <p className="mt-1 text-xs text-muted-foreground">
+                            Cantidad de cobros con descuento (ej. 1 o 2 para 1–2 meses). Luego vuelve al precio normal.
+                        </p>
                     </div>
                 )}
 

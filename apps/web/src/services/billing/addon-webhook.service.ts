@@ -20,6 +20,10 @@ import {
     listLive,
     markFirstCharged,
 } from '@/infrastructure/db/coach-addons.repository'
+import {
+    buildAmountPutIdempotencyKey,
+    resolveActiveDiscountSpec,
+} from '@/services/billing/discount.service'
 
 type DB = SupabaseClient<Database>
 
@@ -186,9 +190,15 @@ export async function applyFirstChargeToAddons(
                 .eq('status', 'cancel_pending')
         }
         // El monto nuevo del próximo cobro EXCLUYE las bajas ya cobradas (dejan de ser facturables).
+        // HONRAR el cupón vivo: sin el spec el PUT borraría el descuento de la base en el 1er cobro.
         const liveAfter = await listLive(db, ctx.coachId)
-        const newComposite = getCompositeAmountClp(ctx.tier, ctx.cycle, toBillableAddons(liveAfter))
-        await payments.updateCheckoutAmount(ctx.subscriptionMpId, newComposite)
+        const spec = await resolveActiveDiscountSpec(db, ctx.coachId)
+        const newComposite = getCompositeAmountClp(ctx.tier, ctx.cycle, toBillableAddons(liveAfter), spec).totalClp
+        await payments.updateCheckoutAmount(
+            ctx.subscriptionMpId,
+            newComposite,
+            spec ? buildAmountPutIdempotencyKey(ctx.coachId, newComposite) : undefined
+        )
         putApplied = true
     }
     return { markedIds: marked.map((a) => a.id), putApplied }

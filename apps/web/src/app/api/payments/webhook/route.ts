@@ -21,6 +21,7 @@ import { cancelAllForCoach, listLive } from '@/infrastructure/db/coach-addons.re
 import { buildCheckoutExternalReference } from '@/lib/payments/providers/mercadopago'
 import { clearUpgradeInFlight } from '@/services/billing/plan-change-lock'
 import {
+    applyCouponToAddonProration,
     getAddonProrationClp,
     getCompositeAmountClp,
     materializeAddonFromOneShot,
@@ -423,8 +424,13 @@ async function handleWebhook(request: Request, rawBody: string) {
                 paidAt
             )
             // Snapshot del cobro one-shot (kind='addon_proration') — idempotente por provider_payment_id.
+            // Honra el cupón vivo: registra el monto descontado + el código (evidencia SERNAC), igual
+            // que la proración se descuenta en activateAddonForCoach. Sin cupón = idéntico a hoy.
             if (result.providerPaymentId) {
                 const breakdown = buildAddonBreakdown([addon], cycleForAddon)
+                const fullTotal = breakdown.reduce((s, l) => s + l.cycle_amount_clp, 0)
+                const detail = await resolveActiveDiscountDetail(admin, coach.id)
+                const discountedTotal = applyCouponToAddonProration(fullTotal, moduleKey, detail?.spec ?? null)
                 await insertBillingSnapshot(admin, {
                     coachId: coach.id,
                     providerPaymentId: result.providerPaymentId,
@@ -434,7 +440,11 @@ async function handleWebhook(request: Request, rawBody: string) {
                     kind: 'addon_proration',
                     baseClp: 0, // el one-shot es SOLO la fracción del add-on, no la base del tier
                     addons: breakdown,
-                    totalClp: breakdown.reduce((s, l) => s + l.cycle_amount_clp, 0),
+                    totalClp: discountedTotal,
+                    baseBeforeDiscountClp: fullTotal,
+                    discountClp: fullTotal - discountedTotal,
+                    couponCode: detail?.couponCode ?? null,
+                    couponRedemptionId: detail?.redemptionId ?? null,
                 })
             }
             // Evento de historial del alta trim/anual: lleva el TEXTO íntegro de las 5 reglas aceptadas.

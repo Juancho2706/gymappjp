@@ -26,6 +26,10 @@ import {
     revokeAdminGrant,
 } from '@/infrastructure/db/coach-addons.repository'
 import { MODULE_KEYS } from '@/services/entitlements.service'
+import {
+    buildAmountPutIdempotencyKey,
+    resolveActiveDiscountSpec,
+} from '@/services/billing/discount.service'
 
 type DB = SupabaseClient<Database>
 
@@ -235,6 +239,28 @@ export function canPurchaseAddon(
     return { allowed: true }
 }
 
+/**
+ * Descuento del cupón aplicable al ONE-SHOT prorrateado de UN módulo. A diferencia del PUT
+ * recurrente (composite completo — el motor `computeDiscountedClp` maneja todos los target), el
+ * one-shot es UNA línea de add-on parcial: SOLO un `percent` que cubra ese add-on lo descuenta —
+ * `target='total'` (cubre todo) o `target='module'` con la key incluida. `base` NO toca add-ons;
+ * `fixed_clp` sobre la fracción de un único módulo sobre-acreditaría (se omite, igual que el one-shot
+ * del upgrade en create-preference). Piso $1 (MP rechaza <= 0). spec null = sin cambio.
+ */
+export function applyCouponToAddonProration(
+    prorationClp: number,
+    key: ModuleKey,
+    spec: DiscountSpec | null
+): number {
+    if (!spec || spec.type !== 'percent') return prorationClp
+    const coversAddon =
+        spec.target === 'total' ||
+        (spec.target === 'module' && (spec.moduleKeys?.includes(key) ?? false))
+    if (!coversAddon) return prorationClp
+    const pct = Math.min(100, Math.max(0, spec.value))
+    return Math.max(1, prorationClp - Math.round((prorationClp * pct) / 100))
+}
+
 // ── Alta: one-shot prorrateado, TODOS los ciclos (D4) ────────────────────────────
 
 export type ActivateAddonContext = {
@@ -275,7 +301,11 @@ export async function activateAddonForCoach(
 
     // One-shot prorrateado inmediato (mensual/trim/anual); la fila la crea el webhook.
     const now = ctx.now ?? new Date()
-    const prorationClp = getAddonProrationClp(priceClpMensual, ctx.cycle, now, ctx.currentPeriodEnd)
+    const fullProrationClp = getAddonProrationClp(priceClpMensual, ctx.cycle, now, ctx.currentPeriodEnd)
+    // Cupón vivo (forever o N-ciclos): un % sobre TODA la cuenta (target='total') descuenta también la
+    // proración del módulo, para no cobrar el one-shot a precio lleno mientras el plan está con cupón.
+    const spec = await resolveActiveDiscountSpec(db, ctx.coachId)
+    const prorationClp = applyCouponToAddonProration(fullProrationClp, key, spec)
     const cycleAmountClp = getAddonCycleAmountClp(priceClpMensual, ctx.cycle)
     const externalReference = buildOneShotExternalReference(ctx.coachId, key, termsVersion)
     const { checkoutUrl } = await payments.createOneShotPayment({
@@ -349,9 +379,16 @@ export async function materializeAddonFromOneShot(
         }
     }
     const live = await listLive(db, ctx.coachId)
-    const newCompositeAmountClp = getCompositeAmountClp(ctx.tier, ctx.cycle, toBillableAddons(live))
-    // PUT: suma el add-on al monto del preapproval DESDE la renovación.
-    await payments.updateCheckoutAmount(ctx.subscriptionMpId, newCompositeAmountClp)
+    // El PUT debe HONRAR el cupón vivo: sin el spec, sumar el add-on recomputaría el preapproval a
+    // precio LLENO y BORRARÍA el descuento de la base (incidente jun-2026). spec null = idéntico a hoy.
+    const spec = await resolveActiveDiscountSpec(db, ctx.coachId)
+    const newCompositeAmountClp = getCompositeAmountClp(ctx.tier, ctx.cycle, toBillableAddons(live), spec).totalClp
+    // PUT: suma el add-on al monto del preapproval DESDE la renovación (con el cupón vivo si hay).
+    await payments.updateCheckoutAmount(
+        ctx.subscriptionMpId,
+        newCompositeAmountClp,
+        spec ? buildAmountPutIdempotencyKey(ctx.coachId, newCompositeAmountClp) : undefined
+    )
     return { addon, newCompositeAmountClp }
 }
 
@@ -402,14 +439,21 @@ export async function requestAddonCancellation(
         // El monto nuevo excluye al add-on que se va de baja. Re-leer las filas vivas tras el
         // update y recomputar (el add-on en cancel_pending YA cobrado deja de ser facturable).
         const liveAfter = await listLive(db, ctx.coachId)
-        const newComposite = getCompositeAmountClp(ctx.tier, ctx.cycle, toBillableAddons(liveAfter))
+        // HONRAR el cupón vivo: sin el spec el PUT-down recomputaría a precio LLENO y borraría el
+        // descuento de la base al quitar un módulo (mismo pecado que la materialización).
+        const spec = await resolveActiveDiscountSpec(db, ctx.coachId)
+        const newComposite = getCompositeAmountClp(ctx.tier, ctx.cycle, toBillableAddons(liveAfter), spec).totalClp
         // La fila YA quedó cancel_pending (requestCancel arriba). Si el PUT que baja el monto del
         // preapproval falla (preapproval pausado / MP caído / id inválido), NO tumbamos la baja: el
         // reconcile diario detecta el drift y reintenta. Devolver error dejaría la baja aplicada en DB
         // pero al usuario con un 500 (y el over-bill ocurriría igual hasta el reconcile).
         let putApplied = false
         try {
-            await payments.updateCheckoutAmount(ctx.subscriptionMpId, newComposite)
+            await payments.updateCheckoutAmount(
+                ctx.subscriptionMpId,
+                newComposite,
+                spec ? buildAmountPutIdempotencyKey(ctx.coachId, newComposite) : undefined
+            )
             putApplied = true
         } catch (err) {
             console.error('[addons.cancel] PUT del monto falló — baja igual aplicada, reconcile reintenta', {
