@@ -1,6 +1,6 @@
 # EVA Docs Index
 
-Ultima modificacion: 2026-05-21 18:25 -04:00
+Ultima modificacion: 2026-06-24
 
 ## Lectura rapida
 
@@ -10,17 +10,20 @@ Ultima modificacion: 2026-05-21 18:25 -04:00
 | `architecture/PROJECT_STRUCTURE.md` | Estructura del repo, capas, reglas y ownership. |
 | `architecture/FLOWS_AND_COMPONENTS.md` | Flujos principales y que rutas/componentes/actions toca cada uno. |
 | `testing/TEST_STATUS.md` | Registro consolidado de pruebas validas y pendientes. |
-| `operations/LOCAL_WORKFLOW.md` | Como trabajar local sin tocar live/master. |
+| `operations/RUNBOOK.md` | Runbook de incidentes y operacion en prod. |
+| `operations/MANUAL_TASKS.md` | Tareas manuales (dashboards, env vars, pagos). |
+
+> Flujo DB actual: remoto/prod via branching de Supabase (ver `CLAUDE.md`). El flujo `local-only` quedo **OBSOLETO** — sus runbooks se archivaron en `archive/ops-local-only/`.
 
 ## Planes y specs
 
-Las features nuevas se especifican en `specs/<feature>/{SPEC,PLAN,TASKS}.md` (SDD). Los planes estrategicos y de Movida ya ejecutados/cancelados se movieron a `archive/` (ver abajo).
+Las features nuevas se especifican en `specs/<feature>/{SPEC,PLAN,TASKS}.md` (SDD). Al shippear, el spec se mueve a `archive/specs/`. Los planes estrategicos y de Movida ya ejecutados/cancelados estan en `archive/`.
 
 | Documento | Estado |
 |---|---|
-| `plans/enterprise-reference-matrices.md` | Referencia enterprise (motor vivo, archivado comercialmente). |
-| `plans/plan-c-enterprise-dashboard-revenue-mvp.md` | MVP dashboard revenue enterprise. |
-| `specs/<feature>/` | Specs vivos de features en diseño/curso (SDD). |
+| `specs/<feature>/` | Specs vivos SOLO de features en diseño/curso (hoy: `enterprise-alumno-separation`). |
+| `plans/` | Planes de producto/estrategia (enterprise reference, dashboard revenue MVP, etc.). |
+| `audits/` | Auditorias point-in-time (paridad RN-web, nutricion, etc.). PDFs exportados y chunks crudos van gitignorados; se versionan solo resumenes curados. |
 
 ## Archivo historico
 
@@ -29,18 +32,21 @@ Las features nuevas se especifican en `specs/<feature>/{SPEC,PLAN,TASKS}.md` (SD
 - `archive/estrategia/` — planes estrategicos ya ejecutados (teams-first, addons, archivado enterprise).
 - `archive/movida/` — esfuerzo Movida (deal cancelado 2026-06-16); historial completo.
 - `archive/nutrition-overhaul-2026-06/` — auditoria + diseño del overhaul de nutricion/menus (shippeado 2026-06).
-- `archive/specs/` — specs de features ya en produccion (exercise-creator, client-excel-import, coach-change-card).
+- `archive/nuevabibliadelaapp/` — biblia extendida (es) historica; NO canonica (usar codigo + `architecture/`).
+- `archive/ops-local-only/` — runbooks del flujo local-only obsoleto (GO_LIVE, MERGE_TO_LIVE, LOCAL_WORKFLOW, etc.).
+- `archive/specs/` — specs de features ya en produccion (exercise-creator, client-excel-import, coach-change-card, discount-codes, whitelabel-v2, coach-settings-restructure, addons-billing, identity-workspace-access, enterprise-subdomain, movida-areas/entrenamiento/intercambios/screening).
 
 ## Docs privados ignorados
 
 Estos existen localmente y estan ignorados por Git:
 
-- `nuevabibliadelaapp/`
 - `docs/ANALISIS_PRECIOS.md`
 - `docs/BRANDING-IMAGENES-IA.md`
 - `docs/COACH_ONBOARDING_PREMIUM_PLAN.md`
 - `docs/WHITE-LABEL-ROADMAP.md`
 - `AGENTS.md`
 - `CLAUDE.md`
+
+> `nuevabibliadelaapp/` ya NO existe en la raiz: se archivo en `archive/nuevabibliadelaapp/`. `CLAUDE.md` / `AGENTS.md` aun la citan como "extended docs" — referencia stale (follow-up local, no committable porque ambos van gitignorados).
 
 Regla: si algo privado se vuelve necesario para el repo publico, crear un resumen limpio en `docs/` sin secretos ni notas personales.
