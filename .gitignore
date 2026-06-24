@@ -102,7 +102,6 @@ scripts/seed-welcome-news.sql
 apps/web/public/MISSING_GROUPS_INSTRUCTIONS.md
 Plan de Alimentación Mati Romero.pdf
 PORCIONES DE INTERCAMBIO.pdf
-.gitignore
 Template_Workout__Martín_Villarroel_.pdf
 docs/plans/movida/negociacion/01-DOC-FUNCIONALIDADES-LUNES.md
 docs/plans/movida/negociacion/02-PROPUESTA-ECONOMICA.md
@@ -120,3 +119,15 @@ docs/anidocs/PROPUESTA MOVIDA-EVA.pdf
 .playwright-mcp/
 docs/socio/EVA-modulos-explicados.pdf
 docs/socio/EVA-modulos-explicados.md
+
+# ── Local binaries & generated artifacts (glob — reemplaza la lista de nombres sueltos de arriba) ──
+# Screenshots / capturas scratch en la raiz (real-*.png, eva-landing-*.png, b7-*.png, etc.)
+/*.png
+# PDFs de cliente/deal soltados en la raiz (plan Mati Romero, templates de workout, etc.)
+/*.pdf
+# Entregables de auditoria generados: PDFs exportados + dirs de chunks markdown crudos (se versionan solo resumenes curados)
+docs/audits/**/*.pdf
+docs/audits/**/*.png
+docs/audits/menus/
+# Inputs crudos de partner/deal (anidocs) — binarios grandes, deal Movida cancelado
+docs/anidocs/
