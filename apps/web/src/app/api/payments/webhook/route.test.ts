@@ -261,6 +261,65 @@ describe('POST /api/payments/webhook — FIX-5: one-shot redelivery sends NO sec
 })
 
 // ─────────────────────────────────────────────────────────────────────────────────────
+// Primer pago sin order.id: el primer `payment` aprobado de una suscripción de MP llega SIN
+// order.id (providerCheckoutId null). El tier viene del external_reference, NO del checkout id →
+// DEBE escribirse para que el coach no quede 'free' tras pagar (incidente Ani, jun-2026).
+// ─────────────────────────────────────────────────────────────────────────────────────
+describe('POST /api/payments/webhook — primer pago sin order.id escribe el tier (no queda free)', () => {
+    function firstPaymentNoOrderId() {
+        return {
+            accepted: true,
+            coachId: 'coach-1',
+            eventKind: 'payment' as const,
+            providerStatus: 'approved',
+            providerPaymentId: 'pay-first-1',
+            paidAt: '2026-06-24T02:50:34.000Z',
+            // external_reference del preapproval → tier/ciclo resueltos…
+            subscriptionTier: 'pro' as const,
+            billingCycle: 'monthly' as const,
+            currentPeriodEnd: '2026-07-24T02:50:35.430Z',
+            // …pero el payment NO trae order.id → checkoutId null (el bug original).
+            providerCheckoutId: undefined,
+            oneShotAddon: null,
+        }
+    }
+
+    const FREE_PENDING_COACH = {
+        id: 'coach-1',
+        subscription_status: 'pending_payment',
+        subscription_tier: 'free',
+        billing_cycle: 'monthly',
+        current_period_end: null,
+        subscription_mp_id: 'preapproval-aef',
+        superseded_mp_preapproval_id: null,
+    }
+
+    it('coach free + pago aprobado SIN order.id → escribe tier=pro + max_clients=30, status active, sin pisar mp_id', async () => {
+        coachRow = { ...FREE_PENDING_COACH }
+        processWebhook.mockResolvedValue(firstPaymentNoOrderId())
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        const patch = coachUpdates.find((p) => p.subscription_tier === 'pro')
+        expect(patch).toBeTruthy()
+        expect(patch!.max_clients).toBe(30)
+        expect(patch!.billing_cycle).toBe('monthly')
+        expect(patch!.subscription_status).toBe('active')
+        // checkoutId null → NO sobrescribir subscription_mp_id (dejaría al coach sin con qué cobrar).
+        expect('subscription_mp_id' in patch!).toBe(false)
+    })
+
+    it('mismo evento PERO con order.id presente (= preapproval) → escribe tier y SÍ setea subscription_mp_id', async () => {
+        coachRow = { ...FREE_PENDING_COACH }
+        processWebhook.mockResolvedValue({ ...firstPaymentNoOrderId(), providerCheckoutId: 'preapproval-aef' })
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(200)
+        const patch = coachUpdates.find((p) => p.subscription_tier === 'pro')
+        expect(patch).toBeTruthy()
+        expect(patch!.subscription_mp_id).toBe('preapproval-aef')
+    })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────────────
 // FIX-7: refund / chargeback payment cancels add-ons + blocks coach + writes the audit row
 // ─────────────────────────────────────────────────────────────────────────────────────
 describe('POST /api/payments/webhook — FIX-7: refund/chargeback handler', () => {

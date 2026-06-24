@@ -974,14 +974,22 @@ async function handleWebhook(request: Request, rawBody: string) {
     }
 
     const isPaidLike = statusForUpdate === 'active' || statusForUpdate === 'trialing'
-    if (isPaidLike && checkoutId) {
+    // El tier/ciclo/max_clients vienen del external_reference (`result.subscriptionTier`), NO del
+    // checkoutId. El PRIMER `payment` aprobado de una suscripción de MP llega SIN `order.id`
+    // (checkoutId null) → antes este bloque se saltaba y el coach quedaba en 'free' pese a haber
+    // pagado (status quedaba 'active' + período, pero sin tier/max_clients). Escribir el plan cuando
+    // viene resuelto del external_reference, aunque falte el checkoutId.
+    const hasResolvedPlan = !!(result.subscriptionTier && result.billingCycle)
+    if (isPaidLike && (checkoutId || hasResolvedPlan)) {
         coachUpdate.subscription_tier = tier
         coachUpdate.billing_cycle = billingCycle
         coachUpdate.max_clients = getTierMaxClients(tier)
-        coachUpdate.subscription_mp_id = checkoutId
+        // subscription_mp_id: SOLO con un checkoutId real. Un `payment` sin `order.id` trae checkoutId
+        // null → NO pisar el preapproval id vigente con null (lo dejaría sin con qué cobrar/reconciliar).
+        if (checkoutId) coachUpdate.subscription_mp_id = checkoutId
 
         const superseded = coach.superseded_mp_preapproval_id?.trim()
-        if (superseded && superseded !== checkoutId) {
+        if (superseded && superseded !== (checkoutId ?? coachMpId)) {
             try {
                 await provider.cancelCheckoutAtProvider(superseded)
                 console.info('[payments.webhook] cancelled superseded preapproval', {
@@ -1143,11 +1151,22 @@ async function handleWebhook(request: Request, rawBody: string) {
                 }
             }
 
-            // (e) Snapshot del cobro recurrente (kind='recurring') — idempotente por provider_payment_id.
+            // (e) Snapshot del cobro (kind='recurring') — idempotente por provider_payment_id. Honra el
+            // descuento vigente del cupón (mismo spec que el cobro): total_clp = lo REALMENTE cobrado,
+            // con desglose base/descuento + código (evidencia SERNAC). Antes este path NO pasaba el spec
+            // → registraba el precio LLENO en cobros con cupón (mismatch disclosed-vs-charged). Espejo de
+            // la rama de cobro recurrente (stale branch) que ya lo hacía bien.
             if (result.providerPaymentId) {
                 const liveForSnap = await listLive(admin, coach.id)
                 const breakdown = buildAddonBreakdown(liveForSnap, finalCycle)
                 const baseClp = tierBaseClp(finalTier, finalCycle)
+                const detail = await resolveActiveDiscountDetail(admin, coach.id)
+                const snapComposite = getCompositeAmountClp(
+                    finalTier,
+                    finalCycle,
+                    toBillableAddons(liveForSnap),
+                    detail?.spec ?? null
+                )
                 await insertBillingSnapshot(admin, {
                     coachId: coach.id,
                     providerPaymentId: result.providerPaymentId,
@@ -1157,8 +1176,21 @@ async function handleWebhook(request: Request, rawBody: string) {
                     kind: 'recurring',
                     baseClp,
                     addons: breakdown,
-                    totalClp: baseClp + breakdown.reduce((s, l) => s + l.cycle_amount_clp, 0),
+                    totalClp: snapComposite.totalClp,
+                    baseBeforeDiscountClp: snapComposite.baseBeforeDiscountClp,
+                    discountClp: snapComposite.discountClp,
+                    couponCode: detail?.couponCode ?? null,
+                    couponRedemptionId: detail?.redemptionId ?? null,
                 })
+                // Decrementar el ciclo del cupón EXACTAMENTE una vez por este cobro (idempotente por
+                // provider_payment_id). Al expirar (N ciclos disclosed cumplidos) subir el preapproval al
+                // precio lleno DESDE la próxima renovación — espejo de la rama de cobro recurrente.
+                const cycleResult = await decrementCouponCycleForCharge(admin, coach.id, result.providerPaymentId)
+                if (cycleResult.expired && finalMpId) {
+                    const liveNow = await listLive(admin, coach.id)
+                    const fullComposite = getCompositeAmountClp(finalTier, finalCycle, toBillableAddons(liveNow))
+                    await provider.updateCheckoutAmount(finalMpId, fullComposite)
+                }
             }
         }
     } catch (addonErr) {
