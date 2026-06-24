@@ -287,7 +287,7 @@ async function getCoachDashboardDataInner(
         // workout_plans NO tiene columna org_id (el scope org va por el cliente, no por la tabla);
         // applyOrgScope(...,'org_id') tiraba 400 para coaches enterprise. El conteo de planes del
         // coach se acota por coach_id, que ya es suficiente.
-        supabase.from('workout_plans').select('*', { count: 'exact', head: true }).eq('coach_id', userId),
+        supabase.from('workout_plans').select('id', { count: 'exact', head: true }).eq('coach_id', userId),
         findCoachRecentClients(supabase, userId, 5, orgId),
         applyOrgScope(
             supabase
