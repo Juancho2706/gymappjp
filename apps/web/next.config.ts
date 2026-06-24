@@ -49,7 +49,7 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '10mb',
     },
-    optimizePackageImports: ['framer-motion', 'recharts', '@lottiefiles/react-lottie-player', 'lucide-react', '@eva/schemas', '@eva/types', '@eva/tokens'],
+    optimizePackageImports: ['framer-motion', 'recharts', '@lottiefiles/react-lottie-player', 'lucide-react', '@eva/schemas'],
   },
   images: {
     dangerouslyAllowSVG: true,

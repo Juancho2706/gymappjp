@@ -5,8 +5,6 @@
     "paths": {
       "@/*": ["./*"],
       "@eva/schemas": ["../../packages/schemas/index.ts"],
-      "@eva/types": ["../../packages/types/index.ts"],
-      "@eva/tokens": ["../../packages/tokens/index.ts"],
       "@eva/brand-kit": ["../../packages/brand-kit/index.ts"],
       "@eva/tiers": ["../../packages/tiers/index.ts"]
     }
