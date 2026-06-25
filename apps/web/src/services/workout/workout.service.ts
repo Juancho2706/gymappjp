@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import type { Json } from '@/lib/database.types'
 import { WorkoutProgramSchema, type WorkoutBlockInput, type WorkoutDayInput, type WorkoutProgramInput } from '@eva/schemas'
@@ -33,6 +32,8 @@ export type AssignProgramResult = {
     success?: boolean
     error?: string
     assignedCount?: number
+    /** IDs de alumnos asignados OK — el action wrapper revalida /coach/clients/[id] por cada uno. */
+    assignedClientIds?: string[]
     failedClients?: { clientId: string; reason: string }[]
 }
 
@@ -819,6 +820,7 @@ export async function assignProgramToClientsAction(
         const endDate = end.toISOString().split('T')[0]
 
         let assignedCount = 0
+        const assignedClientIds: string[] = []
         const coachBrand = await supabase
             .from('coaches')
             .select('brand_name, slug')
@@ -932,7 +934,7 @@ export async function assignProgramToClientsAction(
                         console.error(`Program assigned email error for ${clientId}:`, emailResult.error)
                     }
                 }
-                revalidatePath(`/coach/clients/${clientId}`)
+                assignedClientIds.push(clientId)
             } catch (clientError: any) {
                 failedClients.push({
                     clientId,
@@ -941,8 +943,6 @@ export async function assignProgramToClientsAction(
             }
         }
 
-        revalidatePath('/coach/workout-programs')
-        revalidatePath('/c', 'layout')
         if (assignedCount === 0) {
             return {
                 error: 'No se pudo asignar el programa a ningún alumno.',
@@ -952,6 +952,7 @@ export async function assignProgramToClientsAction(
         return {
             success: true,
             assignedCount,
+            assignedClientIds,
             failedClients,
         }
     } catch (error: any) {
