@@ -18,6 +18,7 @@ import {
     saveWorkoutProgramAction as saveWorkoutProgramService,
     syncProgramFromTemplateAction as syncProgramFromTemplateService,
 } from '@/services/workout/workout.service'
+import { revalidatePath } from 'next/cache'
 import type { ProgramListModel } from '@/app/coach/workout-programs/libraryStats'
 import type { WorkoutProgramInput } from '@eva/schemas'
 
@@ -29,11 +30,22 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
 }
 
 export async function deleteWorkoutProgramAction(programId: string, clientId: string): Promise<{ error?: string }> {
-    return deleteWorkoutProgramService(programId, clientId)
+    const res = await deleteWorkoutProgramService(programId, clientId)
+    if (!res.error) {
+        if (clientId) revalidatePath(`/coach/clients/${clientId}`)
+        revalidatePath('/coach/workout-programs')
+        revalidatePath('/c', 'layout')
+    }
+    return res
 }
 
 export async function deletePlanAction(planId: string, clientId: string): Promise<{ error?: string }> {
-    return deletePlanService(planId, clientId)
+    const res = await deletePlanService(planId, clientId)
+    if (!res.error) {
+        if (clientId) revalidatePath(`/coach/clients/${clientId}`)
+        revalidatePath('/coach/workout-programs')
+    }
+    return res
 }
 
 export async function duplicateWorkoutProgramAction(
@@ -44,7 +56,11 @@ export async function duplicateWorkoutProgramAction(
     programId?: string
     program?: ProgramListModel
 }> {
-    return duplicateWorkoutProgramService(programId, newName)
+    const res = await duplicateWorkoutProgramService(programId, newName)
+    if (!res.error) {
+        revalidatePath('/coach/workout-programs')
+    }
+    return res
 }
 
 export async function assignProgramToClientsAction(
