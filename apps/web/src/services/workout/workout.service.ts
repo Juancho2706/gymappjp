@@ -517,11 +517,6 @@ export async function deleteWorkoutProgramAction(programId: string, clientId: st
 
     if (error) return { error: error.message }
 
-    if (clientId) {
-        revalidatePath(`/coach/clients/${clientId}`)
-    }
-    revalidatePath('/coach/workout-programs')
-    revalidatePath('/c', 'layout')
     return {}
 }
 
@@ -562,10 +557,6 @@ export async function deletePlanAction(planId: string, clientId: string): Promis
 
     if (error) return { error: error.message }
 
-    if (clientId) {
-        revalidatePath(`/coach/clients/${clientId}`)
-    }
-    revalidatePath('/coach/workout-programs')
     return {}
 }
 
@@ -708,8 +699,6 @@ export async function duplicateWorkoutProgramAction(
                 if (blocksError) throw new Error(blocksError.message)
             }
         }
-
-        revalidatePath('/coach/workout-programs')
 
         const { data: libraryRow, error: librarySelectError } = await supabase
             .from('workout_programs')
