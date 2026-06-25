@@ -74,7 +74,17 @@ export async function assignProgramToClientsAction(
     clientIds: string[],
     options?: string | AssignProgramOptions
 ): Promise<AssignProgramResult> {
-    return assignProgramToClientsService(templateId, clientIds, options)
+    const res = await assignProgramToClientsService(templateId, clientIds, options)
+    for (const clientId of res.assignedClientIds ?? []) {
+        revalidatePath(`/coach/clients/${clientId}`)
+    }
+    // failedClients presente ⇒ el loop completó (éxito o 0-asignados, ambos revalidaban antes);
+    // ausente ⇒ outer-catch, que no revalidaba.
+    if (res.failedClients !== undefined) {
+        revalidatePath('/coach/workout-programs')
+        revalidatePath('/c', 'layout')
+    }
+    return res
 }
 
 export async function getExerciseHistoryAction(clientId: string, exerciseId: string) {
