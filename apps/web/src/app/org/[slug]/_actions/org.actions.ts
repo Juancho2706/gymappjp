@@ -13,9 +13,7 @@ import { computeOrgHealthScore } from '@/infrastructure/db/org.repository'
 import { rolesWithOrgPermission } from '@/domain/org/permissions'
 import { isThemeReadable } from '@eva/brand-kit'
 import type { Json } from '@/lib/database.types'
-
-const ALLOWED_LOGO_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
-const MAX_LOGO_BYTES = 2 * 1024 * 1024 // 2 MB
+import { validateLogoFile } from './org-actions.helpers'
 
 export async function uploadOrgLogoAction(orgSlug: string, formData: FormData) {
     const context = await resolveOrgAdminContext(orgSlug, rolesWithOrgPermission('org.brand.edit'))
@@ -24,23 +22,8 @@ export async function uploadOrgLogoAction(orgSlug: string, formData: FormData) {
     const file = formData.get('logo')
     if (!(file instanceof File)) return { error: 'Archivo requerido' }
 
-    // Server-side MIME check — never trust client-reported type alone
-    if (!ALLOWED_LOGO_MIME.has(file.type)) {
-        return { error: 'Tipo de archivo no permitido. Solo JPEG, PNG, WebP o GIF.' }
-    }
-    if (file.size > MAX_LOGO_BYTES) {
-        return { error: 'El archivo supera 2 MB.' }
-    }
-
-    // Re-read first 12 bytes to verify magic numbers (defense-in-depth)
-    const header = new Uint8Array(await file.slice(0, 12).arrayBuffer())
-    const isJpeg = header[0] === 0xFF && header[1] === 0xD8
-    const isPng  = header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47
-    const isWebp = header[8] === 0x57 && header[9] === 0x45 && header[10] === 0x42 && header[11] === 0x50
-    const isGif  = header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46
-    if (!isJpeg && !isPng && !isWebp && !isGif) {
-        return { error: 'El contenido del archivo no coincide con su extensión.' }
-    }
+    const validation = await validateLogoFile(file)
+    if (!validation.ok) return { error: validation.error }
 
     const admin = createServiceRoleClient()
     const { org, user } = context
