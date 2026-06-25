@@ -16,7 +16,11 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-require-imports": "off",
       "@typescript-eslint/no-unused-vars": "warn",
       "react-hooks/set-state-in-effect": "off",
-      "prefer-const": "warn"
+      "prefer-const": "warn",
+      // Surfaces stray console.log/info/debug (data-leak risk in prod logs); structured
+      // console.error/warn ops signals stay allowed. Triage server-path logs, then ratchet
+      // to "error". See docs/audits/deferred-attack-plan-2026-06-24.md (Fase 1.2).
+      "no-console": ["warn", { "allow": ["warn", "error"] }]
     }
   },
   // Override default ignores of eslint-config-next.
