@@ -261,6 +261,9 @@ export function usePlanBuilder(initialDays: DayState[], areas: readonly WorkoutA
         (state: DayState[], action: BuilderAction) => builderReducer(state, action, areasRef.current),
         []
     )
+    // Falso positivo: boundReducer solo corre en dispatch (eventos/DnD), nunca en el render inicial
+    // (initializer no-lazy), por lo que leer areasRef.current dentro del reducer es correcto e intencional.
+    // eslint-disable-next-line react-hooks/refs
     const [days, dispatch] = useReducer(boundReducer, initialDays)
 
     // History tracking via refs to avoid extra re-renders on every change

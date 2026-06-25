@@ -38,6 +38,9 @@ export function ExerciseVideo({
     onDuration?: (seconds: number) => void
 }) {
     const onDurationRef = useRef(onDuration)
+    // Patrón "latest ref": onDurationRef solo se lee en el onReady del player (efecto), no en render,
+    // para que el effect del player NO se re-cree cuando cambia la identidad de onDuration.
+    // eslint-disable-next-line react-hooks/refs
     onDurationRef.current = onDuration
     const frameId = 'ytx-' + useId().replace(/[^a-zA-Z0-9]/g, '')
 
