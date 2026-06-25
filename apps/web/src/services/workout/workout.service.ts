@@ -16,6 +16,8 @@ export type { WorkoutBlockInput, WorkoutDayInput, WorkoutProgramInput } from '@e
 export type ProgramState = {
     error?: string
     programId?: string
+    /** Set por sync para que su action wrapper revalide /coach/clients/[id] (el wrapper no ve el payload). */
+    clientId?: string
     /** E (awareness): el programa cambió en el server desde que el coach lo abrió. No se guardó nada. */
     conflict?: { editedBy: string | null; at: string }
 }
@@ -476,12 +478,6 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
             if (blocksError) throw new Error(blocksError.message)
         }
 
-        if (clientId) {
-            revalidatePath(`/coach/clients/${clientId}`)
-        }
-        revalidatePath('/coach/workout-programs')
-        revalidatePath('/c', 'layout')
-        
         return { programId: finalProgramId }
     } catch (error: any) {
         console.error('Error en saveWorkoutProgramAction:', error)
@@ -1225,7 +1221,7 @@ export async function syncProgramFromTemplateAction(programId: string): Promise<
         phasesSafe = []
     }
 
-    return saveWorkoutProgramAction({
+    const result = await saveWorkoutProgramAction({
         programId: program.id,
         clientId: program.client_id,
         programName: program.name,
@@ -1242,6 +1238,9 @@ export async function syncProgramFromTemplateAction(programId: string): Promise<
         source_template_id: templateId,
         days: mergedDays,
     })
+    // El save service ya no revalida (lo hace el action wrapper). Exponemos clientId para que el
+    // wrapper de sync revalide /coach/clients/[id] sin ver el payload original.
+    return result.programId ? { ...result, clientId: program.client_id } : result
 }
 
 /**

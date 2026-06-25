@@ -26,7 +26,13 @@ export type { WorkoutBlockInput, WorkoutDayInput, WorkoutProgramInput } from '@e
 export type { AssignProgramOptions, AssignProgramResult, ProgramState, SaveProgramOptions } from '@/services/workout/workout.service'
 
 export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, saveOptions?: SaveProgramOptions): Promise<ProgramState> {
-    return saveWorkoutProgramService(payload, saveOptions)
+    const res = await saveWorkoutProgramService(payload, saveOptions)
+    if (res.programId) {
+        if (payload.clientId) revalidatePath(`/coach/clients/${payload.clientId}`)
+        revalidatePath('/coach/workout-programs')
+        revalidatePath('/c', 'layout')
+    }
+    return res
 }
 
 export async function deleteWorkoutProgramAction(programId: string, clientId: string): Promise<{ error?: string }> {
@@ -84,7 +90,13 @@ export async function loadTemplateForBuilderAction(templateId: string) {
 }
 
 export async function syncProgramFromTemplateAction(programId: string): Promise<ProgramState> {
-    return syncProgramFromTemplateService(programId)
+    const res = await syncProgramFromTemplateService(programId)
+    if (res.programId) {
+        if (res.clientId) revalidatePath(`/coach/clients/${res.clientId}`)
+        revalidatePath('/coach/workout-programs')
+        revalidatePath('/c', 'layout')
+    }
+    return res
 }
 
 export async function getCoachClientsAction(): Promise<{
