@@ -15,7 +15,9 @@ export function Stopwatch({ onClose }: StopwatchProps) {
     const [isActive, setIsActive] = useState(true)
     const [laps, setLaps] = useState<number[]>([])
     const reducedMotion = useReducedMotion()
-    const startRef = useRef<number>(Date.now())
+    // El effect reasigna startRef.current = Date.now() antes del primer tick (isActive default true),
+    // así que el seed no se lee nunca; sembrar 0 mantiene el render puro (Date.now() en render es impuro).
+    const startRef = useRef<number>(0)
     const accumulatedRef = useRef(0)
 
     useEffect(() => {

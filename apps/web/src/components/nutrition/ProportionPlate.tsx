@@ -145,14 +145,12 @@ export function ProportionPlate({
   const cy = size / 2
   const r = (size / 2) - 2
 
-  // Build wedges in order, accumulating turns.
-  let cursor = 0
-  const wedges = SEGMENT_ORDER.map((key) => {
+  // Build wedges in order: cada start es la suma acumulada de los shares previos (sin mutación en
+  // render — el `let cursor` reasignado violaba react-hooks/immutability). Output byte-idéntico.
+  const wedges = SEGMENT_ORDER.map((key, i) => {
+    const start = SEGMENT_ORDER.slice(0, i).reduce((sum, k) => sum + shares[k], 0)
     const share = shares[key]
-    const start = cursor
-    const end = cursor + share
-    cursor = end
-    return { key, share, start, end }
+    return { key, share, start, end: start + share }
   }).filter((w) => w.share > 0)
 
   const ariaLabel = plateAriaLabel(shares, resolvedLabels)

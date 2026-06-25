@@ -70,6 +70,9 @@ function parseRestTime(restStr: string | null): number {
 export function WorkoutTimerProvider({ children }: { children: React.ReactNode }) {
     const [active, setActive] = useState<ActiveTimer | null>(null)
     const activeRef = useRef<ActiveTimer | null>(null)
+    // Patrón "latest ref": activeRef solo se lee en replaceWith (callback de evento), nunca en render.
+    // El compiler tolera este caso; el write en render hace que el callback vea el valor actual sin lag.
+    // eslint-disable-next-line react-hooks/refs
     activeRef.current = active
 
     /** Reemplazo suave: si ya hay un timer corriendo, avisa que fue reemplazado (AC5). */

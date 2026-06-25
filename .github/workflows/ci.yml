@@ -21,11 +21,9 @@ jobs:
           cache: pnpm
       # --ignore-scripts blocks postinstall supply chain attacks (pnpm v10+ protection)
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      # NOTE: non-blocking until the react-compiler lint PR clears the 5 pre-existing
-      # errors (see docs/audits/deferred-attack-plan-2026-06-24.md, Fase 2.4). Flip to
-      # blocking (remove continue-on-error) once `pnpm run lint` is green.
+      # Blocking gate: the 5 react-compiler errors were cleared (Fase 2.4), so lint is green
+      # (0 errors; warnings don't fail). Re-introducing a lint error now fails CI.
       - run: pnpm run lint
-        continue-on-error: true
       - run: pnpm run typecheck
       - run: npx vitest run
       - name: pnpm audit (high+)
