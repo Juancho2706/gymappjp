@@ -33,6 +33,7 @@ import { useCaptureAddonFunnel } from '@/lib/posthog/events'
 import Link from 'next/link'
 import { Zap, Crown, Rocket, TrendingUp, Building2, Check, Leaf, HelpCircle, Puzzle, Lock, Gift, ArrowLeft, type LucideIcon } from 'lucide-react'
 import { CouponRedeemCard } from './_components/CouponRedeemCard'
+import { mpBrandLabel, extractAmountClpFromEventPayload } from './_lib/billing-format'
 
 // growth/scale: LEGACY (fuera de venta). Se mantienen en los mapas de display porque el PLAN
 // ACTUAL de un coach grandfathered puede ser legacy y debe renderizar su icono/color correcto.
@@ -51,19 +52,6 @@ const TIER_ICON_BG: Record<SubscriptionTier, string> = {
 const TIER_BADGE: Partial<Record<SubscriptionTier, { label: string; cls: string }>> = {
     pro:    { label: 'Más popular', cls: 'bg-violet-500/15 text-violet-400' },
     growth: { label: 'Nuevo',       cls: 'bg-emerald-500/15 text-emerald-400' },
-}
-
-// Etiqueta legible de la marca a partir del payment_method_id de MercadoPago (P1-8): 'debvisa' es un id
-// de máquina, no una marca. Fallback: el id capitalizado.
-const MP_BRAND_LABEL: Record<string, string> = {
-    visa: 'Visa', debvisa: 'Visa débito',
-    master: 'Mastercard', debmaster: 'Mastercard débito',
-    amex: 'American Express', diners: 'Diners',
-    maestro: 'Maestro', magna: 'Magna', naranja: 'Naranja', cabal: 'Cabal',
-}
-function mpBrandLabel(pmid: string | null | undefined): string {
-    if (!pmid) return ''
-    return MP_BRAND_LABEL[pmid.toLowerCase()] ?? pmid.charAt(0).toUpperCase() + pmid.slice(1)
 }
 
 type CoachSubscription = {
@@ -97,21 +85,6 @@ type CoachAddonView = {
 }
 // billing compuesto del endpoint — la UI NUNCA calcula precios por su cuenta (plan 05 F5.3).
 type BillingBreakdown = { baseClp: number; addonsClp: number; totalClp: number }
-
-function extractAmountClpFromEventPayload(payload: unknown): number | null {
-    if (!payload || typeof payload !== 'object') return null
-    const root = payload as Record<string, unknown>
-    const candidates = [
-        root.transaction_amount,
-        (root.auto_recurring as Record<string, unknown> | undefined)?.transaction_amount,
-        (root.data as Record<string, unknown> | undefined)?.transaction_amount,
-    ]
-    for (const c of candidates) {
-        const n = typeof c === 'number' ? c : typeof c === 'string' ? Number.parseFloat(c) : Number.NaN
-        if (!Number.isNaN(n) && n > 0) return Math.round(n)
-    }
-    return null
-}
 
 // Solo tiers a la venta. Free excluido — el coach no puede bajar manualmente a free (es
 // automatico al cancelar). growth/scale fuera de venta (LEGACY): no se ofertan para cambiar.
