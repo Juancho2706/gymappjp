@@ -4,7 +4,6 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { resolveCheckinPhotoUrls } from '@/lib/storage/checkin-photos'
 import { cache } from 'react'
-import { revalidatePath } from 'next/cache'
 import { format, parseISO, subDays } from 'date-fns'
 import {
     getTodayInSantiago,
@@ -709,8 +708,6 @@ export async function addPayment(data: {
 
     const scope = await getCoachClientScope(supabase, user.id)
     await addPaymentForCoach(supabase, user.id, data, scope)
-
-    revalidatePath(`/coach/clients/${data.client_id}`)
 }
 
 export async function deletePayment(paymentId: string, clientId: string) {
@@ -721,8 +718,6 @@ export async function deletePayment(paymentId: string, clientId: string) {
 
     const scope = await getCoachClientScope(supabase, user.id)
     await deletePaymentForCoach(supabase, user.id, paymentId, scope)
-
-    revalidatePath(`/coach/clients/${clientId}`)
 }
 
 export async function getWeeklyCompliance(clientId: string) {
