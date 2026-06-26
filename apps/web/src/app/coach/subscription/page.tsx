@@ -31,28 +31,11 @@ import {
 import type { ModuleKey } from '@/services/entitlements.service'
 import { useCaptureAddonFunnel } from '@/lib/posthog/events'
 import Link from 'next/link'
-import { Zap, Crown, Rocket, TrendingUp, Building2, Check, Leaf, HelpCircle, Puzzle, Lock, Gift, ArrowLeft, type LucideIcon } from 'lucide-react'
+import { Check, HelpCircle, Puzzle, Lock, Gift, ArrowLeft } from 'lucide-react'
 import { CouponRedeemCard } from './_components/CouponRedeemCard'
 import { mpBrandLabel, extractAmountClpFromEventPayload } from './_lib/billing-format'
+import { TIER_ICON, TIER_COLOR, TIER_ICON_BG, TIER_BADGE } from './_lib/tier-display'
 
-// growth/scale: LEGACY (fuera de venta). Se mantienen en los mapas de display porque el PLAN
-// ACTUAL de un coach grandfathered puede ser legacy y debe renderizar su icono/color correcto.
-const TIER_ICON: Record<SubscriptionTier, LucideIcon> = {
-    free: Leaf, starter: Zap, pro: Rocket, elite: Crown, growth: TrendingUp, scale: Building2,
-}
-const TIER_COLOR: Record<SubscriptionTier, string> = {
-    free: 'text-slate-400', starter: 'text-sky-400', pro: 'text-violet-400',
-    elite: 'text-amber-400', growth: 'text-emerald-400', scale: 'text-rose-400',
-}
-const TIER_ICON_BG: Record<SubscriptionTier, string> = {
-    free: 'bg-slate-500/10 border-slate-500/20', starter: 'bg-sky-500/10 border-sky-500/20',
-    pro: 'bg-violet-500/10 border-violet-500/20', elite: 'bg-amber-500/10 border-amber-500/20',
-    growth: 'bg-emerald-500/10 border-emerald-500/20', scale: 'bg-rose-500/10 border-rose-500/20',
-}
-const TIER_BADGE: Partial<Record<SubscriptionTier, { label: string; cls: string }>> = {
-    pro:    { label: 'Más popular', cls: 'bg-violet-500/15 text-violet-400' },
-    growth: { label: 'Nuevo',       cls: 'bg-emerald-500/15 text-emerald-400' },
-}
 
 type CoachSubscription = {
     id: string
