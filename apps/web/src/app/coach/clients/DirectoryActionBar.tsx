@@ -10,7 +10,8 @@ import {
     X,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { glassButtonVariants } from '@/components/ui/glass-button'
+import { buttonVariants } from '@/components/ui/button'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import { cn } from '@/lib/utils'
 import {
     DropdownMenu,
@@ -34,11 +35,10 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
         <button
             type="button"
             onClick={onRemove}
-            className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-primary transition-colors hover:bg-primary/20"
-            style={{ color: 'var(--theme-primary)', borderColor: 'color-mix(in srgb, var(--theme-primary) 25%, transparent)' }}
+            className="inline-flex h-7 items-center gap-1.5 rounded-pill bg-[var(--ink-950)] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
         >
             {label}
-            <X className="w-3 h-3 opacity-70" />
+            <X className="h-3 w-3 opacity-70" />
         </button>
     )
 }
@@ -177,42 +177,41 @@ export function DirectoryActionBar({
 
     const currentSortLabel = SORT_OPTIONS.find((o) => o.value === sortKey)?.label ?? sortKey
 
+    const triggerClass = cn(
+        buttonVariants({ variant: 'secondary', size: 'default' }),
+        'h-12 gap-2 px-4 text-[10px] font-black tracking-widest uppercase'
+    )
+
     return (
         <div
             className={cn(
-                'sticky top-0 z-10 mx-0 w-full max-w-full min-w-0 rounded-2xl border border-border/60 bg-background/75 px-3 py-3 backdrop-blur-xl dark:border-white/10 dark:bg-zinc-950/70 sm:px-4',
+                'sticky top-0 z-10 mx-0 w-full max-w-full min-w-0 rounded-card border border-subtle bg-surface-app/80 px-3 py-3 backdrop-blur-xl sm:px-4',
                 className
             )}
         >
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
                 <div className="relative min-w-0 flex-1">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Search className="absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted" />
                     <Input
                         ref={inputRef}
                         placeholder="Buscar alumno... (⌘K)"
                         value={search}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        className="h-11 rounded-xl border-border/50 bg-white/60 pl-10 pr-14 text-sm dark:bg-white/[0.04]"
+                        className="pl-10 pr-14"
                     />
-                    <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border border-border/60 bg-muted/50 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground sm:inline">
+                    <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border border-subtle bg-surface-sunken px-1.5 py-0.5 text-[10px] font-bold text-muted sm:inline">
                         ⌘K
                     </kbd>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
                     <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger
-                            type="button"
-                            className={cn(
-                                glassButtonVariants({ variant: 'outline', size: 'default' }),
-                                'h-11 gap-2 rounded-xl px-4 text-[10px] font-black tracking-widest'
-                            )}
-                        >
+                        <DropdownMenuTrigger type="button" className={triggerClass}>
                             <SlidersHorizontal className="h-4 w-4" />
                             Filtros
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
-                            className="min-w-[14rem] w-[min(100vw-2rem,20rem)] rounded-xl"
+                            className="min-w-[14rem] w-[min(100vw-2rem,20rem)] rounded-card"
                             align="start"
                         >
                             <DropdownMenuGroup>
@@ -231,7 +230,7 @@ export function DirectoryActionBar({
                                 <DropdownMenuItem onClick={() => onStatusFilterChange('archived')}>
                                     Archivados
                                     {archivedCount > 0 && (
-                                        <span className="ml-auto rounded-full bg-zinc-200 px-1.5 py-0.5 text-[10px] font-bold text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                                        <span className="ml-auto rounded-full bg-surface-sunken px-1.5 py-0.5 text-[10px] font-bold text-muted">
                                             {archivedCount}
                                         </span>
                                     )}
@@ -276,16 +275,13 @@ export function DirectoryActionBar({
                     <DropdownMenu modal={false}>
                         <DropdownMenuTrigger
                             type="button"
-                            className={cn(
-                                glassButtonVariants({ variant: 'outline', size: 'default' }),
-                                'h-11 max-w-[220px] gap-2 truncate rounded-xl px-4 text-[10px] font-black tracking-widest'
-                            )}
+                            className={cn(triggerClass, 'max-w-[220px] truncate')}
                         >
                             <ArrowUpDown className="h-4 w-4 shrink-0" />
                             <span className="truncate">{currentSortLabel}</span>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
-                            className="min-w-[14rem] w-[min(100vw-2rem,20rem)] rounded-xl"
+                            className="min-w-[14rem] w-[min(100vw-2rem,20rem)] rounded-card"
                             align="start"
                         >
                             <DropdownMenuGroup>
@@ -296,7 +292,7 @@ export function DirectoryActionBar({
                                     <DropdownMenuItem
                                         key={opt.value}
                                         onClick={() => onSortChange(opt.value)}
-                                        className={sortKey === opt.value ? 'bg-primary/10' : ''}
+                                        className={sortKey === opt.value ? 'bg-sport-500/10' : ''}
                                     >
                                         {opt.label}
                                     </DropdownMenuItem>
@@ -305,39 +301,35 @@ export function DirectoryActionBar({
                         </DropdownMenuContent>
                     </DropdownMenu>
 
-                    <div className="flex rounded-xl border border-border/50 p-0.5 dark:border-white/10">
-                        <button
-                            type="button"
-                            onClick={() => onViewChange('grid')}
-                            className={cn(
-                                'flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
-                                view === 'grid' ?
-                                    'bg-primary/15 text-primary'
-                                :   'text-muted-foreground hover:bg-white/50 dark:hover:bg-white/5'
-                            )}
-                            aria-label="Vista cuadrícula"
-                        >
-                            <LayoutGrid className="h-4 w-4" />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => onViewChange('table')}
-                            className={cn(
-                                'flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
-                                view === 'table' ?
-                                    'bg-primary/15 text-primary'
-                                :   'text-muted-foreground hover:bg-white/50 dark:hover:bg-white/5'
-                            )}
-                            aria-label="Vista tabla"
-                        >
-                            <Table2 className="h-4 w-4" />
-                        </button>
-                    </div>
+                    <SegmentedControl
+                        size="sm"
+                        className="w-[92px] shrink-0"
+                        value={view}
+                        onChange={(v) => onViewChange(v as 'grid' | 'table')}
+                        options={[
+                            {
+                                value: 'table',
+                                label: (
+                                    <span className="flex items-center justify-center" aria-label="Vista tabla">
+                                        <Table2 className="h-4 w-4" />
+                                    </span>
+                                ),
+                            },
+                            {
+                                value: 'grid',
+                                label: (
+                                    <span className="flex items-center justify-center" aria-label="Vista cuadrícula">
+                                        <LayoutGrid className="h-4 w-4" />
+                                    </span>
+                                ),
+                            },
+                        ]}
+                    />
                 </div>
             </div>
 
             {chips.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2 border-t border-border/40 pt-3 dark:border-white/10">
+                <div className="mt-3 flex flex-wrap gap-2 border-t border-subtle pt-3">
                     {chips.map((c) => (
                         <FilterChip key={c.key} label={c.label} onRemove={c.onRemove} />
                     ))}

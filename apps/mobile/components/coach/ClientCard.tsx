@@ -1,14 +1,21 @@
 import { useState } from 'react'
 import { Dimensions, Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import Svg, { Circle } from 'react-native-svg'
 import { Apple, Dumbbell, Eye, MoreVertical, Pause, Play, Share2, Smartphone, Star, Trash2, KeyRound } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
 import { Sparkline } from '../Sparkline'
+import { ProgressRing } from '../ProgressRing'
+import { Badge, type BadgeTone } from '../Badge'
+import { Card } from '../Card'
 import { subscriptionDaysRemaining, type DirectoryClient, type PulseRow } from '../../lib/clients-directory'
 
 /** Altura fija de la card (modo cards) — usada por la animación de stack. */
 export const CLIENT_CARD_HEIGHT = 362
 const CONTENT_W = Dimensions.get('window').width - 32 - 28 // pantalla - margen lista - padding card
+
+// Status fijos del DS (token-contract §1 — NO brand, literales seguros para SVG/iconos).
+const SUCCESS = '#1FB877' // success-500
+const WARNING = '#F5A524' // warning-500
+const DANGER = '#F4365A' // danger-500
 
 interface Props {
   client: DirectoryClient
@@ -31,36 +38,21 @@ function lastLog(date: string | null): { label: string; days: number } {
   return { label: `Hace ${days}d`, days }
 }
 
-function AdherenceRing({ pct, initial, color, theme }: { pct: number; initial: string; color: string; theme: any }) {
-  const size = 60, stroke = 5, r = (size - stroke) / 2, circ = 2 * Math.PI * r
-  const dash = (Math.min(100, Math.max(0, pct)) / 100) * circ
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke={theme.border} strokeWidth={stroke} fill="none" />
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none" strokeLinecap="round"
-          strokeDasharray={`${dash} ${circ}`} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-      </Svg>
-      <Text style={{ fontSize: 20, fontFamily: 'Montserrat_800ExtraBold', color: theme.foreground }}>{initial}</Text>
-    </View>
-  )
-}
-
-function attentionMeta(score: number, streak: number): { label: string; color: string } {
-  if (score >= 50) return { label: 'Urgente', color: '#EF4444' }
-  if (score >= 25) return { label: 'Revisar', color: '#F59E0B' }
-  if (score === 0 && streak > 10) return { label: 'Destacado', color: '#F59E0B' }
-  return { label: 'On track', color: '#10B981' }
+function attentionMeta(score: number, streak: number): { label: string; tone: BadgeTone } {
+  if (score >= 50) return { label: 'Urgente', tone: 'danger' }
+  if (score >= 25) return { label: 'Revisar', tone: 'warning' }
+  if (score === 0 && streak > 10) return { label: 'Destacado', tone: 'ember' }
+  return { label: 'On track', tone: 'success' }
 }
 
 export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, onToggleStatus, onResetPw, onDelete, onWorkout, onNutrition }: Props) {
   const { theme } = useTheme()
   const [menu, setMenu] = useState(false)
   const adherence = pulse?.percentage ?? 0
-  const ringColor = adherence > 80 ? '#10B981' : adherence > 50 ? '#F59E0B' : '#EF4444'
+  const ringColor = adherence > 80 ? SUCCESS : adherence > 50 ? WARNING : DANGER
   const att = attentionMeta(pulse?.attentionScore ?? client.attentionScore, pulse?.streak ?? 0)
   const ll = lastLog(pulse?.lastWorkoutDate ?? client.lastWorkoutDate)
-  const llDot = ll.days < 3 ? '#10B981' : ll.days < 7 ? '#F59E0B' : '#EF4444'
+  const llDot = ll.days < 3 ? SUCCESS : ll.days < 7 ? WARNING : DANGER
   const stars = pulse?.latestEnergyLevel != null ? Math.min(5, Math.max(0, Math.round(pulse.latestEnergyLevel / 2))) : 0
   const weightVals = (pulse?.weightHistory30d ?? []).map((d) => d.value)
   const nutri = pulse?.nutritionPercentage ?? 0
@@ -76,18 +68,29 @@ export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, o
   ]
 
   return (
-    <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, height: CLIENT_CARD_HEIGHT }]}>
+    <Card padding={14} radius="card" style={{ ...styles.card, height: CLIENT_CARD_HEIGHT }}>
       {/* Header */}
       <View style={styles.headerRow}>
-        <AdherenceRing pct={adherence} initial={(client.fullName?.[0] ?? '?').toUpperCase()} color={ringColor} theme={theme} />
+        <ProgressRing
+          value={adherence}
+          size={56}
+          stroke={5}
+          color={ringColor}
+          showValue={false}
+          label={
+            <Text style={{ fontSize: 20, fontFamily: 'Archivo_900Black', color: theme.foreground }}>
+              {(client.fullName?.[0] ?? '?').toUpperCase()}
+            </Text>
+          }
+        />
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={styles.nameRow}>
-            <Text numberOfLines={1} style={[styles.name, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} onPress={onPress}>{client.fullName}</Text>
-            <View style={[styles.badge, { backgroundColor: att.color + '22', borderColor: att.color + '44' }]}><Text style={[styles.badgeT, { color: att.color }]}>{att.label}</Text></View>
+            <Text numberOfLines={1} style={[styles.name, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]} onPress={onPress}>{client.fullName}</Text>
+            <Badge tone={att.tone} variant="soft" size="sm">{att.label}</Badge>
           </View>
           <Text numberOfLines={1} style={[styles.email, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{client.email}</Text>
         </View>
-        <TouchableOpacity onPress={() => setMenu(true)} hitSlop={8} style={styles.menuBtn}><MoreVertical size={20} color={theme.foreground} /></TouchableOpacity>
+        <TouchableOpacity onPress={() => setMenu(true)} hitSlop={8} style={styles.menuBtn}><MoreVertical size={20} color={theme.mutedForeground} /></TouchableOpacity>
       </View>
 
       {/* Mini-stats */}
@@ -97,7 +100,7 @@ export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, o
         <View style={[styles.mini, { borderColor: theme.border }]}>
           <Text style={[styles.miniLabel, { color: theme.mutedForeground }]}>Energía</Text>
           <View style={{ flexDirection: 'row', gap: 1, marginTop: 2 }}>
-            {[1, 2, 3, 4, 5].map((i) => <Star key={i} size={11} color="#F59E0B" fill={i <= stars ? '#F59E0B' : 'transparent'} />)}
+            {[1, 2, 3, 4, 5].map((i) => <Star key={i} size={11} color={WARNING} fill={i <= stars ? WARNING : 'transparent'} />)}
           </View>
         </View>
         <View style={[styles.mini, { borderColor: theme.border }]}>
@@ -113,11 +116,11 @@ export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, o
       <View style={styles.sparkRow}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.sparkLabel, { color: theme.mutedForeground }]}>Peso (30d)</Text>
-          {weightVals.length >= 2 ? <Sparkline values={weightVals} width={CONTENT_W / 2 - 6} height={28} color="#3B82F6" /> : <Text style={[styles.sparkEmpty, { color: theme.mutedForeground }]}>Sin datos</Text>}
+          {weightVals.length >= 2 ? <Sparkline values={weightVals} width={CONTENT_W / 2 - 6} height={28} color={theme.cyan} /> : <Text style={[styles.sparkEmpty, { color: theme.mutedForeground }]}>Sin datos</Text>}
         </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.sparkLabel, { color: theme.mutedForeground }]}>Adherencia (4 sem)</Text>
-          {(pulse?.adherenceHistory4w?.length ?? 0) >= 2 ? <Sparkline values={pulse!.adherenceHistory4w} width={CONTENT_W / 2 - 6} height={28} color="#10B981" /> : <Text style={[styles.sparkEmpty, { color: theme.mutedForeground }]}>Sin datos</Text>}
+          {(pulse?.adherenceHistory4w?.length ?? 0) >= 2 ? <Sparkline values={pulse!.adherenceHistory4w} width={CONTENT_W / 2 - 6} height={28} color={SUCCESS} /> : <Text style={[styles.sparkEmpty, { color: theme.mutedForeground }]}>Sin datos</Text>}
         </View>
       </View>
 
@@ -139,23 +142,23 @@ export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, o
 
       {/* Nutrición (barra de adherencia) */}
       {nutri > 0 ? (
-        <View style={[styles.block, { backgroundColor: (nutriRisk ? '#EF4444' : '#10B981') + '12', borderColor: (nutriRisk ? '#EF4444' : '#10B981') + '28' }]}>
+        <View style={[styles.block, { backgroundColor: (nutriRisk ? DANGER : SUCCESS) + '12', borderColor: (nutriRisk ? DANGER : SUCCESS) + '28' }]}>
           <View style={styles.blockTop}>
-            <Apple size={12} color={nutriRisk ? '#EF4444' : '#10B981'} />
-            <Text numberOfLines={1} style={[styles.blockName, { color: nutriRisk ? '#EF4444' : theme.foreground }]}>{nutriRisk ? 'Baja adherencia nutricional' : 'Nutrición'}</Text>
-            <Text style={[styles.blockDim, { color: nutriRisk ? '#EF4444' : theme.foreground }]}>{nutri}%</Text>
+            <Apple size={12} color={nutriRisk ? DANGER : SUCCESS} />
+            <Text numberOfLines={1} style={[styles.blockName, { color: nutriRisk ? DANGER : theme.foreground }]}>{nutriRisk ? 'Baja adherencia nutricional' : 'Nutrición'}</Text>
+            <Text style={[styles.blockDim, { color: nutriRisk ? DANGER : theme.foreground }]}>{nutri}%</Text>
           </View>
-          <Bar value={Math.min(1, nutri / 100)} color={nutriRisk ? '#EF4444' : '#10B981'} theme={theme} />
+          <Bar value={Math.min(1, nutri / 100)} color={nutriRisk ? DANGER : SUCCESS} theme={theme} />
         </View>
       ) : null}
 
       {subDays != null ? (
-        <Text style={[styles.subTxt, { color: subDays <= 5 ? '#EF4444' : theme.mutedForeground }]}>Suscripción: {subDays > 0 ? `${subDays}d restantes` : 'vencida'}</Text>
+        <Text style={[styles.subTxt, { color: subDays <= 5 ? DANGER : theme.mutedForeground }]}>Suscripción: {subDays > 0 ? `${subDays}d restantes` : 'vencida'}</Text>
       ) : null}
 
       {/* Footer actions */}
       <View style={[styles.footer, { borderTopColor: theme.border }]}>
-        {onWhatsApp ? <FootBtn theme={theme} icon={Smartphone} label="WA" color="#10B981" onPress={onWhatsApp} /> : null}
+        {onWhatsApp ? <FootBtn theme={theme} icon={Smartphone} label="WA" color={SUCCESS} onPress={onWhatsApp} /> : null}
         <FootBtn theme={theme} icon={Eye} label="Perfil" onPress={onPress} />
         <FootBtn theme={theme} icon={Dumbbell} label="Entreno" onPress={onWorkout} />
         <FootBtn theme={theme} icon={Apple} label="Nutri" onPress={onNutrition} />
@@ -170,14 +173,14 @@ export function ClientCard({ client, pulse, onPress, onWhatsApp, onShareLogin, o
               return (
                 <TouchableOpacity key={it.label} onPress={it.on} activeOpacity={0.8} style={styles.menuItem}>
                   <Icon size={17} color={c} />
-                  <Text style={[styles.menuItemTxt, { color: c, fontFamily: 'Inter_600SemiBold' }]}>{it.label}</Text>
+                  <Text style={[styles.menuItemTxt, { color: c, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{it.label}</Text>
                 </TouchableOpacity>
               )
             })}
           </View>
         </Pressable>
       </Modal>
-    </View>
+    </Card>
   )
 }
 
@@ -203,39 +206,34 @@ function FootBtn({ theme, icon: Icon, label, color, onPress }: { theme: any; ico
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={[styles.footBtn, { borderColor: theme.border, backgroundColor: color ? color + '14' : 'transparent' }]}>
       <Icon size={14} color={color ?? theme.foreground} />
-      <Text style={[styles.footTxt, { color: color ?? theme.foreground, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+      <Text style={[styles.footTxt, { color: color ?? theme.foreground, fontFamily: 'HankenGrotesk_700Bold' }]}>{label}</Text>
     </TouchableOpacity>
   )
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 18, padding: 14, gap: 9, overflow: 'hidden' },
+  card: { gap: 9, overflow: 'hidden' },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  name: { fontSize: 15, flexShrink: 1 },
-  badge: { borderWidth: 1, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 1 },
-  badgeT: { fontSize: 8.5, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.4 },
+  name: { fontSize: 15, flexShrink: 1, letterSpacing: -0.2 },
   email: { fontSize: 11, marginTop: 1 },
   menuBtn: { padding: 2 },
   statsRow: { flexDirection: 'row', gap: 6 },
   mini: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 7, paddingVertical: 6, gap: 1 },
-  miniLabel: { fontSize: 8, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.4 },
-  miniVal: { fontSize: 14, fontFamily: 'Montserrat_700Bold' },
+  miniLabel: { fontSize: 8, fontFamily: 'HankenGrotesk_700Bold', textTransform: 'uppercase', letterSpacing: 0.4 },
+  miniVal: { fontSize: 14, fontFamily: 'Archivo_800ExtraBold' },
   miniSub: { fontSize: 9 },
   sparkRow: { flexDirection: 'row', gap: 10 },
-  sparkLabel: { fontSize: 8, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 },
+  sparkLabel: { fontSize: 8, fontFamily: 'HankenGrotesk_700Bold', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 },
   sparkEmpty: { fontSize: 10, height: 28, textAlignVertical: 'center' },
-  metaRow: { flexDirection: 'row' },
   metaPill: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
-  metaText: { fontSize: 12, fontFamily: 'Inter_600SemiBold', flexShrink: 1 },
-  metaDim: { fontSize: 10, marginLeft: 'auto', fontFamily: 'Inter_600SemiBold' },
+  metaDim: { fontSize: 10, marginLeft: 'auto', fontFamily: 'HankenGrotesk_600SemiBold' },
   block: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, gap: 5 },
   blockTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  blockName: { fontSize: 11.5, fontFamily: 'Inter_600SemiBold', flexShrink: 1 },
-  blockDim: { fontSize: 10.5, marginLeft: 'auto', fontFamily: 'Montserrat_700Bold' },
+  blockName: { fontSize: 11.5, fontFamily: 'HankenGrotesk_600SemiBold', flexShrink: 1 },
+  blockDim: { fontSize: 10.5, marginLeft: 'auto', fontFamily: 'Archivo_800ExtraBold' },
   barTrack: { height: 5, borderRadius: 99, overflow: 'hidden' },
-  subRow: { flexDirection: 'row', gap: 12 },
-  subTxt: { fontSize: 10, fontFamily: 'Inter_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.3 },
+  subTxt: { fontSize: 10, fontFamily: 'HankenGrotesk_600SemiBold', textTransform: 'uppercase', letterSpacing: 0.3 },
   footer: { flexDirection: 'row', gap: 6, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 9, marginTop: 'auto' },
   footBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, borderWidth: 1, borderRadius: 10, paddingVertical: 8 },
   footTxt: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4 },

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   KeyboardAvoidingView,
@@ -19,16 +18,16 @@ import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnim
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
 import {
+  AlertOctagon,
   AlertTriangle,
+  Apple,
+  ArrowUpDown,
+  Check,
   ChevronRight,
-  Dumbbell,
   EyeOff,
-  Flame,
   LayoutGrid,
   List as ListIcon,
-  RefreshCw,
   Search,
-  ShieldCheck,
   SlidersHorizontal,
   Upload,
   Users,
@@ -37,7 +36,9 @@ import {
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, NativeDialog, ScreenHeader } from '../../../components'
+import { Badge, Button, Input, NativeDialog, ScreenHeader } from '../../../components'
+import type { BadgeTone } from '../../../components/Badge'
+import { ProgressRing } from '../../../components/ProgressRing'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { ClientCard, CLIENT_CARD_HEIGHT } from '../../../components/coach/ClientCard'
@@ -64,6 +65,14 @@ import { parseClientsCsv, type ParsedClientRow } from '../../../lib/import-clien
 const CARD_GAP = 12
 const CARD_STEP = CLIENT_CARD_HEIGHT + CARD_GAP
 
+// Status fijos del DS (token-contract §1 — NO brand, literales seguros para SVG/iconos).
+const SUCCESS = '#1FB877' // success-500
+const WARNING = '#F5A524' // warning-500
+const DANGER = '#F4365A' // danger-500
+const EMBER = '#FF6A3D' // ember-500
+const INFO = '#2680FF' // info-500 (fijo)
+const SEV_HEX: Record<'danger' | 'warning' | 'success', string> = { danger: DANGER, warning: WARNING, success: SUCCESS }
+
 // Item con animación de "stack": al scrollear abajo las cards se apilan arriba; al subir, salen y bajan.
 function StackCardItem({ index, scrollY, headerH, children }: { index: number; scrollY: SharedValue<number>; headerH: number; children: React.ReactNode }) {
   const animStyle = useAnimatedStyle(() => {
@@ -86,129 +95,126 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`
 }
 
-function daysLabel(days: number | null): string | null {
-  if (days === null) return null
-  if (days < 0) return `Vencido ${Math.abs(days)}d`
-  if (days === 0) return 'Vence hoy'
-  return `${days}d restantes`
+function severityMeta(score: number): { label: string; tone: 'danger' | 'warning' | 'success'; Icon: typeof AlertOctagon } {
+  if (score >= 50) return { label: 'Riesgo', tone: 'danger', Icon: AlertOctagon }
+  if (score >= 25) return { label: 'Atención', tone: 'warning', Icon: AlertTriangle }
+  return { label: 'On track', tone: 'success', Icon: Check }
 }
 
-function attentionColor(score: number): string {
-  if (score >= 50) return '#EF4444'
-  if (score >= 25) return '#F59E0B'
-  return '#10B981'
+function statusMeta(client: DirectoryClient): { key: string; label: string; tone: BadgeTone } {
+  if (client.isArchived) return { key: 'archived', label: 'Archivado', tone: 'neutral' }
+  if (!client.isActive) return { key: 'paused', label: 'Pausado', tone: 'neutral' }
+  if (client.forcePwChange) return { key: 'pending', label: 'Pend. sync', tone: 'info' }
+  return { key: 'active', label: 'Activo', tone: 'success' }
 }
 
-// ─── Score badge ──────────────────────────────────────────────────────────────
-
-function ScoreBadge({ score }: { score: number }) {
-  const color = attentionColor(score)
-  return (
-    <View style={[scoreBadgeStyles.wrap, { backgroundColor: color + '22', borderColor: color + '44' }]}>
-      <Text style={[scoreBadgeStyles.text, { color }]}>{score}</Text>
-    </View>
-  )
-}
-const scoreBadgeStyles = StyleSheet.create({
-  wrap: { borderRadius: 6, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2 },
-  text: { fontSize: 11, fontWeight: '800' },
-})
-
-// ─── StatusChip ───────────────────────────────────────────────────────────────
-
-function StatusChip({ client }: { client: DirectoryClient }) {
-  if (client.isArchived) {
-    return <Chip label="Archivado" color="#71717A" />
-  }
-  if (!client.isActive) {
-    return <Chip label="Pausado" color="#EF4444" />
-  }
-  if (client.forcePwChange) {
-    return <Chip label="Pend. sync" color="#F59E0B" />
-  }
-  return <Chip label="Activo" color="#10B981" />
+function lastInfo(date: string | null): { label: string; dot: string } {
+  if (!date) return { label: 'Sin entrenos', dot: '#A8B1BD' }
+  const days = Math.floor((Date.now() - new Date(date).getTime()) / 86400000)
+  const dot = days < 3 ? SUCCESS : days < 7 ? WARNING : DANGER
+  if (days <= 0) return { label: 'Hoy', dot }
+  if (days === 1) return { label: 'Ayer', dot }
+  return { label: `Hace ${days}d`, dot }
 }
 
-function Chip({ label, color }: { label: string; color: string }) {
-  return (
-    <View style={[chipStyles.wrap, { backgroundColor: color + '22', borderColor: color + '33' }]}>
-      <Text style={[chipStyles.text, { color }]}>{label}</Text>
-    </View>
-  )
-}
-const chipStyles = StyleSheet.create({
-  wrap: { borderRadius: 6, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 2 },
-  text: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
-})
+// ─── Pulse card (prioridad: Riesgo / Atención) — botón-filtro jerárquico ───────
 
-// ─── Stats Tile ───────────────────────────────────────────────────────────────
-
-function StatTile({
-  value,
+function PulseCard({
   label,
+  value,
+  hint,
+  tone,
   icon: Icon,
+  selected,
+  onPress,
+}: {
+  label: string
+  value: number
+  hint: string
+  tone: 'danger' | 'warning'
+  icon: typeof AlertOctagon
+  selected: boolean
+  onPress: () => void
+}) {
+  const { theme } = useTheme()
+  const color = tone === 'danger' ? DANGER : WARNING
+  const fg = selected ? '#fff' : color
+  return (
+    <TouchableOpacity
+      style={[
+        pulseStyles.card,
+        {
+          backgroundColor: selected ? color : color + '1A',
+          borderColor: selected ? color : theme.border,
+        },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
+      <View style={pulseStyles.top}>
+        <View style={pulseStyles.labelRow}>
+          <Icon size={14} color={fg} />
+          <Text style={[pulseStyles.label, { color: fg }]}>{label}</Text>
+        </View>
+        {value > 0 ? <ChevronRight size={15} color={fg} /> : null}
+      </View>
+      <Text style={[pulseStyles.value, { color: selected ? '#fff' : value > 0 ? color : theme.mutedForeground }]}>{value}</Text>
+      <Text numberOfLines={1} style={[pulseStyles.hint, { color: selected ? 'rgba(255,255,255,0.85)' : theme.mutedForeground }]}>{hint}</Text>
+    </TouchableOpacity>
+  )
+}
+const pulseStyles = StyleSheet.create({
+  card: { flex: 1, minWidth: 0, gap: 5, padding: 14, borderRadius: 20, borderWidth: 1.5 },
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  label: { fontSize: 12, fontFamily: 'HankenGrotesk_800ExtraBold', letterSpacing: 0.2 },
+  value: { fontSize: 30, lineHeight: 32, fontFamily: 'Archivo_900Black', fontVariant: ['tabular-nums'] },
+  hint: { fontSize: 11, fontFamily: 'HankenGrotesk_600SemiBold' },
+})
+
+// ─── Metric chip (Total / Activos / On track / Sin plan) ───────────────────────
+
+function MetricChip({
+  label,
+  value,
+  suffix,
   color,
   selected,
   onPress,
-  sub,
 }: {
-  value: number
   label: string
-  icon: any
+  value: number
+  suffix?: string
   color: string
   selected: boolean
-  onPress: () => void
-  sub?: string
+  onPress?: () => void
 }) {
   const { theme } = useTheme()
   return (
     <TouchableOpacity
+      disabled={!onPress}
+      onPress={onPress}
+      activeOpacity={onPress ? 0.8 : 1}
       style={[
-        statStyles.tile,
+        chipStyles.chip,
         {
-          backgroundColor: theme.card,
-          borderColor: selected ? color : theme.border,
-          borderWidth: selected ? 2 : 1,
-          borderRadius: theme.radius.xl,
+          backgroundColor: selected ? theme.foreground : theme.card,
+          borderColor: selected ? theme.foreground : theme.border,
         },
       ]}
-      onPress={onPress}
-      activeOpacity={0.75}
     >
-      <View style={statStyles.topRow}>
-        <View style={[statStyles.iconWrap, { backgroundColor: color + '1A' }]}>
-          <Icon size={13} color={color} />
-        </View>
-        <Text style={[statStyles.value, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-          {sub}{value}
-        </Text>
-      </View>
-      <Text style={[statStyles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-        {label}
+      <Text numberOfLines={1} style={[chipStyles.value, { color: selected ? '#fff' : color }]}>
+        {value}
+        {suffix ?? ''}
       </Text>
+      <Text numberOfLines={1} style={[chipStyles.label, { color: selected ? 'rgba(255,255,255,0.72)' : theme.mutedForeground }]}>{label}</Text>
     </TouchableOpacity>
   )
 }
-const statStyles = StyleSheet.create({
-  tile: {
-    // 3 per row, compact (icon + value inline → ~half the height).
-    flexBasis: '31%',
-    flexGrow: 1,
-    minWidth: 96,
-    paddingHorizontal: 11,
-    paddingVertical: 9,
-    gap: 3,
-  },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  iconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 7,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  value: { fontSize: 19, lineHeight: 22 },
-  label: { fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.6 },
+const chipStyles = StyleSheet.create({
+  chip: { flex: 1, minWidth: 0, gap: 1, paddingHorizontal: 8, paddingVertical: 9, borderRadius: 14, borderWidth: 1.5 },
+  value: { fontSize: 17, lineHeight: 19, fontFamily: 'Archivo_800ExtraBold', fontVariant: ['tabular-nums'] },
+  label: { fontSize: 9.5, fontFamily: 'HankenGrotesk_700Bold', textTransform: 'uppercase', letterSpacing: 0.5 },
 })
 
 // ─── Alert Banner ─────────────────────────────────────────────────────────────
@@ -259,37 +265,32 @@ const alertStyles = StyleSheet.create({
   wrap: {
     marginHorizontal: 16,
     marginBottom: 8,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
     gap: 8,
   },
-  text: { fontSize: 13, fontWeight: '600' },
+  text: { fontSize: 13, fontFamily: 'HankenGrotesk_600SemiBold' },
   cta: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  ctaText: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
-  dismiss: { width: 96, marginRight: 16, marginBottom: 8, borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 3 },
-  dismissText: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
+  ctaText: { fontSize: 11, fontFamily: 'HankenGrotesk_800ExtraBold', textTransform: 'uppercase', letterSpacing: 0.5 },
+  dismiss: { width: 96, marginRight: 16, marginBottom: 8, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  dismissText: { fontSize: 11, fontFamily: 'HankenGrotesk_800ExtraBold', textTransform: 'uppercase', letterSpacing: 0.4 },
 })
 
-// ─── Client Row ───────────────────────────────────────────────────────────────
+// ─── Client Row (vista lista) · espejo de DirRowCard ───────────────────────────
 
 function ClientRow({ item, index, theme, router, pulse }: { item: DirectoryClient; index: number; theme: any; router: any; pulse?: PulseRow }) {
-  const planLabel = daysLabel(item.planDaysRemaining)
-  // A-F4: métricas en la fila (antes solo en cards). Adherencia + peso±Δ + último log.
   const adherence = pulse?.percentage ?? null
-  const adherenceColor = adherence == null ? theme.mutedForeground : adherence >= 70 ? '#10B981' : adherence >= 40 ? '#F59E0B' : '#EF4444'
-  const lastDays = item.lastWorkoutDate ? Math.floor((Date.now() - new Date(item.lastWorkoutDate).getTime()) / 86400000) : null
-  const lastColor = lastDays == null ? theme.mutedForeground : lastDays < 3 ? '#10B981' : lastDays < 7 ? '#F59E0B' : '#EF4444'
-  const lastLabel = lastDays == null ? 'Sin entrenos' : lastDays <= 0 ? 'Hoy' : lastDays === 1 ? 'Ayer' : `${lastDays}d`
-  const planColor =
-    item.planDaysRemaining !== null && item.planDaysRemaining <= 0
-      ? '#EF4444'
-      : item.planDaysRemaining !== null && item.planDaysRemaining <= 7
-        ? '#F59E0B'
-        : '#6B7280'
+  const score = pulse?.attentionScore ?? item.attentionScore
+  const sev = severityMeta(score)
+  const ringColor = adherence == null ? theme.border : adherence >= 75 ? theme.primary : adherence >= 50 ? WARNING : DANGER
+  const li = lastInfo(pulse?.lastWorkoutDate ?? item.lastWorkoutDate)
+  const nutri = pulse?.nutritionPercentage ?? 0
+  const nutriRisk = (pulse?.attentionFlags?.includes('NUTRICION_RIESGO') ?? false) || (nutri > 0 && nutri < 60)
+  const st = statusMeta(item)
 
   return (
     <MotiView
@@ -298,81 +299,54 @@ function ClientRow({ item, index, theme, router, pulse }: { item: DirectoryClien
       transition={{ type: 'timing', duration: 300, delay: Math.min(index * 40, 320) }}
     >
       <TouchableOpacity
-        style={[
-          rowStyles.card,
-          {
-            backgroundColor: theme.card,
-            borderColor: theme.border,
-            borderRadius: theme.radius.xl,
-          },
-        ]}
+        style={[rowStyles.card, { backgroundColor: theme.card, borderColor: theme.border }]}
         onPress={() => router.push(`/coach/cliente/${item.id}`)}
         activeOpacity={0.75}
       >
-        {/* Left: avatar + info */}
-        <View style={rowStyles.left}>
-          <View
-            style={[
-              rowStyles.avatar,
-              {
-                backgroundColor: hexToRgba(theme.primary, 0.1),
-                borderColor: hexToRgba(theme.primary, 0.2),
-                borderRadius: theme.radius.lg,
-              },
-            ]}
-          >
-            <Text style={[rowStyles.avatarText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
-              {item.fullName.charAt(0).toUpperCase()}
-            </Text>
+        {/* Anillo de adherencia con inicial + dot de última actividad */}
+        <View style={rowStyles.ringWrap}>
+          <ProgressRing
+            value={adherence ?? 0}
+            size={50}
+            stroke={5}
+            color={ringColor}
+            showValue={false}
+            label={
+              <Text style={{ fontSize: 18, fontFamily: 'Archivo_800ExtraBold', color: theme.foreground }}>
+                {item.fullName.charAt(0).toUpperCase()}
+              </Text>
+            }
+          />
+          <View style={[rowStyles.lastDot, { backgroundColor: li.dot, borderColor: theme.card }]} />
+        </View>
+
+        <View style={rowStyles.info}>
+          <View style={rowStyles.nameRow}>
+            <Text style={[rowStyles.name, { color: theme.foreground }]} numberOfLines={1}>{item.fullName}</Text>
+            <Badge tone={sev.tone} variant="soft" size="sm" icon={<sev.Icon size={11} color={SEV_HEX[sev.tone]} />}>{sev.label}</Badge>
           </View>
-          <View style={rowStyles.info}>
-            <Text style={[rowStyles.name, { color: theme.foreground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-              {item.fullName}
-            </Text>
-            <Text style={[rowStyles.email, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-              {item.email}
-            </Text>
-            {/* Plan row */}
-            <View style={rowStyles.planRow}>
-              {item.activeProgramName ? (
-                <>
-                  <Dumbbell size={10} color={theme.mutedForeground} />
-                  <Text style={[rowStyles.planName, { color: theme.mutedForeground }]} numberOfLines={1}>
-                    {item.activeProgramName}
-                  </Text>
-                  {planLabel ? (
-                    <Text style={[rowStyles.planDays, { color: planColor }]}>· {planLabel}</Text>
-                  ) : null}
-                </>
-              ) : (
-                <>
-                  <Dumbbell size={10} color={theme.mutedForeground} />
-                  <Text style={[rowStyles.planName, { color: theme.mutedForeground }]}>Sin programa</Text>
-                </>
-              )}
-            </View>
-            {pulse ? (
-              <View style={rowStyles.metricsRow}>
-                {adherence != null ? <Text style={[rowStyles.metric, { color: adherenceColor, fontFamily: 'Inter_700Bold' }]}>{adherence}% adh</Text> : null}
-                <View style={[rowStyles.metricDot, { backgroundColor: lastColor }]} />
-                <Text style={[rowStyles.metric, { color: theme.mutedForeground }]}>{lastLabel}</Text>
-                {pulse.currentWeight != null ? (
-                  <Text style={[rowStyles.metric, { color: theme.mutedForeground }]} numberOfLines={1}>
-                    · {pulse.currentWeight}kg{pulse.weightDelta7d != null && pulse.weightDelta7d !== 0 ? ` ${pulse.weightDelta7d > 0 ? '↑' : '↓'}${Math.abs(pulse.weightDelta7d)}` : ''}
-                  </Text>
-                ) : null}
+          <View style={rowStyles.metricsRow}>
+            {adherence != null ? (
+              <Text style={[rowStyles.metricStrong, { color: theme.foreground }]}>{adherence}%</Text>
+            ) : null}
+            {adherence != null ? <Text style={[rowStyles.dotSep, { color: theme.border }]}>·</Text> : null}
+            <Text style={[rowStyles.metric, { color: theme.mutedForeground }]}>{li.label}</Text>
+            {nutriRisk ? (
+              <>
+                <Text style={[rowStyles.dotSep, { color: theme.border }]}>·</Text>
+                <Apple size={12} color={EMBER} />
+                <Text style={[rowStyles.metric, { color: EMBER }]}>{nutri}%</Text>
+              </>
+            ) : null}
+            {st.key !== 'active' ? (
+              <View style={{ marginLeft: 2 }}>
+                <Badge tone={st.tone} variant="soft" size="sm">{st.label}</Badge>
               </View>
             ) : null}
           </View>
         </View>
 
-        {/* Right: status + score + chevron */}
-        <View style={rowStyles.right}>
-          <StatusChip client={item} />
-          {/* A-F6: usar el attentionScore del pulse (autoritativo) cuando llega; si no, el local. */}
-          <ScoreBadge score={pulse?.attentionScore ?? item.attentionScore} />
-          <ChevronRight size={16} color={theme.mutedForeground} />
-        </View>
+        <ChevronRight size={18} color={theme.mutedForeground} />
       </TouchableOpacity>
     </MotiView>
   )
@@ -380,26 +354,22 @@ function ClientRow({ item, index, theme, router, pulse }: { item: DirectoryClien
 
 const rowStyles = StyleSheet.create({
   card: {
-    padding: 12,
+    padding: 14,
     borderWidth: 1,
+    borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
+    gap: 12,
   },
-  left: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
-  avatar: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 1, flexShrink: 0 },
-  avatarText: { fontSize: 16 },
-  info: { flex: 1, gap: 1, minWidth: 0 },
-  name: { fontSize: 14, fontWeight: '600' },
-  email: { fontSize: 11 },
-  planRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  planName: { fontSize: 10, flexShrink: 1 },
-  planDays: { fontSize: 10, fontWeight: '700', flexShrink: 0 },
-  metricsRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
-  metric: { fontSize: 10, flexShrink: 1 },
-  metricDot: { width: 6, height: 6, borderRadius: 3 },
-  right: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 },
+  ringWrap: { position: 'relative', flexShrink: 0 },
+  lastDot: { position: 'absolute', bottom: -1, right: -1, width: 13, height: 13, borderRadius: 7, borderWidth: 2 },
+  info: { flex: 1, gap: 4, minWidth: 0 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7, minWidth: 0 },
+  name: { fontSize: 15.5, fontFamily: 'Archivo_800ExtraBold', letterSpacing: -0.2, flexShrink: 1 },
+  metricsRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' },
+  metricStrong: { fontSize: 12, fontFamily: 'JetBrainsMono_700Bold' },
+  metric: { fontSize: 12, fontFamily: 'HankenGrotesk_500Medium' },
+  dotSep: { fontSize: 12 },
 })
 
 // ─── Sort Sheet ───────────────────────────────────────────────────────────────
@@ -420,6 +390,17 @@ const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = [
   { label: 'Cambio de contraseña pendiente', value: 'pending_sync' },
   { label: 'Archivados', value: 'archived' },
 ]
+
+const RISK_LABELS: Record<string, string> = {
+  urgent: 'Riesgo',
+  review: 'Atención',
+  on_track: 'On track',
+  expired_program: 'Programa vencido',
+  password_reset: 'Cambio de contraseña',
+  no_program: 'Sin programa',
+  with_program: 'Con programa',
+  nutrition_low: 'Nutrición baja',
+}
 
 function OptionSheet({
   visible,
@@ -442,39 +423,33 @@ function OptionSheet({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={sheetStyles.overlay} onPress={onClose} />
       <View style={[sheetStyles.sheet, { backgroundColor: theme.card }]}>
-        <View style={sheetStyles.handle} />
-        <Text style={[sheetStyles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+        <View style={[sheetStyles.handle, { backgroundColor: theme.border }]} />
+        <Text style={[sheetStyles.title, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>
           {title}
         </Text>
-        {options.map((opt) => (
-          <TouchableOpacity
-            key={opt.value}
-            style={[
-              sheetStyles.option,
-              {
-                backgroundColor: selected === opt.value ? hexToRgba(theme.primary, 0.1) : 'transparent',
-                borderRadius: theme.radius.lg,
-              },
-            ]}
-            onPress={() => { onSelect(opt.value); onClose() }}
-          >
-            <Text
-              style={[
-                sheetStyles.optionText,
-                {
-                  color: selected === opt.value ? theme.primary : theme.foreground,
-                  fontFamily: theme.fontSans,
-                  fontWeight: selected === opt.value ? '700' : '400',
-                },
-              ]}
+        {options.map((opt) => {
+          const active = selected === opt.value
+          return (
+            <TouchableOpacity
+              key={opt.value}
+              style={[sheetStyles.option, { backgroundColor: active ? theme.muted : 'transparent' }]}
+              onPress={() => { onSelect(opt.value); onClose() }}
             >
-              {opt.label}
-            </Text>
-            {selected === opt.value && (
-              <View style={[sheetStyles.checkDot, { backgroundColor: theme.primary }]} />
-            )}
-          </TouchableOpacity>
-        ))}
+              <View style={{ width: 18 }}>{active ? <Check size={16} color={theme.primary} /> : null}</View>
+              <Text
+                style={[
+                  sheetStyles.optionText,
+                  {
+                    color: theme.foreground,
+                    fontFamily: active ? 'HankenGrotesk_700Bold' : 'HankenGrotesk_500Medium',
+                  },
+                ]}
+              >
+                {opt.label}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
         <View style={{ height: 24 }} />
       </View>
     </Modal>
@@ -484,18 +459,17 @@ function OptionSheet({
 const sheetStyles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 32,
     gap: 2,
   },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#666', alignSelf: 'center', marginBottom: 16 },
-  title: { fontSize: 16, marginBottom: 8 },
-  option: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 12 },
+  handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  title: { fontSize: 18, marginBottom: 8 },
+  option: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 12 },
   optionText: { fontSize: 15 },
-  checkDot: { width: 8, height: 8, borderRadius: 4 },
 })
 
 // ─── Create Client Modal ──────────────────────────────────────────────────────
@@ -551,75 +525,49 @@ function CreateClientModal({
     }
   }
 
+  const fields: { key: keyof CreateForm; label: string; placeholder?: string }[] = [
+    { key: 'fullName', label: 'Nombre completo *' },
+    { key: 'email', label: 'Email *' },
+    { key: 'phone', label: 'Teléfono (opcional)' },
+    { key: 'tempPassword', label: 'Contraseña temporal *', placeholder: 'Min. 6 caracteres' },
+  ]
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <Pressable style={sheetStyles.overlay} onPress={onClose} />
         <View style={[createStyles.sheet, { backgroundColor: theme.card }]}>
-          <View style={sheetStyles.handle} />
+          <View style={[sheetStyles.handle, { backgroundColor: theme.border }]} />
           <View style={createStyles.header}>
-            <Text style={[createStyles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            <Text style={[createStyles.title, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>
               Nuevo Alumno
             </Text>
-            <TouchableOpacity onPress={onClose}>
+            <TouchableOpacity onPress={onClose} hitSlop={8}>
               <X size={20} color={theme.mutedForeground} />
             </TouchableOpacity>
           </View>
 
           {error && (
-            <View style={[createStyles.errorBox, { backgroundColor: '#EF444418', borderColor: '#EF444440' }]}>
-              <Text style={createStyles.errorText}>{error}</Text>
+            <View style={[createStyles.errorBox, { backgroundColor: DANGER + '18', borderColor: DANGER + '40' }]}>
+              <Text style={[createStyles.errorText, { color: DANGER }]}>{error}</Text>
             </View>
           )}
 
-          {(['fullName', 'email', 'phone', 'tempPassword'] as (keyof CreateForm)[]).map((field) => {
-            const labels: Record<keyof CreateForm, string> = {
-              fullName: 'Nombre completo *',
-              email: 'Email *',
-              phone: 'Teléfono (opcional)',
-              tempPassword: 'Contraseña temporal *',
-            }
-            return (
-              <View key={field} style={createStyles.fieldWrap}>
-                <Text style={[createStyles.label, { color: theme.mutedForeground }]}>{labels[field]}</Text>
-                <TextInput
-                  style={[
-                    createStyles.input,
-                    {
-                      backgroundColor: theme.secondary,
-                      borderColor: theme.border,
-                      color: theme.foreground,
-                      fontFamily: theme.fontSans,
-                      borderRadius: theme.radius.lg,
-                    },
-                  ]}
-                  value={form[field]}
-                  onChangeText={(v) => setForm((f) => ({ ...f, [field]: v }))}
-                  placeholder={field === 'tempPassword' ? 'Min. 6 caracteres' : ''}
-                  placeholderTextColor={theme.mutedForeground}
-                  autoCapitalize={field === 'email' ? 'none' : field === 'tempPassword' ? 'none' : 'words'}
-                  keyboardType={field === 'email' ? 'email-address' : field === 'phone' ? 'phone-pad' : 'default'}
-                  secureTextEntry={field === 'tempPassword'}
-                  autoCorrect={false}
-                />
-              </View>
-            )
-          })}
+          {fields.map(({ key, label, placeholder }) => (
+            <Input
+              key={key}
+              label={label}
+              value={form[key]}
+              onChangeText={(v) => setForm((f) => ({ ...f, [key]: v }))}
+              placeholder={placeholder}
+              autoCapitalize={key === 'fullName' ? 'words' : 'none'}
+              keyboardType={key === 'email' ? 'email-address' : key === 'phone' ? 'phone-pad' : 'default'}
+              secureTextEntry={key === 'tempPassword'}
+              autoCorrect={false}
+            />
+          ))}
 
-          <TouchableOpacity
-            style={[
-              createStyles.btn,
-              { backgroundColor: theme.primary, opacity: loading ? 0.7 : 1, borderRadius: theme.radius.xl },
-            ]}
-            onPress={handleSubmit}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={[createStyles.btnText, { fontFamily: 'Montserrat_700Bold' }]}>Crear Alumno</Text>
-            )}
-          </TouchableOpacity>
+          <Button label={loading ? 'Creando…' : 'Crear Alumno'} variant="sport" size="lg" full loading={loading} disabled={loading} onPress={handleSubmit} />
           <View style={{ height: 12 }} />
         </View>
       </KeyboardAvoidingView>
@@ -629,21 +577,16 @@ function CreateClientModal({
 
 const createStyles = StyleSheet.create({
   sheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: 20,
     paddingTop: 12,
     gap: 12,
   },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  title: { fontSize: 18 },
-  errorBox: { borderRadius: 10, borderWidth: 1, padding: 12 },
-  errorText: { color: '#EF4444', fontSize: 13 },
-  fieldWrap: { gap: 4 },
-  label: { fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  input: { height: 44, borderWidth: 1, paddingHorizontal: 14, fontSize: 15 },
-  btn: { height: 50, alignItems: 'center', justifyContent: 'center' },
-  btnText: { color: '#fff', fontSize: 14, letterSpacing: 1, textTransform: 'uppercase' },
+  title: { fontSize: 20 },
+  errorBox: { borderRadius: 12, borderWidth: 1, padding: 12 },
+  errorText: { fontSize: 13, fontFamily: 'HankenGrotesk_600SemiBold' },
 })
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
@@ -737,16 +680,22 @@ export default function ClientesScreen() {
   }
 
   const hasActiveFilters = riskFilter !== 'all' || statusFilter !== 'any'
+  const activeFilterCount = (riskFilter !== 'all' ? 1 : 0) + (statusFilter !== 'any' ? 1 : 0)
   const sortLabel = SORT_OPTIONS.find((o) => o.value === sortKey)?.label ?? 'Urgencia'
 
-  const STAT_TILES = [
-    { key: 'total', label: 'Total', value: stats.total, icon: Users, color: '#6B7280', filter: 'all' as DirectoryRiskFilter },
-    { key: 'active', label: 'Activos', value: stats.active, icon: ShieldCheck, color: '#10B981', filter: 'all' as DirectoryRiskFilter },
-    { key: 'review', label: 'Atención', value: stats.reviewCount, icon: AlertTriangle, color: '#F59E0B', filter: 'review' as DirectoryRiskFilter, sub: '⚠️ ' },
-    { key: 'urgent', label: 'Riesgo', value: stats.urgentCount, icon: Flame, color: '#EF4444', filter: 'urgent' as DirectoryRiskFilter, sub: '🔴 ' },
-    { key: 'ontrack', label: 'On track', value: stats.onTrackCount, icon: LayoutGrid, color: '#3B82F6', filter: 'on_track' as DirectoryRiskFilter },
-    { key: 'noprogram', label: 'Sin plan', value: stats.noProgramCount, icon: Dumbbell, color: '#8B5CF6', filter: 'no_program' as DirectoryRiskFilter },
+  // Pulso de prioridad (2 números jerárquicos) — botones-filtro de riesgo.
+  const pulseTiles = [
+    { key: 'urgent', label: 'Riesgo', value: stats.urgentCount, filter: 'urgent' as DirectoryRiskFilter, tone: 'danger' as const, icon: AlertOctagon, hint: stats.urgentCount ? (stats.urgentCount === 1 ? 'Necesita atención hoy' : 'Necesitan atención hoy') : 'Todo en orden' },
+    { key: 'review', label: 'Atención', value: stats.reviewCount, filter: 'review' as DirectoryRiskFilter, tone: 'warning' as const, icon: AlertTriangle, hint: stats.reviewCount ? 'Para revisar pronto' : 'Sin pendientes' },
   ]
+  // Métricas secundarias — grilla de 4 (todo en una pantalla).
+  const metricTiles = [
+    { key: 'total', label: 'Total', value: stats.total, filter: 'all' as DirectoryRiskFilter, color: theme.foreground },
+    { key: 'active', label: 'Activos', value: stats.active, filter: 'all' as DirectoryRiskFilter, color: theme.primary },
+    { key: 'ontrack', label: 'On track', value: stats.onTrackCount, filter: 'on_track' as DirectoryRiskFilter, color: SUCCESS },
+    { key: 'noprogram', label: 'Sin plan', value: stats.noProgramCount, filter: 'no_program' as DirectoryRiskFilter, color: theme.mutedForeground },
+  ]
+  const toggleRisk = (f: DirectoryRiskFilter) => setRiskFilter(riskFilter === f ? 'all' : f)
 
   // ── Acciones rápidas por alumno ──────────────────────────────────────────
   function handleWhatsApp(c: DirectoryClient) {
@@ -800,48 +749,84 @@ export default function ClientesScreen() {
   const goWorkout = (c: DirectoryClient) => router.push(`/coach/program-builder?clientId=${c.id}&clientName=${encodeURIComponent(c.fullName)}`)
   const goNutrition = () => router.push('/coach/nutricion')
 
+  const chips: { key: string; label: string; onClear: () => void }[] = []
+  if (riskFilter !== 'all') chips.push({ key: 'risk', label: RISK_LABELS[riskFilter] ?? riskFilter, onClear: () => setRiskFilter('all') })
+  if (statusFilter !== 'any') chips.push({ key: 'status', label: STATUS_OPTIONS.find((o) => o.value === statusFilter)?.label ?? statusFilter, onClear: () => setStatusFilter('any') })
+
   const headerNode = (
     <>
-      <View style={styles.statsGrid}>
-        {STAT_TILES.map((tile) => (
-          <StatTile key={tile.key} value={tile.value} label={tile.label} icon={tile.icon} color={tile.color}
-            selected={riskFilter === tile.filter && tile.filter !== 'all'}
-            onPress={() => setRiskFilter(riskFilter === tile.filter ? 'all' : tile.filter)} sub={tile.sub} />
-        ))}
+      {/* Resumen · hoy — pulso de prioridad + métricas secundarias */}
+      <View style={styles.summary}>
+        <Text style={[styles.eyebrow, { color: theme.mutedForeground }]}>Resumen · hoy</Text>
+        <View style={styles.pulseRow}>
+          {pulseTiles.map((t) => (
+            <PulseCard key={t.key} label={t.label} value={t.value} hint={t.hint} tone={t.tone} icon={t.icon}
+              selected={riskFilter === t.filter} onPress={() => toggleRisk(t.filter)} />
+          ))}
+        </View>
+        <View style={styles.metricRow}>
+          {metricTiles.map((t) => (
+            <MetricChip key={t.key} label={t.label} value={t.value} color={t.color}
+              selected={riskFilter === t.filter && t.filter !== 'all'}
+              onPress={t.filter === 'all' ? () => setRiskFilter('all') : () => toggleRisk(t.filter)} />
+          ))}
+        </View>
       </View>
+
+      {/* Alert banners */}
       {urgentBanner && !isDismissed('urgent', stats.urgentCount) && (
-        <AlertBanner message={`🔴 ${stats.urgentCount} alumno${stats.urgentCount !== 1 ? 's' : ''} con atención urgente`} color="#EF4444" onPress={() => setRiskFilter('urgent')} onDismiss={() => dismissAlert('urgent', stats.urgentCount)} />
+        <AlertBanner message={`${stats.urgentCount} alumno${stats.urgentCount !== 1 ? 's' : ''} con atención urgente`} color={DANGER} onPress={() => setRiskFilter('urgent')} onDismiss={() => dismissAlert('urgent', stats.urgentCount)} />
       )}
       {expiredBanner && !isDismissed('expired', stats.expiredProgramCount) && (
-        <AlertBanner message={`${stats.expiredProgramCount} programa${stats.expiredProgramCount !== 1 ? 's' : ''} vencido${stats.expiredProgramCount !== 1 ? 's' : ''}`} color="#F97316" onPress={() => setRiskFilter('expired_program')} onDismiss={() => dismissAlert('expired', stats.expiredProgramCount)} />
+        <AlertBanner message={`${stats.expiredProgramCount} programa${stats.expiredProgramCount !== 1 ? 's' : ''} vencido${stats.expiredProgramCount !== 1 ? 's' : ''}`} color={WARNING} onPress={() => setRiskFilter('expired_program')} onDismiss={() => dismissAlert('expired', stats.expiredProgramCount)} />
       )}
       {syncBanner && !isDismissed('sync', stats.pendingSyncCount) && (
-        <AlertBanner message={`${stats.pendingSyncCount} alumno${stats.pendingSyncCount !== 1 ? 's' : ''} con cambio de contraseña pendiente`} color="#F59E0B" onPress={() => setRiskFilter('password_reset')} onDismiss={() => dismissAlert('sync', stats.pendingSyncCount)} />
+        <AlertBanner message={`${stats.pendingSyncCount} alumno${stats.pendingSyncCount !== 1 ? 's' : ''} con cambio de contraseña pendiente`} color={INFO} onPress={() => setRiskFilter('password_reset')} onDismiss={() => dismissAlert('sync', stats.pendingSyncCount)} />
       )}
       {nutritionLowCount > 0 && !isDismissed('nutrition_low', nutritionLowCount) && (
-        <AlertBanner message={`🥗 ${nutritionLowCount} alumno${nutritionLowCount !== 1 ? 's' : ''} con adherencia nutricional baja`} color="#10B981" onPress={() => setRiskFilter('nutrition_low')} onDismiss={() => dismissAlert('nutrition_low', nutritionLowCount)} />
+        <AlertBanner message={`${nutritionLowCount} alumno${nutritionLowCount !== 1 ? 's' : ''} con adherencia nutricional baja`} color={EMBER} onPress={() => setRiskFilter('nutrition_low')} onDismiss={() => dismissAlert('nutrition_low', nutritionLowCount)} />
       )}
       {pulseError && (
-        <TouchableOpacity activeOpacity={0.85} onPress={loadPulse} style={[styles.pulseErr, { backgroundColor: '#EF444414', borderColor: '#EF444440' }]}>
-          <Text style={[styles.pulseErrTxt, { color: '#EF4444', fontFamily: 'Inter_600SemiBold' }]}>No se pudieron cargar las métricas (peso/adherencia).</Text>
-          <Text style={[styles.pulseErrAction, { color: '#EF4444', fontFamily: 'Inter_700Bold' }]}>Reintentar</Text>
+        <TouchableOpacity activeOpacity={0.85} onPress={loadPulse} style={[styles.pulseErr, { backgroundColor: DANGER + '14', borderColor: DANGER + '40' }]}>
+          <Text style={[styles.pulseErrTxt, { color: DANGER }]}>No se pudieron cargar las métricas (peso/adherencia).</Text>
+          <Text style={[styles.pulseErrAction, { color: DANGER }]}>Reintentar</Text>
         </TouchableOpacity>
       )}
+
+      {/* Active filter chips */}
+      {chips.length > 0 && (
+        <View style={styles.chipRow}>
+          {chips.map((c) => (
+            <TouchableOpacity key={c.key} style={[styles.filterChip, { backgroundColor: theme.foreground }]} onPress={c.onClear} activeOpacity={0.85}>
+              <Text style={[styles.filterChipText, { color: theme.card }]}>{c.label}</Text>
+              <X size={12} color={theme.card} />
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity onPress={() => { setRiskFilter('all'); setStatusFilter('any') }} activeOpacity={0.7}>
+            <Text style={[styles.clearLink, { color: theme.mutedForeground }]}>Limpiar</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Sort label / result count */}
       <View style={styles.sortRow}>
-        <Text style={[styles.sortLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          {displayed.length} resultado{displayed.length !== 1 ? 's' : ''} · Orden: {sortLabel} ({sortDir === 'asc' ? '↑' : '↓'})
+        <Text style={[styles.sortLabel, { color: theme.mutedForeground }]}>
+          {displayed.length} resultado{displayed.length !== 1 ? 's' : ''} <Text style={{ color: theme.border }}>·</Text> {sortLabel} ({sortDir === 'asc' ? '↑' : '↓'})
         </Text>
       </View>
     </>
   )
+
   const emptyNode = (
     <View style={styles.emptyWrap}>
-      <Users size={36} color={theme.mutedForeground} strokeWidth={1.5} />
-      <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+      <View style={[styles.emptyIcon, { backgroundColor: hexToRgba(theme.primary, 0.1) }]}>
+        <Users size={32} color={theme.primary} strokeWidth={1.75} />
+      </View>
+      <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Archivo_900Black' }]}>
         {search || hasActiveFilters ? 'Sin resultados' : 'Sin alumnos aún'}
       </Text>
       <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-        {search || hasActiveFilters ? 'Probá ajustando los filtros o la búsqueda.' : 'Usa el botón + para agregar tu primer alumno.'}
+        {search || hasActiveFilters ? 'Probá ajustando los filtros o la búsqueda.' : 'Usá el botón Nuevo alumno para agregar tu primer alumno.'}
       </Text>
     </View>
   )
@@ -865,48 +850,25 @@ export default function ClientesScreen() {
 
       {/* Search + action bar */}
       <View style={styles.actionBar}>
-        <View
-          style={[
-            styles.searchWrap,
-            { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg },
-          ]}
-        >
-          <Search size={15} color={theme.mutedForeground} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.foreground, fontFamily: theme.fontSans }]}
-            placeholder="Buscar alumno..."
-            placeholderTextColor={theme.mutedForeground}
-            value={search}
-            onChangeText={setSearch}
-            clearButtonMode="while-editing"
-          />
-        </View>
-        <TouchableOpacity
-          style={[styles.iconBtn, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}
-          onPress={toggleView}
-        >
-          {viewMode === 'list' ? <LayoutGrid size={18} color={theme.mutedForeground} /> : <ListIcon size={18} color={theme.mutedForeground} />}
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.iconBtn,
-            {
-              backgroundColor: hasActiveFilters ? hexToRgba(theme.primary, 0.15) : theme.secondary,
-              borderColor: hasActiveFilters ? theme.primary : theme.border,
-              borderRadius: theme.radius.lg,
-            },
-          ]}
-          onPress={() => setShowFilterSheet(true)}
-        >
+        <Input
+          leftIcon={Search}
+          placeholder="Buscar alumno..."
+          value={search}
+          onChangeText={setSearch}
+          clearButtonMode="while-editing"
+          autoCapitalize="none"
+          autoCorrect={false}
+          containerStyle={{ flex: 1 }}
+        />
+        <BarButton theme={theme} onPress={() => setShowFilterSheet(true)} active={hasActiveFilters} badge={activeFilterCount}>
           <SlidersHorizontal size={18} color={hasActiveFilters ? theme.primary : theme.mutedForeground} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.iconBtn, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}
-          onPress={() => setShowSortSheet(true)}
-          onLongPress={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-        >
-          <RefreshCw size={16} color={theme.mutedForeground} />
-        </TouchableOpacity>
+        </BarButton>
+        <BarButton theme={theme} onPress={() => setShowSortSheet(true)} onLongPress={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}>
+          <ArrowUpDown size={18} color={theme.mutedForeground} />
+        </BarButton>
+        <BarButton theme={theme} onPress={toggleView}>
+          {viewMode === 'list' ? <LayoutGrid size={18} color={theme.mutedForeground} /> : <ListIcon size={18} color={theme.mutedForeground} />}
+        </BarButton>
       </View>
 
       {viewMode === 'cards' ? (
@@ -939,110 +901,19 @@ export default function ClientesScreen() {
           ListEmptyComponent={emptyNode}
         />
       ) : (
-      <FlatList
-        data={displayed}
-        keyExtractor={(c) => c.id}
-        renderItem={({ item, index }) => (
-          <ClientRow item={item} index={index} theme={theme} router={router} pulse={pulseById.get(item.id)} />
-        )}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        onRefresh={() => load(true)}
-        refreshing={refreshing}
-        ListHeaderComponent={
-          <>
-            {/* Stats grid */}
-            <View style={styles.statsGrid}>
-              {STAT_TILES.map((tile) => (
-                <StatTile
-                  key={tile.key}
-                  value={tile.value}
-                  label={tile.label}
-                  icon={tile.icon}
-                  color={tile.color}
-                  selected={riskFilter === tile.filter && tile.filter !== 'all'}
-                  onPress={() => setRiskFilter(riskFilter === tile.filter ? 'all' : tile.filter)}
-                  sub={tile.sub}
-                />
-              ))}
-            </View>
-
-            {/* Alert banners */}
-            {urgentBanner && !isDismissed('urgent', stats.urgentCount) && (
-              <AlertBanner
-                message={`🔴 ${stats.urgentCount} alumno${stats.urgentCount !== 1 ? 's' : ''} con atención urgente`}
-                color="#EF4444"
-                onPress={() => setRiskFilter('urgent')}
-                onDismiss={() => dismissAlert('urgent', stats.urgentCount)}
-              />
-            )}
-            {expiredBanner && !isDismissed('expired', stats.expiredProgramCount) && (
-              <AlertBanner
-                message={`${stats.expiredProgramCount} programa${stats.expiredProgramCount !== 1 ? 's' : ''} vencido${stats.expiredProgramCount !== 1 ? 's' : ''}`}
-                color="#F97316"
-                onPress={() => setRiskFilter('expired_program')}
-                onDismiss={() => dismissAlert('expired', stats.expiredProgramCount)}
-              />
-            )}
-            {syncBanner && !isDismissed('sync', stats.pendingSyncCount) && (
-              <AlertBanner
-                message={`${stats.pendingSyncCount} alumno${stats.pendingSyncCount !== 1 ? 's' : ''} con cambio de contraseña pendiente`}
-                color="#F59E0B"
-                onPress={() => setRiskFilter('password_reset')}
-                onDismiss={() => dismissAlert('sync', stats.pendingSyncCount)}
-              />
-            )}
-
-            {/* Active filter chips */}
-            {hasActiveFilters && (
-              <View style={styles.chipRow}>
-                {riskFilter !== 'all' && (
-                  <TouchableOpacity
-                    style={[styles.filterChip, { borderColor: hexToRgba(theme.primary, 0.3), backgroundColor: hexToRgba(theme.primary, 0.1) }]}
-                    onPress={() => setRiskFilter('all')}
-                  >
-                    <Text style={[styles.filterChipText, { color: theme.primary }]}>
-                      {riskFilter}
-                    </Text>
-                    <X size={11} color={theme.primary} />
-                  </TouchableOpacity>
-                )}
-                {statusFilter !== 'any' && (
-                  <TouchableOpacity
-                    style={[styles.filterChip, { borderColor: hexToRgba(theme.primary, 0.3), backgroundColor: hexToRgba(theme.primary, 0.1) }]}
-                    onPress={() => setStatusFilter('any')}
-                  >
-                    <Text style={[styles.filterChipText, { color: theme.primary }]}>
-                      {STATUS_OPTIONS.find((o) => o.value === statusFilter)?.label}
-                    </Text>
-                    <X size={11} color={theme.primary} />
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-
-            {/* Sort label */}
-            <View style={styles.sortRow}>
-              <Text style={[styles.sortLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                {displayed.length} resultado{displayed.length !== 1 ? 's' : ''} · Orden: {sortLabel}
-              </Text>
-            </View>
-          </>
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <Users size={36} color={theme.mutedForeground} strokeWidth={1.5} />
-            <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-              {search || hasActiveFilters ? 'Sin resultados' : 'Sin alumnos aún'}
-            </Text>
-            <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              {search || hasActiveFilters
-                ? 'Probá ajustando los filtros o la búsqueda.'
-                : 'Usa el botón + para agregar tu primer alumno.'}
-            </Text>
-          </View>
-        }
-      />
+        <FlatList
+          data={displayed}
+          keyExtractor={(c) => c.id}
+          renderItem={({ item, index }) => (
+            <ClientRow item={item} index={index} theme={theme} router={router} pulse={pulseById.get(item.id)} />
+          )}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          onRefresh={() => load(true)}
+          refreshing={refreshing}
+          ListHeaderComponent={headerNode}
+          ListEmptyComponent={emptyNode}
+        />
       )}
 
       {/* A-F14: FAB secundario Importar (paste CSV) */}
@@ -1054,13 +925,14 @@ export default function ClientesScreen() {
         <Upload size={20} color={theme.primary} />
       </TouchableOpacity>
 
-      {/* FAB: Nuevo Alumno */}
+      {/* FAB: Nuevo Alumno (pill extendido, acción primaria) */}
       <TouchableOpacity
-        style={[styles.fab, { backgroundColor: theme.primary }]}
+        style={[styles.fab, { backgroundColor: theme.primary }, theme.shadowGlowBlue]}
         onPress={() => setShowCreate(true)}
-        activeOpacity={0.85}
+        activeOpacity={0.9}
       >
-        <UserPlus size={22} color="#fff" />
+        <UserPlus size={19} color="#fff" />
+        <Text style={styles.fabLabel}>Nuevo alumno</Text>
       </TouchableOpacity>
 
       {/* Sheets */}
@@ -1093,6 +965,45 @@ export default function ClientesScreen() {
         <ImportClientsForm theme={theme} onDone={() => { setShowImport(false); load() }} onCancel={() => setShowImport(false)} />
       </NativeDialog>
     </SafeAreaView>
+  )
+}
+
+// Botón de la barra de acción (Filtros / Orden / Vista) — DS rounded-control.
+function BarButton({
+  theme,
+  onPress,
+  onLongPress,
+  active,
+  badge,
+  children,
+}: {
+  theme: any
+  onPress: () => void
+  onLongPress?: () => void
+  active?: boolean
+  badge?: number
+  children: React.ReactNode
+}) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.barBtn,
+        {
+          backgroundColor: active ? hexToRgba(theme.primary, 0.12) : theme.card,
+          borderColor: active ? theme.primary : theme.border,
+        },
+      ]}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      activeOpacity={0.75}
+    >
+      {children}
+      {badge != null && badge > 0 ? (
+        <View style={[styles.barBadge, { backgroundColor: theme.primary, borderColor: theme.card }]}>
+          <Text style={styles.barBadgeTxt}>{badge}</Text>
+        </View>
+      ) : null}
+    </TouchableOpacity>
   )
 }
 
@@ -1156,7 +1067,7 @@ function ImportClientsForm({ theme, onDone, onCancel }: { theme: any; onDone: ()
   if (result) {
     return (
       <View style={{ gap: 12 }}>
-        <Text style={{ color: theme.foreground, fontFamily: 'Montserrat_700Bold', fontSize: 16 }}>{result.ok} creados · {result.fail} con error</Text>
+        <Text style={{ color: theme.foreground, fontFamily: 'Archivo_800ExtraBold', fontSize: 16 }}>{result.ok} creados · {result.fail} con error</Text>
         {result.errors.map((e, i) => <Text key={i} style={{ color: theme.destructive, fontSize: 12 }}>{e}</Text>)}
         <Button label="Listo" onPress={onDone} full />
       </View>
@@ -1168,7 +1079,7 @@ function ImportClientsForm({ theme, onDone, onCancel }: { theme: any; onDone: ()
   return (
     <View style={{ gap: 12 }}>
       <Text style={{ color: theme.mutedForeground, fontFamily: theme.fontSans, fontSize: 12.5 }}>
-        Subí un CSV con columnas <Text style={{ fontFamily: 'Inter_700Bold' }}>nombre,email,telefono</Text> (una fila por alumno) o pegá el texto. Cada alumno recibe una contraseña temporal.
+        Subí un CSV con columnas <Text style={{ fontFamily: 'HankenGrotesk_700Bold' }}>nombre,email,telefono</Text> (una fila por alumno) o pegá el texto. Cada alumno recibe una contraseña temporal.
       </Text>
 
       <Button label={fileName ? `Archivo: ${fileName}` : 'Subir CSV'} variant="outline" leftIcon={Upload} onPress={pickFile} full />
@@ -1184,21 +1095,21 @@ function ImportClientsForm({ theme, onDone, onCancel }: { theme: any; onDone: ()
 
       {rows.length ? (
         <View style={{ gap: 6 }}>
-          <Text style={{ color: theme.foreground, fontSize: 12.5, fontFamily: 'Inter_700Bold' }}>
+          <Text style={{ color: theme.foreground, fontSize: 12.5, fontFamily: 'HankenGrotesk_700Bold' }}>
             {validRows.length} válido(s){invalidCount ? ` · ${invalidCount} con error` : ''}
           </Text>
           {previewRows.map((r, i) => (
             <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: r.valid ? theme.border : theme.destructive + '55', borderRadius: theme.radius.md, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: r.valid ? 'transparent' : theme.destructive + '0D' }}>
-              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: r.valid ? '#10B981' : theme.destructive }} />
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: r.valid ? SUCCESS : theme.destructive }} />
               <Text numberOfLines={1} style={{ flex: 1, color: theme.foreground, fontSize: 12.5, fontFamily: theme.fontSans }}>
                 {r.name || '(sin nombre)'} · {r.email || '(sin email)'}
               </Text>
-              {!r.valid ? <Text style={{ color: theme.destructive, fontSize: 11, fontFamily: 'Inter_600SemiBold' }}>{r.error}</Text> : null}
+              {!r.valid ? <Text style={{ color: theme.destructive, fontSize: 11, fontFamily: 'HankenGrotesk_600SemiBold' }}>{r.error}</Text> : null}
             </View>
           ))}
           {rows.length > 6 ? (
             <TouchableOpacity onPress={() => setShowAll((v) => !v)} activeOpacity={0.7}>
-              <Text style={{ color: theme.primary, fontSize: 12.5, fontFamily: 'Inter_600SemiBold' }}>{showAll ? 'Ver menos' : `Ver tabla completa (${rows.length})`}</Text>
+              <Text style={{ color: theme.primary, fontSize: 12.5, fontFamily: 'HankenGrotesk_600SemiBold' }}>{showAll ? 'Ver menos' : `Ver tabla completa (${rows.length})`}</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -1206,7 +1117,7 @@ function ImportClientsForm({ theme, onDone, onCancel }: { theme: any; onDone: ()
 
       <TouchableOpacity activeOpacity={0.82} onPress={() => setAgeOk((v) => !v)} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.lg, padding: 12, backgroundColor: theme.secondary }}>
         <View style={{ width: 22, height: 22, borderRadius: 6, borderWidth: 1, borderColor: ageOk ? theme.primary : theme.border, backgroundColor: ageOk ? theme.primary : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-          {ageOk ? <X size={14} color="#fff" /> : null}
+          {ageOk ? <Check size={14} color="#fff" /> : null}
         </View>
         <Text style={{ color: theme.mutedForeground, fontSize: 12.5, flex: 1, fontFamily: theme.fontSans }}>Alumnos 14+ o con consentimiento de tutor legal.</Text>
       </TouchableOpacity>
@@ -1227,27 +1138,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 10,
   },
-  searchWrap: {
-    flex: 1,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
+  barBtn: {
+    width: 48,
+    height: 48,
     alignItems: 'center',
-    gap: 8,
-    height: 40,
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderRadius: 14,
   },
-  searchInput: { flex: 1, height: 40, fontSize: 14 },
-  iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+  barBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  barBadgeTxt: { color: '#fff', fontSize: 10, fontFamily: 'HankenGrotesk_800ExtraBold' },
+  summary: { paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
+  eyebrow: { fontSize: 11, fontFamily: 'HankenGrotesk_800ExtraBold', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 },
+  pulseRow: { flexDirection: 'row', gap: 8 },
+  metricRow: { flexDirection: 'row', gap: 6 },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 8,
     paddingHorizontal: 16,
     paddingBottom: 8,
@@ -1256,41 +1175,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    borderRadius: 999,
+    paddingLeft: 12,
+    paddingRight: 9,
+    paddingVertical: 6,
   },
-  filterChipText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4 },
-  sortRow: { paddingHorizontal: 16, paddingBottom: 8 },
-  sortLabel: { fontSize: 11 },
-  pulseErr: { marginHorizontal: 16, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
-  pulseErrTxt: { fontSize: 12, flexShrink: 1 },
-  pulseErrAction: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4 },
-  list: { paddingHorizontal: 16, paddingBottom: 100, gap: 8 },
-  cardsList: { paddingHorizontal: 16, paddingBottom: 140 },
-  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 32, paddingTop: 40 },
-  emptyTitle: { fontSize: 18 },
+  filterChipText: { fontSize: 12.5, fontFamily: 'HankenGrotesk_600SemiBold' },
+  clearLink: { fontSize: 12.5, fontFamily: 'HankenGrotesk_700Bold', textDecorationLine: 'underline' },
+  sortRow: { paddingHorizontal: 18, paddingBottom: 10 },
+  sortLabel: { fontSize: 12, fontFamily: 'HankenGrotesk_500Medium' },
+  pulseErr: { marginHorizontal: 16, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10 },
+  pulseErrTxt: { fontSize: 12, flexShrink: 1, fontFamily: 'HankenGrotesk_600SemiBold' },
+  pulseErrAction: { fontSize: 12, fontFamily: 'HankenGrotesk_700Bold', textTransform: 'uppercase', letterSpacing: 0.4 },
+  list: { paddingHorizontal: 16, paddingBottom: 120, gap: 8 },
+  cardsList: { paddingHorizontal: 16, paddingBottom: 150 },
+  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 32, paddingTop: 48 },
+  emptyIcon: { width: 72, height: 72, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  emptyTitle: { fontSize: 22, letterSpacing: -0.5 },
   emptySub: { fontSize: 13, textAlign: 'center', lineHeight: 20 },
   fab: {
     position: 'absolute',
-    right: 20,
-    bottom: 80,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    right: 16,
+    bottom: 84,
+    height: 50,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    gap: 8,
   },
+  fabLabel: { color: '#fff', fontSize: 15, fontFamily: 'HankenGrotesk_700Bold' },
   fabSecondary: {
     position: 'absolute',
     right: 24,
-    bottom: 142,
+    bottom: 146,
     width: 44,
     height: 44,
     borderRadius: 22,

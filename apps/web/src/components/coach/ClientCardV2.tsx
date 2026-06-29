@@ -20,7 +20,8 @@ import { differenceInDays } from 'date-fns'
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
 import { Area, AreaChart, ResponsiveContainer } from 'recharts'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -65,7 +66,7 @@ function SparkArea({
 }) {
     if (!data.length) {
         return (
-            <div className="flex h-8 items-center text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+            <div className="flex h-8 items-center text-[9px] font-bold uppercase tracking-widest text-muted">
                 Sin datos
             </div>
         )
@@ -101,38 +102,43 @@ function lastLogMeta(dateStr: string | null | undefined) {
 }
 
 function dotClass(days: number) {
-    if (days < 3) return 'bg-emerald-500'
-    if (days < 7) return 'bg-amber-500'
-    return 'bg-red-500 animate-pulse'
+    if (days < 3) return 'bg-[var(--success-500)]'
+    if (days < 7) return 'bg-[var(--warning-500)]'
+    return 'bg-[var(--danger-500)] animate-pulse'
 }
 
 function ClientCardV2AttentionBadge({ score, streak }: { score: number; streak: number }) {
     if (score >= 50) {
         return (
-            <span className="inline-flex shrink-0 animate-pulse items-center rounded-md border border-rose-500/30 bg-rose-500/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-rose-500">
+            <Badge tone="danger" variant="soft" size="sm" className="animate-pulse uppercase tracking-widest">
                 Atención urgente
-            </span>
+            </Badge>
         )
     }
     if (score >= 25) {
         return (
-            <span className="inline-flex shrink-0 items-center rounded-md border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-amber-500">
+            <Badge tone="warning" variant="soft" size="sm" className="uppercase tracking-widest">
                 Revisar
-            </span>
+            </Badge>
         )
     }
     if (score === 0 && streak > 10) {
         return (
-            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-emerald-500">
-                <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+            <Badge
+                tone="success"
+                variant="soft"
+                size="sm"
+                className="uppercase tracking-widest"
+                icon={<Star className="fill-[var(--warning-500)] text-[var(--warning-500)]" />}
+            >
                 Destacado
-            </span>
+            </Badge>
         )
     }
     return (
-        <span className="inline-flex shrink-0 items-center rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+        <Badge tone="success" variant="soft" size="sm" className="uppercase tracking-widest">
             On track
-        </span>
+        </Badge>
     )
 }
 
@@ -179,7 +185,11 @@ export function ClientCardV2({
         :   0
 
     const ringColor =
-        adherencePct > 80 ? '#10B981' : adherencePct > 50 ? '#F59E0B' : '#EF4444'
+        adherencePct > 80
+            ? 'var(--success-500)'
+            : adherencePct > 50
+              ? 'var(--warning-500)'
+              : 'var(--danger-500)'
 
     const [deleteOpen, setDeleteOpen] = useState(false)
     const [delErr, setDelErr] = useState<string>()
@@ -214,11 +224,12 @@ export function ClientCardV2({
                 transition: { type: 'spring', stiffness: 350, damping: 28 },
             }}
         >
-            <GlassCard
-                hoverEffect
-                className="group relative overflow-visible border-border bg-white/80 p-0 dark:border-white/5 dark:bg-zinc-950/40"
+            <Card
+                interactive
+                padding="none"
+                className="group relative overflow-visible"
             >
-                <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_0%_0%,color-mix(in_srgb,var(--theme-primary),transparent_97%),transparent_70%)] dark:bg-[radial-gradient(circle_at_0%_0%,color-mix(in_srgb,var(--theme-primary),transparent_85%),transparent_75%)] pointer-events-none" />
+                <div className="absolute inset-0 rounded-card bg-[radial-gradient(circle_at_0%_0%,color-mix(in_srgb,var(--sport-500),transparent_94%),transparent_70%)] pointer-events-none" />
 
                 <div className="relative z-10 space-y-4 p-5 md:p-6">
                     <div className="flex gap-4">
@@ -237,12 +248,12 @@ export function ClientCardV2({
                                 strokeWidth={6}
                                 styles={buildStyles({
                                     pathColor: ringColor,
-                                    trailColor: 'rgba(255,255,255,0.08)',
+                                    trailColor: 'var(--track)',
                                     strokeLinecap: 'round',
                                 })}
                             />
                             <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="font-display text-xl font-black uppercase text-foreground">
+                                <span className="font-display text-xl font-black uppercase text-strong">
                                     {client.full_name?.[0] ?? '?'}
                                 </span>
                             </div>
@@ -254,13 +265,13 @@ export function ClientCardV2({
                                     <div className="flex flex-wrap items-center gap-2">
                                         <Link
                                             href={profileHref}
-                                            className="font-display text-base font-black uppercase tracking-tighter text-foreground hover:text-primary truncate"
+                                            className="font-display text-base font-black uppercase tracking-tighter text-strong hover:text-sport-600 truncate"
                                         >
                                             {client.full_name}
                                         </Link>
                                         {pulse ? <ClientCardV2AttentionBadge score={score} streak={streak} /> : null}
                                     </div>
-                                    <p className="truncate text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                    <p className="truncate text-[10px] font-bold uppercase tracking-widest text-subtle">
                                         {client.email}
                                     </p>
                                 </div>
@@ -277,7 +288,7 @@ export function ClientCardV2({
                                     <button
                                         type="button"
                                         onClick={() => setDeleteOpen(true)}
-                                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-rose-500/30 bg-rose-500/10 px-0 text-rose-500 shadow-sm transition-colors hover:bg-rose-500 hover:text-white dark:border-rose-500/40 dark:bg-rose-500/20 dark:hover:bg-rose-500"
+                                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control border border-[color:var(--danger-500)]/30 bg-[var(--danger-100)] px-0 text-[var(--danger-600)] shadow-[var(--shadow-xs)] transition-colors hover:bg-[var(--danger-500)] hover:text-white"
                                         aria-label="Eliminar alumno"
                                         title="Eliminar alumno"
                                     >
@@ -286,16 +297,16 @@ export function ClientCardV2({
                                     <DropdownMenu modal={false}>
                                         <DropdownMenuTrigger
                                             type="button"
-                                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-muted/50 px-0 text-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground dark:border-white/10 dark:bg-white/10 dark:hover:bg-white/[0.14]"
+                                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control border border-subtle bg-surface-sunken px-0 text-strong shadow-[var(--shadow-xs)] transition-colors hover:bg-surface-card"
                                             aria-label="Más opciones"
                                         >
                                             <MoreHorizontal
-                                                className="pointer-events-none h-5 w-5 shrink-0 text-foreground dark:text-foreground"
+                                                className="pointer-events-none h-5 w-5 shrink-0 text-strong"
                                                 strokeWidth={2.5}
                                                 aria-hidden
                                             />
                                         </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end" className="min-w-[200px] rounded-xl">
+                                        <DropdownMenuContent align="end" className="min-w-[200px] rounded-card">
                                             <DropdownMenuItem
                                                 onClick={() => router.push(profileHref)}
                                             >
@@ -329,36 +340,33 @@ export function ClientCardV2({
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                        <div className="rounded-xl border border-border/50 bg-white/40 p-2 dark:border-white/5 dark:bg-white/[0.02]">
-                            <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">
+                        <div className="rounded-control border border-subtle bg-surface-sunken p-2">
+                            <p className="text-[8px] font-bold uppercase tracking-widest text-muted">
                                 Adherencia
                             </p>
-                            <p className="font-display text-lg font-black text-foreground">{adherencePct}%</p>
-                            <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                            <p className="font-display text-lg font-black text-strong">{adherencePct}%</p>
+                            <div className="mt-1 h-1 overflow-hidden rounded-full bg-[var(--track)]">
                                 <div
-                                    className="h-full rounded-full transition-all"
-                                    style={{
-                                        width: `${adherencePct}%`,
-                                        backgroundColor: 'var(--theme-primary, #007AFF)',
-                                    }}
+                                    className="h-full rounded-full bg-sport-500 transition-all"
+                                    style={{ width: `${adherencePct}%` }}
                                 />
                             </div>
                         </div>
-                        <div className="rounded-xl border border-border/50 bg-white/40 p-2 dark:border-white/5 dark:bg-white/[0.02]">
-                            <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">
+                        <div className="rounded-control border border-subtle bg-surface-sunken p-2">
+                            <p className="text-[8px] font-bold uppercase tracking-widest text-muted">
                                 Peso hoy
                             </p>
-                            <p className="font-display text-lg font-black text-foreground">
+                            <p className="font-display text-lg font-black text-strong">
                                 {currentWeight != null ? `${currentWeight} kg` : '—'}
                             </p>
-                            <p className="text-[9px] font-bold text-muted-foreground">
+                            <p className="text-[9px] font-bold text-muted">
                                 {weightDelta != null ?
                                     `${weightDelta > 0 ? '↑' : weightDelta < 0 ? '↓' : ''}${Math.abs(weightDelta)} (7d)`
                                 :   ''}
                             </p>
                         </div>
-                        <div className="rounded-xl border border-border/50 bg-white/40 p-2 dark:border-white/5 dark:bg-white/[0.02]">
-                            <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">
+                        <div className="rounded-control border border-subtle bg-surface-sunken p-2">
+                            <p className="text-[8px] font-bold uppercase tracking-widest text-muted">
                                 Energía
                             </p>
                             <div className="mt-1 flex gap-0.5">
@@ -368,67 +376,69 @@ export function ClientCardV2({
                                         className={cn(
                                             'h-3.5 w-3.5',
                                             i <= stars ?
-                                                'fill-amber-400 text-amber-400'
-                                            :   'text-zinc-300 dark:text-zinc-600'
+                                                'fill-[var(--warning-500)] text-[var(--warning-500)]'
+                                            :   'text-[var(--ink-300)]'
                                         )}
                                     />
                                 ))}
                             </div>
                         </div>
-                        <div className="rounded-xl border border-border/50 bg-white/40 p-2 dark:border-white/5 dark:bg-white/[0.02]">
-                            <p className="text-[8px] font-bold uppercase tracking-widest text-muted-foreground">
+                        <div className="rounded-control border border-subtle bg-surface-sunken p-2">
+                            <p className="text-[8px] font-bold uppercase tracking-widest text-muted">
                                 Último log
                             </p>
                             <div className="mt-1 flex items-center gap-2">
                                 <span
                                     className={cn('h-2 w-2 rounded-full', dotClass(lastLog.days))}
                                 />
-                                <span className="text-xs font-bold text-foreground">{lastLog.label}</span>
+                                <span className="text-xs font-bold text-strong">{lastLog.label}</span>
                             </div>
                         </div>
                     </div>
 
                     <div className="space-y-2">
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-muted">
                             Peso (30d)
                         </p>
-                        <SparkArea data={weightSeries} color="#007AFF" gradId={gradW} />
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                        {/* recharts aplica color como atributo SVG → no resuelve var(); usamos los
+                            valores literales de la paleta DS (sport signature / success). */}
+                        <SparkArea data={weightSeries} color="#2680FF" gradId={gradW} />
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-muted">
                             Adherencia (4 sem)
                         </p>
-                        <SparkArea data={adherenceSeries} color="#10B981" gradId={gradA} />
+                        <SparkArea data={adherenceSeries} color="#1FB877" gradId={gradA} />
                     </div>
 
                     {hasNutritionData && (
                         <div className={cn(
-                            'flex items-center gap-3 rounded-xl border p-3',
+                            'flex items-center gap-3 rounded-control border p-3',
                             nutritionRisk
-                                ? 'border-rose-500/25 bg-rose-500/5 dark:border-rose-500/20'
-                                : 'border-emerald-500/20 bg-emerald-500/5 dark:border-emerald-500/15'
+                                ? 'border-[color:var(--danger-500)]/25 bg-[var(--danger-100)]'
+                                : 'border-[color:var(--ember-500)]/20 bg-[var(--ember-100)]'
                         )}>
-                            <Apple className={cn('h-4 w-4 shrink-0', nutritionRisk ? 'text-rose-500' : 'text-emerald-500')} />
+                            <Apple className={cn('h-4 w-4 shrink-0', nutritionRisk ? 'text-[var(--danger-600)]' : 'text-[var(--ember-600)]')} />
                             <div className="min-w-0 flex-1 space-y-1">
                                 <div className="flex items-center justify-between">
                                     <p className={cn(
                                         'text-[9px] font-bold uppercase tracking-widest',
-                                        nutritionRisk ? 'text-rose-500' : 'text-emerald-600 dark:text-emerald-400'
+                                        nutritionRisk ? 'text-[var(--danger-700)]' : 'text-[var(--ember-700)]'
                                     )}>
                                         {nutritionRisk ? 'Baja adherencia nutricional' : 'Nutrición'}
                                     </p>
                                     <span className={cn(
                                         'text-[10px] font-black tabular-nums',
-                                        nutritionRisk ? 'text-rose-500' : 'text-foreground'
+                                        nutritionRisk ? 'text-[var(--danger-700)]' : 'text-strong'
                                     )}>
                                         {nutritionPct}%
                                     </span>
                                 </div>
-                                <div className="h-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                                <div className="h-1 overflow-hidden rounded-full bg-[var(--track)]">
                                     <div
-                                        className="h-full rounded-full transition-all"
-                                        style={{
-                                            width: `${Math.min(100, nutritionPct)}%`,
-                                            backgroundColor: nutritionRisk ? '#ef4444' : '#10b981',
-                                        }}
+                                        className={cn(
+                                            'h-full rounded-full transition-all',
+                                            nutritionRisk ? 'bg-[var(--danger-500)]' : 'bg-[var(--ember-500)]'
+                                        )}
+                                        style={{ width: `${Math.min(100, nutritionPct)}%` }}
                                     />
                                 </div>
                             </div>
@@ -436,55 +446,52 @@ export function ClientCardV2({
                     )}
 
                     {activeProgramName ?
-                        <div className="space-y-2 rounded-xl border border-primary/15 bg-primary/5 p-3 dark:border-primary/20">
+                        <div className="space-y-2 rounded-control border border-[color:var(--sport-500)]/15 bg-sport-500/5 p-3">
                             <div className="flex items-center justify-between gap-2">
                                 <div className="flex min-w-0 items-center gap-2">
-                                    <Calendar className="h-4 w-4 shrink-0 text-primary" />
+                                    <Calendar className="h-4 w-4 shrink-0 text-sport-600" />
                                     <div className="min-w-0">
-                                        <p className="text-[9px] font-bold uppercase tracking-widest text-primary">
+                                        <p className="text-[9px] font-bold uppercase tracking-widest text-sport-600">
                                             Programa
                                         </p>
-                                        <p className="truncate text-xs font-bold text-foreground">
+                                        <p className="truncate text-xs font-bold text-strong">
                                             {activeProgramName}
                                         </p>
                                     </div>
                                 </div>
-                                <span className="shrink-0 text-[10px] font-black text-foreground">
+                                <span className="shrink-0 text-[10px] font-black text-strong">
                                     Sem {weekCur ?? '—'}/{weekTot ?? '—'}
                                 </span>
                             </div>
-                            <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                            <div className="h-1.5 overflow-hidden rounded-full bg-[var(--track)]">
                                 <div
-                                    className="h-full rounded-full bg-primary transition-all"
-                                    style={{
-                                        width: `${weekPct}%`,
-                                        backgroundColor: 'var(--theme-primary, #007AFF)',
-                                    }}
+                                    className="h-full rounded-full bg-sport-500 transition-all"
+                                    style={{ width: `${weekPct}%` }}
                                 />
                             </div>
-                            <p className="text-[10px] font-medium text-muted-foreground">
+                            <p className="text-[10px] font-medium text-muted">
                                 {remainingDays != null ?
                                     `${remainingDays > 0 ? remainingDays : 0} días restantes`
                                 :   'Sin fechas de programa'}
                                 {weekTot ? ` · ${weekTot} semanas totales` : ''}
                             </p>
                         </div>
-                    :   <div className="flex items-center gap-2 rounded-xl border border-dashed border-border p-3 opacity-70 dark:border-white/10">
-                            <Activity className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    :   <div className="flex items-center gap-2 rounded-control border border-dashed border-default p-3 opacity-70">
+                            <Activity className="h-4 w-4 text-muted" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
                                 Sin programa asignado
                             </span>
                         </div>
                     }
 
                     {subscriptionDaysRemaining !== null && (
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-muted">
                             Suscripción:{' '}
                             <span
                                 className={
                                     subscriptionDaysRemaining <= 5 ?
-                                        'text-rose-500'
-                                    :   'text-primary'
+                                        'text-[var(--danger-600)]'
+                                    :   'text-sport-600'
                                 }
                             >
                                 {subscriptionDaysRemaining > 0 ?
@@ -494,38 +501,38 @@ export function ClientCardV2({
                         </p>
                     )}
 
-                    <div className="flex flex-wrap gap-2 border-t border-border/50 pt-4 dark:border-white/10">
+                    <div className="flex flex-wrap gap-2 border-t border-subtle pt-4">
                         {client.phone && loginUrl ?
                             <a
                                 href={whatsappLink}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-xl bg-emerald-500 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-600 active:scale-[0.98]"
+                                className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-control bg-[#25D366] px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-white shadow-[var(--shadow-sm)] transition hover:bg-[#1ebe5d] active:scale-[0.98]"
                             >
                                 <Smartphone className="h-3.5 w-3.5" /> WA
                             </a>
                         : null}
                         <Link
                             href={profileHref}
-                            className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-xl border border-border bg-white/50 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest transition hover:bg-white/80 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+                            className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-control border border-default bg-surface-card px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-strong transition hover:bg-surface-sunken"
                         >
                             <Eye className="h-3.5 w-3.5" /> Perfil
                         </Link>
                         <Link
                             href={builderHref}
-                            className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-xl border border-border bg-white/50 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest transition hover:bg-white/80 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+                            className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-control border border-default bg-surface-card px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-strong transition hover:bg-surface-sunken"
                         >
                             <Dumbbell className="h-3.5 w-3.5" /> Workout
                         </Link>
                         <Link
                             href={nutritionHref}
-                            className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-xl border border-border bg-white/50 px-3 py-2.5 text-[10px] font-black uppercase tracking-widest transition hover:bg-white/80 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+                            className="inline-flex flex-1 min-w-[120px] items-center justify-center gap-2 rounded-control border border-default bg-surface-card px-3 py-2.5 text-[10px] font-black uppercase tracking-widest text-strong transition hover:bg-surface-sunken"
                         >
                             <Apple className="h-3.5 w-3.5" /> Nutri
                         </Link>
                     </div>
                 </div>
-            </GlassCard>
+            </Card>
 
             <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
                 <AlertDialogContent className="rounded-2xl border border-border bg-card text-foreground">

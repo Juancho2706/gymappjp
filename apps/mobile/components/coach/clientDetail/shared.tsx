@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import { useTheme } from '../../../context/ThemeContext'
+import { Card } from '../../../components'
 
 // ── Helpers de formato (compartidos por todas las tabs del detalle) ──────────
 export function formatDate(iso: string): string {
@@ -26,13 +27,12 @@ export function relativeDays(iso: string | null): string {
   return `Hace ${years} año${years === 1 ? '' : 's'}`
 }
 
-// ── Primitivas de tarjeta ────────────────────────────────────────────────────
+// ── Primitivas de tarjeta (DS Card + tokens semánticos) ──────────────────────
 export function StatCard({ children, style }: { children: ReactNode; style?: any }) {
-  const { theme } = useTheme()
   return (
-    <View style={[s.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }, style]}>
+    <Card padding={16} radius="card" style={{ gap: 12, ...(style as object) }}>
       {children}
-    </View>
+    </Card>
   )
 }
 
@@ -42,7 +42,7 @@ export function CardHeader({ icon: Icon, title, color, right }: { icon?: any; ti
     <View style={s.headerRow}>
       <View style={s.titleRow}>
         {Icon ? <Icon size={15} color={color ?? theme.primary} /> : null}
-        <Text style={[s.title, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>{title}</Text>
+        <Text className="text-muted font-sans-bold" style={s.title} numberOfLines={1}>{title}</Text>
       </View>
       {right ?? null}
     </View>
@@ -51,20 +51,20 @@ export function CardHeader({ icon: Icon, title, color, right }: { icon?: any; ti
 
 export function Pill({ label, color, tone }: { label: string; color?: string; tone?: 'warning' | 'danger' | 'success' }) {
   const { theme } = useTheme()
-  const c = color ?? (tone === 'warning' ? '#F59E0B' : tone === 'danger' ? theme.destructive : tone === 'success' ? theme.success : theme.primary)
+  const c = color ?? (tone === 'warning' ? '#F5A524' : tone === 'danger' ? theme.destructive : tone === 'success' ? theme.success : theme.primary)
   return (
-    <View style={[s.pill, { backgroundColor: c + '16', borderColor: c + '44', borderRadius: theme.radius.sm }]}>
-      <Text style={[s.pillTxt, { color: c, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+    <View className="rounded-control" style={[s.pill, { backgroundColor: c + '16', borderColor: c + '44' }]}>
+      <Text style={[s.pillTxt, { color: c, fontFamily: 'HankenGrotesk_700Bold' }]}>{label}</Text>
     </View>
   )
 }
 
-/** KPI box: valor grande + label + sub opcional. */
+/** KPI box: valor grande (eva-metric) + label + sub opcional. */
 export function MetricBox({ value, label, sub, color, subColor }: { value: string; label: string; sub?: string; color?: string; subColor?: string }) {
   const { theme } = useTheme()
   return (
-    <View style={[s.metric, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-      <Text style={[s.metricVal, { color: color ?? theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]} numberOfLines={1}>{value}</Text>
+    <View className="bg-surface-sunken border-subtle rounded-control" style={s.metric}>
+      <Text style={[s.metricVal, { color: color ?? theme.foreground, fontFamily: 'Archivo_900Black' }]} numberOfLines={1}>{value}</Text>
       <Text style={[s.metricLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>{label}</Text>
       {sub ? <Text style={[s.metricSub, { color: subColor ?? theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>{sub}</Text> : null}
     </View>

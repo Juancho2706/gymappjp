@@ -31,7 +31,7 @@ function TopAlertBanner({ type, message }: { type: ProfileAlertType; message: st
   return (
     <View style={[styles.alertBanner, { backgroundColor: color + '14', borderColor: color + '40' }]}>
       <View style={[styles.alertDot, { backgroundColor: color }]} />
-      <Text style={[styles.alertMsg, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{message}</Text>
+      <Text style={[styles.alertMsg, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{message}</Text>
     </View>
   )
 }
@@ -136,7 +136,7 @@ export function OverviewTab({
         <TouchableOpacity activeOpacity={0.85} onPress={onEditProgram}>
           <StatCard>
             <CardHeader icon={LayoutGrid} title="Programa activo" />
-            <Text numberOfLines={1} style={[cd.big, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{activeProgram.name}</Text>
+            <Text numberOfLines={1} style={[cd.big, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{activeProgram.name}</Text>
             <View style={cd.metaRow}>
               <Pill label={activeProgram.program_structure_type === 'cycle' ? 'Cíclico' : 'Semanal'} />
               {activeProgram.ab_mode ? <Pill label="A/B" tone="warning" /> : null}
@@ -147,7 +147,7 @@ export function OverviewTab({
               <View style={{ gap: 6 }}>
                 <View style={styles.weekRow}>
                   <Text style={[styles.weekLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Progreso del ciclo</Text>
-                  <Text style={[styles.weekVal, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{currentWeek}/{activeProgram.weeks_to_repeat}</Text>
+                  <Text style={[styles.weekVal, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{currentWeek}/{activeProgram.weeks_to_repeat}</Text>
                 </View>
                 <ProgressBar value={activeProgram.weeks_to_repeat > 0 ? currentWeek / activeProgram.weeks_to_repeat : 0} color={theme.primary} height={7} />
               </View>
@@ -156,7 +156,7 @@ export function OverviewTab({
               <View style={[styles.nextRow, { borderColor: theme.border }]}>
                 <Dumbbell size={14} color={theme.primary} />
                 <Text style={[styles.nextLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Próximo:</Text>
-                <Text numberOfLines={1} style={[styles.nextVal, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>
+                <Text numberOfLines={1} style={[styles.nextVal, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>
                   {nextPlan.day_of_week ? dayName(nextPlan.day_of_week) : ''} · {nextPlan.title}
                 </Text>
               </View>
@@ -197,7 +197,7 @@ function Ring({ label, hint, value, color, delta, unit }: { label: string; hint:
   return (
     <View style={styles.ringItem}>
       <ComplianceRing value={value} label={label} color={color} size={68} />
-      <Text style={[styles.ringHint, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{hint}</Text>
+      <Text style={[styles.ringHint, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{hint}</Text>
       {delta != null && delta !== 0 ? (
         <Text style={[styles.ringDelta, { color: delta > 0 ? theme.success : theme.destructive, fontFamily: theme.fontSans }]}>
           {delta > 0 ? '↑' : '↓'}{Math.abs(delta)}{unit ? ` ${unit}` : ''}

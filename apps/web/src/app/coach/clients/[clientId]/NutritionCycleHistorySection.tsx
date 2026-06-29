@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Calendar, History, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -176,7 +176,7 @@ export function NutritionCycleHistorySection({
 
   return (
     <>
-      <GlassCard className="border-border/40 p-4 dark:border-white/10">
+      <Card className="border-border/40 p-4">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <div className="flex items-center gap-1.5">
@@ -261,7 +261,7 @@ export function NutritionCycleHistorySection({
             </ul>
           </div>
         )}
-      </GlassCard>
+      </Card>
 
       <Dialog open={cycleOpen} onOpenChange={setCycleOpen}>
         <DialogContent className="max-h-[min(90dvh,720px)] overflow-y-auto sm:max-w-lg">

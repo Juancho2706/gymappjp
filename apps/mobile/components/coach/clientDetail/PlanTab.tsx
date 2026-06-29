@@ -53,7 +53,7 @@ export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit:
         <CardHeader icon={LayoutGrid} title="Programa" right={
           <TouchableOpacity onPress={onEdit} hitSlop={8}><Pencil size={16} color={theme.primary} /></TouchableOpacity>
         } />
-        <Text numberOfLines={1} style={[cd.big, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{program.name}</Text>
+        <Text numberOfLines={1} style={[cd.big, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{program.name}</Text>
         <View style={cd.metaRow}>
           <Pill label={program.program_structure_type === 'cycle' ? 'Cíclico' : 'Semanal'} />
           {program.ab_mode ? <Pill label={`A/B · ${activeVariant} esta sem.`} tone="warning" /> : null}
@@ -65,7 +65,7 @@ export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit:
           <View style={{ gap: 6 }}>
             <View style={styles.weekRow}>
               <Text style={[styles.weekLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Semana del ciclo</Text>
-              <Text style={[styles.weekVal, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{currentWeek}/{program.weeks_to_repeat}</Text>
+              <Text style={[styles.weekVal, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{currentWeek}/{program.weeks_to_repeat}</Text>
             </View>
             <ProgressBar value={program.weeks_to_repeat > 0 ? currentWeek / program.weeks_to_repeat : 0} color={theme.primary} height={7} />
           </View>
@@ -101,11 +101,11 @@ function DayCard({ plan, isToday, open, onToggle, onBlock }: { plan: ProgramDay;
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={styles.dayTopRow}>
-            <Text style={[styles.dayDow, { color: isToday ? theme.primary : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{plan.day_of_week ? dayName(plan.day_of_week) : 'Día'}</Text>
+            <Text style={[styles.dayDow, { color: isToday ? theme.primary : theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>{plan.day_of_week ? dayName(plan.day_of_week) : 'Día'}</Text>
             {plan.week_variant ? <Pill label={plan.week_variant} /> : null}
             {isToday ? <Pill label="Hoy" /> : null}
           </View>
-          <Text numberOfLines={1} style={[styles.dayTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{isRest ? 'Descanso' : plan.title}</Text>
+          <Text numberOfLines={1} style={[styles.dayTitle, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{isRest ? 'Descanso' : plan.title}</Text>
           {!isRest ? <Text style={[cd.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{plan.blocks.length} ejercicios</Text> : null}
         </View>
         {!isRest ? <ChevronDown size={18} color={theme.mutedForeground} style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }} /> : null}
@@ -116,10 +116,10 @@ function DayCard({ plan, isToday, open, onToggle, onBlock }: { plan: ProgramDay;
           {plan.blocks.map((block) => (
             <TouchableOpacity key={block.id} activeOpacity={0.75} onPress={() => onBlock(block)} style={[styles.blockRow, { borderColor: theme.border }]}>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text numberOfLines={1} style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{block.exerciseName}</Text>
+                <Text numberOfLines={1} style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{block.exerciseName}</Text>
                 <Text style={[cd.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{block.muscleGroup ?? 'Sin grupo'}</Text>
               </View>
-              <Text style={[styles.prescription, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>{block.sets}×{block.reps}</Text>
+              <Text style={[styles.prescription, { color: theme.primary, fontFamily: 'Archivo_700Bold' }]}>{block.sets}×{block.reps}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -140,8 +140,8 @@ function ExerciseDetail({ block }: { block: ProgramBlock }) {
 
   return (
     <View style={{ gap: 14 }}>
-      <Text style={[styles.sheetTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{block.exerciseName}</Text>
-      <Text style={[styles.sheetMuscle, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>{block.muscleGroup ?? 'Sin grupo'}</Text>
+      <Text style={[styles.sheetTitle, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{block.exerciseName}</Text>
+      <Text style={[styles.sheetMuscle, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{block.muscleGroup ?? 'Sin grupo'}</Text>
       {block.gifUrl ? (
         <Image source={{ uri: block.gifUrl }} style={[styles.gif, { backgroundColor: theme.secondary, borderColor: theme.border }]} contentFit="contain" transition={150} />
       ) : null}
@@ -149,7 +149,7 @@ function ExerciseDetail({ block }: { block: ProgramBlock }) {
         {rows.map((r, i) => (
           <View key={r.label} style={[styles.detailRow, i < rows.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
             <Text style={[styles.detailLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{r.label}</Text>
-            <Text style={[styles.detailValue, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{r.value}</Text>
+            <Text style={[styles.detailValue, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{r.value}</Text>
           </View>
         ))}
       </View>

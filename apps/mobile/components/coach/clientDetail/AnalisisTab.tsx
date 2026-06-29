@@ -80,7 +80,7 @@ export function AnalisisTab({
           {muscleVolume.slice(0, 7).map((row) => (
             <View key={row.muscleGroup} style={{ gap: 6 }}>
               <View style={cd.row}>
-                <Text style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{row.muscleGroup}</Text>
+                <Text style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{row.muscleGroup}</Text>
                 <Text style={[cd.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{Math.round(row.volume).toLocaleString('es-CL')}</Text>
               </View>
               <ProgressBar value={row.volume / maxVolume} color={theme.primary} height={6} />
@@ -89,7 +89,7 @@ export function AnalisisTab({
           {imbalances.map((im, i) => (
             <View key={i} style={[styles.alert, { backgroundColor: '#F59E0B14', borderColor: '#F59E0B40' }]}>
               <AlertTriangle size={14} color="#F59E0B" />
-              <Text style={[styles.alertTxt, { color: '#F59E0B', fontFamily: 'Inter_600SemiBold' }]}>
+              <Text style={[styles.alertTxt, { color: '#F59E0B', fontFamily: 'HankenGrotesk_600SemiBold' }]}>
                 {im.stronger} entrena {im.ratio}× más volumen que {im.weaker}.
               </Text>
             </View>
@@ -113,7 +113,7 @@ export function AnalisisTab({
           {muscleVolumeReps.slice(0, 7).map((row) => (
             <View key={row.muscleGroup} style={{ gap: 6 }}>
               <View style={cd.row}>
-                <Text style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{row.muscleGroup}</Text>
+                <Text style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{row.muscleGroup}</Text>
                 <Text style={[cd.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{row.sets} series · {row.reps} reps</Text>
               </View>
               <ProgressBar value={row.sets / maxSets} color={theme.primary} height={6} />
@@ -155,7 +155,7 @@ function StrengthCard({ series }: { series: ExerciseStrengthSeries }) {
         <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Necesita más sesiones para graficar.</Text>
       )}
       {sel ? (
-        <Text style={[cd.sub, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>
+        <Text style={[cd.sub, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>
           {sel.label} · {sel.weightKg} kg × {sel.reps} → 1RM {sel.oneRm} kg
         </Text>
       ) : null}
@@ -210,15 +210,15 @@ function SessionHistory({ workoutDates, selectedDate, onSelectDate, dayDetail, l
               return (
                 <TouchableOpacity key={d} activeOpacity={0.82} onPress={() => onSelectDate(d)}
                   style={[styles.chip, { backgroundColor: on ? theme.primary : theme.secondary, borderColor: on ? theme.primary : theme.border, borderRadius: theme.radius.lg }]}>
-                  <Text style={[styles.chipDow, { color: on ? theme.primaryForeground : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{date.toLocaleDateString('es-CL', { weekday: 'short' }).slice(0, 3)}</Text>
-                  <Text style={[styles.chipNum, { color: on ? theme.primaryForeground : theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{date.getDate()}</Text>
+                  <Text style={[styles.chipDow, { color: on ? theme.primaryForeground : theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>{date.toLocaleDateString('es-CL', { weekday: 'short' }).slice(0, 3)}</Text>
+                  <Text style={[styles.chipNum, { color: on ? theme.primaryForeground : theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{date.getDate()}</Text>
                 </TouchableOpacity>
               )
             })}
           </ScrollView>
           <View style={styles.navRow}>
             <TouchableOpacity onPress={() => go(-1)} disabled={sidx <= 0} hitSlop={8}><ChevronLeft size={22} color={sidx <= 0 ? theme.muted : theme.foreground} /></TouchableOpacity>
-            <Text style={[styles.navDate, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{formatDate(selectedDate)}</Text>
+            <Text style={[styles.navDate, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{formatDate(selectedDate)}</Text>
             <TouchableOpacity onPress={() => go(1)} disabled={sidx < 0 || sidx >= sessions.length - 1} hitSlop={8}><ChevronRight size={22} color={sidx < 0 || sidx >= sessions.length - 1 ? theme.muted : theme.foreground} /></TouchableOpacity>
           </View>
         </StatCard>
@@ -255,12 +255,12 @@ function SessionDetail({ detail }: { detail: ClientDayDetail }) {
       <CardHeader icon={Dumbbell} title="Detalle de la sesión" right={<Pill label={`${Math.round(totalTonnage).toLocaleString('es-CL')} kg`} />} />
       {grouped.map(([name, g], gi) => (
         <View key={name} style={[gi < grouped.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: 8 }]}>
-          <Text numberOfLines={1} style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{name}</Text>
+          <Text numberOfLines={1} style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{name}</Text>
           <Text style={[cd.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{g.muscle ?? 'Sin grupo'}</Text>
           <View style={styles.setWrap}>
             {g.sets.map((set, i) => (
               <View key={i} style={[styles.setPill, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
-                <Text style={[styles.setTxt, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>
+                <Text style={[styles.setTxt, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>
                   {set.weightKg ?? 0}×{set.repsDone ?? 0}{set.rpe != null ? ` · RPE ${set.rpe}` : ''}
                 </Text>
               </View>

@@ -73,7 +73,7 @@ export function FacturacionTab({
                 <View style={[styles.dot, { backgroundColor: si.color }]} />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <View style={styles.payTop}>
-                    <Text style={[styles.payAmount, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{formatCurrency(p.amount)}</Text>
+                    <Text style={[styles.payAmount, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{formatCurrency(p.amount)}</Text>
                     <Pill label={si.label} color={si.color} />
                   </View>
                   <Text numberOfLines={1} style={[cd.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>

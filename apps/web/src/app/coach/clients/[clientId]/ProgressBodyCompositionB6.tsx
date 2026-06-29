@@ -15,7 +15,7 @@ import {
     RadialBar,
     PolarAngleAxis,
 } from 'recharts'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
     Dialog,
@@ -84,7 +84,7 @@ function StatBlock({
     trend?: 'up' | 'down' | 'flat'
 }) {
     return (
-        <div className="rounded-xl border border-border/40 bg-secondary/20 px-3 py-3 dark:border-white/10">
+        <div className="rounded-xl border border-border/40 bg-secondary/20 px-3 py-3">
             <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
                 {label}
             </p>
@@ -194,7 +194,7 @@ export function ProgressBodyCompositionB6({
     const energyGaugePct =
         avgEnergy7 != null ? Math.min(100, Math.max(0, Math.round(avgEnergy7 * 10))) : 0
     const gaugeFill =
-        energyGaugePct >= 70 ? '#10b981' : energyGaugePct >= 40 ? '#f59e0b' : '#ef4444'
+        energyGaugePct >= 70 ? 'var(--success-500)' : energyGaugePct >= 40 ? '#f59e0b' : '#ef4444'
 
     const bmiMarkerPct =
         bmi != null ? Math.min(100, Math.max(0, ((bmi - 16) / (36 - 16)) * 100)) : 50
@@ -210,19 +210,19 @@ export function ProgressBodyCompositionB6({
 
     if (!checkIns?.length) {
         return (
-            <GlassCard className="border-dashed border-border/50 p-8 dark:border-white/10">
+            <Card className="p-8">
                 <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                     <Scale className="h-4 w-4 shrink-0" />
                     Sin check-ins todavía. La composición y tendencias aparecerán cuando el alumno
                     registre peso y fotos.
                 </div>
-            </GlassCard>
+            </Card>
         )
     }
 
     return (
         <div className="space-y-6">
-            <GlassCard className="relative overflow-hidden border-dashed border-border/50 p-6 dark:border-white/10 md:p-8">
+            <Card className="relative overflow-hidden p-6 md:p-8">
                 <div className="pointer-events-none absolute top-0 right-0 -mr-20 -mt-20 h-72 w-72 rounded-full bg-primary/5 blur-3xl" />
                 <div className="relative z-10">
                     <h3 className="mb-6 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
@@ -248,12 +248,12 @@ export function ProgressBodyCompositionB6({
                                                 >
                                                     <stop
                                                         offset="0%"
-                                                        stopColor="var(--theme-primary, #007AFF)"
+                                                        stopColor="var(--sport-500)"
                                                         stopOpacity={0.35}
                                                     />
                                                     <stop
                                                         offset="100%"
-                                                        stopColor="var(--theme-primary, #007AFF)"
+                                                        stopColor="var(--sport-500)"
                                                         stopOpacity={0.02}
                                                     />
                                                 </linearGradient>
@@ -326,7 +326,7 @@ export function ProgressBodyCompositionB6({
                                                 type="monotone"
                                                 dataKey="weight"
                                                 name="Peso (kg)"
-                                                stroke="var(--theme-primary, #007AFF)"
+                                                stroke="var(--sport-500)"
                                                 strokeWidth={2}
                                                 fill={`url(#wgrad-${gradId})`}
                                                 dot={(props: {
@@ -341,7 +341,7 @@ export function ProgressBodyCompositionB6({
                                                             cx={cx}
                                                             cy={cy}
                                                             r={5}
-                                                            fill="var(--theme-primary, #007AFF)"
+                                                            fill="var(--sport-500)"
                                                             stroke="hsl(var(--background))"
                                                             strokeWidth={2}
                                                             className="cursor-pointer"
@@ -403,10 +403,10 @@ export function ProgressBodyCompositionB6({
                         </div>
                     </div>
                 </div>
-            </GlassCard>
+            </Card>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <GlassCard className="border-dashed border-border/50 p-6 dark:border-white/10">
+                <Card className="p-6">
                     <h3 className="mb-4 text-xs font-black uppercase tracking-widest text-primary">
                         IMC
                     </h3>
@@ -452,9 +452,9 @@ export function ProgressBodyCompositionB6({
                             </div>
                         </>
                     )}
-                </GlassCard>
+                </Card>
 
-                <GlassCard className="border-dashed border-border/50 p-6 dark:border-white/10">
+                <Card className="p-6">
                     <h3 className="mb-2 text-xs font-black uppercase tracking-widest text-primary">
                         Energía media (7 días)
                     </h3>
@@ -492,11 +492,11 @@ export function ProgressBodyCompositionB6({
                             <EnergyStars level={avgEnergy7} />
                         </div>
                     )}
-                </GlassCard>
+                </Card>
             </div>
 
             {photoCheckIns.length >= 2 && baseCi?.front_photo_url && compareCi?.front_photo_url && (
-                <GlassCard className="border-dashed border-border/50 p-6 dark:border-white/10">
+                <Card className="p-6">
                     <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
                         <Camera className="h-4 w-4" /> Comparativa fotos
                     </h3>
@@ -537,7 +537,7 @@ export function ProgressBodyCompositionB6({
                         </label>
                     </div>
                     {baseCi && compareCi && baseCi.id !== compareCi.id && (
-                        <div className="mt-4 rounded-xl border border-border/40 bg-secondary/15 p-4 text-sm dark:border-white/10">
+                        <div className="mt-4 rounded-xl border border-border/40 bg-secondary/15 p-4 text-sm">
                             <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
                                 Deltas entre selección
                             </p>
@@ -578,10 +578,10 @@ export function ProgressBodyCompositionB6({
                         beforeDate={baseCi ? format(new Date(baseCi.created_at), 'd MMM yyyy') : ''}
                         afterDate={compareCi ? format(new Date(compareCi.created_at), 'd MMM yyyy') : ''}
                     />
-                </GlassCard>
+                </Card>
             )}
 
-            <GlassCard className="border-dashed border-border/50 p-6 dark:border-white/10">
+            <Card className="p-6">
                 <h3 className="mb-6 text-xs font-black uppercase tracking-widest text-primary">
                     Línea de tiempo de check-ins
                 </h3>
@@ -648,7 +648,7 @@ export function ProgressBodyCompositionB6({
                         ))}
                     </ul>
                 </div>
-            </GlassCard>
+            </Card>
 
             <Dialog open={!!dotDetail} onOpenChange={(o) => !o && setDotDetail(null)}>
                 <DialogContent className="sm:max-w-md">

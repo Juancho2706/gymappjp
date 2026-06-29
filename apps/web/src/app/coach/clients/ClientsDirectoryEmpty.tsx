@@ -4,9 +4,10 @@ import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { motion } from 'framer-motion'
 import { ClipboardList } from 'lucide-react'
+import { UserPlus } from 'lucide-react'
 import { CreateClientModal } from './CreateClientModal'
-import { GlassCard } from '@/components/ui/glass-card'
-import { GlassButton } from '@/components/ui/glass-button'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { LOTTIE_CLIPBOARD_LIST_URL } from '@/lib/lottie-assets'
 
 const Player = dynamic(
@@ -28,27 +29,26 @@ export function ClientsDirectoryEmpty() {
 
     return (
         <>
-            <GlassCard className="mx-4 flex flex-col items-center justify-center py-16 text-center md:mx-0 md:py-24">
+            <Card className="mx-4 flex flex-col items-center justify-center py-16 text-center md:mx-0 md:py-24">
                 <div className="mb-8 flex h-40 w-full max-w-xs items-center justify-center">
                     <Player autoplay loop src={LOTTIE_CLIPBOARD_LIST_URL} style={{ height: '160px' }} />
                 </div>
-                <h3 className="font-display text-xl font-black uppercase tracking-tighter text-foreground md:text-2xl">
+                <h3 className="font-display text-xl font-black uppercase tracking-tighter text-strong md:text-2xl">
                     Tu equipo te espera
                 </h3>
-                <p className="mt-3 max-w-md px-4 text-sm font-medium leading-relaxed text-muted-foreground">
+                <p className="mt-3 max-w-md px-4 text-sm font-medium leading-relaxed text-muted">
                     Agrega tu primer alumno y empieza a transformar vidas.
                 </p>
-                <GlassButton
+                <Button
+                    variant="sport"
+                    size="lg"
                     onClick={() => setOpen(true)}
-                    className="mt-8 h-14 px-10 text-white"
-                    style={{
-                        backgroundColor: 'var(--theme-primary)',
-                        boxShadow: '0 0 20px -5px var(--theme-primary)',
-                    }}
+                    className="mt-8 px-10 uppercase tracking-widest"
                 >
-                    <span className="text-xs font-bold uppercase tracking-widest">Nuevo alumno</span>
-                </GlassButton>
-            </GlassCard>
+                    <UserPlus className="h-5 w-5" />
+                    Nuevo alumno
+                </Button>
+            </Card>
             <CreateClientModal open={open} onClose={() => setOpen(false)} />
         </>
     )

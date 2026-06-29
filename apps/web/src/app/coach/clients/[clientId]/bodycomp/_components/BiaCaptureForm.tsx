@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { BodyCompositionCreateSchema } from '@eva/schemas/bodycomp'
 import { saveBodyCompositionAction } from '../_actions/body-composition.actions'
 
@@ -131,7 +131,7 @@ export function BiaCaptureForm({
     }
 
     return (
-        <GlassCard className="p-4 md:p-5">
+        <Card className="p-4 md:p-5">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
@@ -175,6 +175,6 @@ export function BiaCaptureForm({
                     {pending ? 'Guardando…' : 'Guardar medición BIA'}
                 </Button>
             </form>
-        </GlassCard>
+        </Card>
     )
 }

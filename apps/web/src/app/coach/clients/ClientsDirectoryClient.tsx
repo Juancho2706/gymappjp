@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Users } from 'lucide-react'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { ClientCardV2 } from '@/components/coach/ClientCardV2'
 import { DirectoryActionBar } from './DirectoryActionBar'
 import { ClientsDirectoryTable } from './ClientsDirectoryTable'
@@ -203,22 +203,22 @@ export function ClientsDirectoryClient({
             />
 
             {sortedClients.length === 0 ?
-                <GlassCard className="mx-4 flex flex-col items-center justify-center py-20 text-center md:mx-0 md:py-28">
-                    <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-3xl border border-white/10 bg-white/5 shadow-2xl">
-                        <Users className="h-10 w-10 text-muted-foreground opacity-25" />
+                <Card className="mx-4 flex flex-col items-center justify-center py-20 text-center md:mx-0 md:py-28">
+                    <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-card border border-subtle bg-surface-sunken shadow-[var(--shadow-sm)]">
+                        <Users className="h-10 w-10 text-muted opacity-40" />
                     </div>
-                    <h3 className="font-display text-lg font-black uppercase tracking-tighter text-foreground md:text-xl">
+                    <h3 className="font-display text-lg font-black uppercase tracking-tighter text-strong md:text-xl">
                         Sin resultados
                     </h3>
-                    <p className="mt-3 max-w-md px-4 text-xs font-medium leading-relaxed text-muted-foreground md:text-sm">
+                    <p className="mt-3 max-w-md px-4 text-xs font-medium leading-relaxed text-muted md:text-sm">
                         {search ?
                             <>
                                 Prueba buscando por email o nombre completo. Término:{' '}
-                                <span className="font-bold text-foreground">&quot;{search}&quot;</span>
+                                <span className="font-bold text-strong">&quot;{search}&quot;</span>
                             </>
                         :   'Ningún alumno coincide con los filtros activos.'}
                     </p>
-                </GlassCard>
+                </Card>
             : view === 'table' ?
                 <ClientsDirectoryTable
                     clients={sortedClients}
@@ -284,7 +284,7 @@ export function ClientsDirectoryClient({
                                     Math.min(n + 48, sortedClients.length)
                                 )
                             }
-                            className="rounded-full border border-border/60 bg-muted/40 px-6 py-2 text-sm font-semibold text-foreground hover:bg-muted/70"
+                            className="rounded-pill border border-default bg-surface-sunken px-6 py-2 text-sm font-semibold text-strong transition-colors hover:bg-surface-card"
                         >
                             Cargar más ({sortedClients.length - gridVisibleCount} restantes)
                         </button>

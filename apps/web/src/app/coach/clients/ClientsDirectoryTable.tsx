@@ -8,6 +8,7 @@ import { Apple, ArrowUpDown, Eye, Pencil } from 'lucide-react'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import type { DirectorySortKey } from './directory-types'
 import { defaultSortDir, sortClientsByKey } from './clientsDirectorySort'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { differenceInDays } from 'date-fns'
 import { EditClientDataModal } from './EditClientDataModal'
@@ -46,49 +47,46 @@ interface ClientsDirectoryTableProps {
 function StatusCell({ client }: { client: any }) {
     if (client.is_archived === true) {
         return (
-            <span className="rounded-md border border-zinc-500/20 bg-zinc-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-zinc-500">
+            <Badge tone="neutral" variant="soft" size="sm" className="uppercase tracking-wide">
                 Archivado
-            </span>
+            </Badge>
         )
     }
     if (client.is_active === false) {
         return (
-            <span className="rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-rose-500">
+            <Badge tone="danger" variant="soft" size="sm" className="uppercase tracking-wide">
                 Pausado
-            </span>
+            </Badge>
         )
     }
     if (client.force_password_change) {
         return (
-            <span className="rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-amber-500">
+            <Badge tone="info" variant="soft" size="sm" className="uppercase tracking-wide">
                 Pend. sync
-            </span>
+            </Badge>
         )
     }
     return (
-        <span className="rounded-md border border-primary/20 bg-primary/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-primary">
+        <Badge tone="success" variant="soft" size="sm" className="uppercase tracking-wide">
             Activo
-        </span>
+        </Badge>
     )
 }
 
 function ScoreBadge({ score }: { score: number }) {
-    if (score >= 50) {
-        return (
-            <span className="rounded-md bg-rose-500/15 px-2 py-0.5 text-xs font-black text-rose-500">
-                {score}
-            </span>
-        )
-    }
-    if (score >= 25) {
-        return (
-            <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-xs font-black text-amber-600">
-                {score}
-            </span>
-        )
-    }
+    const tone =
+        score >= 50
+            ? 'bg-[var(--danger-100)] text-[var(--danger-700)]'
+            : score >= 25
+              ? 'bg-[var(--warning-100)] text-[var(--warning-700)]'
+              : 'bg-[var(--success-100)] text-[var(--success-700)]'
     return (
-        <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-black text-emerald-600 dark:text-emerald-400">
+        <span
+            className={cn(
+                'rounded-[var(--radius-control)] px-2 py-0.5 font-mono text-xs font-black tabular-nums',
+                tone
+            )}
+        >
             {score}
         </span>
     )
@@ -110,7 +108,7 @@ function HeaderBtn({
     const sk = COL_TO_SORT[col]
     if (!sk) {
         return (
-            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            <span className="text-[10px] font-black uppercase tracking-widest text-subtle">
                 {label}
             </span>
         )
@@ -126,14 +124,17 @@ function HeaderBtn({
                     onSort(sk, defaultSortDir(sk))
                 }
             }}
-            className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground"
+            className={cn(
+                'inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest transition-colors hover:text-strong',
+                active ? 'text-strong' : 'text-subtle'
+            )}
         >
             {label}
             <ArrowUpDown
-                className={cn('h-3 w-3', active ? 'text-primary opacity-100' : 'opacity-40')}
+                className={cn('h-3 w-3', active ? 'text-sport-600 opacity-100' : 'opacity-40')}
             />
             {active ?
-                <span className="text-[9px] font-bold text-primary">{sortDir === 'asc' ? '↑' : '↓'}</span>
+                <span className="text-[9px] font-bold text-sport-600">{sortDir === 'asc' ? '↑' : '↓'}</span>
             : null}
         </button>
     )
@@ -176,9 +177,9 @@ export function ClientsDirectoryTable({
         const last = p?.lastWorkoutDate
         const daysSince = last ? differenceInDays(new Date(), new Date(last)) : 999
         const dot =
-            daysSince < 3 ? 'bg-emerald-500'
-            : daysSince < 7 ? 'bg-amber-500'
-            : 'bg-red-500'
+            daysSince < 3 ? 'bg-[var(--success-500)]'
+            : daysSince < 7 ? 'bg-[var(--warning-500)]'
+            : 'bg-[var(--danger-500)]'
         const waMessage = `Hola ${client.full_name}! 👋 Soy tu coach. Aquí está tu link para acceder a tu plan: ${loginUrl}`
         const whatsappLink =
             client.phone && loginUrl ?
@@ -195,15 +196,15 @@ export function ClientsDirectoryTable({
                     if (e.key === 'Enter') router.push(`/coach/clients/${client.id}`)
                 }}
                 tabIndex={0}
-                className="grid cursor-pointer grid-cols-[minmax(180px,1.2fr)_88px_72px_100px_100px_minmax(90px,0.8fr)_minmax(120px,1fr)_72px_100px] gap-2 border-b border-border/40 px-3 py-2 text-sm transition-colors hover:bg-white/40 dark:border-white/5 dark:hover:bg-white/[0.04]"
+                className="grid cursor-pointer grid-cols-[minmax(180px,1.2fr)_88px_72px_100px_100px_minmax(90px,0.8fr)_minmax(120px,1fr)_72px_100px] gap-2 border-b border-subtle px-3 py-2 text-sm transition-colors hover:bg-surface-sunken"
             >
                 <div className="flex min-w-0 items-center gap-2">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/60 font-display text-sm font-black uppercase dark:bg-white/10">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-[var(--surface-inverse)] font-display text-sm font-black uppercase text-sport-400">
                         {client.full_name?.[0]}
                     </div>
                     <div className="min-w-0">
-                        <p className="truncate font-bold text-foreground">{client.full_name}</p>
-                        <p className="truncate text-[10px] text-muted-foreground">{client.email}</p>
+                        <p className="truncate font-bold text-strong">{client.full_name}</p>
+                        <p className="truncate text-[10px] text-subtle">{client.email}</p>
                     </div>
                 </div>
                 <div className="flex items-center">
@@ -215,30 +216,27 @@ export function ClientsDirectoryTable({
                 <div className="flex items-center gap-2">
                     {p?.attentionFlags?.includes('NUTRICION_RIESGO') ?
                         <span
-                            className="shrink-0 rounded-full border border-rose-500/40 bg-rose-500/15 p-1"
+                            className="shrink-0 rounded-full border border-[color:var(--ember-500)]/40 bg-[var(--ember-100)] p-1"
                             title="Adherencia nutricional baja (menos del 60%)"
                         >
-                            <Apple className="h-3.5 w-3.5 text-rose-500" aria-hidden />
+                            <Apple className="h-3.5 w-3.5 text-[var(--ember-600)]" aria-hidden />
                             <span className="sr-only">Nutrición baja</span>
                         </span>
                     : null}
-                    <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                    <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--track)]">
                         <div
-                            className="h-full rounded-full"
-                            style={{
-                                width: `${p?.percentage ?? 0}%`,
-                                backgroundColor: 'var(--theme-primary, #007AFF)',
-                            }}
+                            className="h-full rounded-full bg-sport-500"
+                            style={{ width: `${p?.percentage ?? 0}%` }}
                         />
                     </div>
-                    <span className="w-8 shrink-0 text-right text-xs font-bold tabular-nums">
+                    <span className="w-8 shrink-0 text-right text-xs font-bold tabular-nums text-strong">
                         {p?.percentage ?? 0}%
                     </span>
                 </div>
-                <div className="flex flex-col justify-center text-xs font-bold tabular-nums">
+                <div className="flex flex-col justify-center text-xs font-bold tabular-nums text-strong">
                     <span>{p?.currentWeight != null ? `${p.currentWeight} kg` : '—'}</span>
                     {p?.weightDelta7d != null ?
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-[10px] font-medium text-muted">
                             {p.weightDelta7d > 0 ? '+' : ''}
                             {p.weightDelta7d} (7d)
                         </span>
@@ -246,7 +244,7 @@ export function ClientsDirectoryTable({
                 </div>
                 <div className="flex items-center gap-2">
                     <span className={cn('h-2 w-2 shrink-0 rounded-full', dot)} />
-                    <span className="text-xs font-medium text-foreground">
+                    <span className="text-xs font-medium text-body">
                         {last ?
                             daysSince === 0 ? 'Hoy'
                             : daysSince === 1 ? 'Ayer'
@@ -255,11 +253,11 @@ export function ClientsDirectoryTable({
                     </span>
                 </div>
                 <div className="hidden min-w-0 items-center lg:flex">
-                    <span className="truncate text-xs font-medium text-muted-foreground">
+                    <span className="truncate text-xs font-medium text-muted">
                         {client.workout_programs?.find((x: any) => x.is_active)?.name ?? '—'}
                     </span>
                 </div>
-                <div className="flex items-center text-xs font-black tabular-nums text-foreground">
+                <div className="flex items-center text-xs font-black tabular-nums text-strong">
                     {p?.planDaysRemaining != null ? p.planDaysRemaining : '—'}
                 </div>
                 <div
@@ -269,7 +267,7 @@ export function ClientsDirectoryTable({
                 >
                     <Link
                         href={`/coach/clients/${client.id}`}
-                        className="rounded-lg p-2 text-muted-foreground hover:bg-white/50 hover:text-primary dark:hover:bg-white/10"
+                        className="rounded-control p-2 text-muted transition-colors hover:bg-surface-sunken hover:text-sport-600"
                         aria-label="Ver perfil"
                     >
                         <Eye className="h-4 w-4" />
@@ -279,7 +277,7 @@ export function ClientsDirectoryTable({
                             href={whatsappLink}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-wide bg-[#25D366] text-white hover:bg-[#1ebe5d] transition-colors"
+                            className="rounded-control bg-[#25D366] px-2 py-1.5 text-[10px] font-black uppercase tracking-wide text-white transition-colors hover:bg-[#1ebe5d]"
                             aria-label="Enviar WhatsApp"
                         >
                             WA
@@ -288,7 +286,7 @@ export function ClientsDirectoryTable({
                     <button
                         type="button"
                         onClick={() => setEditingClient({ id: client.id, name: client.full_name })}
-                        className="rounded-lg p-2 text-muted-foreground hover:bg-white/50 hover:text-primary dark:hover:bg-white/10"
+                        className="rounded-control p-2 text-muted transition-colors hover:bg-surface-sunken hover:text-sport-600"
                         aria-label="Editar datos"
                     >
                         <Pencil className="h-4 w-4" />
@@ -309,13 +307,13 @@ export function ClientsDirectoryTable({
 
     return (
         <>
-        <div className="overflow-hidden rounded-2xl border border-border/50 bg-white/40 backdrop-blur-md dark:border-white/10 dark:bg-zinc-950/40">
+        <div className="overflow-hidden rounded-card border border-subtle bg-surface-card">
             {/* Una sola zona de scroll horizontal: encabezado y filas comparten el mismo ancho mínimo */}
             <div className="touch-auto overscroll-x-contain overflow-x-auto">
                 <div className="min-w-[920px]">
                     <div
                         role="row"
-                        className="sticky top-0 z-[1] grid grid-cols-[minmax(180px,1.2fr)_88px_72px_100px_100px_minmax(90px,0.8fr)_minmax(120px,1fr)_72px_100px] gap-2 border-b border-border/60 bg-background/90 px-3 py-3 text-left dark:border-white/10 dark:bg-zinc-950/95"
+                        className="sticky top-0 z-[1] grid grid-cols-[minmax(180px,1.2fr)_88px_72px_100px_100px_minmax(90px,0.8fr)_minmax(120px,1fr)_72px_100px] gap-2 border-b border-default bg-surface-sunken px-3 py-3 text-left"
                     >
                         <HeaderBtn
                             label="Alumno"
@@ -359,7 +357,7 @@ export function ClientsDirectoryTable({
                             sortDir={sortDir}
                             onSort={onSortChange}
                         />
-                        <span className="hidden text-[10px] font-black uppercase tracking-widest text-muted-foreground lg:inline">
+                        <span className="hidden text-[10px] font-black uppercase tracking-widest text-subtle lg:inline">
                             Programa
                         </span>
                         <HeaderBtn
@@ -369,7 +367,7 @@ export function ClientsDirectoryTable({
                             sortDir={sortDir}
                             onSort={onSortChange}
                         />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-subtle">
                             Acc.
                         </span>
                     </div>
@@ -406,7 +404,7 @@ export function ClientsDirectoryTable({
                 </div>
             </div>
 
-            <p className="border-t border-border/40 px-3 py-2 text-[10px] text-muted-foreground dark:border-white/10 md:hidden">
+            <p className="border-t border-subtle px-3 py-2 text-[10px] text-muted md:hidden">
                 Desliza horizontalmente en móvil para ver todas las columnas.
             </p>
         </div>

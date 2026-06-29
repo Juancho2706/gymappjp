@@ -77,8 +77,8 @@ export function ProgresoTab({ data, onOpenPhoto }: { data: CoachClientDetailData
                 <Image source={{ uri: active.front_photo_url }} style={[styles.tipPhoto, { borderColor: theme.border }]} contentFit="cover" />
               ) : null}
               <View style={{ flex: 1, gap: 3 }}>
-                <Text style={[styles.tipDate, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{formatDate(active.date)}</Text>
-                <Text style={[styles.tipMeta, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>
+                <Text style={[styles.tipDate, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{formatDate(active.date)}</Text>
+                <Text style={[styles.tipMeta, { color: theme.primary, fontFamily: 'HankenGrotesk_700Bold' }]}>
                   {active.weight} kg{active.energy_level != null ? ` · Energía ${active.energy_level}/10` : ''}
                 </Text>
                 {active.notes ? <Text numberOfLines={2} style={[styles.tipMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{active.notes}</Text> : null}
@@ -103,7 +103,7 @@ export function ProgresoTab({ data, onOpenPhoto }: { data: CoachClientDetailData
       {bmi != null ? (
         <StatCard>
           <CardHeader icon={TrendingUp} title="Índice de masa corporal" right={<Pill label={bmiCategory(bmi)} />} />
-          <Text style={[styles.bmiValue, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{bmi.toFixed(1)}</Text>
+          <Text style={[styles.bmiValue, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{bmi.toFixed(1)}</Text>
           <BmiBar bmi={bmi} />
         </StatCard>
       ) : null}
@@ -201,11 +201,11 @@ function CompCol({ label, c, onOpen }: { label: string; c: CheckInEntry; onOpen:
   const { theme } = useTheme()
   return (
     <View style={{ flex: 1, alignItems: 'center', gap: 6 }}>
-      <Text style={[styles.compLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+      <Text style={[styles.compLabel, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>{label}</Text>
       <TouchableOpacity activeOpacity={0.85} onPress={onOpen}>
         <Image source={{ uri: c.front_photo_url! }} style={[styles.compPhoto, { borderColor: theme.border }]} contentFit="cover" transition={150} />
       </TouchableOpacity>
-      <Text style={[styles.compMeta, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{c.weight != null ? `${c.weight} kg` : '—'}</Text>
+      <Text style={[styles.compMeta, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{c.weight != null ? `${c.weight} kg` : '—'}</Text>
       <Text style={[styles.compMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{formatDate(c.date)}</Text>
     </View>
   )
@@ -215,7 +215,7 @@ function SelChip({ label, on, onPress }: { label: string; on: boolean; onPress: 
   const { theme } = useTheme()
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={[styles.selChip, { borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : 'transparent' }]}>
-      <Text style={{ fontSize: 11.5, fontFamily: 'Inter_600SemiBold', color: on ? theme.primary : theme.mutedForeground }}>{label}</Text>
+      <Text style={{ fontSize: 11.5, fontFamily: 'HankenGrotesk_600SemiBold', color: on ? theme.primary : theme.mutedForeground }}>{label}</Text>
     </TouchableOpacity>
   )
 }
@@ -226,8 +226,8 @@ function CheckInRow({ c, onOpenPhoto }: { c: CheckInEntry; onOpenPhoto: (photos:
   return (
     <View style={[styles.ciCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
       <View style={cd.headerRow}>
-        <Text style={[styles.ciDate, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{formatDate(c.date)}</Text>
-        {c.weight != null ? <Text style={[styles.ciWeight, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>{c.weight} kg</Text> : null}
+        <Text style={[styles.ciDate, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{formatDate(c.date)}</Text>
+        {c.weight != null ? <Text style={[styles.ciWeight, { color: theme.primary, fontFamily: 'Archivo_700Bold' }]}>{c.weight} kg</Text> : null}
       </View>
       {c.energy_level != null ? (
         <View style={styles.ciEnergyRow}>

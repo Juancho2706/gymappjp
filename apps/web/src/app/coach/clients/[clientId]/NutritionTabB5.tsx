@@ -21,7 +21,7 @@ import {
 } from 'recharts'
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -154,7 +154,7 @@ type NutritionTabB5Props = {
 }
 
 const MACRO_COLORS = {
-  cal: '#007AFF',
+  cal: 'var(--sport-500)',
   prot: 'var(--color-macro-protein)',
   carb: 'var(--color-macro-carbs)',
   fat: 'var(--color-macro-fats)',
@@ -279,7 +279,7 @@ function DetailAccordion({
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <GlassCard className="overflow-hidden border-dashed border-border/50 dark:border-white/10">
+    <Card className="overflow-hidden ">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -302,13 +302,13 @@ function DetailAccordion({
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.22 }}
-            className="overflow-hidden border-t border-border/30 dark:border-white/10"
+            className="overflow-hidden border-t border-border/30"
           >
             <div className="space-y-6 p-5">{children}</div>
           </motion.div>
         )}
       </AnimatePresence>
-    </GlassCard>
+    </Card>
   )
 }
 
@@ -651,7 +651,7 @@ export function NutritionTabB5({
       )}
 
       {plan && (
-        <div className="space-y-2 border-t border-border/40 pt-5 dark:border-white/10">
+        <div className="space-y-2 border-t border-border/40 pt-5">
           <h3 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-primary">
             Últimos 7 días · kcal consumidas vs meta del log
             <InfoTooltip content="Barras azules = calorías consumidas (suma de comidas completadas × porción). Línea naranja = meta calórica diaria del plan." />
@@ -722,7 +722,7 @@ export function NutritionTabB5({
         subtitle="Plan activo, edición y lista de comidas"
       />
       {clientFavoriteFoods.length > 0 && (
-        <GlassCard className="border-border/40 p-4 dark:border-white/10">
+        <Card className="border-border/40 p-4">
           <div className="mb-2 flex items-center gap-2">
             <Heart className="h-4 w-4 shrink-0 fill-rose-400 text-rose-400" />
             <h3 className="text-xs font-black uppercase tracking-widest text-foreground/90">
@@ -739,10 +739,10 @@ export function NutritionTabB5({
               </Badge>
             ))}
           </div>
-        </GlassCard>
+        </Card>
       )}
       {plan && (
-        <GlassCard className="relative overflow-hidden border-dashed border-border/50 p-6 dark:border-white/10">
+        <Card className="relative overflow-hidden p-6">
           <div className="absolute top-0 right-0 h-72 w-72 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
           <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0 flex-1 space-y-3">
@@ -872,7 +872,7 @@ export function NutritionTabB5({
                   kcalSharePct={(fCal / macroKcalTotal) * 100}
                   color={MACRO_COLORS.fat}
                 />
-                <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-border/40 bg-secondary/20 px-2 py-3 dark:border-white/10">
+                <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-border/40 bg-secondary/20 px-2 py-3">
                   <Flame className="h-5 w-5 text-primary opacity-80" />
                   <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground text-center">
                     Distribución
@@ -884,7 +884,7 @@ export function NutritionTabB5({
               </div>
             </div>
           </div>
-        </GlassCard>
+        </Card>
       )}
     </section>
   )
@@ -1021,7 +1021,7 @@ export function NutritionTabB5({
       {/* Hilo bidireccional: el coach responde los comentarios del alumno. Gateado por
           `notes` (la superficie de notas/comentarios del alumno). */}
       {showSection('notes') && (
-        <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
+        <Card className="p-5">
           <div className="mb-3 flex items-center gap-1.5">
             <MessageCircle className="h-3.5 w-3.5 shrink-0 text-primary" />
             <h3 className="text-xs font-black uppercase tracking-widest text-primary">
@@ -1035,7 +1035,7 @@ export function NutritionTabB5({
             onSubmit={handleCoachReply}
             emptyHint="Sin comentarios del alumno hoy. Puedes escribirle una nota."
           />
-        </GlassCard>
+        </Card>
       )}
 
       {/* Umbrales de micros para este alumno (base + avanzados con Nutrición Pro).
@@ -1060,8 +1060,8 @@ export function NutritionTabB5({
         historyEntries={nutritionPlanHistoryEntries}
       />
       {showSection('habits') && habitsForDate && (habitsForDate.water_ml != null || habitsForDate.steps != null || habitsForDate.sleep_hours != null || habitsForDate.fasting_hours != null || (habitsForDate.supplements?.length ?? 0) > 0) && (
-        <GlassCard className="border-dashed border-sky-500/20 bg-sky-500/[0.02] p-4 dark:border-sky-500/15">
-          <h3 className="mb-3 flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-sky-600 dark:text-sky-400">
+        <Card className="bg-[var(--info-100)] p-4">
+          <h3 className="mb-3 flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-[var(--info-600)]">
             <Droplets className="h-3.5 w-3.5" />
             Hábitos del día
             <InfoTooltip content="Agua, pasos, sueño, ayuno y suplementos registrados por el alumno desde su app." iconClassName="w-3 h-3" />
@@ -1070,7 +1070,7 @@ export function NutritionTabB5({
             {habitsForDate.water_ml != null && (
               <div>
                 <p className="text-[9px] font-black uppercase text-muted-foreground">Agua</p>
-                <p className="font-black tabular-nums text-sky-600 dark:text-sky-400">
+                <p className="font-black tabular-nums text-[var(--info-600)]">
                   {habitsForDate.water_ml >= 1000
                     ? `${(habitsForDate.water_ml / 1000).toFixed(1).replace('.0', '')} L`
                     : `${habitsForDate.water_ml} ml`}
@@ -1126,7 +1126,7 @@ export function NutritionTabB5({
               </div>
             )}
           </div>
-        </GlassCard>
+        </Card>
       )}
     </section>
   )
@@ -1136,11 +1136,11 @@ export function NutritionTabB5({
     <>
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         {macroMetaPieDetail ? (
-          <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
+          <Card className="p-5">
             {macroMetaPieDetail}
-          </GlassCard>
+          </Card>
         ) : null}
-        <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
+        <Card className="p-5">
           <h3 className="mb-1 text-xs font-black uppercase tracking-widest text-primary">
             Objetivo kcal vs adherencia
           </h3>
@@ -1177,7 +1177,7 @@ export function NutritionTabB5({
                     tickLine={false}
                     width={32}
                   />
-                  <ReferenceArea yAxisId="right" y1={80} y2={100} fill="#10b981" fillOpacity={0.08} />
+                  <ReferenceArea yAxisId="right" y1={80} y2={100} fill="var(--success-500)" fillOpacity={0.08} />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null
@@ -1220,18 +1220,18 @@ export function NutritionTabB5({
                     type="monotone"
                     dataKey="compliancePct"
                     name="% comidas"
-                    stroke="#10b981"
+                    stroke="var(--success-500)"
                     strokeWidth={2}
-                    dot={{ r: 2, fill: '#10b981' }}
+                    dot={{ r: 2, fill: 'var(--success-500)' }}
                   />
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
           )}
-        </GlassCard>
+        </Card>
 
         {hasTodayNutritionLog && pieConsumed.length > 0 && (
-          <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
+          <Card className="p-5">
             <h3 className="mb-2 text-xs font-black uppercase tracking-widest text-primary">
               Consumido hoy (kcal por macro)
             </h3>
@@ -1294,7 +1294,7 @@ export function NutritionTabB5({
                 </PieChart>
               </ResponsiveContainer>
             </div>
-          </GlassCard>
+          </Card>
         )}
       </div>
     </>
@@ -1302,7 +1302,7 @@ export function NutritionTabB5({
 
   // Lista de comidas del plan (Zona B)
   const mealsList = mealDetails && mealDetails.length > 0 && (
-        <GlassCard className="border-dashed border-border/50 p-6 dark:border-white/10">
+        <Card className="p-6">
           <h3 className="mb-4 text-xs font-black uppercase tracking-widest text-primary">
             Plan completo · comidas
           </h3>
@@ -1327,7 +1327,7 @@ export function NutritionTabB5({
               return (
                 <div
                   key={id}
-                  className="overflow-hidden rounded-xl border border-border/40 bg-secondary/15 dark:border-white/10"
+                  className="overflow-hidden rounded-xl border border-border/40 bg-secondary/15"
                 >
                   <button
                     type="button"
@@ -1362,7 +1362,7 @@ export function NutritionTabB5({
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: reduceMotion ? 0 : 0.22 }}
-                        className="overflow-hidden border-t border-border/30 dark:border-white/10"
+                        className="overflow-hidden border-t border-border/30"
                       >
                         <ul className="space-y-2 px-4 py-3">
                           {items.length === 0 ? (
@@ -1401,7 +1401,7 @@ export function NutritionTabB5({
               )
             })}
           </div>
-        </GlassCard>
+        </Card>
       )
 
   // Historial detallado (Detalle): último día, tabla de logs, día específico
@@ -1413,7 +1413,7 @@ export function NutritionTabB5({
         )[0]
         if (!latest) return null
         return (
-          <GlassCard className="border-dashed border-border/50 p-6 dark:border-white/10">
+          <Card className="p-6">
             <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
               <Calendar className="h-4 w-4" /> Último día registrado
             </h3>
@@ -1442,7 +1442,7 @@ export function NutritionTabB5({
                           'flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm',
                           row.is_completed
                             ? 'border-emerald-500/20 bg-emerald-500/10'
-                            : 'border-border/50 bg-secondary/50 dark:border-white/10 dark:bg-white/5'
+                            : 'border-border/50 bg-secondary/50 dark:bg-white/5'
                         )}
                       >
                         <span className="truncate font-bold">
@@ -1458,11 +1458,11 @@ export function NutritionTabB5({
                   })}
               </div>
             )}
-          </GlassCard>
+          </Card>
         )
       })()}
 
-      <GlassCard className="border-dashed border-border/50 p-6 dark:border-white/10">
+      <Card className="p-6">
         <h3 className="mb-4 text-xs font-black uppercase tracking-widest text-primary">Historial de logs (30)</h3>
         {logRowsDesc.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">Sin registros.</p>
@@ -1470,7 +1470,7 @@ export function NutritionTabB5({
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[10px] font-bold uppercase tracking-widest">
               <thead>
-                <tr className="border-b border-border/50 text-muted-foreground dark:border-white/10">
+                <tr className="border-b border-border/50 text-muted-foreground">
                   <th className="pb-2 pr-3">Fecha</th>
                   <th className="pb-2 pr-3">Plan</th>
                   <th className="pb-2 pr-3">Obj. kcal</th>
@@ -1516,10 +1516,10 @@ export function NutritionTabB5({
             </table>
           </div>
         )}
-      </GlassCard>
+      </Card>
 
       {/* ── Historial por fecha ── */}
-      <GlassCard className="p-4 space-y-4">
+      <Card className="p-4 space-y-4">
         <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
           <Calendar className="w-3.5 h-3.5" /> Ver día específico
         </h3>
@@ -1544,7 +1544,7 @@ export function NutritionTabB5({
             )}
           </div>
         )}
-      </GlassCard>
+      </Card>
     </>
   )
 
@@ -1554,7 +1554,7 @@ export function NutritionTabB5({
   if (!nutritionDomainEnabled) {
     return (
       <div className="space-y-4">
-        <GlassCard className="border-dashed border-border/50 p-8 text-center dark:border-white/10">
+        <Card className="p-8 text-center">
           <Utensils className="mx-auto mb-3 h-6 w-6 text-muted-foreground" />
           <h3 className="text-sm font-black uppercase tracking-widest text-foreground">
             Nutrición desactivada para este alumno
@@ -1563,7 +1563,7 @@ export function NutritionTabB5({
             Apagaste el módulo de nutrición para este alumno en tus preferencias. Sus datos se
             conservan; vuelve a activarlo para ver plan, macros y adherencia.
           </p>
-        </GlassCard>
+        </Card>
         {/* Escape hatch: el panel de override permite re-activar la nutrición desde la
             misma ficha aunque el dominio esté apagado (su master switch tri-state). */}
         {nutritionOverrideContext && (
@@ -1702,10 +1702,10 @@ function NutritionDayReadOnly({ log }: { log: NutritionDayLog }) {
                 </ul>
               )}
               {mealSwaps.length > 0 && (
-                <div className="rounded-lg border border-sky-500/25 bg-sky-500/5 px-2.5 py-2 space-y-1">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-sky-600">Swaps aplicados</p>
+                <div className="rounded-lg bg-[var(--info-100)] px-2.5 py-2 space-y-1">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-[var(--info-600)]">Swaps aplicados</p>
                   {mealSwaps.map((s) => (
-                    <p key={s.id ?? `${s.meal_id}-${s.original_food_id}-${s.swapped_food_id}`} className="text-[10px] text-sky-700 dark:text-sky-300">
+                    <p key={s.id ?? `${s.meal_id}-${s.original_food_id}-${s.swapped_food_id}`} className="text-[10px] text-[var(--info-600)]">
                       {(s.original_food?.name ?? 'Alimento')} → {(s.swapped_food?.name ?? 'Alternativa')}
                       {s.swapped_quantity != null
                         ? ` (${s.swapped_quantity}${s.swapped_unit ? ` ${s.swapped_unit}` : ''})`

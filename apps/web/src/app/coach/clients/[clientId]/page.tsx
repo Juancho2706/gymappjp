@@ -22,18 +22,18 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
         <div className="relative mx-auto max-w-[1600px] w-full min-w-0 space-y-8 animate-fade-in">
             <div className="flex items-center justify-between print:hidden">
                 <Link href="/coach/clients"
-                    className="group inline-flex max-w-full min-w-0 items-center gap-2 break-words text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground transition-all hover:text-primary">
-                    <div className="p-1.5 rounded-full bg-secondary dark:bg-white/5 group-hover:bg-primary/10 transition-colors">
-                        <ArrowLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
+                    className="group inline-flex max-w-full min-w-0 items-center gap-2 break-words text-[10px] font-black uppercase tracking-[0.3em] text-muted transition-all hover:text-sport-600">
+                    <div className="rounded-control bg-surface-sunken p-1.5 transition-colors group-hover:bg-sport-100">
+                        <ArrowLeft className="h-3 w-3 transition-transform group-hover:-translate-x-0.5" />
                     </div>
                     Directorio de Unidades
                 </Link>
                 <Link
                     href={`/coach/clients/${clientId}/progress-print`}
                     target="_blank"
-                    className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground hover:text-primary transition-colors"
+                    className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.3em] text-muted transition-colors hover:text-sport-600"
                 >
-                    <FileDown className="w-3.5 h-3.5" />
+                    <FileDown className="h-3.5 w-3.5" />
                     Exportar PDF
                 </Link>
             </div>
@@ -212,11 +212,11 @@ async function ModuleLinksRow({ clientId }: { clientId: string }) {
                 <Link
                     key={href}
                     href={href}
-                    className="group flex min-h-[44px] items-center gap-2 rounded-xl border border-border bg-card px-4 text-sm font-semibold text-foreground transition-all hover:border-primary/30 hover:bg-card/80"
+                    className="group flex min-h-[44px] items-center gap-2 rounded-control border border-subtle bg-surface-card px-4 text-sm font-semibold text-body shadow-[var(--shadow-sm)] transition-all hover:border-default hover:bg-surface-sunken"
                 >
-                    <Icon className="h-4 w-4 text-primary" />
+                    <Icon className="h-4 w-4 text-sport-600" />
                     {label}
-                    <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                    <ChevronRight className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5" />
                 </Link>
             ))}
         </div>

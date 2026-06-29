@@ -12,7 +12,8 @@ import {
     Timer,
     Target,
 } from 'lucide-react'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -142,18 +143,21 @@ export function ProgramTabB7({
 
     if (!activeProgram) {
         return (
-            <GlassCard className="border-dashed border-border/50 p-10 text-center dark:border-white/10">
-                <LayoutGrid className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
-                <p className="text-sm font-medium text-muted-foreground">
+            <Card padding="lg" className="items-center text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-sunken text-subtle">
+                    <LayoutGrid className="h-6 w-6" />
+                </div>
+                <p className="text-base font-extrabold text-strong">Sin programa asignado</p>
+                <p className="text-sm font-medium text-muted">
                     No hay un programa de entrenamiento activo para este alumno.
                 </p>
                 <Link
                     href={`/coach/builder/${clientId}`}
-                    className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'mt-4')}
+                    className={cn(buttonVariants({ variant: 'sport', size: 'md' }), 'mt-2')}
                 >
                     Crear o asignar programa
                 </Link>
-            </GlassCard>
+            </Card>
         )
     }
 
@@ -171,18 +175,18 @@ export function ProgramTabB7({
             <div
                 key={key}
                 className={cn(
-                    'flex flex-col rounded-xl border p-3 transition-colors dark:border-white/10',
+                    'flex flex-col rounded-control border p-3 transition-colors',
                     plan && blocks.length > 0
-                        ? 'border-border/50 bg-secondary/20'
-                        : 'border-dashed border-border/40 bg-muted/20',
-                    isToday && 'ring-2 ring-primary/50'
+                        ? 'border-subtle bg-surface-sunken'
+                        : 'border-subtle bg-surface-sunken/50',
+                    isToday && 'ring-2 ring-sport-400'
                 )}
             >
                 <div className="mb-2 flex items-center justify-between gap-2">
                     <span
                         className={cn(
                             'text-[10px] font-black uppercase tracking-widest',
-                            isToday ? 'text-primary' : 'text-muted-foreground'
+                            isToday ? 'text-sport-600' : 'text-muted'
                         )}
                     >
                         {label}
@@ -190,20 +194,20 @@ export function ProgramTabB7({
                     </span>
                 </div>
                 {!plan || blocks.length === 0 ? (
-                    <p className="mt-auto text-xs font-bold text-muted-foreground">Descanso</p>
+                    <p className="mt-auto text-xs font-bold text-muted">Descanso</p>
                 ) : (
                     <>
-                        <p className="text-xs font-black uppercase tracking-tight text-foreground line-clamp-2">
+                        <p className="line-clamp-2 text-xs font-black uppercase tracking-tight text-strong">
                             {plan.title || 'Entrenamiento'}
                         </p>
-                        <p className="mt-1 text-[10px] font-bold text-muted-foreground">
+                        <p className="mt-1 text-[10px] font-bold text-muted">
                             {blocks.length} ej. · {groups.slice(0, 3).join(', ')}
                             {groups.length > 3 ? '…' : ''}
                         </p>
                         <button
                             type="button"
                             onClick={() => togglePlanList(key)}
-                            className="mt-2 flex w-full items-center justify-between rounded-lg border border-border/40 bg-background/50 px-2 py-1.5 text-[10px] font-black uppercase tracking-widest hover:bg-primary/5 dark:border-white/10"
+                            className="mt-2 flex w-full items-center justify-between rounded-control border border-subtle bg-surface-card px-2 py-1.5 text-[10px] font-black uppercase tracking-widest hover:bg-sport-100"
                         >
                             Ejercicios
                             {listOpen ? (
@@ -213,7 +217,7 @@ export function ProgramTabB7({
                             )}
                         </button>
                         {listOpen && (
-                            <ul className="mt-2 space-y-1 border-t border-border/30 pt-2 dark:border-white/10">
+                            <ul className="mt-2 space-y-1 border-t border-subtle pt-2">
                                 {blocks.map((block: any) => {
                                     const name = block.exercises?.name || 'Ejercicio'
                                     return (
@@ -221,7 +225,7 @@ export function ProgramTabB7({
                                             <button
                                                 type="button"
                                                 onClick={() => openBlock(block)}
-                                                className="w-full rounded-md px-2 py-1.5 text-left text-[11px] font-bold text-foreground hover:bg-primary/10"
+                                                className="w-full rounded-[10px] px-2 py-1.5 text-left text-[11px] font-bold text-strong hover:bg-sport-100"
                                             >
                                                 {name}
                                             </button>
@@ -240,30 +244,26 @@ export function ProgramTabB7({
 
     return (
         <div className="space-y-6">
-            <GlassCard className="relative overflow-hidden border-dashed border-border/50 p-6 dark:border-white/10 md:p-8">
-                <div className="pointer-events-none absolute top-0 right-0 h-64 w-64 rounded-full bg-primary/5 blur-3xl" />
-                <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <Card variant="inverse" padding="lg">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="text-lg font-black uppercase tracking-tight text-foreground md:text-xl">
+                            <h2 className="text-lg font-black uppercase tracking-tight text-on-dark md:text-xl">
                                 {activeProgram.name}
                             </h2>
-                            <span className="rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-primary">
+                            <Badge tone="sport" variant="solid" size="sm">
                                 {isWeekly ? 'Semanal' : 'Cíclico'}
-                            </span>
+                            </Badge>
                             {abMode && (
-                                <span
-                                    className="rounded-md border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-amber-700 dark:text-amber-400"
-                                    title="Semanas impares del programa → A, pares → B"
-                                >
+                                <Badge tone="sport" size="sm" title="Semanas impares del programa → A, pares → B">
                                     Variante {activeVariant} · esta semana
-                                </span>
+                                </Badge>
                             )}
-                            <span className="rounded-md border border-border/50 bg-secondary/40 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground dark:border-white/10">
+                            <span className="rounded-[10px] border border-[var(--border-inverse)] px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-on-dark-muted">
                                 {weeksRepeat} sem. ciclo
                             </span>
                             {activeProgram.cycle_length ? (
-                                <span className="rounded-md border border-border/50 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground dark:border-white/10">
+                                <span className="rounded-[10px] border border-[var(--border-inverse)] px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-on-dark-muted">
                                     {activeProgram.cycle_length} días / ciclo
                                 </span>
                             ) : null}
@@ -275,7 +275,7 @@ export function ProgramTabB7({
                         )}
                         {hasSchedule ? (
                             <div className="max-w-md space-y-2">
-                                <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-on-dark-muted">
                                     <span>
                                         Semana {planCurrentWeek} / {planTotalWeeks}
                                     </span>
@@ -285,29 +285,26 @@ export function ProgramTabB7({
                                         <span>En curso</span>
                                     )}
                                 </div>
-                                <Progress value={weekProgressPct} className="h-1.5 bg-secondary" />
+                                <Progress value={weekProgressPct} className="h-1.5 bg-[var(--border-inverse)]" />
                             </div>
                         ) : (
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-on-dark-muted">
                                 Sin fechas inicio/fin en el programa · progreso por semanas no disponible
                             </p>
                         )}
                     </div>
                     <Link
                         href={`/coach/builder/${clientId}`}
-                        className={cn(
-                            buttonVariants({ variant: 'outline', size: 'sm' }),
-                            'shrink-0 gap-2 border-primary/30'
-                        )}
+                        className="inline-flex h-9 shrink-0 items-center gap-2 rounded-control border-[1.5px] border-[var(--border-inverse)] bg-white/[0.07] px-3.5 text-sm font-bold text-on-dark transition-colors hover:bg-white/[0.12]"
                     >
                         <Pencil className="h-3.5 w-3.5" />
                         Editar en builder
                     </Link>
                 </div>
-            </GlassCard>
+            </Card>
 
-            <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10 md:p-6">
-                <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
+            <Card padding="md">
+                <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
                     <LayoutGrid className="h-4 w-4" />
                     {isWeekly ? 'Microciclo (L–D)' : 'Días del programa'}
                 </h3>
@@ -323,7 +320,7 @@ export function ProgramTabB7({
                         })}
                     </div>
                 ) : plansView.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-sm text-muted">
                         No hay días con ejercicios en este programa (revisa variantes de semana en el
                         builder).
                     </p>
@@ -338,7 +335,7 @@ export function ProgramTabB7({
                         })}
                     </div>
                 )}
-            </GlassCard>
+            </Card>
 
             <Sheet
                 open={sheetOpen}
@@ -351,16 +348,16 @@ export function ProgramTabB7({
                     side={sheetSide}
                     className={cn(
                         sheetSide === 'bottom' ? 'max-h-[92vh]' : 'sm:max-w-md',
-                        'w-full overflow-y-auto border-white/10 bg-zinc-950/95 text-white'
+                        'w-full overflow-y-auto border-subtle bg-surface-card text-body'
                     )}
                 >
                     <SheetHeader>
-                        <SheetTitle className="pr-10 normal-case">
+                        <SheetTitle className="pr-10 normal-case text-strong">
                             {ex?.name || 'Ejercicio'}
                         </SheetTitle>
                         <SheetDescription className="text-left normal-case">
                             {ex?.muscle_group ? (
-                                <span className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-zinc-300">
+                                <span className="inline-flex items-center gap-1 rounded-[10px] border border-subtle bg-surface-sunken px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-muted">
                                     <Target className="h-3 w-3" />
                                     {ex.muscle_group}
                                 </span>
@@ -370,7 +367,7 @@ export function ProgramTabB7({
 
                     <div className="space-y-4 px-6 pb-8">
                         {ex?.gif_url ? (
-                            <div className="relative aspect-square w-full max-w-xs overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                            <div className="relative aspect-square w-full max-w-xs overflow-hidden rounded-control border border-subtle bg-surface-sunken">
                                 <Image
                                     src={ex.gif_url}
                                     alt=""
@@ -381,18 +378,18 @@ export function ProgramTabB7({
                             </div>
                         ) : null}
 
-                        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm">
-                            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                        <div className="rounded-control border border-subtle bg-surface-sunken p-4 text-sm">
+                            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-subtle">
                                 Prescripción
                             </p>
-                            <ul className="space-y-1.5 text-xs font-semibold text-zinc-200">
+                            <ul className="space-y-1.5 text-xs font-semibold text-body">
                                 <li className="flex items-center gap-2">
-                                    <Dumbbell className="h-3.5 w-3.5 text-primary" />
+                                    <Dumbbell className="h-3.5 w-3.5 text-sport-600" />
                                     {sheetBlock?.sets ?? '—'} × {sheetBlock?.reps ?? '—'}
                                 </li>
                                 {sheetBlock?.tempo ? (
                                     <li className="flex items-center gap-2">
-                                        <Timer className="h-3.5 w-3.5 text-amber-400" />
+                                        <Timer className="h-3.5 w-3.5 text-[var(--ember-500)]" />
                                         Tempo {sheetBlock.tempo}
                                     </li>
                                 ) : null}
@@ -407,7 +404,7 @@ export function ProgramTabB7({
                                 ) : null}
                             </ul>
                             {sheetBlock?.notes ? (
-                                <p className="mt-3 border-t border-white/10 pt-3 text-xs font-medium leading-relaxed text-zinc-400">
+                                <p className="mt-3 border-t border-subtle pt-3 text-xs font-medium leading-relaxed text-muted">
                                     {sheetBlock.notes}
                                 </p>
                             ) : null}
@@ -415,8 +412,8 @@ export function ProgramTabB7({
 
                         <Button
                             type="button"
-                            variant="outline"
-                            className="w-full border-white/20 text-white hover:bg-white/10"
+                            variant="secondary"
+                            className="w-full"
                             onClick={() => setSheetOpen(false)}
                         >
                             Cerrar

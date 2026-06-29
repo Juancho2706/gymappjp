@@ -18,7 +18,7 @@ import {
     Tooltip,
     CartesianGrid,
 } from 'recharts'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { Trophy, AlertTriangle, BarChart3, Target, Calendar, Clock, Dumbbell } from 'lucide-react'
 import type { MuscleVolumeRow } from './profileDataHelpers'
@@ -74,42 +74,40 @@ function WeeklyPRBanner({ prs }: { prs: WeeklyWeightPR[] }) {
     const more = prs.length - 1
 
     return (
-        <div
-            className={cn(
-                'relative overflow-hidden rounded-2xl border border-amber-500/35 bg-gradient-to-r from-amber-500/15 via-primary/10 to-emerald-500/10',
-                'px-5 py-4 shadow-[0_0_40px_-12px_rgba(245,158,11,0.45)]'
-            )}
+        <Card
+            padding="md"
+            className="gap-0 border-[var(--ember-200)]"
+            style={{ background: 'linear-gradient(135deg, var(--ember-100), var(--sport-100))' }}
         >
-            <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-amber-400/20 blur-2xl pointer-events-none" />
-            <div className="relative z-10 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
-                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
+                <div className="flex items-center gap-2 text-[var(--ember-700)]">
                     <Trophy className="h-6 w-6 shrink-0" />
                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">Esta semana</span>
                 </div>
                 <div className="min-w-0 flex-1">
-                    <p className="text-sm font-black text-foreground leading-snug">
+                    <p className="text-sm font-black leading-snug text-strong">
                         ¡Nuevo récord 1RM! — {top.exerciseName}:{' '}
-                        <span className="text-primary tabular-nums">{top.newWeightKg} kg ×{top.newReps}</span>
-                        <span className="ml-2 text-[10px] font-bold bg-primary/10 text-primary rounded px-1.5 py-0.5 tabular-nums">
+                        <span className="tabular-nums text-sport-600">{top.newWeightKg} kg ×{top.newReps}</span>
+                        <span className="ml-2 rounded-[10px] bg-sport-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-sport-700">
                             1RM {top.newOneRm} kg
                         </span>
                     </p>
-                    <p className="text-[11px] font-semibold text-muted-foreground mt-0.5">
+                    <p className="mt-0.5 text-[11px] font-semibold text-muted">
                         Antes: {top.prevWeightKg} kg ×{top.prevReps} · 1RM {top.prevOneRm} kg
                         {top.pctChange != null && (
-                            <span className="text-emerald-600 dark:text-emerald-400 ml-2">
+                            <span className="ml-2 text-[var(--success-600)]">
                                 (+{top.pctChange}% 1RM)
                             </span>
                         )}
                         {more > 0 && (
-                            <span className="ml-2 text-foreground/80">
+                            <span className="ml-2 text-body">
                                 +{more} ejercicio{more === 1 ? '' : 's'} más
                             </span>
                         )}
                     </p>
                 </div>
             </div>
-        </div>
+        </Card>
     )
 }
 
@@ -230,8 +228,8 @@ export function TrainingTabB4Panels({
             {hasStrength && (
                 <div className="space-y-4">
                     <div className="flex items-center gap-2">
-                        <Dumbbell className="h-4 w-4 text-primary" />
-                        <h3 className="text-xs font-black uppercase tracking-widest text-primary">
+                        <Dumbbell className="h-4 w-4 text-sport-600" />
+                        <h3 className="text-xs font-black uppercase tracking-widest text-sport-600">
                             Fuerza — 1RM estimado (Epley)
                         </h3>
                     </div>
@@ -242,12 +240,11 @@ export function TrainingTabB4Panels({
                                 type="button"
                                 onClick={() => setSelectedMuscle(null)}
                                 className={cn(
-                                    'rounded-xl border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all',
+                                    'rounded-pill border-[1.5px] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all',
                                     !selectedMuscle
-                                        ? 'border-transparent text-white shadow-md'
-                                        : 'border-border/50 bg-muted/30 text-muted-foreground hover:bg-muted/60 dark:hover:bg-white/10'
+                                        ? 'border-sport-500 bg-sport-500 text-[var(--text-on-sport)]'
+                                        : 'border-default bg-surface-card text-muted hover:text-strong'
                                 )}
-                                style={!selectedMuscle ? { backgroundColor: 'var(--theme-primary)' } : {}}
                             >
                                 Todos
                             </button>
@@ -259,12 +256,11 @@ export function TrainingTabB4Panels({
                                         type="button"
                                         onClick={() => setSelectedMuscle(isActive ? null : group)}
                                         className={cn(
-                                            'rounded-xl border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all',
+                                            'rounded-pill border-[1.5px] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all',
                                             isActive
-                                                ? 'border-transparent text-white shadow-md'
-                                                : 'border-border/50 bg-muted/30 text-muted-foreground hover:bg-muted/60 dark:hover:bg-white/10'
+                                                ? 'border-sport-500 bg-sport-500 text-[var(--text-on-sport)]'
+                                                : 'border-default bg-surface-card text-muted hover:text-strong'
                                         )}
-                                        style={isActive ? { backgroundColor: 'var(--theme-primary)' } : {}}
                                     >
                                         {group}
                                         <span className="ml-1 opacity-60">({count})</span>
@@ -290,15 +286,14 @@ export function TrainingTabB4Panels({
             {(hasRadar || hasBars) && (
                 <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                     {hasRadar && (
-                        <GlassCard className="relative overflow-hidden border-dashed border-border/50 p-5 dark:border-white/10">
-                            <div className="absolute bottom-0 left-0 h-40 w-40 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
-                            <h3 className="relative z-10 mb-1 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
+                        <Card padding="md">
+                            <h3 className="mb-1 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
                                 <Target className="h-4 w-4" /> Balance muscular (30d)
                             </h3>
-                            <p className="relative z-10 mb-4 text-[10px] font-medium text-muted-foreground">
+                            <p className="mb-4 text-[10px] font-medium text-muted">
                                 Volumen relativo por grupo (normalizado al máximo del periodo).
                             </p>
-                            <div className="relative z-10 h-[280px] w-full">
+                            <div className="h-[280px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
                                         <PolarGrid stroke={chartGridColor} />
@@ -314,8 +309,8 @@ export function TrainingTabB4Panels({
                                         <Radar
                                             name="Volumen"
                                             dataKey="pct"
-                                            stroke="var(--theme-primary, #007AFF)"
-                                            fill="var(--theme-primary, #007AFF)"
+                                            stroke="var(--sport-500)"
+                                            fill="var(--sport-500)"
                                             fillOpacity={0.35}
                                         />
                                         <Tooltip
@@ -346,13 +341,13 @@ export function TrainingTabB4Panels({
                                 </ResponsiveContainer>
                             </div>
                             {imbalances.length > 0 && (
-                                <div className="relative z-10 mt-3 space-y-2 rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-2.5">
+                                <div className="mt-3 space-y-2 rounded-control bg-[var(--warning-100)] px-3 py-2.5">
                                     {imbalances.slice(0, 2).map((im, i) => (
                                         <div
                                             key={`${im.weaker}-${i}`}
-                                            className="flex gap-2 text-[11px] font-semibold text-amber-800 dark:text-amber-200/90"
+                                            className="flex gap-2 text-[11px] font-semibold text-[var(--warning-700)]"
                                         >
-                                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warning-600)]" />
                                             <span>
                                                 Posible desequilibrio: <strong>{im.stronger}</strong> ~
                                                 {im.ratio}× más volumen que <strong>{im.weaker}</strong>.
@@ -361,19 +356,18 @@ export function TrainingTabB4Panels({
                                     ))}
                                 </div>
                             )}
-                        </GlassCard>
+                        </Card>
                     )}
 
                     {hasBars && (
-                        <GlassCard className="relative overflow-hidden border-dashed border-border/50 p-5 dark:border-white/10">
-                            <div className="absolute top-0 right-0 h-40 w-40 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
-                            <h3 className="relative z-10 mb-1 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
+                        <Card padding="md">
+                            <h3 className="mb-1 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
                                 <BarChart3 className="h-4 w-4" /> Tonelaje por día
                             </h3>
-                            <p className="relative z-10 mb-4 text-[10px] font-medium text-muted-foreground">
+                            <p className="mb-4 text-[10px] font-medium text-muted">
                                 Σ (peso × reps) agrupado por fecha de registro.
                             </p>
-                            <div className="relative z-10 h-[280px] w-full">
+                            <div className="h-[280px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <ComposedChart data={tonnageSeries} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
                                         <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
@@ -418,14 +412,14 @@ export function TrainingTabB4Panels({
                                         />
                                         <Bar
                                             dataKey="tonnage"
-                                            fill="var(--theme-primary, #007AFF)"
+                                            fill="var(--sport-500)"
                                             radius={[4, 4, 0, 0]}
                                             opacity={0.7}
                                         />
                                         <Line
                                             type="monotone"
                                             dataKey="movingAvg"
-                                            stroke="var(--theme-primary, #007AFF)"
+                                            stroke="var(--sport-500)"
                                             strokeWidth={2}
                                             dot={false}
                                             strokeDasharray="4 3"
@@ -433,30 +427,24 @@ export function TrainingTabB4Panels({
                                     </ComposedChart>
                                 </ResponsiveContainer>
                             </div>
-                        </GlassCard>
+                        </Card>
                     )}
                 </div>
             )}
 
             {/* ── Historial de entrenamientos ── */}
-            <GlassCard className="relative overflow-hidden border-dashed border-border/50 dark:border-white/10 p-5 space-y-5">
-                <div className="absolute -bottom-10 -right-10 h-40 w-40 rounded-full blur-3xl pointer-events-none opacity-5"
-                    style={{ backgroundColor: 'var(--theme-primary)' }} />
-
+            <Card padding="md" className="space-y-5">
                 {/* Header */}
-                <div className="relative z-10 flex items-center justify-between">
+                <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-                            style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 12%, transparent)' }}
-                        >
-                            <Clock className="h-4 w-4" style={{ color: 'var(--theme-primary)' }} />
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-sport-100">
+                            <Clock className="h-4 w-4 text-sport-600" />
                         </div>
                         <div>
-                            <h3 className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--theme-primary)' }}>
+                            <h3 className="text-xs font-black uppercase tracking-widest text-sport-600">
                                 Historial de entrenamientos
                             </h3>
-                            <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60 mt-0.5">
+                            <p className="mt-0.5 text-[9px] font-bold uppercase tracking-widest text-subtle">
                                 {recentWorkoutDates.length > 0
                                     ? `Últimas ${recentWorkoutDates.length} sesiones registradas`
                                     : 'Sin sesiones aún'}
@@ -467,7 +455,7 @@ export function TrainingTabB4Panels({
 
                 {/* Session tiles */}
                 {recentWorkoutDates.length > 0 ? (
-                    <div className="relative z-10 grid grid-cols-5 gap-2 sm:grid-cols-10">
+                    <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
                         {recentWorkoutDates.map((date) => {
                             const dt = new Date(date + 'T12:00:00')
                             const dayName = dt.toLocaleDateString('es-ES', { weekday: 'short' })
@@ -480,27 +468,19 @@ export function TrainingTabB4Panels({
                                     type="button"
                                     onClick={() => handleHistoryDateChange(date)}
                                     className={cn(
-                                        'flex flex-col items-center gap-0.5 rounded-xl border py-2.5 px-1 transition-all duration-200 active:scale-95',
+                                        'flex flex-col items-center gap-0.5 rounded-control border-[1.5px] px-1 py-2.5 transition-all duration-200 active:scale-95',
                                         isSelected
-                                            ? 'border-transparent text-white shadow-lg scale-105'
-                                            : 'border-border/40 bg-muted/20 text-muted-foreground hover:border-primary/30 hover:bg-muted/50 dark:hover:bg-white/5'
+                                            ? 'scale-105 border-sport-500 bg-sport-100'
+                                            : 'border-subtle bg-surface-sunken hover:border-sport-400'
                                     )}
-                                    style={
-                                        isSelected
-                                            ? {
-                                                backgroundColor: 'var(--theme-primary)',
-                                                boxShadow: '0 4px 20px color-mix(in srgb, var(--theme-primary) 45%, transparent)',
-                                            }
-                                            : {}
-                                    }
                                 >
-                                    <span className={cn('text-[8px] font-black uppercase tracking-widest capitalize leading-none', isSelected ? 'text-white/70' : 'text-muted-foreground/60')}>
+                                    <span className={cn('text-[8px] font-black uppercase capitalize leading-none tracking-widest', isSelected ? 'text-sport-700' : 'text-subtle')}>
                                         {dayName}
                                     </span>
-                                    <span className={cn('text-base font-black tabular-nums leading-tight', isSelected ? 'text-white' : 'text-foreground')}>
+                                    <span className={cn('font-display text-base font-black leading-tight tabular-nums', isSelected ? 'text-sport-700' : 'text-strong')}>
                                         {dayNum}
                                     </span>
-                                    <span className={cn('text-[8px] font-bold uppercase leading-none', isSelected ? 'text-white/70' : 'text-muted-foreground/60')}>
+                                    <span className={cn('text-[8px] font-bold uppercase leading-none', isSelected ? 'text-sport-700' : 'text-subtle')}>
                                         {month}
                                     </span>
                                 </button>
@@ -508,14 +488,14 @@ export function TrainingTabB4Panels({
                         })}
                     </div>
                 ) : (
-                    <p className="relative z-10 py-6 text-center text-sm text-muted-foreground">
+                    <p className="py-6 text-center text-sm text-muted">
                         Sin sesiones registradas.
                     </p>
                 )}
 
                 {/* Date picker (búsqueda) */}
-                <div className="relative z-10 space-y-2 border-t border-border/30 pt-4 dark:border-white/10">
-                    <p className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">
+                <div className="space-y-2 border-t border-subtle pt-4">
+                    <p className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-subtle">
                         <Calendar className="h-3 w-3" /> Buscar sesión por fecha
                     </p>
                     <DayNavigator
@@ -528,14 +508,14 @@ export function TrainingTabB4Panels({
 
                 {/* Session detail */}
                 {historyDate !== santiagoTodayIso && (
-                    <div className="relative z-10 border-t border-border/30 pt-4 dark:border-white/10">
+                    <div className="border-t border-subtle pt-4">
                         {isPending && (
-                            <p className="animate-pulse py-6 text-center text-sm text-muted-foreground">
+                            <p className="animate-pulse py-6 text-center text-sm text-muted">
                                 Cargando sesión…
                             </p>
                         )}
                         {!isPending && historyLoaded && historyData.length === 0 && (
-                            <p className="py-6 text-center text-sm text-muted-foreground">
+                            <p className="py-6 text-center text-sm text-muted">
                                 Sin entrenamiento registrado para este día.
                             </p>
                         )}
@@ -544,7 +524,7 @@ export function TrainingTabB4Panels({
                         )}
                     </div>
                 )}
-            </GlassCard>
+            </Card>
         </div>
     )
 }
@@ -579,25 +559,18 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
             {/* Session meta bar */}
             <div className="flex flex-wrap items-center gap-3">
                 {planTitle && (
-                    <span className="rounded-lg border border-border/50 bg-muted/30 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                    <span className="rounded-control bg-surface-sunken px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-muted">
                         {planTitle}
                     </span>
                 )}
-                <span className="rounded-lg border border-border/50 bg-muted/30 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                <span className="rounded-control bg-surface-sunken px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-muted">
                     {exercises.length} ejercicio{exercises.length !== 1 ? 's' : ''}
                 </span>
-                <span className="rounded-lg border border-border/50 bg-muted/30 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                <span className="rounded-control bg-surface-sunken px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-muted">
                     {totalSets} sets
                 </span>
                 {totalVolume > 0 && (
-                    <span
-                        className="rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-widest"
-                        style={{
-                            color: 'var(--theme-primary)',
-                            borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)',
-                            backgroundColor: 'color-mix(in srgb, var(--theme-primary) 8%, transparent)',
-                        }}
-                    >
+                    <span className="rounded-control bg-sport-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-sport-700">
                         {Math.round(totalVolume).toLocaleString('es-ES')} kg·rep
                     </span>
                 )}
@@ -610,41 +583,38 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                     return (
                         <div
                             key={name}
-                            className="overflow-hidden rounded-xl border border-border/40 bg-muted/10 dark:border-white/8"
+                            className="overflow-hidden rounded-control border border-subtle bg-surface-sunken"
                         >
-                            <div className="flex items-center justify-between gap-3 px-3 py-2.5 border-b border-border/30 dark:border-white/5">
-                                <div className="flex items-center gap-2 min-w-0">
-                                    <div
-                                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[9px] font-black text-white"
-                                        style={{ backgroundColor: 'var(--theme-primary)' }}
-                                    >
+                            <div className="flex items-center justify-between gap-3 border-b border-subtle px-3 py-2.5">
+                                <div className="flex min-w-0 items-center gap-2">
+                                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[10px] bg-sport-500 text-[9px] font-black text-[var(--text-on-sport)]">
                                         {exIdx + 1}
                                     </div>
-                                    <p className="text-xs font-black uppercase tracking-tight truncate">{name}</p>
+                                    <p className="truncate text-xs font-black uppercase tracking-tight text-strong">{name}</p>
                                 </div>
                                 {muscle && (
-                                    <span className="shrink-0 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/70">
+                                    <span className="shrink-0 text-[9px] font-bold uppercase tracking-widest text-subtle">
                                         {muscle}
                                     </span>
                                 )}
                             </div>
-                            <div className="px-3 py-2 space-y-1">
+                            <div className="space-y-1 px-3 py-2">
                                 {sortedSets.map((s, i) => (
                                     <div key={i} className="flex items-center gap-3 text-[11px]">
-                                        <span className="w-6 shrink-0 font-black tabular-nums text-muted-foreground/50 text-[10px]">
+                                        <span className="w-6 shrink-0 text-[10px] font-black tabular-nums text-subtle">
                                             #{s.set_number ?? i + 1}
                                         </span>
-                                        <span className="font-black tabular-nums text-foreground">
+                                        <span className="font-black tabular-nums text-strong">
                                             {s.weight_kg ?? '—'}
-                                            <span className="text-muted-foreground font-bold"> kg</span>
+                                            <span className="font-bold text-muted"> kg</span>
                                         </span>
-                                        <span className="text-muted-foreground font-bold">×</span>
-                                        <span className="font-black tabular-nums text-foreground">
+                                        <span className="font-bold text-muted">×</span>
+                                        <span className="font-black tabular-nums text-strong">
                                             {s.reps_done ?? '—'}
-                                            <span className="text-muted-foreground font-bold"> reps</span>
+                                            <span className="font-bold text-muted"> reps</span>
                                         </span>
                                         {s.rpe != null && (
-                                            <span className="ml-auto rounded px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                            <span className="ml-auto rounded-[10px] bg-[var(--ember-100)] px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-[var(--ember-700)]">
                                                 RPE {s.rpe}
                                             </span>
                                         )}

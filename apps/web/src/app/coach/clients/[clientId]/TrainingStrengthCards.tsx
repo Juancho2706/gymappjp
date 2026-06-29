@@ -11,7 +11,7 @@ import {
     ReferenceDot,
     CartesianGrid,
 } from 'recharts'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { Dumbbell, TrendingDown, TrendingUp, Minus, Star } from 'lucide-react'
 import {
     selectStrengthCardExercises,
@@ -57,53 +57,52 @@ function StrengthExerciseCard({
     const gradId = `str-grad-${gradientKey}`
 
     return (
-        <GlassCard className="relative flex flex-col overflow-hidden border-dashed border-border/50 p-5 dark:border-white/10">
-            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-primary/5 blur-2xl pointer-events-none" />
-            <div className="relative z-10 mb-3 flex items-start justify-between gap-3">
+        <Card padding="md" className="flex flex-col gap-0">
+            <div className="mb-3 flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <h3 className="text-xs font-black uppercase tracking-tight text-foreground leading-tight line-clamp-2">
+                    <h3 className="line-clamp-2 text-xs font-black uppercase leading-tight tracking-tight text-strong">
                         {exerciseName}
                     </h3>
-                    <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                    <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-muted">
                         {muscleGroup}
                     </p>
                 </div>
-                <Dumbbell className="h-4 w-4 shrink-0 text-primary opacity-80" />
+                <Dumbbell className="h-4 w-4 shrink-0 text-sport-600 opacity-80" />
             </div>
 
-            <div className="relative z-10 mb-1 flex flex-wrap items-end gap-2">
-                <span className="text-2xl font-black tabular-nums text-foreground">
+            <div className="mb-1 flex flex-wrap items-end gap-2">
+                <span className="font-display text-2xl font-black tabular-nums text-strong">
                     {latest.oneRm}
-                    <span className="ml-1 text-xs font-bold text-muted-foreground">kg</span>
+                    <span className="ml-1 text-xs font-bold text-muted">kg</span>
                 </span>
-                <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground pb-1">
+                <span className="pb-1 text-[9px] font-black uppercase tracking-widest text-muted">
                     1RM est.
                 </span>
             </div>
 
-            <div className="relative z-10 mb-4 flex items-center gap-1.5 text-[11px] font-bold">
+            <div className="mb-4 flex items-center gap-1.5 text-[11px] font-bold">
                 {delta == null || delta === 0 ? (
-                    <span className="flex items-center gap-1 text-muted-foreground">
+                    <span className="flex items-center gap-1 text-muted">
                         <Minus className="h-3.5 w-3.5" /> Sin cambio en el periodo
                     </span>
                 ) : delta > 0 ? (
-                    <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                    <span className="flex items-center gap-1 text-[var(--success-600)]">
                         <TrendingUp className="h-3.5 w-3.5" /> +{delta} kg en el periodo
                     </span>
                 ) : (
-                    <span className="flex items-center gap-1 text-rose-600 dark:text-rose-400">
+                    <span className="flex items-center gap-1 text-[var(--danger-600)]">
                         <TrendingDown className="h-3.5 w-3.5" /> {delta} kg en el periodo
                     </span>
                 )}
             </div>
 
-            <div className="relative z-10 mb-3 h-[140px] w-full">
+            <div className="mb-3 h-[140px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={series} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
                         <defs>
                             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="0%" stopColor="var(--theme-primary, #007AFF)" stopOpacity={0.45} />
-                                <stop offset="100%" stopColor="var(--theme-primary, #007AFF)" stopOpacity={0.02} />
+                                <stop offset="0%" stopColor="var(--sport-500)" stopOpacity={0.45} />
+                                <stop offset="100%" stopColor="var(--sport-500)" stopOpacity={0.02} />
                             </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
@@ -147,7 +146,7 @@ function StrengthExerciseCard({
                         <Area
                             type="monotone"
                             dataKey="oneRm"
-                            stroke="var(--theme-primary, #007AFF)"
+                            stroke="var(--sport-500)"
                             strokeWidth={2}
                             fill={`url(#${gradId})`}
                             dot={false}
@@ -165,16 +164,16 @@ function StrengthExerciseCard({
                 </ResponsiveContainer>
             </div>
 
-            <div className="relative z-10 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/40 pt-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground dark:border-white/10">
-                <span className="inline-flex items-center gap-1 text-foreground/90 normal-case font-semibold tracking-normal">
-                    <Star className="h-3 w-3 text-amber-500" />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-subtle pt-3 text-[10px] font-bold uppercase tracking-widest text-muted">
+                <span className="inline-flex items-center gap-1 font-semibold normal-case tracking-normal text-body">
+                    <Star className="h-3 w-3 text-[var(--ember-500)]" />
                     Pico {maxPoint.oneRm} kg ({maxPoint.label})
                 </span>
                 <span>
                     Última: {latest.weightKg} kg × {latest.reps}
                 </span>
             </div>
-        </GlassCard>
+        </Card>
     )
 }
 
@@ -200,7 +199,7 @@ export function TrainingStrengthCards({
 
     return (
         <div className="space-y-3">
-            <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
+            <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
                 <Dumbbell className="h-4 w-4" /> Fuerza — 1RM estimado (Epley)
             </h3>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Save } from 'lucide-react'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -194,7 +194,7 @@ export function CoachNutrientTargetsEditor({
   }
 
   return (
-    <GlassCard className="border-dashed border-border/50 p-5 dark:border-white/10">
+    <Card className="p-5">
       <div className="mb-4 flex items-center gap-1.5">
         <h3 className="text-xs font-black uppercase tracking-widest text-primary">
           Umbrales de micronutrientes
@@ -216,7 +216,7 @@ export function CoachNutrientTargetsEditor({
               initial={reduceMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: reduceMotion ? 0 : 0.22, delay: reduceMotion ? 0 : idx * 0.05 }}
-              className="space-y-3 rounded-xl border border-border/40 bg-secondary/15 p-4 dark:border-white/10"
+              className="space-y-3 rounded-xl border border-border/40 bg-secondary/15 p-4"
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">
@@ -298,6 +298,6 @@ export function CoachNutrientTargetsEditor({
           Nutrición Pro desbloquea umbrales para más micros (azúcar, grasas).
         </p>
       )}
-    </GlassCard>
+    </Card>
   )
 }

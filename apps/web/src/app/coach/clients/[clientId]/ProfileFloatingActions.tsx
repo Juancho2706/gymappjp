@@ -57,10 +57,10 @@ export function ProfileFloatingActions({
                                 target="_blank"
                                 rel="noreferrer"
                                 {...itemMotion}
-                                className="flex h-12 items-center gap-2 rounded-full border border-border/60 bg-background/95 px-4 text-[10px] font-black uppercase tracking-widest text-foreground shadow-lg backdrop-blur-md dark:border-white/15 dark:bg-zinc-950/90"
+                                className="flex h-12 items-center gap-2 rounded-pill border border-subtle bg-surface-card px-4 text-[10px] font-black tracking-widest text-strong uppercase shadow-[var(--shadow-md)]"
                                 onClick={() => setOpen(false)}
                             >
-                                <MessageCircle className="h-4 w-4 text-emerald-500" />
+                                <MessageCircle className="h-4 w-4 text-[#25D366]" />
                                 WhatsApp
                             </motion.a>
                         ) : null}
@@ -71,9 +71,9 @@ export function ProfileFloatingActions({
                                     target="_blank"
                                     rel="noreferrer"
                                     onClick={() => setOpen(false)}
-                                    className="flex h-12 items-center gap-2 rounded-full border border-border/60 bg-background/95 px-4 text-[10px] font-black uppercase tracking-widest text-foreground shadow-lg backdrop-blur-md dark:border-white/15 dark:bg-zinc-950/90"
+                                    className="flex h-12 items-center gap-2 rounded-pill border border-subtle bg-surface-card px-4 text-[10px] font-black tracking-widest text-strong uppercase shadow-[var(--shadow-md)]"
                                 >
-                                    <Camera className="h-4 w-4 text-primary" />
+                                    <Camera className="h-4 w-4 text-sport-600" />
                                     Check-in alumno
                                 </Link>
                             </motion.div>
@@ -82,9 +82,9 @@ export function ProfileFloatingActions({
                             <Link
                                 href={builderHref}
                                 onClick={() => setOpen(false)}
-                                className="flex h-12 items-center gap-2 rounded-full border border-border/60 bg-background/95 px-4 text-[10px] font-black uppercase tracking-widest text-foreground shadow-lg backdrop-blur-md dark:border-white/15 dark:bg-zinc-950/90"
+                                className="flex h-12 items-center gap-2 rounded-pill border border-subtle bg-surface-card px-4 text-[10px] font-black tracking-widest text-strong uppercase shadow-[var(--shadow-md)]"
                             >
-                                <Dumbbell className="h-4 w-4 text-primary" />
+                                <Dumbbell className="h-4 w-4 text-sport-600" />
                                 Builder
                             </Link>
                         </motion.div>
@@ -98,8 +98,7 @@ export function ProfileFloatingActions({
                 aria-label={open ? 'Cerrar acciones rápidas' : 'Acciones rápidas'}
                 whileTap={reduceMotion ? undefined : { scale: 0.94 }}
                 onClick={() => setOpen((o) => !o)}
-                className="flex h-14 w-14 items-center justify-center rounded-full border border-primary/30 bg-primary text-primary-foreground shadow-[0_8px_30px_-6px_rgba(0,122,255,0.55)]"
-                style={{ backgroundColor: 'var(--theme-primary, #007AFF)', color: 'var(--primary-foreground, #fff)' }}
+                className="flex h-14 w-14 items-center justify-center rounded-full bg-sport-500 text-[var(--text-on-sport)] shadow-[var(--glow-sport)]"
             >
                 {open ? <X className="h-6 w-6" /> : <Plus className="h-6 w-6" />}
             </motion.button>

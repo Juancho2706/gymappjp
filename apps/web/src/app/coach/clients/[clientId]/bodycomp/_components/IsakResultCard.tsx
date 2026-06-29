@@ -1,6 +1,6 @@
 'use client'
 
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import type { IsakMetricsView } from '@/lib/bodycomp/view-helpers'
 import { formatKg, formatPct } from '@/lib/bodycomp/view-helpers'
@@ -30,7 +30,7 @@ export function IsakResultCard({
     const { fractionation: f, somatotype: s, bodyFat } = view
 
     return (
-        <GlassCard className="p-4 md:p-5">
+        <Card className="p-4 md:p-5">
             <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground">
                     {title}
@@ -49,7 +49,7 @@ export function IsakResultCard({
                     return (
                         <div
                             key={key}
-                            className="rounded-xl border border-border/40 bg-secondary/20 px-3 py-2.5 dark:border-white/10"
+                            className="rounded-xl border border-border/40 bg-secondary/20 px-3 py-2.5"
                         >
                             <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
                                 {label}
@@ -80,7 +80,7 @@ export function IsakResultCard({
 
             {/* Somatotipo + % grasa */}
             <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-border/40 bg-secondary/20 px-3 py-2.5 dark:border-white/10">
+                <div className="rounded-xl border border-border/40 bg-secondary/20 px-3 py-2.5">
                     <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
                         Somatotipo
                     </p>
@@ -89,7 +89,7 @@ export function IsakResultCard({
                     </p>
                     <p className="text-[9px] font-semibold text-muted-foreground">Endo – Meso – Ecto</p>
                 </div>
-                <div className="rounded-xl border border-border/40 bg-secondary/20 px-3 py-2.5 dark:border-white/10">
+                <div className="rounded-xl border border-border/40 bg-secondary/20 px-3 py-2.5">
                     <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
                         % Grasa {!isValidated && '(prelim.)'}
                     </p>
@@ -99,6 +99,6 @@ export function IsakResultCard({
                     <p className="text-[9px] font-semibold text-muted-foreground">{bodyFat.equation}</p>
                 </div>
             </div>
-        </GlassCard>
+        </Card>
     )
 }

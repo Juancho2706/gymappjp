@@ -20,16 +20,16 @@ export function CheckInCard({ date, weight, energyLevel, notes, photoUrl }: Chec
     })
 
     return (
-        <div className="bg-card border border-border rounded-2xl p-5 hover:border-primary/20 transition-colors shadow-sm">
+        <div className="bg-surface-card border border-subtle rounded-card p-5 hover:border-[color:var(--sport-500)]/30 transition-colors shadow-[var(--shadow-sm)]">
             <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-2 text-muted-foreground">
+                <div className="flex items-center gap-2 text-muted">
                     <Calendar className="w-4 h-4" />
                     <span className="text-sm font-medium capitalize">{formattedDate}</span>
                 </div>
                 {photoUrl && (
                     <button
                         onClick={() => setIsPhotoOpen(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-muted/80 text-xs font-medium text-foreground transition-colors"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-control bg-surface-sunken hover:bg-surface-card text-xs font-medium text-strong transition-colors"
                     >
                         <ImageIcon className="w-3.5 h-3.5" />
                         Ver Foto
@@ -38,41 +38,41 @@ export function CheckInCard({ date, weight, energyLevel, notes, photoUrl }: Chec
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="bg-muted/50 border border-border rounded-xl p-3 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                <div className="bg-surface-sunken border border-subtle rounded-control p-3 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-control bg-sport-500/10 text-sport-600 flex items-center justify-center">
                         <Weight className="w-4 h-4" />
                     </div>
                     <div>
-                        <p className="text-xs text-muted-foreground font-medium tracking-wide uppercase">Peso</p>
-                        <p className="text-sm font-bold text-foreground">{weight !== null ? `${weight} kg` : '--'}</p>
+                        <p className="text-xs text-muted font-medium tracking-wide uppercase">Peso</p>
+                        <p className="text-sm font-bold text-strong">{weight !== null ? `${weight} kg` : '--'}</p>
                     </div>
                 </div>
 
-                <div className="bg-muted/50 border border-border rounded-xl p-3 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <div className="bg-surface-sunken border border-subtle rounded-control p-3 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-control bg-[var(--warning-100)] text-[var(--warning-700)] flex items-center justify-center">
                         <Activity className="w-4 h-4" />
                     </div>
                     <div>
-                        <p className="text-xs text-muted-foreground font-medium tracking-wide uppercase">Energía</p>
-                        <p className="text-sm font-bold text-foreground">{energyLevel !== null ? `${energyLevel}/10` : '--'}</p>
+                        <p className="text-xs text-muted font-medium tracking-wide uppercase">Energía</p>
+                        <p className="text-sm font-bold text-strong">{energyLevel !== null ? `${energyLevel}/10` : '--'}</p>
                     </div>
                 </div>
             </div>
 
             {notes && (
-                <div className="bg-muted/30 rounded-xl p-3.5 border border-border">
+                <div className="bg-surface-sunken rounded-control p-3.5 border border-subtle">
                     <div className="flex items-center gap-2 mb-1.5">
-                        <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" />
-                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Notas</span>
+                        <MessageSquare className="w-3.5 h-3.5 text-muted" />
+                        <span className="text-xs font-bold text-muted uppercase tracking-wider">Notas</span>
                     </div>
-                    <p className="text-sm text-foreground leading-relaxed break-words">{notes}</p>
+                    <p className="text-sm text-body leading-relaxed break-words">{notes}</p>
                 </div>
             )}
 
             {/* Photo Modal */}
             {isPhotoOpen && photoUrl && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4" onClick={() => setIsPhotoOpen(false)}>
-                    <div className="relative w-full max-w-lg aspect-[3/4] max-h-[90vh] rounded-2xl overflow-hidden bg-card border border-border shadow-2xl" onClick={e => e.stopPropagation()}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--surface-overlay)] p-4" onClick={() => setIsPhotoOpen(false)}>
+                    <div className="relative w-full max-w-lg aspect-[3/4] max-h-[90vh] rounded-card overflow-hidden bg-surface-card border border-subtle shadow-[var(--shadow-lg)]" onClick={e => e.stopPropagation()}>
                         <Image src={photoUrl} alt={`Foto progreso ${formattedDate}`} fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" />
                         <button
                             onClick={() => setIsPhotoOpen(false)}

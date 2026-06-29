@@ -5,7 +5,7 @@ import Image from 'next/image'
 import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Scale, Battery, StickyNote, Camera, ChevronRight, CheckCircle2, Loader2 } from 'lucide-react'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
     Dialog,
@@ -38,7 +38,7 @@ function EnergyStars({ level }: { level: number | null | undefined }) {
                     key={i}
                     className={cn(
                         'text-sm leading-none',
-                        i <= stars ? 'text-amber-400' : 'text-muted-foreground/25'
+                        i <= stars ? 'text-[var(--ember-500)]' : 'text-[var(--ink-200)]'
                     )}
                 >
                     ★
@@ -58,13 +58,13 @@ function MetricRow({
     children: ReactNode
 }) {
     return (
-        <div className="flex items-start gap-3 py-2 border-b border-border/40 dark:border-white/5 last:border-0 last:pb-0">
-            <Icon className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+        <div className="flex items-start gap-3 border-b border-subtle py-2 last:border-0 last:pb-0">
+            <Icon className="mt-0.5 h-4 w-4 shrink-0 text-sport-600" />
             <div className="min-w-0 flex-1">
-                <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                <p className="text-[9px] font-black uppercase tracking-widest text-muted">
                     {label}
                 </p>
-                <div className="text-sm font-bold text-foreground mt-0.5">{children}</div>
+                <div className="mt-0.5 text-sm font-bold text-strong">{children}</div>
             </div>
         </div>
     )
@@ -95,21 +95,21 @@ export function ProfileCheckInSnapshot({ checkIn, clientId, onViewHistory }: Pro
 
     if (!checkIn) {
         return (
-            <GlassCard className="p-6 border-dashed border-border/50 dark:border-white/10 h-full flex flex-col justify-center">
-                <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
-                    <Camera className="w-4 h-4 shrink-0" />
+            <Card padding="md" className="h-full justify-center">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted">
+                    <Camera className="h-4 w-4 shrink-0" />
                     Aún no hay check-ins registrados.
                 </div>
                 <Button
                     type="button"
                     variant="link"
-                    className="mt-2 h-auto p-0 text-[10px] font-black uppercase tracking-widest text-primary justify-start"
+                    className="mt-2 h-auto justify-start p-0 text-[10px] font-black uppercase tracking-widest text-sport-600"
                     onClick={onViewHistory}
                 >
                     Ver panel de progreso
-                    <ChevronRight className="w-3 h-3 ml-1" />
+                    <ChevronRight className="ml-1 h-3 w-3" />
                 </Button>
-            </GlassCard>
+            </Card>
         )
     }
 
@@ -119,13 +119,12 @@ export function ProfileCheckInSnapshot({ checkIn, clientId, onViewHistory }: Pro
     })
 
     return (
-        <GlassCard className="p-6 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden h-full flex flex-col">
-            <div className="absolute top-0 right-0 -mr-12 -mt-12 w-32 h-32 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
-            <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2 mb-4 relative z-10">
-                <Camera className="w-4 h-4" />
+        <Card padding="md" className="h-full gap-0">
+            <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
+                <Camera className="h-4 w-4" />
                 Último check-in
             </h3>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-4 relative z-10">
+            <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-muted">
                 {relative}
             </p>
 
@@ -135,7 +134,7 @@ export function ProfileCheckInSnapshot({ checkIn, clientId, onViewHistory }: Pro
                         render={
                             <button
                                 type="button"
-                                className="relative z-10 mb-4 w-full aspect-[4/3] max-h-44 rounded-xl overflow-hidden border border-border/60 bg-secondary/30 group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                                className="group relative z-10 mb-4 aspect-[4/3] max-h-44 w-full overflow-hidden rounded-control border border-subtle bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
                             />
                         }
                     >
@@ -172,11 +171,11 @@ export function ProfileCheckInSnapshot({ checkIn, clientId, onViewHistory }: Pro
                 </MetricRow>
                 <MetricRow icon={StickyNote} label="Notas">
                     {checkIn.notes?.trim() ? (
-                        <span className="font-medium text-foreground/90 whitespace-pre-wrap break-words">
+                        <span className="font-medium whitespace-pre-wrap break-words text-body">
                             {checkIn.notes}
                         </span>
                     ) : (
-                        <span className="text-muted-foreground font-medium">Sin notas</span>
+                        <span className="font-medium text-muted">Sin notas</span>
                     )}
                 </MetricRow>
             </div>
@@ -184,19 +183,19 @@ export function ProfileCheckInSnapshot({ checkIn, clientId, onViewHistory }: Pro
             {/* Mark reviewed — enterprise response-time tracking */}
             {checkIn.id && (
                 reviewed ? (
-                    <div className="relative z-10 mt-4 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-500">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
+                    <div className="mt-4 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--success-600)]">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
                         Revisado
                     </div>
                 ) : (
                     <Button
                         type="button"
                         variant="outline"
-                        className="relative z-10 mt-4 h-auto py-2 text-[10px] font-black uppercase tracking-widest gap-1.5"
+                        className="mt-4 h-auto gap-1.5 py-2 text-[10px] font-black uppercase tracking-widest"
                         onClick={handleMarkReviewed}
                         disabled={pending}
                     >
-                        {pending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                        {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
                         Marcar como revisado
                     </Button>
                 )
@@ -205,12 +204,12 @@ export function ProfileCheckInSnapshot({ checkIn, clientId, onViewHistory }: Pro
             <Button
                 type="button"
                 variant="ghost"
-                className="relative z-10 mt-2 h-auto py-2 px-0 text-[10px] font-black uppercase tracking-widest text-primary hover:text-primary/90 justify-start gap-1"
+                className="mt-2 h-auto justify-start gap-1 px-0 py-2 text-[10px] font-black uppercase tracking-widest text-sport-600 hover:text-sport-700"
                 onClick={onViewHistory}
             >
                 Ver historial en Progreso
-                <ChevronRight className="w-3.5 h-3.5" />
+                <ChevronRight className="h-3.5 w-3.5" />
             </Button>
-        </GlassCard>
+        </Card>
     )
 }

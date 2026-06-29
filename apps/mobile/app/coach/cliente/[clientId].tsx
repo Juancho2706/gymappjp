@@ -321,7 +321,7 @@ function Fab({ open, onToggle, actions }: { open: boolean; onToggle: () => void;
         return (
           <MotiView key={a.label} from={{ opacity: 0, translateY: 12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 180, delay: i * 40 }} style={styles.fabAction}>
             <View style={[styles.fabLabel, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Text style={[styles.fabLabelTxt, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{a.label}</Text>
+              <Text style={[styles.fabLabelTxt, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{a.label}</Text>
             </View>
             <TouchableOpacity activeOpacity={0.85} onPress={a.onPress} style={[styles.fabMini, { backgroundColor: a.color ?? theme.primary }]}>
               <Icon size={18} color="#FFFFFF" />

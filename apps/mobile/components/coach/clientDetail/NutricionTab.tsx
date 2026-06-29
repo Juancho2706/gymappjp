@@ -72,7 +72,7 @@ export function NutricionTab({
         <View style={{ gap: 8 }}>
           {alerts.map((a) => (
             <View key={a.id} style={[styles.alert, { backgroundColor: ALERT_COLORS[a.variant] + '14', borderColor: ALERT_COLORS[a.variant] + '40' }]}>
-              <Text style={[styles.alertTitle, { color: ALERT_COLORS[a.variant], fontFamily: 'Inter_700Bold' }]}>{a.title}</Text>
+              <Text style={[styles.alertTitle, { color: ALERT_COLORS[a.variant], fontFamily: 'HankenGrotesk_700Bold' }]}>{a.title}</Text>
               <Text style={[styles.alertDesc, { color: theme.foreground, fontFamily: theme.fontSans }]}>{a.description}</Text>
             </View>
           ))}
@@ -84,7 +84,7 @@ export function NutricionTab({
         <CardHeader icon={Salad} title="Plan activo" right={
           onEditNutrition ? <TouchableOpacity onPress={onEditNutrition} hitSlop={8}><Pencil size={16} color={theme.primary} /></TouchableOpacity> : undefined
         } />
-        <Text numberOfLines={1} style={[cd.big, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{activeNutrition.name}</Text>
+        <Text numberOfLines={1} style={[cd.big, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{activeNutrition.name}</Text>
         <View style={styles.macroRow}>
           {activeNutrition.daily_calories != null && <MacroPill label="kcal" value={activeNutrition.daily_calories} color={theme.primary} />}
           {activeNutrition.protein_g != null && <MacroPill label="P" value={activeNutrition.protein_g} color="#EF4444" />}
@@ -149,8 +149,8 @@ export function NutricionTab({
           <CardHeader icon={Scale} title="Contexto de check-ins" />
           {recentWeights.map((c) => (
             <View key={c.id} style={cd.row}>
-              <Text style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{formatDate(c.date)}</Text>
-              <Text style={[cd.rowMetric, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>{c.weight != null ? `${c.weight} kg` : '—'}</Text>
+              <Text style={[cd.rowTitle, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{formatDate(c.date)}</Text>
+              <Text style={[cd.rowMetric, { color: theme.primary, fontFamily: 'Archivo_700Bold' }]}>{c.weight != null ? `${c.weight} kg` : '—'}</Text>
             </View>
           ))}
           <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Cruzá la adherencia con la evolución de peso para ajustar el plan.</Text>
@@ -164,7 +164,7 @@ export function NutricionTab({
           <View style={styles.favWrap}>
             {favoriteFoods.slice(0, 12).map((f) => (
               <View key={f.id} style={[styles.favChip, { backgroundColor: '#F43F5E18', borderColor: '#F43F5E44', borderRadius: theme.radius.sm }]}>
-                <Text numberOfLines={1} style={[styles.favTxt, { color: '#F43F5E', fontFamily: 'Inter_700Bold' }]}>{f.name}</Text>
+                <Text numberOfLines={1} style={[styles.favTxt, { color: '#F43F5E', fontFamily: 'HankenGrotesk_700Bold' }]}>{f.name}</Text>
               </View>
             ))}
           </View>
@@ -201,7 +201,7 @@ function DayNutritionDetail({ timeline, selectedDate, onSelectDate, dayDetail, l
         <CardHeader icon={Apple} title="Día seleccionado" />
         <View style={styles.navRow}>
           <TouchableOpacity onPress={() => go(-1)} disabled={sidx <= 0} hitSlop={8}><ChevronLeft size={22} color={sidx <= 0 ? theme.muted : theme.foreground} /></TouchableOpacity>
-          <Text style={[styles.navDate, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{formatDate(selectedDate)}</Text>
+          <Text style={[styles.navDate, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{formatDate(selectedDate)}</Text>
           <TouchableOpacity onPress={() => go(1)} disabled={sidx >= days.length - 1} hitSlop={8}><ChevronRight size={22} color={sidx >= days.length - 1 ? theme.muted : theme.foreground} /></TouchableOpacity>
         </View>
         {loading ? (
@@ -216,7 +216,7 @@ function DayNutritionDetail({ timeline, selectedDate, onSelectDate, dayDetail, l
                 <View key={`${meal.name}-${i}`}>
                   <TouchableOpacity activeOpacity={hasFoods ? 0.7 : 1} onPress={() => { if (!hasFoods) return; setOpenMeals((prev) => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n }) }} style={styles.mealRow}>
                     <Check size={14} color={meal.completed ? theme.success : theme.mutedForeground} />
-                    <Text numberOfLines={1} style={[cd.rowTitle, { color: meal.completed ? theme.foreground : theme.mutedForeground, fontFamily: 'Inter_600SemiBold', flex: 1 }]}>{meal.name}</Text>
+                    <Text numberOfLines={1} style={[cd.rowTitle, { color: meal.completed ? theme.foreground : theme.mutedForeground, fontFamily: 'HankenGrotesk_600SemiBold', flex: 1 }]}>{meal.name}</Text>
                     {hasFoods ? <Text style={[styles.mealCount, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{meal.foods.length} alim.</Text> : null}
                     {hasFoods ? <ChevronRight size={14} color={theme.mutedForeground} style={{ transform: [{ rotate: isOpen ? '90deg' : '0deg' }] }} /> : null}
                   </TouchableOpacity>
@@ -258,7 +258,7 @@ function Habit({ icon: Icon, label, value }: { icon: any; label: string; value: 
   return (
     <View style={[styles.habit, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
       <Icon size={15} color={theme.primary} />
-      <Text style={[styles.habitVal, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{value}</Text>
+      <Text style={[styles.habitVal, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{value}</Text>
       <Text style={[styles.habitLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
     </View>
   )

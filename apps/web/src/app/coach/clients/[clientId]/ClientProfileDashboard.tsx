@@ -4,7 +4,7 @@ import { useState, useCallback, useTransition } from 'react'
 import { useTheme } from 'next-themes'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Activity, Dumbbell, User, Edit2, Plus, PieChart as PieChartIcon, Flame, TrendingUp, Camera, ArrowUpRight, ArrowDownRight, Minus, Trophy, Layers } from 'lucide-react'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { AppOnlyBadge } from '@/components/AppOnlyBadge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart, Bar, Legend, Cell, BarChart, ReferenceLine } from 'recharts'
@@ -411,17 +411,17 @@ export function ClientProfileDashboard({
                             </div>
 
                             {/* Miniaturas de Check-in */}
-                            <GlassCard className="p-6 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden">
-                                <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2 mb-4 relative z-10">
-                                    <Camera className="w-4 h-4" /> Evolución Visual (Último Mes)
+                            <Card padding="md">
+                                <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
+                                    <Camera className="h-4 w-4" /> Evolución Visual (Último Mes)
                                 </h3>
-                                <div className="mb-4 relative z-10">
+                                <div className="mb-4">
                                     <AppOnlyBadge>Mira las fotos con zoom y desliza entre ellas en la app de EVA</AppOnlyBadge>
                                 </div>
                                 {checkInsWithPhotos.length > 0 ? (
-                                    <div className="grid grid-cols-3 gap-4 relative z-10">
+                                    <div className="grid grid-cols-3 gap-4">
                                         {checkInsWithPhotos.map((c: any, i: number) => (
-                                            <div key={i} className="relative aspect-[3/4] bg-secondary/50 rounded-xl overflow-hidden group">
+                                            <div key={i} className="group relative aspect-[3/4] overflow-hidden rounded-control bg-surface-sunken">
                                                 <Image
                                                     src={c.front_photo_url || c.side_photo_url || c.back_photo_url}
                                                     alt="Progreso"
@@ -430,7 +430,7 @@ export function ClientProfileDashboard({
                                                     unoptimized
                                                     className="object-cover transition-transform duration-500 group-hover:scale-110"
                                                 />
-                                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
+                                                <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/80 via-transparent to-transparent p-3 opacity-0 transition-opacity group-hover:opacity-100">
                                                     <span className="text-[10px] font-black uppercase tracking-widest text-white">
                                                         {new Date(c.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
                                                     </span>
@@ -439,29 +439,29 @@ export function ClientProfileDashboard({
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="py-8 text-center border border-dashed border-border/50 rounded-xl bg-secondary/20 relative z-10">
-                                        <Camera className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
-                                        <p className="text-sm text-muted-foreground font-medium">Sin fotos recientes de check-in.</p>
+                                    <div className="rounded-control bg-surface-sunken py-8 text-center">
+                                        <Camera className="mx-auto mb-2 h-8 w-8 text-[var(--ink-300)]" />
+                                        <p className="text-sm font-medium text-muted">Sin fotos recientes de check-in.</p>
                                     </div>
                                 )}
-                            </GlassCard>
+                            </Card>
                         </div>
                         <div className="min-w-0 space-y-6 md:col-span-4">
                             {/* Task 2: Dynamic Metrics Card */}
-                            <GlassCard className="p-4 flex flex-col border-dashed border-border/50 dark:border-white/10 relative overflow-hidden h-full">
-                                <div className="flex justify-between items-center mb-6 relative z-10">
-                                    <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                                        <Activity className="w-4 h-4" /> Métricas Clave
+                            <Card padding="md" className="h-full gap-0">
+                                <div className="mb-6 flex items-center justify-between">
+                                    <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
+                                        <Activity className="h-4 w-4" /> Métricas Clave
                                     </h3>
                                     <Dialog>
                                         <DialogTrigger render={
-                                            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-primary/10 hover:text-primary">
-                                                <Edit2 className="w-3 h-3" />
+                                            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-sport-100 hover:text-sport-600">
+                                                <Edit2 className="h-3 w-3" />
                                             </Button>
                                         } />
                                         <DialogContent className="sm:max-w-[425px]">
                                             <DialogHeader>
-                                                <DialogTitle className="uppercase font-black tracking-tighter text-xl">Editar Biometría Inicial</DialogTitle>
+                                                <DialogTitle className="font-display text-xl font-black tracking-tighter uppercase">Editar Biometría Inicial</DialogTitle>
                                             </DialogHeader>
                                             <div className="grid gap-4 py-4">
                                                 <div className="grid grid-cols-4 items-center gap-4">
@@ -474,40 +474,40 @@ export function ClientProfileDashboard({
                                                 </div>
                                             </div>
                                             <div className="flex justify-end gap-3">
-                                                <Button variant="outline" className="text-[10px] font-black uppercase tracking-widest">Cancelar</Button>
-                                                <Button className="text-[10px] font-black uppercase tracking-widest bg-primary hover:bg-primary/90">Guardar Cambios</Button>
+                                                <Button variant="secondary" className="text-[10px] font-black uppercase tracking-widest">Cancelar</Button>
+                                                <Button variant="sport" className="text-[10px] font-black uppercase tracking-widest">Guardar Cambios</Button>
                                             </div>
                                         </DialogContent>
                                     </Dialog>
                                 </div>
-                                <div className="space-y-6 relative z-10 flex-1 flex flex-col justify-center">
+                                <div className="flex flex-1 flex-col justify-center space-y-6">
                                     {/* Peso Actual */}
-                                    <div className="flex items-center justify-between bg-secondary/30 p-3 rounded-lg border border-border/50">
+                                    <div className="flex items-center justify-between rounded-control bg-surface-sunken p-3">
                                         <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1"><Activity className="w-3 h-3"/> Peso Actual</span>
-                                            <span className="text-2xl font-black text-foreground">{currentWeight} <span className="text-sm font-medium text-muted-foreground">kg</span></span>
+                                            <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted"><Activity className="h-3 w-3"/> Peso Actual</span>
+                                            <span className="font-display text-2xl font-black text-strong">{currentWeight} <span className="text-sm font-medium text-muted">kg</span></span>
                                         </div>
                                     </div>
-                                    
+
                                     {/* Variación Semanal */}
-                                    <div className="flex items-center justify-between bg-secondary/30 p-3 rounded-lg border border-border/50">
+                                    <div className="flex items-center justify-between rounded-control bg-surface-sunken p-3">
                                         <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1"><TrendingUp className="w-3 h-3"/> Var. Semanal</span>
-                                            <span className="text-lg font-black flex items-center gap-1">
+                                            <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted"><TrendingUp className="h-3 w-3"/> Var. Semanal</span>
+                                            <span className="flex items-center gap-1 font-display text-lg font-black text-strong">
                                                 {Math.abs(weeklyWeightVariation).toFixed(1)} kg
                                                 {weeklyWeightVariation > 0 ? (
-                                                    <ArrowUpRight className="w-4 h-4 text-red-500" />
+                                                    <ArrowUpRight className="h-4 w-4 text-[var(--ember-600)]" />
                                                 ) : weeklyWeightVariation < 0 ? (
-                                                    <ArrowDownRight className="w-4 h-4 text-emerald-500" />
+                                                    <ArrowDownRight className="h-4 w-4 text-[var(--success-500)]" />
                                                 ) : (
-                                                    <Minus className="w-4 h-4 text-muted-foreground" />
+                                                    <Minus className="h-4 w-4 text-muted" />
                                                 )}
                                             </span>
                                         </div>
                                     </div>
 
                                 </div>
-                            </GlassCard>
+                            </Card>
                         </div>
                     </motion.div>
                 )}
@@ -530,11 +530,11 @@ export function ClientProfileDashboard({
                         />
 
                         {/* Task 3: Panel de Progreso Unificado */}
-                        <GlassCard id="profile-progress-panel" className="p-6 md:p-8 flex flex-col border-dashed border-border/50 dark:border-white/10 relative overflow-hidden h-[35rem]">
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 relative z-10">
+                        <Card id="profile-progress-panel" padding="md" className="h-[35rem] gap-0 md:p-8">
+                            <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
                                 <div className="flex flex-col gap-2">
-                                    <h3 className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                                        <Activity className="w-4 h-4" /> Panel de Progreso Unificado
+                                    <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
+                                        <Activity className="h-4 w-4" /> Panel de Progreso Unificado
                                     </h3>
                                     <AppOnlyBadge className="self-start">Gráficas táctiles: desliza el dedo sobre el gráfico en la app de EVA</AppOnlyBadge>
                                     {/* Peso objetivo inline */}
@@ -550,7 +550,7 @@ export function ClientProfileDashboard({
                                             setIsSavingGoal(false)
                                         }}
                                     >
-                                        <label className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground whitespace-nowrap">
+                                        <label className="whitespace-nowrap text-[9px] font-bold uppercase tracking-widest text-muted">
                                             Objetivo (kg)
                                         </label>
                                         <input
@@ -561,12 +561,12 @@ export function ClientProfileDashboard({
                                             value={goalWeightInput}
                                             onChange={(e) => setGoalWeightInput(e.target.value)}
                                             placeholder="—"
-                                            className="w-16 text-[11px] font-bold text-center bg-muted/50 border border-border rounded px-1.5 py-0.5 text-foreground focus:outline-none focus:border-primary"
+                                            className="w-16 rounded-[10px] border border-default bg-surface-sunken px-1.5 py-0.5 text-center text-[11px] font-bold text-strong focus:border-sport-500 focus:outline-none"
                                         />
                                         <button
                                             type="submit"
                                             disabled={isSavingGoal}
-                                            className="text-[9px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded hover:bg-primary/20 transition-colors uppercase tracking-wider disabled:opacity-50"
+                                            className="rounded-[10px] bg-sport-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-sport-700 transition-colors hover:brightness-95 disabled:opacity-50"
                                         >
                                             {isSavingGoal ? '…' : 'OK'}
                                         </button>
@@ -578,10 +578,10 @@ export function ClientProfileDashboard({
                                         <button
                                             key={tab.id}
                                             onClick={() => setActiveChart(tab.id)}
-                                            className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                                            className={`rounded-pill border-[1.5px] px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${
                                                 activeChart === tab.id
-                                                    ? 'bg-primary text-primary-foreground shadow-sm'
-                                                    : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground border border-border/50'
+                                                    ? 'border-sport-500 bg-sport-500 text-[var(--text-on-sport)]'
+                                                    : 'border-default bg-surface-card text-muted hover:text-strong'
                                             }`}
                                         >
                                             {tab.label}
@@ -589,8 +589,8 @@ export function ClientProfileDashboard({
                                     ))}
                                 </div>
                             </div>
-                            
-                            <div className="flex-1 w-full relative z-10 min-h-0">
+
+                            <div className="relative z-10 min-h-0 w-full flex-1">
                                 {activeChart === 'peso_composicion' && (
                                     weightData.length > 1 ? (
                                         <ResponsiveContainer width="100%" height="100%">
@@ -601,11 +601,11 @@ export function ClientProfileDashboard({
                                                 <YAxis yAxisId="right" orientation="right" stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} domain={[0, 10]} />
                                                 <Tooltip 
                                                     contentStyle={{ backgroundColor: tooltipBgColor, border: `1px solid ${tooltipBorderColor}`, borderRadius: '8px', color: tooltipTextColor }}
-                                                    itemStyle={{ color: 'var(--theme-primary)' }}
+                                                    itemStyle={{ color: 'var(--sport-500)' }}
                                                 />
                                                 <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
-                                                <Line yAxisId="left" type="monotone" dataKey="peso" name="Peso (kg)" stroke="var(--theme-primary)" strokeWidth={3} dot={{ fill: 'var(--theme-primary)', strokeWidth: 2 }} activeDot={{ r: 6 }} />
-                                                <Line yAxisId="right" type="monotone" dataKey="energia" name="Energía (1-10)" stroke="#10b981" strokeWidth={3} strokeDasharray="5 5" dot={{ fill: '#10b981', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                                                <Line yAxisId="left" type="monotone" dataKey="peso" name="Peso (kg)" stroke="var(--sport-500)" strokeWidth={3} dot={{ fill: 'var(--sport-500)', strokeWidth: 2 }} activeDot={{ r: 6 }} />
+                                                <Line yAxisId="right" type="monotone" dataKey="energia" name="Energía (1-10)" stroke="var(--success-500)" strokeWidth={3} strokeDasharray="5 5" dot={{ fill: 'var(--success-500)', strokeWidth: 2 }} activeDot={{ r: 6 }} />
                                                 {goalWeight != null && (
                                                     <ReferenceLine yAxisId="left" y={goalWeight} stroke="#f59e0b" strokeDasharray="6 3" strokeWidth={1.5} label={{ value: `Objetivo ${goalWeight}kg`, position: 'insideTopRight', fontSize: 9, fill: '#f59e0b' }} />
                                                 )}
@@ -634,7 +634,7 @@ export function ClientProfileDashboard({
                                                         const val = entry.cambio_peso;
                                                         let color = '#f59e0b';
                                                         if (Math.abs(val) > 0.6) color = '#ef4444';
-                                                        else if (Math.abs(val) >= 0.2 && Math.abs(val) <= 0.6) color = '#10b981';
+                                                        else if (Math.abs(val) >= 0.2 && Math.abs(val) <= 0.6) color = 'var(--success-500)';
                                                         return <Cell key={`cell-change-${index}`} fill={color} fillOpacity={0.8} />
                                                     })}
                                                 </Bar>
@@ -659,7 +659,7 @@ export function ClientProfileDashboard({
                                                 />
                                                 <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
                                                 <Line type="monotone" dataKey="bench" name="Bench Press" stroke="#3b82f6" strokeWidth={3} dot={{ strokeWidth: 2 }} activeDot={{ r: 6 }} connectNulls />
-                                                <Line type="monotone" dataKey="squat" name="Squat" stroke="#10b981" strokeWidth={3} dot={{ strokeWidth: 2 }} activeDot={{ r: 6 }} connectNulls />
+                                                <Line type="monotone" dataKey="squat" name="Squat" stroke="var(--success-500)" strokeWidth={3} dot={{ strokeWidth: 2 }} activeDot={{ r: 6 }} connectNulls />
                                                 <Line type="monotone" dataKey="deadlift" name="Deadlift" stroke="#f59e0b" strokeWidth={3} dot={{ strokeWidth: 2 }} activeDot={{ r: 6 }} connectNulls />
                                             </LineChart>
                                         </ResponsiveContainer>
@@ -681,8 +681,8 @@ export function ClientProfileDashboard({
                                                     contentStyle={{ backgroundColor: tooltipBgColor, border: `1px solid ${tooltipBorderColor}`, borderRadius: '8px', color: tooltipTextColor }}
                                                     formatter={(value) => [`${value} kg`, 'Volumen']}
                                                 />
-                                                <Bar dataKey="volumen" fill="var(--theme-primary)" opacity={0.6} radius={[4, 4, 0, 0]} />
-                                                <Line type="monotone" dataKey="volumen" stroke="var(--theme-primary)" strokeWidth={2} dot={false} />
+                                                <Bar dataKey="volumen" fill="var(--sport-500)" opacity={0.6} radius={[4, 4, 0, 0]} />
+                                                <Line type="monotone" dataKey="volumen" stroke="var(--sport-500)" strokeWidth={2} dot={false} />
                                             </ComposedChart>
                                         </ResponsiveContainer>
                                     ) : (
@@ -730,7 +730,7 @@ export function ClientProfileDashboard({
                                                     {nutritionHistory.map((entry, index) => (
                                                         <Cell 
                                                             key={`cell-${index}`} 
-                                                            fill={entry.isAdherent ? '#10b981' : '#ef4444'} 
+                                                            fill={entry.isAdherent ? 'var(--success-500)' : '#ef4444'} 
                                                             fillOpacity={0.8}
                                                         />
                                                     ))}
@@ -770,9 +770,9 @@ export function ClientProfileDashboard({
                                                     type="monotone" 
                                                     dataKey="acumulado" 
                                                     name="Acumulado" 
-                                                    stroke="var(--theme-primary)" 
+                                                    stroke="var(--sport-500)" 
                                                     strokeWidth={3} 
-                                                    dot={{ fill: 'var(--theme-primary)' }} 
+                                                    dot={{ fill: 'var(--sport-500)' }} 
                                                 />
                                             </ComposedChart>
                                         </ResponsiveContainer>
@@ -783,7 +783,7 @@ export function ClientProfileDashboard({
                                     )
                                 )}
                             </div>
-                        </GlassCard>
+                        </Card>
                     </div>
                     </motion.div>
                 )}
@@ -810,39 +810,39 @@ export function ClientProfileDashboard({
                         {(data.personalRecords?.length > 0 || data.muscleVolumeByGroup?.length > 0) && (
                             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                                 {data.personalRecords?.length > 0 && (
-                                    <GlassCard className="relative overflow-hidden border-dashed border-border/50 p-6 dark:border-white/10">
-                                        <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
+                                    <Card padding="md">
+                                        <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
                                             <Trophy className="h-4 w-4" /> Récords de peso (máx. registrado)
                                         </h3>
                                         <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
                                             {data.personalRecords.slice(0, 12).map((pr: any) => (
                                                 <div
                                                     key={pr.exerciseId}
-                                                    className="flex items-center justify-between rounded-lg border border-border/40 bg-secondary/30 px-3 py-2 text-xs dark:border-white/10"
+                                                    className="flex items-center justify-between rounded-control bg-surface-sunken px-3 py-2 text-xs"
                                                 >
                                                     <div className="min-w-0">
-                                                        <p className="truncate font-bold text-foreground">{pr.exerciseName}</p>
-                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                                        <p className="truncate font-bold text-strong">{pr.exerciseName}</p>
+                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted">
                                                             {pr.muscleGroup}
                                                         </p>
                                                     </div>
-                                                    <span className="shrink-0 font-black tabular-nums text-primary">
+                                                    <span className="shrink-0 font-black tabular-nums text-sport-600">
                                                         {pr.maxWeightKg} kg
-                                                        <span className="ml-1 text-[10px] font-bold text-muted-foreground">
+                                                        <span className="ml-1 text-[10px] font-bold text-muted">
                                                             ×{pr.repsAtMax}
                                                         </span>
                                                     </span>
                                                 </div>
                                             ))}
                                         </div>
-                                    </GlassCard>
+                                    </Card>
                                 )}
                                 {data.muscleVolumeByGroup?.length > 0 && (
-                                    <GlassCard className="relative overflow-hidden border-dashed border-border/50 p-6 dark:border-white/10">
-                                        <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
+                                    <Card padding="md">
+                                        <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
                                             <Layers className="h-4 w-4" /> Volumen últimos 30 días
                                         </h3>
-                                        <p className="mb-3 text-[10px] font-medium text-muted-foreground">
+                                        <p className="mb-3 text-[10px] font-medium text-muted">
                                             Σ (peso × reps) por grupo muscular.
                                         </p>
                                         <div className="space-y-2">
@@ -852,17 +852,17 @@ export function ClientProfileDashboard({
                                                 return (
                                                     <div key={row.muscleGroup}>
                                                         <div className="mb-0.5 flex justify-between text-[10px] font-bold uppercase tracking-widest">
-                                                            <span className="text-muted-foreground">{row.muscleGroup}</span>
-                                                            <span className="tabular-nums text-foreground">
+                                                            <span className="text-muted">{row.muscleGroup}</span>
+                                                            <span className="tabular-nums text-strong">
                                                                 {Math.round(row.volume).toLocaleString('es-ES')} u.
                                                             </span>
                                                         </div>
-                                                        <Progress value={pct} className="h-1 bg-secondary" />
+                                                        <Progress value={pct} className="h-1 bg-surface-sunken" />
                                                     </div>
                                                 )
                                             })}
                                         </div>
-                                    </GlassCard>
+                                    </Card>
                                 )}
                             </div>
                         )}

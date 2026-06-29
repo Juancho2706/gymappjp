@@ -1,13 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { useTheme } from 'next-themes'
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
-import {
-    CircularProgressbar,
-    buildStyles,
-} from 'react-circular-progressbar'
-import 'react-circular-progressbar/dist/styles.css'
 import {
     Flame,
     Star,
@@ -16,7 +10,8 @@ import {
     Scale,
     CalendarRange,
 } from 'lucide-react'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
+import { ProgressRing } from '@/components/ui/progress-ring'
 import { cn } from '@/lib/utils'
 import {
     buildProfileActivityCalendarData,
@@ -56,14 +51,6 @@ export function ProfileOverviewB3({
     compliance,
     onViewNutrition,
 }: ProfileOverviewB3Props) {
-    const { resolvedTheme } = useTheme()
-    const [themeReady, setThemeReady] = useState(false)
-    useEffect(() => {
-        setThemeReady(true)
-    }, [])
-    // Evita mismatch SSR/cliente: en servidor y primer paint, mismo valor que en SSR.
-    const isDark = themeReady && resolvedTheme === 'dark'
-
     const calendarData = useMemo(
         () => buildProfileActivityCalendarData(workoutHistory, checkIns, 371),
         [workoutHistory, checkIns]
@@ -115,10 +102,10 @@ export function ProfileOverviewB3({
         return Number((latest - baseline).toFixed(1))
     }, [sortedCi, monthStart])
 
-    const primaryHex = 'var(--theme-primary, #007AFF)'
-    const emeraldHex = '#10b981'
-    const redHex = '#ef4444'
-    const amberHex = '#f59e0b'
+    const primaryHex = 'var(--sport-500)'
+    const emeraldHex = 'var(--success-500)'
+    const redHex = 'var(--danger-500)'
+    const amberHex = 'var(--warning-500)'
 
     const nutColor = nutAvg >= 70 ? emeraldHex : nutAvg >= 50 ? amberHex : redHex
 
@@ -157,19 +144,17 @@ export function ProfileOverviewB3({
 
     return (
         <div className="space-y-6">
-            <GlassCard className="p-6 border-dashed border-border/50 dark:border-white/10 relative overflow-hidden">
-                <h3 className="text-xs font-black uppercase tracking-widest text-primary mb-6">
+            <Card padding="md">
+                <h3 className="text-xs font-black uppercase tracking-widest text-sport-600">
                     Cumplimiento semanal
                 </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 justify-items-center">
+                <div className="grid grid-cols-1 justify-items-center gap-8 sm:grid-cols-3">
                     <ComplianceRing
                         label="Entrenamientos"
                         valueText={`${wThis}/${target}`}
                         percentage={workoutPct}
                         delta={workoutDelta}
                         pathColor={primaryHex}
-                        trailColor={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}
-                        textColor={isDark ? '#fafafa' : '#111'}
                     />
                     <ComplianceRing
                         label="Nutrición (7d)"
@@ -177,8 +162,6 @@ export function ProfileOverviewB3({
                         percentage={Math.min(100, nutAvg)}
                         delta={nutDelta}
                         pathColor={nutColor}
-                        trailColor={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}
-                        textColor={isDark ? '#fafafa' : '#111'}
                         onClick={onViewNutrition}
                         linkLabel="Ver nutrición →"
                     />
@@ -188,13 +171,11 @@ export function ProfileOverviewB3({
                         percentage={checkPct}
                         delta={checkDelta}
                         pathColor={checkPct >= 70 ? emeraldHex : checkPct >= 40 ? amberHex : redHex}
-                        trailColor={isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}
-                        textColor={isDark ? '#fafafa' : '#111'}
                     />
                 </div>
-            </GlassCard>
+            </Card>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
                 {kpiItems.map((item, i) => (
                     <motion.div
                         key={item.label}
@@ -202,21 +183,19 @@ export function ProfileOverviewB3({
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.05, duration: 0.25 }}
                     >
-                        <GlassCard
-                            className={cn(
-                                'p-3 h-full border border-border/50 dark:border-white/10',
-                                'hover:shadow-[0_0_24px_-8px_hsl(var(--primary)/0.35)] transition-shadow duration-300'
-                            )}
-                        >
-                            <div className="flex items-center gap-1.5 mb-1.5">
-                                <item.icon className="w-3.5 h-3.5 text-primary shrink-0" />
-                                <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
-                                    {item.label}
-                                </span>
+                        <Card padding="md" className="h-full flex-row items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-sport-100 text-sport-600">
+                                <item.icon className="h-[18px] w-[18px]" />
                             </div>
-                            <p className="text-xl font-black text-foreground">{item.value}</p>
-                            <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">{item.hint}</p>
-                        </GlassCard>
+                            <div className="min-w-0">
+                                <p className="font-display text-lg font-black leading-tight text-strong">
+                                    {item.value}
+                                </p>
+                                <p className="mt-0.5 text-[10.5px] font-medium text-muted">
+                                    {item.label} · {item.hint}
+                                </p>
+                            </div>
+                        </Card>
                     </motion.div>
                 ))}
             </div>
@@ -230,8 +209,6 @@ function ComplianceRing({
     percentage,
     delta,
     pathColor,
-    trailColor,
-    textColor,
     onClick,
     linkLabel,
 }: {
@@ -240,8 +217,6 @@ function ComplianceRing({
     percentage: number
     delta: number
     pathColor: string
-    trailColor: string
-    textColor: string
     onClick?: () => void
     linkLabel?: string
 }) {
@@ -251,40 +226,28 @@ function ComplianceRing({
             type={onClick ? 'button' : undefined}
             onClick={onClick}
             className={cn(
-                'flex flex-col items-center gap-3 w-full max-w-[200px]',
+                'flex w-full max-w-[200px] flex-col items-center gap-3',
                 onClick &&
-                    'rounded-2xl p-1 transition-colors hover:bg-primary/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40'
+                    'rounded-card p-1 transition-colors hover:bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]'
             )}
         >
-            <div style={{ width: ringSize, height: ringSize }}>
-                <CircularProgressbar
-                    value={percentage}
-                    text={`${percentage}%`}
-                    strokeWidth={8}
-                    styles={buildStyles({
-                        pathColor,
-                        trailColor,
-                        textColor,
-                        textSize: '22px',
-                    })}
-                />
-            </div>
-            <div className="text-center space-y-1">
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            <ProgressRing value={percentage} size={ringSize} stroke={8} color={pathColor} />
+            <div className="space-y-1 text-center">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted">
                     {label}
                 </p>
-                <p className="text-lg font-black text-foreground">{valueText}</p>
+                <p className="font-display text-lg font-black text-strong">{valueText}</p>
                 <p
                     className={cn(
                         'text-[10px] font-bold',
-                        delta > 0 ? 'text-emerald-500' : delta < 0 ? 'text-rose-500' : 'text-muted-foreground'
+                        delta > 0 ? 'text-[var(--success-600)]' : delta < 0 ? 'text-[var(--danger-600)]' : 'text-subtle'
                     )}
                 >
                     {delta > 0 ? '↑' : delta < 0 ? '↓' : '—'} vs sem. anterior
                     {delta !== 0 ? ` (${delta > 0 ? '+' : ''}${delta} pts)` : ''}
                 </p>
                 {onClick && linkLabel ? (
-                    <p className="text-[10px] font-bold text-primary">{linkLabel}</p>
+                    <p className="text-[10px] font-bold text-sport-600">{linkLabel}</p>
                 ) : null}
             </div>
         </Wrapper>

@@ -23,9 +23,7 @@ import {
     Target,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { GlassButton } from '@/components/ui/glass-button'
-import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
+import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { formatTrainingAgeLabel, formatRelativeLastActivity } from './profileOverviewUtils'
 
@@ -59,14 +57,10 @@ type ClientProfileHeroProps = {
     nutritionFirstPlanId?: string
 }
 
-function attentionBadge(score: number) {
-    if (score >= 50) {
-        return { label: 'Urgente', className: 'bg-rose-500/15 text-rose-500 border-rose-500/30' }
-    }
-    if (score >= 25) {
-        return { label: 'Revisar', className: 'bg-amber-500/15 text-amber-500 border-amber-500/30' }
-    }
-    return { label: 'Estable', className: 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30' }
+function attentionBadge(score: number): { label: string; tone: 'danger' | 'warning' | 'success' } {
+    if (score >= 50) return { label: 'Urgente', tone: 'danger' }
+    if (score >= 25) return { label: 'Revisar', tone: 'warning' }
+    return { label: 'Estable', tone: 'success' }
 }
 
 export function ClientProfileHero({
@@ -107,167 +101,146 @@ export function ClientProfileHero({
     }
 
     return (
-        <div className="relative flex min-w-0 max-w-full flex-col gap-6">
-            <div className="absolute -top-10 -left-10 w-64 h-64 bg-primary/10 blur-[100px] pointer-events-none z-0" />
-
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 relative z-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                <span className="opacity-0 sm:opacity-100 select-none" aria-hidden>
-                    &nbsp;
-                </span>
-                <span>
+        <div className="relative flex min-w-0 max-w-full flex-col gap-3">
+            {/* Acciones + última actividad (TopBar de la ficha) */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-[10px] font-bold tracking-widest text-muted uppercase">
                     Última actividad:{' '}
-                    <span className="text-foreground">
+                    <span className="text-strong">
                         {formatRelativeLastActivity(profileLastActivityAt)}
                     </span>
                 </span>
+
+                <div className="flex w-full min-w-0 max-w-full flex-row flex-wrap items-center gap-2 print:hidden sm:w-auto">
+                    {client.phone ? (
+                        <a
+                            href={`https://wa.me/${client.phone.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Contactar por WhatsApp"
+                            className="flex h-12 w-12 items-center justify-center rounded-control border border-[#25D366]/40 bg-[#25D366]/10 text-[#25D366] transition-all hover:bg-[#25D366]/20"
+                        >
+                            <WhatsAppIcon className="h-5 w-5" />
+                        </a>
+                    ) : (
+                        <div
+                            aria-label="Sin número de teléfono"
+                            className="pointer-events-none flex h-12 w-12 cursor-not-allowed items-center justify-center rounded-control border border-subtle bg-surface-sunken text-muted opacity-40 grayscale"
+                        >
+                            <WhatsAppIcon className="h-5 w-5" />
+                        </div>
+                    )}
+                    <Link
+                        href={`/coach/nutrition-plans/client/${clientId}`}
+                        className="flex h-12 flex-1 items-center justify-center rounded-control border border-default bg-surface-card px-5 text-[10px] font-bold tracking-widest text-strong uppercase transition-colors hover:bg-surface-sunken sm:flex-none"
+                    >
+                        Nutrición
+                    </Link>
+                    <Link
+                        href={`/coach/builder/${clientId}`}
+                        className="flex h-12 flex-1 items-center justify-center gap-2 rounded-control bg-[var(--cta-fill)] px-5 text-[10px] font-bold tracking-widest text-[var(--text-on-sport)] uppercase shadow-[var(--glow-sport)] transition-colors hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)] sm:flex-none"
+                    >
+                        <Zap className="h-4 w-4" />
+                        Entrenamiento
+                    </Link>
+                    <button
+                        type="button"
+                        onClick={handleExport}
+                        className="flex h-12 items-center gap-2 rounded-control border border-default bg-surface-card px-4 text-[10px] font-bold tracking-widest text-strong uppercase transition-colors hover:bg-surface-sunken"
+                    >
+                        <Download className="h-4 w-4" />
+                        Exportar
+                    </button>
+                </div>
             </div>
 
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-                <div className="flex items-center gap-4 md:gap-6 min-w-0">
-                    <div className="w-16 h-16 md:w-24 md:h-24 rounded-2xl md:rounded-[2rem] bg-white dark:bg-white/5 border border-primary/20 flex items-center justify-center flex-shrink-0 shadow-2xl overflow-hidden relative group">
-                        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-transparent" />
-                        <span className="text-2xl md:text-4xl font-black text-primary uppercase font-display relative z-10">
+            {/* Hero inverso: identidad + 5 chips */}
+            <Card variant="inverse" padding="lg" className="gap-0">
+                <div className="flex items-start gap-4">
+                    <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-inverse)] bg-white/[0.07] shadow-[var(--shadow-md)] md:h-20 md:w-20">
+                        <span className="font-display relative z-10 text-2xl font-black text-on-dark uppercase md:text-3xl">
                             {client.full_name[0]}
                         </span>
                     </div>
-                    <div className="min-w-0 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                            <h1 className="font-display max-w-full text-2xl font-black uppercase leading-none tracking-tighter text-foreground break-words md:text-5xl">
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h1 className="font-display max-w-full text-2xl font-black tracking-tighter text-on-dark break-words md:text-3xl">
                                 {client.full_name}
                             </h1>
-                            <Badge
-                                variant="outline"
-                                className={cn(
-                                    'font-black text-[10px] uppercase tracking-widest shrink-0',
-                                    active
-                                        ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                                        : 'bg-muted text-muted-foreground border-border'
-                                )}
-                            >
+                            <Badge tone={active ? 'success' : 'neutral'} size="sm">
                                 {active ? 'Activo' : 'Inactivo'}
                             </Badge>
-                            <Badge variant="outline" className={cn('font-black text-[10px] uppercase tracking-widest shrink-0 border', ab.className)}>
-                                Score: {attentionScore} · {ab.label}
+                            <Badge tone={ab.tone} size="sm">
+                                Score {attentionScore} · {ab.label}
                             </Badge>
                         </div>
-                        <p className="break-all text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                            {client.email}
-                        </p>
-                        <p className="flex w-full min-w-0 flex-wrap gap-x-3 gap-y-1 text-[11px] font-medium normal-case tracking-normal text-muted-foreground [overflow-wrap:anywhere] break-words md:text-xs">
+                        <p className="truncate text-[12.5px] text-on-dark-muted">{client.email}</p>
+                        <p className="flex w-full min-w-0 flex-wrap gap-x-3.5 gap-y-1 text-[11.5px] text-on-dark-muted [overflow-wrap:anywhere] break-words">
                             <span className="inline-flex items-center gap-1">
-                                <Flame className="w-3.5 h-3.5 text-orange-500 shrink-0" />
-                                Racha: {streakDays} día{streakDays === 1 ? '' : 's'}
+                                <Flame className="h-3.5 w-3.5 shrink-0 text-[var(--ember-400)]" />
+                                {streakDays} d de racha
                             </span>
                             <span className="inline-flex items-center gap-1">
-                                <Calendar className="w-3.5 h-3.5 shrink-0" />
-                                Cliente desde: {clientSinceLabel}
+                                <Calendar className="h-3.5 w-3.5 shrink-0" />
+                                Desde {clientSinceLabel}
                             </span>
                             <span className="inline-flex items-center gap-1">
-                                <Target className="w-3.5 h-3.5 text-primary shrink-0" />
-                                Edad entreno: ~{trainingAge}
+                                <Target className="h-3.5 w-3.5 shrink-0 text-[var(--sport-400)]" />
+                                ~{trainingAge}
                             </span>
                         </p>
                     </div>
                 </div>
 
-                <div className="relative z-10 flex w-full min-w-0 max-w-full flex-row flex-wrap items-center gap-2 print:hidden md:gap-3">
-                    <GlassButton
-                        asChild
-                        className={cn(
-                            'w-12 h-12 p-0 border-[#25D366]/40 bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#25D366] transition-all shadow-[0_0_12px_rgba(37,211,102,0.15)] hover:shadow-[0_0_18px_rgba(37,211,102,0.3)]',
-                            !client.phone && 'opacity-40 grayscale cursor-not-allowed pointer-events-none'
-                        )}
-                    >
-                        {client.phone ? (
-                            <a
-                                href={`https://wa.me/${client.phone.replace(/\D/g, '')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                aria-label="Contactar por WhatsApp"
-                            >
-                                <WhatsAppIcon className="w-5 h-5" />
-                            </a>
-                        ) : (
-                            <div aria-label="Sin número de teléfono">
-                                <WhatsAppIcon className="w-5 h-5" />
-                            </div>
-                        )}
-                    </GlassButton>
-                    <GlassButton
-                        asChild
-                        className="flex-1 md:flex-none h-12 px-5 border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary"
-                    >
-                        <Link
-                            href={`/coach/nutrition-plans/client/${clientId}`}
-                        >
-                            <span className="font-bold uppercase tracking-widest text-[10px]">Nutrición</span>
-                        </Link>
-                    </GlassButton>
-                    <GlassButton
-                        asChild
-                        className="flex-1 md:flex-none h-12 px-5 bg-primary text-primary-foreground hover:bg-primary/90 border-none shadow-[0_0_20px_-5px_var(--theme-primary)]"
-                    >
-                        <Link href={`/coach/builder/${clientId}`}>
-                            <Zap className="w-4 h-4 mr-2" />
-                            <span className="font-bold uppercase tracking-widest text-[10px]">Entrenamiento</span>
-                        </Link>
-                    </GlassButton>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleExport}
-                        className="h-12 px-4 border-dashed border-primary/30 bg-background/80 hover:bg-primary/5 font-bold uppercase tracking-widest text-[10px] gap-2"
-                    >
-                        <Download className="w-4 h-4" />
-                        Exportar
-                    </Button>
+                <div className="mt-3.5 grid w-full min-w-0 max-w-full grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                    <HeroStatChip
+                        label="Peso"
+                        value={currentWeightKg > 0 ? `${currentWeightKg} kg` : '—'}
+                        sub={
+                            weightDeltaKg === 0 ? (
+                                <span className="inline-flex items-center gap-0.5 text-on-dark-muted">
+                                    <Minus className="h-3 w-3" /> sin cambio
+                                </span>
+                            ) : weightDeltaKg > 0 ? (
+                                <span className="inline-flex items-center gap-0.5 text-[var(--ember-400)]">
+                                    <TrendingUp className="h-3 w-3" /> +{Math.abs(weightDeltaKg).toFixed(1)} kg
+                                </span>
+                            ) : (
+                                <span className="inline-flex items-center gap-0.5 text-[var(--success-500)]">
+                                    <TrendingDown className="h-3 w-3" /> {weightDeltaKg.toFixed(1)} kg
+                                </span>
+                            )
+                        }
+                    />
+                    <HeroStatChip
+                        label="Adherencia"
+                        value={`${adherencePct}%`}
+                        sub={<HeroChipBar value={adherencePct} />}
+                    />
+                    <HeroStatChip
+                        label="Workouts"
+                        value={`${workoutsThisWeek}/${workoutsTarget}`}
+                        sub={<span className="text-on-dark-muted">esta semana</span>}
+                        icon={<Dumbbell className="h-3 w-3 text-[var(--sport-400)]" />}
+                    />
+                    <HeroStatChip
+                        label="Programa"
+                        value={`Sem ${planCur}/${planTot}`}
+                        sub={<HeroChipBar value={(planCur / planTot) * 100} />}
+                    />
+                    <HeroStatChip
+                        label="Comidas hoy"
+                        value={`${mealsDone}/${mealsTotal}`}
+                        sub={
+                            <span className={nutritionPct >= 80 ? 'text-[var(--success-500)]' : 'text-[var(--warning-500)]'}>
+                                {nutritionPct}% plan
+                            </span>
+                        }
+                        icon={<Utensils className="h-3 w-3 text-[var(--ember-400)]" />}
+                        className="col-span-2 sm:col-span-1"
+                    />
                 </div>
-            </div>
-
-            <div className="relative z-10 grid w-full min-w-0 max-w-full grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-5">
-                <HeroStatChip
-                    label="Peso"
-                    value={currentWeightKg > 0 ? `${currentWeightKg} kg` : '—'}
-                    sub={
-                        weightDeltaKg === 0 ? (
-                            <span className="inline-flex items-center gap-0.5 text-muted-foreground">
-                                <Minus className="w-3 h-3" /> sin cambio
-                            </span>
-                        ) : weightDeltaKg > 0 ? (
-                            <span className="inline-flex items-center gap-0.5 text-red-500">
-                                <TrendingUp className="w-3 h-3" /> +{Math.abs(weightDeltaKg).toFixed(1)} kg
-                            </span>
-                        ) : (
-                            <span className="inline-flex items-center gap-0.5 text-emerald-500">
-                                <TrendingDown className="w-3 h-3" /> {weightDeltaKg.toFixed(1)} kg
-                            </span>
-                        )
-                    }
-                />
-                <HeroStatChip
-                    label="Adherencia"
-                    value={`${adherencePct}%`}
-                    sub={<Progress value={adherencePct} className="h-1.5 bg-secondary mt-1" />}
-                />
-                <HeroStatChip
-                    label="Workouts"
-                    value={`${workoutsThisWeek}/${workoutsTarget}`}
-                    sub={<span className="text-muted-foreground">esta semana</span>}
-                    icon={<Dumbbell className="w-3 h-3 text-primary" />}
-                />
-                <HeroStatChip
-                    label="Programa"
-                    value={`Sem ${planCur}/${planTot}`}
-                    sub={<Progress value={(planCur / planTot) * 100} className="h-1.5 bg-secondary mt-1" />}
-                />
-                <HeroStatChip
-                    label="Comidas hoy"
-                    value={`${mealsDone}/${mealsTotal}`}
-                    sub={<span className={nutritionPct >= 80 ? 'text-emerald-500' : 'text-amber-500'}>{nutritionPct}% plan</span>}
-                    icon={<Utensils className="w-3 h-3 text-emerald-500" />}
-                    className="col-span-2 sm:col-span-1"
-                />
-            </div>
+            </Card>
         </div>
     )
 }
@@ -276,6 +249,17 @@ function parseIsoSafe(s: string | null): Date | null {
     if (!s) return null
     const d = new Date(s.length <= 10 ? `${s}T12:00:00` : s)
     return isFinite(d.getTime()) ? d : null
+}
+
+function HeroChipBar({ value }: { value: number }) {
+    return (
+        <div className="mt-1.5 h-1 overflow-hidden rounded-pill bg-[var(--border-inverse)]">
+            <div
+                className="h-full rounded-pill bg-sport-500"
+                style={{ width: `${Math.min(100, Math.max(0, value))}%` }}
+            />
+        </div>
+    )
 }
 
 function HeroStatChip({
@@ -294,18 +278,20 @@ function HeroStatChip({
     return (
         <div
             className={cn(
-                'min-w-0 max-w-full rounded-2xl border border-border/60 bg-card/80 p-3 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.03] sm:p-4',
+                'min-w-0 max-w-full rounded-control border border-[var(--border-inverse)] bg-white/[0.07] p-2.5',
                 className
             )}
         >
             <div className="mb-1 flex min-w-0 items-center justify-between gap-2">
-                <span className="min-w-0 truncate text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                <span className="min-w-0 truncate text-[10px] tracking-[0.03em] text-on-dark-muted">
                     {label}
                 </span>
                 {icon}
             </div>
-            <div className="min-w-0 break-words text-base font-black leading-tight text-foreground sm:text-lg">{value}</div>
-            <div className="mt-1 min-w-0 text-[10px] font-medium [overflow-wrap:anywhere]">{sub}</div>
+            <div className="font-display min-w-0 break-words text-base font-black tabular-nums text-on-dark">
+                {value}
+            </div>
+            <div className="mt-0.5 min-w-0 text-[10.5px] font-bold [overflow-wrap:anywhere]">{sub}</div>
         </div>
     )
 }

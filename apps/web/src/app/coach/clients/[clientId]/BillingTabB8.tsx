@@ -5,8 +5,9 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { format, formatDistanceToNow, addMonths } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { CreditCard, Plus, Trash2, Calendar, Receipt } from 'lucide-react'
-import { GlassCard } from '@/components/ui/glass-card'
+import { CreditCard, Plus, Trash2, Calendar, Receipt, Info } from 'lucide-react'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -143,23 +144,30 @@ export function BillingTabB8({ payments, clientId }: BillingTabB8Props) {
 
     return (
         <div className="space-y-6">
+            <div className="flex items-center gap-1.5 text-subtle">
+                <Info className="h-3.5 w-3.5 shrink-0" />
+                <span className="text-[11.5px]">
+                    Pagos del alumno hacia ti · independiente de tu suscripción EVA
+                </span>
+            </div>
+
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <GlassCard className="border-dashed border-border/50 p-4 dark:border-white/10">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                <Card padding="md" className="gap-0">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted">
                         Total cobrado
                     </p>
-                    <p className="mt-1 text-lg font-black tabular-nums text-primary">
+                    <p className="font-display mt-1 text-lg font-black tabular-nums text-[var(--success-700)]">
                         {formatMoney(totalPaid)}
                     </p>
-                    <p className="mt-1 text-[10px] font-medium text-muted-foreground">
+                    <p className="mt-1 text-[10px] font-medium text-muted">
                         Suma de pagos marcados como pagados
                     </p>
-                </GlassCard>
-                <GlassCard className="border-dashed border-border/50 p-4 dark:border-white/10">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                </Card>
+                <Card padding="md" className="gap-0">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted">
                         Último pago
                     </p>
-                    <p className="mt-1 text-sm font-black text-foreground">
+                    <p className="font-display mt-1 text-sm font-black text-strong">
                         {lastPaid
                             ? formatDistanceToNow(new Date(lastPaid.payment_date), {
                                   addSuffix: true,
@@ -168,32 +176,32 @@ export function BillingTabB8({ payments, clientId }: BillingTabB8Props) {
                             : '—'}
                     </p>
                     {lastPaid ? (
-                        <p className="mt-1 text-[10px] font-medium text-muted-foreground">
+                        <p className="mt-1 text-[10px] font-medium text-muted">
                             {format(new Date(lastPaid.payment_date), "d MMM yyyy", { locale: es })} ·{' '}
                             {formatMoney(Number(lastPaid.amount))}
                         </p>
                     ) : null}
-                </GlassCard>
-                <GlassCard className="border-dashed border-border/50 p-4 dark:border-white/10">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                </Card>
+                <Card padding="md" className="gap-0">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted">
                         Próx. renovación (estim.)
                     </p>
-                    <p className="mt-1 text-sm font-black text-foreground">{nextRenewalLabel}</p>
-                    <p className="mt-1 text-[10px] font-medium text-muted-foreground">
+                    <p className="font-display mt-1 text-sm font-black text-strong">{nextRenewalLabel}</p>
+                    <p className="mt-1 text-[10px] font-medium text-muted">
                         Desde último pago + periodo en meses
                     </p>
-                </GlassCard>
+                </Card>
             </div>
 
-            <GlassCard className="relative overflow-hidden border-dashed border-border/50 p-6 dark:border-white/10 md:p-8">
-                <div className="pointer-events-none absolute top-1/2 left-1/2 -mt-32 -ml-32 h-64 w-64 rounded-full bg-primary/5 blur-3xl dark:bg-primary/10" />
-                <div className="relative z-10 mb-6 flex flex-wrap items-center justify-between gap-4">
-                    <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
+            <Card padding="md" className="gap-0">
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+                    <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
                         <CreditCard className="h-4 w-4" /> Línea de tiempo
                     </h3>
                     <Button
                         type="button"
-                        className="h-8 bg-primary px-4 text-[10px] font-black uppercase tracking-widest text-primary-foreground shadow-[0_0_20px_-5px_var(--theme-primary)] hover:bg-primary/90"
+                        variant="sport"
+                        size="sm"
                         onClick={() => setAddOpen(true)}
                     >
                         <Plus className="mr-2 h-3 w-3" /> Nuevo pago
@@ -312,12 +320,13 @@ export function BillingTabB8({ payments, clientId }: BillingTabB8Props) {
                 </div>
 
                 {sorted.length === 0 ? (
-                    <p className="relative z-10 py-10 text-center text-sm text-muted-foreground">
-                        No hay pagos registrados.
-                    </p>
+                    <div className="py-10 text-center">
+                        <Receipt className="mx-auto mb-2 h-7 w-7 text-[var(--ink-300)]" />
+                        <p className="text-sm text-muted">No hay pagos registrados.</p>
+                    </div>
                 ) : (
-                    <div className="relative z-10 pl-2">
-                        <div className="absolute top-3 bottom-3 left-[19px] w-px bg-border/70 dark:bg-white/15" />
+                    <div className="relative pl-2">
+                        <div className="absolute top-3 bottom-3 left-[19px] w-px bg-[var(--border-subtle)]" />
                         <ul className="space-y-6">
                             {sorted.map((p) => {
                                 const paid = isPaidStatus(p.status)
@@ -326,22 +335,22 @@ export function BillingTabB8({ payments, clientId }: BillingTabB8Props) {
                                     <li key={p.id} className="relative flex gap-4 pl-10">
                                         <div
                                             className={cn(
-                                                'absolute top-2 left-2 z-10 h-3.5 w-3.5 rounded-full border-2 border-background',
-                                                paid && 'bg-emerald-500',
-                                                pending && 'bg-amber-500',
-                                                !paid && !pending && 'bg-muted-foreground/50'
+                                                'absolute top-2 left-2 z-10 h-3.5 w-3.5 rounded-full border-2 border-[var(--surface-card)]',
+                                                paid && 'bg-[var(--success-500)]',
+                                                pending && 'bg-[var(--warning-500)]',
+                                                !paid && !pending && 'bg-[var(--ink-400)]'
                                             )}
                                         />
-                                        <div className="min-w-0 flex-1 rounded-xl border border-border/50 bg-secondary/25 p-4 dark:border-white/10 dark:bg-white/[0.04]">
+                                        <div className="min-w-0 flex-1 rounded-control border border-subtle bg-surface-sunken p-4">
                                             <div className="flex flex-wrap items-start justify-between gap-3">
                                                 <div className="min-w-0 space-y-1">
-                                                    <p className="text-base font-black tabular-nums text-primary">
+                                                    <p className="font-display text-base font-black tabular-nums text-strong">
                                                         {formatMoney(Number(p.amount))}
                                                     </p>
-                                                    <p className="text-sm font-bold text-foreground">
+                                                    <p className="text-sm font-bold text-strong">
                                                         {p.service_description || 'Sin descripción'}
                                                     </p>
-                                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold uppercase tracking-widest text-muted">
                                                         <span className="inline-flex items-center gap-1">
                                                             <Calendar className="h-3 w-3" />
                                                             {format(new Date(p.payment_date), "d MMM yyyy", {
@@ -354,26 +363,18 @@ export function BillingTabB8({ payments, clientId }: BillingTabB8Props) {
                                                     </div>
                                                 </div>
                                                 <div className="flex shrink-0 flex-col items-end gap-2">
-                                                    <span
-                                                        className={cn(
-                                                            'rounded-md border px-2 py-0.5 text-[9px] font-black uppercase tracking-widest',
-                                                            paid &&
-                                                                'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-                                                            pending &&
-                                                                'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-400',
-                                                            !paid &&
-                                                                !pending &&
-                                                                'border-border/50 bg-muted/40 text-muted-foreground'
-                                                        )}
+                                                    <Badge
+                                                        tone={paid ? 'success' : pending ? 'warning' : 'neutral'}
+                                                        size="sm"
                                                     >
-                                                        {p.status || '—'}
-                                                    </span>
+                                                        {paid ? 'Pagado' : pending ? 'Pendiente' : (p.status || '—')}
+                                                    </Badge>
                                                     <Button
                                                         type="button"
                                                         variant="ghost"
                                                         size="sm"
                                                         disabled={isDeleting || isAdding}
-                                                        className="h-8 text-rose-600 hover:bg-rose-500/10 hover:text-rose-600"
+                                                        className="h-8 text-[var(--ink-300)] hover:bg-[var(--danger-100)] hover:text-[var(--danger-600)]"
                                                         onClick={() => onDelete(p.id)}
                                                     >
                                                         <Trash2 className="h-4 w-4" />
@@ -385,9 +386,9 @@ export function BillingTabB8({ payments, clientId }: BillingTabB8Props) {
                                                     href={p.receipt_image_url}
                                                     target="_blank"
                                                     rel="noreferrer"
-                                                    className="mt-3 inline-flex items-center gap-2 rounded-lg border border-border/40 bg-background/50 p-2 text-[10px] font-black uppercase tracking-widest hover:bg-primary/5 dark:border-white/10"
+                                                    className="mt-3 inline-flex items-center gap-2 rounded-control border border-subtle bg-surface-card p-2 text-[10px] font-black uppercase tracking-widest text-body hover:bg-surface-sunken"
                                                 >
-                                                    <div className="relative h-12 w-12 overflow-hidden rounded-md">
+                                                    <div className="relative h-12 w-12 overflow-hidden rounded-[10px]">
                                                         <Image
                                                             src={p.receipt_image_url}
                                                             alt=""
@@ -396,7 +397,7 @@ export function BillingTabB8({ payments, clientId }: BillingTabB8Props) {
                                                             unoptimized
                                                         />
                                                     </div>
-                                                    <Receipt className="h-4 w-4 text-primary" />
+                                                    <Receipt className="h-4 w-4 text-sport-600" />
                                                     Comprobante
                                                 </a>
                                             ) : null}
@@ -407,7 +408,7 @@ export function BillingTabB8({ payments, clientId }: BillingTabB8Props) {
                         </ul>
                     </div>
                 )}
-            </GlassCard>
+            </Card>
         </div>
     )
 }

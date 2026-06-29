@@ -66,57 +66,49 @@ export function ProfileTabNav({ activeTab, onChange, badges }: ProfileTabNavProp
     return (
         <div
             className={cn(
-                'sticky z-20 mx-0 mb-2 w-full max-w-full min-w-0 border-b border-border/50 px-0 dark:border-white/10',
-                'bg-background/90 backdrop-blur-md supports-[backdrop-filter]:bg-background/75',
+                'sticky z-20 mx-0 mb-2 w-full max-w-full min-w-0 border-b border-subtle px-0',
+                'bg-[color-mix(in_srgb,var(--surface-app)_80%,transparent)] [backdrop-filter:saturate(180%)_blur(12px)] [-webkit-backdrop-filter:saturate(180%)_blur(12px)]',
                 'top-[var(--coach-mobile-content-top-offset)] md:top-0 print:static print:border-0 print:bg-transparent'
             )}
         >
             <div className="relative min-w-0">
                 <div
                     ref={scrollRef}
-                    className="relative z-10 flex min-w-0 gap-0 overflow-x-auto sm:gap-2 scrollbar-none"
+                    className="relative z-10 flex min-w-0 gap-1.5 overflow-x-auto py-2 scrollbar-none"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                 >
                     {TABS.map((tab) => {
                         const Icon = tab.icon
                         const active = activeTab === tab.id
                         const badge = badges?.[tab.id]
+                        const isAlert = badge === '!'
                         return (
                             <button
                                 key={tab.id}
                                 type="button"
                                 onClick={() => onChange(tab.id)}
                                 className={cn(
-                                    'relative flex shrink-0 items-center gap-2 px-3 py-3.5 text-[10px] font-black uppercase tracking-widest transition-colors sm:px-4',
-                                    active ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+                                    'relative flex h-[38px] shrink-0 items-center gap-1.5 rounded-pill border-[1.5px] px-3.5 text-[13.5px] font-bold transition-[background-color,border-color,color] duration-[140ms] ease-[cubic-bezier(0.22,1,0.36,1)]',
+                                    active
+                                        ? 'border-sport-500 bg-sport-500 text-[var(--text-on-sport)]'
+                                        : 'border-default bg-surface-card text-muted hover:text-strong'
                                 )}
-                                style={active ? { color: 'var(--theme-primary)' } : undefined}
                             >
-                                <Icon className="h-3.5 w-3.5 opacity-90 shrink-0" />
+                                <Icon className="h-3.5 w-3.5 shrink-0 opacity-90" />
                                 <span className="whitespace-nowrap">{tab.label}</span>
                                 {badge != null && badge !== '' && (
                                     <span
                                         className={cn(
-                                            'min-w-[1.125rem] h-5 px-1.5 rounded-md flex items-center justify-center text-[9px] font-black tabular-nums',
-                                            badge === '!'
-                                                ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/35'
-                                                : 'bg-primary/12 text-primary border border-primary/25'
+                                            'flex h-[18px] min-w-[18px] items-center justify-center rounded-pill px-1.5 text-[11px] font-extrabold tabular-nums',
+                                            isAlert
+                                                ? 'bg-[var(--danger-500)] text-white'
+                                                : active
+                                                  ? 'bg-white/25 text-white'
+                                                  : 'bg-surface-sunken text-muted'
                                         )}
                                     >
                                         {badge}
                                     </span>
-                                )}
-                                {active && (
-                                    <motion.div
-                                        layoutId="coach-profile-tab-indicator"
-                                        className="absolute right-2 bottom-0 left-2 h-0.5 rounded-full"
-                                        style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
-                                        transition={
-                                            reduceMotion
-                                                ? { duration: 0 }
-                                                : { type: 'spring', stiffness: 500, damping: 35 }
-                                        }
-                                    />
                                 )}
                             </button>
                         )
@@ -134,7 +126,7 @@ export function ProfileTabNav({ activeTab, onChange, badges }: ProfileTabNavProp
                             transition={{ duration: 0.2 }}
                             className="pointer-events-none absolute right-0 top-0 bottom-0 w-16 z-20 flex items-center justify-end pr-1 md:hidden"
                             style={{
-                                background: 'linear-gradient(to right, transparent, var(--background) 80%)',
+                                background: 'linear-gradient(to right, transparent, var(--surface-app) 80%)',
                             }}
                         >
                             <AnimatePresence>

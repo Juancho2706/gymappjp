@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { computeIsak } from '@/domain/bodycomp'
 import {
@@ -164,7 +164,7 @@ export function IsakCaptureForm({
     )
 
     return (
-        <GlassCard className="p-4 md:p-5">
+        <Card className="p-4 md:p-5">
             {/* Stepper */}
             <div className="mb-4 flex flex-wrap gap-1.5">
                 {STEPS.map((label, i) => (
@@ -281,6 +281,6 @@ export function IsakCaptureForm({
                     )}
                 </div>
             </div>
-        </GlassCard>
+        </Card>
     )
 }

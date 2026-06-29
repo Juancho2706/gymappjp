@@ -10,7 +10,7 @@ import {
     XAxis,
     YAxis,
 } from 'recharts'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Trash2 } from 'lucide-react'
@@ -69,17 +69,17 @@ export function BiaTrendPanel({
 
     if (rows.length === 0) {
         return (
-            <GlassCard className="p-6 text-center">
+            <Card className="p-6 text-center">
                 <p className="text-sm text-muted-foreground">
                     Aún no hay mediciones de bioimpedancia para este alumno.
                 </p>
-            </GlassCard>
+            </Card>
         )
     }
 
     return (
         <div className="space-y-3">
-            <GlassCard className="p-4 md:p-5">
+            <Card className="p-4 md:p-5">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                     {SERIES.map((s) => (
                         <button
@@ -127,7 +127,7 @@ export function BiaTrendPanel({
                             <Line
                                 type="monotone"
                                 dataKey="value"
-                                stroke="#007AFF"
+                                stroke="var(--sport-500)"
                                 strokeWidth={2.5}
                                 dot={{ r: 3 }}
                                 activeDot={{ r: 5 }}
@@ -135,7 +135,7 @@ export function BiaTrendPanel({
                         </LineChart>
                     </ResponsiveContainer>
                 </div>
-            </GlassCard>
+            </Card>
 
             {error && <p className="text-xs font-semibold text-rose-500">{error}</p>}
 
@@ -145,7 +145,7 @@ export function BiaTrendPanel({
                     return (
                         <li
                             key={r.id}
-                            className="flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-secondary/20 px-3 py-2.5 dark:border-white/10"
+                            className="flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-secondary/20 px-3 py-2.5"
                         >
                             <div className="min-w-0">
                                 <p className="text-xs font-bold text-foreground">{deviceLabel(r)}</p>
