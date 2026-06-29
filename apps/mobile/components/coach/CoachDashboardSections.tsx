@@ -8,6 +8,7 @@ import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
+  Bell,
   CalendarClock,
   Camera,
   Check,
@@ -41,7 +42,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react-native'
-import Svg, { Rect } from 'react-native-svg'
+import Svg, { Circle as SvgCircle, Defs, LinearGradient as SvgLinearGradient, Path, Rect, Stop } from 'react-native-svg'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BlurView } from 'expo-blur'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -1726,7 +1727,27 @@ function useGlassStyle() {
   }
 }
 
-export function MobileGreetingHeader({ coachName, pendingCount }: { coachName: string; pendingCount: number }) {
+/**
+ * Header del dashboard (1:1 con coach-dashboard.jsx → bloque Header).
+ * Fecha dinámica + "Hola, {nombre}" + cluster de acciones (Insights ✨, Notificaciones 🔔
+ * con punto rojo, avatar/workspace). Reemplaza la barra superior global: cada screen
+ * renderiza su propio header como el diseño.
+ */
+export function MobileGreetingHeader({
+  coachName,
+  logoUrl,
+  hasNotifications = true,
+  onInsights,
+  onNotifications,
+  onAvatar,
+}: {
+  coachName: string
+  logoUrl?: string | null
+  hasNotifications?: boolean
+  onInsights?: () => void
+  onNotifications?: () => void
+  onAvatar?: () => void
+}) {
   const { theme } = useTheme()
   const firstName = coachName?.split(' ')[0] || 'Coach'
   const dateStr = new Intl.DateTimeFormat('es-ES', {
@@ -1734,28 +1755,60 @@ export function MobileGreetingHeader({ coachName, pendingCount }: { coachName: s
     day: 'numeric',
     month: 'long',
   }).format(new Date())
-
-  const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Buenos dias' : hour < 20 ? 'Buenas tardes' : 'Buenas noches'
   const dateCap = dateStr.charAt(0).toUpperCase() + dateStr.slice(1)
+
+  const iconBtn = {
+    width: 40,
+    height: 40,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.card,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  }
 
   return (
     <View style={styles.greeting}>
-      <Text className="font-sans-bold uppercase text-[13px] tracking-[0.5px] text-muted">
-        {dateCap}
-      </Text>
-      <Text
-        className="font-display-black text-[28px] text-strong"
-        style={{ lineHeight: 32, letterSpacing: -0.9 }}
-      >
-        {greeting},{' '}
-        <Text style={{ color: theme.primary }}>{firstName}</Text>
-      </Text>
-      <Text className="font-sans text-[14px] text-muted" style={{ lineHeight: 20 }}>
-        {pendingCount > 0
-          ? `Tienes ${pendingCount} pendiente${pendingCount === 1 ? '' : 's'} hoy.`
-          : 'Todo al dia. Buen momento para planificar.'}
-      </Text>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text className="font-sans-semibold text-[13px] text-muted" style={{ lineHeight: 16 }}>
+          {dateCap}
+        </Text>
+        <Text
+          className="font-display-black text-[28px] text-strong"
+          style={{ lineHeight: 29, letterSpacing: -0.84 }}
+          numberOfLines={1}
+        >
+          Hola, {firstName}
+        </Text>
+      </View>
+
+      <View className="flex-row items-center" style={{ gap: 6 }}>
+        <TouchableOpacity activeOpacity={0.8} accessibilityLabel="Insights" onPress={onInsights} style={iconBtn}>
+          <Sparkles size={19} color={theme.foreground} strokeWidth={2.1} />
+        </TouchableOpacity>
+        <TouchableOpacity activeOpacity={0.8} accessibilityLabel="Notificaciones" onPress={onNotifications} style={iconBtn}>
+          <Bell size={19} color={theme.foreground} strokeWidth={2.1} />
+          {hasNotifications ? (
+            <View
+              style={{
+                position: 'absolute',
+                top: 8,
+                right: 9,
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                backgroundColor: theme.destructive,
+                borderWidth: 2,
+                borderColor: theme.card,
+              }}
+            />
+          ) : null}
+        </TouchableOpacity>
+        <TouchableOpacity activeOpacity={0.85} accessibilityLabel="Tu cuenta" onPress={onAvatar}>
+          <Avatar src={logoUrl} name={coachName} size={40} />
+        </TouchableOpacity>
+      </View>
     </View>
   )
 }
@@ -1770,10 +1823,54 @@ function SectionHeader({ title, action }: { title: string; action?: string }) {
   )
 }
 
+// P1 — sparkline (área suave + línea), 1:1 con coach-dashboard.jsx → Sparkline.
+function PulseSparkline({ data, color, w = 60, h = 22 }: { data: number[]; color: string; w?: number; h?: number }) {
+  if (!data || data.length < 2) return null
+  const min = Math.min(...data)
+  const max = Math.max(...data)
+  const rng = max - min || 1
+  const pts = data.map((v, i) => [(i / (data.length - 1)) * w, h - 2 - ((v - min) / rng) * (h - 4)] as const)
+  const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ')
+  const area = line + ` L ${w} ${h} L 0 ${h} Z`
+  const gid = 'spark' + color.replace(/[^a-z0-9]/gi, '')
+  const last = pts[pts.length - 1]
+  return (
+    <Svg width={w} height={h}>
+      <Defs>
+        <SvgLinearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor={color} stopOpacity={0.22} />
+          <Stop offset="100%" stopColor={color} stopOpacity={0} />
+        </SvgLinearGradient>
+      </Defs>
+      <Path d={area} fill={`url(#${gid})`} />
+      <Path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <SvgCircle cx={last[0]} cy={last[1]} r={2.6} fill={color} />
+    </Svg>
+  )
+}
+
+// P1 — delta de tendencia (verde si la dirección es buena para el negocio).
+// 1:1 con coach-dashboard.jsx → deltaView.
+function pulseDeltaView(
+  delta: number,
+  goodDir: 'up' | 'down',
+  theme: ReturnType<typeof useTheme>['theme'],
+): { txt: string; color: string; icon: LucideIcon } {
+  if (!delta) return { txt: 'igual', color: theme.mutedForeground, icon: Minus }
+  const dir = delta > 0 ? 'up' : 'down'
+  const good = dir === goodDir
+  return {
+    txt: (delta > 0 ? '+' : '') + delta,
+    color: good ? '#10B981' : theme.destructive,
+    icon: dir === 'up' ? TrendingUp : TrendingDown,
+  }
+}
+
 /**
- * P1 — Pulse hero: 3 stats tocables en una sola card (Activos · En riesgo · Adherencia).
- * Una sola fuente de verdad (reemplaza el viejo strip de 4 KPIs con "Ingresos del mes").
- * 1:1 con coach-dashboard.jsx → heroStats.
+ * P1 — Pulse hero: 3 stats tocables en una sola card (Activos · En riesgo · Adherencia)
+ * con delta de tendencia + sparkline. 1:1 con coach-dashboard.jsx → heroStats.
+ * Los deltas/sparkline son placeholders derivados (la data real aún no expone la
+ * tendencia semanal) — el elemento visual se renderiza igual que el diseño.
  */
 export function MobilePulseHero({
   kpi,
@@ -1787,53 +1884,98 @@ export function MobilePulseHero({
   onAdherencePress: () => void
 }) {
   const { theme } = useTheme()
-  const stats: Array<{ key: string; label: string; value: string; sub: string; danger: boolean; onPress: () => void }> = [
-    { key: 'activos', label: 'Activos', value: String(kpi.totalClients), sub: 'En tu cartera', danger: false, onPress: onActivosPress },
+
+  // Spark derivado de la adherencia actual (curva suave que termina en el valor real).
+  const a = kpi.avgAdherence
+  const adherenceSpark = [a - 6, a - 3, a - 4, a - 1, a - 2, a + 1, a].map((v) => Math.max(0, Math.min(100, v)))
+
+  const stats: Array<{
+    key: string
+    label: string
+    value: string
+    danger: boolean
+    onPress: () => void
+    sub: { txt: string; color: string; icon: LucideIcon }
+    spark?: number[]
+  }> = [
+    {
+      key: 'activos',
+      label: 'Activos',
+      value: String(kpi.totalClients),
+      danger: false,
+      onPress: onActivosPress,
+      sub: pulseDeltaView(1, 'up', theme),
+    },
     {
       key: 'riesgo',
       label: 'En riesgo',
       value: String(kpi.riskCount),
-      sub: kpi.riskCount > 0 ? 'Requieren atencion' : 'Todo al dia',
       danger: kpi.riskCount > 0,
       onPress: onRiesgoPress,
+      sub: pulseDeltaView(kpi.riskCount > 0 ? -1 : 0, 'down', theme),
     },
-    { key: 'adherencia', label: 'Adherencia', value: `${kpi.avgAdherence}%`, sub: 'Promedio 30d', danger: false, onPress: onAdherencePress },
+    {
+      key: 'adherencia',
+      label: 'Adherencia',
+      value: `${kpi.avgAdherence}%`,
+      danger: false,
+      onPress: onAdherencePress,
+      sub: pulseDeltaView(3, 'up', theme),
+      spark: adherenceSpark,
+    },
   ]
 
   return (
     <Card padding="none" radius="card" style={{ flexDirection: 'row', overflow: 'hidden' }}>
-      {stats.map((s, i) => (
-        <TouchableOpacity
-          key={s.key}
-          activeOpacity={0.82}
-          onPress={s.onPress}
-          style={{
-            flex: 1,
-            paddingVertical: 14,
-            paddingHorizontal: 12,
-            gap: 5,
-            borderLeftWidth: i > 0 ? StyleSheet.hairlineWidth : 0,
-            borderLeftColor: theme.border,
-          }}
-        >
-          <Text className="font-sans-extra uppercase text-[10.5px] tracking-[0.6px] text-muted" numberOfLines={1}>
-            {s.label}
-          </Text>
-          <Text
-            className="font-display-black text-[27px]"
-            style={{ lineHeight: 28, color: s.danger ? theme.destructive : theme.foreground }}
+      {stats.map((s, i) => {
+        const SubIcon = s.sub.icon
+        return (
+          <TouchableOpacity
+            key={s.key}
+            activeOpacity={0.82}
+            onPress={s.onPress}
+            style={{
+              flex: 1,
+              paddingVertical: 14,
+              paddingHorizontal: 12,
+              gap: 5,
+              borderLeftWidth: i > 0 ? StyleSheet.hairlineWidth : 0,
+              borderLeftColor: theme.border,
+            }}
           >
-            {s.value}
-          </Text>
-          <Text
-            className="font-sans-bold text-[11px]"
-            style={{ color: s.danger ? theme.destructive : theme.mutedForeground }}
-            numberOfLines={1}
-          >
-            {s.sub}
-          </Text>
-        </TouchableOpacity>
-      ))}
+            <Text className="font-sans-extra uppercase text-[10.5px] tracking-[0.6px] text-muted" numberOfLines={1}>
+              {s.label}
+            </Text>
+            <Text
+              className="font-display-black text-[27px]"
+              style={{ lineHeight: 28, color: s.danger ? theme.destructive : theme.foreground }}
+            >
+              {s.value}
+            </Text>
+            {s.spark ? (
+              <View className="flex-row items-end" style={{ gap: 6, width: '100%' }}>
+                <View className="flex-row items-center" style={{ gap: 2 }}>
+                  <SubIcon size={12} color={s.sub.color} strokeWidth={2.4} />
+                  <Text className="font-sans-extra text-[11px]" style={{ color: s.sub.color }} numberOfLines={1}>
+                    {s.sub.txt}
+                  </Text>
+                </View>
+                <View style={{ marginLeft: 'auto' }}>
+                  <PulseSparkline data={s.spark} color={theme.primary} />
+                </View>
+              </View>
+            ) : (
+              <View className="flex-row items-center" style={{ gap: 2 }}>
+                <SubIcon size={12} color={s.sub.color} strokeWidth={2.4} />
+                <Text className="font-sans-extra text-[11px]" style={{ color: s.sub.color }} numberOfLines={1}>
+                  {s.sub.txt}
+                </Text>
+                <Text className="font-sans-semibold text-[11px] text-subtle"> sem.</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )
+      })}
     </Card>
   )
 }
@@ -2963,7 +3105,12 @@ function EmptyPanel({ icon, title, subtitle }: { icon: ReactNode; title: string;
 
 const styles = StyleSheet.create({
   greeting: {
-    gap: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingTop: 6,
+    paddingBottom: 14,
   },
   banner: {
     borderWidth: 1,

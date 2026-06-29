@@ -17,6 +17,8 @@ export function CoachMainWrapper({ children, scroll = true, refreshControl }: Co
   const insets = useSafeAreaInsets()
   // Clear the translucent blur tab bar + iPhone home indicator.
   const bottomPad = insets.bottom + 84
+  // Sin header global: el wrapper paga el inset superior (status bar / notch).
+  const topPad = insets.top + 6
 
   const content = (
     <MotiView
@@ -35,7 +37,7 @@ export function CoachMainWrapper({ children, scroll = true, refreshControl }: Co
       {scroll ? (
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPad }]}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: topPad, paddingBottom: bottomPad }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={refreshControl}

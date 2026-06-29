@@ -2,28 +2,23 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Search, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { Search, ChevronRight, ArrowLeft } from 'lucide-react'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
 
 /**
- * CoachTopBar — barra superior de escritorio del panel /coach (Fase 2, net-new).
+ * CoachTopBar — barra superior de escritorio del panel /coach (.dt-topbar del diseño Claude).
  *
- * SOLO escritorio (`hidden md:flex`): por debajo de `md` el chrome móvil vive en
- * `CoachSidebar` (header móvil fijo + bottom bar). Contenido mínimo:
- *  1. Breadcrumb/sección derivado de `usePathname()` — el 2º crumb aparece solo en
- *     drill-down (ej. `/coach/clients/[id]`).
- *  2. Búsqueda global = placeholder estilizado NO funcional (el real necesita endpoint;
- *     follow-up al ⌘K del directorio). No cablea data.
- *  3. Campana = se REUSA `NewsBellButton` (consume `NewsFeedProvider`, cero data nueva).
- *  4. Avatar de cuenta → `/coach/settings` (inicial de la marca/nombre del coach).
+ * SOLO escritorio (`hidden md:flex`): por debajo de `md` el chrome lo renderiza cada pantalla
+ * (header propio) + la cápsula flotante de navegación de `CoachSidebar`.
  *
- * Devuelve `null` en el builder (full-screen sin chrome global), igual que los guards
- * `isBuilder` del sidebar.
+ * Layout (verbatim del diseño):
+ *  - Izquierda (`.dt-tb-left`): back + breadcrumb "Sección › Detalle", SOLO en drill-down.
+ *  - Centro (`.dt-tb-search`): búsqueda global centrada "Buscar alumno o programa…  (/)"
+ *    (placeholder NO funcional — endpoint real es follow-up).
+ *  - Derecha (`.dt-tb-actions`): campana (NewsBellButton, con badge) + avatar de cuenta → /coach/settings.
  *
- * Props serializables (resueltas en el server layout). NO recibe data sensible: el
- * branding ya llega aplicado vía los tokens `--sport-*`/`--theme-primary` del `<style>`
- * inline del layout, así que `bg-sport-500` y `primaryColor` ya son el color de marca.
+ * Devuelve `null` en el builder (full-screen sin chrome global). El branding ya llega aplicado vía
+ * los tokens `--sport-*` rebindeados en el `<style>` del layout, así que `var(--sport-*)` ya es marca.
  */
 export interface CoachTopBarProps {
     coachName: string
@@ -51,7 +46,6 @@ const SECTIONS: ReadonlyArray<{ prefix: string; label: string; detail: string }>
 const FALLBACK_SECTION = { prefix: '/coach/dashboard', label: 'Panel', detail: 'Detalle' } as const
 
 function resolveCrumb(pathname: string): { sectionLabel: string; sectionHref: string; detailLabel: string | null } {
-    // Prefijo más largo que matchee la ruta actual.
     let best = FALLBACK_SECTION as { prefix: string; label: string; detail: string }
     for (const s of SECTIONS) {
         if (
@@ -61,7 +55,6 @@ function resolveCrumb(pathname: string): { sectionLabel: string; sectionHref: st
             best = s
         }
     }
-    // El 2º crumb (detalle) solo en drill-down: hay segmento más profundo que la raíz de sección.
     const isDrillDown = pathname.startsWith(best.prefix + '/')
     return {
         sectionLabel: best.label,
@@ -70,7 +63,7 @@ function resolveCrumb(pathname: string): { sectionLabel: string; sectionHref: st
     }
 }
 
-export function CoachTopBar({ coachName, coachBrand, primaryColor }: CoachTopBarProps) {
+export function CoachTopBar({ coachName, coachBrand }: CoachTopBarProps) {
     const pathname = usePathname()
 
     // Builder = full-screen sin chrome global (espejo de `isBuilder` en CoachSidebar).
@@ -79,54 +72,61 @@ export function CoachTopBar({ coachName, coachBrand, primaryColor }: CoachTopBar
     }
 
     const { sectionLabel, sectionHref, detailLabel } = resolveCrumb(pathname)
+    const inStack = detailLabel != null
     const initial = (coachBrand?.trim() || coachName?.trim() || 'C').charAt(0).toUpperCase()
 
     return (
-        <header className="hidden md:flex h-14 shrink-0 items-center gap-3 border-b border-border-subtle bg-surface-card px-5 font-ui">
-            {/* Breadcrumb / sección */}
-            <nav aria-label="Ruta" className="flex min-w-0 flex-1 items-center gap-1.5">
-                {detailLabel ? (
+        <header className="hidden h-[60px] flex-shrink-0 items-center gap-4 border-b border-[var(--border-subtle)] bg-[var(--surface-card)] px-[22px] font-ui md:flex">
+            {/* .dt-tb-left — back + breadcrumb (solo en drill-down) */}
+            <div className="flex min-w-0 flex-shrink-0 items-center gap-2.5">
+                {inStack && (
                     <>
                         <Link
                             href={sectionHref}
                             prefetch={false}
-                            className="truncate text-sm font-semibold text-[var(--text-muted)] transition-colors hover:text-[var(--text-strong)]"
+                            aria-label="Volver"
+                            title="Volver"
+                            className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-[var(--surface-sunken)] text-[var(--text-strong)] transition-colors hover:bg-[var(--ink-100)]"
                         >
-                            {sectionLabel}
+                            <ArrowLeft size={18} />
                         </Link>
-                        <ChevronRight
-                            aria-hidden="true"
-                            className="h-4 w-4 shrink-0 text-[var(--text-muted)]"
-                        />
-                        <span className="truncate text-sm font-semibold text-[var(--text-strong)]">
-                            {detailLabel}
-                        </span>
+                        <nav aria-label="Ruta" className="flex min-w-0 items-center gap-[7px]">
+                            <Link
+                                href={sectionHref}
+                                prefetch={false}
+                                className="whitespace-nowrap text-[14.5px] font-bold text-[var(--text-subtle)] transition-colors hover:text-[var(--text-strong)]"
+                            >
+                                {sectionLabel}
+                            </Link>
+                            <span aria-hidden="true" className="inline-flex text-[var(--ink-300)]">
+                                <ChevronRight size={14} />
+                            </span>
+                            <span className="max-w-[240px] truncate text-[14.5px] font-bold text-[var(--text-strong)]">
+                                {detailLabel}
+                            </span>
+                        </nav>
                     </>
-                ) : (
-                    <h1 className="truncate font-display text-base font-bold tracking-tight text-[var(--text-strong)]">
-                        {sectionLabel}
-                    </h1>
                 )}
-            </nav>
+            </div>
 
-            {/* Búsqueda global — placeholder NO funcional (follow-up: endpoint real ⌘K). */}
-            <div
-                className="hidden h-9 w-64 shrink-0 items-center gap-2 rounded-control border border-border-subtle bg-surface-app px-3 lg:flex"
-                aria-hidden="true"
-            >
-                <Search className="h-4 w-4 shrink-0 text-[var(--text-muted)]" />
+            {/* .dt-tb-search — búsqueda global centrada (placeholder NO funcional) */}
+            <div className="relative mx-auto flex max-w-[460px] flex-1 items-center">
+                <span className="pointer-events-none absolute left-3 inline-flex text-[var(--text-subtle)]">
+                    <Search size={17} />
+                </span>
                 <input
                     type="text"
                     readOnly
                     tabIndex={-1}
-                    placeholder="Buscar alumno o programa…"
-                    className="w-full bg-transparent text-sm text-[var(--text-body)] placeholder:text-[var(--text-muted)] focus:outline-none"
+                    placeholder="Buscar alumno o programa…  (/)"
+                    aria-hidden="true"
+                    className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] pl-[38px] pr-[34px] text-sm text-[var(--text-strong)] outline-none placeholder:text-[var(--text-subtle)]"
                 />
             </div>
 
-            {/* Acciones: campana (reusada) + cuenta */}
-            <div className="flex shrink-0 items-center gap-1.5 pl-1">
-                <div className="flex h-9 w-9 items-center justify-center rounded-control text-[var(--text-muted)] transition-colors hover:bg-surface-sunken hover:text-[var(--text-strong)]">
+            {/* .dt-tb-actions — campana (reusada) + cuenta */}
+            <div className="ml-auto flex flex-shrink-0 items-center gap-1.5">
+                <div className="relative flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-sunken)] hover:text-[var(--text-strong)]">
                     <NewsBellButton />
                 </div>
                 <Link
@@ -134,15 +134,9 @@ export function CoachTopBar({ coachName, coachBrand, primaryColor }: CoachTopBar
                     prefetch={false}
                     aria-label="Tu cuenta"
                     title={coachBrand || coachName}
-                    className="flex items-center"
+                    className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-sunken)]"
                 >
-                    <span
-                        className={cn(
-                            'flex h-8 w-8 items-center justify-center rounded-pill font-display text-xs font-bold text-[var(--text-on-sport,#fff)]',
-                            !primaryColor && 'bg-sport-500'
-                        )}
-                        style={primaryColor ? { backgroundColor: primaryColor } : undefined}
-                    >
+                    <span className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-[var(--sport-500)] font-display text-sm font-bold text-[var(--text-on-sport,#fff)]">
                         {initial}
                     </span>
                 </Link>

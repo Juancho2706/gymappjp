@@ -1,13 +1,127 @@
 'use client'
 
 import Link from 'next/link'
-import { CheckCircle2, ChevronRight, ArrowRight } from 'lucide-react'
+import {
+    type LucideIcon,
+    CheckCircle2,
+    ChevronRight,
+    ArrowRight,
+    CalendarX,
+    OctagonAlert,
+    Activity,
+    CalendarClock,
+} from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { flagLabel, riskBand } from '../_lib/dashboard-design'
 import type { RiskAlertItem } from '../_data/types'
 
 interface Props {
     items: RiskAlertItem[]
+    /** Mobile only: render the embedded "Tu próximo paso" inset (NextBestAction). */
+    showNextStep?: boolean
+    agendaPending?: number
+    expiringOverdue?: number
+    avgAdherence?: number
+}
+
+interface NextStep {
+    Icon: LucideIcon
+    title: string
+    cta: string
+    href: string
+    tone: 'warn' | 'info' | 'positive'
+}
+
+/** Resolver de reglas (§2.7) verbatim de coach-dashboard-sheets.jsx NextBestAction. */
+function resolveNextStep(
+    riesgo: number,
+    expiredCount: number,
+    adherence: number,
+    agendaPending: number
+): NextStep {
+    if (expiredCount > 0)
+        return {
+            Icon: CalendarX,
+            title: `${expiredCount} ${expiredCount === 1 ? 'programa vencido' : 'programas vencidos'}`,
+            cta: 'Revisar programas',
+            href: '/coach/workout-programs',
+            tone: 'warn',
+        }
+    if (riesgo >= 3)
+        return {
+            Icon: OctagonAlert,
+            title: `${riesgo} alumnos en riesgo`,
+            cta: 'Ver focus list',
+            href: '/coach/clients?filter=risk',
+            tone: 'warn',
+        }
+    if (adherence < 60)
+        return {
+            Icon: Activity,
+            title: 'Adherencia promedio < 60%',
+            cta: 'Ver detalle',
+            href: '/coach/clients',
+            tone: 'warn',
+        }
+    if (agendaPending > 0)
+        return {
+            Icon: CalendarClock,
+            title: `${agendaPending} ${agendaPending === 1 ? 'pendiente' : 'pendientes'} hoy`,
+            cta: 'Ver agenda',
+            href: '/coach/clients',
+            tone: 'info',
+        }
+    return {
+        Icon: CheckCircle2,
+        title: 'Todo bajo control',
+        cta: 'Ver alumnos',
+        href: '/coach/clients',
+        tone: 'positive',
+    }
+}
+
+const NEXT_STEP_ACC: Record<NextStep['tone'], string> = {
+    warn: '#FFC861',
+    info: '#7FB0FF',
+    positive: '#4FD9A0',
+}
+
+/** NextBestAction embebido — variante flush/oscura dentro de la zona de prioridad. */
+function NextStepInset({ step }: { step: NextStep }) {
+    const acc = NEXT_STEP_ACC[step.tone]
+    const { Icon } = step
+    return (
+        <Link
+            href={step.href}
+            className="flex w-full items-center gap-[11px] rounded-control border border-[var(--border-inverse)] px-3 py-[11px] text-left"
+            style={{ background: 'rgba(255,255,255,0.05)' }}
+        >
+            <span
+                className="flex size-8 shrink-0 items-center justify-center rounded-full"
+                style={{ background: 'rgba(255,255,255,0.08)', color: acc }}
+            >
+                <Icon className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+                <div
+                    className="text-[10px] font-extrabold uppercase tracking-[0.07em]"
+                    style={{ color: acc }}
+                >
+                    Tu próximo paso
+                </div>
+                <div className="mt-px truncate text-[13.5px] font-bold text-[var(--text-on-dark)]">
+                    {step.title}
+                </div>
+            </div>
+            <span
+                className="inline-flex shrink-0 items-center gap-[3px] text-xs font-extrabold"
+                style={{ color: acc }}
+            >
+                {step.cta}
+                <ArrowRight className="size-[13px]" />
+            </span>
+        </Link>
+    )
 }
 
 /**
@@ -16,8 +130,20 @@ interface Props {
  * named risk rows with risk band label+score → "Ver todos en Alumnos").
  * Reused 1:1 by the mobile stack and the desktop bento (it's the dark left card).
  */
-export function PriorityCard({ items }: Props) {
+export function PriorityCard({
+    items,
+    showNextStep = false,
+    agendaPending = 0,
+    expiringOverdue = 0,
+    avgAdherence = 100,
+}: Props) {
     const riesgoCount = items.length
+    const nextStep = resolveNextStep(
+        riesgoCount,
+        expiringOverdue,
+        avgAdherence,
+        agendaPending
+    )
 
     return (
         <div
@@ -114,9 +240,11 @@ export function PriorityCard({ items }: Props) {
                         })}
                     </div>
 
+                    {showNextStep && <NextStepInset step={nextStep} />}
+
                     <Link
                         href="/coach/clients?filter=risk"
-                        className="mt-2 inline-flex h-9 w-full items-center justify-center gap-1 rounded-control font-ui text-[13px] font-extrabold text-sport-400"
+                        className="mt-[9px] inline-flex h-9 w-full items-center justify-center gap-1 rounded-control font-ui text-[13px] font-extrabold text-sport-400"
                     >
                         Ver todos en Alumnos <ArrowRight className="size-3.5" />
                     </Link>

@@ -91,8 +91,15 @@ export default function CoachHomeScreen() {
           <MobileTierUsageBanners coach={data.coach} totalClients={data.kpi.totalClients} />
         ) : null}
 
-        {/* Header — fecha + saludo */}
-        <MobileGreetingHeader coachName={data.coach.fullName || data.coach.brandName || 'Coach'} pendingCount={pendingCount} />
+        {/* Header — fecha + "Hola, {nombre}" + acciones (Insights / Notificaciones / avatar) */}
+        <MobileGreetingHeader
+          coachName={data.coach.fullName || data.coach.brandName || 'Coach'}
+          logoUrl={data.coach.logoUrl}
+          hasNotifications={pendingCount > 0}
+          onInsights={() => router.push('/coach/(tabs)/settings')}
+          onNotifications={() => router.push('/coach/(tabs)/check-ins')}
+          onAvatar={() => router.push('/coach/(tabs)/perfil')}
+        />
 
         {/* P1 — Pulse hero (Activos · En riesgo · Adherencia) */}
         <MobilePulseHero

@@ -3,8 +3,12 @@
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
-/** Coach: safe-area + altura del header fijo móvil (CoachSidebar). No usar --mobile-content-top-offset (alumno). */
-const COACH_MOBILE_TOP_CHROME_PT = 'pt-[var(--coach-mobile-content-top-offset)]'
+/**
+ * Coach móvil: SIN header fijo global (cada pantalla renderiza su propio header + la cápsula
+ * flotante navega). Solo se respeta el notch (safe-area + 1rem) — ya no se reserva la altura
+ * de una barra superior que no existe.
+ */
+const COACH_MOBILE_TOP_CHROME_PT = 'pt-[var(--mobile-content-top-offset)]'
 
 export function CoachMainWrapper({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()

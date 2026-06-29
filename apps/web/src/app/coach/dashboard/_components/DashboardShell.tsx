@@ -2,7 +2,8 @@
 
 import { Suspense, useState } from 'react'
 import Link from 'next/link'
-import { Sparkles } from 'lucide-react'
+import { Sparkles, Bell } from 'lucide-react'
+import { Avatar } from '@/components/ui/avatar'
 import { BillingBanners } from './banners/BillingBanners'
 import { FreeWelcomeModal } from './FreeWelcomeModal'
 import { PulseHero } from './PulseHero'
@@ -79,20 +80,45 @@ export function DashboardShell({
                                 Hola, {firstName}
                             </h1>
                         </div>
-                        <button
-                            type="button"
-                            onClick={openInsights}
-                            aria-label="Insights"
-                            className="flex size-10 shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-card text-[var(--text-strong)] transition-colors hover:bg-surface-sunken"
-                        >
-                            <Sparkles className="size-[19px]" />
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                onClick={openInsights}
+                                aria-label="Insights"
+                                className="flex size-10 shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-card text-[var(--text-strong)] transition-colors hover:bg-surface-sunken"
+                            >
+                                <Sparkles className="size-[19px]" />
+                            </button>
+                            <button
+                                type="button"
+                                aria-label="Notificaciones"
+                                className="relative flex size-10 shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-card text-[var(--text-strong)] transition-colors hover:bg-surface-sunken"
+                            >
+                                <Bell className="size-[19px]" />
+                                <span className="absolute right-[9px] top-2 size-2 rounded-full border-2 border-[var(--surface-card)] bg-[var(--danger-500)]" />
+                            </button>
+                            <Link
+                                href="/coach/settings"
+                                aria-label="Tu espacio"
+                                className="shrink-0"
+                            >
+                                <Avatar name={coachName} size="md" ring="sport" />
+                            </Link>
+                        </div>
                     </header>
 
                     <PulseHero kpi={data.kpi} onAdherence={openInsights} />
 
                     <div className="mb-5">
-                        <PriorityCard items={data.topRiskClients} />
+                        <PriorityCard
+                            items={data.topRiskClients}
+                            showNextStep
+                            agendaPending={data.agenda.length}
+                            expiringOverdue={
+                                data.expiringPrograms.filter((p) => p.daysLeft <= 0).length
+                            }
+                            avgAdherence={data.kpi.avgAdherence}
+                        />
                     </div>
 
                     <div className="mb-6">

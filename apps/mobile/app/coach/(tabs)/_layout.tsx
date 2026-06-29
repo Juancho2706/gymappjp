@@ -1,13 +1,14 @@
 import { Tabs } from 'expo-router'
 import { View } from 'react-native'
 import { useTheme } from '../../../context/ThemeContext'
-import { CoachMobileHeader, CoachMobileTabBar } from '../../../components/coach/CoachMobileChrome'
+import { CoachMobileTabBar } from '../../../components/coach/CoachMobileChrome'
 
 export default function CoachTabsLayout() {
   const { theme } = useTheme()
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <CoachMobileHeader />
+      {/* Sin barra superior global: cada screen renderiza su propio header (como el
+          diseño). El dashboard usa <MobileGreetingHeader/> (fecha + Hola + acciones). */}
       <Tabs
         tabBar={(props) => <CoachMobileTabBar {...props} />}
         screenOptions={{

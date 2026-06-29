@@ -12,16 +12,27 @@ const KIND_ICON: Record<AgendaItem['kind'], LucideIcon> = {
     sin_ejercicio: Dumbbell,
 }
 
+/** Placeholder clock-time per row (09:00, 10:30, 12:00…). La agenda real es trabajo
+ * pendiente derivado (sin hora agendada); la hora se rellena para igualar el diseño. */
+function slotTime(i: number): string {
+    const start = 9 * 60 // 09:00
+    const mins = start + i * 90
+    const h = Math.floor(mins / 60) % 24
+    const m = mins % 60
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
 /**
- * "Agenda de hoy" — today's pending tasks. Structure from coach-dashboard.jsx
- * (time + icon + who + what + status). The real agenda is derived pending work
- * (no scheduled clock-time / done flag), so we render kind-icon + name + label +
- * chevron and surface the pending count in the section action.
+ * "Agenda de hoy" — tareas pendientes del día. Estructura verbatim de
+ * coach-dashboard.jsx: hora (mono) + icono + quién + qué + estado (check si hecho /
+ * chevron si pendiente), con "{hechas} de {total} hechas" en el SectionTitle. La
+ * pipeline real no expone hora ni flag `done`, así que se rellenan (placeholder).
  */
 export function AgendaCard({ items }: { items: AgendaItem[] }) {
+    const done = 0
     return (
         <div>
-            <SectionTitle action={`${items.length} pendiente${items.length === 1 ? '' : 's'}`}>
+            <SectionTitle action={`${done} de ${items.length} hechas`}>
                 Agenda de hoy
             </SectionTitle>
             <Card padding="none" className="gap-0 overflow-hidden">
@@ -39,10 +50,13 @@ export function AgendaCard({ items }: { items: AgendaItem[] }) {
                                 {i > 0 && <div className="mx-3.5 h-px bg-[var(--border-subtle)]" />}
                                 <Link
                                     href={a.href}
-                                    className="flex cursor-pointer items-center gap-3 px-3.5 py-2.5 transition-colors hover:bg-surface-sunken"
+                                    className="flex cursor-pointer items-center gap-3 px-3.5 py-[11px] transition-colors hover:bg-surface-sunken"
                                 >
+                                    <span className="w-[42px] shrink-0 font-mono text-xs font-bold tabular-nums text-[var(--text-muted)]">
+                                        {slotTime(i)}
+                                    </span>
                                     <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-sunken text-[var(--ink-700)]">
-                                        <Icon className="size-4" />
+                                        <Icon className="size-[15px]" />
                                     </span>
                                     <div className="min-w-0 flex-1">
                                         <div className="truncate text-sm font-bold text-[var(--text-strong)]">
