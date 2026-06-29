@@ -5,36 +5,62 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+// EVA DS Button — semantic tokens only (no hardcoded hex).
+// Design source: docs/design-source/components/core/Button.{prompt.md,jsx}
+// Solid fill uses var(--cta-fill) (NOT lime — prompt.md is stale on that).
+// Public API preserved: every legacy variant/size key still resolves; the
+// design's named variants (primary / sport / danger) and size (md) are added.
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center bg-clip-padding rounded-control border-[1.5px] font-ui font-bold tracking-[-0.01em] leading-none whitespace-nowrap select-none outline-none transition-[transform,background-color,box-shadow,border-color] duration-150 ease-[cubic-bezier(.22,1,.36,1)] active:scale-[0.97] focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-0 disabled:pointer-events-none disabled:opacity-[0.45] disabled:shadow-none aria-invalid:border-[var(--cta-danger)] aria-invalid:ring-[3px] aria-invalid:ring-[color-mix(in_oklab,var(--cta-danger)_30%,transparent)] [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90 glow-primary",
-        electric: "bg-primary text-primary-foreground hover:bg-primary/90 glow-primary shadow-[0_0_20px_-5px_rgba(var(--theme-primary-rgb,0,122,255),0.5)]",
-        glass: "bg-white/10 backdrop-blur-md border border-white/20 text-foreground hover:bg-white/20",
+        // Legacy default — the app's prominent solid action (blue CTA fill).
+        default:
+          "bg-[var(--cta-fill)] text-[var(--text-on-sport)] border-transparent shadow-[var(--shadow-sm)] hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)]",
+        // Design `primary` — solid ink action.
+        primary:
+          "bg-[var(--action-primary)] text-[var(--text-on-dark)] border-transparent shadow-[var(--shadow-sm)] hover:bg-[var(--action-primary-hover)]",
+        // Design `sport` — high-energy hero CTA (blue + glow). One per screen.
+        sport:
+          "bg-[var(--cta-fill)] text-[var(--text-on-sport)] border-transparent shadow-[var(--glow-sport)] hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)]",
+        // Legacy electric — alias of the glowy brand CTA.
+        electric:
+          "bg-[var(--cta-fill)] text-[var(--text-on-sport)] border-transparent shadow-[var(--glow-sport)] hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)]",
+        // Legacy glass — token-aware translucent surface.
+        glass:
+          "bg-[color-mix(in_oklab,var(--surface-card)_70%,transparent)] backdrop-blur-md text-[var(--text-strong)] border-[var(--border-subtle)] hover:bg-surface-card",
+        // Legacy outline — DS bordered control.
         outline:
-          "border-white/10 bg-white/5 backdrop-blur-md text-foreground hover:bg-white/10 hover:border-white/20",
+          "bg-surface-card text-[var(--text-body)] border-[var(--border-default)] hover:bg-surface-sunken hover:text-[var(--text-strong)]",
+        // Design `secondary` — outline card.
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+          "bg-surface-card text-[var(--text-strong)] border-[var(--border-default)] hover:bg-surface-sunken",
+        // Design `ghost` — text only.
         ghost:
-          "hover:bg-white/5 hover:text-foreground",
+          "bg-transparent text-[var(--text-strong)] border-transparent hover:bg-surface-sunken",
+        // Design `danger` — solid destructive CTA.
+        danger:
+          "bg-[var(--cta-danger)] text-white border-transparent hover:bg-[color-mix(in_oklab,var(--cta-danger)_90%,#000)]",
+        // Legacy destructive — soft destructive tint (kept).
         destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20",
-        link: "text-primary underline-offset-4 hover:underline",
+          "bg-[color-mix(in_oklab,var(--cta-danger)_12%,transparent)] text-[var(--cta-danger)] border-transparent shadow-none hover:bg-[color-mix(in_oklab,var(--cta-danger)_20%,transparent)]",
+        // Legacy link — text link.
+        link: "bg-transparent text-[var(--text-link)] border-transparent shadow-none underline-offset-4 hover:underline",
       },
       size: {
+        // Legacy default → design `md` (48px comfortable touch target).
         default:
-          "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
-        icon: "size-8",
+          "h-12 gap-2 px-[18px] text-[15px] [&_svg:not([class*='size-'])]:size-[18px]",
+        sm: "h-9 gap-1.5 px-3.5 text-sm [&_svg:not([class*='size-'])]:size-4",
+        md: "h-12 gap-2 px-[18px] text-[15px] [&_svg:not([class*='size-'])]:size-[18px]",
+        lg: "h-14 gap-2.5 px-[22px] text-[17px] [&_svg:not([class*='size-'])]:size-5",
+        xs: "h-7 gap-1 px-2.5 text-xs rounded-[10px] [&_svg:not([class*='size-'])]:size-3.5",
+        icon: "size-12 [&_svg:not([class*='size-'])]:size-[18px]",
         "icon-xs":
-          "size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm":
-          "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
-        "icon-lg": "size-9",
+          "size-7 rounded-[10px] [&_svg:not([class*='size-'])]:size-3.5",
+        "icon-sm": "size-9 [&_svg:not([class*='size-'])]:size-4",
+        "icon-lg": "size-14 [&_svg:not([class*='size-'])]:size-5",
       },
     },
     defaultVariants: {
