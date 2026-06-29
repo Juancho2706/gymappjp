@@ -89,14 +89,14 @@ export function MealCompletionRow({
             disabled={pending}
             onClick={onToggle}
             className={cn(
-                'flex w-full items-center gap-3 rounded-xl border border-border/50 bg-card/40 px-3 py-2 text-left transition-colors hover:bg-accent/30',
+                'flex w-full items-center gap-3 rounded-control border border-subtle bg-surface-card px-3 py-2 text-left transition-colors hover:bg-surface-sunken',
                 pending && 'opacity-60'
             )}
         >
             <span
                 className={cn(
-                    'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border',
-                    optimistic ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-border bg-muted'
+                    'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-control border-[1.5px]',
+                    optimistic ? 'border-transparent bg-[var(--success-500)] text-white' : 'border-strong bg-surface-sunken'
                 )}
             >
                 {pending ?
@@ -113,7 +113,7 @@ export function MealCompletionRow({
                 </motion.svg>
                 }
             </span>
-            <span className={`min-w-0 flex-1 text-sm font-medium ${optimistic ? 'text-muted-foreground line-through' : ''}`}>{name}</span>
+            <span className={`min-w-0 flex-1 text-sm font-semibold ${optimistic ? 'text-subtle line-through' : 'text-strong'}`}>{name}</span>
         </button>
     )
 }

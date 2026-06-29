@@ -15,10 +15,10 @@ export function WeightQuickLog({ coachSlug }: { coachSlug: string }) {
     }, [state.success])
 
     return (
-        <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2 border-t border-border/40 pt-3">
+        <form action={formAction} className="mt-3 flex flex-wrap items-end gap-2 border-t border-subtle pt-3">
             <input type="hidden" name="coach_slug" value={coachSlug} />
             <label className="flex min-w-0 flex-1 flex-col gap-1">
-                <span className="text-[10px] font-medium text-muted-foreground">Peso rápido (kg)</span>
+                <span className="text-[10px] font-semibold text-muted">Peso rápido (kg)</span>
                 <input
                     id="dash-quick-weight"
                     name="weight"
@@ -27,7 +27,7 @@ export function WeightQuickLog({ coachSlug }: { coachSlug: string }) {
                     min={20}
                     max={400}
                     required
-                    className="h-11 min-h-[44px] rounded-lg border border-input bg-background px-3 text-sm"
+                    className="h-11 min-h-[44px] rounded-control border-[1.5px] border-subtle bg-surface-sunken px-3 text-sm font-semibold tabular-nums text-strong outline-none transition-colors focus-visible:border-sport-500"
                     placeholder="72.5"
                     disabled={pending}
                 />
@@ -35,12 +35,12 @@ export function WeightQuickLog({ coachSlug }: { coachSlug: string }) {
             <button
                 type="submit"
                 disabled={pending}
-                className="h-11 min-h-[44px] min-w-[44px] rounded-lg bg-[color:var(--theme-primary)] px-4 text-xs font-bold text-white disabled:opacity-50"
+                className="h-11 min-h-[44px] min-w-[44px] rounded-control bg-[var(--cta-fill)] px-4 text-xs font-bold text-on-sport transition-[transform,background-color] active:scale-[0.97] disabled:opacity-50"
             >
                 {pending ? '…' : 'Guardar'}
             </button>
-            {state.error ? <p className="w-full text-xs text-destructive">{state.error}</p> : null}
-            {state.success ? <p className="w-full text-xs text-emerald-600 dark:text-emerald-400">Registrado.</p> : null}
+            {state.error ? <p className="w-full text-xs font-semibold text-[var(--danger-600)]">{state.error}</p> : null}
+            {state.success ? <p className="w-full text-xs font-semibold text-[var(--success-700)]">Registrado.</p> : null}
         </form>
     )
 }

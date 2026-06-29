@@ -8,8 +8,8 @@ import { TrendingUp, Scale, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { useBasePath } from '@/components/client/BasePathProvider'
 
-/** Brand-themed chart color: respects per-coach `--theme-primary`, never a hardcoded hex. */
-const THEME_PRIMARY = 'var(--theme-primary)'
+/** Brand-themed chart color: per-coach DS sport ramp (white-label override), never a hardcoded hex. */
+const THEME_PRIMARY = 'var(--sport-500)'
 
 interface CheckIn {
     date: string
@@ -43,38 +43,38 @@ export function WeightProgressChart({ data, coachSlug }: Props) {
 
     if (!mounted) {
         return (
-            <Card className="bg-card border-border shadow-sm">
+            <Card>
                 <CardHeader className="pb-4">
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-muted-foreground" style={{ color: THEME_PRIMARY }} />
+                    <CardTitle className="text-base flex items-center gap-2 font-display">
+                        <TrendingUp className="w-4 h-4 text-sport-500" />
                         Evolución de Peso
                     </CardTitle>
                 </CardHeader>
-                <CardContent className="h-64 animate-pulse bg-muted/20" />
+                <CardContent className="h-64 animate-pulse bg-surface-sunken/40" />
             </Card>
         )
     }
 
     if (!data || data.length === 0) {
         return (
-            <Card className="bg-card border-border shadow-sm transition-all hover:shadow-md">
+            <Card>
                 <CardHeader className="pb-2">
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-muted-foreground" />
+                    <CardTitle className="text-base flex items-center gap-2 font-display">
+                        <TrendingUp className="w-4 h-4 text-muted" />
                         Progreso de Peso
                     </CardTitle>
                     <CardDescription>Aún no hay datos suficientes</CardDescription>
                 </CardHeader>
                 <CardContent className="h-48 flex flex-col items-center justify-center gap-3">
-                    <div className="text-center text-muted-foreground">
+                    <div className="text-center text-muted">
                         <Scale className="w-8 h-8 mx-auto mb-2 opacity-50" />
                         <p className="text-sm">Realiza tu primer check-in para medir tu progreso.</p>
                     </div>
                     {coachSlug && (
                         <Link
                             href={`${base}/check-in`}
-                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all hover:opacity-90 active:scale-95 text-white"
-                            style={{ backgroundColor: THEME_PRIMARY }}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-control text-sm font-bold transition-all hover:opacity-90 active:scale-95 text-on-sport"
+                            style={{ backgroundColor: 'var(--cta-fill)' }}
                         >
                             <Plus className="w-4 h-4" />
                             Registrar Peso Hoy
@@ -95,10 +95,10 @@ export function WeightProgressChart({ data, coachSlug }: Props) {
     const domainPadding = (maxWeight - minWeight) * 0.2 || 5
 
     return (
-        <Card className="bg-card border-border shadow-sm">
+        <Card>
             <CardHeader className="pb-4">
-                <CardTitle className="text-base flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-muted-foreground" style={{ color: THEME_PRIMARY }} />
+                <CardTitle className="text-base flex items-center gap-2 font-display">
+                    <TrendingUp className="w-4 h-4 text-sport-500" />
                     Evolución de Peso
                 </CardTitle>
             </CardHeader>

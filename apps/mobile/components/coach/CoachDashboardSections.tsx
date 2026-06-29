@@ -35,7 +35,6 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react-native'
-import { MotiView } from 'moti'
 import Svg, { Rect } from 'react-native-svg'
 import { BlurView } from 'expo-blur'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -58,6 +57,11 @@ import { getRecommendedTier, TIER_CONFIG } from '../../lib/coach-tiers'
 import { canUseNutrition } from '../../lib/coach-tiers'
 import { NativeDialog } from '../NativeDialog'
 import { Button } from '../Button'
+import { Card } from '../Card'
+import { StatCard } from '../StatCard'
+import { Avatar } from '../Avatar'
+import { Badge } from '../Badge'
+import { ListRow } from '../ListRow'
 import { useEffect, useRef, useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { apiFetch, getApiBaseUrl } from '../../lib/api'
@@ -1047,10 +1051,10 @@ export function MobileQuickActionsBar({
   return (
     <>
       <View style={styles.quickActions}>
-        <QuickActionButton icon={UserPlus} label="+ Alumno" shortLabel="+" onPress={() => setModal('client')} />
-        <QuickActionButton icon={Layers} label="+ Programa" shortLabel="+" onPress={() => router.push('/coach/(tabs)/builder')} />
-        <QuickActionButton icon={Utensils} label="+ Nutricion" shortLabel="+" onPress={() => router.push('/coach/(tabs)/nutricion')} />
-        <QuickActionButton icon={Receipt} label="+ Pago" shortLabel="+" onPress={() => setModal('payment')} />
+        <QuickActionButton icon={UserPlus} label="+ Alumno" onPress={() => setModal('client')} />
+        <QuickActionButton icon={Layers} label="+ Programa" onPress={() => router.push('/coach/(tabs)/builder')} />
+        <QuickActionButton icon={Utensils} label="+ Nutricion" onPress={() => router.push('/coach/(tabs)/nutricion')} />
+        <QuickActionButton icon={Receipt} label="+ Pago" onPress={() => setModal('payment')} />
       </View>
 
       <NativeDialog
@@ -1409,16 +1413,13 @@ function FormInput({
 function QuickActionButton({
   icon: Icon,
   label,
-  shortLabel,
   onPress,
 }: {
   icon: LucideIcon
   label: string
-  shortLabel: string
   onPress: () => void
 }) {
-  const { theme, mode } = useTheme()
-  const isDark = mode !== 'light'
+  const { theme } = useTheme()
 
   return (
     <TouchableOpacity
@@ -1426,21 +1427,11 @@ function QuickActionButton({
       accessibilityRole="button"
       activeOpacity={0.82}
       onPress={onPress}
-      style={[
-        styles.quickActionButton,
-        {
-          backgroundColor: isDark ? 'rgba(10,10,10,0.58)' : 'rgba(255,255,255,0.82)',
-          borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.11)',
-          shadowColor: '#000',
-        },
-      ]}
+      className="min-h-[36px] flex-row items-center gap-1.5 rounded-pill border border-subtle bg-surface-card px-3 py-2"
     >
       <Icon size={16} color={theme.primary} strokeWidth={2.3} />
-      <Text
-        style={[styles.quickActionShort, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}
-        numberOfLines={1}
-      >
-        {shortLabel}
+      <Text className="font-sans-semibold text-[13px] text-strong" numberOfLines={1}>
+        {label}
       </Text>
     </TouchableOpacity>
   )
@@ -1472,19 +1463,21 @@ export function MobileGreetingHeader({ coachName, pendingCount }: { coachName: s
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Buenos dias' : hour < 20 ? 'Buenas tardes' : 'Buenas noches'
+  const dateCap = dateStr.charAt(0).toUpperCase() + dateStr.slice(1)
 
   return (
     <View style={styles.greeting}>
-      <Text style={[styles.eyebrow, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
-        {dateStr}
+      <Text className="font-sans-bold uppercase text-[13px] tracking-[0.5px] text-muted">
+        {dateCap}
       </Text>
-      <Text style={[styles.greetingTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+      <Text
+        className="font-display-black text-[28px] text-strong"
+        style={{ lineHeight: 32, letterSpacing: -0.9 }}
+      >
         {greeting},{' '}
-        <Text style={{ color: theme.primary }}>
-          {firstName}
-        </Text>
+        <Text style={{ color: theme.primary }}>{firstName}</Text>
       </Text>
-      <Text style={[styles.greetingSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+      <Text className="font-sans text-[14px] text-muted" style={{ lineHeight: 20 }}>
         {pendingCount > 0
           ? `Tienes ${pendingCount} pendiente${pendingCount === 1 ? '' : 's'} hoy.`
           : 'Todo al dia. Buen momento para planificar.'}
@@ -1508,8 +1501,8 @@ export function MobileKpiStrip({
       <MobileKpiTile
         label="Ingresos del mes"
         value={formatCurrency(kpi.mrrCurrentMonth)}
-        hint={`Mes anterior: ${formatCurrency(kpi.mrrPreviousMonth)}`}
         icon={TrendingUp}
+        accent="sport"
         deltaPct={kpi.mrrDeltaPct}
         onPress={onMrrPress}
       />
@@ -1517,162 +1510,169 @@ export function MobileKpiStrip({
         label="Alumnos activos"
         value={String(kpi.totalClients)}
         icon={Users}
+        accent="neutral"
         onPress={() => router.push('/coach/(tabs)/clientes')}
       />
       <MobileKpiTile
         label="En riesgo"
         value={String(kpi.riskCount)}
-        hint={kpi.riskCount > 0 ? 'Requieren atencion inmediata' : 'Todos al dia'}
         icon={TriangleAlert}
+        accent="ember"
         onPress={onAdherencePress}
       />
       <MobileKpiTile
         label="Adherencia"
-        value={`${kpi.avgAdherence}%`}
-        hint={`Nutricion: ${kpi.avgNutrition}%`}
+        value={String(kpi.avgAdherence)}
+        unit="%"
         icon={Activity}
+        accent="sport"
         onPress={onAdherencePress}
       />
     </View>
   )
 }
 
+type KpiAccent = 'sport' | 'ember' | 'aqua' | 'neutral'
+
 function MobileKpiTile({
   label,
   value,
-  hint,
+  unit,
   icon: Icon,
+  accent = 'sport',
   deltaPct,
   onPress,
 }: {
   label: string
   value: string
-  hint?: string
+  unit?: string
   icon: LucideIcon
+  accent?: KpiAccent
   deltaPct?: number
   onPress?: () => void
 }) {
-  const { theme } = useTheme()
-  const glass = useGlassStyle()
-  const hasDelta = typeof deltaPct === 'number'
-  const up = hasDelta && deltaPct >= 0
+  const delta =
+    typeof deltaPct === 'number' ? `${deltaPct >= 0 ? '+' : ''}${deltaPct}%` : null
 
-  const body = (
-    <MotiView
-      from={{ opacity: 0, translateY: 14 }}
-      animate={{ opacity: 1, translateY: 0 }}
-      transition={{ type: 'timing', duration: 320 }}
-      style={[styles.kpiCard, glass, { borderRadius: theme.radius.xl }]}
-    >
-      <CardGlass />
-      <View style={styles.kpiTop}>
-        <Text style={[styles.kpiLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]} numberOfLines={2}>
-          {label}
-        </Text>
-        <Icon size={17} color={theme.primary} strokeWidth={2.2} />
-      </View>
-      <Text
-        style={[styles.kpiValue, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-      >
-        {value}
-      </Text>
-      {hasDelta ? (
-        <View style={[styles.deltaPill, { backgroundColor: up ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.15)' }]}>
-          {up ? <ArrowUpRight size={12} color="#10B981" /> : <ArrowDownRight size={12} color="#F43F5E" />}
-          <Text style={[styles.deltaText, { color: up ? '#10B981' : '#F43F5E', fontFamily: 'Inter_700Bold' }]}>
-            {Math.abs(deltaPct)}%
-          </Text>
-        </View>
-      ) : null}
-      {hint ? (
-        <Text style={[styles.kpiHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-          {hint}
-        </Text>
-      ) : null}
-      {onPress ? (
-        <Text style={[styles.kpiDetailCta, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>
-          Ver detalle →
-        </Text>
-      ) : null}
-    </MotiView>
+  const card = (
+    <StatCard
+      label={label}
+      value={value}
+      unit={unit}
+      delta={delta}
+      accent={accent}
+      icon={Icon}
+      style={{ width: '100%' }}
+    />
   )
 
   if (!onPress) {
-    return <View style={styles.kpiTouch}>{body}</View>
+    return <View style={styles.kpiTouch}>{card}</View>
   }
 
   return (
     <TouchableOpacity activeOpacity={0.84} onPress={onPress} style={styles.kpiTouch}>
-      {body}
+      {card}
     </TouchableOpacity>
   )
+}
+
+// Banda de riesgo P5: etiqueta + color (no solo color). Colores fijos on-dark
+// (la card de prioridad es siempre oscura, no usar tokens que cambian por tema).
+function focusRiskBand(score: number): { label: string; color: string } {
+  if (score >= 80) return { label: 'Riesgo alto', color: '#FF7C97' }
+  if (score >= 50) return { label: 'Riesgo medio', color: '#FFC861' }
+  return { label: 'Seguimiento', color: '#939DAB' }
 }
 
 export function MobileFocusList({ items }: { items: MobileRiskAlertItem[] }) {
   const router = useRouter()
   const { theme } = useTheme()
-  const glass = useGlassStyle()
+  const hasRisk = items.length > 0
 
   return (
-    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>
-      <CardGlass />
-      <View style={styles.panelHeader}>
-        <View style={styles.panelTitleRow}>
-          <TriangleAlert size={17} color="#F59E0B" />
-          <Text style={[styles.panelTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-            Focus list
+    <Card variant="inverse" padding="md" radius="card" style={{ overflow: 'hidden' }}>
+      <View className="mb-3 flex-row items-center justify-between">
+        <Text className="font-sans-bold uppercase text-[11px] tracking-[1px] text-sport-400">
+          Prioridad de hoy
+        </Text>
+        <View
+          className="rounded-pill px-2 py-0.5"
+          style={{ backgroundColor: hasRisk ? '#F4365A' : '#1FB877' }}
+        >
+          <Text className="font-sans-bold text-[11px]" style={{ color: '#0B0E13' }}>
+            {items.length}
           </Text>
         </View>
-        <TouchableOpacity activeOpacity={0.72} onPress={() => router.push('/coach/(tabs)/clientes')}>
-          <Text style={[styles.panelAction, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>
-            VER TODOS
-          </Text>
-        </TouchableOpacity>
       </View>
 
-      {items.length === 0 ? (
-        <EmptyPanel icon={<Sparkles size={24} color={theme.mutedForeground} />} title="Sin alumnos en riesgo" subtitle="Todos con check-in y ejercicio al dia." />
-      ) : (
-        <View style={styles.rows}>
-          {items.map((item, index) => (
-            <TouchableOpacity
-              key={item.clientId}
-              activeOpacity={0.78}
-              onPress={() => router.push(`/coach/cliente/${item.clientId}`)}
-              style={[styles.row, index < items.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
-            >
-              <View style={styles.rowCopy}>
-                <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>
-                  {item.clientName}
-                </Text>
-                <Text style={[styles.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-                  {item.label}
-                </Text>
-              </View>
-              <View style={styles.rowRight}>
-                <View style={[
-                  styles.scorePill,
-                  {
-                    backgroundColor: 'rgba(245,158,11,0.15)',
-                  },
-                ]}>
-                  <Text style={[
-                    styles.scoreText,
-                    {
-                      fontFamily: 'Inter_700Bold',
-                      color: '#F59E0B',
-                    },
-                  ]}>{item.attentionScore}</Text>
-                </View>
-                <ChevronRight size={18} color={theme.mutedForeground} />
-              </View>
-            </TouchableOpacity>
-          ))}
+      {!hasRisk ? (
+        <View className="flex-row items-center gap-3 py-1">
+          <View
+            className="h-[38px] w-[38px] items-center justify-center rounded-pill"
+            style={{ backgroundColor: 'rgba(31,184,119,0.16)' }}
+          >
+            <CheckCircle2 size={20} color="#4FD9A0" />
+          </View>
+          <View className="flex-1">
+            <Text className="font-sans-bold text-[15px] text-on-dark">Ningun alumno en riesgo</Text>
+            <Text className="font-sans text-[12.5px] text-on-dark-muted">Todo al dia. Buen trabajo.</Text>
+          </View>
         </View>
+      ) : (
+        <>
+          <View>
+            {items.map((item, index) => {
+              const band = focusRiskBand(item.attentionScore)
+              return (
+                <TouchableOpacity
+                  key={item.clientId}
+                  activeOpacity={0.8}
+                  onPress={() => router.push(`/coach/cliente/${item.clientId}`)}
+                  className="flex-row items-center gap-3 py-2.5"
+                  style={
+                    index > 0
+                      ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(255,255,255,0.10)' }
+                      : undefined
+                  }
+                >
+                  <Avatar name={item.clientName} size="sm" ring="sport" />
+                  <View className="flex-1" style={{ minWidth: 0 }}>
+                    <Text className="font-sans-bold text-[14px] text-on-dark" numberOfLines={1}>
+                      {item.clientName}
+                    </Text>
+                    <Text className="font-sans text-[12px] text-on-dark-muted" numberOfLines={1}>
+                      {item.label}
+                    </Text>
+                  </View>
+                  <View className="items-end" style={{ gap: 2 }}>
+                    <View className="flex-row items-center" style={{ gap: 5 }}>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: band.color }} />
+                      <Text className="font-sans-bold text-[11px]" style={{ color: band.color }} numberOfLines={1}>
+                        {band.label}
+                      </Text>
+                    </View>
+                    <Text className="font-mono-bold text-[12px] text-on-dark">
+                      {item.attentionScore}
+                      <Text className="text-on-dark-muted">/100</Text>
+                    </Text>
+                  </View>
+                  <ChevronRight size={17} color="#5A6573" />
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => router.push('/coach/(tabs)/clientes')}
+            className="mt-2 h-9 flex-row items-center justify-center gap-1"
+          >
+            <Text className="font-sans-bold text-[13px] text-sport-400">Ver todos en Alumnos</Text>
+            <ArrowRight size={14} color={theme.primary} />
+          </TouchableOpacity>
+        </>
       )}
-    </View>
+    </Card>
   )
 }
 
@@ -1772,7 +1772,6 @@ export function MobileNextBestAction({
 }) {
   const router = useRouter()
   const { theme } = useTheme()
-  const glass = useGlassStyle()
   const action = resolveMobileNextBestAction({ kpi, topRiskClients, agenda, expiringPrograms })
   const toneColor = action.tone === 'warn' ? '#F59E0B' : action.tone === 'positive' ? '#10B981' : theme.primary
 
@@ -1803,77 +1802,78 @@ export function MobileNextBestAction({
   }
 
   return (
-    <View style={[styles.nextCard, glass, { borderRadius: theme.radius.xl }]}>
-      <CardGlass tone={toneColor} />
-      <View style={styles.panelTitleRow}>
-        <Sparkles size={17} color={theme.primary} />
-        <Text style={[styles.eyebrow, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+    <Card variant="default" padding="md" radius="card" style={{ gap: 10 }}>
+      <View className="flex-row items-center gap-2">
+        <Sparkles size={17} color={toneColor} />
+        <Text className="font-sans-bold uppercase text-[10px] tracking-[1.5px] text-muted">
           PROXIMA ACCION
         </Text>
       </View>
-      <Text style={[styles.nextTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+      <Text className="font-display-bold text-[20px] text-strong" style={{ lineHeight: 24 }}>
         {action.title}
       </Text>
-      <Text style={[styles.nextDescription, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+      <Text className="font-sans text-[13px] text-muted" style={{ lineHeight: 19 }}>
         {action.description}
       </Text>
-      <TouchableOpacity activeOpacity={0.82} onPress={handlePress} style={[styles.ctaPill, { backgroundColor: theme.primary }]}>
-        <Text style={[styles.ctaText, { fontFamily: 'Inter_700Bold' }]}>{action.ctaLabel}</Text>
-        <ArrowRight size={16} color="#FFFFFF" />
-      </TouchableOpacity>
-    </View>
+      <Button
+        label={action.ctaLabel}
+        variant="sport"
+        size="sm"
+        rightIcon={ArrowRight}
+        onPress={handlePress}
+        style={{ alignSelf: 'flex-start' }}
+      />
+    </Card>
   )
 }
 
 export function MobileTodayAgenda({ items }: { items: MobileAgendaItem[] }) {
   const router = useRouter()
   const { theme } = useTheme()
-  const glass = useGlassStyle()
 
   return (
-    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>
-      <CardGlass />
-      <View style={styles.panelHeader}>
-        <View style={styles.panelTitleRow}>
+    <View style={{ gap: 10 }}>
+      <View className="flex-row items-center justify-between">
+        <View className="flex-row items-center gap-2">
           <CalendarClock size={17} color={theme.primary} />
-          <Text style={[styles.panelTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-            Agenda de hoy
-          </Text>
+          <Text className="font-display-bold text-[17px] text-strong">Agenda de hoy</Text>
         </View>
-        <Text style={[styles.panelCount, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          {items.length} pendientes
-        </Text>
+        <Text className="font-sans text-[12px] text-muted">{items.length} pendientes</Text>
       </View>
       {items.length === 0 ? (
-        <EmptyPanel icon={<CheckCircle2 size={25} color="#10B981" />} title="Todo cerrado" subtitle="Sin pendientes en el dia." />
+        <Card padding="md" radius="card">
+          <EmptyPanel icon={<CheckCircle2 size={25} color="#10B981" />} title="Todo cerrado" subtitle="Sin pendientes en el dia." />
+        </Card>
       ) : (
-        <View style={styles.rows}>
+        <Card padding="none" radius="card" style={{ overflow: 'hidden' }}>
           {items.map((item, index) => (
-            <TouchableOpacity
-              key={item.id}
-              activeOpacity={0.78}
-              onPress={() => router.push(`/coach/cliente/${item.clientId}`)}
-              style={[styles.row, index < items.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
-            >
-              <View style={[styles.agendaIconWrap, { backgroundColor: hexToRgba(theme.primary, 0.1) }]}>
-                {item.kind === 'programa_vence'
-                  ? <Clock size={15} color={theme.primary} />
-                  : item.kind === 'checkin_pendiente'
-                    ? <Camera size={15} color={theme.primary} />
-                    : <Dumbbell size={15} color={theme.primary} />}
-              </View>
-              <View style={styles.rowCopy}>
-                <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>
-                  {item.clientName}
-                </Text>
-                <Text style={[styles.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-                  {item.label}
-                </Text>
-              </View>
-              <ChevronRight size={18} color={theme.mutedForeground} />
-            </TouchableOpacity>
+            <View key={item.id}>
+              {index > 0 ? (
+                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginHorizontal: 14 }} />
+              ) : null}
+              <ListRow
+                leading={
+                  <View
+                    className="h-7 w-7 items-center justify-center"
+                    style={{ backgroundColor: hexToRgba(theme.primary, 0.1), borderRadius: 8 }}
+                  >
+                    {item.kind === 'programa_vence' ? (
+                      <Clock size={15} color={theme.primary} />
+                    ) : item.kind === 'checkin_pendiente' ? (
+                      <Camera size={15} color={theme.primary} />
+                    ) : (
+                      <Dumbbell size={15} color={theme.primary} />
+                    )}
+                  </View>
+                }
+                title={item.clientName}
+                subtitle={item.label}
+                showChevron
+                onPress={() => router.push(`/coach/cliente/${item.clientId}`)}
+              />
+            </View>
           ))}
-        </View>
+        </Card>
       )}
     </View>
   )
@@ -1882,51 +1882,44 @@ export function MobileTodayAgenda({ items }: { items: MobileAgendaItem[] }) {
 export function MobileExpiringPrograms({ items }: { items: MobileExpiringProgramItem[] }) {
   const router = useRouter()
   const { theme } = useTheme()
-  const glass = useGlassStyle()
 
   return (
-    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>
-      <CardGlass />
-      <View style={styles.panelTitleRow}>
+    <View style={{ gap: 10 }}>
+      <View className="flex-row items-center gap-2">
         <Clock size={17} color="#F59E0B" />
-        <Text style={[styles.panelTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-          Programas por vencer
-        </Text>
+        <Text className="font-display-bold text-[17px] text-strong">Programas por vencer</Text>
       </View>
       {items.length === 0 ? (
-        <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          Sin programas vencidos ni por vencer.
-        </Text>
+        <Card padding="md" radius="card">
+          <Text className="font-sans text-[12px] text-muted" style={{ textAlign: 'center' }}>
+            Sin programas vencidos ni por vencer.
+          </Text>
+        </Card>
       ) : (
-        <View style={styles.rows}>
+        <Card padding="none" radius="card" style={{ overflow: 'hidden' }}>
           {items.map((item, index) => (
-            <TouchableOpacity
-              key={item.id}
-              activeOpacity={0.78}
-              onPress={() => item.clientId
-                ? router.push(`/coach/cliente/${item.clientId}`)
-                : router.push('/coach/(tabs)/builder')}
-              style={[styles.row, index < items.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
-            >
-              <View style={styles.rowCopy}>
-                <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>
-                  {item.clientName}
-                </Text>
-                <Text style={[styles.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-                  {item.name}
-                </Text>
-              </View>
-              <View style={styles.rowRight}>
-                <View style={[styles.duePill, { backgroundColor: item.daysLeft <= 0 ? 'rgba(244,63,94,0.15)' : 'rgba(245,158,11,0.15)' }]}>
-                  <Text style={[styles.dueText, { color: item.daysLeft <= 0 ? '#F43F5E' : '#F59E0B', fontFamily: 'Inter_700Bold' }]}>
+            <View key={item.id}>
+              {index > 0 ? (
+                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginHorizontal: 14 }} />
+              ) : null}
+              <ListRow
+                title={item.clientName}
+                subtitle={item.name}
+                trailing={
+                  <Badge tone={item.daysLeft <= 0 ? 'danger' : 'warning'} variant="soft" size="sm">
                     {item.daysLeft <= 0 ? 'Vencido' : `${item.daysLeft}d`}
-                  </Text>
-                </View>
-                <ChevronRight size={16} color={theme.mutedForeground} />
-              </View>
-            </TouchableOpacity>
+                  </Badge>
+                }
+                showChevron
+                onPress={() =>
+                  item.clientId
+                    ? router.push(`/coach/cliente/${item.clientId}`)
+                    : router.push('/coach/(tabs)/builder')
+                }
+              />
+            </View>
           ))}
-        </View>
+        </Card>
       )}
     </View>
   )
@@ -1941,60 +1934,56 @@ function ActivityTypeIcon({ type, size, color }: { type: MobileActivityItem['typ
 export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
   const router = useRouter()
   const { theme } = useTheme()
-  const glass = useGlassStyle()
 
   return (
-    <View style={[styles.panel, glass, { borderRadius: theme.radius.xl }]}>
-      <CardGlass />
-      <View style={styles.panelTitleRow}>
+    <View style={{ gap: 10 }}>
+      <View className="flex-row items-center gap-2">
         <Activity size={17} color={theme.primary} />
-        <Text style={[styles.panelTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-          Actividad reciente
-        </Text>
+        <Text className="font-display-bold text-[17px] text-strong">Actividad reciente</Text>
       </View>
       {items.length === 0 ? (
-        <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-          Sin actividad reciente.
-        </Text>
+        <Card padding="md" radius="card">
+          <Text className="font-sans text-[12px] text-muted" style={{ textAlign: 'center' }}>
+            Sin actividad reciente.
+          </Text>
+        </Card>
       ) : (
-        <View style={styles.rows}>
+        <Card padding="none" radius="card" style={{ overflow: 'hidden' }}>
           {items.map((item, index) => {
             const iconColor = item.type === 'nuevo alumno' ? '#10B981' : item.type === 'check-in' ? '#3B82F6' : theme.primary
             return (
-              <TouchableOpacity
-                key={item.id}
-                activeOpacity={0.78}
-                disabled={!item.clientId}
-                onPress={() => item.clientId && router.push(`/coach/cliente/${item.clientId}`)}
-                style={[styles.row, index < items.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}
-              >
-                {item.type === 'check-in' && item.photoUrl ? (
-                  <Image
-                    source={{ uri: item.photoUrl }}
-                    style={[styles.activityPhoto, { borderRadius: theme.radius.lg }]}
-                    contentFit="cover"
-                    transition={200}
-                  />
-                ) : (
-                  <View style={[styles.activityIcon, { backgroundColor: hexToRgba(iconColor, 0.11) }]}>
-                    <ActivityTypeIcon type={item.type} size={16} color={iconColor} />
-                  </View>
-                )}
-                <View style={styles.rowCopy}>
-                  <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>
-                    {item.title}
-                  </Text>
-                  <Text style={[styles.rowSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-                    {item.subtitle}
-                  </Text>
-                </View>
-                <Text style={[styles.timeText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                  {timeAgo(item.date)}
-                </Text>
-              </TouchableOpacity>
+              <View key={item.id}>
+                {index > 0 ? (
+                  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginHorizontal: 14 }} />
+                ) : null}
+                <ListRow
+                  leading={
+                    item.type === 'check-in' && item.photoUrl ? (
+                      <Image
+                        source={{ uri: item.photoUrl }}
+                        style={{ width: 38, height: 38, borderRadius: 12 }}
+                        contentFit="cover"
+                        transition={200}
+                      />
+                    ) : (
+                      <View
+                        className="h-8 w-8 items-center justify-center rounded-pill"
+                        style={{ backgroundColor: hexToRgba(iconColor, 0.11) }}
+                      >
+                        <ActivityTypeIcon type={item.type} size={16} color={iconColor} />
+                      </View>
+                    )
+                  }
+                  title={item.title}
+                  subtitle={item.subtitle}
+                  trailing={<Text className="font-sans text-[11px] text-muted">{timeAgo(item.date)}</Text>}
+                  disabled={!item.clientId}
+                  onPress={item.clientId ? () => router.push(`/coach/cliente/${item.clientId}`) : undefined}
+                />
+              </View>
             )
           })}
-        </View>
+        </Card>
       )}
     </View>
   )

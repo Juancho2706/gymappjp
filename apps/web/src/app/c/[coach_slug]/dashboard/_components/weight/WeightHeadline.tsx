@@ -28,6 +28,9 @@ export function WeightHeadline({ value }: { value: number }) {
     const display = reduce ? value : animated
 
     return (
-        <span className="font-display text-3xl font-black tabular-nums text-foreground">{display.toFixed(1)} kg</span>
+        <span className="font-display text-[28px] font-black leading-none tracking-[-0.03em] tabular-nums text-strong">
+            {display.toFixed(1)}
+            <span className="ml-1 text-[13px] font-semibold text-muted">kg</span>
+        </span>
     )
 }

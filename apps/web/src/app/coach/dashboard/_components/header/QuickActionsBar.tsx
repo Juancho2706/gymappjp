@@ -11,9 +11,9 @@ interface Props {
     clients: ClientListItem[]
 }
 
-/** Misma píldora de antes; en claro solo un borde y sombra un poco más marcados para separar del fondo. */
+/** EVA DS pill — surface-card fill, subtle hairline, sport accent + lift on hover. */
 const quickActionClassName =
-    'inline-flex items-center gap-2 rounded-full border border-black/[0.11] bg-card/95 px-4 py-2 text-sm font-medium shadow-sm shadow-black/[0.06] backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow dark:border-border/60 dark:bg-background/60 dark:shadow-none dark:hover:bg-background/80'
+    'inline-flex items-center gap-2 rounded-pill border border-border-subtle bg-surface-card px-4 py-2 text-sm font-bold text-[var(--text-body)] shadow-[var(--shadow-sm)] [transition:transform_var(--dur-fast)_var(--ease-out),border-color_var(--dur-fast)_var(--ease-out),box-shadow_var(--dur-fast)_var(--ease-out)] hover:-translate-y-px hover:border-[var(--border-default)] hover:shadow-[var(--shadow-md)]'
 
 export function QuickActionsBar({ clients }: Props) {
     const [createOpen, setCreateOpen] = useState(false)
@@ -28,7 +28,7 @@ export function QuickActionsBar({ clients }: Props) {
                     aria-label="Registrar alumno"
                     className={quickActionClassName}
                 >
-                    <UserPlus className="h-4 w-4 shrink-0 text-primary" />
+                    <UserPlus className="h-4 w-4 shrink-0 text-sport-500" />
                     <span className="hidden sm:inline">+ Alumno</span>
                     <span className="sm:hidden">+</span>
                 </button>
@@ -38,7 +38,7 @@ export function QuickActionsBar({ clients }: Props) {
                     aria-label="Crear programa"
                     className={quickActionClassName}
                 >
-                    <Layers className="h-4 w-4 shrink-0 text-primary" />
+                    <Layers className="h-4 w-4 shrink-0 text-sport-500" />
                     <span className="hidden sm:inline">+ Programa</span>
                     <span className="sm:hidden">+</span>
                 </Link>
@@ -48,7 +48,7 @@ export function QuickActionsBar({ clients }: Props) {
                     aria-label="Crear plan de nutricion"
                     className={quickActionClassName}
                 >
-                    <Utensils className="h-4 w-4 shrink-0 text-primary" />
+                    <Utensils className="h-4 w-4 shrink-0 text-sport-500" />
                     <span className="hidden sm:inline">+ Nutricion</span>
                     <span className="sm:hidden">+</span>
                 </Link>
@@ -59,7 +59,7 @@ export function QuickActionsBar({ clients }: Props) {
                     aria-label="Registrar pago"
                     className={quickActionClassName}
                 >
-                    <Receipt className="h-4 w-4 shrink-0 text-primary" />
+                    <Receipt className="h-4 w-4 shrink-0 text-sport-500" />
                     <span className="hidden sm:inline">+ Pago</span>
                     <span className="sm:hidden">+</span>
                 </button>

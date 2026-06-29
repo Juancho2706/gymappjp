@@ -30,7 +30,7 @@ export function DashboardHeaderSkeleton() {
 
 export function CalendarSkeleton() {
     return (
-        <div className="rounded-2xl border border-border bg-card p-3 shadow-sm">
+        <div className="rounded-card border border-subtle bg-surface-card p-3 shadow-sm">
             <div className="grid grid-cols-7 gap-1">
                 {Array.from({ length: 7 }).map((_, i) => (
                     <div key={i} className="flex flex-col items-center gap-1.5">
@@ -44,16 +44,16 @@ export function CalendarSkeleton() {
 }
 
 export function CheckInSkeleton() {
-    return <BrandSkeleton className="h-14 w-full rounded-xl" />
+    return <BrandSkeleton className="h-14 w-full rounded-card" />
 }
 
 export function HeroOnlySkeleton() {
-    return <BrandSkeleton className="h-48 w-full rounded-2xl" />
+    return <BrandSkeleton className="h-48 w-full rounded-card" />
 }
 
 export function ComplianceRingsSkeleton() {
     return (
-        <div className="space-y-3 rounded-2xl border border-border/40 bg-card/30 p-4 shadow-sm backdrop-blur-md">
+        <div className="space-y-3 rounded-card border border-subtle bg-surface-card p-4 shadow-sm">
             <BrandSkeleton className="mx-auto h-3 w-28" />
             <div className="grid grid-cols-3 gap-2">
                 {Array.from({ length: 3 }).map((_, i) => (
@@ -78,11 +78,11 @@ export function HeroAndComplianceSkeleton() {
 }
 
 export function PersonalRecordsSkeleton() {
-    return <BrandSkeleton className="h-24 w-full rounded-2xl" />
+    return <BrandSkeleton className="h-24 w-full rounded-card" />
 }
 
 export function WeightChartSkeleton() {
-    return <BrandSkeleton className="h-64 w-full rounded-2xl" />
+    return <BrandSkeleton className="h-64 w-full rounded-card" />
 }
 
 export function DashboardSidebarSkeleton() {
@@ -98,39 +98,39 @@ export function DashboardSidebarSkeleton() {
 
 export function NutritionSkeleton() {
     return (
-        <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
+        <div className="space-y-3 rounded-card border border-subtle bg-surface-card p-4">
             <BrandSkeleton className="h-5 w-32" />
             <BrandSkeleton className="h-8 w-24" />
             {Array.from({ length: 3 }).map((_, i) => (
-                <BrandSkeleton key={i} className="h-2 w-full rounded-full" />
+                <BrandSkeleton key={i} className="h-2 w-full rounded-pill" />
             ))}
             {Array.from({ length: 3 }).map((_, i) => (
-                <BrandSkeleton key={i} className="h-8 w-full rounded-lg" />
+                <BrandSkeleton key={i} className="h-8 w-full rounded-control" />
             ))}
         </div>
     )
 }
 
 export function HabitsSkeleton() {
-    return <BrandSkeleton className="h-12 w-full rounded-2xl" />
+    return <BrandSkeleton className="h-12 w-full rounded-card" />
 }
 
 export function WeightSkeleton() {
     return (
-        <div className="rounded-2xl border border-border bg-card p-4">
+        <div className="rounded-card border border-subtle bg-surface-card p-4">
             <BrandSkeleton className="h-8 w-24" />
-            <BrandSkeleton className="mt-3 h-[72px] w-full rounded-xl" />
+            <BrandSkeleton className="mt-3 h-[72px] w-full rounded-control" />
         </div>
     )
 }
 
 export function ProgramSkeleton() {
     return (
-        <div className="space-y-3 rounded-2xl border border-border bg-card p-4">
+        <div className="space-y-3 rounded-card border border-subtle bg-surface-card p-4">
             <BrandSkeleton className="h-5 w-40" />
-            <BrandSkeleton className="h-2 w-full rounded-full" />
+            <BrandSkeleton className="h-2 w-full rounded-pill" />
             {Array.from({ length: 4 }).map((_, i) => (
-                <BrandSkeleton key={i} className="h-14 w-full rounded-xl" />
+                <BrandSkeleton key={i} className="h-14 w-full rounded-control" />
             ))}
         </div>
     )
@@ -138,9 +138,9 @@ export function ProgramSkeleton() {
 
 export function HistorySkeleton() {
     return (
-        <div className="rounded-2xl border border-border bg-card">
+        <div className="rounded-card border border-subtle bg-surface-card">
             {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="flex h-14 items-center gap-3 border-b border-border/30 px-4 last:border-0">
+                <div key={i} className="flex h-14 items-center gap-3 border-b border-subtle px-4 last:border-0">
                     <BrandSkeleton className="h-8 w-8 rounded-lg" />
                     <div className="min-w-0 flex-1 space-y-1.5">
                         <BrandSkeleton className="h-3 w-32" />

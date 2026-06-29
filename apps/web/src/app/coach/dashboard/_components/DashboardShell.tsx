@@ -46,6 +46,7 @@ const itemVariants = {
 import type { Json } from '@/lib/database.types'
 import type { SubscriptionTier } from '@/lib/constants'
 import { TIER_CONFIG } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 import Link from 'next/link'
 
 interface Props {
@@ -115,20 +116,6 @@ export function DashboardShell({
                 </motion.header>
 
                 <motion.section variants={itemVariants}>
-                    <CoachOnboardingChecklist
-                        coachId={coachId}
-                        coachSlug={coachSlug}
-                        coachInviteCode={coachInviteCode}
-                        initialOnboardingGuide={initialOnboardingGuide}
-                        totalClients={data.kpi.totalClients}
-                        activePlans={data.activePlans}
-                        hasStudentSignal30d={data.hasStudentSignal30d}
-                        subscriptionTier={subscriptionTier}
-                        hasCoachLogo={hasCoachLogo}
-                    />
-                </motion.section>
-
-                <motion.section variants={itemVariants}>
                     <KpiStrip kpi={data.kpi} onAdherenceClick={() => setStatsSheetOpen(true)} onMrrClick={() => setRevenueSheetOpen(true)} />
                 </motion.section>
 
@@ -152,6 +139,20 @@ export function DashboardShell({
 
                 <motion.section variants={itemVariants}>
                     <ActivityFeed items={data.recentActivities} />
+                </motion.section>
+
+                <motion.section variants={itemVariants}>
+                    <CoachOnboardingChecklist
+                        coachId={coachId}
+                        coachSlug={coachSlug}
+                        coachInviteCode={coachInviteCode}
+                        initialOnboardingGuide={initialOnboardingGuide}
+                        totalClients={data.kpi.totalClients}
+                        activePlans={data.activePlans}
+                        hasStudentSignal30d={data.hasStudentSignal30d}
+                        subscriptionTier={subscriptionTier}
+                        hasCoachLogo={hasCoachLogo}
+                    />
                 </motion.section>
 
                 <motion.section variants={itemVariants}>
@@ -183,25 +184,31 @@ function FreeTierBanner({ totalClients }: { totalClients: number }) {
     const full = used >= max
 
     return (
-        <div className={`mt-3 flex items-center justify-between gap-4 rounded-xl border px-4 py-3 ${
-            full
-                ? 'border-amber-500/30 bg-amber-500/10'
-                : 'border-border bg-card/60'
-        }`}>
-            <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-foreground">
+        <div
+            className={cn(
+                'mt-3 flex items-center justify-between gap-4 rounded-card border px-4 py-3',
+                full
+                    ? 'border-[var(--warning-500)]/30 bg-[var(--warning-100)]'
+                    : 'border-border-subtle bg-surface-card'
+            )}
+        >
+            <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-[var(--text-strong)]">
                     {used}/{max} alumnos · Plan gratuito
                 </p>
-                <div className="mt-1.5 h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-pill bg-[var(--track)]">
                     <div
-                        className={`h-full rounded-full transition-all ${full ? 'bg-amber-400' : 'bg-emerald-500'}`}
+                        className={cn(
+                            'h-full rounded-pill transition-all',
+                            full ? 'bg-[var(--warning-500)]' : 'bg-[var(--success-500)]'
+                        )}
                         style={{ width: `${pct}%` }}
                     />
                 </div>
             </div>
             <Link
                 href="/coach/subscription"
-                className="shrink-0 text-xs font-semibold text-primary hover:underline"
+                className="shrink-0 text-xs font-bold text-sport-500 hover:underline"
             >
                 {full ? 'Expandir límite →' : 'Ver planes →'}
             </Link>
@@ -214,18 +221,18 @@ function TeamsBridgeBanner({ totalClients }: { totalClients: number }) {
     const pct = Math.round((Math.min(totalClients, max) / max) * 100)
 
     return (
-        <div className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
-            <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-foreground">
+        <div className="mt-3 flex items-center justify-between gap-4 rounded-card border border-[var(--success-500)]/30 bg-[var(--success-100)] px-4 py-3">
+            <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-[var(--text-strong)]">
                     {totalClients}/{max} alumnos · {pct}% de tu plan Elite
                 </p>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
+                <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
                     ¿Más de 100 alumnos o trabajas con otros profesionales? Conoce EVA Teams
                 </p>
             </div>
             <a
                 href="mailto:contacto@eva-app.cl?subject=Quiero%20conocer%20EVA%20Teams"
-                className="shrink-0 text-xs font-semibold text-emerald-500 hover:underline"
+                className="shrink-0 text-xs font-bold text-[var(--success-600)] hover:underline"
             >
                 Conversemos →
             </a>

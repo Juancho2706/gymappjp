@@ -2,27 +2,28 @@
 
 import { useEffect, useState } from 'react'
 import { useReducedMotion, useMotionValue, useSpring, useMotionValueEvent } from 'framer-motion'
-import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
-import 'react-circular-progressbar/dist/styles.css'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
+import { ProgressRing } from '@/components/ui/progress-ring'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
+
+type RingColor = 'sport' | 'ember' | 'success'
 
 interface ComplianceRingProps {
     value: number
     label: string
-    color: 'brand' | 'emerald' | 'violet'
+    color: RingColor
     /** Sin datos en ventana (p. ej. nutrición 30d): anillo gris y leyenda. */
     empty?: boolean
 }
 
-const stroke: Record<ComplianceRingProps['color'], string> = {
-    brand: 'var(--theme-primary)',
-    emerald: '#10b981',
-    violet: '#8b5cf6',
+const stroke: Record<RingColor, string> = {
+    sport: 'var(--sport-500)',
+    ember: 'var(--ember-500)',
+    success: 'var(--success-500)',
 }
 
-const emptyStroke = '#9ca3af'
+const emptyStroke = 'var(--ink-300)'
 
 export function ComplianceRing({ value, label, color, empty }: ComplianceRingProps) {
     const reduce = useReducedMotion()
@@ -44,26 +45,31 @@ export function ComplianceRing({ value, label, color, empty }: ComplianceRingPro
     })
 
     const displayPct = empty ? 0 : reduce ? value : animated
+    const ringValue = empty ? 0 : value
     const pathColor = empty ? emptyStroke : stroke[color]
-    const centerText = empty ? '—' : `${displayPct}%`
-    const textSize = empty ? '22px' : '28px'
 
     return (
-        <div className="flex flex-col items-center gap-1">
-            <div className="h-20 w-20 sm:h-24 sm:w-24">
-                <CircularProgressbar
-                    value={displayPct}
-                    text={centerText}
-                    styles={buildStyles({
-                        pathColor,
-                        trailColor: 'var(--compliance-ring-trail)',
-                        textColor: empty ? 'var(--compliance-ring-text-empty)' : 'var(--compliance-ring-text)',
-                        textSize,
-                    })}
-                />
+        <div className="flex flex-col items-center gap-2">
+            <ProgressRing
+                value={ringValue}
+                size={76}
+                stroke={7}
+                color={pathColor}
+                label={
+                    empty ? (
+                        <span className="font-display text-lg font-black text-subtle">—</span>
+                    ) : (
+                        <span className="font-display text-[19px] font-black tabular-nums tracking-[-0.03em] text-strong">
+                            {displayPct}
+                            <span className="text-[11px]">%</span>
+                        </span>
+                    )
+                }
+            />
+            <div className="text-center">
+                <div className="text-xs font-bold text-strong">{label}</div>
+                {empty ? <div className="text-[10px] text-subtle">Sin datos</div> : null}
             </div>
-            <span className="text-center text-[10px] font-medium text-muted-foreground sm:text-xs">{label}</span>
-            {empty ? <span className="text-center text-[9px] text-muted-foreground/80">Sin datos</span> : null}
         </div>
     )
 }
@@ -89,18 +95,18 @@ export function ComplianceRingCluster({
 }) {
     const { t } = useTranslation()
     return (
-        <GlassCard className="p-4">
-            <div className="mb-3 flex items-center justify-center gap-1.5">
-                <p className="text-center text-xs font-semibold text-muted-foreground">Últimos 30 días</p>
+        <Card padding="md">
+            <div className="-mb-1 flex items-center justify-center gap-1.5">
+                <p className="text-center text-[11px] font-bold uppercase tracking-[0.08em] text-subtle">Últimos 30 días</p>
                 <InfoTooltip content={t('section.compliance')} />
             </div>
             <div className={`grid gap-2 ${nutritionEnabled ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                <ComplianceRing value={workoutScore} label="Entrenos" color="brand" />
+                <ComplianceRing value={workoutScore} label="Entrenos" color="sport" />
                 {nutritionEnabled ? (
-                    <ComplianceRing value={nutritionEngagementScore} label="Nutrición" color="emerald" empty={!nutritionHasLogs} />
+                    <ComplianceRing value={nutritionEngagementScore} label="Nutrición" color="ember" empty={!nutritionHasLogs} />
                 ) : null}
-                <ComplianceRing value={checkInScore} label="Check-ins" color="violet" />
+                <ComplianceRing value={checkInScore} label="Check-ins" color="success" />
             </div>
-        </GlassCard>
+        </Card>
     )
 }

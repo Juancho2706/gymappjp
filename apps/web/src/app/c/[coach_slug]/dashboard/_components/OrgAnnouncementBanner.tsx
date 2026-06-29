@@ -12,10 +12,10 @@ export function OrgAnnouncementBanner({ announcements }: Props) {
             {announcements.map((a) => (
                 <div
                     key={a.id}
-                    className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-900 dark:bg-blue-950"
+                    className="rounded-card border border-[color-mix(in_srgb,var(--info-500)_30%,transparent)] bg-[var(--info-100)] px-4 py-3"
                 >
-                    <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">{a.title}</p>
-                    <p className="mt-0.5 text-sm text-blue-800 dark:text-blue-200">{a.body}</p>
+                    <p className="text-sm font-bold text-[var(--info-600)]">{a.title}</p>
+                    <p className="mt-0.5 text-sm text-[var(--info-600)]">{a.body}</p>
                 </div>
             ))}
         </div>

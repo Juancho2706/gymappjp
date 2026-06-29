@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Scale } from 'lucide-react'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { WeightQuickLog } from './WeightQuickLog'
 import { getCheckInHistory30Days } from '../../_data/dashboard.queries'
 import { formatRelativeDate, getTodayInSantiago } from '@/lib/date-utils'
@@ -32,17 +32,17 @@ export async function WeightWidget({ userId, coachSlug }: { userId: string; coac
 
     if (withW.length === 0) {
         return (
-            <GlassCard className="p-5 text-center">
-                <Scale className="mx-auto mb-2 h-10 w-10 text-muted-foreground" />
-                <p className="text-sm font-medium text-foreground">Aún sin registros de peso</p>
+            <Card padding="lg" className="text-center">
+                <Scale className="mx-auto h-10 w-10 text-muted" />
+                <p className="text-sm font-bold text-strong">Aún sin registros de peso</p>
                 <Link
                     href={`${base}/check-in`}
-                    className="mt-3 inline-flex min-h-11 items-center justify-center rounded-lg px-3 text-xs font-semibold text-[color:var(--theme-primary)]"
+                    className="inline-flex min-h-11 items-center justify-center rounded-control px-3 text-xs font-bold text-sport-600"
                 >
                     Check-in completo →
                 </Link>
                 <WeightQuickLog coachSlug={coachSlug} />
-            </GlassCard>
+            </Card>
         )
     }
 
@@ -58,23 +58,23 @@ export async function WeightWidget({ userId, coachSlug }: { userId: string; coac
     }))
 
     return (
-        <GlassCard className="p-4">
-            <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Peso</span>
+        <Card padding="md" className="gap-0">
+            <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-muted">Peso actual</span>
                 <Link
                     href={`${base}/check-in`}
-                    className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-2 text-[10px] font-semibold text-[color:var(--theme-primary)]"
+                    className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-control px-2 text-[11px] font-bold text-sport-600"
                 >
                     Registrar
                 </Link>
             </div>
-            <div className="flex items-end gap-2">
+            <div className="mt-1 flex items-end justify-between gap-2">
                 <WeightHeadline value={current} />
                 <TrendArrow trend={trend} deltaKg={delta} />
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">{formatRelativeDate(lastDay, todayIso)}</p>
+            <p className="mt-1 text-xs text-muted">{formatRelativeDate(lastDay, todayIso)}</p>
             <WeightSparkline data={spark} />
             <WeightQuickLog coachSlug={coachSlug} />
-        </GlassCard>
+        </Card>
     )
 }

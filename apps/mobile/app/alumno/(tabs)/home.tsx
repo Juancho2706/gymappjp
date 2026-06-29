@@ -6,25 +6,28 @@ import {
   Text,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { Apple, CalendarDays, ChevronRight, Droplets, Dumbbell, Footprints, Scale, TrendingDown, TrendingUp } from 'lucide-react-native'
+import { CalendarDays, Check, ChevronRight, Droplets, Dumbbell, Footprints, Moon, Scale, TrendingDown, TrendingUp } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile, type ClientProfile } from '../../../lib/client'
 import { getOnboardingStatus } from '../../../lib/alumno-onboarding'
 import { useTheme } from '../../../context/ThemeContext'
 import {
+  Badge,
   Button,
   Card,
-  ComplianceRing,
   NutritionDailySummaryWidget,
   PersonalRecordsBanner,
+  ProgressBar,
   ScreenHeader,
   Sparkline,
   StreakWidget,
   WelcomeModal,
 } from '../../../components'
+import { ProgressRing } from '../../../components/ProgressRing'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AppBackground } from '../../../components/AppBackground'
@@ -33,6 +36,10 @@ import { getDailyHabits, type HabitsData } from '../../../lib/habits.queries'
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab']
 const MS_DAY = 24 * 60 * 60 * 1000
+
+// Fixed DS accents (constant ramp values; sport follows the runtime brand).
+const EMBER_500 = '#FF6A3D' // accent-nutrition
+const WARNING_500 = '#F5A524' // warning glyph (weight uptrend)
 
 interface Plan {
   id: string
@@ -284,25 +291,23 @@ export default function AlumnoHomeScreen() {
             transition={{ type: 'timing', duration: 400 }}
           >
             <TouchableOpacity
-              style={[
-                styles.checkInBanner,
-                { backgroundColor: theme.primary + '12', borderColor: theme.primary + '30', borderRadius: theme.radius.xl },
-              ]}
+              className="flex-row items-center rounded-card border border-ember-200 bg-ember-100 dark:bg-ember-100/20"
+              style={styles.checkInBanner}
               onPress={() => router.push('/alumno/check-in')}
               activeOpacity={0.82}
             >
-              <View style={styles.bannerLeft}>
-                <Scale size={18} color={theme.primary} />
-                <View style={styles.bannerText}>
-                  <Text style={[styles.bannerTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-                    Check-in pendiente
-                  </Text>
-                  <Text style={[styles.bannerSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                    Registra tu peso y energia de este mes.
-                  </Text>
-                </View>
+              <View className="items-center justify-center rounded-control bg-ember-500" style={styles.bannerIcon}>
+                <Scale size={18} color="#fff" strokeWidth={2.25} />
               </View>
-              <ChevronRight size={20} color={theme.primary} />
+              <View className="flex-1" style={styles.bannerText}>
+                <Text className="font-sans-bold text-[13.5px] text-ember-700">
+                  Check-in pendiente
+                </Text>
+                <Text className="font-sans text-[12px] text-ember-700">
+                  Registra tu peso y energia de este mes.
+                </Text>
+              </View>
+              <ChevronRight size={18} color={EMBER_500} />
             </TouchableOpacity>
           </MotiView>
         ) : null}
@@ -319,14 +324,14 @@ export default function AlumnoHomeScreen() {
           animate={{ opacity: 1, translateY: 0 }}
           transition={{ type: 'timing', duration: 400, delay: 120 }}
         >
-          <Card style={styles.complianceCard}>
-            <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+          <Card>
+            <Text className="font-sans-bold text-[13px] uppercase text-subtle" style={styles.cardEyebrow}>
               Cumplimiento 30 dias
             </Text>
             <View style={styles.ringsRow}>
-              <ComplianceRing value={derived.workoutCompliance} label="Entrenos" color={theme.primary} />
-              <ComplianceRing value={derived.nutritionCompliance} label="Nutrición" color="#10B981" empty={derived.nutritionEmpty} />
-              <ComplianceRing value={derived.checkInCompliance} label="Check-in" color="#F59E0B" empty={derived.checkInEmpty} />
+              <ComplianceItem value={derived.workoutCompliance} label="Entrenos" color={theme.primary} />
+              <ComplianceItem value={derived.nutritionCompliance} label="Nutrición" color={EMBER_500} empty={derived.nutritionEmpty} />
+              <ComplianceItem value={derived.checkInCompliance} label="Check-in" color={theme.success} empty={derived.checkInEmpty} />
             </View>
           </Card>
         </MotiView>
@@ -341,7 +346,7 @@ export default function AlumnoHomeScreen() {
           <NutritionDailySummaryWidget clientId={data.client.id} />
         )}
         {data?.habitsToday && (data.habitsToday.water_ml != null || data.habitsToday.steps != null) && (
-          <HabitsMiniRow habits={data.habitsToday} theme={theme} />
+          <HabitsMiniRow habits={data.habitsToday} />
         )}
       </ScrollView>
 
@@ -355,6 +360,31 @@ export default function AlumnoHomeScreen() {
         />
       )}
     </SafeAreaView>
+  )
+}
+
+/** One compliance ring + label (DS ProgressRing, 0..1 fraction → percent). */
+function ComplianceItem({ value, label, color, empty = false }: { value: number; label: string; color: string; empty?: boolean }) {
+  const { theme } = useTheme()
+  const pct = Math.round(Math.max(0, Math.min(1, value)) * 100)
+  return (
+    <View className="items-center" style={styles.ringItem}>
+      <ProgressRing
+        value={empty ? 0 : pct}
+        size={74}
+        stroke={7}
+        color={empty ? theme.mutedForeground : color}
+        label={
+          <Text className="font-display-black text-strong text-[19px]" style={styles.tnum}>
+            {empty ? '—' : pct}
+          </Text>
+        }
+      />
+      <View className="items-center">
+        <Text className="font-sans-bold text-strong text-[12px]">{label}</Text>
+        {empty ? <Text className="font-sans text-subtle text-[10.5px]">Sin datos</Text> : null}
+      </View>
+    </View>
   )
 }
 
@@ -376,35 +406,30 @@ function WeekCalendar({ workoutDates, plannedDays }: { workoutDates: Set<string>
         const active = dIso === todayIso
         const done = workoutDates.has(dIso)
         const planned = plannedDays.has(dIso)
-        const isPast = dIso < todayIso
-        // dot color: done=green, planned+past+not done=amber, planned+future=muted, active=white
-        const dotColor = done
-          ? (active ? theme.primaryForeground : '#10B981')
-          : planned && isPast
-          ? '#F59E0B'
-          : planned
-          ? (active ? theme.primaryForeground + '80' : theme.border)
-          : 'transparent'
+        // today = brand cta-fill; completed = card + border; otherwise = sunken.
+        const bgClass = active
+          ? 'bg-cta-fill'
+          : done
+          ? 'bg-surface-card border border-subtle'
+          : 'bg-surface-sunken border border-subtle'
 
         return (
-          <View
-            key={dIso}
-            style={[
-              styles.dayPill,
-              {
-                backgroundColor: active ? theme.primary : theme.card,
-                borderColor: active ? theme.primary : done ? '#10B981' + '50' : theme.border,
-                borderRadius: theme.radius.xl,
-              },
-            ]}
-          >
-            <Text style={[styles.dayLabel, { color: active ? theme.primaryForeground : theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          <View key={dIso} className={`flex-1 items-center justify-center rounded-control ${bgClass}`} style={styles.dayPill}>
+            <Text className={`font-sans-bold text-[10px] uppercase ${active ? 'text-on-sport' : 'text-subtle'}`} style={styles.dayLabel}>
               {DAY_LABELS[day.getDay()]}
             </Text>
-            <Text style={[styles.dayNum, { color: active ? theme.primaryForeground : theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            <Text className={`font-display-bold text-[16px] ${active ? 'text-on-sport' : 'text-strong'}`}>
               {day.getDate()}
             </Text>
-            <View style={[styles.dayDot, { backgroundColor: dotColor }]} />
+            <View style={styles.dayGlyph}>
+              {done ? (
+                <Check size={13} color={active ? '#fff' : theme.success} strokeWidth={3} />
+              ) : active ? (
+                <View style={[styles.dot, { backgroundColor: '#fff' }]} />
+              ) : planned ? (
+                <View style={[styles.dot, { backgroundColor: theme.primary, opacity: 0.5 }]} />
+              ) : null}
+            </View>
           </View>
         )
       })}
@@ -414,44 +439,80 @@ function WeekCalendar({ workoutDates, plannedDays }: { workoutDates: Set<string>
 
 function WorkoutHero({ plan, nextPlan, doneToday, onStart }: { plan: Plan | null; nextPlan: Plan | null; doneToday: boolean; onStart: (id: string) => void }) {
   const { theme } = useTheme()
+
+  // ── Rest day (no plan today) — recessed sunken card ──
+  if (!plan) {
+    return (
+      <MotiView
+        from={{ opacity: 0, translateY: 16 }}
+        animate={{ opacity: 1, translateY: 0 }}
+        transition={{ type: 'timing', duration: 450, delay: 80 }}
+      >
+        <Card variant="sunken" padding="lg">
+          <View className="flex-row items-center" style={styles.heroTop}>
+            <View className="items-center justify-center rounded-xl" style={[styles.heroIcon, { backgroundColor: theme.cyan + '1A' }]}>
+              <Moon size={24} color={theme.cyan} strokeWidth={2.25} />
+            </View>
+            <View className="flex-1" style={styles.heroCopy}>
+              <Text className="font-sans-bold text-[11px] uppercase" style={{ color: theme.cyan, letterSpacing: 1 }}>
+                Dia de descanso
+              </Text>
+              <Text className="font-display-black text-strong text-[18px]" numberOfLines={2} style={styles.restTitle}>
+                Recupera y prepara el siguiente entreno
+              </Text>
+            </View>
+          </View>
+          <Text className="font-sans text-muted text-[13px]" style={styles.restText}>
+            Proximo workout: {nextPlan?.title ?? 'cuando tu coach lo asigne'}
+          </Text>
+        </Card>
+      </MotiView>
+    )
+  }
+
+  // ── Active workout — inverse (dark) hero ──
   return (
     <MotiView
       from={{ opacity: 0, translateY: 16 }}
       animate={{ opacity: 1, translateY: 0 }}
       transition={{ type: 'timing', duration: 450, delay: 80 }}
     >
-      <Card variant={plan ? 'highlighted' : 'default'} padding={20} style={styles.heroCard}>
-        <View style={styles.heroTop}>
-          <View style={[styles.heroIcon, { backgroundColor: theme.primary + '15', borderRadius: theme.radius.xl }]}>
-            <Dumbbell size={24} color={theme.primary} />
+      <Card variant="inverse" padding="lg">
+        <View className="flex-row items-center" style={styles.heroTop}>
+          <View className="items-center justify-center rounded-xl" style={[styles.heroIcon, { backgroundColor: 'rgba(255,255,255,0.08)' }]}>
+            <Dumbbell size={24} color={theme.primary} strokeWidth={2.25} />
           </View>
-          <View style={styles.heroCopy}>
-            <Text style={[styles.heroEyebrow, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
-              {plan ? 'Workout de hoy' : 'Dia de descanso'}
+          <View className="flex-1" style={styles.heroCopy}>
+            <Text className="font-sans-bold text-sport-400 text-[11px] uppercase" style={{ letterSpacing: 1 }}>
+              Workout de hoy
             </Text>
-            <Text style={[styles.heroTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]} numberOfLines={2}>
-              {plan?.title ?? 'Recupera y prepara el siguiente entreno'}
+            <Text className="font-display-black text-on-dark text-[20px]" numberOfLines={2} style={styles.heroTitle}>
+              {plan.title}
+            </Text>
+            <Text className="font-sans text-on-dark-muted text-[13px]">
+              {plan.blockCount} {plan.blockCount === 1 ? 'ejercicio' : 'ejercicios'}
             </Text>
           </View>
         </View>
-        {plan ? (
-          <>
-            {/* Fix S1: progreso REAL (no más 18% hardcodeado). Si entrenó hoy → barra llena + "Completado". */}
-            {doneToday ? (
-              <>
-                <View style={[styles.progressTrack, { backgroundColor: theme.muted }]}>
-                  <View style={[styles.progressFill, { backgroundColor: theme.success, width: '100%' }]} />
-                </View>
-                <Text style={{ color: theme.success, fontSize: 12.5, fontFamily: 'Inter_600SemiBold', marginBottom: 4 }}>✓ Completado hoy</Text>
-              </>
-            ) : null}
-            <Button label={doneToday ? 'Entrenar de nuevo' : 'Empezar'} rightIcon={ChevronRight} onPress={() => onStart(plan.id)} full />
-          </>
-        ) : (
-          <Text style={[styles.restText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Proximo workout: {nextPlan?.title ?? 'cuando tu coach lo asigne'}
-          </Text>
-        )}
+
+        {doneToday ? (
+          <View style={styles.heroProgress}>
+            <View className="overflow-hidden" style={[styles.progressTrack, { backgroundColor: 'rgba(255,255,255,0.12)' }]}>
+              <View style={[styles.progressFill, { backgroundColor: theme.success, width: '100%' }]} />
+            </View>
+            <Text className="font-sans-semibold text-[12.5px]" style={{ color: theme.success }}>✓ Completado hoy</Text>
+          </View>
+        ) : null}
+
+        <View style={styles.heroCta}>
+          <Button
+            label={doneToday ? 'Entrenar de nuevo' : 'Empezar'}
+            variant="sport"
+            rightIcon={ChevronRight}
+            onPress={() => onStart(plan.id)}
+            full
+          />
+        </View>
       </Card>
     </MotiView>
   )
@@ -462,47 +523,53 @@ function ActiveProgramSection({ program }: { program: Program | null }) {
   if (!program) return null
   const progress = program.plans.length ? 1 / program.plans.length : 0
   return (
-    <Card style={styles.sectionCard}>
-      <View style={styles.sectionTitleRow}>
-        <CalendarDays size={17} color={theme.primary} />
-        <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+    <Card>
+      <View className="flex-row items-center" style={styles.sectionTitleRow}>
+        <CalendarDays size={16} color={theme.primary} strokeWidth={2.25} />
+        <Text className="font-sans-bold text-[12px] uppercase text-subtle" style={styles.sectionEyebrow}>
           Programa activo
         </Text>
       </View>
-      <Text style={[styles.programName, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]} numberOfLines={2}>
+      <Text className="font-display-bold text-strong text-[18px]" numberOfLines={2} style={styles.programName}>
         {program.name}
       </Text>
-      <Text style={[styles.programMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+      <Text className="font-sans text-muted text-[13px]" style={styles.programMeta}>
         {program.plans.length} plan{program.plans.length !== 1 ? 'es' : ''} en rotacion
       </Text>
-      <View style={[styles.progressTrack, { backgroundColor: theme.muted }]}>
-        <View style={[styles.progressFill, { backgroundColor: theme.primary, width: `${Math.max(8, progress * 100)}%` }]} />
-      </View>
+      <ProgressBar value={Math.max(0.08, progress)} color={theme.primary} style={styles.programBar} />
     </Card>
   )
 }
 
 function RecentWorkouts({ workouts }: { workouts: RecentWorkout[] }) {
   const { theme } = useTheme()
+  const rows = workouts.slice(0, 4)
   return (
-    <Card style={styles.sectionCard}>
-      <View style={styles.sectionTitleRow}>
-        <Dumbbell size={17} color={theme.primary} />
-        <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+    <Card padding="none" style={styles.listCard}>
+      <View className="flex-row items-center" style={styles.listHeader}>
+        <Dumbbell size={16} color={theme.primary} strokeWidth={2.25} />
+        <Text className="font-sans-bold text-[12px] uppercase text-subtle" style={styles.sectionEyebrow}>
           Ultimos workouts
         </Text>
       </View>
-      {workouts.length === 0 ? (
-        <Text style={[styles.emptyText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+      {rows.length === 0 ? (
+        <Text className="font-sans text-muted text-[13px]" style={styles.listEmpty}>
           Aun no hay entrenamientos registrados.
         </Text>
       ) : (
-        workouts.slice(0, 4).map((w, idx) => (
-          <View key={`${w.logged_at}-${idx}`} style={[styles.workoutRow, idx < workouts.length - 1 && { borderBottomColor: theme.border }]}>
-            <Text style={[styles.workoutName, { color: theme.foreground, fontFamily: theme.fontSans }]} numberOfLines={1}>
+        rows.map((w, idx) => (
+          <View
+            key={`${w.logged_at}-${idx}`}
+            className="flex-row items-center"
+            style={[styles.listRow, idx > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border }]}
+          >
+            <View className="items-center justify-center rounded-md bg-surface-sunken" style={styles.listIcon}>
+              <Dumbbell size={18} color={theme.primary} strokeWidth={2.25} />
+            </View>
+            <Text className="flex-1 font-sans-semibold text-strong text-[14px]" numberOfLines={1}>
               {w.exercise_name_at_log ?? 'Workout registrado'}
             </Text>
-            <Text style={[styles.workoutDate, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            <Text className="font-sans text-muted text-[12px]">
               {formatDateTime(w.logged_at)}
             </Text>
           </View>
@@ -514,36 +581,78 @@ function RecentWorkouts({ workouts }: { workouts: RecentWorkout[] }) {
 
 function WeightSparkline({ weights, currentWeight, delta }: { weights: number[]; currentWeight: number | null; delta: number | null }) {
   const { theme } = useTheme()
+  const { width } = useWindowDimensions()
+  const sparkWidth = Math.max(0, width - 64) // scroll px (16×2) + card md padding (16×2)
+  const good = delta != null && delta <= 0
   const TrendIcon = delta != null && delta < 0 ? TrendingDown : TrendingUp
+  const deltaText = delta != null ? `${delta > 0 ? '+' : ''}${delta.toFixed(1)} kg` : '-'
+
   return (
-    <Card style={styles.sectionCard}>
-      <View style={styles.sectionTitleRow}>
-        <Scale size={17} color={theme.primary} />
-        <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+    <Card>
+      <View className="flex-row items-center" style={styles.sectionTitleRow}>
+        <Scale size={16} color={theme.primary} strokeWidth={2.25} />
+        <Text className="font-sans-bold text-[12px] uppercase text-subtle" style={styles.sectionEyebrow}>
           Peso 30 dias
         </Text>
       </View>
       {weights.length < 2 ? (
-        <Text style={[styles.emptyText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        <Text className="font-sans text-muted text-[13px]" style={styles.listEmpty}>
           Registra mas check-ins para ver tendencia.
         </Text>
       ) : (
         <>
-          <View style={styles.weightTop}>
-            <Text style={[styles.weightValue, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
-              {currentWeight?.toFixed(1)} kg
-            </Text>
-            <View style={styles.trendRow}>
-              <TrendIcon size={16} color={delta != null && delta <= 0 ? theme.success : '#F59E0B'} />
-              <Text style={[styles.trendText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                {delta != null ? `${delta > 0 ? '+' : ''}${delta.toFixed(1)} kg` : '-'}
+          <View className="flex-row items-end justify-between" style={styles.weightTop}>
+            <View className="flex-row items-baseline" style={styles.weightValueRow}>
+              <Text className="font-display-black text-strong" style={styles.weightValue}>
+                {currentWeight?.toFixed(1)}
               </Text>
+              <Text className="font-sans-semibold text-muted text-[13px]">kg</Text>
             </View>
+            <Badge
+              tone={good ? 'success' : 'warning'}
+              variant="soft"
+              size="md"
+              icon={<TrendIcon size={12} color={good ? theme.success : WARNING_500} strokeWidth={2.5} />}
+            >
+              {deltaText}
+            </Badge>
           </View>
-          <Sparkline values={weights} height={84} color={theme.primary} />
+          <View style={styles.sparkWrap}>
+            <Sparkline values={weights} width={sparkWidth} height={64} color={theme.primary} />
+          </View>
         </>
       )}
     </Card>
+  )
+}
+
+function HabitsMiniRow({ habits }: { habits: HabitsData }) {
+  const { theme } = useTheme()
+  return (
+    <MotiView
+      from={{ opacity: 0, translateY: 10 }}
+      animate={{ opacity: 1, translateY: 0 }}
+      transition={{ type: 'timing', duration: 350 }}
+    >
+      <View style={styles.habitsRow}>
+        {habits.water_ml != null && (
+          <View className="flex-row items-center rounded-pill border border-subtle bg-surface-card" style={styles.habitChip}>
+            <Droplets size={14} color={theme.cyan} strokeWidth={2.25} />
+            <Text className="font-sans-semibold text-body text-[13px]">
+              {habits.water_ml >= 1000 ? `${(habits.water_ml / 1000).toFixed(1)}L` : `${habits.water_ml}ml`}
+            </Text>
+          </View>
+        )}
+        {habits.steps != null && (
+          <View className="flex-row items-center rounded-pill border border-subtle bg-surface-card" style={styles.habitChip}>
+            <Footprints size={14} color={theme.primary} strokeWidth={2.25} />
+            <Text className="font-sans-semibold text-body text-[13px]">
+              {habits.steps.toLocaleString('es-CL')} pasos
+            </Text>
+          </View>
+        )}
+      </View>
+    </MotiView>
   )
 }
 
@@ -578,90 +687,60 @@ function hasCheckInThisMonth(checkIns: CheckInPoint[]): boolean {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
-  weekRow: { flexDirection: 'row', gap: 8 },
-  dayPill: {
-    flex: 1,
-    minHeight: 72,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  dayLabel: { fontSize: 10, textTransform: 'uppercase' },
-  dayNum: { fontSize: 17 },
-  dayDot: { width: 5, height: 5, borderRadius: 3 },
-  checkInBanner: {
-    borderWidth: 1,
-    padding: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  bannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
-  bannerText: { flex: 1, minWidth: 0, gap: 2 },
-  bannerTitle: { fontSize: 14 },
-  bannerSub: { fontSize: 12, lineHeight: 17 },
-  heroCard: { gap: 16 },
-  heroTop: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  heroIcon: { width: 54, height: 54, alignItems: 'center', justifyContent: 'center' },
-  heroCopy: { flex: 1, minWidth: 0, gap: 3 },
-  heroEyebrow: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 },
-  heroTitle: { fontSize: 20, letterSpacing: -0.4 },
-  progressTrack: { height: 6, borderRadius: 3, overflow: 'hidden' },
-  progressFill: { height: 6, borderRadius: 3 },
-  restText: { fontSize: 13, lineHeight: 19 },
-  complianceCard: { gap: 14 },
-  ringsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  sectionCard: { gap: 10 },
-  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  sectionTitle: { fontSize: 15, letterSpacing: -0.1 },
-  programName: { fontSize: 18, letterSpacing: -0.3 },
-  programMeta: { fontSize: 13 },
-  workoutRow: {
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  workoutName: { fontSize: 14, flex: 1 },
-  workoutDate: { fontSize: 12 },
-  emptyText: { fontSize: 13, lineHeight: 19 },
-  weightTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  weightValue: { fontSize: 24, letterSpacing: -0.6 },
-  trendRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  trendText: { fontSize: 13 },
-  habitsRow: { flexDirection: 'row', gap: 8 },
-  habitChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
-  habitText: { fontSize: 13 },
-})
 
-function HabitsMiniRow({ habits, theme }: { habits: HabitsData; theme: any }) {
-  return (
-    <MotiView
-      from={{ opacity: 0, translateY: 10 }}
-      animate={{ opacity: 1, translateY: 0 }}
-      transition={{ type: 'timing', duration: 350 }}
-    >
-      <View style={styles.habitsRow}>
-        {habits.water_ml != null && (
-          <View style={[styles.habitChip, { borderColor: theme.border, backgroundColor: theme.card }]}>
-            <Droplets size={14} color="#3b82f6" strokeWidth={2} />
-            <Text style={[styles.habitText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
-              {habits.water_ml >= 1000 ? `${(habits.water_ml / 1000).toFixed(1)}L` : `${habits.water_ml}ml`}
-            </Text>
-          </View>
-        )}
-        {habits.steps != null && (
-          <View style={[styles.habitChip, { borderColor: theme.border, backgroundColor: theme.card }]}>
-            <Footprints size={14} color="#10B981" strokeWidth={2} />
-            <Text style={[styles.habitText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
-              {habits.steps.toLocaleString('es-CL')} pasos
-            </Text>
-          </View>
-        )}
-      </View>
-    </MotiView>
-  )
-}
+  // Week strip
+  weekRow: { flexDirection: 'row', gap: 6 },
+  dayPill: { minHeight: 60, paddingVertical: 8, gap: 5 },
+  dayLabel: { letterSpacing: 0.6 },
+  dayGlyph: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+
+  // Check-in banner
+  checkInBanner: { paddingHorizontal: 12, paddingVertical: 12, gap: 12 },
+  bannerIcon: { width: 34, height: 34 },
+  bannerText: { minWidth: 0, gap: 2 },
+
+  // Cards / section titles
+  cardEyebrow: { letterSpacing: 0.8, marginBottom: 14 },
+  sectionTitleRow: { gap: 7, marginBottom: 2 },
+  sectionEyebrow: { letterSpacing: 0.6 },
+
+  // Compliance rings
+  ringsRow: { flexDirection: 'row', justifyContent: 'space-around' },
+  ringItem: { gap: 8 },
+  tnum: { fontVariant: ['tabular-nums'] },
+
+  // Hero
+  heroTop: { gap: 12 },
+  heroIcon: { width: 54, height: 54 },
+  heroCopy: { minWidth: 0, gap: 3 },
+  heroTitle: { letterSpacing: -0.4, marginTop: 1 },
+  heroProgress: { gap: 6, marginTop: 16 },
+  heroCta: { marginTop: 16 },
+  progressTrack: { height: 6, borderRadius: 9999 },
+  progressFill: { height: 6, borderRadius: 9999 },
+  restTitle: { letterSpacing: -0.3, marginTop: 1 },
+  restText: { marginTop: 12, lineHeight: 19 },
+
+  // Active program
+  programName: { letterSpacing: -0.3, marginTop: 6 },
+  programMeta: { marginTop: 2 },
+  programBar: { marginTop: 12 },
+
+  // Recent workouts list
+  listCard: { overflow: 'hidden' },
+  listHeader: { gap: 7, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
+  listEmpty: { paddingHorizontal: 16, paddingBottom: 16, lineHeight: 19 },
+  listRow: { gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  listIcon: { width: 38, height: 38 },
+
+  // Weight
+  weightTop: { marginTop: 4 },
+  weightValueRow: { gap: 5 },
+  weightValue: { fontSize: 28, lineHeight: 30, letterSpacing: -1, fontVariant: ['tabular-nums'] },
+  sparkWrap: { marginTop: 12 },
+
+  // Habits
+  habitsRow: { flexDirection: 'row', gap: 8 },
+  habitChip: { gap: 6, paddingHorizontal: 12, paddingVertical: 7 },
+})

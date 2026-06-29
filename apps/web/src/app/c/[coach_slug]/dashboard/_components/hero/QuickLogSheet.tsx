@@ -50,7 +50,7 @@ export function QuickLogSheet({ blocks, coachSlug, baseLoggedPerBlock, totalSets
 
     return (
         <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger className="inline-flex h-9 items-center justify-center whitespace-nowrap rounded-xl border border-border bg-secondary/50 px-4 text-[10px] font-bold uppercase tracking-widest text-foreground backdrop-blur-md transition-colors hover:bg-secondary dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
+            <SheetTrigger className="inline-flex h-14 shrink-0 items-center justify-center whitespace-nowrap rounded-control border-[1.5px] border-white/15 bg-white/10 px-5 text-[15px] font-bold text-on-dark transition-colors hover:bg-white/15 active:scale-[0.97]">
                 Rápido
             </SheetTrigger>
             <SheetContent side="bottom" className="max-h-[85dvh] sm:max-w-md sm:data-[side=right]:max-w-md" data-side="bottom">
@@ -58,7 +58,7 @@ export function QuickLogSheet({ blocks, coachSlug, baseLoggedPerBlock, totalSets
                     <SheetTitle>Log rápido</SheetTitle>
                 </SheetHeader>
                 <div className="flex flex-col gap-3 overflow-y-auto p-4 pt-0">
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs tabular-nums text-muted">
                         {totalLogged}/{totalSetsTarget} series · {coachSlug}
                     </p>
                     {blocks.map((b) => {
@@ -66,10 +66,10 @@ export function QuickLogSheet({ blocks, coachSlug, baseLoggedPerBlock, totalSets
                         const extra = loggedByBlock[b.id] ?? 0
                         const done = base + extra
                         return (
-                            <div key={b.id} className="flex items-center justify-between gap-2 rounded-xl border border-border/60 bg-card/50 px-3 py-2">
+                            <div key={b.id} className="flex items-center justify-between gap-2 rounded-control border border-subtle bg-surface-card px-3 py-2">
                                 <div className="min-w-0">
-                                    <p className="truncate text-sm font-medium">{b.exercise.name}</p>
-                                    <p className="text-[10px] text-muted-foreground">
+                                    <p className="truncate text-sm font-semibold text-strong">{b.exercise.name}</p>
+                                    <p className="text-[10px] tabular-nums text-muted">
                                         {done}/{b.sets} series hoy
                                     </p>
                                 </div>
@@ -78,7 +78,7 @@ export function QuickLogSheet({ blocks, coachSlug, baseLoggedPerBlock, totalSets
                                     disabled={pending || done >= b.sets}
                                     whileTap={{ scale: 0.9 }}
                                     transition={springs.elastic}
-                                    className="flex h-10 w-10 items-center justify-center rounded-full border border-[color:var(--theme-primary)]/40 bg-[color:var(--theme-primary)]/10 text-[color:var(--theme-primary)] disabled:opacity-40"
+                                    className="flex h-10 w-10 items-center justify-center rounded-full border-[1.5px] border-sport-500/40 bg-sport-500/10 text-sport-600 disabled:opacity-40"
                                     onClick={() => logOne(b.id, base, extra, b.sets)}
                                     aria-label="Añadir serie"
                                 >

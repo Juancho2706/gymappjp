@@ -23,15 +23,15 @@ export async function DashboardHeader({ userId, coachSlug, initialUseBrandColors
     const greeting = `${greet}, ${firstName}`
 
     return (
-        <header className="sticky left-0 right-0 top-0 z-40 border-b border-border/40 bg-background/95 pt-safe backdrop-blur-xl lg:static lg:z-auto lg:border-none lg:bg-transparent lg:pt-0 lg:backdrop-blur-none">
+        <header className="sticky left-0 right-0 top-0 z-40 border-b border-subtle bg-surface-app/95 pt-safe backdrop-blur-xl lg:static lg:z-auto lg:border-none lg:bg-transparent lg:pt-0 lg:backdrop-blur-none">
             <div className="flex h-14 items-center justify-between gap-3 px-4 lg:px-0">
                 <div className="min-w-0 flex-1">
                     {brandName ? (
-                        <p className="truncate text-[10px] font-medium uppercase tracking-widest text-muted-foreground">{brandName}</p>
+                        <p className="truncate text-[10px] font-bold uppercase tracking-widest text-subtle">{brandName}</p>
                     ) : null}
                     <ClientGreeting greeting={greeting} dateLabel={dateLabel} key={iso} />
                     {welcomeMessage ? (
-                        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{welcomeMessage}</p>
+                        <p className="mt-0.5 truncate text-[11px] text-muted">{welcomeMessage}</p>
                     ) : null}
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-2">

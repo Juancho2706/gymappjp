@@ -13,15 +13,17 @@ export async function CheckInBanner({ userId, coachSlug }: { userId: string; coa
 
     if (!last?.created_at) {
         return (
-            <div className="flex items-center gap-3 rounded-xl border-l-4 border-muted-foreground/30 bg-muted p-3">
-                <AlertCircle className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <div className="flex items-center gap-3 rounded-card border border-subtle bg-surface-sunken p-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-surface-card text-muted">
+                    <AlertCircle className="h-[18px] w-[18px]" />
+                </span>
                 <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold">Registra tu primer check-in</p>
-                    <p className="text-xs text-muted-foreground">Peso y energía en segundos</p>
+                    <p className="text-sm font-bold text-strong">Registra tu primer check-in</p>
+                    <p className="text-xs text-muted">Peso y energía en segundos</p>
                 </div>
                 <Link
                     href={`${base}/check-in`}
-                    className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-xs font-semibold text-[color:var(--theme-primary)]"
+                    className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control px-3 text-xs font-bold text-sport-600"
                 >
                     Ir
                 </Link>
@@ -45,25 +47,25 @@ export async function CheckInBanner({ userId, coachSlug }: { userId: string; coa
               : `Check-in próximo — hace ${daysSince} días`
     const dateText = `Último: ${formatRelativeDate(lastDay, todayIso)}`
 
-    const box =
-        variant === 'overdue'
-            ? 'border-l-red-500 bg-red-50 dark:border-l-red-400 dark:bg-red-950/30'
-            : 'border-l-amber-500 bg-amber-50 dark:border-l-amber-400 dark:bg-amber-950/30'
+    const overdue = variant === 'overdue'
+    const box = overdue
+        ? 'border-[var(--danger-200,var(--danger-100))] bg-[var(--danger-100)]'
+        : 'border-ember-200 bg-ember-100'
+    const accentText = overdue ? 'text-[var(--danger-700,var(--danger-600))]' : 'text-ember-700'
+    const iconChip = overdue ? 'bg-[var(--danger-500)]' : 'bg-ember-500'
 
     return (
-        <CheckInBannerFrame overdue={variant === 'overdue'} className={`flex items-center gap-3 rounded-xl border-l-4 p-3 ${box}`}>
-            {variant === 'overdue' ? (
-                <AlertCircle className="h-5 w-5 shrink-0 text-red-600 dark:text-red-400" />
-            ) : (
-                <CheckCircle2 className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
-            )}
+        <CheckInBannerFrame overdue={overdue} className={`flex items-center gap-3 rounded-card border p-3 ${box}`}>
+            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-white ${iconChip}`}>
+                {overdue ? <AlertCircle className="h-[18px] w-[18px]" /> : <CheckCircle2 className="h-[18px] w-[18px]" />}
+            </span>
             <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">{message}</p>
-                <p className="text-xs text-muted-foreground">{dateText}</p>
+                <p className={`text-sm font-bold ${accentText}`}>{message}</p>
+                <p className={`text-xs ${accentText} opacity-90`}>{dateText}</p>
             </div>
             <Link
                 href={`${base}/check-in`}
-                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-background/80 px-4 text-xs font-semibold shadow-sm"
+                className={`inline-flex min-h-11 shrink-0 items-center justify-center rounded-control bg-surface-card px-4 text-xs font-bold shadow-sm ${accentText}`}
             >
                 Check-in
             </Link>

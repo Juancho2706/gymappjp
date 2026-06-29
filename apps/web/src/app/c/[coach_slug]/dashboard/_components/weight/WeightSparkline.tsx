@@ -32,11 +32,11 @@ export function WeightSparkline({ data }: { data: Point[] }) {
                 <AreaChart width={chartWidth} height={72} data={chartData} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
                     <defs>
                         <linearGradient id="wGradDash" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="var(--theme-primary)" stopOpacity={0.25} />
-                            <stop offset="95%" stopColor="var(--theme-primary)" stopOpacity={0} />
+                            <stop offset="5%" stopColor="var(--sport-500)" stopOpacity={0.25} />
+                            <stop offset="95%" stopColor="var(--sport-500)" stopOpacity={0} />
                         </linearGradient>
                     </defs>
-                    <Area type="monotone" dataKey="w" stroke="var(--theme-primary)" strokeWidth={2} fill="url(#wGradDash)" dot={false} isAnimationActive={!reduce} />
+                    <Area type="monotone" dataKey="w" stroke="var(--sport-500)" strokeWidth={2} fill="url(#wGradDash)" dot={false} isAnimationActive={!reduce} />
                 </AreaChart>
             )}
         </div>

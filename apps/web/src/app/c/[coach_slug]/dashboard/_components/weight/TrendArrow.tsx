@@ -15,19 +15,23 @@ export function TrendArrow({ trend, deltaKg }: { trend: Trend; deltaKg: number }
               : { y: 0 }
 
     const Icon = trend === 'up' ? ArrowUp : trend === 'down' ? ArrowDown : Minus
-    const color =
-        trend === 'up' ? 'text-red-500' : trend === 'down' ? 'text-emerald-500' : 'text-muted-foreground'
+    const pill =
+        trend === 'up'
+            ? 'bg-[var(--danger-100)] text-[var(--danger-700,var(--danger-600))]'
+            : trend === 'down'
+              ? 'bg-[var(--success-100)] text-[var(--success-700)]'
+              : 'text-muted'
 
     return (
-        <div className={`flex items-center gap-1 ${color}`}>
+        <div className={`flex shrink-0 items-center gap-1 whitespace-nowrap rounded-pill px-2.5 py-1 text-[13px] font-bold ${pill}`}>
             <motion.span
                 animate={reduced ? undefined : bounce}
                 transition={reduced ? undefined : { duration: 1.5, repeat: Infinity, delay: 0.5 }}
             >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-3.5 w-3.5" />
             </motion.span>
             {trend !== 'stable' ? (
-                <span className="text-xs tabular-nums">
+                <span className="tabular-nums">
                     {deltaKg > 0 ? '+' : ''}
                     {deltaKg.toFixed(1)} kg
                 </span>

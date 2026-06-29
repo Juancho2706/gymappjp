@@ -13,21 +13,18 @@ export function WorkoutLogItems({
     items: Array<{ dayKey: string; dateLabel: string; sets: number; subtitle: string }>
 }) {
     return (
-        <RevealStagger className="divide-y divide-border/30">
+        <RevealStagger className="divide-y divide-[var(--border-subtle)]">
             {items.map((item) => (
                 <RevealItem key={item.dayKey} variant="fadeUp">
                     <div className="flex items-center gap-3 px-4 py-3">
-                        <div
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-                            style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
-                        >
-                            <Dumbbell className="h-4 w-4" style={{ color: 'var(--theme-primary)' }} />
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-surface-sunken text-sport-600">
+                            <Dumbbell className="h-[18px] w-[18px]" />
                         </div>
                         <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-foreground">{item.dateLabel}</p>
-                            <p className="text-[10px] text-muted-foreground">{item.subtitle}</p>
+                            <p className="text-sm font-bold text-strong">{item.dateLabel}</p>
+                            <p className="text-xs text-muted">{item.subtitle}</p>
                         </div>
-                        <span className="shrink-0 whitespace-nowrap text-xs font-bold tabular-nums text-muted-foreground">
+                        <span className="shrink-0 whitespace-nowrap text-xs font-bold tabular-nums text-subtle">
                             {item.sets} {item.sets === 1 ? 'serie' : 'series'}
                         </span>
                     </div>

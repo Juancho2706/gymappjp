@@ -38,11 +38,11 @@ export function PRBadge({ exerciseName, weightKg, achievedAt, index }: PRBadgePr
             initial={{ scale: 0, rotate: -10 }}
             animate={{ scale: 1, rotate: 0 }}
             transition={{ ...springs.elastic, delay: index * 0.08 }}
-            className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-yellow-400/40 bg-gradient-to-r from-yellow-400/20 to-amber-400/20 px-3 py-1.5 dark:border-yellow-800/50 dark:from-yellow-400/10 dark:to-amber-400/10"
+            className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-pill border border-subtle bg-surface-card px-3 py-1.5 shadow-sm"
         >
-            <Trophy className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-            <span className="text-xs font-bold text-foreground">{exerciseName}</span>
-            <span className="text-[10px] font-black tabular-nums text-amber-700 dark:text-amber-300">{weightKg} kg</span>
+            <Trophy className="h-3.5 w-3.5 text-[var(--warning-500)]" />
+            <span className="text-xs font-bold text-strong">{exerciseName}</span>
+            <span className="font-display text-[11px] font-black tabular-nums text-sport-500">{weightKg} kg</span>
         </motion.div>
     )
 }

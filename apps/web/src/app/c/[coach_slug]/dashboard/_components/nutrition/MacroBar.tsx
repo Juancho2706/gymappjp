@@ -22,17 +22,17 @@ export function MacroBar({ label, consumed, target, unit, colorClass, delayIndex
 
     return (
         <div ref={ref} className="space-y-1">
-            <div className="flex justify-between text-[10px] font-medium text-muted-foreground">
+            <div className="flex justify-between text-[11px] font-semibold text-muted">
                 <span>{label}</span>
-                <span className="tabular-nums">
+                <span className="tabular-nums text-body">
                     {Math.round(consumed)}/{Math.round(target)}
                     {unit}
-                    {over ? <AlertTriangle className="ml-1 inline h-3 w-3 text-red-500" /> : null}
+                    {over ? <AlertTriangle className="ml-1 inline h-3 w-3 text-[var(--danger-500)]" /> : null}
                 </span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-2 overflow-hidden rounded-pill bg-[var(--track)]">
                 <motion.div
-                    className={`h-full rounded-full ${over ? 'bg-red-500' : colorClass}`}
+                    className={`h-full rounded-pill ${over ? 'bg-[var(--danger-500)]' : colorClass}`}
                     initial={{ width: '0%' }}
                     animate={inView ? { width: `${pct}%` } : { width: '0%' }}
                     transition={{ ...springs.lazy, delay: delayIndex * 0.08 }}

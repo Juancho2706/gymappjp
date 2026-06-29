@@ -2,7 +2,8 @@
 
 import { motion } from 'framer-motion'
 import Link from 'next/link'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Moon } from 'lucide-react'
+import { Card } from '@/components/ui/card'
 import { useBasePath } from '@/components/client/BasePathProvider'
 
 interface RestDayCardProps {
@@ -16,29 +17,29 @@ interface RestDayCardProps {
 export function RestDayCard({ coachSlug, nextWorkoutTitle, nextWorkoutDayLabel, showNutritionLink = true }: RestDayCardProps) {
     const base = useBasePath(`/c/${coachSlug}`)
     return (
-        <GlassCard className="relative overflow-hidden bg-gradient-to-br from-slate-50 to-purple-50/30 p-6 text-center dark:from-gray-900 dark:to-slate-900">
+        <Card variant="sunken" padding="lg" className="items-center gap-0 text-center">
             <motion.div
-                className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted text-3xl"
+                className="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-aqua-100 text-aqua-700"
                 animate={{ y: [0, -8, 0] }}
                 transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
                 aria-hidden
             >
-                🌙
+                <Moon className="h-7 w-7" />
             </motion.div>
-            <h2 className="font-display text-xl font-bold text-foreground">Día de descanso</h2>
+            <h2 className="font-display text-xl font-black tracking-[-0.02em] text-strong">Día de descanso</h2>
             {nextWorkoutTitle ? (
-                <p className="mt-2 text-sm text-muted-foreground">
-                    Próximo: <span className="font-medium text-foreground">{nextWorkoutTitle}</span>
+                <p className="mt-1.5 max-w-[280px] text-[13.5px] leading-relaxed text-muted">
+                    Próximo: <span className="font-semibold text-body">{nextWorkoutTitle}</span>
                     {nextWorkoutDayLabel ? ` · ${nextWorkoutDayLabel}` : null}
                 </p>
             ) : (
-                <p className="mt-2 text-sm text-muted-foreground">Recupera bien para la próxima sesión.</p>
+                <p className="mt-1.5 max-w-[280px] text-[13.5px] leading-relaxed text-muted">Recupera bien para la próxima sesión.</p>
             )}
             {showNutritionLink && (
-                <Link href={`${base}/nutrition`} className="mt-4 inline-block text-xs font-semibold text-[color:var(--theme-primary)]">
+                <Link href={`${base}/nutrition`} className="mt-4 inline-block text-[13px] font-bold text-sport-600">
                     Ver nutrición →
                 </Link>
             )}
-        </GlassCard>
+        </Card>
     )
 }

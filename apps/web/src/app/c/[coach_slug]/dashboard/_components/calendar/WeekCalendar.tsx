@@ -10,6 +10,7 @@ import {
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
 import { CalendarDaysRow, type CalendarDayProps } from './CalendarDay'
+import { Card } from '@/components/ui/card'
 
 export async function WeekCalendar({ userId }: { userId: string }) {
     const [program, allPlans, logs] = await Promise.all([
@@ -76,8 +77,8 @@ export async function WeekCalendar({ userId }: { userId: string }) {
     })
 
     return (
-        <div className="rounded-2xl border border-border bg-card px-3 py-3 shadow-sm">
+        <Card padding="sm">
             <CalendarDaysRow days={days} />
-        </div>
+        </Card>
     )
 }

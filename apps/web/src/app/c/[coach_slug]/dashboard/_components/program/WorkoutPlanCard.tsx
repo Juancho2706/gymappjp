@@ -34,33 +34,27 @@ export function WorkoutPlanCards({
                             <motion.div
                                 whileHover={{ x: 4 }}
                                 className={cn(
-                                    'flex items-center gap-4 rounded-xl border p-3 transition-colors',
+                                    'flex items-center gap-4 rounded-control border p-3 transition-colors',
                                     isToday
-                                        ? 'border-[color:var(--theme-primary)]/30 bg-[color:var(--theme-primary)]/10'
-                                        : 'border-border bg-card hover:bg-accent/50'
+                                        ? 'border-sport-500/30 bg-sport-500/10'
+                                        : 'border-subtle bg-surface-card hover:bg-surface-sunken'
                                 )}
                             >
                                 <div
                                     className={cn(
-                                        'flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl border text-xs font-bold',
-                                        isToday ? 'text-white' : 'text-[color:var(--theme-primary)]'
-                                    )}
-                                    style={
+                                        'flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-control border-[1.5px] font-display text-xs font-bold',
                                         isToday
-                                            ? { backgroundColor: 'var(--theme-primary)', borderColor: 'var(--theme-primary)' }
-                                            : {
-                                                  backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)',
-                                                  borderColor: 'color-mix(in srgb, var(--theme-primary) 25%, transparent)',
-                                              }
-                                    }
+                                            ? 'border-transparent bg-[var(--cta-fill)] text-on-sport'
+                                            : 'border-sport-500/25 bg-sport-500/10 text-sport-600'
+                                    )}
                                 >
                                     <span>{DAYS[dow - 1]}</span>
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-bold">{p.title}</p>
-                                    <p className="text-[10px] text-muted-foreground">Día {dow}</p>
+                                    <p className="truncate text-sm font-bold text-strong">{p.title}</p>
+                                    <p className="text-[10px] text-muted">Día {dow}</p>
                                 </div>
-                                {done ? <Check className="h-5 w-5 shrink-0 text-emerald-500" /> : <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />}
+                                {done ? <Check className="h-5 w-5 shrink-0 text-[var(--success-500)]" /> : <ChevronRight className="h-5 w-5 shrink-0 text-[var(--ink-300)]" />}
                             </motion.div>
                         </Link>
                     </motion.div>

@@ -22,10 +22,10 @@ export function ProgramPhaseBar({
 
     if (!phases || !Array.isArray(phases) || phases.length === 0) {
         return (
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-2 overflow-hidden rounded-pill bg-[var(--track)]">
                 <motion.div
-                    className="h-full rounded-full"
-                    style={{ backgroundColor: 'var(--theme-primary)' }}
+                    className="h-full rounded-pill"
+                    style={{ backgroundColor: 'var(--sport-500)' }}
                     initial={{ width: '0%' }}
                     animate={{ width: `${pct}%` }}
                     transition={springs.lazy}
@@ -35,22 +35,22 @@ export function ProgramPhaseBar({
     }
 
     return (
-        <div className="relative h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="relative h-2 w-full overflow-hidden rounded-pill bg-[var(--track)]">
             <div className="absolute inset-0 flex">
                 {phases.map((p, i) => (
                     <div
                         key={`${p.name}-${i}`}
-                        className="h-full border-r border-background/50 last:border-0"
+                        className="h-full border-r border-[var(--surface-card)]/50 last:border-0"
                         style={{
                             width: `${(p.weeks / totalWeeks) * 100}%`,
-                            backgroundColor: p.color || 'color-mix(in srgb, var(--theme-primary) 40%, transparent)',
+                            backgroundColor: p.color || 'color-mix(in srgb, var(--sport-500) 40%, transparent)',
                         }}
                     />
                 ))}
             </div>
             <motion.div
-                className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background shadow-md"
-                style={{ backgroundColor: 'var(--theme-primary)', left: `${pct}%` }}
+                className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--surface-card)] shadow-md"
+                style={{ backgroundColor: 'var(--sport-500)', left: `${pct}%` }}
                 initial={{ left: '0%' }}
                 animate={{ left: `${pct}%` }}
                 transition={{ ...springs.smooth, delay: 0.2 }}

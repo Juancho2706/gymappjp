@@ -14,15 +14,15 @@ export function ClientGreeting({ greeting, dateLabel }: ClientGreetingProps) {
     if (reduce) {
         return (
             <div className="min-w-0">
-                <p className="truncate text-[10px] font-medium uppercase tracking-widest text-muted-foreground">{dateLabel}</p>
-                <h1 className="truncate font-display text-xl font-bold text-foreground">{greeting}</h1>
+                <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-muted">{dateLabel}</p>
+                <h1 className="truncate font-display text-xl font-black tracking-[-0.03em] text-strong">{greeting}</h1>
             </div>
         )
     }
     return (
         <div className="min-w-0">
             <motion.p
-                className="truncate text-[10px] font-medium uppercase tracking-widest text-muted-foreground"
+                className="truncate text-[10px] font-semibold uppercase tracking-widest text-muted"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={springs.snappy}
@@ -30,7 +30,7 @@ export function ClientGreeting({ greeting, dateLabel }: ClientGreetingProps) {
                 {dateLabel}
             </motion.p>
             <motion.h1
-                className="truncate font-display text-xl font-bold text-foreground"
+                className="truncate font-display text-xl font-black tracking-[-0.03em] text-strong"
                 variants={staggerContainer(0.04)}
                 initial="hidden"
                 animate="show"
