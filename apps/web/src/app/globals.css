@@ -127,6 +127,25 @@
 }
 
 /* ============================================================
+   DS semantic utility shorthands
+   El diseño usa nombres bare (text-strong, text-muted, border-subtle...).
+   @theme con --color-text-strong genera `text-text-strong`, no `text-strong`,
+   así que aliaseamos los nombres bare del diseño a las CSS vars semánticas
+   (que flipean en .dark). Mantiene el código de los componentes 1:1 con el kit.
+   ============================================================ */
+@utility text-strong { color: var(--text-strong); }
+@utility text-body { color: var(--text-body); }
+@utility text-muted { color: var(--text-muted); }
+@utility text-subtle { color: var(--text-subtle); }
+@utility text-on-sport { color: var(--text-on-sport); }
+@utility text-on-dark { color: var(--text-on-dark); }
+@utility text-on-dark-muted { color: var(--text-on-dark-muted); }
+@utility text-link { color: var(--text-link); }
+@utility border-subtle { border-color: var(--border-subtle); }
+@utility border-default { border-color: var(--border-default); }
+@utility border-strong { border-color: var(--border-strong); }
+
+/* ============================================================
    LIGHT MODE (Default / Base)
    ============================================================ */
 :root {

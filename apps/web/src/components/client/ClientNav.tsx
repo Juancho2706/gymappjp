@@ -1,27 +1,29 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
     Home,
     Apple,
-    Settings,
-    ChevronLeft,
-    ChevronRight,
     LogOut,
     CheckCircle,
     Dumbbell,
     PersonStanding,
     Gauge,
+    History,
+    Palette,
+    ChevronRight,
+    MoreHorizontal,
+    X,
     PanelLeftClose,
-    PanelLeft
+    PanelLeft,
+    type LucideIcon,
 } from 'lucide-react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { PwaNavButton } from './PwaNavButton'
 import { toggleClientBrandColors } from '@/app/c/[coach_slug]/_actions/client-root.actions'
@@ -50,6 +52,8 @@ interface Props {
     showNutrition?: boolean
 }
 
+type NavItem = { href: string; label: string; short: string; icon: LucideIcon }
+
 export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initialUseBrandColors = true, showMovement = false, showBodyComposition = false, showNutrition = true }: Props) {
     const base = basePath ?? `/c/${coachSlug}`
     const pathname = usePathname()
@@ -59,70 +63,56 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
     const [isNavigating, setIsNavigating] = useState<string | null>(null)
     const [useBrandColors, setUseBrandColors] = useState(initialUseBrandColors)
     const [isTogglingColors, setIsTogglingColors] = useState(false)
-    const navRef = useRef<HTMLElement>(null)
-    const [canScrollLeft, setCanScrollLeft] = useState(false)
-    const [canScrollRight, setCanScrollRight] = useState(false)
+    const [moreOpen, setMoreOpen] = useState(false)
     const reduce = useReducedMotion()
-
-    const updateScrollIndicators = useCallback(() => {
-        const el = navRef.current
-        if (!el) return
-        setCanScrollLeft(el.scrollLeft > 4)
-        setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
-    }, [])
-
-    useEffect(() => {
-        const el = navRef.current
-        if (!el) return
-        updateScrollIndicators()
-        el.addEventListener('scroll', updateScrollIndicators, { passive: true })
-        const ro = new ResizeObserver(updateScrollIndicators)
-        ro.observe(el)
-        return () => {
-            el.removeEventListener('scroll', updateScrollIndicators)
-            ro.disconnect()
-        }
-    }, [updateScrollIndicators])
 
     // Reset navigating state when pathname changes
     useEffect(() => {
         setIsNavigating(null)
     }, [pathname])
 
-    const navItems = [
-        {
-            href: `${base}/dashboard`,
-            label: 'Inicio',
-            icon: Home,
-        },
-        ...(showNutrition ? [{
-            href: `${base}/nutrition`,
-            label: 'Plan Alimenticio',
-            icon: Apple,
-        }] : []),
-        {
-            href: `${base}/exercises`,
-            label: 'Aprender',
-            icon: Dumbbell,
-        },
-        {
-            href: `${base}/check-in`,
-            label: 'Check-in',
-            icon: CheckCircle,
-        },
-        ...(showMovement ? [{
-            href: `${base}/movimiento`,
-            label: 'Movimiento',
-            icon: PersonStanding,
-        }] : []),
-        // Guard de nav: base 4 + movimiento + bodycomp = 6 (tope). El bottom bar mobile ya tiene
-        // scroll horizontal con afford; NO agregar un 7º item sin un menu "mas".
-        ...(showBodyComposition ? [{
-            href: `${base}/bodycomp`,
-            label: 'Composición',
-            icon: Gauge,
-        }] : []),
+    // Cerrar el panel "Más" al navegar (cambio de ruta).
+    useEffect(() => {
+        setMoreOpen(false)
+    }, [pathname])
+
+    // Estilo white-label del estado activo (preserva `var(--theme-primary)`).
+    const activeColorStyle = { color: 'var(--theme-primary)' }
+    const activeBgStyle = {
+        backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)',
+        borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
+    }
+
+    // Base 4 (zona del pulgar en mobile): Inicio · Plan (si showNutrition) · Aprender · Check-in.
+    const baseItems: NavItem[] = [
+        { href: `${base}/dashboard`, label: 'Inicio', short: 'Inicio', icon: Home },
+        ...(showNutrition ? [{ href: `${base}/nutrition`, label: 'Plan Alimenticio', short: 'Plan', icon: Apple }] : []),
+        { href: `${base}/exercises`, label: 'Aprender', short: 'Aprender', icon: Dumbbell },
+        { href: `${base}/check-in`, label: 'Check-in', short: 'Check-in', icon: CheckCircle },
     ]
+
+    // Módulos de pago (entitled server-side). Viven en el grupo "Módulos" del sidebar desktop y en
+    // el panel "Más" del mobile.
+    const moduleItems: NavItem[] = [
+        ...(showMovement ? [{ href: `${base}/movimiento`, label: 'Movimiento', short: 'Movimiento', icon: PersonStanding }] : []),
+        ...(showBodyComposition ? [{ href: `${base}/bodycomp`, label: 'Composición', short: 'Composición', icon: Gauge }] : []),
+    ]
+
+    // Overflow del mobile ("Más"): Historial + módulos entitled. (Las acciones de cuenta — tema,
+    // colores, instalar, cerrar sesión — se renderizan aparte dentro del sheet.)
+    const overflowItems: NavItem[] = [
+        { href: `${base}/workout-history`, label: 'Historial', short: 'Historial', icon: History },
+        ...moduleItems,
+    ]
+    const isMoreActive = overflowItems.some((i) => pathname === i.href || pathname.startsWith(i.href + '/'))
+
+    // Estado activo del nav primario — preserva los special-cases (workout-history => Inicio activo,
+    // ejecución `/workout`, y el pulso optimista `isNavigating`).
+    const isActiveHref = (href: string) =>
+        pathname === href ||
+        pathname.startsWith(href + '/workout') ||
+        (href === `${base}/dashboard` && pathname === `${base}/workout-history`) ||
+        isNavigating === href
 
     async function handleSignOut() {
         await supabase.auth.signOut()
@@ -134,7 +124,7 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
         setIsTogglingColors(true)
         const newValue = !useBrandColors
         setUseBrandColors(newValue)
-        
+
         try {
             const res = await toggleClientBrandColors(newValue, coachSlug)
             if (res.error) {
@@ -159,42 +149,108 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
     // Solo ejecución de plan (/workout/[planId]); no ocultar rutas tipo /workout-history
     const isWorkout = pathname.includes('/workout/')
 
+    // DESKTOP — link vertical del sidebar (restyle DS, white-label en activo).
+    const renderDesktopLink = (item: NavItem) => {
+        const isActive = isActiveHref(item.href)
+        const Icon = item.icon
+        return (
+            <Link
+                key={item.href}
+                href={item.href}
+                prefetch={false}
+                onClick={() => {
+                    if (pathname !== item.href) setIsNavigating(item.href)
+                }}
+                title={isCollapsed ? item.label : undefined}
+                className={cn(
+                    'group flex w-full flex-none items-center gap-3 rounded-control border border-transparent px-3 py-2.5 text-sm font-semibold transition-all duration-300',
+                    isCollapsed ? 'justify-center px-0' : 'justify-start',
+                    isActive ? 'text-strong' : 'text-muted hover:text-strong hover:bg-surface-sunken',
+                    isNavigating === item.href && 'animate-pulse'
+                )}
+                style={isActive ? activeBgStyle : undefined}
+            >
+                <Icon
+                    className={cn(
+                        'h-5 w-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110',
+                        isActive ? '' : 'text-muted group-hover:text-strong'
+                    )}
+                    style={isActive ? activeColorStyle : undefined}
+                />
+                <span className={cn('truncate', isCollapsed && 'hidden')} style={isActive ? activeColorStyle : undefined}>
+                    {item.label}
+                </span>
+                {isActive && !isCollapsed && (
+                    <ChevronRight className="ml-auto h-3 w-3 opacity-60" style={activeColorStyle} />
+                )}
+            </Link>
+        )
+    }
+
+    // MOBILE — tile de la barra inferior (44px+ touch target, zona del pulgar).
+    const renderBaseTile = (item: NavItem) => {
+        const isActive = isActiveHref(item.href)
+        const Icon = item.icon
+        return (
+            <Link
+                key={item.href}
+                href={item.href}
+                prefetch={false}
+                aria-label={item.label}
+                title={item.label}
+                onClick={() => {
+                    if (pathname !== item.href) setIsNavigating(item.href)
+                }}
+                className={cn(
+                    'relative flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1 rounded-control px-1 py-1.5 transition-colors',
+                    isActive ? '' : 'hover:bg-surface-sunken',
+                    isNavigating === item.href && 'animate-pulse'
+                )}
+            >
+                {isActive && (
+                    <span className="absolute -top-0.5 left-1/2 h-1 w-8 -translate-x-1/2 rounded-pill" style={{ backgroundColor: 'var(--theme-primary)' }} />
+                )}
+                <Icon
+                    className={cn('h-[22px] w-[22px] flex-shrink-0 transition-transform duration-200', isActive ? '' : 'text-muted')}
+                    style={isActive ? activeColorStyle : undefined}
+                />
+                <span
+                    className={cn('max-w-full truncate text-[10px] font-semibold leading-tight', isActive ? '' : 'text-muted')}
+                    style={isActive ? activeColorStyle : undefined}
+                >
+                    {item.short}
+                </span>
+            </Link>
+        )
+    }
+
     return (
         <>
-            {/* Navigation Sidebar (Desktop) / Bottom Nav (Mobile) */}
-            <aside className={cn(
-                "client-nav-desktop fixed bottom-0 left-0 right-0 z-50 md:sticky md:top-0 md:h-dvh bg-background/80 backdrop-blur-xl md:bg-card border-t border-border/10 md:border-t-0 md:border-r flex flex-col transition-all duration-300 pl-safe pr-safe pb-safe md:pl-0 md:pr-0 md:pb-0",
-                isCollapsed ? "md:w-20" : "md:w-64",
-                isWorkout && "hidden md:flex"
-            )}>
-                
-                {/* Logo area (Desktop only) */}
-                <div className={cn("hidden md:flex py-6 border-b border-border/10 items-center", isCollapsed ? "px-0 justify-center flex-col gap-4" : "px-6 justify-between")}>
-                    <div className={cn("flex min-w-0 items-center gap-3", isCollapsed && "justify-center")}>
-                        <div
-                            className={cn(
-                                'relative h-10 flex-shrink-0',
-                                isCollapsed ? 'w-10' : 'w-[6.75rem]'
-                            )}
-                        >
+            {/* ============================ DESKTOP SIDEBAR ============================ */}
+            {/* El mobile usa el bottom bar "4 + Más" más abajo. */}
+            <aside
+                className={cn(
+                    'client-nav-desktop hidden md:sticky md:top-0 md:flex md:h-dvh md:flex-col bg-surface-card border-r border-subtle transition-all duration-300',
+                    isCollapsed ? 'md:w-20' : 'md:w-64'
+                )}
+            >
+                {/* Logo area */}
+                <div className={cn('flex items-center border-b border-subtle py-6', isCollapsed ? 'flex-col justify-center gap-4 px-0' : 'justify-between px-6')}>
+                    <div className={cn('flex min-w-0 items-center gap-3', isCollapsed && 'justify-center')}>
+                        <div className={cn('relative h-10 flex-shrink-0', isCollapsed ? 'w-10' : 'w-[6.75rem]')}>
                             <Image
                                 src={coachLogoUrl === BRAND_APP_ICON ? BRAND_APP_ICON : coachLogoUrl}
                                 alt={`${coachBrand} logo`}
                                 fill
                                 sizes={isCollapsed ? '40px' : '108px'}
-                                className={cn(
-                                    'object-contain',
-                                    isCollapsed && 'p-1'
-                                )}
+                                className={cn('object-contain', isCollapsed && 'p-1')}
                                 priority
                             />
                         </div>
                         {!isCollapsed && (
                             <div className="min-w-0 overflow-hidden">
-                                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-widest">
-                                    Mi Coach
-                                </p>
-                                <p className="text-sm font-bold text-foreground truncate font-display" style={{ color: 'var(--theme-primary)' }}>
+                                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted">Mi Coach</p>
+                                <p className="truncate font-display text-sm font-bold text-strong" style={{ color: 'var(--theme-primary)' }}>
                                     {coachBrand}
                                 </p>
                             </div>
@@ -202,121 +258,183 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
                     </div>
                     <button
                         onClick={() => setIsCollapsed(!isCollapsed)}
-                        aria-label={isCollapsed ? "Expandir menú" : "Contraer menú"}
-                        className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-lg hover:bg-muted/50"
+                        aria-label={isCollapsed ? 'Expandir menú' : 'Contraer menú'}
+                        className="rounded-control p-1.5 text-muted transition-colors hover:bg-surface-sunken hover:text-strong"
                     >
-                        {isCollapsed ? <PanelLeft className="w-5 h-5" /> : <PanelLeftClose className="w-5 h-5" />}
+                        {isCollapsed ? <PanelLeft className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
                     </button>
                 </div>
 
-                {/* Navigation Links */}
-                <div className="relative flex-1 flex md:flex-col md:flex-none overflow-hidden md:overflow-visible">
-                {canScrollLeft && (
-                    <div className="md:hidden pointer-events-none absolute inset-y-0 left-0 z-10 flex items-center bg-gradient-to-r from-background/90 to-transparent w-10">
-                        <motion.div
-                            animate={reduce ? undefined : { x: [0, -4, 0] }}
-                            transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
-                            className="ml-0.5"
-                        >
-                            <ChevronLeft className="w-4 h-4 text-foreground/50" />
-                        </motion.div>
-                    </div>
-                )}
-                {canScrollRight && (
-                    <div className="md:hidden pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center bg-gradient-to-l from-background/90 to-transparent w-10">
-                        <motion.div
-                            animate={reduce ? undefined : { x: [0, 4, 0] }}
-                            transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
-                            className="mr-0.5 ml-auto"
-                        >
-                            <ChevronRight className="w-4 h-4 text-foreground/50" />
-                        </motion.div>
-                    </div>
-                )}
-                <nav ref={navRef} className="flex-1 flex flex-row justify-start md:flex-col md:justify-start px-2 pt-2 md:px-3 md:py-4 gap-1 md:space-y-1 overflow-x-auto overflow-y-auto custom-scrollbar">
-                    {navItems.map((item) => {
-                        const isActive =
-                            pathname === item.href ||
-                            pathname.startsWith(item.href + '/workout') ||
-                            (item.href === `${base}/dashboard` && pathname === `${base}/workout-history`) ||
-                            isNavigating === item.href
-                        const Icon = item.icon
-                        return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                prefetch={false}
-                                onClick={() => {
-                                    if (pathname !== item.href) setIsNavigating(item.href)
-                                }}
-                                title={isCollapsed ? item.label : undefined}
-                                className={cn(
-                                    'relative flex md:flex-row flex-col items-center gap-1 md:gap-3 px-2 py-2 md:py-3 rounded-2xl text-[10px] md:text-sm font-medium transition-all duration-300 group flex-none shrink-0 basis-[4.5rem] md:basis-auto md:flex-none',
-                                    isCollapsed ? 'md:justify-center md:px-0' : 'md:justify-start md:px-3',
-                                    isActive
-                                        ? 'text-foreground md:bg-muted/50 md:border md:border-border/50'
-                                        : 'text-muted-foreground hover:text-foreground md:hover:bg-muted/30',
-                                    isNavigating === item.href && "animate-pulse"
-                                )}
-                            >
-                                {isActive && (
-                                    <span className="md:hidden absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full" style={{ backgroundColor: 'var(--theme-primary)' }} />
-                                )}
-                                <Icon
-                                    className={cn(
-                                        'w-6 h-6 md:w-[18px] md:h-[18px] flex-shrink-0 transition-transform duration-300',
-                                        isActive ? 'scale-110' : 'group-hover:scale-110'
-                                    )}
-                                    style={isActive ? { color: 'var(--theme-primary)' } : {}}
-                                />
-                                <span className={cn(
-                                    "truncate transition-colors duration-300",
-                                    isActive ? "font-bold" : "font-medium",
-                                    isCollapsed && "md:hidden"
-                                )}
-                                style={isActive ? { color: 'var(--theme-primary)' } : {}}
-                                >
-                                    {item.label}
-                                </span>
-                                {isActive && !isCollapsed && (
-                                    <ChevronRight className="hidden md:block w-3 h-3 ml-auto opacity-60" style={{ color: 'var(--theme-primary)' }} />
-                                )}
-                            </Link>
-                        )
-                    })}
-                    
-                    {/* PWA Install Button */}
-                    <PwaNavButton isCollapsed={isCollapsed} />
-
-                    <button
-                        onClick={handleSignOut}
-                        className={cn(
-                            'md:hidden relative flex flex-col items-center justify-center gap-1 px-2 py-3 rounded-2xl text-[10px] font-medium transition-all duration-300 flex-none shrink-0 basis-[4.5rem] text-muted-foreground hover:text-red-500'
+                {/* Navigation Links (Desktop) */}
+                <div className="min-h-0 flex-1 overflow-visible">
+                    <nav className="flex min-h-0 flex-1 flex-col justify-start gap-1 overflow-y-auto px-3 py-4 custom-scrollbar">
+                        {baseItems.map(renderDesktopLink)}
+                        {moduleItems.length > 0 && (
+                            <>
+                                <div className={cn('flex shrink-0 select-none flex-col gap-1 pt-2', isCollapsed ? 'items-center' : 'px-3')} aria-hidden="true">
+                                    <div className="h-px w-full bg-border-subtle" />
+                                    {!isCollapsed && <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Módulos</p>}
+                                </div>
+                                {moduleItems.map(renderDesktopLink)}
+                            </>
                         )}
-                    >
-                        <LogOut className="w-6 h-6 flex-shrink-0 transition-transform duration-300" />
-                        <span className="truncate transition-colors duration-300 font-medium">
-                            Salir
-                        </span>
-                    </button>
-                </nav>
+                    </nav>
                 </div>
 
                 {/* Bottom area (Desktop only) */}
-                    <div className={cn("hidden md:flex flex-col border-t border-border/10", isCollapsed ? "p-3 items-center" : "px-3 py-4 space-y-2")}>
-                        <button
+                <div className={cn('flex flex-col border-t border-subtle', isCollapsed ? 'items-center gap-3 p-3' : 'gap-1 px-3 py-4')}>
+                    <PwaNavButton isCollapsed={isCollapsed} />
+                    {!isCollapsed ? (
+                        <>
+                            <div className="flex items-center justify-between rounded-control px-3 py-2">
+                                <span className="text-sm font-medium text-body">Tema</span>
+                                <ThemeToggle />
+                            </div>
+                            <div className="flex items-center justify-between gap-3 rounded-control px-3 py-2">
+                                <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-body">
+                                    <Palette className="h-4 w-4 flex-shrink-0 text-muted" />
+                                    <span className="truncate">Colores del coach</span>
+                                </span>
+                                <Switch checked={useBrandColors} onCheckedChange={handleToggleBrandColors} disabled={isTogglingColors} aria-label="Colores del coach" />
+                            </div>
+                        </>
+                    ) : (
+                        <ThemeToggle />
+                    )}
+                    <button
                         onClick={handleSignOut}
-                        title={isCollapsed ? "Cerrar sesión" : undefined}
+                        title={isCollapsed ? 'Cerrar sesión' : undefined}
                         className={cn(
-                            "flex items-center rounded-xl text-sm font-medium text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-all duration-200 group",
-                            isCollapsed ? "justify-center w-10 h-10 p-0" : "w-full px-3 py-2.5 gap-3"
+                            'group flex items-center rounded-control text-sm font-medium text-muted transition-all duration-200 hover:bg-destructive/10 hover:text-destructive',
+                            isCollapsed ? 'h-10 w-10 justify-center p-0' : 'w-full gap-3 px-3 py-2.5'
                         )}
                     >
-                        <LogOut className="w-4 h-4 flex-shrink-0 group-hover:text-red-500" />
+                        <LogOut className="h-4 w-4 flex-shrink-0 group-hover:text-destructive" />
                         {!isCollapsed && <span>Cerrar sesión</span>}
                     </button>
                 </div>
             </aside>
+
+            {/* ============================ MOBILE "MÁS" SHEET ============================ */}
+            <AnimatePresence>
+                {moreOpen && !isWorkout && (
+                    <>
+                        <motion.div
+                            key="client-more-backdrop"
+                            className="md:hidden fixed inset-0 z-[58] bg-black/40"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: reduce ? 0 : 0.18 }}
+                            onClick={() => setMoreOpen(false)}
+                            aria-hidden="true"
+                        />
+                        <motion.div
+                            key="client-more-panel"
+                            role="dialog"
+                            aria-label="Más opciones de navegación"
+                            className="md:hidden fixed inset-x-0 bottom-0 z-[60] flex flex-col gap-2 rounded-t-card border-t border-subtle bg-surface-card px-3 pt-3 pb-safe shadow-md"
+                            initial={reduce ? { opacity: 0 } : { y: '100%' }}
+                            animate={reduce ? { opacity: 1 } : { y: 0 }}
+                            exit={reduce ? { opacity: 0 } : { y: '100%' }}
+                            transition={{ type: reduce ? 'tween' : 'spring', duration: reduce ? 0.18 : undefined, damping: 26, stiffness: 280 }}
+                        >
+                            <div className="mb-1 flex items-center justify-between px-2">
+                                <p className="text-[11px] font-bold uppercase tracking-widest text-muted">Más</p>
+                                <button
+                                    type="button"
+                                    onClick={() => setMoreOpen(false)}
+                                    aria-label="Cerrar"
+                                    className="flex h-9 w-9 items-center justify-center rounded-control text-muted hover:bg-surface-sunken hover:text-strong"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+
+                            {/* Navegación overflow: Historial + módulos entitled */}
+                            <div className="grid grid-cols-2 gap-1.5">
+                                {overflowItems.map((item) => {
+                                    const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+                                    const Icon = item.icon
+                                    return (
+                                        <Link
+                                            key={item.href}
+                                            href={item.href}
+                                            prefetch={false}
+                                            title={item.label}
+                                            aria-label={item.label}
+                                            onClick={() => setMoreOpen(false)}
+                                            className={cn(
+                                                'flex min-h-[44px] items-center gap-3 rounded-control border border-transparent px-3 py-2.5 text-sm font-semibold transition-colors',
+                                                isActive ? 'text-strong' : 'text-muted hover:bg-surface-sunken hover:text-strong'
+                                            )}
+                                            style={isActive ? activeBgStyle : undefined}
+                                        >
+                                            <Icon className={cn('h-5 w-5 flex-shrink-0', isActive ? '' : 'text-muted')} style={isActive ? activeColorStyle : undefined} />
+                                            <span className="truncate">{item.label}</span>
+                                        </Link>
+                                    )
+                                })}
+                            </div>
+
+                            {/* Acciones de cuenta (en sitio — no son rutas) */}
+                            <div className="flex flex-col gap-1 border-t border-subtle pt-2">
+                                <PwaNavButton />
+                                <div className="flex min-h-[44px] items-center justify-between rounded-control px-3 py-2">
+                                    <span className="text-sm font-medium text-body">Tema</span>
+                                    <ThemeToggle />
+                                </div>
+                                <div className="flex min-h-[44px] items-center justify-between gap-3 rounded-control px-3 py-2">
+                                    <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-body">
+                                        <Palette className="h-4 w-4 flex-shrink-0 text-muted" />
+                                        <span className="truncate">Colores del coach</span>
+                                    </span>
+                                    <Switch checked={useBrandColors} onCheckedChange={handleToggleBrandColors} disabled={isTogglingColors} aria-label="Colores del coach" />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleSignOut}
+                                    className="group flex min-h-[44px] items-center gap-3 rounded-control px-3 py-2.5 text-sm font-medium text-muted transition-colors hover:bg-destructive/10 hover:text-destructive"
+                                >
+                                    <LogOut className="h-5 w-5 flex-shrink-0 group-hover:text-destructive" />
+                                    <span>Cerrar sesión</span>
+                                </button>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+
+            {/* ============================ MOBILE BOTTOM BAR ============================ */}
+            {/* Patrón nativo "4 primarios + Más" (espejo de CoachSidebar). Oculto durante la ejecución
+                de plan (/workout/) y en desktop (md:). */}
+            <nav
+                aria-label="Navegación principal"
+                className={cn(
+                    'client-nav-mobile md:hidden fixed bottom-0 left-0 right-0 z-[59] flex items-stretch gap-0.5 border-t border-subtle bg-surface-card/95 backdrop-blur-xl px-1.5 pt-1.5 pb-safe pl-safe pr-safe shadow-md',
+                    isWorkout && 'hidden'
+                )}
+            >
+                {baseItems.map(renderBaseTile)}
+                <button
+                    type="button"
+                    onClick={() => setMoreOpen((o) => !o)}
+                    aria-label="Más"
+                    aria-expanded={moreOpen}
+                    className={cn(
+                        'relative flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1 rounded-control px-1 py-1.5 transition-colors',
+                        isMoreActive || moreOpen ? '' : 'hover:bg-surface-sunken'
+                    )}
+                >
+                    {(isMoreActive || moreOpen) && (
+                        <span className="absolute -top-0.5 left-1/2 h-1 w-8 -translate-x-1/2 rounded-pill" style={{ backgroundColor: 'var(--theme-primary)' }} />
+                    )}
+                    <MoreHorizontal className={cn('h-[22px] w-[22px] flex-shrink-0', isMoreActive || moreOpen ? '' : 'text-muted')} style={isMoreActive || moreOpen ? activeColorStyle : undefined} />
+                    <span className={cn('text-[10px] font-semibold leading-tight', isMoreActive || moreOpen ? '' : 'text-muted')} style={isMoreActive || moreOpen ? activeColorStyle : undefined}>
+                        Más
+                    </span>
+                </button>
+            </nav>
         </>
     )
 }

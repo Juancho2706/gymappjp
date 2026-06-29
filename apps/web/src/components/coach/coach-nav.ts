@@ -153,3 +153,28 @@ export function splitNavItems(items: NavModule[]): { core: NavModule[]; modules:
     }
     return { core, modules }
 }
+
+/**
+ * Partición para el SIDEBAR DESKTOP (Fase 2 — restyle DS). Separa los items visibles en:
+ *  - `primary`: navegación principal (núcleo de trabajo) — arriba, zona de mayor jerarquía.
+ *  - `secondary`: grupo visualmente secundario "Más" (footer del nav) — Soporte + los módulos
+ *    comprados/toggleables (entitlement). Espejo de la franja `dt-nav2` "Más" del diseño desktop.
+ *
+ * Discriminador: `item.key === 'support'` OR `item.entitlement != null`.
+ *
+ * Se aplica SOBRE el resultado de `getVisibleNavItems` (los módulos OFF ya vienen filtrados),
+ * así que `secondary` solo trae Soporte + los módulos con entitlement ON. Cuando `secondary`
+ * queda vacío (p.ej. status bloqueado ⇒ solo "Reactivar"), el sidebar omite el grupo secundario.
+ *
+ * Función PURA (unit-testeable sin render); preserva el orden relativo de `items` dentro de cada
+ * grupo. NO altera `getVisibleNavItems` / `splitNavItems` / `NAV_MODULES` (contratos unit-tested).
+ */
+export function splitForSidebar(items: NavModule[]): { primary: NavModule[]; secondary: NavModule[] } {
+    const primary: NavModule[] = []
+    const secondary: NavModule[] = []
+    for (const item of items) {
+        if (item.key === 'support' || item.entitlement != null) secondary.push(item)
+        else primary.push(item)
+    }
+    return { primary, secondary }
+}

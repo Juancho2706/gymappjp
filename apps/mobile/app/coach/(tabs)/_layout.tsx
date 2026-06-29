@@ -20,9 +20,12 @@ export default function CoachTabsLayout() {
         <Tabs.Screen name="builder" options={{ title: 'Programas' }} />
         <Tabs.Screen name="ejercicios" options={{ title: 'Ejercicios' }} />
         <Tabs.Screen name="nutricion" options={{ title: 'Nutricion' }} />
-        <Tabs.Screen name="settings" options={{ title: 'Mi Marca' }} />
-        <Tabs.Screen name="subscription" options={{ title: 'Suscripcion' }} />
+        {/* Orden del overflow "Más" alineado al blueprint Fase 2: Opciones + Soporte
+            primero; los screens legacy solo-RN (Suscripcion/Check-ins/Mi cuenta) van al
+            final (parity debt: web pliega Suscripcion dentro de Opciones). */}
+        <Tabs.Screen name="settings" options={{ title: 'Opciones' }} />
         <Tabs.Screen name="support" options={{ title: 'Soporte' }} />
+        <Tabs.Screen name="subscription" options={{ title: 'Suscripcion' }} />
         <Tabs.Screen name="check-ins" options={{ title: 'Check-ins' }} />
         <Tabs.Screen name="perfil" options={{ title: 'Mi cuenta' }} />
       </Tabs>

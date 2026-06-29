@@ -21,7 +21,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
 import { WorkspaceSwitcher } from '@/components/workspace/WorkspaceSwitcher'
-import { getVisibleNavItems, splitNavItems, type NavModule } from '@/components/coach/coach-nav'
+import { getVisibleNavItems, splitForSidebar, type NavModule } from '@/components/coach/coach-nav'
 import type { WorkspaceSummary, WorkspaceType } from '@/domain/auth/types'
 import type { EnabledModules } from '@/services/entitlements.service'
 
@@ -75,11 +75,14 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
         setMoreOpen(false)
     }, [pathname])
 
+    // White-label: el override del color del coach se aplica inline sobre la base de tokens DS
+    // (sport-*). Ausente ⇒ el activo usa la ramp `sport` (default EVA / sistema).
     const activeColorStyle = primaryColor ? { color: primaryColor } : undefined
-    const activeBgStyle = primaryColor ? { 
+    const activeBgStyle = primaryColor ? {
         backgroundColor: `color-mix(in srgb, ${primaryColor} 10%, transparent)`,
         borderColor: `color-mix(in srgb, ${primaryColor} 20%, transparent)`
     } : undefined
+    const activeAccentStyle = primaryColor ? { backgroundColor: primaryColor } : undefined
 
     const toggleSidebar = () => {
         const newState = !isCollapsed
@@ -98,10 +101,12 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
     // Registro nav-como-módulos: cada flujo (standalone/enterprise/team) ve SOLO sus módulos.
     const disabledDomainSet = disabledDomains && disabledDomains.length > 0 ? new Set(disabledDomains) : null
     const visibleNavItems = getVisibleNavItems({ activeWorkspaceType, subscriptionStatus, enabledModules, disabledDomains: disabledDomainSet })
-    // Particionar para el grupo "MÓDULOS" (DESKTOP): core va arriba y, si hay módulos comprados,
-    // se agrupan bajo un divisor.
-    const { core: coreNavItems, modules: moduleNavItems } = splitNavItems(visibleNavItems)
-    const hasModuleGroup = moduleNavItems.length > 0
+    // Particionar para el DESKTOP: la nav principal arriba (núcleo de trabajo) y un grupo
+    // visualmente secundario "Más" abajo (Soporte + módulos comprados). El divisor del grupo
+    // expone `data-testid="nav-modules-divider"`; los links siguen siendo <a title> dentro de
+    // <aside><nav> ⇒ collectNavTitles de los specs E2E los lee en orden de DOM (primary→secondary).
+    const { primary: primaryNavItems, secondary: secondaryNavItems } = splitForSidebar(visibleNavItems)
+    const hasSecondaryGroup = secondaryNavItems.length > 0
 
     // MOBILE — patrón "4 primarios + Más" (espejo de CoachMobileChrome). Los primarios se eligen por
     // `key` (estable); todo lo demás (Opciones, Soporte, módulos entitled, Equipo) vive tras "Más".
@@ -128,28 +133,37 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                 prefetch={false}
                 title={item.label}
                 className={cn(
-                    'flex w-full flex-none flex-row items-center gap-3 rounded-xl border border-transparent px-4 py-2 text-sm font-semibold transition-all duration-300 group',
+                    'group relative flex w-full flex-none flex-row items-center gap-3 rounded-control border border-transparent px-3 py-2.5 font-ui text-sm font-semibold tracking-tight transition-all duration-200',
                     isCollapsed ? 'justify-center px-0' : 'justify-start',
                     isActive
-                        ? 'text-sidebar-foreground bg-primary/10 border-primary/20 dark:shadow-[0_0_15px_-5px_rgba(var(--theme-primary-rgb,0,122,255),0.4)]'
-                        : 'text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent'
+                        ? 'bg-sport-100 text-sport-600'
+                        : 'text-text-muted hover:bg-surface-sunken hover:text-text-strong'
                 )}
-                style={isActive ? activeBgStyle : undefined}
+                style={isActive ? { ...activeBgStyle, ...activeColorStyle } : undefined}
             >
+                {/* Indicador de activo (espejo del `dt-nav-accent` del diseño) — barra lateral sport. */}
+                <span
+                    aria-hidden="true"
+                    className={cn(
+                        'pointer-events-none absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-sport-500 transition-opacity duration-200',
+                        isActive ? 'opacity-100' : 'opacity-0',
+                        isCollapsed && 'hidden'
+                    )}
+                    style={isActive ? activeAccentStyle : undefined}
+                />
                 <Icon
                     className={cn(
-                        'w-5 h-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110',
-                        isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-sidebar-foreground'
+                        'h-5 w-5 flex-shrink-0 transition-transform duration-200 group-hover:scale-110',
+                        !isActive && 'text-text-muted group-hover:text-text-strong'
                     )}
-                    style={isActive ? activeColorStyle : undefined}
                 />
                 <span
                     className={cn(
-                        'max-w-full truncate text-left leading-tight tracking-wide',
+                        'max-w-full truncate text-left leading-tight',
                         isCollapsed && 'hidden'
                     )}
                 >
-                    <span className="uppercase text-[11px]">{item.label}</span>
+                    {item.label}
                 </span>
             </Link>
         )
@@ -168,14 +182,14 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                 <Icon
                     className={cn(
                         'h-[22px] w-[22px] flex-shrink-0 transition-transform duration-200',
-                        opts.active ? 'text-primary' : 'text-muted-foreground'
+                        opts.active ? 'text-sport-600' : 'text-text-muted'
                     )}
                     style={opts.active ? activeColorStyle : undefined}
                 />
                 <span
                     className={cn(
                         'max-w-full truncate text-center text-[10px] font-semibold leading-tight tracking-wide',
-                        opts.active ? 'text-primary' : 'text-muted-foreground'
+                        opts.active ? 'text-sport-600' : 'text-text-muted'
                     )}
                     style={opts.active ? activeColorStyle : undefined}
                 >
@@ -184,8 +198,8 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
             </>
         )
         const tileClass = cn(
-            'flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 transition-colors',
-            opts.active ? 'bg-primary/10' : 'hover:bg-sidebar-accent'
+            'flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1 rounded-control px-1 py-1.5 transition-colors',
+            opts.active ? 'bg-sport-100' : 'hover:bg-surface-sunken'
         )
         if (opts.href) {
             return (
@@ -222,13 +236,13 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
             {/* Mobile Top Header — oculto en builder para evitar doble barra fija */}
             <div
                 className={cn(
-                    "md:hidden fixed top-0 left-0 right-0 z-[55] flex items-center justify-between border-b border-sidebar-border bg-sidebar px-4 pt-safe pb-3",
+                    "md:hidden fixed top-0 left-0 right-0 z-[55] flex items-center justify-between border-b border-border-subtle bg-surface-card px-4 pt-safe pb-3",
                     isBuilder && "hidden"
                 )}
             >
                 <div className="flex min-w-0 items-center gap-2.5">
                     <EvaBrandIcon className="h-8 w-8 shrink-0 sm:h-8 sm:w-8" />
-                    <span className="font-bold text-base truncate max-w-[150px] text-sidebar-foreground font-display">
+                    <span className="font-bold text-base truncate max-w-[150px] text-text-strong font-display">
                         {coachBrand || coachName}
                     </span>
                 </div>
@@ -244,7 +258,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                         <button
                             type="button"
                             onClick={() => window.dispatchEvent(new CustomEvent('brand-tour-start'))}
-                            className="text-muted-foreground hover:text-foreground transition-colors"
+                            className="text-text-muted hover:text-text-strong transition-colors"
                             title="Ver guía de Mi Marca"
                             aria-label="Ver guía de Mi Marca"
                         >
@@ -252,7 +266,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                         </button>
                     )}
                     <ThemeToggle />
-                    <button type="button" onClick={handleSignOut} className="text-muted-foreground hover:text-destructive" aria-label="Cerrar sesión">
+                    <button type="button" onClick={handleSignOut} className="text-text-muted hover:text-destructive transition-colors" aria-label="Cerrar sesión">
                         <LogOut className="w-5 h-5" />
                     </button>
                 </div>
@@ -260,7 +274,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
 
             {/* Navigation Sidebar (Desktop only — el mobile usa el bottom bar "4 + Más" más abajo) */}
             <aside className={cn(
-                "hidden md:sticky md:top-0 md:flex md:flex-col md:border-r md:border-sidebar-border md:bg-sidebar transition-all duration-300 [transform:translateZ(0)]",
+                "hidden md:sticky md:top-0 md:flex md:flex-col md:border-r md:border-border-subtle md:bg-surface-card transition-all duration-300 [transform:translateZ(0)]",
                 isBuilder
                     ? "md:h-full md:min-h-0 md:max-h-full supports-[height:100dvh]:md:h-full"
                     : "md:h-dvh supports-[height:100dvh]:md:h-[100dvh]",
@@ -268,18 +282,18 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
             )}>
 
                 {/* Logo area (Desktop only) */}
-                <div className={cn("hidden md:flex py-5 border-b border-sidebar-border items-center", isCollapsed ? "px-0 justify-center flex-col gap-4" : "px-6 justify-between")}>
+                <div className={cn("hidden md:flex py-5 border-b border-border-subtle items-center", isCollapsed ? "px-0 justify-center flex-col gap-4" : "px-6 justify-between")}>
                     <div className={cn("flex min-w-0 items-center gap-3", isCollapsed && "justify-center")}>
                         <EvaBrandIcon
                             className={cn('h-10 w-10 flex-shrink-0', isCollapsed && 'h-9 w-9')}
                         />
                         {!isCollapsed && (
                             <div className="min-w-0 animate-in fade-in duration-300">
-                                <p className="text-sm font-bold text-sidebar-foreground truncate uppercase tracking-tight font-display">
+                                <p className="text-sm font-bold text-text-strong truncate uppercase tracking-tight font-display">
                                     {coachBrand || coachName}
                                 </p>
                                 {enterpriseContext && (
-                                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
                                         Gestionado por {enterpriseContext.orgName}
                                     </p>
                                 )}
@@ -290,7 +304,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                         <button
                             onClick={toggleSidebar}
                             aria-label="Contraer menú"
-                            className="p-1.5 rounded-lg hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground transition-colors"
+                            className="p-1.5 rounded-control hover:bg-surface-sunken text-text-muted hover:text-text-strong transition-colors"
                         >
                             <PanelLeftClose className="w-5 h-5" />
                         </button>
@@ -298,76 +312,74 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                 </div>
 
                 {isCollapsed && (
-                    <div className="hidden md:flex justify-center py-4 border-b border-sidebar-border">
+                    <div className="hidden md:flex justify-center py-4 border-b border-border-subtle">
                         <button
                             onClick={toggleSidebar}
                             aria-label="Expandir menú"
-                            className="p-1.5 rounded-lg hover:bg-sidebar-accent text-muted-foreground hover:text-sidebar-foreground transition-colors"
+                            className="p-1.5 rounded-control hover:bg-surface-sunken text-text-muted hover:text-text-strong transition-colors"
                         >
                             <PanelLeft className="w-5 h-5" />
                         </button>
                     </div>
                 )}
 
-                {/* Navigation Links (Desktop) */}
-                <div className="flex-1 min-h-0 overflow-visible">
-                <nav className="flex max-w-none flex-1 min-h-0 flex-col justify-start gap-1 space-y-1 overflow-x-hidden overflow-y-auto px-4 py-3 custom-scrollbar">
-                    {enterpriseContext && isOrgAdmin && (
-                        <Link
-                            href={`/org/${enterpriseContext.orgSlug}`}
-                            prefetch={false}
-                            title="Panel empresa"
-                            className={cn(
-                                'flex shrink-0 items-center gap-3 rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-semibold text-sidebar-foreground transition-all duration-300 hover:bg-primary/15',
-                                isCollapsed ? 'justify-center px-0' : 'justify-start'
-                            )}
-                            style={activeBgStyle}
-                        >
-                            <Building2
-                                className="h-5 w-5 flex-shrink-0 text-primary"
-                                style={activeColorStyle}
-                            />
-                            <span className={cn('truncate text-left', isCollapsed && 'hidden')}>Panel empresa</span>
-                        </Link>
-                    )}
-                    {coreNavItems.map(renderNavLink)}
-                    {hasModuleGroup && (
-                        <>
-                            {/* Divisor del grupo "MÓDULOS" — SOLO desktop (md:). En mobile el bottom
-                                bar es plano [...core, ...modules]. NO es <a title> ⇒ no contamina
-                                collectNavTitles de los specs E2E (aside nav a[title]). */}
+                {/* Navigation Links (Desktop) — primary scrollable + secondary "Más" pinned */}
+                <div className="flex min-h-0 flex-1 flex-col overflow-visible">
+                    <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-x-hidden overflow-y-auto px-4 py-3 custom-scrollbar">
+                        {enterpriseContext && isOrgAdmin && (
+                            <Link
+                                href={`/org/${enterpriseContext.orgSlug}`}
+                                prefetch={false}
+                                title="Panel empresa"
+                                className={cn(
+                                    'flex shrink-0 items-center gap-3 rounded-control border border-sport-200 bg-sport-100 px-3 py-2.5 font-ui text-sm font-semibold text-sport-600 transition-all duration-200 hover:bg-sport-200/60',
+                                    isCollapsed ? 'justify-center px-0' : 'justify-start'
+                                )}
+                                style={activeBgStyle}
+                            >
+                                <Building2
+                                    className="h-5 w-5 flex-shrink-0"
+                                    style={activeColorStyle}
+                                />
+                                <span className={cn('truncate text-left', isCollapsed && 'hidden')}>Panel empresa</span>
+                            </Link>
+                        )}
+                        {primaryNavItems.map(renderNavLink)}
+                    </nav>
+
+                    {hasSecondaryGroup && (
+                        /* Grupo "Más" (DESKTOP) — Soporte + módulos comprados, visualmente secundario.
+                           Es un <nav> dentro del <aside> ⇒ `aside nav a[title]` (selector E2E) sigue
+                           leyendo sus links tras los primarios. NO se renderiza en mobile (el bottom
+                           bar es plano [primarios + Más]); el <aside> ya es `hidden md:flex`. */
+                        <nav aria-label="Más" className={cn("flex flex-none flex-col gap-1 px-4 pb-2", isCollapsed && "items-center")}>
                             <div
                                 aria-hidden="true"
                                 data-testid="nav-modules-divider"
-                                className={cn(
-                                    'hidden md:flex shrink-0 select-none flex-col gap-1 pt-2',
-                                    isCollapsed ? 'items-center' : 'px-4'
-                                )}
+                                className={cn("flex w-full select-none flex-col gap-1 pb-0.5 pt-1", isCollapsed && "items-center")}
                             >
-                                <div className="h-px w-full bg-sidebar-border" />
+                                <div className="h-px w-full bg-border-subtle" />
                                 {!isCollapsed && (
-                                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
-                                        Módulos
+                                    <p className="px-1 text-[10px] font-bold uppercase tracking-widest text-text-subtle">
+                                        Más
                                     </p>
                                 )}
                             </div>
-                            {moduleNavItems.map(renderNavLink)}
-                        </>
+                            {secondaryNavItems.map(renderNavLink)}
+                        </nav>
                     )}
-                </nav>
                 </div>
 
                 {/* Bottom area (Desktop only) */}
-                <div className={cn("hidden md:flex flex-col border-t border-sidebar-border bg-sidebar-accent/50 dark:bg-black/50 backdrop-blur-xl", isCollapsed ? "p-4 space-y-6 items-center" : "px-4 py-3 space-y-2")}>
+                <div className={cn("hidden md:flex flex-col border-t border-border-subtle bg-surface-sunken/50 dark:bg-surface-app/60 backdrop-blur-xl", isCollapsed ? "p-4 space-y-6 items-center" : "px-4 py-3 space-y-2")}>
                     <div className={cn("flex items-center", isCollapsed ? "justify-center gap-4" : "justify-between px-2")}>
                         {!isCollapsed && (
                             <div className="flex flex-col">
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">Terminal</p>
-                                <p className="text-xs text-sidebar-foreground font-medium truncate max-w-[120px]">{coachName}</p>
+                                <p className="text-[10px] text-text-subtle uppercase tracking-widest font-bold">Terminal</p>
+                                <p className="text-xs text-text-strong font-medium truncate max-w-[120px]">{coachName}</p>
                             </div>
                         )}
                         <div className="flex items-center gap-2">
-                            <NewsBellButton />
                             <ThemeToggle />
                         </div>
                     </div>
@@ -387,7 +399,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                         onClick={handleSignOut}
                         title={isCollapsed ? "Cerrar sesión" : undefined}
                         className={cn(
-                            "flex items-center rounded-xl text-[11px] uppercase tracking-widest font-bold text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-300 group border border-transparent hover:border-destructive/20",
+                            "flex items-center rounded-control text-[11px] uppercase tracking-widest font-bold text-text-muted hover:text-destructive hover:bg-destructive/10 transition-all duration-200 group border border-transparent hover:border-destructive/20",
                             isCollapsed ? "justify-center w-12 h-12 p-0" : "w-full px-4 py-3 gap-3"
                         )}
                     >
@@ -397,7 +409,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                     {!isCollapsed && (
                         <a
                             href="mailto:privacidad@eva-app.cl"
-                            className="block text-center text-[9px] text-muted-foreground/30 hover:text-muted-foreground/50 transition-colors py-1"
+                            className="block text-center text-[9px] text-text-muted/40 hover:text-text-muted/60 transition-colors py-1"
                         >
                             Privacidad · ARCO
                         </a>
@@ -428,19 +440,19 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                             key="more-panel"
                             role="dialog"
                             aria-label="Más opciones de navegación"
-                            className="md:hidden fixed inset-x-0 bottom-0 z-[60] flex flex-col gap-1 rounded-t-2xl border-t border-sidebar-border bg-sidebar px-3 pt-3 pb-safe shadow-2xl"
+                            className="md:hidden fixed inset-x-0 bottom-0 z-[60] flex flex-col gap-1 rounded-t-[28px] border-t border-border-subtle bg-surface-card px-3 pt-3 pb-safe shadow-md"
                             initial={reduceMotion ? { opacity: 0 } : { y: '100%' }}
                             animate={reduceMotion ? { opacity: 1 } : { y: 0 }}
                             exit={reduceMotion ? { opacity: 0 } : { y: '100%' }}
                             transition={{ type: reduceMotion ? 'tween' : 'spring', duration: reduceMotion ? 0.18 : undefined, damping: 26, stiffness: 280 }}
                         >
                             <div className="mb-1 flex items-center justify-between px-2">
-                                <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Más</p>
+                                <p className="text-[11px] font-bold uppercase tracking-widest text-text-subtle">Más</p>
                                 <button
                                     type="button"
                                     onClick={() => setMoreOpen(false)}
                                     aria-label="Cerrar"
-                                    className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                                    className="flex h-9 w-9 items-center justify-center rounded-control text-text-muted hover:bg-surface-sunken hover:text-text-strong"
                                 >
                                     <X className="h-5 w-5" />
                                 </button>
@@ -458,16 +470,15 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
                                             aria-label={item.label}
                                             onClick={() => setMoreOpen(false)}
                                             className={cn(
-                                                'flex min-h-[44px] items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-sm font-semibold transition-colors',
+                                                'flex min-h-[44px] items-center gap-3 rounded-control border border-transparent px-3 py-2.5 text-sm font-semibold transition-colors',
                                                 isActive
-                                                    ? 'bg-primary/10 border-primary/20 text-sidebar-foreground'
-                                                    : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                                                    ? 'bg-sport-100 text-sport-600'
+                                                    : 'text-text-muted hover:bg-surface-sunken hover:text-text-strong'
                                             )}
-                                            style={isActive ? activeBgStyle : undefined}
+                                            style={isActive ? { ...activeBgStyle, ...activeColorStyle } : undefined}
                                         >
                                             <Icon
-                                                className={cn('h-5 w-5 flex-shrink-0', isActive ? 'text-primary' : 'text-muted-foreground')}
-                                                style={isActive ? activeColorStyle : undefined}
+                                                className={cn('h-5 w-5 flex-shrink-0', !isActive && 'text-text-muted')}
                                             />
                                             <span className="truncate">{item.label}</span>
                                         </Link>
@@ -482,7 +493,7 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
             <nav
                 aria-label="Navegación principal"
                 className={cn(
-                    'md:hidden fixed bottom-0 left-0 right-0 z-[59] flex items-stretch gap-0.5 border-t border-sidebar-border bg-sidebar px-1.5 pt-1.5 pb-safe pl-safe pr-safe shadow-2xl [transform:translateZ(0)]',
+                    'md:hidden fixed bottom-0 left-0 right-0 z-[59] flex items-stretch gap-0.5 border-t border-border-subtle bg-surface-card px-1.5 pt-1.5 pb-safe pl-safe pr-safe shadow-md [transform:translateZ(0)]',
                     isBuilder && 'hidden'
                 )}
             >
@@ -504,4 +515,3 @@ export function CoachSidebar({ coachName, coachBrand, primaryColor, subscription
         </>
     )
 }
-

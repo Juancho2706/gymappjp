@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'react'
-import { AppState } from 'react-native'
+import { AppState, View } from 'react-native'
 import { Tabs, useRouter } from 'expo-router'
-import { Apple, BookOpen, CheckCircle, History, Home, User } from 'lucide-react-native'
 import { supabase } from '../../../lib/supabase'
 import { flushLogQueue, flushNutritionQueue, getPendingLogCount, getPendingNutritionCount } from '../../../lib/offline-cache'
 import { getClientProfile } from '../../../lib/client'
 import { sessionFlags } from '../../../lib/session-flags'
 import { useTheme } from '../../../context/ThemeContext'
+import { AlumnoMobileChrome } from '../../../components/alumno/AlumnoMobileChrome'
 
 export default function AlumnoTabsLayout() {
   const { theme } = useTheme()
@@ -41,73 +41,27 @@ export default function AlumnoTabsLayout() {
     })
     return () => sub.remove()
   }, [])
+
+  // 6→4+Más: barra docked DS (espejo del coach). Inicio · Plan · Aprender · Check-in + "Más"
+  // (Historial, Perfil). El tint activo / inactivo lo resuelve la chrome desde theme.primary.
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: theme.primary,
-        tabBarInactiveTintColor: theme.mutedForeground,
-        tabBarStyle: {
-          backgroundColor: theme.card,
-          borderTopColor: theme.border,
-          height: 64,
-          paddingBottom: 8,
-          paddingTop: 6,
-        },
-        tabBarLabelStyle: {
-          fontFamily: 'Inter_500Medium',
-          fontSize: 11,
-          letterSpacing: 0.2,
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="home"
-        options={{
-          title: 'Inicio',
-          tabBarIcon: ({ color, size }) => <Home size={size} color={color} strokeWidth={2} />,
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <Tabs
+        tabBar={(props) => <AlumnoMobileChrome {...props} />}
+        screenOptions={{
+          headerShown: false,
+          sceneStyle: { backgroundColor: theme.background },
         }}
-      />
-      <Tabs.Screen
-        name="nutricion"
-        options={{
-          title: 'Nutrición',
-          tabBarIcon: ({ color, size }) => <Apple size={size} color={color} strokeWidth={2} />,
-        }}
-      />
-      <Tabs.Screen
-        name="exercises"
-        options={{
-          title: 'Aprender',
-          tabBarIcon: ({ color, size }) => <BookOpen size={size} color={color} strokeWidth={2} />,
-        }}
-      />
-      <Tabs.Screen
-        name="check-in"
-        options={{
-          title: 'Check-in',
-          tabBarIcon: ({ color, size }) => <CheckCircle size={size} color={color} strokeWidth={2} />,
-        }}
-      />
-      <Tabs.Screen
-        name="history"
-        options={{
-          title: 'Historial',
-          tabBarIcon: ({ color, size }) => <History size={size} color={color} strokeWidth={2} />,
-        }}
-      />
-      <Tabs.Screen
-        name="perfil"
-        options={{
-          title: 'Perfil',
-          tabBarIcon: ({ color, size }) => <User size={size} color={color} strokeWidth={2} />,
-        }}
-      />
-      {/* Workout se accede desde hero card del Home, no como tab directo */}
-      <Tabs.Screen
-        name="workout"
-        options={{ href: null }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen name="home" options={{ title: 'Inicio' }} />
+        <Tabs.Screen name="nutricion" options={{ title: 'Nutrición' }} />
+        <Tabs.Screen name="exercises" options={{ title: 'Aprender' }} />
+        <Tabs.Screen name="check-in" options={{ title: 'Check-in' }} />
+        <Tabs.Screen name="history" options={{ title: 'Historial' }} />
+        <Tabs.Screen name="perfil" options={{ title: 'Perfil' }} />
+        {/* Workout se accede desde hero card del Home, no como tab directo */}
+        <Tabs.Screen name="workout" options={{ href: null }} />
+      </Tabs>
+    </View>
   )
 }

@@ -69,8 +69,11 @@ const NAV_META: Record<string, NavMeta> = {
     icon: Apple,
   },
   settings: {
-    label: 'Mi Marca',
-    shortLabel: 'Marca',
+    // Reconciliado con la IA del coach web (blueprint Fase 2): standalone colapsa
+    // Mi Marca + Suscripción en el hub "Opciones" (/coach/settings). El merge real del
+    // hub en RN es follow-up — ver parity debt en notes.
+    label: 'Opciones',
+    shortLabel: 'Opcs.',
     icon: Settings,
   },
   subscription: {
@@ -236,7 +239,7 @@ export function CoachMobileTabBar({
         <MotiView animate={{ scale: focused ? 1 : 0.96 }} transition={{ type: 'spring', damping: 16, stiffness: 230 }}
           style={[styles.tabItem, focused ? { backgroundColor: hexToRgba(theme.primary, 0.1) } : null]}>
           <Icon size={22} color={focused ? theme.primary : theme.mutedForeground} strokeWidth={focused ? 2.4 : 2.1} />
-          <Text numberOfLines={1} style={[styles.tabLabel, { color: focused ? theme.primary : theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>{label}</Text>
+          <Text numberOfLines={1} style={[styles.tabLabel, { color: focused ? theme.primary : theme.mutedForeground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{label}</Text>
         </MotiView>
       </TouchableOpacity>
     )
@@ -247,7 +250,10 @@ export function CoachMobileTabBar({
       {/* Overflow ("Más") sheet */}
       {moreOpen && (
         <>
-          <Pressable style={styles.backdrop} onPress={() => setMoreOpen(false)} />
+          <Pressable
+            style={[styles.backdrop, { backgroundColor: isDark ? 'rgba(0,0,0,0.62)' : 'rgba(11,14,19,0.55)' }]}
+            onPress={() => setMoreOpen(false)}
+          />
           <MotiView
             from={{ opacity: 0, translateY: 16 }}
             animate={{ opacity: 1, translateY: 0 }}
@@ -261,7 +267,7 @@ export function CoachMobileTabBar({
               return (
                 <TouchableOpacity key={r.key} activeOpacity={0.75} onPress={() => go(r.name)} style={styles.moreRow}>
                   <Icon size={19} color={focused ? theme.primary : theme.mutedForeground} strokeWidth={2.2} />
-                  <Text style={[styles.moreRowText, { color: focused ? theme.primary : theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{meta.label}</Text>
+                  <Text style={[styles.moreRowText, { color: focused ? theme.primary : theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{meta.label}</Text>
                 </TouchableOpacity>
               )
             })}
@@ -311,7 +317,8 @@ const styles = StyleSheet.create({
   },
   brandLogo: { width: 32, height: 32 },
   brandMarkText: {
-    fontFamily: 'Montserrat_800ExtraBold',
+    // DS display family (token-contract.md D3): Archivo, no Montserrat.
+    fontFamily: 'Archivo_800ExtraBold',
     fontSize: 17,
     lineHeight: 20,
   },
@@ -361,17 +368,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 40,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    // backgroundColor set inline (DS surface-overlay, scheme-aware).
   },
   morePanel: {
     position: 'absolute',
     right: 12,
     left: 12,
     zIndex: 50,
-    borderRadius: 18,
+    borderRadius: 20, // DS radius-card
     borderWidth: 1,
     paddingVertical: 6,
-    shadowColor: '#000',
+    shadowColor: '#0D121C', // DS cool-tinted shadow
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
     shadowRadius: 20,
