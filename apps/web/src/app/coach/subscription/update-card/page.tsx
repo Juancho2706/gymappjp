@@ -21,10 +21,10 @@ export default function UpdateCardPage() {
     return (
         <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-6 px-4 pt-safe pb-safe py-8">
             <header className="space-y-1">
-                <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-50">
+                <h1 className="font-display text-xl font-bold tracking-tight text-strong">
                     Cambiar tarjeta
                 </h1>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                <p className="text-sm text-muted">
                     Actualizá la tarjeta de tu suscripción. Tu plan, monto y fecha de cobro no cambian.
                 </p>
             </header>

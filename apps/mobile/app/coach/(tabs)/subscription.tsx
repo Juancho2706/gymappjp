@@ -71,9 +71,9 @@ export default function SubscriptionScreen() {
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>
         {/* Plan */}
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-          <Text style={[styles.cardLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>PLAN ACTUAL</Text>
+          <Text style={[styles.cardLabel, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>PLAN ACTUAL</Text>
           <View style={styles.planRow}>
-            <Text style={[styles.planTier, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{tierLabel}</Text>
+            <Text style={[styles.planTier, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{tierLabel}</Text>
             <Badge label={statusLabel} tone={statusActive ? 'success' : 'muted'} />
           </View>
         </View>
@@ -82,9 +82,9 @@ export default function SubscriptionScreen() {
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl, gap: 12 }]}>
           <View style={styles.iconRow}>
             <Users size={16} color={theme.primary} />
-            <Text style={[styles.cardLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>ALUMNOS</Text>
+            <Text style={[styles.cardLabel, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>ALUMNOS</Text>
           </View>
-          <Text style={[styles.usageBig, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+          <Text style={[styles.usageBig, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>
             {clientCount}{max > 0 ? ` / ${max}` : ''}
           </Text>
           {max > 0 ? <ProgressBar value={usage} /> : (
@@ -96,9 +96,9 @@ export default function SubscriptionScreen() {
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl, gap: 8 }]}>
           <View style={styles.iconRow}>
             <CalendarClock size={16} color={theme.primary} />
-            <Text style={[styles.cardLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{renewLabel.toUpperCase()}</Text>
+            <Text style={[styles.cardLabel, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>{renewLabel.toUpperCase()}</Text>
           </View>
-          <Text style={[styles.usageBig, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{formatDate(renewDate)}</Text>
+          <Text style={[styles.usageBig, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{formatDate(renewDate)}</Text>
         </View>
 
         {orgManaged ? (
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   planRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
   planTier: { fontSize: 26, letterSpacing: -0.5 },
   iconRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  usageBig: { fontSize: 20, letterSpacing: -0.3 },
+  usageBig: { fontSize: 20, letterSpacing: -0.3, fontVariant: ['tabular-nums'] },
   usageSub: { fontSize: 13 },
   lockCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderWidth: 1 },
   lockText: { fontSize: 13, flex: 1, lineHeight: 18 },

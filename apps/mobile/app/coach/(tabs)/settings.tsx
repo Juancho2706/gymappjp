@@ -206,7 +206,7 @@ export default function MiMarcaScreen() {
             <View style={[styles.gateIcon, { backgroundColor: theme.primary + '1A' }]}>
               <Lock size={26} color={theme.primary} />
             </View>
-            <Text style={[styles.gateTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>Marca personalizada en Starter+</Text>
+            <Text style={[styles.gateTitle, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>Marca personalizada en Starter+</Text>
             <Text style={[styles.gateText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
               Subí a Starter (o superior) para personalizar el logo, los colores, el loader y el mensaje de bienvenida que ven tus alumnos al instalar tu app.
             </Text>
@@ -226,7 +226,7 @@ export default function MiMarcaScreen() {
         {/* Brand score */}
         <View style={styles.scoreRow}>
           <Text style={[styles.scoreLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Marca completada</Text>
-          <Text style={[styles.scoreValue, { color: brandScore >= 80 ? theme.success : brandScore >= 50 ? '#F59E0B' : theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{brandScore}%</Text>
+          <Text style={[styles.scoreValue, { color: brandScore >= 80 ? theme.success : brandScore >= 50 ? '#F59E0B' : theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{brandScore}%</Text>
         </View>
         <View style={[styles.scoreTrack, { backgroundColor: theme.muted }]}>
           <View style={{ width: `${brandScore}%`, height: '100%', borderRadius: 99, backgroundColor: brandScore >= 80 ? theme.success : brandScore >= 50 ? '#F59E0B' : color }} />
@@ -239,11 +239,11 @@ export default function MiMarcaScreen() {
               {logoUrl ? (
                 <Image source={{ uri: logoUrl }} style={styles.logoImg} contentFit="cover" transition={150} />
               ) : (
-                <Text style={[styles.logoInitial, { color, fontFamily: 'Montserrat_800ExtraBold' }]}>{(brandName || 'E').charAt(0).toUpperCase()}</Text>
+                <Text style={[styles.logoInitial, { color, fontFamily: 'Archivo_800ExtraBold' }]}>{(brandName || 'E').charAt(0).toUpperCase()}</Text>
               )}
             </View>
             <View style={{ flex: 1 }}>
-              <Text numberOfLines={1} style={[styles.previewName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{brandName || 'Tu marca'}</Text>
+              <Text numberOfLines={1} style={[styles.previewName, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{brandName || 'Tu marca'}</Text>
               <View style={styles.swatchRow}>
                 <View style={[styles.swatchDot, { backgroundColor: color }]} />
                 <Text style={[styles.previewColor, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{color.toUpperCase()}</Text>
@@ -341,7 +341,7 @@ export default function MiMarcaScreen() {
                 if (!ci) return null
                 const okColor = ci.aa ? theme.success : ci.aaLarge ? '#F59E0B' : theme.destructive
                 return (
-                  <Text style={{ fontSize: 12, color: okColor, fontFamily: 'Inter_600SemiBold' }}>
+                  <Text style={{ fontSize: 12, color: okColor, fontFamily: 'HankenGrotesk_600SemiBold' }}>
                     Texto {ci.txt} sobre tu color: {ci.ratio.toFixed(1)}:1 · {ci.aa ? 'AA ✓' : ci.aaLarge ? 'AA solo texto grande' : 'contraste bajo ⚠'}
                   </Text>
                 )
@@ -405,7 +405,7 @@ export default function MiMarcaScreen() {
           <SectionCard theme={theme} icon={Share2} title="Compartir con alumnos">
             {settings.inviteCode ? (
               <View style={[styles.codeChip, { borderColor: theme.primary + '33', backgroundColor: theme.primary + '14' }]}>
-                <Text style={[styles.codeText, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}>{settings.inviteCode}</Text>
+                <Text style={[styles.codeText, { color: theme.primary, fontFamily: 'Archivo_800ExtraBold' }]}>{settings.inviteCode}</Text>
               </View>
             ) : null}
             {/* P4: URL principal por código (permanente). El slug solo se muestra como enlace alternativo legacy. */}
@@ -440,7 +440,7 @@ function BrandWordmark({ text, gradient, solidColor }: { text: string; gradient:
   return (
     <View style={{ flexDirection: 'row' }}>
       {text.split('').map((ch, i) => (
-        <Text key={i} style={{ fontSize: 30, fontFamily: 'Montserrat_800ExtraBold', letterSpacing: -1, color: gradient ? WORDMARK_COLORS[i % WORDMARK_COLORS.length] : solidColor }}>
+        <Text key={i} style={{ fontSize: 30, fontFamily: 'Archivo_900Black', letterSpacing: -1, color: gradient ? WORDMARK_COLORS[i % WORDMARK_COLORS.length] : solidColor }}>
           {ch}
         </Text>
       ))}
@@ -453,7 +453,7 @@ function SectionCard({ theme, icon: Icon, title, children }: { theme: any; icon:
     <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
       <View style={styles.sectionHead}>
         <Icon size={15} color={theme.primary} />
-        <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{title}</Text>
+        <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{title}</Text>
       </View>
       {children}
     </View>
@@ -461,7 +461,7 @@ function SectionCard({ theme, icon: Icon, title, children }: { theme: any; icon:
 }
 
 function Label({ children, theme }: { children: React.ReactNode; theme: any }) {
-  return <Text style={[styles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{children}</Text>
+  return <Text style={[styles.label, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>{children}</Text>
 }
 
 function Field({ theme, label, multiline, ...rest }: any) {
@@ -482,7 +482,7 @@ function Segmented({ theme, options, value, onChange }: { theme: any; options: {
         return (
           <TouchableOpacity key={o.value} disabled={o.disabled} onPress={() => onChange(o.value)} activeOpacity={0.8}
             style={[styles.segItem, active && { backgroundColor: theme.primary }, o.disabled && { opacity: 0.4 }]}>
-            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>{o.label}</Text>
+            <Text style={{ fontSize: 12, fontFamily: 'HankenGrotesk_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>{o.label}</Text>
           </TouchableOpacity>
         )
       })}

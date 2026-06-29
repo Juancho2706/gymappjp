@@ -143,26 +143,27 @@ export function BrandSettingsTour({
         <div className="fixed inset-0 z-[120]">
             {/* Spotlight: pointer-events-none para que el usuario pueda interactuar con el área focuseada */}
             <div
-                className="absolute rounded-xl border-2 border-primary transition-all duration-300 pointer-events-none"
+                className="pointer-events-none absolute rounded-control border-2 transition-all duration-300"
                 style={{
                     top: rect.top,
                     left: rect.left,
                     width: rect.width,
                     height: rect.height,
+                    borderColor: 'var(--sport-500)',
                     boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.72)',
                 }}
             />
 
             {/* Tarjeta de guía: clicks habilitados, z-[60] para estar por encima de la bottom nav (z-50) */}
             <div
-                className="absolute z-[60] w-[min(340px,calc(100vw-24px))] rounded-xl border border-border bg-background/95 backdrop-blur p-3 md:p-4 pb-safe shadow-2xl"
+                className="absolute z-[60] w-[min(340px,calc(100vw-24px))] rounded-card border border-subtle bg-surface-card/95 p-3 backdrop-blur pb-safe shadow-[var(--shadow-xl)] md:p-4"
                 style={{ top: cardTopStyle, left: cardLeftStyle }}
             >
-                <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-1">
+                <p className="mb-1 text-[10px] font-black uppercase tracking-widest" style={{ color: 'var(--sport-600)' }}>
                     Mi Marca · Paso {currentIdx + 1} de {total}
                 </p>
-                <h3 className="text-sm font-bold text-foreground leading-tight">{activeStep.title}</h3>
-                <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">{activeStep.description}</p>
+                <h3 className="text-sm font-bold leading-tight text-strong">{activeStep.title}</h3>
+                <p className="mt-1.5 text-xs leading-relaxed text-muted">{activeStep.description}</p>
 
                 <div className="mt-3 flex items-center justify-between gap-2">
                     <Button variant="ghost" size="sm" className="text-xs" onClick={() => onClose(false)}>

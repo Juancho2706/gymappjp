@@ -8,21 +8,23 @@ export const metadata: Metadata = {
 
 export default function CoachSupportPage() {
   return (
-    <div className="px-4 py-6 md:px-8 max-w-2xl mx-auto animate-fade-in">
-      <div className="mb-6 space-y-2">
-        <div className="flex items-center gap-2">
-          <LifeBuoy className="h-6 w-6 text-primary" />
-          <h1 className="text-xl md:text-2xl font-extrabold text-foreground leading-tight">
+    <div className="mx-auto max-w-2xl animate-fade-in px-4 py-6 md:px-8">
+      {/* Inverse hero */}
+      <div className="mb-5 flex items-center gap-3.5 rounded-card p-5 bg-[var(--surface-inverse)]">
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-[var(--sport-500)] text-[var(--text-on-sport)]">
+          <LifeBuoy className="h-6 w-6" />
+        </span>
+        <div className="min-w-0">
+          <h1 className="font-display text-xl font-black text-on-dark md:text-2xl">
             Centro de Ayuda
           </h1>
+          <p className="mt-0.5 text-[13px] leading-relaxed text-on-dark-muted">
+            Escríbenos: dudas, un problema o una mejora. Te respondemos directamente a tu correo.
+          </p>
         </div>
-        <p className="text-muted-foreground text-sm leading-relaxed">
-          ¿Tienes dudas, encontraste un problema o quieres sugerir una mejora? 
-          Escríbenos y te responderemos directamente a tu correo.
-        </p>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-5 md:p-6">
+      <div className="rounded-card border border-subtle bg-surface-card p-5 md:p-6">
         <SupportForm />
       </div>
     </div>

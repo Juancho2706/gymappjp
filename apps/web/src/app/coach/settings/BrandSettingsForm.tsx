@@ -33,11 +33,11 @@ function SaveButton() {
             type="submit"
             disabled={pending}
             className={cn(
-                'flex items-center gap-2 rounded-xl transition-all duration-200 text-white shadow-lg',
-                'px-3 py-2.5 sm:px-5 text-sm font-bold',
+                'flex items-center gap-2 rounded-pill transition-all duration-200 text-[var(--text-on-sport)] shadow-[var(--glow-sport)]',
+                'h-12 px-5 text-sm font-bold',
                 'disabled:opacity-60 disabled:cursor-not-allowed hover:opacity-90 hover:-translate-y-0.5'
             )}
-            style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
+            style={{ backgroundColor: 'var(--theme-primary)' }}
         >
             {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             <span className="hidden sm:inline">{pending ? 'Guardando...' : 'Guardar cambios'}</span>
@@ -165,22 +165,22 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
         <form key={`brand-form-${coach.updated_at ?? coach.id}`} action={formAction} className="space-y-8 lg:space-y-0">
             {/* Brand Score */}
             <div className="flex items-center justify-between gap-3 px-1 mb-2">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 text-xs text-muted">
                     <span className="font-semibold">Marca completada</span>
-                    <span className="font-black tabular-nums" style={{ color: brandScore >= 80 ? '#10b981' : brandScore >= 50 ? '#f59e0b' : undefined }}>{brandScore}%</span>
+                    <span className="font-display font-black tabular-nums" style={{ color: brandScore >= 80 ? 'var(--success-600)' : brandScore >= 50 ? 'var(--warning-600)' : undefined }}>{brandScore}%</span>
                 </div>
-                <div className="flex-1 max-w-[200px] h-1.5 bg-border rounded-full overflow-hidden">
+                <div className="h-1.5 max-w-[200px] flex-1 overflow-hidden rounded-pill bg-surface-sunken">
                     <div
-                        className="h-full rounded-full transition-all duration-500"
+                        className="h-full rounded-pill transition-all duration-500"
                         style={{
                             width: `${brandScore}%`,
-                            backgroundColor: brandScore >= 80 ? '#10b981' : brandScore >= 50 ? '#f59e0b' : 'var(--theme-primary)',
+                            backgroundColor: brandScore >= 80 ? 'var(--success-500)' : brandScore >= 50 ? 'var(--warning-500)' : 'var(--theme-primary)',
                         }}
                     />
                 </div>
                 {isDirty && (
-                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+                    <span className="flex items-center gap-1 text-[10px] font-bold" style={{ color: 'var(--warning-600)' }}>
+                        <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: 'var(--warning-500)' }} />
                         Sin guardar
                     </span>
                 )}
@@ -189,18 +189,18 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-8">
                 <div className="space-y-8">
             {/* Identity */}
-            <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-identity">
+            <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-identity">
                 <div className="flex items-center gap-2">
                     <Type className="w-4 h-4 text-primary" />
-                    <h2 className="text-base font-bold text-foreground">Identidad de tu marca</h2>
+                    <h2 className="text-base font-bold text-strong">Identidad de tu marca</h2>
                 </div>
-                <p className="text-xs text-muted-foreground -mt-3">
+                <p className="text-xs text-muted -mt-3">
                     Esta información es lo primero que ven tus alumnos al abrir tu app.
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                        <Label htmlFor="full_name" className="text-sm text-foreground font-semibold">
+                        <Label htmlFor="full_name" className="text-sm text-strong font-semibold">
                             Tu nombre completo
                         </Label>
                         <Input
@@ -208,16 +208,16 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                             name="full_name"
                             defaultValue={coach.full_name}
                             required
-                            className="h-10 bg-secondary border-border text-foreground rounded-xl focus:border-primary"
+                            className="h-10 bg-surface-sunken border-default text-strong rounded-xl focus:border-primary"
                         />
-                        <p className="text-[10px] text-muted-foreground">Nombre privado para facturación y soporte.</p>
+                        <p className="text-[10px] text-muted">Nombre privado para facturación y soporte.</p>
                         {state.fieldErrors?.full_name && (
                             <p className="text-xs text-destructive">{state.fieldErrors.full_name[0]}</p>
                         )}
                     </div>
 
                     <div className="space-y-1.5">
-                        <Label htmlFor="brand_name" className="text-sm text-foreground font-semibold">
+                        <Label htmlFor="brand_name" className="text-sm text-strong font-semibold">
                             Nombre de tu marca
                         </Label>
                         <Input
@@ -225,9 +225,9 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                             name="brand_name"
                             defaultValue={coach.brand_name}
                             required
-                            className="h-10 bg-secondary border-border text-foreground rounded-xl focus:border-primary"
+                            className="h-10 bg-surface-sunken border-default text-strong rounded-xl focus:border-primary"
                         />
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-[10px] text-muted">
                             Nombre que ven tus alumnos en la app instalada, la pestaña del navegador y el título.
                         </p>
                         {state.fieldErrors?.brand_name && (
@@ -238,22 +238,22 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
 
                 {coach.slug && (
                     <div className="space-y-1.5">
-                        <Label className="text-sm text-foreground font-semibold">
+                        <Label className="text-sm text-strong font-semibold">
                             URL legacy (alias)
                         </Label>
                         <div className="flex items-center gap-0">
-                            <div className="h-10 px-3 flex items-center bg-muted border border-r-0 border-border rounded-l-xl text-sm text-muted-foreground whitespace-nowrap">
+                            <div className="flex h-10 items-center whitespace-nowrap rounded-l-xl border border-r-0 border-subtle bg-surface-sunken px-3 text-sm text-muted">
                                 /c/
                             </div>
-                            <div className="h-10 px-3 flex items-center flex-1 bg-secondary border border-border rounded-r-xl text-sm text-foreground">
+                            <div className="flex h-10 flex-1 items-center rounded-r-xl border border-subtle bg-surface-sunken px-3 text-sm text-strong">
                                 {coach.slug}
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <div className="flex items-center gap-2 text-[11px] text-muted">
                             <ExternalLink className="w-3 h-3 shrink-0" />
                             <span className="truncate">{legacyStudentUrl}</span>
                         </div>
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-[10px] text-muted">
                             Alias web antiguo (no editable). Los links nuevos usan tu código corto; este slug sigue funcionando para tus alumnos actuales.
                         </p>
                     </div>
@@ -261,8 +261,8 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
 
                 <div className="space-y-1.5">
                     <div className="flex items-center gap-2">
-                        <MessageSquare className="w-3.5 h-3.5 text-muted-foreground" />
-                        <Label htmlFor="welcome_message" className="text-sm text-foreground font-semibold">
+                        <MessageSquare className="w-3.5 h-3.5 text-muted" />
+                        <Label htmlFor="welcome_message" className="text-sm text-strong font-semibold">
                             Mensaje de bienvenida
                         </Label>
                     </div>
@@ -274,9 +274,9 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         rows={3}
                         maxLength={240}
                         placeholder="Ej: Bienvenido/a. Esta semana nos enfocamos en consistencia y buena técnica."
-                        className="bg-secondary border-border text-foreground rounded-xl focus:border-primary resize-none"
+                        className="bg-surface-sunken border-default text-strong rounded-xl focus:border-primary resize-none"
                     />
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-[10px] text-muted">
                         Aparece debajo de tu logo en la pantalla de login de tus alumnos. Máximo 240 caracteres.
                     </p>
                     {state.fieldErrors?.welcome_message && (
@@ -285,11 +285,11 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                 </div>
 
                 {/* Welcome Modal */}
-                <div className="rounded-xl border border-border bg-card p-4 space-y-4" data-tour-id="brand-welcome-modal">
+                <div className="rounded-control border border-subtle bg-surface-card p-4 space-y-4" data-tour-id="brand-welcome-modal">
                     <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
                             <Play className="w-4 h-4 text-primary" />
-                            <h3 className="text-sm font-bold text-foreground">Mensaje de bienvenida al dashboard</h3>
+                            <h3 className="text-sm font-bold text-strong">Mensaje de bienvenida al dashboard</h3>
                         </div>
                         <input
                             type="checkbox"
@@ -299,7 +299,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                             className="w-5 h-5 rounded border-border text-primary focus:ring-primary"
                         />
                     </div>
-                    <p className="text-xs text-muted-foreground -mt-2">
+                    <p className="text-xs text-muted -mt-2">
                         Muestra un mensaje o video a tus alumnos cada vez que entran a su dashboard. Útil para anuncios, motivación o instrucciones.
                     </p>
 
@@ -313,7 +313,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                                         'flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg border transition-all',
                                         welcomeModalType === 'text'
                                             ? 'bg-primary/10 border-primary/30 text-primary'
-                                            : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+                                            : 'bg-surface-sunken border-default text-muted hover:text-strong'
                                     )}
                                 >
                                     <FileText className="w-3.5 h-3.5" />
@@ -326,7 +326,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                                         'flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg border transition-all',
                                         welcomeModalType === 'video'
                                             ? 'bg-primary/10 border-primary/30 text-primary'
-                                            : 'bg-secondary border-border text-muted-foreground hover:text-foreground'
+                                            : 'bg-surface-sunken border-default text-muted hover:text-strong'
                                     )}
                                 >
                                     <Play className="w-3.5 h-3.5" />
@@ -336,7 +336,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
 
                             {welcomeModalType === 'text' ? (
                                 <div className="space-y-1.5">
-                                    <Label htmlFor="welcome_modal_content" className="text-sm text-foreground font-semibold">
+                                    <Label htmlFor="welcome_modal_content" className="text-sm text-strong font-semibold">
                                         Mensaje para tus alumnos
                                     </Label>
                                     <Textarea
@@ -347,15 +347,15 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                                         rows={5}
                                         maxLength={1000}
                                         placeholder="Ej: ¡Feliz lunes! Esta semana tenemos un nuevo foco de entrenamiento..."
-                                        className="bg-secondary border-border text-foreground rounded-xl focus:border-primary resize-none"
+                                        className="bg-surface-sunken border-default text-strong rounded-xl focus:border-primary resize-none"
                                     />
-                                    <p className="text-[10px] text-muted-foreground">
+                                    <p className="text-[10px] text-muted">
                                         Máximo 1000 caracteres. Tus alumnos verán este mensaje en un modal al entrar a su dashboard.
                                     </p>
                                 </div>
                             ) : (
                                 <div className="space-y-1.5">
-                                    <Label htmlFor="welcome_modal_content" className="text-sm text-foreground font-semibold">
+                                    <Label htmlFor="welcome_modal_content" className="text-sm text-strong font-semibold">
                                         URL del video
                                     </Label>
                                     <Input
@@ -364,9 +364,9 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                                         value={welcomeModalContent}
                                         onChange={(e) => setWelcomeModalContent(e.target.value)}
                                         placeholder="https://youtube.com/watch?v=... o https://vimeo.com/..."
-                                        className="h-10 bg-secondary border-border text-foreground rounded-xl focus:border-primary"
+                                        className="h-10 bg-surface-sunken border-default text-strong rounded-xl focus:border-primary"
                                     />
-                                    <p className="text-[10px] text-muted-foreground">
+                                    <p className="text-[10px] text-muted">
                                         Pega el link de YouTube o Vimeo. El video se mostrará embebido en el modal.
                                     </p>
                                 </div>
@@ -380,12 +380,12 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             </div>
 
             {/* Brand color */}
-            <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-color">
+            <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-color">
                 <div className="flex items-center gap-2">
                     <Palette className="w-4 h-4 text-primary" />
-                    <h2 className="text-base font-bold text-foreground">Color de marca</h2>
+                    <h2 className="text-base font-bold text-strong">Color de marca</h2>
                 </div>
-                <p className="text-xs text-muted-foreground -mt-3">
+                <p className="text-xs text-muted -mt-3">
                     Este color se aplica a botones, elementos activos, gráficos y brillos de tu app. Generamos automáticamente variantes más claras y oscuras.
                 </p>
 
@@ -396,9 +396,9 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                             type="button"
                             onClick={() => setSelectedColor(color)}
                             className={cn(
-                                'w-10 h-10 rounded-xl border-2 transition-all duration-150 hover:scale-110',
+                                'h-10 w-10 rounded-control border-2 transition-all duration-150 hover:scale-110',
                                 selectedColor === color
-                                    ? 'border-foreground scale-110 shadow-lg'
+                                    ? 'scale-110 border-strong shadow-[var(--shadow-md)]'
                                     : 'border-transparent'
                             )}
                             style={{ backgroundColor: color }}
@@ -414,19 +414,21 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                             className="w-10 h-10 rounded-xl cursor-pointer border-2 border-border bg-transparent"
                             title="Color personalizado"
                         />
-                        <span className="text-xs text-muted-foreground font-mono">{selectedColor}</span>
+                        <span className="text-xs text-muted font-mono">{selectedColor}</span>
                     </div>
                 </div>
 
                 {/* Contrast badge + reset */}
                 <div className="flex items-center gap-3 flex-wrap">
                     <div
-                        className={cn(
-                            'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border',
-                            contrast.level === 'AA' && 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400',
-                            contrast.level === 'AA-large' && 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400',
-                            contrast.level === 'fail' && 'bg-destructive/10 border-destructive/30 text-destructive',
-                        )}
+                        className="flex items-center gap-1.5 rounded-control px-2.5 py-1 text-xs font-bold"
+                        style={
+                            contrast.level === 'AA'
+                                ? { background: 'var(--success-100)', color: 'var(--success-700)' }
+                                : contrast.level === 'AA-large'
+                                ? { background: 'var(--warning-100)', color: 'var(--warning-700)' }
+                                : { background: 'var(--danger-100)', color: 'var(--danger-600)' }
+                        }
                     >
                         {contrast.level === 'AA' && <ShieldCheck className="w-3.5 h-3.5" />}
                         {contrast.level === 'AA-large' && <ShieldAlert className="w-3.5 h-3.5" />}
@@ -438,7 +440,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         <button
                             type="button"
                             onClick={() => setSelectedColor('#007AFF')}
-                            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            className="flex items-center gap-1 text-xs text-muted hover:text-strong transition-colors"
                         >
                             <RotateCcw className="w-3 h-3" />
                             Restaurar por defecto
@@ -450,7 +452,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
 
                 {/* Generated palette */}
                 <div className="space-y-2">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Paleta generada automáticamente</p>
+                    <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Paleta generada automáticamente</p>
                     <div className="flex gap-2">
                         {[
                             { label: 'Primario', color: palette.primary },
@@ -465,14 +467,14 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                                     style={{ backgroundColor: color }}
                                     title={color}
                                 />
-                                <span className="text-[9px] text-muted-foreground">{label}</span>
+                                <span className="text-[9px] text-muted">{label}</span>
                             </div>
                         ))}
                     </div>
                 </div>
 
-                <div className="rounded-xl border border-border p-4 bg-muted/50">
-                    <p className="text-xs text-muted-foreground mb-3">Vista previa del botón principal</p>
+                <div className="rounded-control border border-subtle bg-surface-sunken p-4">
+                    <p className="mb-3 text-xs text-muted">Vista previa del botón principal</p>
                     <button
                         type="button"
                         className="px-5 py-2.5 text-sm font-bold rounded-xl text-white transition-all"
@@ -490,7 +492,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                     <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-border bg-card">
                         <div className="space-y-0.5">
                             <Label className="text-sm font-semibold">Usar todos mis estilos personalizados en mi dashboard actual</Label>
-                            <p className="text-xs text-muted-foreground">Si se activa, tu panel de coach usa tu color, loader y estilos de marca. Si no, usa los valores del sistema.</p>
+                            <p className="text-xs text-muted">Si se activa, tu panel de coach usa tu color, loader y estilos de marca. Si no, usa los valores del sistema.</p>
                         </div>
                         <input
                             type="checkbox"
@@ -522,19 +524,19 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             />
 
             {/* Loader customization */}
-            <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-loader">
+            <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-loader">
                 <div className="flex items-center gap-2">
                     <ImageIcon className="w-4 h-4 text-primary" />
-                    <h2 className="text-base font-bold text-foreground">Loader animado</h2>
+                    <h2 className="text-base font-bold text-strong">Loader animado</h2>
                 </div>
-                <p className="text-xs text-muted-foreground -mt-3">
+                <p className="text-xs text-muted -mt-3">
                     Animación que aparece cuando tus alumnos cargan la app o navegan entre páginas.
                 </p>
 
                 <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-border bg-card">
                     <div className="space-y-0.5">
                         <Label className="text-sm font-semibold">Usar texto personalizado</Label>
-                        <p className="text-xs text-muted-foreground">Muestra tu marca en vez de &quot;EVA&quot; en la animación de carga.</p>
+                        <p className="text-xs text-muted">Muestra tu marca en vez de &quot;EVA&quot; en la animación de carga.</p>
                     </div>
                     <input
                         type="checkbox"
@@ -548,7 +550,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                 {useCustomLoader && (
                     <div className="space-y-4">
                         <div className="space-y-1.5">
-                            <Label htmlFor="loader_text" className="text-sm text-foreground font-semibold">
+                            <Label htmlFor="loader_text" className="text-sm text-strong font-semibold">
                                 Texto del loader
                             </Label>
                             <Input
@@ -558,9 +560,9 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                                 onChange={(e) => setLoaderText(e.target.value.toUpperCase())}
                                 maxLength={10}
                                 placeholder="EVA"
-                                className="h-10 bg-secondary border-border text-foreground rounded-xl focus:border-primary uppercase"
+                                className="h-10 bg-surface-sunken border-default text-strong rounded-xl focus:border-primary uppercase"
                             />
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-muted">
                                 Máximo 10 caracteres. Se transforma automáticamente a mayúsculas.
                             </p>
                             {state.fieldErrors?.loader_text && (
@@ -569,7 +571,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         </div>
 
                         <div className="space-y-2">
-                            <Label className="text-sm text-foreground font-semibold">Ícono del loader</Label>
+                            <Label className="text-sm text-strong font-semibold">Ícono del loader</Label>
                             <div className="grid grid-cols-3 gap-2">
                                 {([
                                     { value: 'eva', label: 'Logo EVA', desc: 'Ícono animado de EVA' },
@@ -590,7 +592,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                                         )}
                                     >
                                         <span className="text-xs font-bold">{label}</span>
-                                        <span className="text-[10px] text-muted-foreground leading-tight">{desc}</span>
+                                        <span className="text-[10px] text-muted leading-tight">{desc}</span>
                                     </button>
                                 ))}
                             </div>
@@ -598,7 +600,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         </div>
 
                         <div className="space-y-2">
-                            <Label className="text-sm text-foreground font-semibold">Estilo del texto</Label>
+                            <Label className="text-sm text-strong font-semibold">Estilo del texto</Label>
                             {(() => {
                                 const p = generateBrandPalette(selectedColor ?? '#007AFF')
                                 const brandGradient = `linear-gradient(90deg, ${p.primaryLight}, ${p.primary}, ${p.primaryDark}, ${p.primaryLight})`
@@ -620,7 +622,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                                             >
                                                 {(loaderText || 'EVA').toUpperCase()}
                                             </span>
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Gradiente animado</span>
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted">Gradiente animado</span>
                                         </button>
                                         <button
                                             type="button"
@@ -638,7 +640,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                                             >
                                                 {(loaderText || 'EVA').toUpperCase()}
                                             </span>
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Color sólido</span>
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted">Color sólido</span>
                                         </button>
                                     </div>
                                 )
@@ -657,12 +659,12 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                                         value={loaderTextColor}
                                         onChange={(e) => setLoaderTextColor(e.target.value)}
                                         placeholder="#007AFF"
-                                        className="h-10 bg-secondary border-border text-foreground rounded-xl focus:border-primary flex-1"
+                                        className="h-10 bg-surface-sunken border-default text-strong rounded-xl focus:border-primary flex-1"
                                     />
                                 </div>
                             )}
                             <input type="hidden" name="loader_text_color" value={loaderTextColor} />
-                            <p className="text-[10px] text-muted-foreground">
+                            <p className="text-[10px] text-muted">
                                 Gradiente: el mismo estilo animado que usa EVA. Color sólido: tu color de marca con animación de pulso.
                             </p>
                         </div>
@@ -671,12 +673,12 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             </div>
 
             {/* Share with students */}
-            <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-share">
+            <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-share">
                 <div className="flex items-center gap-2">
                     <QrCode className="w-4 h-4 text-primary" />
-                    <h2 className="text-base font-bold text-foreground">Compartir con alumnos</h2>
+                    <h2 className="text-base font-bold text-strong">Compartir con alumnos</h2>
                 </div>
-                <p className="text-xs text-muted-foreground -mt-3">
+                <p className="text-xs text-muted -mt-3">
                     Tus alumnos entran con tu código corto. Los slugs antiguos siguen funcionando como alias.
                 </p>
 
@@ -696,23 +698,24 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                                 <Input
                                     readOnly
                                     value={studentUrl}
-                                    className="h-10 bg-secondary border-border text-foreground rounded-xl text-sm"
+                                    className="h-10 bg-surface-sunken border-default text-strong rounded-xl text-sm"
                                 />
                                 <button
                                     type="button"
                                     onClick={handleCopyLink}
                                     className={cn(
-                                        'h-10 px-3 rounded-xl border text-sm font-bold transition-all shrink-0',
+                                        'h-10 shrink-0 rounded-control border px-3 text-sm font-bold transition-all',
                                         copied
-                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600'
-                                            : 'bg-secondary border-border text-muted-foreground hover:text-foreground hover:border-primary/50'
+                                            ? 'border-transparent'
+                                            : 'border-default bg-surface-sunken text-muted hover:border-[var(--sport-400)] hover:text-strong'
                                     )}
+                                    style={copied ? { background: 'var(--success-100)', color: 'var(--success-700)' } : undefined}
                                 >
                                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                 </button>
                             </div>
                         </div>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted">
                             Comparte este link por WhatsApp, Instagram o muestra el QR en tu gym. Si un alumno tiene un link antiguo con tu slug, también seguirá funcionando.
                         </p>
                     </div>
@@ -747,12 +750,12 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             <div className="fixed bottom-[calc(var(--mobile-content-bottom-offset,0px)+1.5rem)] right-4 z-50 md:bottom-6 md:right-8" data-tour-id="brand-save">
                 <div className="flex flex-col items-end gap-2">
                     {state.error && (
-                        <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-3 py-2 text-xs text-destructive shadow-lg max-w-[260px]">
+                        <div className="max-w-[260px] rounded-control border px-3 py-2 text-xs shadow-[var(--shadow-lg)]" style={{ background: 'var(--danger-100)', borderColor: 'var(--danger-100)', color: 'var(--danger-600)' }}>
                             {state.error}
                         </div>
                     )}
                     {state.success && (
-                        <div className="rounded-xl bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400 shadow-lg max-w-[260px]">
+                        <div className="max-w-[260px] rounded-control border px-3 py-2 text-xs shadow-[var(--shadow-lg)]" style={{ background: 'var(--success-100)', borderColor: 'var(--success-100)', color: 'var(--success-700)' }}>
                             ✓ Cambios guardados
                         </div>
                     )}
@@ -760,7 +763,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         <button
                             type="button"
                             onClick={() => setPreviewExpanded(true)}
-                            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 shadow-lg"
+                            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl border border-border bg-card text-muted hover:text-strong hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 shadow-lg"
                         >
                             <Maximize2 className="w-4 h-4" />
                             <span className="hidden sm:inline">Expandir vista</span>
@@ -773,7 +776,8 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             {/* Vista previa expandida — el MISMO preview fiel (refleja lo que editás), a pantalla completa */}
             {previewExpanded && (
                 <div
-                    className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+                    className="fixed inset-0 z-[60] flex items-center justify-center p-4 backdrop-blur-sm"
+                    style={{ background: 'var(--surface-overlay)' }}
                     onClick={() => setPreviewExpanded(false)}
                     role="dialog"
                     aria-modal="true"
@@ -783,7 +787,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         <button
                             type="button"
                             onClick={() => setPreviewExpanded(false)}
-                            className="absolute -right-2 -top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-lg transition-colors hover:text-foreground"
+                            className="absolute -right-2 -top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted shadow-lg transition-colors hover:text-strong"
                             aria-label="Cerrar vista previa"
                         >
                             <X className="h-4 w-4" />

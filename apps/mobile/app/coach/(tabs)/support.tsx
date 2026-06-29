@@ -51,11 +51,11 @@ export default function SupportScreen() {
         {/* Contact */}
         <Button label="Escribinos por email" leftIcon={Mail} onPress={() => Linking.openURL(buildSupportMailto()).catch(() => {})} full />
 
-        <Text style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>PREGUNTAS FRECUENTES</Text>
+        <Text style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_800ExtraBold' }]}>PREGUNTAS FRECUENTES</Text>
 
         {groups.map(([category, entries]) => (
           <View key={category} style={styles.group}>
-            <Text style={[styles.groupTitle, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>{category.toUpperCase()}</Text>
+            <Text style={[styles.groupTitle, { color: theme.primary, fontFamily: 'HankenGrotesk_700Bold' }]}>{category.toUpperCase()}</Text>
             <View style={styles.groupItems}>
               {entries.map((item) => (
                 <Accordion key={item.q} question={item.q} answer={item.a} />

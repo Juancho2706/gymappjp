@@ -4,7 +4,6 @@ import { useState, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
@@ -157,10 +156,10 @@ export function SupportForm() {
                     type="button"
                     onClick={() => field.onChange(t)}
                     className={cn(
-                      'shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-colors border',
+                      'shrink-0 rounded-control border px-4 py-2 text-sm font-semibold transition-colors',
                       field.value === t
-                        ? 'bg-primary text-white border-primary'
-                        : 'bg-muted text-muted-foreground border-transparent hover:bg-muted/80'
+                        ? 'border-transparent bg-[var(--sport-500)] text-[var(--text-on-sport)]'
+                        : 'border-transparent bg-surface-sunken text-muted hover:text-strong'
                     )}
                   >
                     {TYPE_LABELS[t]}
@@ -243,7 +242,7 @@ export function SupportForm() {
               <FormControl>
                 <div className="flex items-center gap-3">
                   {!uploadedFileName ? (
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-border bg-muted/50 px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-control border border-dashed border-default bg-surface-sunken px-4 py-2.5 text-sm font-semibold text-muted transition-colors hover:text-strong">
                       <Paperclip className="h-4 w-4" />
                       {uploadingFile ? 'Subiendo...' : 'Subir imagen o PDF'}
                       <input
@@ -255,12 +254,12 @@ export function SupportForm() {
                       />
                     </label>
                   ) : (
-                    <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2 text-sm">
-                      <span className="text-foreground truncate max-w-[200px]">{uploadedFileName}</span>
+                    <div className="flex items-center gap-2 rounded-control border border-subtle bg-surface-sunken px-3 py-2 text-sm">
+                      <span className="max-w-[200px] truncate text-strong">{uploadedFileName}</span>
                       <button
                         type="button"
                         onClick={removeAttachment}
-                        className="text-muted-foreground hover:text-destructive"
+                        className="text-muted transition-colors hover:text-[var(--danger-600)]"
                       >
                         <X className="h-4 w-4" />
                       </button>
@@ -275,19 +274,23 @@ export function SupportForm() {
         />
 
         {/* Disclaimer */}
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-[11px] text-muted">
           Al enviar, aceptas nuestras condiciones de uso.
         </p>
 
         {/* Submit */}
-        <Button type="submit" className="w-full gap-2" disabled={isSubmitting}>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-control text-sm font-bold transition-all bg-[var(--sport-500)] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] hover:bg-[var(--cta-fill)] disabled:opacity-60"
+        >
           {isSubmitting ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Send className="h-4 w-4" />
           )}
           Enviar mensaje
-        </Button>
+        </button>
       </form>
     </Form>
   )

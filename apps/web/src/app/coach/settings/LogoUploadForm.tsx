@@ -19,7 +19,7 @@ function UploadButton() {
         <button
             type="submit"
             disabled={pending}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl bg-secondary border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-60"
+            className="flex items-center gap-2 rounded-control border border-default bg-surface-sunken px-4 py-2 text-sm font-semibold text-muted transition-colors hover:text-strong disabled:opacity-60"
         >
             {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
             {pending ? 'Subiendo...' : 'Subir logo'}
@@ -99,17 +99,17 @@ export function LogoUploadForm({
     const displayUrl = previewUrl ?? currentLogoUrl
 
     return (
-        <div className="bg-card border border-border rounded-2xl p-6 shadow-sm" data-tour-id="brand-logo">
+        <div className="rounded-card border border-subtle bg-surface-card p-6 shadow-[var(--shadow-sm)]" data-tour-id="brand-logo">
             <div className="mb-5">
-                <h2 className="text-base font-bold text-foreground">Logo de tu marca</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <h2 className="text-base font-bold text-strong">Logo de tu marca</h2>
+                <p className="mt-1 text-xs text-muted">
                     También es el ícono que tus alumnos ven al instalar tu app en el teléfono.
                 </p>
             </div>
 
             <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
                 {/* Logo preview */}
-                <div className="w-20 h-20 rounded-2xl bg-muted border border-border flex items-center justify-center flex-shrink-0 overflow-hidden relative">
+                <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-card border border-subtle bg-surface-sunken">
                     {displayUrl ? (
                         <Image
                             src={displayUrl}
@@ -147,18 +147,18 @@ export function LogoUploadForm({
                         onDragLeave={() => setIsDragging(false)}
                         onDrop={handleDrop}
                         className={cn(
-                            'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-5 cursor-pointer transition-colors',
+                            'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-control border-2 border-dashed p-5 transition-colors',
                             isDragging
-                                ? 'border-primary/60 bg-primary/5'
-                                : 'border-border hover:border-primary/40 hover:bg-primary/5'
+                                ? 'border-[var(--sport-500)] bg-[var(--sport-100)]'
+                                : 'border-default hover:border-[var(--sport-400)] hover:bg-[var(--sport-100)]'
                         )}
                     >
-                        <ImagePlus className={cn('w-6 h-6 transition-colors', isDragging ? 'text-primary' : 'text-muted-foreground')} />
+                        <ImagePlus className={cn('h-6 w-6 transition-colors', isDragging ? 'text-[var(--sport-600)]' : 'text-muted')} />
                         <div className="text-center">
-                            <p className="text-sm font-medium text-foreground">
+                            <p className="text-sm font-semibold text-strong">
                                 {isDragging ? 'Suelta aquí' : 'Arrastra tu logo o haz clic'}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-0.5">PNG, JPG o SVG · Máx 2 MB · Recomendado: 512×512 px, fondo transparente</p>
+                            <p className="mt-0.5 text-xs text-muted">PNG, JPG o SVG · Máx 2 MB · Recomendado: 512×512 px, fondo transparente</p>
                         </div>
                     </div>
 
@@ -176,8 +176,8 @@ export function LogoUploadForm({
                         <UploadButton />
                     </form>
 
-                    {state.error && <p className="text-xs text-destructive">{state.error}</p>}
-                    {state.success && <p className="text-xs text-emerald-600 dark:text-emerald-400">✓ Logo actualizado.</p>}
+                    {state.error && <p className="text-xs" style={{ color: 'var(--danger-600)' }}>{state.error}</p>}
+                    {state.success && <p className="text-xs" style={{ color: 'var(--success-700)' }}>✓ Logo actualizado.</p>}
                 </div>
             </div>
         </div>

@@ -117,28 +117,28 @@ export function CouponRedeemCard() {
     if (!enabled && !activeCode) return null
 
     return (
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-white">
-                <Ticket className="h-4 w-4 text-emerald-400" /> Código de descuento
+        <div className="rounded-card border border-subtle bg-surface-card p-4">
+            <div className="mb-2 flex items-center gap-2 font-display text-sm font-bold tracking-tight text-strong">
+                <Ticket className="h-4 w-4 text-emerald-500" /> Código de descuento
             </div>
 
             {activeCode ? (
-                <p className="text-sm text-emerald-400">
+                <p className="text-sm text-emerald-600 dark:text-emerald-400">
                     Código <span className="font-mono font-semibold">{activeCode}</span> aplicado a tu suscripción.
                 </p>
             ) : (phase === 'preview' || phase === 'applying') && preview ? (
                 <div ref={dialogRef} onKeyDown={onDialogKeyDown} role="dialog" aria-modal="true" aria-label="Confirmar código de descuento" className="space-y-3">
-                    <p className="text-sm text-white/90">{preview.termsText}</p>
-                    <div className="rounded-lg bg-white/5 p-3 text-sm">
-                        <div className="flex justify-between text-white/60">
+                    <p className="text-sm text-body">{preview.termsText}</p>
+                    <div className="rounded-control bg-surface-sunken p-3 text-sm">
+                        <div className="flex justify-between text-muted">
                             <span>Precio normal</span>
                             <span className="line-through">{clp(preview.baseBeforeDiscountClp)}</span>
                         </div>
-                        <div className="flex justify-between text-emerald-400">
+                        <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
                             <span>Descuento ({preview.durationLabel})</span>
                             <span>−{clp(preview.discountClp)}</span>
                         </div>
-                        <div className="mt-1 flex justify-between border-t border-white/10 pt-1 font-semibold text-white">
+                        <div className="mt-1 flex justify-between border-t border-subtle pt-1 font-semibold text-strong">
                             <span>Pagas</span>
                             <span>{clp(preview.totalClp)}</span>
                         </div>
@@ -147,7 +147,7 @@ export function CouponRedeemCard() {
                         <button
                             onClick={onConfirmar}
                             disabled={phase === 'applying'}
-                            className="flex-1 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50 min-h-[44px]"
+                            className="flex-1 rounded-control bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 min-h-[44px]"
                         >
                             {phase === 'applying' ? 'Aplicando…' : 'Confirmar y aplicar'}
                         </button>
@@ -156,33 +156,33 @@ export function CouponRedeemCard() {
                                 setPhase('idle')
                                 setPreview(null)
                             }}
-                            className="rounded-lg border border-white/15 px-4 py-2.5 text-sm text-white/70 min-h-[44px]"
+                            className="rounded-control border border-default px-4 py-2.5 text-sm text-muted min-h-[44px]"
                         >
                             Cancelar
                         </button>
                     </div>
                 </div>
             ) : phase === 'done' ? (
-                <p className="text-sm text-emerald-400">¡Código aplicado! Se reflejará en tu próximo cobro.</p>
+                <p className="text-sm text-emerald-600 dark:text-emerald-400">¡Código aplicado! Se reflejará en tu próximo cobro.</p>
             ) : (
                 <div className="flex gap-2">
                     <input
                         value={code}
                         onChange={(e) => setCode(e.target.value)}
                         placeholder="Ingresa tu código"
-                        className="h-11 min-h-[44px] flex-1 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                        className="h-11 min-h-[44px] flex-1 rounded-control border border-default bg-surface-card px-3 text-sm text-strong placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
                     />
                     <button
                         onClick={onAplicar}
                         disabled={!code.trim() || phase === 'checking'}
-                        className="rounded-lg bg-white/10 px-4 text-sm font-medium text-white disabled:opacity-40 min-h-[44px]"
+                        className="rounded-control bg-surface-sunken px-4 text-sm font-semibold text-strong disabled:opacity-40 min-h-[44px]"
                     >
                         {phase === 'checking' ? '…' : 'Aplicar'}
                     </button>
                 </div>
             )}
 
-            {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+            {error && <p className="mt-2 text-xs text-red-500 dark:text-red-400">{error}</p>}
         </div>
     )
 }

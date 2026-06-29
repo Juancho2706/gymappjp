@@ -554,12 +554,12 @@ export default function CoachSubscriptionPage() {
         <main className="mx-auto max-w-4xl px-4 py-8">
             <Link
                 href="/coach/settings"
-                className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-strong"
             >
                 <ArrowLeft className="h-4 w-4" /> Opciones
             </Link>
-            <h1 className="text-2xl font-extrabold text-foreground">Mi Suscripción</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <h1 className="font-display text-2xl font-extrabold tracking-tight text-strong">Mi Suscripción</h1>
+            <p className="mt-1 text-sm text-muted">
                 Gestioná tu plan, frecuencia de cobro y cancelación.
             </p>
 
@@ -573,8 +573,8 @@ export default function CoachSubscriptionPage() {
             ) : null}
 
             {coach ? (
-                <section className="mt-6 rounded-2xl border border-border bg-card p-5">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Plan actual</p>
+                <section className="mt-6 rounded-card border border-subtle bg-surface-card p-5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">Plan actual</p>
                     <div className="flex items-start gap-4">
                         {(() => {
                             // Un tier desconocido (ni venta ni legacy — data corrupta o tier nuevo
@@ -661,7 +661,7 @@ export default function CoachSubscriptionPage() {
                                         <button
                                             type="button"
                                             onClick={() => router.push('/coach/subscription/update-card')}
-                                            className="font-medium text-[#007AFF] hover:underline"
+                                            className="font-medium text-link hover:underline"
                                         >
                                             Cambiar tarjeta
                                         </button>
@@ -669,16 +669,16 @@ export default function CoachSubscriptionPage() {
                                 )}
                             {/* Desglose compuesto (base + add-ons) — solo si hay add-ons facturables */}
                             {coach.subscription_status === 'active' && billing && billing.addonsClp > 0 && (
-                                <div className="mt-2 rounded-lg border border-border bg-secondary/30 px-3 py-2 text-xs">
-                                    <div className="flex justify-between text-muted-foreground">
+                                <div className="mt-2 rounded-control border border-subtle bg-surface-sunken px-3 py-2 text-xs">
+                                    <div className="flex justify-between text-muted">
                                         <span>Plan base</span>
-                                        <span className="text-foreground">${billing.baseClp.toLocaleString('es-CL')} CLP</span>
+                                        <span className="text-strong">${billing.baseClp.toLocaleString('es-CL')} CLP</span>
                                     </div>
-                                    <div className="mt-0.5 flex justify-between text-muted-foreground">
+                                    <div className="mt-0.5 flex justify-between text-muted">
                                         <span>Módulos add-on</span>
-                                        <span className="text-foreground">${billing.addonsClp.toLocaleString('es-CL')} CLP</span>
+                                        <span className="text-strong">${billing.addonsClp.toLocaleString('es-CL')} CLP</span>
                                     </div>
-                                    <div className="mt-1 flex justify-between border-t border-border pt-1 font-semibold text-foreground">
+                                    <div className="mt-1 flex justify-between border-t border-subtle pt-1 font-semibold text-strong">
                                         <span>Total próximo cobro</span>
                                         <span>${billing.totalClp.toLocaleString('es-CL')} CLP</span>
                                     </div>
@@ -691,12 +691,12 @@ export default function CoachSubscriptionPage() {
 
             {/* ── Add-ons (módulos) — superficie de venta permitida #2 (anti-hostigamiento) ── */}
             {coach ? (
-                <section id="addons" className="mt-6 rounded-2xl border border-border bg-card p-5">
+                <section id="addons" className="mt-6 rounded-card border border-subtle bg-surface-card p-5">
                     <div className="flex items-center gap-2">
                         <Puzzle className="h-5 w-5 text-primary" />
-                        <h2 className="text-lg font-semibold text-foreground">Módulos add-on</h2>
+                        <h2 className="font-display text-lg font-bold tracking-tight text-strong">Módulos add-on</h2>
                     </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    <p className="mt-1 text-sm text-muted">
                         Suma módulos a tu plan según los necesites. Cada módulo se cobra junto a tu suscripción
                         y puedes quitarlo cuando quieras.
                     </p>
@@ -715,11 +715,11 @@ export default function CoachSubscriptionPage() {
                             const canAdd = hasActivePaidPlan && !requiresNutritionTier && !row
 
                             return (
-                                <div key={key} className="rounded-xl border border-border dark:border-white/10 p-4">
+                                <div key={key} className="rounded-control border border-subtle p-4">
                                     <div className="flex items-start justify-between gap-3 flex-wrap">
                                         <div className="min-w-0 flex-1">
-                                            <p className="font-semibold text-foreground">{cfg.label}</p>
-                                            <p className="mt-0.5 text-xs text-muted-foreground">{cfg.description}</p>
+                                            <p className="font-semibold text-strong">{cfg.label}</p>
+                                            <p className="mt-0.5 text-xs text-muted">{cfg.description}</p>
                                         </div>
                                         <div className="shrink-0 text-right">
                                             {isCourtesy ? (
@@ -752,7 +752,7 @@ export default function CoachSubscriptionPage() {
 
                                     {/* Acción Agregar / Quitar */}
                                     <div className="mt-3 flex items-center justify-between gap-3">
-                                        <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+                                        <span className="min-w-0 flex-1 text-xs text-muted">
                                             ${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes
                                             {coachCycle !== 'monthly' && (
                                                 <span className="ml-1">
@@ -765,7 +765,7 @@ export default function CoachSubscriptionPage() {
                                                 type="button"
                                                 disabled={addonSaving || isCancelPendingCharged || isCommitted || !SELF_SERVICE_ADDONS_ENABLED}
                                                 onClick={(e) => { modalTriggerRef.current = e.currentTarget; setCancelAddonEffective(undefined); setCancelAddonKey(key) }}
-                                                className="shrink-0 h-11 min-h-[44px] rounded-xl border border-border px-4 text-xs font-semibold text-muted-foreground hover:text-foreground disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                                className="shrink-0 h-11 min-h-[44px] rounded-control border border-default px-4 text-xs font-semibold text-muted hover:text-strong disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                             >
                                                 {isCancelPendingCharged || isCommitted ? 'Baja solicitada' : 'Quitar'}
                                             </button>
@@ -774,7 +774,7 @@ export default function CoachSubscriptionPage() {
                                                 type="button"
                                                 disabled={addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
                                                 onClick={(e) => { modalTriggerRef.current = e.currentTarget; openAddonModal(key) }}
-                                                className="shrink-0 h-11 min-h-[44px] rounded-xl bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                                className="shrink-0 h-11 min-h-[44px] rounded-control bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                             >
                                                 Agregar
                                             </button>
@@ -782,7 +782,7 @@ export default function CoachSubscriptionPage() {
                                     </div>
 
                                     {isCourtesy && (
-                                        <p className="mt-2 text-[11px] text-muted-foreground">
+                                        <p className="mt-2 text-[11px] text-muted">
                                             Activo sin costo por cortesía de EVA. No se incluye en tu cobro.
                                         </p>
                                     )}
@@ -792,12 +792,12 @@ export default function CoachSubscriptionPage() {
                     </div>
 
                     {!hasActivePaidPlan && (
-                        <p className="mt-4 rounded-lg border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
+                        <p className="mt-4 rounded-control border border-subtle bg-surface-sunken px-3 py-2 text-xs text-muted">
                             Los módulos add-on están disponibles con un plan pago activo.
                         </p>
                     )}
                     {hasActivePaidPlan && !SELF_SERVICE_ADDONS_ENABLED && (
-                        <p className="mt-4 rounded-lg border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
+                        <p className="mt-4 rounded-control border border-subtle bg-surface-sunken px-3 py-2 text-xs text-muted">
                             La compra y baja de módulos estará disponible muy pronto. Si necesitas un módulo ahora,
                             escríbenos a <a href="mailto:contacto@eva-app.cl" className="text-primary hover:opacity-80">contacto@eva-app.cl</a>.
                         </p>
@@ -810,21 +810,21 @@ export default function CoachSubscriptionPage() {
                 unos segundos hasta que carga subscription-status. coach se setea junto a addons +
                 activeClientCount en el mismo fetch → al aparecer la sección, la data está completa. */}
             {coach && (
-            <section className="mt-6 rounded-2xl border border-border bg-card p-5 space-y-5">
+            <section className="mt-6 rounded-card border border-subtle bg-surface-card p-5 space-y-5">
                 <div className="flex items-center justify-between flex-wrap gap-3">
-                    <h2 className="text-lg font-semibold text-foreground">Cambiar plan</h2>
+                    <h2 className="font-display text-lg font-bold tracking-tight text-strong">Cambiar plan</h2>
                     {/* Cycle pills — shown per selected tier */}
                     {allowedCycleOptions.length > 1 && (
-                        <div className="flex flex-wrap items-center gap-1 rounded-xl border border-border bg-secondary/50 p-1">
+                        <div className="flex flex-wrap items-center gap-1 rounded-control border border-subtle bg-surface-sunken p-1">
                             {allowedCycleOptions.map((cycle) => (
                                 <button
                                     key={cycle}
                                     type="button"
                                     onClick={() => setSelectedCycle(cycle)}
-                                    className={`flex min-h-[44px] items-center rounded-lg px-2.5 py-2 text-xs font-semibold transition-colors sm:px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+                                    className={`flex min-h-[44px] items-center rounded-control px-2.5 py-2 text-xs font-semibold transition-colors sm:px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
                                         selectedCycle === cycle
-                                            ? 'bg-background text-foreground shadow-sm'
-                                            : 'text-muted-foreground hover:text-foreground'
+                                            ? 'bg-surface-card text-strong shadow-sm'
+                                            : 'text-muted hover:text-strong'
                                     }`}
                                 >
                                     {BILLING_CYCLE_CONFIG[cycle].label}
@@ -890,12 +890,12 @@ export default function CoachSubscriptionPage() {
                                     setBlockedMsg(null)
                                     setSelectedTier(tier)
                                 }}
-                                className={`relative rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+                                className={`relative rounded-card border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
                                     isBlocked
-                                        ? 'cursor-not-allowed border-border opacity-50'
+                                        ? 'cursor-not-allowed border-subtle opacity-50'
                                         : isSelected
                                         ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30'
-                                        : 'border-border hover:border-border/80 hover:bg-secondary/30'
+                                        : 'border-subtle hover:border-default hover:bg-surface-sunken'
                                 }`}
                             >
                                 {/* Razón del bloqueo para lectores de pantalla (referida por aria-describedby) */}
@@ -920,16 +920,16 @@ export default function CoachSubscriptionPage() {
                                     <TierIcon className={`h-4.5 w-4.5 ${TIER_COLOR[tier]}`} />
                                 </div>
 
-                                <p className="font-bold text-foreground">{TIER_CONFIG[tier].label}</p>
-                                <p className="text-[11px] text-muted-foreground mt-0.5">{TIER_STUDENT_RANGE_LABEL[tier]}</p>
+                                <p className="font-display font-bold tracking-tight text-strong">{TIER_CONFIG[tier].label}</p>
+                                <p className="text-[11px] text-muted mt-0.5">{TIER_STUDENT_RANGE_LABEL[tier]}</p>
 
                                 <div className="mt-3">
-                                    <span className="text-xl font-extrabold text-foreground">
+                                    <span className="font-display text-xl font-extrabold tracking-tight text-strong">
                                         ${price.toLocaleString('es-CL')}
                                     </span>
-                                    <span className="text-xs text-muted-foreground"> CLP/mes</span>
+                                    <span className="text-xs text-muted"> CLP/mes</span>
                                     {selectedCycle === 'annual' && isBillingCycleAllowedForTier(tier, 'annual') && (
-                                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                                        <p className="text-[10px] text-muted mt-0.5">
                                             ${(price * 12).toLocaleString('es-CL')} cobrado anualmente
                                         </p>
                                     )}
@@ -937,7 +937,7 @@ export default function CoachSubscriptionPage() {
 
                                 <ul className="mt-3 space-y-1.5">
                                     {features.map((f) => (
-                                        <li key={f} className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                                        <li key={f} className="flex items-start gap-1.5 text-[11px] text-muted">
                                             <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400" />
                                             {f}
                                         </li>
@@ -979,13 +979,13 @@ export default function CoachSubscriptionPage() {
                 {/* Combo plan + add-ons (plan 05): elegí módulos para pagarlos JUNTO al plan en un
                     solo checkout. Visible solo con el flag de lanzamiento (en prod oculto). */}
                 {SELF_SERVICE_ADDONS_ENABLED && (
-                    <div className="rounded-xl border border-border bg-card p-4">
-                        <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <div className="rounded-control border border-subtle bg-surface-card p-4">
+                        <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
                             <Puzzle className="h-3.5 w-3.5" aria-hidden="true" /> Sumar módulos (opcional · se pagan junto al plan)
                         </p>
                         {/* Aclaración (issue #12): estos módulos se cobran CON el plan al corte; el catálogo
                             "Agregar ahora" de arriba cobra una proración inmediata. Dos superficies distintas. */}
-                        <p className="mb-2 text-[11px] text-muted-foreground">
+                        <p className="mb-2 text-[11px] text-muted">
                             Se cobran junto a tu plan en el mismo checkout y toman efecto al corte. Si necesitas
                             un módulo de inmediato, usa &quot;Agregar&quot; en la sección Módulos add-on (cobro prorrateado ahora).
                         </p>
@@ -1002,10 +1002,10 @@ export default function CoachSubscriptionPage() {
                                 return (
                                     <label
                                         key={key}
-                                        className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${
+                                        className={`flex items-center justify-between gap-2 rounded-control border px-3 py-2 text-sm ${
                                             disabled
-                                                ? 'cursor-not-allowed border-border opacity-50'
-                                                : 'cursor-pointer border-border hover:bg-secondary/40'
+                                                ? 'cursor-not-allowed border-subtle opacity-50'
+                                                : 'cursor-pointer border-subtle hover:bg-surface-sunken'
                                         }`}
                                     >
                                         <span className="flex items-center gap-2">
@@ -1022,14 +1022,14 @@ export default function CoachSubscriptionPage() {
                                                 }
                                                 className="h-4 w-4 rounded border-border"
                                             />
-                                            <span className="text-foreground">{cfg.label}</span>
+                                            <span className="text-strong">{cfg.label}</span>
                                             {alreadyLive ? (
                                                 <span className="text-[10px] font-semibold text-emerald-500">ya activo</span>
                                             ) : needsNutrition ? (
                                                 <span className="text-[10px] font-semibold text-amber-500">requiere Pro+</span>
                                             ) : null}
                                         </span>
-                                        <span className="text-muted-foreground">
+                                        <span className="text-muted">
                                             ${cfg.priceClpMensual.toLocaleString('es-CL')}/mes
                                         </span>
                                     </label>
@@ -1039,17 +1039,17 @@ export default function CoachSubscriptionPage() {
                     </div>
                 )}
 
-                <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-secondary/30 px-4 py-3">
+                <div className="flex items-center justify-between gap-4 rounded-control border border-subtle bg-surface-sunken px-4 py-3">
                     <div>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted">
                             {upgradeAddons.length > 0 ? 'Total (plan + módulos)' : 'Total a pagar'}
                         </p>
-                        <p className="text-lg font-extrabold text-foreground">
+                        <p className="font-display text-lg font-extrabold tracking-tight text-strong">
                             {selectedCouponDiscount > 0 && (
-                                <span className="mr-2 text-sm font-normal text-muted-foreground line-through">${selectedComposite.toLocaleString('es-CL')}</span>
+                                <span className="mr-2 text-sm font-normal text-muted line-through">${selectedComposite.toLocaleString('es-CL')}</span>
                             )}
                             ${selectedCompositeNet.toLocaleString('es-CL')} CLP
-                            <span className="text-sm font-normal text-muted-foreground"> / {BILLING_CYCLE_CONFIG[selectedCycle].label.toLowerCase()}</span>
+                            <span className="text-sm font-normal text-muted"> / {BILLING_CYCLE_CONFIG[selectedCycle].label.toLowerCase()}</span>
                         </p>
                         {selectedCouponDiscount > 0 && activeCoupon && (
                             <p className="text-[11px] font-medium text-emerald-500">
@@ -1057,7 +1057,7 @@ export default function CoachSubscriptionPage() {
                             </p>
                         )}
                         {upgradeAddons.length > 0 && (
-                            <p className="text-[11px] text-muted-foreground">
+                            <p className="text-[11px] text-muted">
                                 plan ${selectedPrice.toLocaleString('es-CL')} + {upgradeAddons.length} módulo(s) ${upgradeAddonsCycleTotal.toLocaleString('es-CL')}
                             </p>
                         )}
@@ -1067,7 +1067,7 @@ export default function CoachSubscriptionPage() {
                         onClick={(e) => { modalTriggerRef.current = e.currentTarget; setShowUpgradeConfirm(true) }}
                         disabled={saving || isNoOpChange}
                         title={isNoOpChange ? 'Ya tienes este plan y ciclo. Elige un plan o ciclo distinto.' : undefined}
-                        className="shrink-0 h-11 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        className="shrink-0 h-11 rounded-control bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                     >
                         Continuar →
                     </button>
@@ -1086,10 +1086,10 @@ export default function CoachSubscriptionPage() {
                         aria-modal="true"
                         aria-labelledby={upgradeModalTitleId}
                         onClick={(e) => e.stopPropagation()}
-                        className="w-full max-w-md rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-6 pb-safe shadow-2xl max-h-[90dvh] overflow-y-auto"
+                        className="w-full max-w-md rounded-card border border-subtle bg-surface-card p-6 pb-safe shadow-2xl max-h-[90dvh] overflow-y-auto"
                     >
-                        <h2 id={upgradeModalTitleId} className="text-lg font-bold text-foreground">Confirmar cambio de plan</h2>
-                        <div className="mt-4 space-y-2 rounded-xl border border-border bg-secondary/40 p-4 text-sm">
+                        <h2 id={upgradeModalTitleId} className="font-display text-lg font-bold tracking-tight text-strong">Confirmar cambio de plan</h2>
+                        <div className="mt-4 space-y-2 rounded-control border border-subtle bg-surface-sunken p-4 text-sm">
                             {/* Issue #1: el copy depende de la DIRECCIÓN del cambio. Un UPGRADE de un pago
                                 activo se activa AHORA y cobra solo la DIFERENCIA prorrateada (el server hace
                                 el one-shot); NO mostramos el compuesto completo como si fuera el cargo de hoy.
@@ -1182,7 +1182,7 @@ export default function CoachSubscriptionPage() {
                                 type="button"
                                 ref={(el) => { if (el) el.focus() }}
                                 onClick={() => setShowUpgradeConfirm(false)}
-                                className="flex-1 h-11 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                className="flex-1 h-11 rounded-control border border-default text-sm font-semibold text-muted hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                             >
                                 Cancelar
                             </button>
@@ -1190,7 +1190,7 @@ export default function CoachSubscriptionPage() {
                                 type="button"
                                 onClick={() => { setShowUpgradeConfirm(false); void handleChangePlan() }}
                                 disabled={saving}
-                                className="flex-1 h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                className="flex-1 h-11 rounded-control bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                             >
                                 {saving ? 'Procesando...' : 'Confirmar'}
                             </button>
@@ -1213,13 +1213,13 @@ export default function CoachSubscriptionPage() {
                             aria-modal="true"
                             aria-labelledby={addonModalTitleId}
                             onClick={(e) => e.stopPropagation()}
-                            className="w-full max-w-lg rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-6 pb-safe shadow-2xl max-h-[90dvh] overflow-y-auto"
+                            className="w-full max-w-lg rounded-card border border-subtle bg-surface-card p-6 pb-safe shadow-2xl max-h-[90dvh] overflow-y-auto"
                         >
-                            <h2 id={addonModalTitleId} className="text-lg font-bold text-foreground">Agregar {cfg.label}</h2>
+                            <h2 id={addonModalTitleId} className="font-display text-lg font-bold tracking-tight text-strong">Agregar {cfg.label}</h2>
                             <p className="mt-1 text-sm text-muted-foreground">{cfg.description}</p>
 
                             {/* Desglose: el total compuesto en vivo lo da el endpoint (billing.totalClp) */}
-                            <div className="mt-4 space-y-1.5 rounded-xl border border-border bg-secondary/40 p-4 text-sm">
+                            <div className="mt-4 space-y-1.5 rounded-control border border-subtle bg-surface-sunken p-4 text-sm">
                                 <div className="flex justify-between text-muted-foreground">
                                     <span>Tu plan ({TIER_CONFIG[coachTier]?.label ?? coachTier})</span>
                                     <span className="text-foreground">${(billing?.baseClp ?? getTierPriceClp(coachTier, coachCycle)).toLocaleString('es-CL')} CLP</span>
@@ -1279,7 +1279,7 @@ export default function CoachSubscriptionPage() {
                                 <button
                                     type="button"
                                     onClick={() => setAddonModalKey(null)}
-                                    className="flex-1 h-11 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                    className="flex-1 h-11 rounded-control border border-default text-sm font-semibold text-muted hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                 >
                                     Cancelar
                                 </button>
@@ -1287,7 +1287,7 @@ export default function CoachSubscriptionPage() {
                                     type="button"
                                     onClick={() => void handleAddAddon()}
                                     disabled={!addonTermsAccepted || addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
-                                    className="flex-1 h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                    className="flex-1 h-11 rounded-control bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                 >
                                     {addonSaving ? 'Procesando...' : 'Ir a pagar'}
                                 </button>
@@ -1308,11 +1308,11 @@ export default function CoachSubscriptionPage() {
                         aria-modal="true"
                         aria-labelledby={cancelAddonModalTitleId}
                         onClick={(e) => e.stopPropagation()}
-                        className="w-full max-w-md rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-6 pb-safe shadow-2xl max-h-[90dvh] overflow-y-auto"
+                        className="w-full max-w-md rounded-card border border-subtle bg-surface-card p-6 pb-safe shadow-2xl max-h-[90dvh] overflow-y-auto"
                     >
                         {cancelAddonEffective === undefined ? (
                             <>
-                                <h2 id={cancelAddonModalTitleId} className="text-lg font-bold text-foreground">Quitar {ADDON_CONFIG[cancelAddonKey].label}</h2>
+                                <h2 id={cancelAddonModalTitleId} className="font-display text-lg font-bold tracking-tight text-strong">Quitar {ADDON_CONFIG[cancelAddonKey].label}</h2>
                                 <p className="mt-2 text-sm text-muted-foreground">
                                     Conservas el acceso hasta el final del período que ya pagaste. No hay reembolsos por
                                     fracciones no usadas. ¿Confirmas que quieres quitar este módulo?
@@ -1322,7 +1322,7 @@ export default function CoachSubscriptionPage() {
                                         type="button"
                                         ref={(el) => { if (el) el.focus() }}
                                         onClick={() => setCancelAddonKey(null)}
-                                        className="flex-1 h-11 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                        className="flex-1 h-11 rounded-control border border-default text-sm font-semibold text-muted hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                     >
                                         Volver
                                     </button>
@@ -1330,7 +1330,7 @@ export default function CoachSubscriptionPage() {
                                         type="button"
                                         onClick={() => void handleCancelAddon()}
                                         disabled={addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
-                                        className="flex-1 h-11 rounded-xl bg-red-600 text-sm font-semibold text-primary-foreground hover:bg-red-500 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+                                        className="flex-1 h-11 rounded-control bg-red-600 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
                                     >
                                         {addonSaving ? 'Procesando...' : 'Quitar módulo'}
                                     </button>
@@ -1338,7 +1338,7 @@ export default function CoachSubscriptionPage() {
                             </>
                         ) : (
                             <>
-                                <h2 id={cancelAddonModalTitleId} className="text-lg font-bold text-foreground">Baja registrada</h2>
+                                <h2 id={cancelAddonModalTitleId} className="font-display text-lg font-bold tracking-tight text-strong">Baja registrada</h2>
                                 <p className="mt-2 text-sm text-muted-foreground" data-testid="addon-cancel-effective">
                                     {cancelAddonEffective
                                         ? `Conservas el acceso a ${ADDON_CONFIG[cancelAddonKey].label} hasta el ${new Date(cancelAddonEffective).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}. Sin reembolso de fracciones.`
@@ -1349,7 +1349,7 @@ export default function CoachSubscriptionPage() {
                                         type="button"
                                         ref={(el) => { if (el) el.focus() }}
                                         onClick={() => { setCancelAddonKey(null); setCancelAddonEffective(undefined) }}
-                                        className="h-11 w-full rounded-xl bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                        className="h-11 w-full rounded-control bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                     >
                                         Entendido
                                     </button>
@@ -1360,8 +1360,8 @@ export default function CoachSubscriptionPage() {
                 </div>
             )}
 
-            <section className="mt-6 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-5">
-                <h2 className="text-lg font-semibold text-foreground">Historial de pagos</h2>
+            <section className="mt-6 rounded-card border border-subtle bg-surface-card p-5">
+                <h2 className="font-display text-lg font-bold tracking-tight text-strong">Historial de pagos</h2>
                 <p className="mt-1 text-xs text-muted-foreground">
                     Eventos registrados por Mercado Pago y confirmaciones manuales (zona horaria local en fechas).
                 </p>
@@ -1371,7 +1371,7 @@ export default function CoachSubscriptionPage() {
                     <div className="mt-4 overflow-x-auto">
                         <table className="w-full min-w-[520px] border-collapse text-left text-sm">
                             <thead>
-                                <tr className="border-b border-border dark:border-white/10 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                <tr className="border-b border-subtle text-xs font-semibold uppercase tracking-wide text-muted">
                                     <th className="py-2 pr-3">Fecha</th>
                                     <th className="py-2 pr-3">Estado</th>
                                     <th className="py-2 pr-3">Monto</th>
@@ -1409,8 +1409,8 @@ export default function CoachSubscriptionPage() {
                 )}
             </section>
 
-            <section className="mt-6 rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-zinc-950 p-5">
-                <h2 className="text-lg font-semibold text-foreground">Cancelar suscripción</h2>
+            <section className="mt-6 rounded-card border border-subtle bg-surface-card p-5">
+                <h2 className="font-display text-lg font-bold tracking-tight text-strong">Cancelar suscripción</h2>
                 {coach?.current_period_end ? (
                     <p className="mt-2 text-sm text-muted-foreground">
                         Al cancelar,{' '}
@@ -1430,7 +1430,7 @@ export default function CoachSubscriptionPage() {
                 <textarea
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
-                    className="mt-3 w-full rounded-xl border border-border bg-secondary p-3 text-sm text-foreground outline-none focus:border-primary"
+                    className="mt-3 w-full rounded-control border border-default bg-surface-sunken p-3 text-sm text-strong outline-none focus:border-[var(--brand)]"
                     rows={4}
                     placeholder="Ejemplo: no usaré la app este mes..."
                 />
@@ -1438,7 +1438,7 @@ export default function CoachSubscriptionPage() {
                     type="button"
                     onClick={handleCancel}
                     disabled={saving}
-                    className="mt-3 inline-flex h-11 items-center justify-center rounded-xl border border-border px-4 text-sm font-semibold text-muted-foreground hover:text-foreground disabled:opacity-60"
+                    className="mt-3 inline-flex h-11 items-center justify-center rounded-control border border-default px-4 text-sm font-semibold text-muted hover:text-strong disabled:opacity-60"
                 >
                     Enviar solicitud de cancelación
                 </button>

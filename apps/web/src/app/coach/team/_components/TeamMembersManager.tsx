@@ -63,7 +63,7 @@ export default function TeamMembersManager({
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
-                <h3 className="text-base font-semibold">Miembros ({activeMemberCount})</h3>
+                <h3 className="font-display text-base font-bold tracking-tight text-strong">Miembros ({activeMemberCount})</h3>
                 {isManager && (
                     <Button size="sm" disabled={seatsFull || pending} onClick={() => { setFeedback(null); setAddOpen(true) }}>
                         <UserPlus className="h-4 w-4" /> Agregar coach
@@ -72,20 +72,20 @@ export default function TeamMembersManager({
             </div>
 
             {seatsFull && isManager && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted">
                     Llegaste al límite de {seatLimit} cupos. Pide al administrador ampliar el equipo para sumar más coaches.
                 </p>
             )}
 
             {feedback && (
-                <div className={`rounded-xl border px-4 py-3 text-sm ${feedback.type === 'error'
-                    ? 'border-red-500/20 bg-red-500/10 text-red-400'
-                    : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500'}`}>
+                <div className={`rounded-control border px-4 py-3 text-sm ${feedback.type === 'error'
+                    ? 'border-red-500/20 bg-red-500/10 text-red-500 dark:text-red-400'
+                    : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-500'}`}>
                     {feedback.msg}
                 </div>
             )}
 
-            <ul className="flex flex-col divide-y divide-border/50">
+            <ul className="flex flex-col divide-y divide-subtle">
                 {members.map((m) => {
                     const isMemberOwner = m.coach_id === ownerCoachId
                     const isSelf = m.coach_id === userId
@@ -95,11 +95,11 @@ export default function TeamMembersManager({
                             <div className="flex min-w-0 items-center gap-3">
                                 <Avatar size="default"><AvatarFallback>{initialsOf(m.name)}</AvatarFallback></Avatar>
                                 <div className="flex min-w-0 flex-col">
-                                    <span className="truncate font-semibold">
+                                    <span className="truncate font-semibold text-strong">
                                         {m.name}
-                                        {isSelf && <span className="font-normal text-muted-foreground"> (vos)</span>}
+                                        {isSelf && <span className="font-normal text-muted"> (vos)</span>}
                                     </span>
-                                    <span className="truncate text-xs text-muted-foreground">{m.display_role || 'Coach'}</span>
+                                    <span className="truncate text-xs text-muted">{m.display_role || 'Coach'}</span>
                                 </div>
                             </div>
                             <div className="flex shrink-0 items-center gap-2">
@@ -113,7 +113,7 @@ export default function TeamMembersManager({
                                         <DropdownMenuTrigger
                                             disabled={pending}
                                             aria-label="Acciones del miembro"
-                                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
+                                            className="inline-flex h-8 w-8 items-center justify-center rounded-control text-muted hover:bg-surface-sunken hover:text-strong disabled:opacity-50"
                                         >
                                             <MoreVertical className="h-4 w-4" />
                                         </DropdownMenuTrigger>
@@ -249,7 +249,7 @@ function AddCoachDialog({ teamId, isOwner, open, onOpenChange }: {
                 {created ? (
                     <div className="space-y-3">
                         <p className="text-sm">Cuenta creada para <span className="font-semibold">{created.email}</span>. Comparte estas credenciales (cambiará la contraseña al primer ingreso):</p>
-                        <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-muted/50 px-3 py-2 font-mono text-sm">
+                        <div className="flex items-center justify-between gap-2 rounded-control border border-subtle bg-surface-sunken px-3 py-2 font-mono text-sm">
                             <span className="truncate">{created.tempPassword}</span>
                             <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => {
                                 navigator.clipboard?.writeText(created.tempPassword).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) })
@@ -269,7 +269,7 @@ function AddCoachDialog({ teamId, isOwner, open, onOpenChange }: {
                         </div>
 
                         {error && (
-                            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</div>
+                            <div className="rounded-control border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-500 dark:text-red-400">{error}</div>
                         )}
 
                         {mode === 'new' ? (

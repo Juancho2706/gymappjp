@@ -10,8 +10,10 @@ import { ComplianceRing } from '../../components'
 // no datos en vivo). Recibe color/nombre/logo/loaderText por params para reflejar
 // los cambios actuales del formulario de Mi Marca. Light/dark togglable.
 
-const LIGHT = { bg: '#F4F5F7', card: '#FFFFFF', fg: '#0F172A', muted: '#64748B', border: '#E2E8F0' }
-const DARK = { bg: '#07080C', card: '#13151A', fg: '#F8FAFC', muted: '#94A3B8', border: '#23262E' }
+// DS surface tokens (token-contract.md §2/§3) so the mock previews the alumno app
+// on the real EVA light/dark surfaces; the coach's brand color rides on `accent`.
+const LIGHT = { bg: '#FBFCFD', card: '#FFFFFF', fg: '#0B0E13', muted: '#5A6573', border: '#E6E9ED' }
+const DARK = { bg: '#0A0D12', card: '#161B22', fg: '#F4F6F8', muted: '#8A95A3', border: 'rgba(255,255,255,0.07)' }
 
 export default function BrandPreviewScreen() {
   const router = useRouter()
@@ -28,9 +30,9 @@ export default function BrandPreviewScreen() {
       <View style={[styles.coachBar, { borderBottomColor: pal.border }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={styles.back}>
           <ChevronLeft size={20} color={accent} />
-          <Text style={[styles.backTxt, { color: accent, fontFamily: 'Montserrat_700Bold' }]}>Volver</Text>
+          <Text style={[styles.backTxt, { color: accent, fontFamily: 'HankenGrotesk_700Bold' }]}>Volver</Text>
         </TouchableOpacity>
-        <Text style={[styles.coachTitle, { color: pal.fg, fontFamily: 'Inter_700Bold' }]}>Vista del alumno</Text>
+        <Text style={[styles.coachTitle, { color: pal.fg, fontFamily: 'HankenGrotesk_700Bold' }]}>Vista del alumno</Text>
         <TouchableOpacity onPress={() => setDark((v) => !v)} hitSlop={10} style={[styles.modeBtn, { borderColor: pal.border }]}>
           {dark ? <Sun size={16} color={pal.fg} /> : <Moon size={16} color={pal.fg} />}
         </TouchableOpacity>
@@ -54,9 +56,9 @@ export default function BrandPreviewScreen() {
         <View style={[styles.card, { backgroundColor: pal.card, borderColor: pal.border }]}>
           <View style={styles.cardHead}>
             <Dumbbell size={16} color={accent} />
-            <Text style={[styles.cardTitle, { color: pal.fg, fontFamily: 'Montserrat_700Bold' }]}>Entreno de hoy</Text>
+            <Text style={[styles.cardTitle, { color: pal.fg, fontFamily: 'HankenGrotesk_700Bold' }]}>Entreno de hoy</Text>
           </View>
-          <Text style={[styles.cardBig, { color: pal.fg, fontFamily: 'Montserrat_800ExtraBold' }]}>Día 3 · Empuje</Text>
+          <Text style={[styles.cardBig, { color: pal.fg, fontFamily: 'Archivo_800ExtraBold' }]}>Día 3 · Empuje</Text>
           <Text style={[styles.cardSub, { color: pal.muted }]}>5 ejercicios · ~45 min</Text>
           <View style={[styles.cta, { backgroundColor: accent }]}>
             <Text style={styles.ctaTxt}>Comenzar entreno</Text>
@@ -66,21 +68,21 @@ export default function BrandPreviewScreen() {
         {/* Nutrición + progreso */}
         <View style={styles.row}>
           <View style={[styles.card, styles.half, { backgroundColor: pal.card, borderColor: pal.border }]}>
-            <View style={styles.cardHead}><Apple size={15} color={accent} /><Text style={[styles.cardTitle, { color: pal.fg, fontFamily: 'Montserrat_700Bold' }]}>Hoy</Text></View>
+            <View style={styles.cardHead}><Apple size={15} color={accent} /><Text style={[styles.cardTitle, { color: pal.fg, fontFamily: 'HankenGrotesk_700Bold' }]}>Hoy</Text></View>
             <View style={{ alignItems: 'center', paddingVertical: 4 }}>
               <ComplianceRing value={0.72} label="comidas" color={accent} size={68} />
             </View>
           </View>
           <View style={[styles.card, styles.half, { backgroundColor: pal.card, borderColor: pal.border }]}>
-            <View style={styles.cardHead}><Activity size={15} color={accent} /><Text style={[styles.cardTitle, { color: pal.fg, fontFamily: 'Montserrat_700Bold' }]}>Progreso</Text></View>
-            <Text style={[styles.cardBig, { color: pal.fg, fontFamily: 'Montserrat_800ExtraBold' }]}>-2.4 kg</Text>
+            <View style={styles.cardHead}><Activity size={15} color={accent} /><Text style={[styles.cardTitle, { color: pal.fg, fontFamily: 'HankenGrotesk_700Bold' }]}>Progreso</Text></View>
+            <Text style={[styles.cardBig, { color: pal.fg, fontFamily: 'Archivo_800ExtraBold' }]}>-2.4 kg</Text>
             <Text style={[styles.cardSub, { color: pal.muted }]}>últimas 4 sem</Text>
           </View>
         </View>
 
         {/* Check-in */}
         <View style={[styles.card, { backgroundColor: pal.card, borderColor: pal.border }]}>
-          <Text style={[styles.cardTitle, { color: pal.fg, fontFamily: 'Montserrat_700Bold' }]}>Check-in semanal</Text>
+          <Text style={[styles.cardTitle, { color: pal.fg, fontFamily: 'HankenGrotesk_700Bold' }]}>Check-in semanal</Text>
           <Text style={[styles.cardSub, { color: pal.muted }]}>Subí tu peso y fotos para tu coach.</Text>
           <View style={[styles.ctaOutline, { borderColor: accent }]}><Text style={[styles.ctaOutlineTxt, { color: accent }]}>Hacer check-in</Text></View>
         </View>
@@ -93,7 +95,7 @@ export default function BrandPreviewScreen() {
           return (
             <View key={idx} style={styles.tabItem}>
               <Icon size={20} color={t.on ? accent : pal.muted} />
-              <Text style={[styles.tabLbl, { color: t.on ? accent : pal.muted, fontFamily: 'Inter_600SemiBold' }]}>{t.l}</Text>
+              <Text style={[styles.tabLbl, { color: t.on ? accent : pal.muted, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{t.l}</Text>
             </View>
           )
         })}
@@ -114,18 +116,18 @@ const styles = StyleSheet.create({
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   logoBox: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   logoImg: { width: 48, height: 48 },
-  logoInitial: { fontSize: 22, color: '#fff', fontFamily: 'Montserrat_800ExtraBold' },
-  brandName: { fontSize: 18, color: '#fff', fontFamily: 'Montserrat_800ExtraBold', letterSpacing: -0.3 },
-  brandHi: { fontSize: 12.5, color: 'rgba(255,255,255,0.85)', fontFamily: 'Inter_600SemiBold', marginTop: 2 },
+  logoInitial: { fontSize: 22, color: '#fff', fontFamily: 'Archivo_800ExtraBold' },
+  brandName: { fontSize: 18, color: '#fff', fontFamily: 'Archivo_800ExtraBold', letterSpacing: -0.3 },
+  brandHi: { fontSize: 12.5, color: 'rgba(255,255,255,0.85)', fontFamily: 'HankenGrotesk_600SemiBold', marginTop: 2 },
   card: { borderWidth: 1, borderRadius: 16, padding: 16, gap: 6 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   cardTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6 },
   cardBig: { fontSize: 18, letterSpacing: -0.3, marginTop: 2 },
   cardSub: { fontSize: 12.5 },
   cta: { borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 6 },
-  ctaTxt: { color: '#fff', fontFamily: 'Inter_700Bold', fontSize: 14 },
+  ctaTxt: { color: '#fff', fontFamily: 'HankenGrotesk_700Bold', fontSize: 14 },
   ctaOutline: { borderWidth: 1.5, borderRadius: 12, paddingVertical: 11, alignItems: 'center', marginTop: 6 },
-  ctaOutlineTxt: { fontFamily: 'Inter_700Bold', fontSize: 13.5 },
+  ctaOutlineTxt: { fontFamily: 'HankenGrotesk_700Bold', fontSize: 13.5 },
   row: { flexDirection: 'row', gap: 12 },
   half: { flex: 1 },
   tabBar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 8, paddingBottom: 8 },

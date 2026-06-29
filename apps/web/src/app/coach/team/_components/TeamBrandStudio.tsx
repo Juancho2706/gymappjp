@@ -185,9 +185,9 @@ function Section({ icon: Icon, title, children }: {
     children: React.ReactNode
 }) {
     return (
-        <section className="rounded-2xl border border-border bg-card p-4 sm:p-5">
-            <h4 className="mb-4 flex items-center gap-2 text-sm font-semibold">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+        <section className="rounded-card border border-subtle bg-surface-card p-4 sm:p-5">
+            <h4 className="mb-4 flex items-center gap-2 font-display text-sm font-bold tracking-tight text-strong">
+                <span className="flex h-7 w-7 items-center justify-center rounded-control bg-primary/10">
                     <Icon className="h-3.5 w-3.5 text-primary" />
                 </span>
                 {title}
@@ -445,10 +445,10 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
 
                 {/* ── Live preview ──────────────────────────────────── */}
                 <div className="lg:sticky lg:top-4 lg:self-start">
-                    <div className="rounded-2xl border border-border bg-card p-4">
+                    <div className="rounded-card border border-subtle bg-surface-card p-4">
                         <div className="mb-3 flex items-center justify-between">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vista del alumno</p>
-                            <div className="flex overflow-hidden rounded-lg border border-border" role="radiogroup" aria-label="Modo de la vista previa">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Vista del alumno</p>
+                            <div className="flex overflow-hidden rounded-control border border-subtle" role="radiogroup" aria-label="Modo de la vista previa">
                                 <button
                                     type="button"
                                     role="radio"
@@ -549,10 +549,10 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
 
             {feedback && (
                 <div className={cn(
-                    'flex items-center gap-2 rounded-xl border px-4 py-3 text-sm',
+                    'flex items-center gap-2 rounded-control border px-4 py-3 text-sm',
                     feedback.type === 'error'
-                        ? 'border-red-500/20 bg-red-500/10 text-red-400'
-                        : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500'
+                        ? 'border-red-500/20 bg-red-500/10 text-red-500 dark:text-red-400'
+                        : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-500'
                 )}>
                     {feedback.type === 'success' && <Check className="h-4 w-4" />}
                     {feedback.msg}
@@ -561,8 +561,8 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
 
             {/* Sticky save bar — aparece solo con cambios sin publicar */}
             {canEdit && dirty && (
-                <div className="sticky bottom-2 z-20 flex items-center justify-between gap-3 rounded-2xl border border-border bg-card/95 px-4 py-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/80">
-                    <p className="text-xs text-muted-foreground">
+                <div className="sticky bottom-2 z-20 flex items-center justify-between gap-3 rounded-card border border-subtle bg-card/95 px-4 py-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/80">
+                    <p className="text-xs text-muted">
                         <span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-amber-500" />
                         Cambios sin publicar
                     </p>

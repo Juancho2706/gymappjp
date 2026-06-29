@@ -39,7 +39,7 @@ type FieldStyle = Record<string, string>
 
 /** Las clases del contenedor donde Secure Fields monta su iframe (alto fijo, look de input). */
 const FIELD_BOX =
-    'h-11 rounded-md border border-neutral-300 bg-white px-3 dark:border-neutral-700 dark:bg-neutral-900'
+    'h-11 rounded-control border border-default bg-surface-card px-3'
 
 export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
     const router = useRouter()
@@ -183,7 +183,7 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
 
     if (missingKey) {
         return (
-            <p className="rounded-md bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            <p className="rounded-control bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
                 El cambio de tarjeta no está disponible en este momento. Intentá más tarde o escribinos a
                 contacto@eva-app.cl.
             </p>
@@ -201,7 +201,7 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-1">
-                    <label htmlFor="mp-cardholder" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    <label htmlFor="mp-cardholder" className="text-sm font-medium text-body">
                         Nombre en la tarjeta
                     </label>
                     <input
@@ -210,13 +210,13 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
                         autoComplete="cc-name"
                         value={cardholderName}
                         onChange={(e) => setCardholderName(e.target.value)}
-                        className="h-11 w-full rounded-md border border-neutral-300 bg-white px-3 text-base text-neutral-900 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-50"
+                        className="h-11 w-full rounded-control border border-default bg-surface-card px-3 text-base text-strong"
                         placeholder="Como figura en la tarjeta"
                     />
                 </div>
 
                 <div className="space-y-1">
-                    <span id="mp-card-number-label" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    <span id="mp-card-number-label" className="text-sm font-medium text-body">
                         Número de tarjeta
                     </span>
                     <div id="mp-card-number" role="group" aria-labelledby="mp-card-number-label" className={FIELD_BOX} />
@@ -224,13 +224,13 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
 
                 <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                        <span id="mp-card-expiration-label" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                        <span id="mp-card-expiration-label" className="text-sm font-medium text-body">
                             Vencimiento
                         </span>
                         <div id="mp-card-expiration" role="group" aria-labelledby="mp-card-expiration-label" className={FIELD_BOX} />
                     </div>
                     <div className="space-y-1">
-                        <span id="mp-card-security-label" className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                        <span id="mp-card-security-label" className="text-sm font-medium text-body">
                             Código
                         </span>
                         <div id="mp-card-security" role="group" aria-labelledby="mp-card-security-label" className={FIELD_BOX} />
@@ -238,18 +238,18 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
                 </div>
 
                 {/* Consentimiento DEDICADO (SERNAC) — texto versionado de CARD_CHANGE_DISCLOSURE. */}
-                <div className="rounded-md bg-neutral-50 p-3 text-xs text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400">
+                <div className="rounded-control bg-surface-sunken p-3 text-xs text-muted">
                     <ul className="space-y-1">
                         {disclosure.map((p) => (
                             <li key={p.number}>
-                                <span className="font-medium text-neutral-700 dark:text-neutral-300">{p.title}:</span>{' '}
+                                <span className="font-medium text-body">{p.title}:</span>{' '}
                                 {p.text}
                             </li>
                         ))}
                     </ul>
                 </div>
 
-                <label className="flex items-start gap-2 text-sm text-neutral-700 dark:text-neutral-300">
+                <label className="flex items-start gap-2 text-sm text-body">
                     <input
                         type="checkbox"
                         checked={accepted}
@@ -260,7 +260,7 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
                 </label>
 
                 {error && (
-                    <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
+                    <p role="alert" className="rounded-control bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
                         {error}
                     </p>
                 )}
@@ -268,12 +268,12 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure }: Props) {
                 <button
                     type="submit"
                     disabled={submitting || !fieldsReady || !accepted}
-                    className="h-11 w-full rounded-md bg-[#007AFF] font-medium text-white transition-opacity disabled:opacity-50"
+                    className="h-11 w-full rounded-control bg-[var(--cta-fill)] font-semibold text-white transition-opacity disabled:opacity-50"
                 >
                     {submitting ? 'Guardando…' : 'Guardar tarjeta'}
                 </button>
 
-                <p className="text-center text-xs text-neutral-400 dark:text-neutral-500">
+                <p className="text-center text-xs text-subtle">
                     Procesado de forma segura por Mercado Pago. EVA no almacena el número de tu tarjeta.
                 </p>
             </form>

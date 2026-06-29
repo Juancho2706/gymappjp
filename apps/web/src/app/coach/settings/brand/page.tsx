@@ -27,27 +27,27 @@ export default async function CoachBrandPage() {
     if (!capabilities.canUseBranding) redirect('/coach/settings')
 
     return (
-        <div className="px-4 py-6 md:px-8 max-w-3xl lg:max-w-6xl animate-fade-in mx-auto" data-tour-id="brand-header">
+        <div className="mx-auto max-w-3xl animate-fade-in px-4 py-6 md:px-8 lg:max-w-6xl" data-tour-id="brand-header">
             <div className="mb-6 space-y-4">
                 <Link
                     href="/coach/settings"
-                    className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-strong"
                 >
                     <ArrowLeft className="h-4 w-4" />
                     Opciones
                 </Link>
 
                 <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
-                        <Palette className="h-5 w-5 text-primary" />
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control" style={{ background: 'var(--sport-100)', color: 'var(--sport-600)' }}>
+                        <Palette className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
-                        <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
+                        <h1 className="font-display text-2xl font-black tracking-tight text-strong">
                             Mi Marca
                         </h1>
-                        <p className="text-muted-foreground text-sm mt-1 leading-relaxed">
+                        <p className="mt-1 text-sm leading-relaxed text-muted">
                             Personaliza la app de tus alumnos: logo, colores, nombre y mensajes.
-                            Cada alumno ve <span className="font-semibold text-foreground">TU marca</span>, no la de EVA — instalan tu app como si fuera tuya.
+                            Cada alumno ve <span className="font-semibold text-strong">TU marca</span>, no la de EVA — instalan tu app como si fuera tuya.
                         </p>
                     </div>
                 </div>

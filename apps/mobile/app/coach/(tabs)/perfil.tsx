@@ -119,7 +119,7 @@ export default function CoachPerfilScreen() {
     <SafeAreaView edges={[]} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.pageTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+        <Text style={[styles.pageTitle, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>
           Perfil
         </Text>
 
@@ -148,7 +148,7 @@ export default function CoachPerfilScreen() {
               <User size={30} color={theme.primary} strokeWidth={1.75} />
             )}
           </View>
-          <Text style={[styles.heroName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+          <Text style={[styles.heroName, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>
             {coach?.fullName ?? '-'}
           </Text>
           {coach?.brandName ? (
@@ -191,7 +191,7 @@ export default function CoachPerfilScreen() {
             >
               <View style={styles.webLinkLeft}>
                 <CreditCard size={16} color={theme.primary} />
-                <Text style={[styles.webLinkText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
+                <Text style={[styles.webLinkText, { color: theme.primary, fontFamily: 'HankenGrotesk_700Bold' }]}>
                   Gestionar suscripcion
                 </Text>
               </View>

@@ -122,13 +122,13 @@ export default function UpgradeProcessingPage() {
 
     return (
         <main className="flex min-h-dvh items-center justify-center px-4 py-12 pt-safe pb-safe bg-background">
-            <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-xl">
+            <div className="w-full max-w-md rounded-card border border-subtle bg-surface-card p-8 text-center shadow-xl">
                 {!error && (
                     <div className="mx-auto mb-6 h-12 w-12 animate-spin rounded-full border-[3px] border-primary border-t-transparent" />
                 )}
 
                 <div role="status" aria-live="polite">
-                    <h1 className="text-xl font-bold text-foreground">
+                    <h1 className="font-display text-xl font-bold tracking-tight text-foreground">
                         {error ? 'Problema al procesar' : 'Activando tu nuevo plan'}
                     </h1>
                     <p className="mt-2 text-sm text-muted-foreground">{error ?? statusText}</p>

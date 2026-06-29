@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Users, UserCheck, Package, Crown, Sparkles } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { createClient } from '@/lib/supabase/server'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import { getCoachTeamOverview } from './_data/team.queries'
@@ -28,11 +27,11 @@ export default async function CoachTeamPage() {
     if (teams.length === 0) {
         return (
             <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-                <h1 className="font-display text-2xl font-bold tracking-tight">Mi equipo</h1>
-                <div className="mt-6 flex flex-col items-center gap-2 rounded-2xl border border-border bg-card py-12 text-center">
-                    <Users className="h-8 w-8 text-muted-foreground" />
-                    <p className="text-sm font-semibold">No perteneces a ningún equipo</p>
-                    <p className="text-xs text-muted-foreground">Cuando te sumen a un pool de coaches, aparecerá acá.</p>
+                <h1 className="font-display text-2xl font-bold tracking-tight text-strong">Mi equipo</h1>
+                <div className="mt-6 flex flex-col items-center gap-2 rounded-card border border-subtle bg-surface-card py-12 text-center">
+                    <Users className="h-8 w-8 text-muted" />
+                    <p className="text-sm font-semibold text-strong">No perteneces a ningún equipo</p>
+                    <p className="text-xs text-muted">Cuando te sumen a un pool de coaches, aparecerá acá.</p>
                 </div>
             </div>
         )
@@ -54,18 +53,18 @@ export default async function CoachTeamPage() {
                     <section key={team.id} className="space-y-5">
                         {/* ── Hero de identidad ─────────────────────────── */}
                         <header
-                            className="relative overflow-hidden rounded-3xl border border-border bg-card p-5 sm:p-6"
+                            className="relative overflow-hidden rounded-card border border-[var(--border-inverse)] bg-[var(--surface-inverse)] p-5 text-on-dark sm:p-6"
                         >
                             <div
                                 className="pointer-events-none absolute inset-0"
                                 aria-hidden
-                                style={{ background: `radial-gradient(ellipse 80% 120% at 0% 0%, ${accent}1a, transparent 60%)` }}
+                                style={{ background: `radial-gradient(ellipse 80% 120% at 0% 0%, ${accent}33, transparent 60%)` }}
                             />
                             <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="flex min-w-0 items-center gap-4">
                                     <div
-                                        className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border shadow-sm"
-                                        style={{ borderColor: `${accent}40`, backgroundColor: `${accent}14` }}
+                                        className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-control border shadow-sm"
+                                        style={{ borderColor: `${accent}55`, backgroundColor: `${accent}26` }}
                                     >
                                         {team.logo_url ? (
                                             <Image src={team.logo_url} alt={team.name} fill className="object-contain p-1.5" />
@@ -75,18 +74,18 @@ export default async function CoachTeamPage() {
                                     </div>
                                     <div className="min-w-0">
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <h1 className="truncate font-display text-2xl font-bold tracking-tight">{team.name}</h1>
+                                            <h1 className="truncate font-display text-2xl font-bold tracking-tight text-on-dark">{team.name}</h1>
                                             {team.isOwner ? (
-                                                <Badge className="gap-1" style={{ backgroundColor: accent, color: '#fff' }}>
+                                                <span className="inline-flex items-center gap-1 rounded-pill px-2.5 py-0.5 text-[11px] font-semibold text-white" style={{ backgroundColor: accent }}>
                                                     <Crown className="h-3 w-3" /> Owner
-                                                </Badge>
+                                                </span>
                                             ) : team.isManager ? (
-                                                <Badge variant="secondary">Co-gestor</Badge>
+                                                <span className="inline-flex items-center rounded-pill bg-white/10 px-2.5 py-0.5 text-[11px] font-semibold text-on-dark">Co-gestor</span>
                                             ) : (
-                                                <Badge variant="secondary">Miembro</Badge>
+                                                <span className="inline-flex items-center rounded-pill bg-white/10 px-2.5 py-0.5 text-[11px] font-semibold text-on-dark">Miembro</span>
                                             )}
                                         </div>
-                                        <p className="mt-0.5 text-sm text-muted-foreground">Pool compartido — todo el equipo ve a todos los alumnos</p>
+                                        <p className="mt-0.5 text-sm text-on-dark-muted">Pool compartido — todo el equipo ve a todos los alumnos</p>
                                     </div>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-2">
@@ -96,56 +95,56 @@ export default async function CoachTeamPage() {
 
                             {/* Stats row */}
                             <div className="relative mt-5 grid grid-cols-3 gap-3">
-                                <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-background/60 p-3 backdrop-blur">
+                                <div className="flex items-center gap-3 rounded-control border border-[var(--border-inverse)] bg-white/5 p-3">
                                     <svg viewBox="0 0 60 60" className="h-12 w-12 shrink-0 -rotate-90">
-                                        <circle cx="30" cy="30" r="26" fill="none" strokeWidth="6" className="stroke-muted" />
+                                        <circle cx="30" cy="30" r="26" fill="none" strokeWidth="6" stroke="rgba(255,255,255,0.14)" />
                                         <circle
                                             cx="30" cy="30" r="26" fill="none" strokeWidth="6" strokeLinecap="round"
                                             stroke={accent} strokeDasharray={ringLen} strokeDashoffset={ringOffset}
                                         />
                                     </svg>
                                     <div className="min-w-0">
-                                        <p className="font-display text-xl font-bold leading-none tracking-tight">
-                                            {team.activeMemberCount}<span className="text-sm font-semibold text-muted-foreground">/{team.seat_limit}</span>
+                                        <p className="font-display text-xl font-bold leading-none tracking-tight text-on-dark">
+                                            {team.activeMemberCount}<span className="text-sm font-semibold text-on-dark-muted">/{team.seat_limit}</span>
                                         </p>
-                                        <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">Cupos</p>
+                                        <p className="mt-1 text-[11px] uppercase tracking-wide text-on-dark-muted">Cupos</p>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-background/60 p-3 backdrop-blur">
-                                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${accent}14` }}>
+                                <div className="flex items-center gap-3 rounded-control border border-[var(--border-inverse)] bg-white/5 p-3">
+                                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control" style={{ backgroundColor: `${accent}26` }}>
                                         <UserCheck className="h-5 w-5" style={{ color: accent }} />
                                     </span>
                                     <div className="min-w-0">
-                                        <p className="font-display text-xl font-bold leading-none tracking-tight">{team.poolClientCount}</p>
-                                        <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">Alumnos</p>
+                                        <p className="font-display text-xl font-bold leading-none tracking-tight text-on-dark">{team.poolClientCount}</p>
+                                        <p className="mt-1 text-[11px] uppercase tracking-wide text-on-dark-muted">Alumnos</p>
                                     </div>
                                 </div>
 
                                 <Link
                                     href="/coach/settings/modules"
-                                    className="group flex items-center gap-3 rounded-2xl border border-border/60 bg-background/60 p-3 backdrop-blur transition-colors hover:border-primary/40"
+                                    className="group flex items-center gap-3 rounded-control border border-[var(--border-inverse)] bg-white/5 p-3 transition-colors hover:border-white/25"
                                 >
-                                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${accent}14` }}>
+                                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control" style={{ backgroundColor: `${accent}26` }}>
                                         <Package className="h-5 w-5" style={{ color: accent }} />
                                     </span>
                                     <div className="min-w-0">
-                                        <p className="font-display text-xl font-bold leading-none tracking-tight">{activeModules}</p>
-                                        <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground group-hover:text-foreground">Módulos →</p>
+                                        <p className="font-display text-xl font-bold leading-none tracking-tight text-on-dark">{activeModules}</p>
+                                        <p className="mt-1 text-[11px] uppercase tracking-wide text-on-dark-muted group-hover:text-on-dark">Módulos →</p>
                                     </div>
                                 </Link>
                             </div>
                         </header>
 
                         {/* ── Brand Studio ──────────────────────────────── */}
-                        <div className="rounded-3xl border border-border bg-card p-4 sm:p-6">
+                        <div className="rounded-card border border-subtle bg-surface-card p-4 sm:p-6">
                             <div className="mb-4 flex items-center gap-2">
-                                <span className="flex h-8 w-8 items-center justify-center rounded-xl" style={{ backgroundColor: `${accent}14` }}>
+                                <span className="flex h-8 w-8 items-center justify-center rounded-control" style={{ backgroundColor: `${accent}26` }}>
                                     <Sparkles className="h-4 w-4" style={{ color: accent }} />
                                 </span>
                                 <div>
-                                    <h2 className="text-base font-semibold leading-tight">Marca del equipo</h2>
-                                    <p className="text-xs text-muted-foreground">La identidad que ven tus alumnos y todo el pool</p>
+                                    <h2 className="font-display text-base font-bold leading-tight tracking-tight text-strong">Marca del equipo</h2>
+                                    <p className="text-xs text-muted">La identidad que ven tus alumnos y todo el pool</p>
                                 </div>
                             </div>
                             <TeamBrandStudio
@@ -170,7 +169,7 @@ export default async function CoachTeamPage() {
                         </div>
 
                         {/* ── Miembros ──────────────────────────────────── */}
-                        <div className="rounded-3xl border border-border bg-card p-4 sm:p-6">
+                        <div className="rounded-card border border-subtle bg-surface-card p-4 sm:p-6">
                             <TeamMembersManager
                                 teamId={team.id}
                                 ownerCoachId={team.owner_coach_id}

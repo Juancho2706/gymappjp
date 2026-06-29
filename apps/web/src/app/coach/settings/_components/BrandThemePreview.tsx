@@ -375,17 +375,17 @@ export function BrandThemePreview({
     ]
 
     return (
-        <div className="bg-card border border-border rounded-2xl p-6 space-y-5 shadow-sm">
+        <div className="rounded-card border border-subtle bg-surface-card p-6 space-y-5 shadow-[var(--shadow-sm)]">
             <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-foreground">Vista previa de tu app</h2>
+                <h2 className="text-base font-bold text-strong">Vista previa de tu app</h2>
                 <button
                     type="button"
                     onClick={() => setIsDark(!isDark)}
                     className={cn(
-                        'flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all',
+                        'flex items-center gap-2 rounded-control border px-3 py-1.5 text-xs font-bold transition-all',
                         isDark
-                            ? 'bg-foreground text-background border-foreground'
-                            : 'bg-secondary text-foreground border-border hover:border-primary/50'
+                            ? 'border-transparent bg-[var(--surface-inverse)] text-on-dark'
+                            : 'border-default bg-surface-sunken text-strong hover:border-[var(--sport-400)]'
                     )}
                 >
                     {isDark ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5" />}
@@ -491,8 +491,8 @@ export function BrandThemePreview({
             </div>
 
             {/* Loader preview */}
-            <div className="rounded-xl border border-border p-4 bg-muted/50">
-                <p className="text-xs text-muted-foreground mb-3 text-center">Así se ve al cargar la app de tus alumnos</p>
+            <div className="rounded-control border border-subtle bg-surface-sunken p-4">
+                <p className="mb-3 text-center text-xs text-muted">Así se ve al cargar la app de tus alumnos</p>
                 <div className="flex items-center justify-center py-2">
                     <EvaRouteLoader
                         customText={loaderText}

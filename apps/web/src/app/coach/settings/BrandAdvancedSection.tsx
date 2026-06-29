@@ -23,7 +23,7 @@ type Props = {
     }
 }
 
-const CARD = 'bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-5 shadow-sm'
+const CARD = 'bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-[var(--shadow-sm)]'
 
 /** Sección "Branding avanzado (Pro)" del white-label v2: color2 + fuente + dark + loader, con
  *  preview en vivo y guardia WCAG. Emite hidden inputs que el form padre envía al server action. */
@@ -66,11 +66,11 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
         return (
             <div className={CARD}>
                 <div className="flex items-center gap-2">
-                    <Lock className="w-4 h-4 text-muted-foreground" />
-                    <h2 className="text-base font-bold text-foreground">Branding avanzado</h2>
+                    <Lock className="w-4 h-4 text-muted" />
+                    <h2 className="text-base font-bold text-strong">Branding avanzado</h2>
                     <span className="ml-auto text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary px-2 py-0.5 rounded-full">Pro</span>
                 </div>
-                <p className="text-xs text-muted-foreground -mt-3">
+                <p className="text-xs text-muted -mt-3">
                     Color secundario, fuente personalizada, modo oscuro con tu marca y loaders. Disponible desde el plan Pro.
                 </p>
             </div>
@@ -81,10 +81,10 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
         <div className={CARD} data-tour-id="brand-advanced">
             <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-primary" />
-                <h2 className="text-base font-bold text-foreground">Branding avanzado</h2>
+                <h2 className="text-base font-bold text-strong">Branding avanzado</h2>
                 <span className="ml-auto text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary px-2 py-0.5 rounded-full">Pro</span>
             </div>
-            <p className="text-xs text-muted-foreground -mt-3">
+            <p className="text-xs text-muted -mt-3">
                 Profundidad visual para que la app se sienta 100% tuya. Tus alumnos siempre la ven; vos elegís cómo.
             </p>
 
@@ -99,10 +99,10 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
             {/* ── Color secundario ── */}
             <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                    <Palette className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-sm font-semibold text-foreground">Color secundario</span>
+                    <Palette className="w-3.5 h-3.5 text-muted" />
+                    <span className="text-sm font-semibold text-strong">Color secundario</span>
                 </div>
-                <p className="text-xs text-muted-foreground">Para badges, etiquetas, macros de nutrición y la 2ª serie de gráficos. Independiente del principal.</p>
+                <p className="text-xs text-muted">Para badges, etiquetas, macros de nutrición y la 2ª serie de gráficos. Independiente del principal.</p>
                 <div className="flex items-center gap-3">
                     <input
                         type="color"
@@ -119,7 +119,7 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
                         className="h-10 w-full rounded-lg border border-border bg-background px-3 font-mono text-sm uppercase outline-none focus:ring-2 focus:ring-primary/40"
                     />
                     {secondaryColor && (
-                        <button type="button" onClick={() => setSecondaryColor('')} className="text-xs text-muted-foreground underline shrink-0">Quitar</button>
+                        <button type="button" onClick={() => setSecondaryColor('')} className="text-xs text-muted underline shrink-0">Quitar</button>
                     )}
                 </div>
             </div>
@@ -127,10 +127,10 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
             {/* ── Fuente ── */}
             <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                    <TypeIcon className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-sm font-semibold text-foreground">Fuente de títulos</span>
+                    <TypeIcon className="w-3.5 h-3.5 text-muted" />
+                    <span className="text-sm font-semibold text-strong">Fuente de títulos</span>
                 </div>
-                <p className="text-xs text-muted-foreground">Se aplica a los títulos de tu app. El cuerpo queda en Inter para máxima legibilidad.</p>
+                <p className="text-xs text-muted">Se aplica a los títulos de tu app. El cuerpo queda en Inter para máxima legibilidad.</p>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {FONT_KEY_TUPLE.map((k) => {
                         const f = CURATED_FONTS[k]
@@ -144,9 +144,9 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
                                     selected ? 'border-primary ring-2 ring-primary/30 bg-primary/5' : 'border-border hover:border-primary/40'
                                 }`}
                             >
-                                <span className="text-lg leading-none text-foreground" style={{ fontFamily: `var(${f.cssVar})` }}>Aa</span>
-                                <span className="truncate text-[11px] font-medium text-foreground" style={{ fontFamily: `var(${f.cssVar})` }}>{f.label}</span>
-                                <span className="truncate text-[9px] text-muted-foreground">{f.note}</span>
+                                <span className="text-lg leading-none text-strong" style={{ fontFamily: `var(${f.cssVar})` }}>Aa</span>
+                                <span className="truncate text-[11px] font-medium text-strong" style={{ fontFamily: `var(${f.cssVar})` }}>{f.label}</span>
+                                <span className="truncate text-[9px] text-muted">{f.note}</span>
                             </button>
                         )
                     })}
@@ -156,7 +156,7 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
             {/* ── Tinte neutro + acento avanzado ── */}
             <div className="space-y-3">
                 <label className="flex cursor-pointer items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-foreground">Tinte de marca en los fondos</span>
+                    <span className="text-sm font-semibold text-strong">Tinte de marca en los fondos</span>
                     <button
                         type="button"
                         role="switch"
@@ -175,7 +175,7 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
                         {([['accent_light', 'Acento claro', accentLight, setAccentLight, '#047857'], ['accent_dark', 'Acento oscuro', accentDark, setAccentDark, '#34d399']] as const).map(
                             ([, label, val, setter, ph]) => (
                                 <div key={label} className="space-y-1">
-                                    <span className="text-xs font-medium text-muted-foreground">{label}</span>
+                                    <span className="text-xs font-medium text-muted">{label}</span>
                                     <div className="flex items-center gap-2">
                                         <input type="color" aria-label={label} value={HEX_RE.test(val) ? val : ph} onChange={(e) => setter(e.target.value)} className="h-9 w-10 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5" />
                                         <input type="text" value={val} onChange={(e) => setter(e.target.value)} placeholder={`${ph} (auto)`} className="h-9 w-full rounded-lg border border-border bg-background px-2 font-mono text-xs uppercase outline-none focus:ring-2 focus:ring-primary/40" />
@@ -190,8 +190,8 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
             {/* ── Loader ── */}
             <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                    <Loader2 className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span className="text-sm font-semibold text-foreground">Pantalla de carga</span>
+                    <Loader2 className="w-3.5 h-3.5 text-muted" />
+                    <span className="text-sm font-semibold text-strong">Pantalla de carga</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {LOADER_VARIANT_TUPLE.map((v) => {
@@ -206,8 +206,8 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
                                     selected ? 'border-primary ring-2 ring-primary/30 bg-primary/5' : 'border-border hover:border-primary/40'
                                 }`}
                             >
-                                <span className="text-[11px] font-semibold text-foreground">{meta.label}</span>
-                                <span className="truncate text-[9px] text-muted-foreground">{meta.note}</span>
+                                <span className="text-[11px] font-semibold text-strong">{meta.label}</span>
+                                <span className="truncate text-[9px] text-muted">{meta.note}</span>
                             </button>
                         )
                     })}
@@ -217,7 +217,7 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
             {/* ── Preview + guardia WCAG ── */}
             <div className="space-y-2 rounded-xl border border-border p-3">
                 <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-foreground">Vista previa</span>
+                    <span className="text-xs font-semibold text-strong">Vista previa</span>
                     <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
                         {(['light', 'dark'] as const).map((m) => (
                             <button
@@ -225,7 +225,7 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
                                 type="button"
                                 onClick={() => setPreviewMode(m)}
                                 aria-pressed={previewMode === m}
-                                className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${previewMode === m ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'}`}
+                                className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${previewMode === m ? 'bg-card text-strong shadow-sm' : 'text-muted'}`}
                             >
                                 {m === 'light' ? <Sun className="h-3 w-3" /> : <Moon className="h-3 w-3" />}
                                 {m === 'light' ? 'Claro' : 'Oscuro'}
@@ -242,11 +242,11 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
                     </div>
                 </div>
                 {failing.length === 0 ? (
-                    <p className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                    <p className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: 'var(--success-700)' }}>
                         <Check className="h-3.5 w-3.5" /> Contraste legible (WCAG AA) en claro y oscuro.
                     </p>
                 ) : (
-                    <p className="flex items-center gap-1.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                    <p className="flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: 'var(--warning-600)' }}>
                         <AlertTriangle className="h-3.5 w-3.5" /> Ajustamos tus colores para que el texto siempre se lea ({failing.length} alerta{failing.length > 1 ? 's' : ''} rescatada{failing.length > 1 ? 's' : ''}).
                     </p>
                 )}
