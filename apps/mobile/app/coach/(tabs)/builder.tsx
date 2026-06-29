@@ -377,7 +377,7 @@ export default function BuilderScreen() {
                   </Text>
                 </View>
                 <TouchableOpacity onPress={() => setCompact((v) => !v)} style={[styles.viewToggle, { borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-                  <Text style={[styles.viewToggleText, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+                  <Text style={[styles.viewToggleText, { color: theme.foreground, fontFamily: 'HankenGrotesk_700Bold' }]}>
                     {compact ? 'Compacta' : 'Comoda'}
                   </Text>
                 </TouchableOpacity>
@@ -470,9 +470,9 @@ function LibraryHero({ stats, theme, onNewTemplate, onExercises }: { stats: { te
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={styles.eyebrowRow}>
             <Sparkles size={14} color={theme.primary} />
-            <Text style={[styles.eyebrow, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}>BIBLIOTECA</Text>
+            <Text style={[styles.eyebrow, { color: theme.primary, fontFamily: 'Archivo_800ExtraBold' }]}>BIBLIOTECA</Text>
           </View>
-          <Text style={[styles.heroTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>Programas reutilizables</Text>
+          <Text style={[styles.heroTitle, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>Programas reutilizables</Text>
           <Text style={[styles.heroSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
             Revisa plantillas, alumnos con plan activo y estructura del programa antes de entrar al builder.
           </Text>
@@ -491,13 +491,13 @@ function LibraryHero({ stats, theme, onNewTemplate, onExercises }: { stats: { te
         accessibilityLabel="Lista de ejercicios"
       >
         <Dumbbell size={16} color={theme.success} />
-        <Text style={[styles.exercisesButtonText, { color: theme.success, fontFamily: 'Inter_600SemiBold' }]}>Lista de ejercicios</Text>
+        <Text style={[styles.exercisesButtonText, { color: theme.success, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Lista de ejercicios</Text>
       </TouchableOpacity>
 
       <View style={styles.statGrid}>
         <HeroStat icon={Layers3} label="Plantillas" value={stats.templates} color={theme.primary} theme={theme} />
         <HeroStat icon={ListChecks} label="Activos" value={stats.active} color={theme.success} theme={theme} />
-        <HeroStat icon={Users} label="Sin plan" value={stats.noProgram} color="#F59E0B" theme={theme} />
+        <HeroStat icon={Users} label="Sin plan" value={stats.noProgram} color="#F5A524" theme={theme} />
         <HeroStat icon={Dumbbell} label="Total" value={stats.total} color="#8B5CF6" theme={theme} />
       </View>
     </View>
@@ -508,7 +508,7 @@ function HeroStat({ icon: Icon, label, value, color, theme }: { icon: any; label
   return (
     <View style={[styles.heroStat, { backgroundColor: color + '12', borderColor: color + '33', borderRadius: theme.radius.lg }]}>
       <Icon size={15} color={color} />
-      <Text style={[styles.heroStatValue, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{value}</Text>
+      <Text style={[styles.heroStatValue, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{value}</Text>
       <Text style={[styles.heroStatLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>{label}</Text>
     </View>
   )
@@ -550,7 +550,7 @@ function ProgramCard({
         <View style={styles.cardTop}>
           <View style={{ flex: 1, minWidth: 0 }}>
             <View style={styles.cardTitleRow}>
-              <Text numberOfLines={1} style={[styles.cardTitle, compact && { fontSize: 14 }, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{program.name}</Text>
+              <Text numberOfLines={1} style={[styles.cardTitle, compact && { fontSize: 14 }, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{program.name}</Text>
               <StatusBadge program={program} theme={theme} />
             </View>
             <Text numberOfLines={1} style={[styles.cardMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -559,9 +559,9 @@ function ProgramCard({
             {!isTemplate && program.client?.full_name ? (
               <View style={styles.clientLine}>
                 <View style={[styles.avatar, { backgroundColor: theme.primary + '18', borderColor: theme.primary + '44' }]}>
-                  <Text style={[styles.avatarText, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}>{initials(program.client.full_name)}</Text>
+                  <Text style={[styles.avatarText, { color: theme.primary, fontFamily: 'Archivo_800ExtraBold' }]}>{initials(program.client.full_name)}</Text>
                 </View>
-                <Text numberOfLines={1} style={[styles.clientName, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{program.client.full_name}</Text>
+                <Text numberOfLines={1} style={[styles.clientName, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{program.client.full_name}</Text>
               </View>
             ) : null}
           </View>
@@ -579,8 +579,8 @@ function ProgramCard({
             <View style={styles.dayRail}>
               {days.slice(0, 7).map((plan) => (
                 <View key={plan.id} style={[styles.dayNode, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.md }]}>
-                  <Text style={[styles.dayNodeLabel, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>{dayLabel(plan.day_of_week)}</Text>
-                  <Text style={[styles.dayNodeCount, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{plan.workout_blocks?.length ?? 0}</Text>
+                  <Text style={[styles.dayNodeLabel, { color: theme.primary, fontFamily: 'HankenGrotesk_700Bold' }]}>{dayLabel(plan.day_of_week)}</Text>
+                  <Text style={[styles.dayNodeCount, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{plan.workout_blocks?.length ?? 0}</Text>
                 </View>
               ))}
             </View>
@@ -613,7 +613,7 @@ function StatusBadge({ program, theme }: { program: ProgramItem; theme: any }) {
   return (
     <View style={[styles.statusBadge, { backgroundColor: color + '14', borderColor: color + '44', borderRadius: theme.radius.sm }]}>
       {program.is_active ? <CheckCircle2 size={10} color={color} /> : null}
-      <Text style={[styles.statusText, { color, fontFamily: 'Inter_800ExtraBold' }]}>{label}</Text>
+      <Text style={[styles.statusText, { color, fontFamily: 'HankenGrotesk_800ExtraBold' }]}>{label}</Text>
     </View>
   )
 }
@@ -633,7 +633,7 @@ function ProgramPreview({ program, theme, onEdit, onAssign, onDuplicate }: { pro
 
       {phases.length ? (
         <View style={{ gap: 8 }}>
-          <Text style={[styles.previewSectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>FASES</Text>
+          <Text style={[styles.previewSectionTitle, { color: theme.mutedForeground, fontFamily: 'Archivo_700Bold' }]}>FASES</Text>
           <View style={styles.phaseBar}>
             {phases.map((phase, i) => (
               <View key={`${phase.name}-${i}`} style={{ flex: Math.max(1, phase.weeks ?? 1), backgroundColor: phase.color || theme.primary }} />
@@ -646,27 +646,27 @@ function ProgramPreview({ program, theme, onEdit, onAssign, onDuplicate }: { pro
       ) : null}
 
       <View style={{ gap: 12 }}>
-        <Text style={[styles.previewSectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>ESTRUCTURA</Text>
+        <Text style={[styles.previewSectionTitle, { color: theme.mutedForeground, fontFamily: 'Archivo_700Bold' }]}>ESTRUCTURA</Text>
         {plans.length ? plans.map((plan) => (
           <View key={plan.id} style={[styles.previewDay, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
             <View style={styles.previewDayHead}>
               <View style={[styles.previewDayIndex, { backgroundColor: theme.primary }]}>
-                <Text style={[styles.previewDayIndexText, { color: theme.primaryForeground, fontFamily: 'Montserrat_800ExtraBold' }]}>{dayLabel(plan.day_of_week)}</Text>
+                <Text style={[styles.previewDayIndexText, { color: theme.primaryForeground, fontFamily: 'Archivo_800ExtraBold' }]}>{dayLabel(plan.day_of_week)}</Text>
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text numberOfLines={1} style={[styles.previewDayTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{plan.title}</Text>
+                <Text numberOfLines={1} style={[styles.previewDayTitle, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{plan.title}</Text>
                 <Text style={[styles.cardMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{plan.workout_blocks?.length ?? 0} ejercicios</Text>
               </View>
             </View>
             {sortedBlocks(plan).slice(0, 8).map((block, i) => (
               <View key={block.id} style={[styles.blockRow, i < Math.min(sortedBlocks(plan).length, 8) - 1 && { borderBottomColor: theme.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text numberOfLines={1} style={[styles.blockName, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{block.exercise?.name ?? 'Ejercicio'}</Text>
+                  <Text numberOfLines={1} style={[styles.blockName, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{block.exercise?.name ?? 'Ejercicio'}</Text>
                   <Text numberOfLines={1} style={[styles.cardMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
                     {[block.tempo && `Tempo ${block.tempo}`, block.rir && `${block.rir} RIR`, block.rest_time && `Desc. ${block.rest_time}`].filter(Boolean).join(' · ') || 'Bloque principal'}
                   </Text>
                 </View>
-                <Text style={[styles.blockDose, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}>{block.sets}x{block.reps}</Text>
+                <Text style={[styles.blockDose, { color: theme.primary, fontFamily: 'Archivo_800ExtraBold' }]}>{block.sets}x{block.reps}</Text>
               </View>
             ))}
           </View>
@@ -688,7 +688,7 @@ function PreviewMetric({ icon: Icon, label, value, theme }: { icon: any; label: 
   return (
     <View style={[styles.previewMetric, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
       <Icon size={15} color={theme.primary} />
-      <Text style={[styles.previewMetricValue, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{value}</Text>
+      <Text style={[styles.previewMetricValue, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{value}</Text>
       <Text style={[styles.previewMetricLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
     </View>
   )
@@ -724,7 +724,7 @@ function AssignTemplateDialog({
       </Text>
 
       <View style={[styles.inputWrap, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}>
-        <Text style={[styles.inputLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Duracion semanas</Text>
+        <Text style={[styles.inputLabel, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>Duracion semanas</Text>
         <TextInput
           value={durationWeeks}
           onChangeText={onDurationChange}
@@ -750,8 +750,8 @@ function AssignTemplateDialog({
                 {selected ? <CheckCircle2 size={15} color={theme.primaryForeground} /> : null}
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text numberOfLines={1} style={[styles.assignClientName, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>{client.full_name}</Text>
-                <Text numberOfLines={1} style={[styles.cardMeta, { color: activePlan ? '#F59E0B' : theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                <Text numberOfLines={1} style={[styles.assignClientName, { color: theme.foreground, fontFamily: 'HankenGrotesk_700Bold' }]}>{client.full_name}</Text>
+                <Text numberOfLines={1} style={[styles.cardMeta, { color: activePlan ? '#F5A524' : theme.mutedForeground, fontFamily: theme.fontSans }]}>
                   {activePlan ? `Sobrescribe: ${activePlan.name}` : 'Sin programa activo'}
                 </Text>
               </View>
@@ -794,7 +794,7 @@ function DuplicateDialog({
         Crea una copia reutilizable sin alumno asignado.
       </Text>
       <View style={[styles.inputWrap, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}>
-        <Text style={[styles.inputLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Nombre</Text>
+        <Text style={[styles.inputLabel, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>Nombre</Text>
         <TextInput
           value={name}
           onChangeText={onChangeName}
@@ -816,7 +816,7 @@ function ActionButton({ icon: Icon, label, onPress, theme, danger, disabled }: {
   return (
     <TouchableOpacity disabled={disabled} onPress={onPress} style={[styles.actionButton, { backgroundColor: danger ? color + '10' : theme.secondary, borderColor: danger ? color + '44' : theme.border, borderRadius: theme.radius.lg, opacity: disabled ? 0.55 : 1 }]}>
       <Icon size={14} color={color} />
-      <Text style={[styles.actionText, { color: danger ? color : theme.foreground, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+      <Text style={[styles.actionText, { color: danger ? color : theme.foreground, fontFamily: 'HankenGrotesk_700Bold' }]}>{label}</Text>
     </TouchableOpacity>
   )
 }
@@ -827,7 +827,7 @@ function FilterPill({ label, active, onPress, theme }: { label: string; active: 
       onPress={onPress}
       style={[styles.filterPill, { backgroundColor: active ? theme.primary : theme.secondary, borderColor: active ? theme.primary : theme.border, borderRadius: theme.radius.lg }]}
     >
-      <Text style={[styles.filterPillText, { color: active ? theme.primaryForeground : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+      <Text style={[styles.filterPillText, { color: active ? theme.primaryForeground : theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>{label}</Text>
     </TouchableOpacity>
   )
 }
@@ -836,7 +836,7 @@ function SmallBadge({ label, theme, muted }: { label: string; theme: any; muted?
   const color = muted ? theme.mutedForeground : theme.primary
   return (
     <View style={[styles.smallBadge, { backgroundColor: muted ? theme.secondary : color + '12', borderColor: muted ? theme.border : color + '33', borderRadius: theme.radius.sm }]}>
-      <Text numberOfLines={1} style={[styles.smallBadgeText, { color, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+      <Text numberOfLines={1} style={[styles.smallBadgeText, { color, fontFamily: 'HankenGrotesk_700Bold' }]}>{label}</Text>
     </View>
   )
 }

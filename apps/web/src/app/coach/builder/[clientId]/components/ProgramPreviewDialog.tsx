@@ -87,7 +87,7 @@ export function ProgramPreviewDialog({
 
                 <div className="mt-4 space-y-6 max-h-[70vh] overflow-y-auto pr-1">
                     {/* Header del programa */}
-                    <div className="p-5 rounded-2xl border border-border bg-muted/30">
+                    <div className="p-5 rounded-card border border-border bg-muted/30">
                         <h2 className="text-xl font-display font-bold uppercase tracking-widest text-foreground">
                             {programName || 'Sin nombre'}
                         </h2>
@@ -117,7 +117,7 @@ export function ProgramPreviewDialog({
                                 { label: 'Series', value: totalSets },
                                 { label: 'Días activos', value: activeDays.length },
                             ].map(stat => (
-                                <div key={stat.label} className="text-center p-3 bg-background rounded-xl border border-border overflow-hidden">
+                                <div key={stat.label} className="text-center p-3 bg-background rounded-control border border-border overflow-hidden">
                                     <div className="text-2xl font-bold text-foreground">{stat.value}</div>
                                     <div className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground mt-0.5 leading-tight break-words">{stat.label}</div>
                                 </div>
@@ -144,7 +144,7 @@ export function ProgramPreviewDialog({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {days.map(day => {
                             if (day.is_rest) return (
-                                <div key={day.id} className="p-3 rounded-xl border border-border bg-muted/10 opacity-50">
+                                <div key={day.id} className="p-3 rounded-control border border-border bg-muted/10 opacity-50">
                                     <div className="text-[9px] font-bold uppercase tracking-widest text-indigo-400 flex items-center gap-2">
                                         <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
                                         {day.name} — Descanso
@@ -153,7 +153,7 @@ export function ProgramPreviewDialog({
                             )
                             if (day.blocks.length === 0) return null
                             return (
-                                <div key={day.id} className="p-4 rounded-xl border border-border bg-muted/20 hover:bg-muted/30 transition-colors">
+                                <div key={day.id} className="p-4 rounded-control border border-border bg-muted/20 hover:bg-muted/30 transition-colors">
                                     <div className="flex items-center justify-between mb-2">
                                         <div className="text-[10px] font-bold uppercase tracking-widest text-foreground">
                                             {day.name}
@@ -226,7 +226,7 @@ export function ProgramPreviewDialog({
 
                     {/* Notas del programa */}
                     {programNotes && (
-                        <div className="p-4 rounded-xl border border-border bg-muted/20">
+                        <div className="p-4 rounded-control border border-border bg-muted/20">
                             <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Notas del Programa</div>
                             <p className="text-xs text-foreground/80 leading-relaxed">{programNotes}</p>
                         </div>

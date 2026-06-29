@@ -34,11 +34,11 @@ describe('buildLibrarySections (preview de la biblioteca por área)', () => {
         const sections = buildLibrarySections(rows, [])
         expect(sections.map(s => s.short)).toEqual(['CAL', 'PRI', 'ENF'])
         expect(sections.map(s => s.label)).toEqual(['Calentamiento', 'Bloque principal', 'Enfriamiento'])
-        // Clases EXACTAS del SECTION_META legacy (cero regresión visual).
+        // Clases EXACTAS del SECTION_META (DS redesign Fase 5: warning/sport/aqua semánticos).
         expect(sections.map(s => s.className)).toEqual([
-            'text-amber-700 dark:text-amber-400 bg-amber-500/10 border-amber-500/20',
-            'text-primary bg-primary/10 border-primary/20',
-            'text-sky-700 dark:text-sky-400 bg-sky-500/10 border-sky-500/20',
+            'text-[var(--warning-700)] bg-[var(--warning-100)] border-[var(--warning-500)]/25',
+            'text-[var(--sport-700)] bg-[var(--sport-100)] border-[var(--sport-300)]/40',
+            'text-[var(--aqua-700)] bg-[var(--aqua-100)] border-[var(--aqua-500)]/25',
         ])
     })
 

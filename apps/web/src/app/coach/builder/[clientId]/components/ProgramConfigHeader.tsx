@@ -78,7 +78,7 @@ export function ProgramConfigHeader({
                                 placeholder="EJ: HYPERTROPHY BLOCK 1"
                                 maxLength={100}
                                 autoComplete="off"
-                                className="h-12 pl-11 rounded-xl bg-background border-border font-bold text-xs uppercase tracking-widest placeholder:text-muted-foreground"
+                                className="h-12 pl-11 rounded-control bg-background border-border font-bold text-xs uppercase tracking-widest placeholder:text-muted-foreground"
                             />
                         </div>
                         <p className={`text-right text-[10px] tabular-nums ${programName.length > 85 ? 'text-amber-500' : 'text-muted-foreground/40'}`}>
@@ -94,7 +94,7 @@ export function ProgramConfigHeader({
                         <p className="text-[10px] text-muted-foreground">
                             Define c&oacute;mo se repiten los d&iacute;as: semanal o por ciclo.
                         </p>
-                        <div data-tour-id="program-structure-toggle" className="flex rounded-xl overflow-hidden border border-border bg-background">
+                        <div data-tour-id="program-structure-toggle" className="flex rounded-control overflow-hidden border border-border bg-background">
                             <button
                                 onClick={() => setProgramStructureType('weekly')}
                                 className={`flex-1 flex items-center justify-center gap-2 h-11 text-[11px] font-bold uppercase tracking-widest transition-colors ${
@@ -119,7 +119,7 @@ export function ProgramConfigHeader({
                             </button>
                         </div>
                         {programStructureType === 'cycle' && (
-                            <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-xl p-3 mt-2">
+                            <div className="flex items-center gap-3 bg-primary/5 border border-primary/20 rounded-card p-3 mt-2">
                                 <RotateCcw className="w-4 h-4 text-primary flex-shrink-0" />
                                 <div className="flex-1">
                                     <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Longitud del ciclo</p>
@@ -152,7 +152,7 @@ export function ProgramConfigHeader({
                                     Duración del Programa
                                 </label>
                                 <Select value={durationType} onValueChange={v => setDurationType(v as any)}>
-                                    <SelectTrigger className="h-12 rounded-xl bg-background border-border font-bold text-xs uppercase tracking-widest">
+                                    <SelectTrigger className="h-12 rounded-control bg-background border-border font-bold text-xs uppercase tracking-widest">
                                         <SelectValue>
                                             {DURATION_META[durationType]?.label ?? durationType}
                                         </SelectValue>
@@ -228,7 +228,7 @@ export function ProgramConfigHeader({
                     <div className="space-y-2">
                         <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Notas y reglas del programa</label>
                         <textarea
-                            className="w-full h-[88px] p-4 text-sm rounded-xl bg-background border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none resize-none placeholder:text-muted-foreground"
+                            className="w-full h-[88px] p-4 text-sm rounded-control bg-background border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none resize-none placeholder:text-muted-foreground"
                             value={programNotes}
                             onChange={e => setProgramNotes(e.target.value)}
                             placeholder="Reglas del macrociclo, RIR general, consideraciones..."
@@ -276,7 +276,7 @@ export function ProgramConfigHeader({
                     {programPhases.map((phase, index) => (
                         <div
                             key={index}
-                            className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-background border border-border"
+                            className="flex flex-wrap items-center gap-2 p-3 rounded-control bg-background border border-border"
                         >
                             <input
                                 type="color"

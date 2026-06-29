@@ -7,7 +7,7 @@
 export function LibraryHeroBackdrop() {
     return (
         <div
-            className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl"
+            className="pointer-events-none absolute inset-0 overflow-hidden rounded-[28px]"
             aria-hidden
         >
             {/* Primary wash — biased to upper area, not same corner weight as layout glow */}
@@ -25,8 +25,8 @@ export function LibraryHeroBackdrop() {
                         'radial-gradient(ellipse at 30% 40%, rgb(var(--theme-primary-rgb) / 0.35) 0%, transparent 65%)',
                 }}
             />
-            {/* Cool secondary hint (theme-agnostic, very low) */}
-            <div className="absolute right-[10%] top-[-20%] h-[200px] w-[280px] rounded-full bg-violet-500/10 blur-3xl dark:bg-violet-400/5" />
+            {/* Cool secondary hint (theme-agnostic, very low) — DS aqua tint */}
+            <div className="absolute right-[10%] top-[-20%] h-[200px] w-[280px] rounded-full bg-[var(--aqua-400)]/10 blur-3xl dark:bg-[var(--aqua-400)]/5" />
         </div>
     )
 }

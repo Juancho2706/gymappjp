@@ -95,7 +95,7 @@ export function AreasManager({
     return (
         <div className="space-y-4">
             {!canEdit && (
-                <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 rounded-card border border-subtle bg-surface-sunken/50 px-4 py-3 text-sm text-muted">
                     <Lock className="h-4 w-4 shrink-0" />
                     {scope === 'team'
                         ? 'Solo el owner o co-gestor del equipo gestiona las áreas del pool. Puedes usarlas en el builder.'
@@ -103,7 +103,7 @@ export function AreasManager({
                 </div>
             )}
 
-            <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border bg-card">
+            <ul className="divide-y divide-[var(--border-subtle)] overflow-hidden rounded-card border border-subtle bg-surface-card">
                 {ordered.map(area => {
                     const vm = vmById.get(area.id)
                     const isEditing = editingId === area.id
@@ -117,14 +117,14 @@ export function AreasManager({
                                         onChange={e => setEditName(e.target.value)}
                                         maxLength={40}
                                         autoFocus
-                                        className="h-10 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
+                                        className="h-10 min-w-0 flex-1 rounded-control border border-default bg-surface-card px-3 text-sm text-strong focus:border-sport-600 focus:outline-none focus:ring-1 focus:ring-[var(--focus-ring)]"
                                         aria-label="Nombre del área"
                                     />
                                     <input
                                         value={editOrder}
                                         onChange={e => setEditOrder(e.target.value.replace(/[^0-9]/g, ''))}
                                         inputMode="numeric"
-                                        className="h-10 w-20 rounded-lg border border-border bg-background px-3 text-center text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
+                                        className="h-10 w-20 rounded-control border border-default bg-surface-card px-3 text-center text-sm text-strong focus:border-sport-600 focus:outline-none focus:ring-1 focus:ring-[var(--focus-ring)]"
                                         aria-label="Orden del área"
                                         title="Orden (menor = primero en el día)"
                                     />
@@ -133,7 +133,7 @@ export function AreasManager({
                                             type="button"
                                             onClick={() => handleUpdate(area)}
                                             disabled={isPending}
-                                            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors hover:bg-primary/20 md:min-h-[36px] md:min-w-[36px]"
+                                            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-control bg-[var(--sport-100)] text-[var(--sport-600)] transition-colors hover:bg-[var(--sport-200)] md:min-h-[36px] md:min-w-[36px]"
                                             aria-label="Guardar cambios del área"
                                         >
                                             {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
@@ -141,7 +141,7 @@ export function AreasManager({
                                         <button
                                             type="button"
                                             onClick={() => setEditingId(null)}
-                                            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted md:min-h-[36px] md:min-w-[36px]"
+                                            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-sunken md:min-h-[36px] md:min-w-[36px]"
                                             aria-label="Cancelar edición"
                                         >
                                             <X className="h-4 w-4" />
@@ -154,14 +154,14 @@ export function AreasManager({
                                         <span
                                             className={cn(
                                                 'shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-tight',
-                                                vm?.badgeClass ?? 'border-border bg-muted text-muted-foreground',
+                                                vm?.badgeClass ?? 'border-subtle bg-surface-sunken text-muted',
                                             )}
                                         >
                                             {vm?.shortLabel ?? '—'}
                                         </span>
                                         <div className="min-w-0">
-                                            <p className="truncate font-semibold text-foreground">{area.name}</p>
-                                            <p className="text-xs text-muted-foreground">
+                                            <p className="truncate font-semibold text-strong">{area.name}</p>
+                                            <p className="text-xs text-muted">
                                                 Orden {area.sort_order}
                                                 {area.is_system && ' · Área del sistema (solo lectura)'}
                                             </p>
@@ -175,7 +175,7 @@ export function AreasManager({
                                                         type="button"
                                                         onClick={() => handleDelete(area)}
                                                         disabled={isPending}
-                                                        className="flex min-h-[44px] items-center gap-1.5 rounded-lg bg-destructive/10 px-3 text-xs font-bold text-destructive transition-colors hover:bg-destructive/20 md:min-h-[36px]"
+                                                        className="flex min-h-[44px] items-center gap-1.5 rounded-control bg-[var(--danger-100)] px-3 text-xs font-bold text-[var(--danger-600)] transition-colors hover:bg-[color-mix(in_oklab,var(--danger-100)_75%,var(--danger-500))] md:min-h-[36px]"
                                                     >
                                                         {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                                                         Confirmar
@@ -183,7 +183,7 @@ export function AreasManager({
                                                     <button
                                                         type="button"
                                                         onClick={() => setConfirmDeleteId(null)}
-                                                        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted md:min-h-[36px] md:min-w-[36px]"
+                                                        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-sunken md:min-h-[36px] md:min-w-[36px]"
                                                         aria-label="Cancelar eliminación"
                                                     >
                                                         <X className="h-4 w-4" />
@@ -194,7 +194,7 @@ export function AreasManager({
                                                     <button
                                                         type="button"
                                                         onClick={() => startEdit(area)}
-                                                        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:min-h-[36px] md:min-w-[36px]"
+                                                        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-sunken hover:text-strong md:min-h-[36px] md:min-w-[36px]"
                                                         aria-label={`Editar área ${area.name}`}
                                                     >
                                                         <Pencil className="h-4 w-4" />
@@ -202,7 +202,7 @@ export function AreasManager({
                                                     <button
                                                         type="button"
                                                         onClick={() => setConfirmDeleteId(area.id)}
-                                                        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive md:min-h-[36px] md:min-w-[36px]"
+                                                        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-control text-muted transition-colors hover:bg-[var(--danger-100)] hover:text-[var(--danger-600)] md:min-h-[36px] md:min-w-[36px]"
                                                         aria-label={`Eliminar área ${area.name}`}
                                                     >
                                                         <Trash2 className="h-4 w-4" />
@@ -226,7 +226,7 @@ export function AreasManager({
                         onKeyDown={e => { if (e.key === 'Enter') handleCreate() }}
                         maxLength={40}
                         placeholder='Nueva área (ej: "Core", "HYROX")'
-                        className="h-11 min-w-0 flex-1 rounded-xl border border-border bg-background px-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
+                        className="h-11 min-w-0 flex-1 rounded-control border border-default bg-surface-card px-4 text-sm text-strong placeholder:text-muted focus:border-sport-600 focus:outline-none focus:ring-1 focus:ring-[var(--focus-ring)]"
                         aria-label="Nombre de la nueva área"
                     />
                     <button
@@ -234,10 +234,10 @@ export function AreasManager({
                         onClick={handleCreate}
                         disabled={isPending || newName.trim().length < 2}
                         className={cn(
-                            'flex min-h-[44px] items-center gap-1.5 rounded-xl px-4 text-sm font-bold transition-colors',
+                            'flex min-h-[44px] items-center gap-1.5 rounded-control px-4 text-sm font-bold transition-colors',
                             newName.trim().length >= 2 && !isPending
-                                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                                : 'cursor-not-allowed bg-muted text-muted-foreground',
+                                ? 'bg-sport-500 text-[var(--text-on-sport)] shadow-[var(--glow-sport)] hover:bg-[var(--cta-fill)]'
+                                : 'cursor-not-allowed bg-surface-sunken text-muted',
                         )}
                     >
                         {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
@@ -246,7 +246,7 @@ export function AreasManager({
                 </div>
             )}
 
-            <p className="text-xs leading-relaxed text-muted-foreground">
+            <p className="text-xs leading-relaxed text-muted">
                 Las áreas ordenan los ejercicios de cada día en el builder (orden menor = primero).
                 Al eliminar un área, los ejercicios que la usaban no se pierden: vuelven a verse bajo
                 el área Principal.

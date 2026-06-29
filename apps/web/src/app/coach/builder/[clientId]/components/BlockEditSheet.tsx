@@ -188,7 +188,7 @@ function PaceInput({
 
 function SideModeSelector({ block, onChange }: { block: BuilderBlock; onChange: (b: BuilderBlock) => void }) {
     return (
-        <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-border text-[10px] font-bold uppercase tracking-widest dark:border-white/10">
+        <div className="grid grid-cols-3 overflow-hidden rounded-control border border-border text-[10px] font-bold uppercase tracking-widest dark:border-white/10">
             {SIDE_MODE_OPTIONS.map((opt) => (
                 <button
                     key={opt.label}
@@ -288,7 +288,7 @@ function IntervalEditor({
     const workByDistance = config?.work?.distance_m != null
 
     return (
-        <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4 dark:border-white/10">
+        <div className="space-y-3 rounded-card border border-border bg-muted/30 p-4 dark:border-white/10">
             <div className="flex items-center justify-between gap-2">
                 <label className={FIELD_LABEL_CLASS}>Intervalos</label>
                 {cardio?.enabled && (
@@ -329,7 +329,7 @@ function IntervalEditor({
                 </div>
                 <div className="space-y-1.5">
                     <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Trabajo por</p>
-                    <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-border text-[10px] font-bold uppercase tracking-widest dark:border-white/10">
+                    <div className="grid grid-cols-2 overflow-hidden rounded-control border border-border text-[10px] font-bold uppercase tracking-widest dark:border-white/10">
                         <button
                             type="button"
                             onClick={() => patch({ work: { ...config?.work, duration_sec: config?.work?.duration_sec ?? 60, distance_m: undefined } })}
@@ -421,7 +421,7 @@ function NotesField({ block, onChange, t }: { block: BuilderBlock; onChange: (b:
                 <InfoTooltip content={t('tooltip.notes')} />
             </label>
             <textarea
-                className="w-full h-32 p-4 text-sm rounded-xl bg-secondary dark:bg-white/5 border border-border dark:border-white/10 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 focus:outline-none transition-all resize-none placeholder:text-muted-foreground"
+                className="w-full h-32 p-4 text-sm rounded-control bg-secondary dark:bg-white/5 border border-border dark:border-white/10 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 focus:outline-none transition-all resize-none placeholder:text-muted-foreground"
                 value={block.notes || ''}
                 onChange={e => onChange({...block, notes: e.target.value})}
                 placeholder="Detalles biomecánicos o notas..."
@@ -502,7 +502,7 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
             <SheetContent side="right" className="w-full max-w-full bg-background/95 p-0 shadow-2xl backdrop-blur-2xl sm:w-[540px] sm:max-w-[540px] border-l border-border">
                 <SheetHeader className="border-b border-border bg-muted/20 pb-6 pl-6 pr-14 pt-[max(1.5rem,env(safe-area-inset-top))]">
                     <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden border border-border shrink-0 relative">
+                        <div className="w-16 h-16 rounded-control bg-primary/10 flex items-center justify-center overflow-hidden border border-border shrink-0 relative">
                             {thumb ? (
                                 <Image
                                     src={thumb}
@@ -549,7 +549,7 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                     {/* Tipo de ejercicio (override del bloque — decisión #2 del PLAN) */}
                     <div className="space-y-2">
                         <label className={FIELD_LABEL_CLASS}>Tipo de ejercicio</label>
-                        <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-border text-[9px] font-bold uppercase tracking-widest dark:border-white/10">
+                        <div className="grid grid-cols-4 overflow-hidden rounded-control border border-border text-[9px] font-bold uppercase tracking-widest dark:border-white/10">
                             {(Object.keys(EXERCISE_TYPE_LABEL) as ExerciseType[]).map((type) => (
                                 <button
                                     key={type}
@@ -674,7 +674,7 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                     </div>
 
                     {/* Ejes adicionales (farmer carry: carga + distancia + lado — AC2) */}
-                    <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4 dark:border-white/10">
+                    <div className="space-y-3 rounded-card border border-border bg-muted/30 p-4 dark:border-white/10">
                         <label className={FIELD_LABEL_CLASS}>Ejes adicionales (opcional)</label>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
@@ -699,7 +699,7 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                             </div>
                             <div className="space-y-1.5">
                                 <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Unidad de carga</p>
-                                <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-border text-[10px] font-bold uppercase tracking-widest dark:border-white/10">
+                                <div className="grid grid-cols-2 overflow-hidden rounded-control border border-border text-[10px] font-bold uppercase tracking-widest dark:border-white/10">
                                     {(['kg', 'lb'] as const).map((unit) => (
                                         <button
                                             key={unit}
@@ -794,7 +794,7 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                                         ...block,
                                         interval_config: { repeats: 4, work: { duration_sec: 60 }, recovery: { duration_sec: 90, mode: 'rest' } },
                                     })}
-                                    className="w-full min-h-[44px] rounded-xl border border-dashed border-border px-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                                    className="w-full min-h-[44px] rounded-control border border-dashed border-border px-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
                                 >
                                     + Prescribir por intervalos
                                 </button>
@@ -919,7 +919,7 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                         <div className="space-y-3">
                             <label className={FIELD_LABEL_CLASS}>Instrucciones para el alumno</label>
                             <textarea
-                                className="w-full h-24 p-4 text-sm rounded-xl bg-secondary dark:bg-white/5 border border-border dark:border-white/10 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 focus:outline-none transition-all resize-none placeholder:text-muted-foreground"
+                                className="w-full h-24 p-4 text-sm rounded-control bg-secondary dark:bg-white/5 border border-border dark:border-white/10 text-foreground focus:border-primary focus:ring-1 focus:ring-primary/30 focus:outline-none transition-all resize-none placeholder:text-muted-foreground"
                                 value={block.instructions || ''}
                                 onChange={e => onChange({ ...block, instructions: e.target.value })}
                                 placeholder="Cómo ejecutar este bloque (ritmo, técnica, sensación)..."
@@ -932,7 +932,7 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
 
                     {/* Auto-progression — solo fuerza (kg/reps no aplican a los tipos nuevos) */}
                     {effectiveType === 'strength' && (
-                    <div className="space-y-3 rounded-xl border border-border bg-muted/30 p-4 dark:border-white/10">
+                    <div className="space-y-3 rounded-card border border-border bg-muted/30 p-4 dark:border-white/10">
                         <div className="flex items-center justify-between">
                             <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
                                 Progresión Automática
@@ -955,7 +955,7 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
 
                         {block.progression_type && (
                             <div className="mt-2 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
-                                <div className="grid min-w-0 grid-cols-2 overflow-hidden rounded-lg border border-border text-[10px] font-bold uppercase tracking-widest dark:border-white/10">
+                                <div className="grid min-w-0 grid-cols-2 overflow-hidden rounded-control border border-border text-[10px] font-bold uppercase tracking-widest dark:border-white/10">
                                     <button
                                         onClick={() => onChange({...block, progression_type: 'weight'})}
                                         className={`px-3 py-2 transition-colors ${block.progression_type === 'weight' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
@@ -992,7 +992,7 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                     <button
                         onClick={() => onUpdate(block)}
                         disabled={!blockIsValid}
-                        className="w-full py-4 mt-4 bg-primary text-primary-foreground font-bold uppercase tracking-[0.2em] text-xs rounded-xl shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.4)] hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                        className="w-full py-4 mt-4 bg-primary text-primary-foreground font-bold uppercase tracking-[0.2em] text-xs rounded-control shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.4)] hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                         style={{
                             backgroundColor: 'var(--theme-primary, #007AFF)',
                             boxShadow: '0 0 20px -5px var(--theme-primary, rgba(0,122,255,0.4))'

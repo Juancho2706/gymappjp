@@ -17,18 +17,18 @@ export default async function CoachAreasPage() {
         <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
             <Link
                 href="/coach/workout-programs"
-                className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-strong"
             >
                 <ArrowLeft className="h-4 w-4" /> Programas
             </Link>
 
             <div className="mb-6 flex items-start gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
-                    <LayoutList className="h-5 w-5 text-primary" />
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control border border-[var(--sport-300)]/40 bg-[var(--sport-100)]">
+                    <LayoutList className="h-5 w-5 text-[var(--sport-600)]" />
                 </div>
                 <div className="min-w-0">
-                    <h1 className="font-display text-2xl font-bold tracking-tight">Áreas del builder</h1>
-                    <p className="mt-1 text-sm text-muted-foreground">
+                    <h1 className="font-display text-2xl font-extrabold tracking-[-0.03em] text-strong">Áreas del builder</h1>
+                    <p className="mt-1 text-sm text-muted">
                         {ctx.scope === 'team'
                             ? `Equipo "${ctx.teamName}" — todo el pool arma los días con estas áreas.`
                             : 'Organizá los días de entrenamiento con tus propias áreas (Movilidad, Core, HYROX…).'}

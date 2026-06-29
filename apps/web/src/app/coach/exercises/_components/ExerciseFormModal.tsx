@@ -8,6 +8,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
     Select,
@@ -155,14 +156,14 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
 
                 <form action={handleSubmit} className="space-y-4 mt-2">
                     {state.error && state.error !== 'upgrade_required' && (
-                        <p className="text-sm text-destructive rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2">
+                        <p className="text-sm text-[var(--danger-600)] rounded-control border border-[var(--danger-500)]/30 bg-[var(--danger-100)] px-3 py-2">
                             {state.error}
                         </p>
                     )}
 
                     {/* Nombre */}
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-foreground">Nombre *</label>
+                        <label className="text-sm font-medium text-strong">Nombre *</label>
                         <Input
                             name="name"
                             value={name}
@@ -171,13 +172,13 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                             required
                         />
                         {state.fieldErrors?.name && (
-                            <p className="text-xs text-destructive">{state.fieldErrors.name[0]}</p>
+                            <p className="text-xs text-[var(--danger-600)]">{state.fieldErrors.name[0]}</p>
                         )}
                     </div>
 
                     {/* Grupo muscular */}
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-foreground">Grupo muscular *</label>
+                        <label className="text-sm font-medium text-strong">Grupo muscular *</label>
                         <Select name="muscle_group" defaultValue={exercise?.muscle_group ?? ''} required>
                             <SelectTrigger>
                                 <SelectValue placeholder="Seleccioná un grupo" />
@@ -189,13 +190,13 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                             </SelectContent>
                         </Select>
                         {state.fieldErrors?.muscle_group && (
-                            <p className="text-xs text-destructive">{state.fieldErrors.muscle_group[0]}</p>
+                            <p className="text-xs text-[var(--danger-600)]">{state.fieldErrors.muscle_group[0]}</p>
                         )}
                     </div>
 
                     {/* Tipo de ejercicio (polimórfico) */}
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-foreground">Tipo de ejercicio</label>
+                        <label className="text-sm font-medium text-strong">Tipo de ejercicio</label>
                         <Select
                             name="exercise_type"
                             value={exerciseType}
@@ -212,7 +213,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                                 ))}
                             </SelectContent>
                         </Select>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted">
                             Define qué campos muestra el builder y la app del alumno.
                         </p>
                     </div>
@@ -220,7 +221,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                     {/* Equipo + Dificultad */}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-foreground">Equipo</label>
+                            <label className="text-sm font-medium text-strong">Equipo</label>
                             <Select name="equipment" defaultValue={exercise?.equipment ?? ''}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Seleccioná equipo" />
@@ -233,7 +234,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                             </Select>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-foreground">Dificultad</label>
+                            <label className="text-sm font-medium text-strong">Dificultad</label>
                             <Select name="difficulty" value={difficulty} onValueChange={(v) => setDifficulty(v ?? '')}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Seleccioná dificultad">
@@ -251,7 +252,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
 
                     {/* Media picker */}
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-foreground">Demostración visual</label>
+                        <label className="text-sm font-medium text-strong">Demostración visual</label>
                         <ExerciseMediaPicker
                             value={media}
                             onChange={setMedia}
@@ -269,7 +270,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                         <div className="space-y-1.5">
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium text-foreground">Empieza en (m:ss)</label>
+                                    <label className="text-sm font-medium text-strong">Empieza en (m:ss)</label>
                                     <Input
                                         value={videoStart}
                                         onChange={(e) => setVideoStart(e.target.value)}
@@ -278,7 +279,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium text-foreground">Termina en (opcional)</label>
+                                    <label className="text-sm font-medium text-strong">Termina en (opcional)</label>
                                     <Input
                                         value={videoEnd}
                                         onChange={(e) => setVideoEnd(e.target.value)}
@@ -287,22 +288,22 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                                     />
                                 </div>
                             </div>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-muted">
                                 El video loopea ese tramo (salta intro/charla). Vacío = video completo.
                                 {videoDuration != null && ` El video dura ${secondsToMmss(Math.floor(videoDuration))}.`}
                             </p>
                             {durationError && (
-                                <p className="text-xs text-destructive">{durationError}</p>
+                                <p className="text-xs text-[var(--danger-600)]">{durationError}</p>
                             )}
                             {state.fieldErrors?.video_end_time && (
-                                <p className="text-xs text-destructive">{state.fieldErrors.video_end_time[0]}</p>
+                                <p className="text-xs text-[var(--danger-600)]">{state.fieldErrors.video_end_time[0]}</p>
                             )}
                         </div>
                     )}
 
                     {/* Músculos secundarios */}
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-foreground">Músculos secundarios</label>
+                        <label className="text-sm font-medium text-strong">Músculos secundarios</label>
                         <Input
                             name="secondary_muscles"
                             value={secondaryMuscles}
@@ -313,7 +314,7 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
 
                     {/* Instrucciones */}
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-foreground">Instrucciones</label>
+                        <label className="text-sm font-medium text-strong">Instrucciones</label>
                         <Textarea
                             name="instructions"
                             value={instructions}
@@ -321,24 +322,16 @@ export function ExerciseFormModal({ open, onClose, exercise }: Props) {
                             placeholder="Una instrucción por línea..."
                             rows={4}
                         />
-                        <p className="text-xs text-muted-foreground">Una instrucción por línea.</p>
+                        <p className="text-xs text-muted">Una instrucción por línea.</p>
                     </div>
 
-                    <div className="flex items-center justify-end gap-3 pt-2 border-t border-border">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="rounded-xl border border-border px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
-                        >
+                    <div className="flex items-center justify-end gap-3 pt-2 border-t border-subtle">
+                        <Button type="button" variant="secondary" onClick={onClose}>
                             Cancelar
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isPending}
-                            className="rounded-xl bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                        >
+                        </Button>
+                        <Button type="submit" variant="sport" disabled={isPending}>
                             {isPending ? 'Guardando...' : exercise ? 'Guardar cambios' : 'Crear ejercicio'}
-                        </button>
+                        </Button>
                     </div>
                 </form>
             </DialogContent>

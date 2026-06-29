@@ -37,7 +37,7 @@ function AreaDropZone({
         <div
             ref={setNodeRef}
             className={cn(
-                'text-[9px] font-bold uppercase tracking-widest px-2 py-1.5 rounded-lg border border-dashed mb-1 transition-colors select-none',
+                'text-[9px] font-bold uppercase tracking-widest px-2 py-1.5 rounded-control border border-dashed mb-1 transition-colors select-none',
                 area.zoneClass,
                 isOver && 'border-primary bg-primary/10 text-primary ring-1 ring-primary/25',
             )}
@@ -130,7 +130,7 @@ function DayColumnInner({
 
     return (
         <div className={cn(
-            'flex min-w-0 max-w-full flex-col h-full backdrop-blur-xl border border-border rounded-2xl overflow-hidden shadow-sm transition-colors duration-300',
+            'flex min-w-0 max-w-full flex-col h-full backdrop-blur-xl border border-border rounded-card overflow-hidden shadow-sm transition-colors duration-300',
             // Ancho fijo en desktop para que nombres largos hagan wrap y no estiren el tablero
             'w-full min-w-[200px] max-w-full md:w-[300px] md:max-w-[300px] md:flex-shrink-0 lg:w-[320px] lg:max-w-[320px]',
             is_rest
@@ -155,7 +155,7 @@ function DayColumnInner({
                                 <PopoverTrigger className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition-colors text-muted-foreground hover:text-foreground">
                                     <Copy className="w-3.5 h-3.5" />
                                 </PopoverTrigger>
-                                <PopoverContent className="w-56 p-3 bg-background/95 backdrop-blur-xl border border-border shadow-2xl rounded-xl">
+                                <PopoverContent className="w-56 p-3 bg-background/95 backdrop-blur-xl border border-border shadow-2xl rounded-card">
                                     <h4 className="text-xs font-bold uppercase tracking-widest mb-3 text-muted-foreground">Copiar a otro día</h4>
                                     <div className="space-y-2 mb-4">
                                         {(allDays || DAYS_OF_WEEK).map(d => d.id !== dayId && (
@@ -221,7 +221,7 @@ function DayColumnInner({
                                 placeholder="TITULO DEL DIA (EJ: EMPUJE)"
                                 maxLength={100}
                                 autoComplete="off"
-                                className="w-full h-9 pl-9 pr-3 text-[10px] font-bold uppercase tracking-widest rounded-lg bg-black/5 dark:bg-black/20 border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-muted-foreground text-[16px] md:text-[10px]"
+                                className="w-full h-9 pl-9 pr-3 text-[10px] font-bold uppercase tracking-widest rounded-control bg-black/5 dark:bg-black/20 border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-muted-foreground text-[16px] md:text-[10px]"
                             />
                         </div>
 
@@ -255,11 +255,11 @@ function DayColumnInner({
                                 }}
                                 onFocus={() => setIsSearchOpen(true)}
                                 placeholder="BUSCAR EJERCICIO..."
-                                className="w-full h-11 pl-10 pr-4 text-[11px] font-bold uppercase tracking-widest rounded-xl bg-black/10 dark:bg-black/40 border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-muted-foreground"
+                                className="w-full h-11 pl-10 pr-4 text-[11px] font-bold uppercase tracking-widest rounded-control bg-black/10 dark:bg-black/40 border border-border text-foreground focus:border-primary focus:ring-1 focus:ring-primary/20 focus:outline-none transition-all placeholder:text-muted-foreground"
                             />
 
                             {search && isSearchOpen && (
-                                <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-popover/95 backdrop-blur-xl border border-border shadow-2xl rounded-xl overflow-hidden z-50">
+                                <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-popover/95 backdrop-blur-xl border border-border shadow-2xl rounded-card overflow-hidden z-50">
                                     {filtered.length > 0 ? (
                                         <div className="py-2">
                                             <div className="px-3 pb-2 mb-2 border-b border-border text-[9px] font-bold uppercase tracking-widest text-muted-foreground">

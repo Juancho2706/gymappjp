@@ -57,7 +57,7 @@ export function ExerciseMediaPicker({ value, onChange, error, onDuration }: Prop
 
     return (
         <div className="space-y-3">
-            <div className="flex gap-1.5 p-1 bg-muted rounded-xl border border-border">
+            <div className="flex gap-1.5 p-1 bg-surface-sunken rounded-control border border-subtle">
                 {TABS.map(({ kind, label, icon: Icon }) => {
                     const active = activeTab === kind
                     return (
@@ -65,10 +65,10 @@ export function ExerciseMediaPicker({ value, onChange, error, onDuration }: Prop
                             key={kind}
                             type="button"
                             onClick={() => handleTabChange(kind)}
-                            className={`flex-1 flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-all ${
+                            className={`flex-1 flex items-center justify-center gap-2 rounded-[calc(var(--radius-control)-3px)] px-3 py-2 text-sm font-semibold transition-all ${
                                 active
-                                    ? 'bg-background dark:bg-card text-foreground shadow-sm ring-1 ring-border/40'
-                                    : 'text-muted-foreground hover:text-foreground hover:bg-background/50 dark:hover:bg-card/50'
+                                    ? 'bg-surface-card text-strong shadow-sm ring-1 ring-[var(--border-subtle)]'
+                                    : 'text-muted hover:text-strong hover:bg-surface-card/50'
                             }`}
                             aria-pressed={active}
                         >
@@ -79,7 +79,7 @@ export function ExerciseMediaPicker({ value, onChange, error, onDuration }: Prop
                 })}
             </div>
 
-            <div className="rounded-xl border border-border bg-card p-4">
+            <div className="rounded-control border border-subtle bg-surface-card p-4">
                 {activeTab === 'youtube' && (
                     <YoutubePanel
                         value={value.kind === 'youtube' ? value.value : ''}
@@ -104,7 +104,7 @@ export function ExerciseMediaPicker({ value, onChange, error, onDuration }: Prop
             </div>
 
             {error && (
-                <p className="text-xs text-destructive" role="alert">
+                <p className="text-xs text-[var(--danger-600)]" role="alert">
                     {error}
                 </p>
             )}
@@ -120,7 +120,7 @@ function YoutubePanel({ value, onChange, onDuration }: { value: string; onChange
     return (
         <div className="space-y-3">
             <div>
-                <label className="text-xs font-semibold text-muted-foreground block mb-1.5">
+                <label className="text-xs font-semibold text-muted block mb-1.5">
                     URL del video YouTube
                 </label>
                 <Input
@@ -129,12 +129,12 @@ function YoutubePanel({ value, onChange, onDuration }: { value: string; onChange
                     value={value}
                     onChange={(e) => onChange(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground mt-1.5">
+                <p className="text-xs text-muted mt-1.5">
                     Pegá el link. Asegurate que el video sea <strong>Unlisted</strong> o Público en YouTube.
                 </p>
             </div>
             {videoId && (
-                <div className="rounded-xl overflow-hidden border border-border aspect-video bg-black">
+                <div className="rounded-control overflow-hidden border border-subtle aspect-video bg-black">
                     <ExerciseVideo
                         videoId={videoId}
                         className="w-full h-full"
@@ -144,7 +144,7 @@ function YoutubePanel({ value, onChange, onDuration }: { value: string; onChange
                 </div>
             )}
             {value && !videoId && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
+                <p className="text-xs text-[var(--warning-600)]">
                     URL inválida. Usá un link de youtube.com o youtu.be.
                 </p>
             )}
@@ -320,10 +320,10 @@ function FileUploadPanel({ kind, value, onChange }: FileUploadProps) {
                             inputRef.current?.click()
                         }
                     }}
-                    className={`relative flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                    className={`relative flex flex-col items-center justify-center gap-2 rounded-control border-2 border-dashed p-8 cursor-pointer transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] ${
                         dragging
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-primary/40 hover:bg-muted/30'
+                            ? 'border-sport-500 bg-[var(--sport-100)]'
+                            : 'border-default hover:border-[var(--sport-300)] hover:bg-surface-sunken'
                     } ${isUploading ? 'pointer-events-none opacity-60' : ''}`}
                 >
                     <input
@@ -335,27 +335,27 @@ function FileUploadPanel({ kind, value, onChange }: FileUploadProps) {
                     />
                     {isUploading ? (
                         <>
-                            <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                            <p className="text-sm font-semibold text-foreground">Subiendo...</p>
+                            <Loader2 className="w-8 h-8 text-[var(--sport-600)] animate-spin" />
+                            <p className="text-sm font-semibold text-strong">Subiendo...</p>
                         </>
                     ) : (
                         <>
-                            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-                                <Upload className="w-6 h-6 text-primary" />
+                            <div className="flex h-12 w-12 items-center justify-center rounded-control bg-[var(--sport-100)]">
+                                <Upload className="w-6 h-6 text-[var(--sport-600)]" />
                             </div>
-                            <p className="text-sm font-semibold text-foreground">
+                            <p className="text-sm font-semibold text-strong">
                                 Arrastrá o hacé click para subir
                             </p>
-                            <p className="text-xs text-muted-foreground text-center">{helpText}</p>
-                            <p className="text-[10px] text-muted-foreground/70">
+                            <p className="text-xs text-muted text-center">{helpText}</p>
+                            <p className="text-[10px] text-subtle">
                                 También podés pegar (Ctrl+V) una imagen
                             </p>
                         </>
                     )}
                 </div>
             ) : (
-                <div className="relative rounded-xl overflow-hidden border border-border bg-card">
-                    <div className="relative aspect-video bg-muted">
+                <div className="relative rounded-control overflow-hidden border border-subtle bg-surface-card">
+                    <div className="relative aspect-video bg-surface-sunken">
                         <Image
                             src={displayUrl}
                             alt="Preview"

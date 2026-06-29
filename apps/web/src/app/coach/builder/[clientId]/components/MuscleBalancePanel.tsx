@@ -147,11 +147,11 @@ export function MuscleBalancePanel({ open, onClose, days }: MuscleBalancePanelPr
 
                             {/* Push/Pull warning */}
                             {pushSets > 0 && pullSets > 0 && (
-                                <div className={`p-3 rounded-xl border text-[10px] font-bold uppercase tracking-widest ${
+                                <div className={`p-3 rounded-card border text-[10px] font-bold uppercase tracking-widest ${
                                     pushPullRatio > 1.5
-                                        ? 'border-orange-500/20 bg-orange-500/5 text-orange-500'
+                                        ? 'border-amber-500/20 bg-amber-500/5 text-amber-600 dark:text-amber-400'
                                         : pushPullRatio < 0.65
-                                            ? 'border-orange-500/20 bg-orange-500/5 text-orange-500'
+                                            ? 'border-amber-500/20 bg-amber-500/5 text-amber-600 dark:text-amber-400'
                                             : 'border-emerald-500/20 bg-emerald-500/5 text-emerald-500'
                                 }`}>
                                     {pushPullRatio > 1.5

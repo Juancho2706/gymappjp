@@ -48,7 +48,7 @@ export const MuscleBalanceSheet = forwardRef<BottomSheetModal, Props>(function M
   return (
     <BottomSheetModal ref={ref} index={0} snapPoints={['85%']} enableDynamicSizing={false} enablePanDownToClose backgroundStyle={{ backgroundColor: theme.card }} handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}>
       <BottomSheetScrollView contentContainerStyle={styles.body}>
-        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Balance muscular</Text>
+        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>Balance muscular</Text>
         <Text style={[styles.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{data.total} series totales · {data.arr.length} grupos activos</Text>
 
         {data.arr.length === 0 ? (
@@ -74,19 +74,19 @@ export const MuscleBalanceSheet = forwardRef<BottomSheetModal, Props>(function M
                 return (
                   <View key={x.muscle} style={styles.row}>
                     <View style={[styles.mDot, { backgroundColor: color }]} />
-                    <Text style={[styles.muscle, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>{x.muscle}</Text>
+                    <Text style={[styles.muscle, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]} numberOfLines={1}>{x.muscle}</Text>
                     <View style={[styles.track, { backgroundColor: theme.muted }]}>
                       <View style={{ height: '100%', borderRadius: 5, width: `${Math.round((x.sets / data.max) * 100)}%`, backgroundColor: color }} />
                     </View>
-                    <Text style={[styles.sets, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{x.sets}s · {x.ex}ej</Text>
+                    <Text style={[styles.sets, { color: theme.mutedForeground, fontFamily: 'JetBrainsMono_700Bold' }]}>{x.sets}s · {x.ex}ej</Text>
                   </View>
                 )
               })}
             </View>
 
             {data.push > 0 && data.pull > 0 ? (
-              <View style={[styles.warn, { borderColor: balanced ? '#10B98133' : '#F59E0B33', backgroundColor: balanced ? '#10B98114' : '#F59E0B14' }]}>
-                <Text style={[styles.warnTxt, { color: balanced ? '#10B981' : '#F59E0B', fontFamily: 'Inter_700Bold' }]}>
+              <View style={[styles.warn, { borderColor: balanced ? theme.success + '33' : '#F5A52433', backgroundColor: balanced ? theme.success + '14' : '#F5A52414' }]}>
+                <Text style={[styles.warnTxt, { color: balanced ? theme.success : '#F5A524', fontFamily: 'HankenGrotesk_700Bold' }]}>
                   {balanced ? `✓ Ratio empuje/jale equilibrado (${data.push}s / ${data.pull}s)` : ratio > 1.5 ? '⚠ Empuje/jale desequilibrado — sumá más espalda' : '⚠ Jale/empuje desequilibrado — sumá más pecho y hombros'}
                 </Text>
               </View>

@@ -71,9 +71,9 @@ function FiltersForm({
     return (
         <div className={cn('flex flex-col gap-3', className)}>
             <div className="space-y-1.5">
-                <span className="text-xs font-medium text-muted-foreground">Estado</span>
+                <span className="text-xs font-medium text-muted">Estado</span>
                 <Select value={filterStatus} onValueChange={(v) => onFilterStatusChange(v as LibraryFilters['filterStatus'])}>
-                    <SelectTrigger className="h-10 w-full bg-background">
+                    <SelectTrigger className="h-10 w-full bg-surface-card">
                         <SelectValue>{filterStatusLabel(filterStatus)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -84,12 +84,12 @@ function FiltersForm({
                 </Select>
             </div>
             <div className="space-y-1.5">
-                <span className="text-xs font-medium text-muted-foreground">Estructura</span>
+                <span className="text-xs font-medium text-muted">Estructura</span>
                 <Select
                     value={filterStructure}
                     onValueChange={(v) => onFilterStructureChange(v as LibraryFilters['filterStructure'])}
                 >
-                    <SelectTrigger className="h-10 w-full bg-background">
+                    <SelectTrigger className="h-10 w-full bg-surface-card">
                         <SelectValue>{filterStructureLabel(filterStructure)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -100,12 +100,12 @@ function FiltersForm({
                 </Select>
             </div>
             <div className="space-y-1.5">
-                <span className="text-xs font-medium text-muted-foreground">Fases</span>
+                <span className="text-xs font-medium text-muted">Fases</span>
                 <Select
                     value={filterHasPhases}
                     onValueChange={(v) => onFilterHasPhasesChange(v as LibraryFilters['filterHasPhases'])}
                 >
-                    <SelectTrigger className="h-10 w-full bg-background">
+                    <SelectTrigger className="h-10 w-full bg-surface-card">
                         <SelectValue>{filterPhasesLabel(filterHasPhases)}</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -120,10 +120,10 @@ function FiltersForm({
 }
 
 const segmentedTabsListClass =
-    'h-11 w-full justify-start gap-0.5 overflow-x-auto rounded-full border border-border/50 bg-muted/35 p-1 shadow-inner [-ms-overflow-style:none] [scrollbar-width:none] dark:bg-muted/20 [&::-webkit-scrollbar]:hidden'
+    'h-11 w-full justify-start gap-1 overflow-x-auto rounded-control border-0 bg-surface-sunken p-1 shadow-none [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
 
 const segmentedTabsTriggerClass =
-    'shrink-0 rounded-full border-0 px-3.5 py-2 text-xs font-semibold shadow-none after:hidden sm:px-4 sm:text-sm data-active:bg-primary/12 data-active:text-foreground dark:data-active:bg-primary/20'
+    'shrink-0 rounded-[calc(var(--radius-control)-3px)] border-0 px-3.5 py-2 text-xs font-semibold text-muted shadow-none after:hidden sm:px-4 sm:text-sm data-active:bg-surface-card data-active:text-strong data-active:shadow-[var(--shadow-sm)]'
 
 export function LibraryToolbar({
     search,
@@ -146,21 +146,21 @@ export function LibraryToolbar({
         <div className={cn('flex flex-col gap-3', className)}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="relative min-w-0 flex-1">
-                    <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-subtle" />
                     <Input
                         placeholder="Buscar por programa o alumno…"
                         value={search}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        className="h-11 rounded-full border-border/50 bg-background/90 pl-10 text-base shadow-sm placeholder:text-muted-foreground/80 md:text-sm dark:bg-background/60"
+                        className="h-11 rounded-control border-default bg-surface-card pl-10 text-base shadow-sm placeholder:text-muted md:text-sm"
                         aria-label="Buscar programas"
                     />
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                     <Button
                         type="button"
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
-                        className="h-11 shrink-0 gap-2 rounded-full border-border/50 px-3 shadow-sm md:hidden"
+                        className="h-11 shrink-0 gap-2 rounded-control px-3 shadow-sm md:hidden"
                         onClick={() => setMobileFiltersOpen(true)}
                     >
                         <SlidersHorizontal className="size-4" />
@@ -169,13 +169,13 @@ export function LibraryToolbar({
                     <Popover>
                         <PopoverTrigger
                             type="button"
-                            className="hidden h-11 shrink-0 items-center gap-2 rounded-full border border-border/50 bg-background/90 px-4 text-sm font-medium text-foreground shadow-sm hover:bg-muted/50 md:inline-flex dark:bg-background/60"
+                            className="hidden h-11 shrink-0 items-center gap-2 rounded-control border-[1.5px] border-default bg-surface-card px-4 text-sm font-semibold text-strong shadow-sm hover:bg-surface-sunken md:inline-flex"
                         >
                             <Filter className="size-4 shrink-0" />
                             Filtros
                         </PopoverTrigger>
                         <PopoverContent
-                            className="w-[min(100vw-2rem,320px)] border-border bg-popover p-4"
+                            className="w-[min(100vw-2rem,320px)] p-4"
                             align="end"
                         >
                             <FiltersForm
@@ -188,12 +188,12 @@ export function LibraryToolbar({
                             />
                         </PopoverContent>
                     </Popover>
-                    <div className="flex items-center rounded-full border border-border/50 bg-muted/35 p-1 shadow-inner dark:bg-muted/20">
+                    <div className="flex items-center rounded-control border-0 bg-surface-sunken p-1">
                         <Button
                             type="button"
                             variant={viewMode === 'comfortable' ? 'secondary' : 'ghost'}
                             size="icon"
-                            className="size-9 shrink-0 rounded-full"
+                            className="size-9 shrink-0 rounded-[calc(var(--radius-control)-3px)]"
                             onClick={() => onViewModeChange('comfortable')}
                             title="Vista cómoda"
                         >
@@ -203,7 +203,7 @@ export function LibraryToolbar({
                             type="button"
                             variant={viewMode === 'compact' ? 'secondary' : 'ghost'}
                             size="icon"
-                            className="size-9 shrink-0 rounded-full"
+                            className="size-9 shrink-0 rounded-[calc(var(--radius-control)-3px)]"
                             onClick={() => onViewModeChange('compact')}
                             title="Vista compacta"
                         >
@@ -235,10 +235,10 @@ export function LibraryToolbar({
                 <SheetContent
                     side="bottom"
                     showCloseButton
-                    className="max-h-[min(85dvh,560px)] rounded-t-2xl border-border bg-background text-foreground shadow-lg [&_[data-slot=sheet-close]]:border-border [&_[data-slot=sheet-close]]:bg-muted/40 [&_[data-slot=sheet-close]]:text-foreground"
+                    className="max-h-[min(85dvh,560px)] rounded-t-sheet border-subtle bg-surface-card text-body shadow-lg"
                 >
-                    <SheetHeader className="border-0 bg-background px-6 pt-2">
-                        <SheetTitle className="font-semibold normal-case tracking-normal text-foreground">
+                    <SheetHeader className="border-0 bg-surface-card px-6 pt-2">
+                        <SheetTitle className="font-display font-extrabold normal-case tracking-[-0.02em] text-strong">
                             Filtros
                         </SheetTitle>
                     </SheetHeader>
@@ -252,8 +252,8 @@ export function LibraryToolbar({
                             onFilterHasPhasesChange={onFilterHasPhasesChange}
                         />
                     </div>
-                    <SheetFooter className="border-border bg-background">
-                        <Button type="button" className="w-full" onClick={() => setMobileFiltersOpen(false)}>
+                    <SheetFooter className="border-subtle bg-surface-card">
+                        <Button type="button" variant="sport" className="w-full" onClick={() => setMobileFiltersOpen(false)}>
                             Listo
                         </Button>
                     </SheetFooter>

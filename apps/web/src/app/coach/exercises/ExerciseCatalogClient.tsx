@@ -84,20 +84,20 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
     return (
         <div className="space-y-6">
             {/* Filters Section */}
-            <div className="bg-card border border-border rounded-2xl p-4 shadow-sm flex flex-col md:flex-row gap-4">
+            <div className="bg-surface-card border border-subtle rounded-card p-4 shadow-sm flex flex-col md:flex-row gap-4">
                 <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-subtle" />
                     <Input
                         placeholder="Buscar ejercicio..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="pl-9 bg-background border-border text-foreground"
+                        className="pl-9 bg-surface-card border-default text-strong"
                     />
                 </div>
                 <div className="w-full md:w-64">
                     <Select value={muscleFilter} onValueChange={(val) => setMuscleFilter(val || 'Todos')}>
-                        <SelectTrigger className="bg-muted/50 border-border">
-                            <Filter className="w-4 h-4 mr-2 text-muted-foreground" />
+                        <SelectTrigger className="bg-surface-card border-default">
+                            <Filter className="w-4 h-4 mr-2 text-muted" />
                             <SelectValue placeholder="Grupo muscular" />
                         </SelectTrigger>
                         <SelectContent>
@@ -115,10 +115,10 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                         onClick={() => setCustomOnly(v => !v)}
                         aria-pressed={customOnly}
                         className={cn(
-                            'inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all whitespace-nowrap',
+                            'inline-flex items-center gap-1.5 px-3 py-2 rounded-control text-sm font-semibold border-[1.5px] transition-all whitespace-nowrap',
                             customOnly
-                                ? 'bg-primary/10 text-primary border-primary/30'
-                                : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                                ? 'bg-[var(--sport-100)] text-[var(--sport-700)] border-[var(--sport-300)]'
+                                : 'bg-surface-sunken text-muted border-subtle hover:bg-surface-sunken hover:text-strong'
                         )}
                     >
                         <User className="w-4 h-4" />
@@ -129,10 +129,10 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                         onClick={() => setWithVideoOnly(v => !v)}
                         aria-pressed={withVideoOnly}
                         className={cn(
-                            'inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium border transition-all whitespace-nowrap',
+                            'inline-flex items-center gap-1.5 px-3 py-2 rounded-control text-sm font-semibold border-[1.5px] transition-all whitespace-nowrap',
                             withVideoOnly
-                                ? 'bg-primary/10 text-primary border-primary/30'
-                                : 'bg-muted/50 text-muted-foreground border-border hover:bg-muted'
+                                ? 'bg-[var(--sport-100)] text-[var(--sport-700)] border-[var(--sport-300)]'
+                                : 'bg-surface-sunken text-muted border-subtle hover:bg-surface-sunken hover:text-strong'
                         )}
                     >
                         <Play className="w-4 h-4" />
@@ -144,10 +144,10 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
             {/* Right: global catalog by muscle group */}
             <div className="lg:col-span-2 space-y-4">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-muted flex items-center gap-2">
                         <Globe className="w-4 h-4" />
                         Catálogo de ejercicios
-                        <Badge variant="secondary" className="ml-2 font-mono">
+                        <Badge tone="neutral" variant="soft" className="ml-2 font-mono">
                             {filteredExercises.length}
                         </Badge>
                     </h2>
@@ -158,27 +158,27 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                     Object.entries(groupedByMuscle).map(([muscle, exList]) => {
                         const isCollapsed = collapsedGroups[muscle]
                         return (
-                            <div key={muscle} className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm transition-all hover:shadow-md">
-                                <button 
+                            <div key={muscle} className="bg-surface-card border border-subtle rounded-card overflow-hidden shadow-sm transition-all hover:shadow-md">
+                                <button
                                     onClick={() => toggleGroup(muscle)}
-                                    className="w-full px-5 py-3 border-b border-border bg-muted/30 flex items-center gap-2 cursor-pointer hover:bg-muted/50 transition-colors"
+                                    className="w-full px-5 py-3 border-b border-subtle bg-surface-sunken/50 flex items-center gap-2 cursor-pointer hover:bg-surface-sunken transition-colors"
                                 >
-                                    <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
-                                    <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                                    <div className="w-2 h-2 rounded-full bg-sport-500 shrink-0" />
+                                    <span className="text-xs font-bold text-strong uppercase tracking-wider">
                                         {muscle}
                                     </span>
                                     <div className="ml-auto flex items-center gap-3">
-                                        <span className="text-xs text-muted-foreground bg-background px-2 py-0.5 rounded-full border border-border">
+                                        <span className="text-xs text-muted bg-surface-card px-2 py-0.5 rounded-full border border-subtle">
                                             {exList.length}
                                         </span>
-                                        <div className="text-muted-foreground">
+                                        <div className="text-muted">
                                             {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
                                         </div>
                                     </div>
                                 </button>
                                 <AnimatePresence initial={false}>
                                     {!isCollapsed && (
-                                        <motion.div 
+                                        <motion.div
                                             initial={{ height: 0, opacity: 0 }}
                                             animate={{ height: "auto", opacity: 1 }}
                                             exit={{ height: 0, opacity: 0 }}
@@ -189,10 +189,10 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                                                 <button
                                                     key={ex.id}
                                                     onClick={() => setSelected(ex)}
-                                                    className="group inline-flex items-center px-4 py-2 rounded-xl text-xs font-medium bg-background text-foreground border border-border hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-all duration-200 cursor-pointer shadow-sm hover:shadow"
+                                                    className="group inline-flex items-center px-4 py-2 rounded-control text-xs font-medium bg-surface-card text-strong border border-subtle hover:border-[var(--sport-300)] hover:bg-[var(--sport-100)] hover:text-[var(--sport-700)] transition-all duration-200 cursor-pointer shadow-sm hover:shadow"
                                                 >
                                                     {(ex.video_url || ex.gif_url) && (
-                                                        <div className="mr-2 w-2 h-2 rounded-full bg-primary animate-pulse group-hover:animate-none" />
+                                                        <div className="mr-2 w-2 h-2 rounded-full bg-sport-500 animate-pulse group-hover:animate-none" />
                                                     )}
                                                     {ex.name}
                                                 </button>
@@ -204,12 +204,12 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                         )
                     })
                 ) : (
-                    <div className="py-20 text-center bg-card border border-dashed border-border rounded-2xl">
-                        <Dumbbell className="w-12 h-12 text-muted-foreground/20 mx-auto mb-4" />
-                        <p className="text-muted-foreground font-medium">No se encontraron ejercicios</p>
+                    <div className="py-20 text-center bg-surface-card border border-dashed border-default rounded-card">
+                        <Dumbbell className="w-12 h-12 text-[var(--ink-300)] mx-auto mb-4" />
+                        <p className="text-muted font-medium">No se encontraron ejercicios</p>
                         <button
                             onClick={() => { setSearch(''); setMuscleFilter('Todos'); setCustomOnly(false); setWithVideoOnly(false); }}
-                            className="mt-4 text-xs text-primary hover:underline font-bold"
+                            className="mt-4 text-xs text-[var(--sport-600)] hover:underline font-bold"
                         >
                             Limpiar filtros
                         </button>
@@ -253,12 +253,12 @@ function ExercisePreviewModal({
 
     return (
         <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-            <DialogContent 
+            <DialogContent
                 showCloseButton={false}
-                className="bg-card border border-border text-foreground max-w-lg rounded-2xl shadow-2xl p-0 overflow-y-auto custom-scrollbar max-h-[85vh] focus:outline-none"
+                className="bg-surface-card border border-subtle text-body max-w-lg rounded-card shadow-2xl p-0 overflow-y-auto custom-scrollbar max-h-[85vh] focus:outline-none"
             >
                 {/* Media demonstration area */}
-                <div className="sticky top-0 relative w-full bg-white flex items-center justify-center border-b border-border h-56 md:h-72 shrink-0 overflow-hidden z-10">
+                <div className="sticky top-0 relative w-full bg-white flex items-center justify-center border-b border-subtle h-56 md:h-72 shrink-0 overflow-hidden z-10">
                     {ytId ? (
                         <ExerciseVideo
                             videoId={ytId}
@@ -275,7 +275,7 @@ function ExercisePreviewModal({
                             className="w-full h-full object-contain"
                         />
                     ) : (
-                        <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground opacity-30">
+                        <div className="flex flex-col items-center justify-center gap-2 text-muted opacity-30">
                             <Dumbbell className="w-12 h-12" />
                             <p className="text-xs font-medium">Sin previsualización</p>
                         </div>
@@ -285,29 +285,29 @@ function ExercisePreviewModal({
                 <div className="p-6 space-y-5 flex-1">
                     <DialogHeader>
                         <div className="flex items-start justify-between gap-4">
-                            <DialogTitle className="text-xl font-extrabold text-foreground">
+                            <DialogTitle className="font-display text-xl font-extrabold text-strong">
                                 {exercise.name}
                             </DialogTitle>
-                            <DialogClose className="p-2 -mr-2 -mt-2 rounded-full hover:bg-muted transition-colors shrink-0">
-                                <X className="w-5 h-5 text-muted-foreground" />
+                            <DialogClose className="p-2 -mr-2 -mt-2 rounded-full hover:bg-surface-sunken transition-colors shrink-0">
+                                <X className="w-5 h-5 text-muted" />
                             </DialogClose>
                         </div>
                     </DialogHeader>
 
                     {/* Badges row */}
                     <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/20">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[var(--sport-100)] text-[var(--sport-700)] border border-[var(--sport-300)]/40">
                             <Target className="w-3 h-3" />
                             {exercise.muscle_group}
                         </span>
                         {hasEquipment && (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-muted text-muted-foreground border border-border">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-surface-sunken text-muted border border-subtle">
                                 <Wrench className="w-3 h-3" />
                                 {exercise.equipment}
                             </span>
                         )}
                         {hasSecondary && exercise.secondary_muscles!.map(m => (
-                            <span key={m} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs text-muted-foreground bg-muted/60 border border-border">
+                            <span key={m} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs text-muted bg-surface-sunken/60 border border-subtle">
                                 {m}
                             </span>
                         ))}
@@ -316,8 +316,8 @@ function ExercisePreviewModal({
                     {/* Instructions */}
                     {hasInstructions && (
                         <div className="space-y-3">
-                            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                                <Zap className="w-4 h-4 text-primary" />
+                            <h3 className="text-sm font-bold text-strong flex items-center gap-2">
+                                <Zap className="w-4 h-4 text-[var(--sport-600)]" />
                                 Instrucciones
                             </h3>
                             <ol className="space-y-2">
@@ -325,8 +325,8 @@ function ExercisePreviewModal({
                                     // Strip "Step:N " prefix from ExerciseDB data
                                     const cleanStep = step.replace(/^Step:\d+\s*/i, '')
                                     return (
-                                        <li key={i} className="flex gap-3 text-sm text-muted-foreground">
-                                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center mt-0.5">
+                                        <li key={i} className="flex gap-3 text-sm text-muted">
+                                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-[var(--sport-100)] text-[var(--sport-700)] text-xs font-bold flex items-center justify-center mt-0.5">
                                                 {i + 1}
                                             </span>
                                             <span className="leading-relaxed">{cleanStep}</span>
@@ -338,14 +338,14 @@ function ExercisePreviewModal({
                     )}
 
                     {/* Vista del alumno preview */}
-                    <div className="bg-muted/50 border border-border rounded-xl p-4">
-                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
+                    <div className="bg-surface-sunken/50 border border-subtle rounded-card p-4">
+                        <p className="text-xs font-bold text-muted uppercase tracking-wider mb-3">
                             Vista del alumno
                         </p>
-                        <div className="bg-card border border-border rounded-xl p-4">
+                        <div className="bg-surface-card border border-subtle rounded-card p-4">
                             <div className="flex items-center gap-3">
                                 {ytId ? (
-                                    <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-black/5 dark:bg-black/20">
+                                    <div className="relative w-14 h-14 rounded-control overflow-hidden flex-shrink-0 bg-black/5 dark:bg-black/20">
                                         <Image
                                             src={exerciseThumbnailUrl(exercise) ?? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
                                             alt={exercise.name}
@@ -355,7 +355,7 @@ function ExercisePreviewModal({
                                         />
                                     </div>
                                 ) : (directMedia || rawVideoUrl) ? (
-                                    <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-black/5 dark:bg-black/20">
+                                    <div className="relative w-14 h-14 rounded-control overflow-hidden flex-shrink-0 bg-black/5 dark:bg-black/20">
                                         {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img
                                             src={(directMedia || rawVideoUrl)!}
@@ -364,15 +364,15 @@ function ExercisePreviewModal({
                                         />
                                     </div>
                                 ) : (
-                                    <div className="w-14 h-14 rounded-xl bg-primary/10 border border-primary/15 flex items-center justify-center flex-shrink-0">
-                                        <Dumbbell className="w-6 h-6 text-primary" />
+                                    <div className="w-14 h-14 rounded-control bg-[var(--sport-100)] border border-[var(--sport-300)]/30 flex items-center justify-center flex-shrink-0">
+                                        <Dumbbell className="w-6 h-6 text-[var(--sport-600)]" />
                                     </div>
                                 )}
                                 <div>
-                                    <p className="text-sm font-semibold text-foreground">{exercise.name}</p>
-                                    <p className="text-xs text-muted-foreground">{exercise.muscle_group}</p>
+                                    <p className="text-sm font-semibold text-strong">{exercise.name}</p>
+                                    <p className="text-xs text-muted">{exercise.muscle_group}</p>
                                     {hasEquipment && (
-                                        <p className="text-xs text-muted-foreground mt-0.5">🔧 {exercise.equipment}</p>
+                                        <p className="text-xs text-muted mt-0.5">🔧 {exercise.equipment}</p>
                                     )}
                                 </div>
                             </div>
@@ -380,7 +380,7 @@ function ExercisePreviewModal({
                     </div>
 
                     {/* Source badge */}
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
+                    <div className="flex items-center gap-2 text-xs text-muted pt-1">
                         {exercise.coach_id ? (
                             <>
                                 <User className="w-3.5 h-3.5" />

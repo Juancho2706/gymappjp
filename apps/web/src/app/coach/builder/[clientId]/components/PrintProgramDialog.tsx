@@ -221,7 +221,7 @@ export function PrintProgramDialog({ open, onClose, programName, clientName, coa
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="bg-background border border-border rounded-card shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
                 {/* Dialog header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
                     <div>
@@ -231,13 +231,13 @@ export function PrintProgramDialog({ open, onClose, programName, clientName, coa
                     <div className="flex items-center gap-2">
                         <button
                             onClick={handlePrint}
-                            className="flex items-center gap-2 px-4 py-2 text-white text-xs font-bold uppercase tracking-widest rounded-xl hover:opacity-90 transition-opacity"
+                            className="flex items-center gap-2 px-4 py-2 text-white text-xs font-bold uppercase tracking-widest rounded-control hover:opacity-90 transition-opacity"
                             style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
                         >
                             <Printer className="w-4 h-4" />
                             Imprimir / PDF
                         </button>
-                        <button onClick={onClose} className="p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground">
+                        <button onClick={onClose} className="p-2 rounded-control hover:bg-muted transition-colors text-muted-foreground">
                             <X className="w-5 h-5" />
                         </button>
                     </div>

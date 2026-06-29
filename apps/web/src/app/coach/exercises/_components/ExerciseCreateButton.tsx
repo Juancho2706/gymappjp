@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { ExerciseFormModal } from './ExerciseFormModal'
 
 export function ExerciseCreateButton() {
@@ -9,13 +10,10 @@ export function ExerciseCreateButton() {
 
     return (
         <>
-            <button
-                onClick={() => setOpen(true)}
-                className="flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
-            >
+            <Button type="button" variant="sport" size="sm" onClick={() => setOpen(true)} className="gap-2">
                 <Plus className="h-4 w-4" />
                 Crear ejercicio
-            </button>
+            </Button>
             {open && <ExerciseFormModal open={open} onClose={() => setOpen(false)} />}
         </>
     )

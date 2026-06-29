@@ -81,7 +81,7 @@ interface WorkoutProgramsClientProps {
 }
 
 const libraryEmptyCardClass =
-    'rounded-xl border border-border/60 bg-card px-4 py-14 text-center text-card-foreground shadow-sm'
+    'rounded-card border border-subtle bg-surface-card px-4 py-14 text-center text-strong shadow-sm'
 
 function defaultDuplicateProgramName(program: ProgramListModel): string {
     if (program.client_id && program.client?.full_name) {
@@ -105,40 +105,40 @@ function LibraryEmptyState({
     if (hasPrograms && trimmed) {
         return (
             <div className={libraryEmptyCardClass}>
-                <p className="text-sm font-medium text-foreground">Sin resultados para tu búsqueda</p>
-                <p className="mt-1 text-xs text-muted-foreground">Prueba con otro término o revisa los filtros.</p>
+                <p className="text-sm font-medium text-strong">Sin resultados para tu búsqueda</p>
+                <p className="mt-1 text-xs text-muted">Prueba con otro término o revisa los filtros.</p>
             </div>
         )
     }
     if (hasPrograms && filterType === 'templates') {
         return (
             <div className={libraryEmptyCardClass}>
-                <p className="text-sm font-medium text-foreground">No hay plantillas con estos criterios</p>
-                <p className="mt-1 text-xs text-muted-foreground">Crea una plantilla nueva o cambia el filtro.</p>
+                <p className="text-sm font-medium text-strong">No hay plantillas con estos criterios</p>
+                <p className="mt-1 text-xs text-muted">Crea una plantilla nueva o cambia el filtro.</p>
             </div>
         )
     }
     if (hasPrograms && filterType === 'assigned') {
         return (
             <div className={libraryEmptyCardClass}>
-                <p className="text-sm font-medium text-foreground">No hay programas en curso</p>
-                <p className="mt-1 text-xs text-muted-foreground">Asigna una plantilla a un alumno para verla aquí.</p>
+                <p className="text-sm font-medium text-strong">No hay programas en curso</p>
+                <p className="mt-1 text-xs text-muted">Asigna una plantilla a un alumno para verla aquí.</p>
             </div>
         )
     }
     if (hasPrograms) {
         return (
             <div className={libraryEmptyCardClass}>
-                <p className="text-sm font-medium text-foreground">Nada que mostrar con estos filtros</p>
-                <p className="mt-1 text-xs text-muted-foreground">Ajusta filtros o la búsqueda.</p>
+                <p className="text-sm font-medium text-strong">Nada que mostrar con estos filtros</p>
+                <p className="mt-1 text-xs text-muted">Ajusta filtros o la búsqueda.</p>
             </div>
         )
     }
     return (
         <div className={libraryEmptyCardClass}>
-            <p className="text-sm font-medium text-foreground">Aún no tienes programas</p>
-            <p className="mt-1 text-xs text-muted-foreground">Crea tu primera plantilla para empezar.</p>
-            <Button type="button" className="mt-4 h-11 w-full gap-2 rounded-xl shadow-sm sm:h-10 sm:w-auto sm:rounded-lg" onClick={onNewTemplate}>
+            <p className="text-sm font-medium text-strong">Aún no tienes programas</p>
+            <p className="mt-1 text-xs text-muted">Crea tu primera plantilla para empezar.</p>
+            <Button type="button" variant="sport" className="mt-4 h-11 w-full gap-2 rounded-control shadow-sm sm:h-10 sm:w-auto" onClick={onNewTemplate}>
                 <Plus className="size-4" />
                 Nueva plantilla
             </Button>
@@ -148,12 +148,12 @@ function LibraryEmptyState({
 
 function DesktopEmptyPanel() {
     return (
-        <div className="rounded-xl border border-border/60 bg-card p-8 text-center text-card-foreground shadow-sm">
-            <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-muted/40 text-muted-foreground">
+        <div className="rounded-card border border-subtle bg-surface-card p-8 text-center text-strong shadow-sm">
+            <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-surface-sunken text-muted">
                 <Eye className="size-5 opacity-60" />
             </div>
-            <p className="text-sm font-medium text-foreground">Vista de detalles</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="text-sm font-medium text-strong">Vista de detalles</p>
+            <p className="mt-1 text-xs text-muted">
                 Selecciona un programa de la lista para ver su contenido aquí.
             </p>
         </div>
@@ -199,43 +199,36 @@ function DesktopDetailPanel({
         .join(' · ')
 
     return (
-        <div className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-sm">
+        <div className="rounded-card border border-subtle bg-surface-card text-strong shadow-sm">
             {/* Header */}
-            <div className="flex items-start justify-between gap-2 border-b border-border/60 bg-muted/25 px-4 py-3.5">
+            <div className="flex items-start justify-between gap-2 border-b border-subtle bg-surface-sunken/40 px-4 py-3.5">
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="min-w-0 truncate font-semibold text-foreground">{program.name}</span>
+                        <span className="min-w-0 truncate font-display font-bold text-strong">{program.name}</span>
                         {isTemplate ? (
-                            <Badge
-                                variant="outline"
-                                className="shrink-0 border-primary/25 bg-primary/5 text-[10px] font-semibold text-primary"
-                            >
+                            <Badge tone="sport" variant="soft" size="sm" className="shrink-0">
                                 Plantilla
                             </Badge>
+                        ) : program.is_active ? (
+                            <Badge tone="success" variant="soft" size="sm" dot className="shrink-0">
+                                {stats.templateLabel}
+                            </Badge>
                         ) : (
-                            <Badge
-                                variant="outline"
-                                className={cn(
-                                    'shrink-0 text-[10px] font-semibold',
-                                    program.is_active
-                                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
-                                        : 'border-border text-muted-foreground'
-                                )}
-                            >
+                            <Badge tone="neutral" variant="soft" size="sm" className="shrink-0">
                                 {stats.templateLabel}
                             </Badge>
                         )}
                     </div>
                     {!isTemplate && program.client?.full_name && (
-                        <p className="mt-0.5 text-xs text-muted-foreground">{program.client.full_name}</p>
+                        <p className="mt-0.5 text-xs text-muted">{program.client.full_name}</p>
                     )}
-                    <p className="mt-0.5 text-xs text-muted-foreground">{meta}</p>
+                    <p className="mt-0.5 text-xs text-muted">{meta}</p>
                 </div>
                 <Button
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="-mr-1 -mt-1 size-8 shrink-0 text-muted-foreground"
+                    className="-mr-1 -mt-1 size-8 shrink-0 text-muted"
                     onClick={onClose}
                 >
                     <X className="size-4" />
@@ -246,13 +239,13 @@ function DesktopDetailPanel({
             <ProgramPreviewBody program={program} areas={areas} />
 
             {/* Footer actions */}
-            <div className="flex flex-wrap gap-2 border-t border-border/60 bg-muted/10 px-4 py-3">
-                <Button type="button" size="sm" onClick={onEdit} className="gap-1.5">
+            <div className="flex flex-wrap gap-2 border-t border-subtle bg-surface-sunken/30 px-4 py-3">
+                <Button type="button" size="sm" variant="sport" onClick={onEdit} className="gap-1.5">
                     <Pencil className="size-3.5" />
                     Editar
                 </Button>
                 {isTemplate && (
-                    <Button type="button" size="sm" variant="outline" onClick={onAssign} className="gap-1.5">
+                    <Button type="button" size="sm" variant="secondary" onClick={onAssign} className="gap-1.5">
                         <Users className="size-3.5" />
                         Asignar
                     </Button>
@@ -260,7 +253,7 @@ function DesktopDetailPanel({
                 <Button
                     type="button"
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     onClick={onDuplicate}
                     disabled={isPending && isActionPending}
                     className="gap-1.5"
@@ -272,7 +265,7 @@ function DesktopDetailPanel({
                     <Button
                         type="button"
                         size="sm"
-                        variant="outline"
+                        variant="secondary"
                         onClick={onSync}
                         disabled={isPending && isActionPending}
                         className="gap-1.5"
@@ -286,7 +279,7 @@ function DesktopDetailPanel({
                     size="sm"
                     variant="ghost"
                     onClick={onDelete}
-                    className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    className="gap-1.5 text-[var(--danger-600)] hover:bg-[var(--danger-100)] hover:text-[var(--danger-600)]"
                 >
                     <Trash2 className="size-3.5" />
                     Eliminar
@@ -550,7 +543,7 @@ export function WorkoutProgramsClient({
                         <AlertDialogTitle>¿Sobreescribir programas de entrenamiento?</AlertDialogTitle>
                         <AlertDialogDescription>
                             <span className="mt-2 block">Los siguientes alumnos ya tienen un programa activo:</span>
-                            <span className="mt-2 block font-medium text-foreground">
+                            <span className="mt-2 block font-medium text-strong">
                                 {clientsWithExistingPlans.map((c) => (
                                     <span key={c.id} className="ml-4 block">
                                         • {c.full_name} ({c.workout_programs?.[0]?.name})
@@ -567,7 +560,7 @@ export function WorkoutProgramsClient({
                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={() => handleAssign(true)}
-                            className="bg-primary text-primary-foreground hover:bg-primary/90"
+                            className="bg-sport-500 text-[var(--text-on-sport)] hover:bg-[var(--sport-600)]"
                         >
                             Continuar y sobreescribir
                         </AlertDialogAction>
@@ -580,7 +573,7 @@ export function WorkoutProgramsClient({
                     <AlertDialogHeader>
                         <AlertDialogTitle>Eliminar programa</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Esta acción eliminará <span className="font-semibold text-foreground">{programToDelete?.name}</span>.
+                            Esta acción eliminará <span className="font-semibold text-strong">{programToDelete?.name}</span>.
                             No se puede deshacer.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
@@ -588,7 +581,7 @@ export function WorkoutProgramsClient({
                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={() => programToDelete && handleDelete(programToDelete)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            className="bg-[var(--cta-danger)] text-white hover:bg-[color-mix(in_oklab,var(--cta-danger)_90%,#000)]"
                         >
                             Eliminar
                         </AlertDialogAction>
@@ -597,7 +590,7 @@ export function WorkoutProgramsClient({
             </AlertDialog>
 
             {/* Hero: backdrop + header + toolbar */}
-            <div className="w-full min-w-0 max-w-full overflow-hidden rounded-3xl border border-border/40 bg-background/90 shadow-[0_8px_28px_-14px_rgba(0,0,0,0.08)] backdrop-blur-md dark:border-white/10 dark:bg-background/85 dark:shadow-[0_8px_32px_-16px_rgba(0,0,0,0.5)]">
+            <div className="w-full min-w-0 max-w-full overflow-hidden rounded-[28px] border border-subtle bg-surface-card/90 shadow-[0_8px_28px_-14px_rgba(13,18,28,0.10)] backdrop-blur-md dark:border-default dark:bg-surface-card/85 dark:shadow-[0_8px_32px_-16px_rgba(0,0,0,0.5)]">
                 <LibraryHeroBackdrop />
                 <div className="relative z-10 space-y-4 px-3 pb-4 pt-3 sm:px-5">
                     <LibraryHeader
@@ -736,25 +729,25 @@ export function WorkoutProgramsClient({
                     if (!open) setOpenPopover(false)
                 }}
             >
-                <DialogContent className="max-h-[min(88dvh,88svh)] overflow-y-auto overscroll-contain border-border bg-card px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] text-card-foreground sm:max-w-[440px]">
+                <DialogContent className="max-h-[min(88dvh,88svh)] overflow-y-auto overscroll-contain border-subtle bg-surface-card px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] text-body sm:max-w-[440px]">
                     <DialogHeader>
-                        <DialogTitle className="text-foreground">Asignar programa</DialogTitle>
-                        <DialogDescription className="text-muted-foreground">
+                        <DialogTitle className="text-strong">Asignar programa</DialogTitle>
+                        <DialogDescription className="text-muted">
                             Duplicas la plantilla en el alumno; ajusta inicio, semanas y días aquí.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-3 py-3 sm:space-y-4 sm:py-4">
                         <div className="space-y-2">
-                            <p className="text-sm font-medium">
+                            <p className="text-sm font-medium text-body">
                                 Programa:{' '}
-                                <span className="font-semibold text-primary">{selectedProgram?.name}</span>
+                                <span className="font-semibold text-[var(--sport-600)]">{selectedProgram?.name}</span>
                             </p>
                         </div>
                         <div className="space-y-3">
-                            <p className="text-sm font-medium">Alumnos ({selectedClients.length})</p>
+                            <p className="text-sm font-medium text-body">Alumnos ({selectedClients.length})</p>
                             <Popover open={openPopover} onOpenChange={setOpenPopover}>
                                 <PopoverTrigger
-                                    className="flex h-auto min-h-11 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-left text-sm text-foreground ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                    className="flex h-auto min-h-11 w-full items-center justify-between rounded-control border-[1.5px] border-default bg-surface-card px-3 py-2 text-left text-sm text-strong focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
                                 >
                                     <span className="truncate">
                                         {selectedClients.length > 0
@@ -764,14 +757,14 @@ export function WorkoutProgramsClient({
                                     <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
                                 </PopoverTrigger>
                                 <PopoverContent
-                                    className="w-[var(--radix-popover-trigger-width)] border-border bg-popover p-0 text-popover-foreground"
+                                    className="w-[var(--radix-popover-trigger-width)] p-0"
                                     align="start"
                                 >
-                                    <div className="space-y-1 rounded-lg border border-border bg-popover p-1 shadow-md">
-                                        <div className="flex items-center gap-2 border-b px-3 py-2">
+                                    <div className="space-y-1 rounded-control border border-subtle bg-surface-card p-1 shadow-md">
+                                        <div className="flex items-center gap-2 border-b border-subtle px-3 py-2">
                                             <Search className="size-4 shrink-0 opacity-50" />
                                             <input
-                                                className="h-8 w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                                                className="h-8 w-full bg-transparent text-sm text-strong outline-none placeholder:text-muted"
                                                 placeholder="Buscar alumno…"
                                                 value={clientSearch}
                                                 onChange={(e) => setClientSearch(e.target.value)}
@@ -781,7 +774,7 @@ export function WorkoutProgramsClient({
                                             {availableClients.filter((c) =>
                                                 c.full_name.toLowerCase().includes(clientSearch.toLowerCase())
                                             ).length === 0 ? (
-                                                <div className="py-6 text-center text-sm text-muted-foreground">
+                                                <div className="py-6 text-center text-sm text-muted">
                                                     No se encontraron alumnos.
                                                 </div>
                                             ) : (
@@ -801,13 +794,13 @@ export function WorkoutProgramsClient({
                                                                     toggleClient(client.id)
                                                                 }
                                                             }}
-                                                            className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm text-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+                                                            className="relative flex cursor-pointer select-none items-center rounded-[10px] px-2 py-1.5 text-sm text-strong outline-none transition-colors hover:bg-surface-sunken"
                                                         >
                                                             <div
                                                                 className={cn(
-                                                                    'mr-2 flex size-4 items-center justify-center rounded-sm border border-primary',
+                                                                    'mr-2 flex size-4 items-center justify-center rounded-[6px] border border-sport-500',
                                                                     selectedClients.includes(client.id)
-                                                                        ? 'bg-primary text-primary-foreground'
+                                                                        ? 'bg-sport-500 text-[var(--text-on-sport)]'
                                                                         : 'opacity-50'
                                                                 )}
                                                             >
@@ -817,7 +810,7 @@ export function WorkoutProgramsClient({
                                                             </div>
                                                             {client.full_name}
                                                             {client.workout_programs && client.workout_programs.length > 0 && (
-                                                                <span className="ml-2 shrink-0 rounded-full border border-amber-500/30 bg-amber-500/15 px-1.5 py-0.5 text-[10px] text-amber-800 dark:text-amber-200">
+                                                                <span className="ml-2 shrink-0 rounded-full border border-[var(--warning-500)]/30 bg-[var(--warning-100)] px-1.5 py-0.5 text-[10px] text-[var(--warning-700)]">
                                                                     Plan: {client.workout_programs[0].name}
                                                                 </span>
                                                             )}
@@ -829,8 +822,8 @@ export function WorkoutProgramsClient({
                                 </PopoverContent>
                             </Popover>
                         </div>
-                        <div className="space-y-3 border-t border-border pt-3">
-                            <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+                        <div className="space-y-3 border-t border-subtle pt-3">
+                            <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-strong">
                                 <span>Configuración de asignación</span>
                                 <InfoTooltip
                                     title="Cómo funciona la asignación"
@@ -839,7 +832,7 @@ export function WorkoutProgramsClient({
                             </div>
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <div className="space-y-1">
-                                    <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                    <label className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                                         Inicio
                                     </label>
                                     <Select
@@ -848,7 +841,7 @@ export function WorkoutProgramsClient({
                                             setAssignmentStartMode(v as 'today' | 'custom' | 'flexible')
                                         }
                                     >
-                                        <SelectTrigger className="h-11 min-h-11 w-full border-input bg-background text-foreground sm:h-10 sm:min-h-10">
+                                        <SelectTrigger className="h-11 min-h-11 w-full border-default bg-surface-card text-strong sm:h-10 sm:min-h-10">
                                             <SelectValue>
                                                 {assignmentStartMode === 'today'
                                                     ? 'Hoy'
@@ -857,7 +850,7 @@ export function WorkoutProgramsClient({
                                                       : 'Flexible'}
                                             </SelectValue>
                                         </SelectTrigger>
-                                        <SelectContent className="border-border bg-popover text-popover-foreground">
+                                        <SelectContent>
                                             <SelectItem value="today">Hoy (fecha por defecto)</SelectItem>
                                             <SelectItem value="custom">Fecha específica</SelectItem>
                                             <SelectItem value="flexible">Inicio flexible</SelectItem>
@@ -865,7 +858,7 @@ export function WorkoutProgramsClient({
                                     </Select>
                                 </div>
                                 <div className="space-y-1">
-                                    <label className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                    <label className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                                         Duración (semanas)
                                     </label>
                                     <Input
@@ -875,7 +868,7 @@ export function WorkoutProgramsClient({
                                         value={assignmentDurationWeeks}
                                         onChange={(e) => setAssignmentDurationWeeks(e.target.value)}
                                         placeholder="Ej: 4"
-                                        className="h-11 min-h-11 border-input bg-background text-foreground placeholder:text-muted-foreground sm:h-10 sm:min-h-10"
+                                        className="h-11 min-h-11 border-default bg-surface-card text-strong placeholder:text-muted sm:h-10 sm:min-h-10"
                                     />
                                 </div>
                             </div>
@@ -884,12 +877,12 @@ export function WorkoutProgramsClient({
                                     type="date"
                                     value={assignmentStartDate}
                                     onChange={(e) => setAssignmentStartDate(e.target.value)}
-                                    className="h-11 min-h-11 border-input bg-background text-foreground sm:h-10 sm:min-h-10"
+                                    className="h-11 min-h-11 border-default bg-surface-card text-strong sm:h-10 sm:min-h-10"
                                 />
                             )}
                             <div className="space-y-1.5">
                                 <div className="flex flex-wrap items-center gap-1.5">
-                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                                         Días a copiar (opcional)
                                     </p>
                                     <InfoTooltip
@@ -898,7 +891,7 @@ export function WorkoutProgramsClient({
                                     />
                                 </div>
                                 {assignDaysMismatch ? (
-                                    <p className="text-xs text-destructive" role="alert">
+                                    <p className="text-xs text-[var(--danger-600)]" role="alert">
                                         Ningún día marcado coincide con esta plantilla. Desmarca todo para copiar todos
                                         los días.
                                     </p>
@@ -916,10 +909,10 @@ export function WorkoutProgramsClient({
                                                     )
                                                 }
                                                 className={cn(
-                                                    'flex min-h-9 min-w-0 items-center justify-center rounded-lg border px-0.5 py-1.5 text-[10px] font-semibold leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background sm:min-h-9 sm:text-xs',
+                                                    'flex min-h-9 min-w-0 items-center justify-center rounded-control border-[1.5px] px-0.5 py-1.5 text-[10px] font-semibold leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-app)] sm:min-h-9 sm:text-xs',
                                                     active
-                                                        ? 'border-primary/40 bg-primary/15 text-primary'
-                                                        : 'border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                                                        ? 'border-[var(--sport-300)] bg-[var(--sport-100)] text-[var(--sport-700)]'
+                                                        : 'border-subtle bg-surface-sunken text-muted hover:bg-surface-sunken hover:text-strong'
                                                 )}
                                             >
                                                 {day.label}
@@ -933,14 +926,15 @@ export function WorkoutProgramsClient({
                     <DialogFooter className="gap-2">
                         <Button
                             type="button"
-                            variant="outline"
-                            className="w-full border-border sm:w-auto"
+                            variant="secondary"
+                            className="w-full sm:w-auto"
                             onClick={() => setIsAssignOpen(false)}
                         >
                             Cancelar
                         </Button>
                         <Button
                             type="button"
+                            variant="sport"
                             className="w-full sm:w-auto"
                             onClick={() => handleAssign(false)}
                             disabled={
@@ -962,7 +956,7 @@ export function WorkoutProgramsClient({
                     if (!open) closeDuplicateDialog()
                 }}
             >
-                <DialogContent className="border-border bg-card text-card-foreground sm:max-w-[440px]">
+                <DialogContent className="border-subtle bg-surface-card text-body sm:max-w-[440px]">
                     <DialogHeader>
                         <DialogTitle>Duplicar programa</DialogTitle>
                         <DialogDescription>
@@ -979,21 +973,21 @@ export function WorkoutProgramsClient({
                             onChange={(e) => setDuplicateNameInput(e.target.value)}
                             autoComplete="off"
                             disabled={isPending && actionProgramId === programToDuplicate?.id}
-                            className="border-input bg-background text-foreground"
+                            className="border-default bg-surface-card text-strong"
                             aria-invalid={duplicateTemplateNameTaken || duplicateNameTooShort || duplicateNameTooLong}
                         />
                         {duplicateNameTooShort ? (
-                            <p role="alert" className="text-sm text-destructive">
+                            <p role="alert" className="text-sm text-[var(--danger-600)]">
                                 El nombre debe tener al menos 2 caracteres.
                             </p>
                         ) : null}
                         {duplicateNameTooLong ? (
-                            <p role="alert" className="text-sm text-destructive">
+                            <p role="alert" className="text-sm text-[var(--danger-600)]">
                                 El nombre no puede superar 100 caracteres.
                             </p>
                         ) : null}
                         {duplicateTemplateNameTaken ? (
-                            <p role="alert" className="text-sm text-destructive">
+                            <p role="alert" className="text-sm text-[var(--danger-600)]">
                                 Ya tienes una plantilla con este nombre. Elige otro.
                             </p>
                         ) : null}
@@ -1001,7 +995,7 @@ export function WorkoutProgramsClient({
                     <DialogFooter>
                         <Button
                             type="button"
-                            variant="outline"
+                            variant="secondary"
                             onClick={closeDuplicateDialog}
                             disabled={isPending && actionProgramId === programToDuplicate?.id}
                         >
@@ -1009,6 +1003,7 @@ export function WorkoutProgramsClient({
                         </Button>
                         <Button
                             type="button"
+                            variant="sport"
                             onClick={handleConfirmDuplicate}
                             disabled={
                                 !canConfirmDuplicate ||

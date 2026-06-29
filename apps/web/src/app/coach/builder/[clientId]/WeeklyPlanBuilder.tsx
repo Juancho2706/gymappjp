@@ -1043,7 +1043,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 Reordena con gestos, arma offline y revisa el progreso con gráficas táctiles en la app de EVA.
             </AppOnlyPopup>
             {showDraftBanner && (
-                <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] z-[72] animate-in slide-in-from-bottom rounded-xl border border-primary/25 bg-background/95 p-3 shadow-2xl backdrop-blur-xl md:static md:inset-auto md:bottom-auto md:rounded-none md:border-x-0 md:border-t-0 md:bg-primary/10 md:shadow-none">
+                <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] z-[72] animate-in slide-in-from-bottom rounded-card border border-primary/25 bg-background/95 p-3 shadow-2xl backdrop-blur-xl md:static md:inset-auto md:bottom-auto md:rounded-none md:border-x-0 md:border-t-0 md:bg-primary/10 md:shadow-none">
                     <div className="flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center sm:gap-4">
                         <p className="text-xs font-bold text-foreground">Tienes cambios sin guardar recientes.</p>
                         <div className="flex items-center justify-end gap-2">
@@ -1068,8 +1068,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                     {programName || 'NUEVO PROGRAMA'}
                                 </h1>
                                 {hasUnsavedChanges && (
-                                    <span className="hidden md:flex items-center gap-1 text-[9px] bg-orange-500/10 text-orange-500 px-2 py-0.5 rounded-full border border-orange-500/20 shrink-0">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+                                    <span className="hidden md:flex items-center gap-1 text-[9px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-pill border border-amber-500/20 shrink-0">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
                                         CAMBIOS SIN GUARDAR
                                     </span>
                                 )}
@@ -1080,8 +1080,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 )}
                             </div>
                             {hasUnsavedChanges ? (
-                                <p className="md:hidden text-[9px] font-bold uppercase tracking-widest text-orange-500 flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse inline-block shrink-0"></span>
+                                <p className="md:hidden text-[9px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse inline-block shrink-0"></span>
                                     Sin guardar
                                 </p>
                             ) : (
@@ -1461,7 +1461,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                     </div>
                                 )}
                                 {/* Mobile tab bar with exercise counts */}
-                                <div className="flex bg-muted/50 p-1 h-11 rounded-xl gap-0.5 mx-2 mt-1 mb-1 flex-shrink-0">
+                                <div className="flex bg-muted/50 p-1 h-11 rounded-control gap-0.5 mx-2 mt-1 mb-1 flex-shrink-0">
                                     {days.map((d, idx) => {
                                         const isActive = activeMobileDayIndex === idx
                                         const count = d.blocks.length
@@ -1641,7 +1641,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                             <input
                                                 type="text"
                                                 placeholder="Buscar ejercicio..."
-                                                className="w-full pl-9 pr-4 py-2.5 text-[16px] bg-muted/50 border border-border rounded-xl focus:outline-none focus:border-primary"
+                                                className="w-full pl-9 pr-4 py-2.5 text-[16px] bg-muted/50 border border-border rounded-control focus:outline-none focus:border-primary"
                                                 onFocus={() => { setIsCatalogOpen(true); setSheetHeight(80) }}
                                             />
                                         </div>
@@ -1783,7 +1783,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                     <DragOverlay dropAnimation={null}>
                         {activeId && activeData ? (
                             activeData.type === 'new-exercise' ? (
-                                <div className="p-4 bg-primary/10 border-2 border-primary/50 border-dashed rounded-xl backdrop-blur-xl shadow-2xl transform scale-105 rotate-3 -mr-16">
+                                <div className="p-4 bg-primary/10 border-2 border-primary/50 border-dashed rounded-control backdrop-blur-xl shadow-2xl transform scale-105 rotate-3 -mr-16">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded bg-primary/20 flex items-center justify-center">
                                             <span className="text-primary font-bold">N</span>

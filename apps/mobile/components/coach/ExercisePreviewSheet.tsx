@@ -4,6 +4,7 @@ import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { Image } from 'expo-image'
 import { Copy, Dumbbell, Globe, Pencil, Play, Target, User, Wrench } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
+import { Badge, Button } from '../index'
 import { exerciseThumb, youtubeId, type ExerciseRow } from '../../lib/exercises'
 
 const DIFFICULTY_LABEL: Record<string, string> = {
@@ -55,13 +56,13 @@ export const ExercisePreviewSheet = forwardRef<BottomSheetModal, Props>(function
         {!exercise ? null : (
           <>
             {/* Media */}
-            <View style={[styles.media, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
+            <View className="bg-surface-sunken border border-subtle rounded-2xl items-center justify-center" style={styles.media}>
               {thumb ? (
                 <Image source={{ uri: thumb }} style={styles.mediaImg} contentFit={isYouTubeOnly ? 'cover' : 'contain'} transition={180} />
               ) : (
                 <View style={styles.mediaEmpty}>
                   <Dumbbell size={40} color={theme.mutedForeground} strokeWidth={1.4} />
-                  <Text style={{ color: theme.mutedForeground, fontFamily: theme.fontSans, fontSize: 12 }}>Sin previsualización</Text>
+                  <Text className="text-muted font-sans" style={styles.mediaEmptyText}>Sin previsualización</Text>
                 </View>
               )}
               {isYouTubeOnly ? (
@@ -75,89 +76,80 @@ export const ExercisePreviewSheet = forwardRef<BottomSheetModal, Props>(function
               <TouchableOpacity
                 onPress={() => exercise.video_url && Linking.openURL(exercise.video_url)}
                 activeOpacity={0.85}
-                style={[styles.ytBtn, { borderColor: theme.border, backgroundColor: theme.secondary }]}
+                className="flex-row items-center justify-center border border-subtle bg-surface-sunken rounded-control"
+                style={styles.ytBtn}
               >
                 <Play size={15} color={theme.primary} fill={theme.primary} />
-                <Text style={[styles.ytText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Ver en YouTube</Text>
+                <Text className="text-strong font-sans-bold" style={styles.ytText}>Ver en YouTube</Text>
               </TouchableOpacity>
             ) : null}
 
             {/* Title */}
-            <Text style={[styles.name, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{exercise.name}</Text>
+            <Text className="text-strong font-display-bold" style={styles.name}>{exercise.name}</Text>
 
             {/* Badges */}
             <View style={styles.badges}>
-              <View style={[styles.badge, { backgroundColor: theme.primary + '1A', borderColor: theme.primary + '33' }]}>
-                <Target size={13} color={theme.primary} />
-                <Text style={[styles.badgeText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>{exercise.muscle_group}</Text>
-              </View>
+              <Badge tone="sport" variant="soft" size="md" icon={<Target size={13} color={theme.primary} />}>
+                {exercise.muscle_group}
+              </Badge>
               {exercise.equipment ? (
-                <View style={[styles.badge, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
-                  <Wrench size={13} color={theme.mutedForeground} />
-                  <Text style={[styles.badgeText, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>{exercise.equipment}</Text>
-                </View>
+                <Badge tone="neutral" variant="soft" size="md" icon={<Wrench size={13} color={theme.mutedForeground} />}>
+                  {exercise.equipment}
+                </Badge>
               ) : null}
               {exercise.difficulty ? (
-                <View style={[styles.badge, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
-                  <Text style={[styles.badgeText, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>
-                    {DIFFICULTY_LABEL[exercise.difficulty] ?? exercise.difficulty}
-                  </Text>
-                </View>
+                <Badge tone="neutral" variant="soft" size="md">
+                  {DIFFICULTY_LABEL[exercise.difficulty] ?? exercise.difficulty}
+                </Badge>
               ) : null}
             </View>
 
             {secondary.length > 0 ? (
               <View style={styles.badges}>
                 {secondary.map((m) => (
-                  <View key={m} style={[styles.badge, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
-                    <Text style={[styles.badgeText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{m}</Text>
-                  </View>
+                  <Badge key={m} tone="neutral" variant="soft" size="md">{m}</Badge>
                 ))}
               </View>
             ) : null}
 
             {/* Instrucciones */}
             {steps.length > 0 ? (
-              <View style={{ gap: 12, marginTop: 4 }}>
-                <Text style={[styles.section, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Instrucciones</Text>
+              <View style={styles.stepsWrap}>
+                <Text className="text-strong font-display" style={styles.section}>Instrucciones</Text>
                 {steps.map((step, i) => (
                   <View key={i} style={styles.stepRow}>
-                    <View style={[styles.stepNum, { backgroundColor: theme.primary + '1A' }]}>
-                      <Text style={[styles.stepNumText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>{i + 1}</Text>
+                    <View className="bg-sport-100 dark:bg-sport-100/20 items-center justify-center" style={styles.stepNum}>
+                      <Text className="text-sport-700 font-sans-bold" style={styles.stepNumText}>{i + 1}</Text>
                     </View>
-                    <Text style={[styles.stepText, { color: theme.foreground, fontFamily: theme.fontSans }]}>{step}</Text>
+                    <Text className="text-body font-sans" style={styles.stepText}>{step}</Text>
                   </View>
                 ))}
               </View>
             ) : null}
 
             {/* Origen */}
-            <View style={[styles.source, { borderTopColor: theme.border }]}>
+            <View className="border-subtle" style={styles.source}>
               {exercise.isOwn ? <User size={14} color={theme.mutedForeground} /> : <Globe size={14} color={theme.mutedForeground} />}
-              <Text style={[styles.sourceText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              <Text className="text-muted font-sans" style={styles.sourceText}>
                 {exercise.isOwn ? 'Ejercicio personalizado' : 'Catálogo del sistema · EVA'}
               </Text>
             </View>
 
             {exercise.isOwn && onEdit ? (
-              <TouchableOpacity
-                onPress={() => onEdit(exercise)}
-                activeOpacity={0.85}
-                style={[styles.editBtn, { backgroundColor: theme.primary }]}
-              >
-                <Pencil size={16} color={theme.primaryForeground} />
-                <Text style={[styles.editText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>Editar ejercicio</Text>
-              </TouchableOpacity>
+              <View style={styles.actionWrap}>
+                <Button label="Editar ejercicio" variant="sport" size="lg" full leftIcon={Pencil} onPress={() => onEdit(exercise)} />
+              </View>
             ) : null}
 
             {!exercise.isOwn && onClone ? (
               <TouchableOpacity
                 onPress={() => onClone(exercise)}
                 activeOpacity={0.85}
-                style={[styles.editBtn, { backgroundColor: theme.primary + '1A', borderWidth: 1, borderColor: theme.primary + '44' }]}
+                className="flex-row items-center justify-center border border-sport-500/40 bg-sport-100 dark:bg-sport-100/20 rounded-control"
+                style={styles.cloneBtn}
               >
                 <Copy size={16} color={theme.primary} />
-                <Text style={[styles.editText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Duplicar a mis ejercicios</Text>
+                <Text className="text-sport-700 font-sans-bold" style={styles.cloneText}>Duplicar a mis ejercicios</Text>
               </TouchableOpacity>
             ) : null}
           </>
@@ -169,9 +161,10 @@ export const ExercisePreviewSheet = forwardRef<BottomSheetModal, Props>(function
 
 const styles = StyleSheet.create({
   body: { paddingHorizontal: 18, paddingBottom: 48, gap: 12 },
-  media: { width: '100%', height: 220, borderWidth: 1, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  media: { width: '100%', height: 220, overflow: 'hidden' },
   mediaImg: { width: '100%', height: '100%' },
   mediaEmpty: { alignItems: 'center', justifyContent: 'center', gap: 8 },
+  mediaEmptyText: { fontSize: 12 },
   playBadge: {
     position: 'absolute',
     width: 56,
@@ -181,19 +174,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ytBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingVertical: 12 },
+  ytBtn: { gap: 8, paddingVertical: 12 },
   ytText: { fontSize: 14 },
   name: { fontSize: 21, letterSpacing: -0.3, marginTop: 2 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 6 },
-  badgeText: { fontSize: 12 },
   section: { fontSize: 15 },
+  stepsWrap: { gap: 12, marginTop: 4 },
   stepRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  stepNum: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  stepNum: { width: 24, height: 24, borderRadius: 12, flexShrink: 0 },
   stepNumText: { fontSize: 12 },
   stepText: { flex: 1, fontSize: 14, lineHeight: 21 },
   source: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 14, marginTop: 4 },
   sourceText: { fontSize: 12 },
-  editBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14, marginTop: 6 },
-  editText: { fontSize: 15 },
+  actionWrap: { marginTop: 6 },
+  cloneBtn: { gap: 8, height: 50, marginTop: 6 },
+  cloneText: { fontSize: 15 },
 })

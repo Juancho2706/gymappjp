@@ -44,7 +44,7 @@ function DraggableExerciseItem({ exercise, onSelect, onPreview, onTapAdd }: Drag
             {...attributes}
             onClick={() => onSelect?.(exercise)}
             className={cn(
-                "max-w-full overflow-hidden p-3 rounded-lg border bg-card hover:border-primary/50 transition-all cursor-grab active:cursor-grabbing group relative",
+                "max-w-full overflow-hidden p-3 rounded-control border bg-card hover:border-primary/50 transition-all cursor-grab active:cursor-grabbing group relative",
                 isDragging && "opacity-50 ring-2 ring-primary border-primary",
                 onSelect && "cursor-pointer active:scale-95 transition-transform"
             )}
@@ -191,9 +191,9 @@ export function DraggableExerciseCatalog({
     })
 
     return (
-        <div className={cn("flex min-h-0 min-w-0 flex-col h-full max-w-full bg-card border border-border rounded-xl overflow-hidden shadow-sm relative", className)}>
+        <div className={cn("flex min-h-0 min-w-0 flex-col h-full max-w-full bg-card border border-border rounded-card overflow-hidden shadow-sm relative", className)}>
             {/* Header / Filters */}
-            <div className="p-3 md:p-4 border-b border-border space-y-3 md:space-y-4 bg-muted/20 rounded-t-xl shrink-0">
+            <div className="p-3 md:p-4 border-b border-border space-y-3 md:space-y-4 bg-muted/20 rounded-t-card shrink-0">
                 <div className="flex items-center justify-between">
                     <h2 className="text-sm font-bold flex items-center gap-2 text-foreground">
                         <Activity className="w-4 h-4 text-primary" style={{ color: 'var(--theme-primary)' }} />
@@ -208,14 +208,14 @@ export function DraggableExerciseCatalog({
                             placeholder="Buscar por nombre..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            className="pl-9 h-10 text-[16px] md:text-xs bg-background border-border rounded-xl focus:border-primary focus:ring-primary/20 transition-all text-foreground"
+                            className="pl-9 h-10 text-[16px] md:text-xs bg-background border-border rounded-control focus:border-primary focus:ring-primary/20 transition-all text-foreground"
                             style={{ borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)' }}
                         />
                     </div>
 
                     <Select value={selectedMuscle} onValueChange={(val) => setSelectedMuscle(val || 'Todos')}>
                         <SelectTrigger
-                            className="h-10 text-xs bg-background border-border rounded-xl focus:border-primary focus:ring-primary/20 transition-all text-foreground"
+                            className="h-10 text-xs bg-background border-border rounded-control focus:border-primary focus:ring-primary/20 transition-all text-foreground"
                             style={{ borderColor: 'color-mix(in srgb, var(--theme-primary) 30%, transparent)' }}
                         >
                             <div className="flex items-center gap-2">

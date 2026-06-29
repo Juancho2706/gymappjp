@@ -7,7 +7,8 @@ import { useTheme } from '../../context/ThemeContext'
 import type { DurationType, ProgramStructureType } from '../../lib/plan-builder/types'
 
 export type Phase = { name: string; weeks: number; color: string }
-export const PHASE_COLORS = ['#6366F1', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899']
+// EVA DS macrocycle palette (token-contract): sport · violet · success · warning · ember · aqua
+export const PHASE_COLORS = ['#2680FF', '#7C5CE6', '#1FB877', '#F5A524', '#FF6A3D', '#18ABD4']
 
 interface Props {
   name: string; setName: (v: string) => void
@@ -39,11 +40,11 @@ export const ProgramConfigSheet = forwardRef<BottomSheetModal, Props>(function P
     <BottomSheetModal ref={ref} index={0} snapPoints={['92%']} enableDynamicSizing={false} enablePanDownToClose onDismiss={p.onClose}
       backgroundStyle={{ backgroundColor: theme.card }} handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}>
       <BottomSheetScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Configurar programa</Text>
+        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>Configurar programa</Text>
 
         <Field theme={theme} label="Nombre del programa">
           <TextInput value={p.name} onChangeText={p.setName} placeholder="EJ: HIPERTROFIA BLOQUE 1" placeholderTextColor={theme.mutedForeground} maxLength={100}
-            style={[styles.input, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} />
+            style={[styles.input, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: 'Archivo_700Bold' }]} />
         </Field>
 
         <Field theme={theme} label="Estructura del programa">
@@ -53,7 +54,7 @@ export const ProgramConfigSheet = forwardRef<BottomSheetModal, Props>(function P
               <Text style={[styles.cycleLbl, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Longitud del ciclo (1–14 días)</Text>
               <View style={styles.stepper}>
                 <TouchableOpacity onPress={() => p.setCycleLength(Math.max(1, p.cycleLength - 1))} style={[styles.stepBtn, { borderColor: theme.border }]}><Text style={[styles.stepTxt, { color: theme.foreground }]}>−</Text></TouchableOpacity>
-                <Text style={[styles.stepVal, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{p.cycleLength}</Text>
+                <Text style={[styles.stepVal, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{p.cycleLength}</Text>
                 <TouchableOpacity onPress={() => p.setCycleLength(Math.min(14, p.cycleLength + 1))} style={[styles.stepBtn, { borderColor: theme.border }]}><Text style={[styles.stepTxt, { color: theme.foreground }]}>+</Text></TouchableOpacity>
               </View>
             </View>
@@ -95,7 +96,7 @@ export const ProgramConfigSheet = forwardRef<BottomSheetModal, Props>(function P
 
         {/* Fases */}
         <Field theme={theme} label="Fases del programa (Volumen → Fuerza → …)">
-          <View style={[styles.phaseNote, { borderColor: '#F59E0B33', backgroundColor: '#F59E0B14' }]}>
+          <View style={[styles.phaseNote, { borderColor: '#F5A52433', backgroundColor: '#F5A52414' }]}>
             <Text style={[styles.phaseNoteTxt, { color: theme.foreground, fontFamily: theme.fontSans }]}>Solo organizan el timeline visual. No cambian ejercicios ni cargas.</Text>
           </View>
           {p.phases.map((ph, i) => (
@@ -112,12 +113,12 @@ export const ProgramConfigSheet = forwardRef<BottomSheetModal, Props>(function P
           ))}
           <TouchableOpacity onPress={() => p.setPhases((prev) => [...prev, { name: `Fase ${prev.length + 1}`, weeks: 4, color: PHASE_COLORS[prev.length % PHASE_COLORS.length] }])} activeOpacity={0.8} style={[styles.phaseAdd, { borderColor: theme.border }]}>
             <Plus size={14} color={theme.primary} />
-            <Text style={[styles.phaseAddTxt, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Añadir fase</Text>
+            <Text style={[styles.phaseAddTxt, { color: theme.primary, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Añadir fase</Text>
           </TouchableOpacity>
         </Field>
 
         <TouchableOpacity onPress={() => (ref as React.RefObject<BottomSheetModal>).current?.dismiss()} activeOpacity={0.85} style={[styles.doneBtn, { backgroundColor: theme.primary }]}>
-          <Text style={[styles.doneTxt, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>Listo</Text>
+          <Text style={[styles.doneTxt, { color: theme.primaryForeground, fontFamily: 'Archivo_700Bold' }]}>Listo</Text>
         </TouchableOpacity>
       </BottomSheetScrollView>
     </BottomSheetModal>
@@ -127,7 +128,7 @@ export const ProgramConfigSheet = forwardRef<BottomSheetModal, Props>(function P
 function Field({ theme, label, children }: { theme: any; label: string; children: React.ReactNode }) {
   return (
     <View style={{ gap: 8 }}>
-      <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+      <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>{label}</Text>
       {children}
     </View>
   )
@@ -140,7 +141,7 @@ function Seg({ theme, options, value, onChange }: { theme: any; options: { v: st
         const active = o.v === value
         return (
           <TouchableOpacity key={o.v} onPress={() => onChange(o.v)} activeOpacity={0.8} style={[styles.segItem, active && { backgroundColor: theme.primary }]}>
-            <Text numberOfLines={1} style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>{o.l}</Text>
+            <Text numberOfLines={1} style={{ fontSize: 11, fontFamily: 'HankenGrotesk_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>{o.l}</Text>
           </TouchableOpacity>
         )
       })}
@@ -159,7 +160,7 @@ const styles = StyleSheet.create({
   cycleLbl: { fontSize: 12, flex: 1 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   stepBtn: { width: 34, height: 34, borderWidth: 1, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  stepTxt: { fontSize: 18, fontFamily: 'Montserrat_700Bold' },
+  stepTxt: { fontSize: 18, fontFamily: 'Archivo_700Bold' },
   stepVal: { fontSize: 22, minWidth: 28, textAlign: 'center' },
   inlineNum: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 4 },
   inlineLbl: { fontSize: 12, flex: 1 },

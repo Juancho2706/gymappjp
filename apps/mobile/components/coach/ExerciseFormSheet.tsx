@@ -5,6 +5,7 @@ import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
 import { ImagePlus, Trash2, X } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
+import { Button, Input, SegmentedTabs } from '../index'
 import {
   DIFFICULTY_OPTIONS,
   EQUIPMENT_OPTIONS,
@@ -119,112 +120,119 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
       handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}
     >
       <BottomSheetScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+        <Text className="text-strong font-display" style={styles.title}>
           {editing ? 'Editar ejercicio' : 'Nuevo ejercicio'}
         </Text>
 
         {error ? (
-          <View style={[styles.errorBox, { borderColor: theme.destructive + '55', backgroundColor: theme.destructive + '14' }]}>
-            <Text style={{ color: theme.destructive, fontSize: 13, fontFamily: theme.fontSans }}>{error}</Text>
+          <View className="border border-danger-500/30 bg-danger-100 dark:bg-danger-100/[0.18] rounded-control" style={styles.errorBox}>
+            <Text className="text-danger-600 font-sans" style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
 
-        <Field theme={theme} label="Nombre *" value={name} onChangeText={setName} placeholder="Ej: Press banca inclinado" />
+        <Input label="Nombre *" value={name} onChangeText={setName} placeholder="Ej: Press banca inclinado" />
 
-        <Label theme={theme}>Grupo muscular *</Label>
-        <Chips theme={theme} options={MUSCLE_GROUPS as readonly string[]} value={muscle} onSelect={setMuscle} />
+        <Label>Grupo muscular *</Label>
+        <Chips options={MUSCLE_GROUPS as readonly string[]} value={muscle} onSelect={setMuscle} />
 
-        <Label theme={theme}>Equipo</Label>
-        <Chips theme={theme} options={EQUIPMENT_OPTIONS as readonly string[]} value={equipment} onSelect={(v) => setEquipment(v === equipment ? null : v)} />
+        <Label>Equipo</Label>
+        <Chips options={EQUIPMENT_OPTIONS as readonly string[]} value={equipment} onSelect={(v) => setEquipment(v === equipment ? null : v)} />
 
-        <Label theme={theme}>Dificultad</Label>
-        <Segmented theme={theme} options={DIFFICULTY_OPTIONS} value={difficulty} onChange={(v) => setDifficulty(v === difficulty ? null : v)} />
+        <Label>Dificultad</Label>
+        <SegmentedTabs
+          items={DIFFICULTY_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          value={difficulty ?? ''}
+          onChange={(v) => setDifficulty(v === difficulty ? null : v)}
+        />
 
-        <Field theme={theme} label="Músculos secundarios" value={secondary} onChangeText={setSecondary} placeholder="Tríceps, Deltoides (separados por coma)" />
+        <Input label="Músculos secundarios" value={secondary} onChangeText={setSecondary} placeholder="Tríceps, Deltoides (separados por coma)" />
 
-        <Field theme={theme} label="Video (YouTube)" value={videoUrl} onChangeText={setVideoUrl} placeholder="https://youtu.be/..." autoCapitalize="none" keyboardType="url" />
-        <Field theme={theme} label="GIF (URL)" value={gifUrl} onChangeText={setGifUrl} placeholder="https://..." autoCapitalize="none" keyboardType="url" />
+        <Input label="Video (YouTube)" value={videoUrl} onChangeText={setVideoUrl} placeholder="https://youtu.be/..." autoCapitalize="none" keyboardType="url" />
+        <Input label="GIF (URL)" value={gifUrl} onChangeText={setGifUrl} placeholder="https://..." autoCapitalize="none" keyboardType="url" />
 
         {/* E-F1: imagen desde el device */}
-        <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Imagen del ejercicio</Text>
+        <Label>Imagen del ejercicio</Label>
         <View style={styles.imgRow}>
           {imageUrl ? (
             <View>
               <Image source={{ uri: imageUrl }} style={[styles.imgThumb, { borderColor: theme.border }]} contentFit="cover" transition={150} />
-              <TouchableOpacity onPress={() => setImageUrl('')} style={[styles.imgClear, { backgroundColor: theme.destructive }]} hitSlop={6}>
+              <TouchableOpacity onPress={() => setImageUrl('')} className="bg-cta-danger items-center justify-center" style={styles.imgClear} hitSlop={6}>
                 <X size={12} color="#fff" />
               </TouchableOpacity>
             </View>
           ) : null}
-          <TouchableOpacity onPress={pickImage} disabled={uploading} activeOpacity={0.85}
-            style={[styles.imgBtn, { borderColor: theme.primary + '55', backgroundColor: theme.primary + '12' }]}>
+          <TouchableOpacity
+            onPress={pickImage}
+            disabled={uploading}
+            activeOpacity={0.85}
+            className="flex-1 flex-row items-center justify-center border border-sport-500/40 bg-sport-100 dark:bg-sport-100/20 rounded-control"
+            style={styles.imgBtn}
+          >
             {uploading ? <ActivityIndicator size="small" color={theme.primary} /> : <ImagePlus size={18} color={theme.primary} />}
-            <Text style={[styles.imgBtnText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>{uploading ? 'Subiendo…' : imageUrl ? 'Cambiar imagen' : 'Subir imagen'}</Text>
+            <Text className="text-sport-700 font-sans-semibold" style={styles.imgBtnText}>{uploading ? 'Subiendo…' : imageUrl ? 'Cambiar imagen' : 'Subir imagen'}</Text>
           </TouchableOpacity>
         </View>
 
-        <Field theme={theme} label="Instrucciones" value={instructions} onChangeText={setInstructions} placeholder="Una instrucción por línea" multiline />
+        <View style={styles.instructionsWrap}>
+          <Label>Instrucciones</Label>
+          <TextInput
+            value={instructions}
+            onChangeText={setInstructions}
+            placeholder="Una instrucción por línea"
+            placeholderTextColor={theme.mutedForeground}
+            multiline
+            className="border border-default bg-surface-card text-strong rounded-control"
+            style={styles.instructionsInput}
+          />
+        </View>
 
-        <TouchableOpacity onPress={save} disabled={saving} activeOpacity={0.85}
-          style={[styles.saveBtn, { backgroundColor: theme.primary, opacity: saving ? 0.6 : 1 }]}>
-          {saving ? <ActivityIndicator color={theme.primaryForeground} size="small" /> : (
-            <Text style={[styles.saveText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>
-              {editing ? 'Guardar cambios' : 'Crear ejercicio'}
-            </Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.saveWrap}>
+          <Button
+            label={editing ? 'Guardar cambios' : 'Crear ejercicio'}
+            variant="sport"
+            size="lg"
+            full
+            loading={saving}
+            onPress={save}
+          />
+        </View>
 
         {editing ? (
-          <TouchableOpacity onPress={remove} disabled={saving} activeOpacity={0.8}
-            style={[styles.removeBtn, { borderColor: theme.destructive + '55' }]}>
-            <Trash2 size={16} color={theme.destructive} />
-            <Text style={[styles.removeText, { color: theme.destructive, fontFamily: 'Montserrat_700Bold' }]}>Eliminar ejercicio</Text>
-          </TouchableOpacity>
+          <View style={styles.removeWrap}>
+            <Button
+              label="Eliminar ejercicio"
+              variant="destructive"
+              size="lg"
+              full
+              leftIcon={Trash2}
+              disabled={saving}
+              onPress={remove}
+            />
+          </View>
         ) : null}
       </BottomSheetScrollView>
     </BottomSheetModal>
   )
 })
 
-function Label({ children, theme }: { children: React.ReactNode; theme: any }) {
-  return <Text style={[styles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{children}</Text>
+function Label({ children }: { children: React.ReactNode }) {
+  return <Text className="text-strong font-sans-semibold" style={styles.label}>{children}</Text>
 }
 
-function Field({ theme, label, multiline, ...rest }: any) {
-  return (
-    <View style={{ gap: 6 }}>
-      <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
-      <TextInput placeholderTextColor={theme.mutedForeground} multiline={multiline}
-        style={[styles.input, multiline && { height: 92, textAlignVertical: 'top', paddingTop: 10 }, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} {...rest} />
-    </View>
-  )
-}
-
-function Chips({ theme, options, value, onSelect }: { theme: any; options: readonly string[]; value: string | null; onSelect: (v: string) => void }) {
+function Chips({ options, value, onSelect }: { options: readonly string[]; value: string | null; onSelect: (v: string) => void }) {
   return (
     <View style={styles.chips}>
       {options.map((o) => {
         const active = o === value
         return (
-          <TouchableOpacity key={o} onPress={() => onSelect(o)} activeOpacity={0.8}
-            style={[styles.chip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary + '1A' : 'transparent' }]}>
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: active ? theme.primary : theme.mutedForeground }}>{o}</Text>
-          </TouchableOpacity>
-        )
-      })}
-    </View>
-  )
-}
-
-function Segmented({ theme, options, value, onChange }: { theme: any; options: readonly { value: string; label: string }[]; value: string | null; onChange: (v: string) => void }) {
-  return (
-    <View style={[styles.segmented, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
-      {options.map((o) => {
-        const active = o.value === value
-        return (
-          <TouchableOpacity key={o.value} onPress={() => onChange(o.value)} activeOpacity={0.8}
-            style={[styles.segItem, active && { backgroundColor: theme.primary }]}>
-            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>{o.label}</Text>
+          <TouchableOpacity
+            key={o}
+            onPress={() => onSelect(o)}
+            activeOpacity={0.8}
+            className={`rounded-pill ${active ? 'bg-sport-500' : 'bg-surface-card border border-default'}`}
+            style={styles.chip}
+          >
+            <Text className={`${active ? 'text-on-sport' : 'text-body'} font-sans-bold`} style={styles.chipText}>{o}</Text>
           </TouchableOpacity>
         )
       })}
@@ -234,22 +242,20 @@ function Segmented({ theme, options, value, onChange }: { theme: any; options: r
 
 const styles = StyleSheet.create({
   body: { paddingHorizontal: 18, paddingBottom: 48, gap: 12 },
-  title: { fontSize: 18 },
-  errorBox: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  label: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 4 },
-  fieldLabel: { fontSize: 12 },
+  title: { fontSize: 19, letterSpacing: -0.3 },
+  errorBox: { paddingHorizontal: 12, paddingVertical: 10 },
+  errorText: { fontSize: 13 },
+  label: { fontSize: 13, marginTop: 4 },
   imgRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  imgThumb: { width: 64, height: 64, borderRadius: 10, borderWidth: 1 },
-  imgClear: { position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  imgBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingVertical: 12 },
+  imgThumb: { width: 64, height: 64, borderRadius: 14, borderWidth: 1 },
+  imgClear: { position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10 },
+  imgBtn: { gap: 8, paddingVertical: 12 },
   imgBtnText: { fontSize: 13 },
-  input: { height: 44, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 15 },
+  instructionsWrap: { gap: 6 },
+  instructionsInput: { height: 92, textAlignVertical: 'top', borderWidth: 1.5, paddingHorizontal: 14, paddingTop: 10, fontSize: 15, fontFamily: 'HankenGrotesk_500Medium' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8 },
-  segmented: { flexDirection: 'row', borderWidth: 1, borderRadius: 10, padding: 3, gap: 3 },
-  segItem: { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: 8 },
-  saveBtn: { height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 10 },
-  saveText: { fontSize: 15 },
-  removeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingVertical: 13, marginTop: 4 },
-  removeText: { fontSize: 14 },
+  chip: { paddingHorizontal: 13, paddingVertical: 8 },
+  chipText: { fontSize: 13 },
+  saveWrap: { marginTop: 10 },
+  removeWrap: { marginTop: 4 },
 })

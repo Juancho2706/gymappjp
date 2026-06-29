@@ -35,17 +35,17 @@ const SECTION_META: Record<BlockSection, { label: string; icon: React.ReactNode;
     warmup: {
         label: 'Calentamiento',
         icon: <Flame className="size-3" />,
-        className: 'text-amber-700 dark:text-amber-400 bg-amber-500/10 border-amber-500/20',
+        className: 'text-[var(--warning-700)] bg-[var(--warning-100)] border-[var(--warning-500)]/25',
     },
     main: {
         label: 'Bloque principal',
         icon: <Dumbbell className="size-3" />,
-        className: 'text-primary bg-primary/10 border-primary/20',
+        className: 'text-[var(--sport-700)] bg-[var(--sport-100)] border-[var(--sport-300)]/40',
     },
     cooldown: {
         label: 'Enfriamiento',
         icon: <Wind className="size-3" />,
-        className: 'text-sky-700 dark:text-sky-400 bg-sky-500/10 border-sky-500/20',
+        className: 'text-[var(--aqua-700)] bg-[var(--aqua-100)] border-[var(--aqua-500)]/25',
     },
 }
 
@@ -72,7 +72,7 @@ function librarySectionHeader(sectionKey: WorkoutSectionKey): {
             short,
             label: 'Otros bloques',
             icon: <Dumbbell className="size-3" />,
-            className: 'text-muted-foreground bg-muted/30 border-border/40',
+            className: 'text-muted bg-surface-sunken border-subtle',
         }
     }
     const m = SECTION_META[sectionKey]
@@ -120,7 +120,7 @@ export function buildLibrarySections<
             short: vm?.shortLabel ?? '???',
             label: areaGroup.name ?? 'Área',
             icon: <Layers className="size-3" />,
-            className: vm?.badgeClass ?? 'text-muted-foreground bg-muted/30 border-border/40',
+            className: vm?.badgeClass ?? 'text-muted bg-surface-sunken border-subtle',
             groups,
         }
     })
@@ -136,15 +136,15 @@ function renderLibraryExerciseRow(block: LibraryPlanBlock) {
     return (
         <div className="flex items-start justify-between gap-3 px-3 py-2.5 sm:px-4">
             <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-foreground">{block.exercise.name}</p>
+                <p className="truncate text-sm font-medium text-strong">{block.exercise.name}</p>
                 {chips.length > 0 && (
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">{chips.join(' · ')}</p>
+                    <p className="mt-0.5 text-[11px] text-muted">{chips.join(' · ')}</p>
                 )}
                 {block.notes && (
-                    <p className="mt-0.5 truncate text-[11px] italic text-muted-foreground/80">{block.notes}</p>
+                    <p className="mt-0.5 truncate text-[11px] italic text-muted">{block.notes}</p>
                 )}
             </div>
-            <div className="shrink-0 rounded-md border border-border/80 bg-muted/30 px-2.5 py-1 text-xs font-semibold tabular-nums text-foreground">
+            <div className="shrink-0 rounded-control border border-subtle bg-surface-sunken px-2.5 py-1 text-xs font-semibold tabular-nums text-strong">
                 {block.sets}×{block.reps}
             </div>
         </div>
@@ -177,8 +177,8 @@ export function ProgramPreviewBody({ program, areas = [] }: { program: ProgramLi
         <div className="flex max-h-[min(70vh,560px)] flex-col overflow-y-auto pb-4 sm:max-h-[min(75vh,640px)]">
             {/* Phases bar */}
             {phases.length > 0 && (
-                <div className="space-y-1.5 border-b border-border/60 px-4 py-3 sm:px-6">
-                    <p className="text-xs font-medium text-muted-foreground">Fases del programa</p>
+                <div className="space-y-1.5 border-b border-subtle px-4 py-3 sm:px-6">
+                    <p className="text-xs font-medium text-muted">Fases del programa</p>
                     <div className="flex h-2 w-full overflow-hidden rounded-full">
                         {phases.map((phase, i) => (
                             <div
@@ -190,7 +190,7 @@ export function ProgramPreviewBody({ program, areas = [] }: { program: ProgramLi
                     </div>
                     <div className="flex flex-wrap gap-x-3 gap-y-1">
                         {phases.map((phase, i) => (
-                            <span key={i} className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <span key={i} className="flex items-center gap-1 text-[11px] text-muted">
                                 <span
                                     className="inline-block size-2 rounded-full"
                                     style={{ backgroundColor: phase.color || '#6b7280' }}
@@ -204,10 +204,10 @@ export function ProgramPreviewBody({ program, areas = [] }: { program: ProgramLi
 
             {plans.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-16 text-center">
-                    <div className="flex size-14 items-center justify-center rounded-full border border-dashed border-border bg-muted/30 text-muted-foreground">
+                    <div className="flex size-14 items-center justify-center rounded-full border border-dashed border-default bg-surface-sunken text-muted">
                         <Dumbbell className="size-7 opacity-40" />
                     </div>
-                    <p className="text-sm text-muted-foreground">Este programa aún no tiene días configurados.</p>
+                    <p className="text-sm text-muted">Este programa aún no tiene días configurados.</p>
                 </div>
             ) : (
                 <div className="space-y-4 px-4 pt-4 sm:px-6">
@@ -225,32 +225,32 @@ export function ProgramPreviewBody({ program, areas = [] }: { program: ProgramLi
                         return (
                             <div
                                 key={plan.id}
-                                className="overflow-hidden rounded-2xl border border-border/40 bg-card/40"
+                                className="overflow-hidden rounded-card border border-subtle bg-surface-sunken/40"
                             >
-                                <div className="flex items-center justify-between gap-2 border-b border-border/60 bg-muted/20 px-3 py-2.5 sm:px-4">
-                                    <h3 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-foreground">
-                                        <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
+                                <div className="flex items-center justify-between gap-2 border-b border-subtle bg-surface-sunken px-3 py-2.5 sm:px-4">
+                                    <h3 className="flex min-w-0 items-center gap-2 text-sm font-semibold text-strong">
+                                        <span className="flex size-7 shrink-0 items-center justify-center rounded-control bg-sport-500 text-xs font-bold text-[var(--text-on-sport)]">
                                             {plan.day_of_week}
                                         </span>
                                         <span className="truncate">
                                             Día {plan.day_of_week}: {plan.title}
                                         </span>
                                     </h3>
-                                    <Badge variant="secondary" className="shrink-0 text-[10px]">
+                                    <Badge tone="neutral" variant="soft" size="sm" className="shrink-0">
                                         {blocks.length} ejercicios
                                     </Badge>
                                 </div>
-                                <div className="divide-y divide-border/50">
+                                <div className="divide-y divide-[var(--border-subtle)]">
                                     {buildLibrarySections(rows, areas).map((section) => {
                                         return (
                                             <div key={section.key} className="space-y-0">
                                                 <div
                                                     className={cn(
-                                                        'flex flex-wrap items-center gap-2 border-b border-border/40 px-3 py-1.5 text-[11px] font-semibold sm:px-4',
+                                                        'flex flex-wrap items-center gap-2 border-b border-subtle px-3 py-1.5 text-[11px] font-semibold sm:px-4',
                                                         section.className,
                                                     )}
                                                 >
-                                                    <span className="rounded border border-current/30 bg-background/40 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest">
+                                                    <span className="rounded border border-current/30 bg-[var(--surface-card)]/40 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest">
                                                         {section.short}
                                                     </span>
                                                     <span className="flex items-center gap-1.5">
@@ -258,25 +258,25 @@ export function ProgramPreviewBody({ program, areas = [] }: { program: ProgramLi
                                                         {section.label}
                                                     </span>
                                                 </div>
-                                                <div className="space-y-2 bg-background/20 px-2 py-2 sm:px-3">
+                                                <div className="space-y-2 bg-[var(--surface-card)]/20 px-2 py-2 sm:px-3">
                                                     {section.groups.map((group) => (
                                                         <div
                                                             key={group.key}
                                                             className={cn(
-                                                                'overflow-hidden rounded-xl border border-transparent',
+                                                                'overflow-hidden rounded-card border border-transparent',
                                                                 group.type === 'superset' &&
-                                                                    'border-primary/25 bg-primary/[0.06]',
+                                                                    'border-[var(--sport-300)]/40 bg-[var(--sport-100)]/50',
                                                             )}
                                                         >
                                                             {group.type === 'superset' && (
-                                                                <div className="border-b border-primary/15 bg-primary/[0.04] px-3 py-1 text-[9px] font-black uppercase tracking-widest text-primary/85">
+                                                                <div className="border-b border-[var(--sport-300)]/30 bg-[var(--sport-100)]/40 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-[var(--sport-700)]">
                                                                     Superserie · grupo {group.supersetLetter ?? '?'}
                                                                 </div>
                                                             )}
                                                             <div
                                                                 className={cn(
-                                                                    'divide-y divide-border/40',
-                                                                    group.type === 'superset' && 'rounded-b-xl',
+                                                                    'divide-y divide-[var(--border-subtle)]',
+                                                                    group.type === 'superset' && 'rounded-b-card',
                                                                 )}
                                                             >
                                                                 {group.blocks.map((block) => (
@@ -300,10 +300,10 @@ export function ProgramPreviewBody({ program, areas = [] }: { program: ProgramLi
 }
 
 const shellDialogClass =
-    'flex w-full max-w-none flex-col gap-0 overflow-hidden border-border bg-background p-0 text-foreground shadow-xl sm:max-w-2xl md:max-h-[min(92vh,800px)] max-md:fixed max-md:inset-0 max-md:h-[100dvh] max-md:max-h-[100dvh] max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0'
+    'flex w-full max-w-none flex-col gap-0 overflow-hidden border-subtle bg-surface-app p-0 text-body shadow-xl sm:max-w-2xl md:max-h-[min(92vh,800px)] max-md:fixed max-md:inset-0 max-md:h-[100dvh] max-md:max-h-[100dvh] max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0'
 
 const shellSheetClass =
-    'flex h-[min(92dvh,720px)] max-h-[92dvh] flex-col gap-0 overflow-hidden rounded-t-2xl border-border bg-background p-0 text-foreground shadow-lg [&_[data-slot=sheet-close]]:border-border [&_[data-slot=sheet-close]]:bg-muted/50 [&_[data-slot=sheet-close]]:text-foreground'
+    'flex h-[min(92dvh,720px)] max-h-[92dvh] flex-col gap-0 overflow-hidden rounded-t-sheet border-subtle bg-surface-app p-0 text-body shadow-lg [&_[data-slot=sheet-close]]:border-subtle [&_[data-slot=sheet-close]]:bg-surface-sunken [&_[data-slot=sheet-close]]:text-strong'
 
 export interface ProgramPreviewPanelProps {
     program: ProgramListModel | null
@@ -319,13 +319,13 @@ export function ProgramPreviewPanel({ program, open, onOpenChange, areas = [] }:
     if (!program) return null
 
     const header = (
-        <div className="flex items-start gap-3 border-b border-border/80 px-4 py-4 sm:px-6">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <div className="flex items-start gap-3 border-b border-subtle px-4 py-4 sm:px-6">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-control bg-[var(--sport-100)] text-[var(--sport-600)]">
                 <Eye className="size-5" />
             </div>
             <div className="min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Vista previa</p>
-                <p className="truncate text-lg font-semibold text-foreground">{program.name}</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted">Vista previa</p>
+                <p className="truncate font-display text-lg font-extrabold tracking-[-0.01em] text-strong">{program.name}</p>
             </div>
         </div>
     )
@@ -345,7 +345,7 @@ export function ProgramPreviewPanel({ program, open, onOpenChange, areas = [] }:
                     </DialogHeader>
                     {header}
                     <ProgramPreviewBody program={program} areas={areas} />
-                    <DialogFooter className="border-t border-border/80 bg-muted/10 px-4 py-3 sm:px-6">
+                    <DialogFooter className="border-t border-subtle bg-surface-sunken/30 px-4 py-3 sm:px-6">
                         {footer}
                     </DialogFooter>
                 </DialogContent>
@@ -356,12 +356,12 @@ export function ProgramPreviewPanel({ program, open, onOpenChange, areas = [] }:
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent side="bottom" showCloseButton className={shellSheetClass}>
-                <SheetHeader className="border-0 bg-background p-0">
+                <SheetHeader className="border-0 bg-surface-app p-0">
                     <SheetTitle className="sr-only">Vista previa de {program.name}</SheetTitle>
                     {header}
                 </SheetHeader>
                 <ProgramPreviewBody program={program} areas={areas} />
-                <SheetFooter className="border-border bg-muted/10">{footer}</SheetFooter>
+                <SheetFooter className="border-subtle bg-surface-sunken/30">{footer}</SheetFooter>
             </SheetContent>
         </Sheet>
     )

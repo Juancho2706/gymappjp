@@ -96,24 +96,24 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
       const color = getMuscleColor(ex.muscle_group)
       const thumb = exerciseThumb(ex)
       return (
-        <TouchableOpacity style={[styles.row, { borderColor: theme.border, backgroundColor: theme.card }]} onPress={() => handleSelect(ex)} activeOpacity={0.8}>
+        <TouchableOpacity className="flex-row items-center bg-surface-card border border-subtle rounded-control" style={styles.row} onPress={() => handleSelect(ex)} activeOpacity={0.8}>
           <View style={[styles.thumb, { backgroundColor: hexToRgba(color, 0.15) }]}>
             {thumb ? <Image source={{ uri: thumb }} style={styles.thumbImg} contentFit="cover" cachePolicy="memory-disk" recyclingKey={ex.id} /> : <Activity size={18} color={color} />}
           </View>
           <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-            <Text numberOfLines={1} style={[styles.exName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{ex.name}</Text>
+            <Text numberOfLines={1} className="text-strong font-sans-bold" style={styles.exName}>{ex.name}</Text>
             <View style={styles.exMuscleRow}>
               <View style={[styles.mDot, { backgroundColor: color }]} />
-              <Text numberOfLines={1} style={[styles.exMuscle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{ex.muscle_group ?? ''}</Text>
+              <Text numberOfLines={1} className="text-muted font-sans" style={styles.exMuscle}>{ex.muscle_group ?? ''}</Text>
             </View>
           </View>
           <TouchableOpacity onPress={() => setPreview(ex)} hitSlop={8} style={styles.eyeBtn}><Eye size={16} color={theme.mutedForeground} /></TouchableOpacity>
           {addedFlash[ex.id] ? (
-            <MotiView from={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'timing', duration: 160 }} style={[styles.addBtn, { backgroundColor: '#10B981' }]}>
+            <MotiView from={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'timing', duration: 160 }} className="items-center justify-center" style={[styles.addBtn, { backgroundColor: '#10B981' }]}>
               <Check size={16} color="#fff" />
             </MotiView>
           ) : (
-            <View style={[styles.addBtn, { backgroundColor: theme.primary }]}><Plus size={16} color={theme.primaryForeground} /></View>
+            <View className="bg-sport-500 items-center justify-center" style={styles.addBtn}><Plus size={16} color={theme.primaryForeground} /></View>
           )}
         </TouchableOpacity>
       )
@@ -126,14 +126,14 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
     // Handle custom: grabber + (colapsado) label "Añadir ejercicio · N en {día}".
     const renderHandle = () => (
       <Pressable onPress={() => localRef.current?.snapToIndex(2)} style={styles.handle}>
-        <View style={[styles.grabber, { backgroundColor: theme.mutedForeground }]} />
+        <View className="bg-track" style={styles.grabber} />
         {index <= 0 ? (
           <View style={styles.collapsedRow}>
             <MotiView from={{ translateY: 1 }} animate={{ translateY: -4 }} transition={{ loop: true, type: 'timing', duration: 850 }}>
               <ChevronUp size={16} color={theme.primary} />
             </MotiView>
-            <Text style={[styles.collapsedText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>DESLIZA PARA AÑADIR EJERCICIOS</Text>
-            <Text style={[styles.collapsedHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>· {dayBlockCount} en {dayName}</Text>
+            <Text className="text-strong font-sans-bold" style={styles.collapsedText}>DESLIZA PARA AÑADIR EJERCICIOS</Text>
+            <Text className="text-muted font-sans" style={styles.collapsedHint}>· {dayBlockCount} en {dayName}</Text>
           </View>
         ) : null}
       </Pressable>
@@ -169,12 +169,12 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
             <View style={{ gap: 10 }}>
               <View style={styles.headerRow}>
                 <Activity size={16} color={theme.primary} />
-                <Text style={[styles.headerTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Catálogo de Ejercicios</Text>
+                <Text className="text-strong font-display" style={styles.headerTitle}>Catálogo de Ejercicios</Text>
               </View>
-              <View style={[styles.searchBar, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+              <View className="flex-row items-center bg-surface-sunken border border-subtle rounded-control" style={styles.searchBar}>
                 <Search size={16} color={theme.mutedForeground} />
                 <TextInput value={query} onChangeText={setQuery} placeholder="Buscar por nombre..." placeholderTextColor={theme.mutedForeground}
-                  style={[styles.searchInput, { color: theme.foreground, fontFamily: theme.fontSans }]} />
+                  className="flex-1 text-strong font-sans" style={styles.searchInput} />
                 {query.length ? <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}><X size={15} color={theme.mutedForeground} /></TouchableOpacity> : null}
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} style={{ maxHeight: 42 }}>
@@ -182,8 +182,8 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
                   const on = muscle === m
                   return (
                     <TouchableOpacity key={m} onPress={() => setMuscle(m)} activeOpacity={0.8}
-                      style={[styles.chip, { borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : 'transparent' }]}>
-                      <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: on ? theme.primary : theme.mutedForeground }}>{m}</Text>
+                      className={`justify-center rounded-pill ${on ? 'bg-sport-500' : 'bg-surface-card border border-default'}`} style={styles.chip}>
+                      <Text className={`${on ? 'text-on-sport' : 'text-body'} font-sans-bold`} style={styles.chipText}>{m}</Text>
                     </TouchableOpacity>
                   )
                 })}
@@ -192,36 +192,36 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
                 <>
                   <View style={styles.recentHead}>
                     <Clock size={13} color={theme.mutedForeground} />
-                    <Text style={[styles.recentLabel, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>Usados recientemente</Text>
+                    <Text className="text-muted font-sans-semibold" style={styles.recentLabel}>Usados recientemente</Text>
                   </View>
                   {recents.map((ex) => <View key={`r-${ex.id}`}>{renderItem({ item: ex })}</View>)}
-                  <Text style={[styles.recentLabel, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold', marginTop: 4 }]}>Todos los ejercicios</Text>
+                  <Text className="text-muted font-sans-semibold" style={[styles.recentLabel, { marginTop: 4 }]}>Todos los ejercicios</Text>
                 </>
               ) : null}
             </View>
           }
           ListEmptyComponent={
-            <Text style={[styles.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sin resultados</Text>
+            <Text className="text-muted font-sans" style={styles.empty}>Sin resultados</Text>
           }
         />
 
         {/* Preview */}
         <Modal visible={!!preview} transparent animationType="fade" onRequestClose={() => setPreview(null)}>
           <Pressable style={styles.pvBackdrop} onPress={() => setPreview(null)}>
-            <Pressable style={[styles.pvCard, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => {}}>
+            <Pressable className="bg-surface-card border border-subtle" style={styles.pvCard} onPress={() => {}}>
               <View style={styles.pvHead}>
-                <Text style={[styles.pvTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={2}>{preview?.name}</Text>
+                <Text className="text-strong font-display" style={styles.pvTitle} numberOfLines={2}>{preview?.name}</Text>
                 <TouchableOpacity onPress={() => setPreview(null)} hitSlop={8}><X size={20} color={theme.mutedForeground} /></TouchableOpacity>
               </View>
-              <Text style={[styles.pvMuscle, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>{preview?.muscle_group}</Text>
-              <View style={[styles.pvMedia, { backgroundColor: theme.secondary }]}>
+              <Text className="text-sport-600 font-sans-bold" style={styles.pvMuscle}>{preview?.muscle_group}</Text>
+              <View className="bg-surface-sunken" style={styles.pvMedia}>
                 {pthumb ? <Image source={{ uri: pthumb }} style={styles.pvImg} contentFit={pIsYt ? 'cover' : 'contain'} transition={150} /> : <Dumbbell size={40} color={theme.mutedForeground} />}
                 {pIsYt ? <View style={styles.pvPlay} pointerEvents="none"><Play size={20} color="#fff" fill="#fff" /></View> : null}
               </View>
               {pIsYt ? (
-                <TouchableOpacity onPress={() => preview?.video_url && Linking.openURL(preview.video_url)} style={[styles.pvYt, { borderColor: theme.border }]}>
+                <TouchableOpacity onPress={() => preview?.video_url && Linking.openURL(preview.video_url)} className="flex-row items-center justify-center border border-subtle rounded-control" style={styles.pvYt}>
                   <Play size={14} color={theme.primary} fill={theme.primary} />
-                  <Text style={[styles.pvYtTxt, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Ver en YouTube</Text>
+                  <Text className="text-strong font-sans-bold" style={styles.pvYtTxt}>Ver en YouTube</Text>
                 </TouchableOpacity>
               ) : null}
             </Pressable>
@@ -235,21 +235,22 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
 const styles = StyleSheet.create({
   sheetShadow: { shadowColor: '#000', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 16 },
   handle: { paddingTop: 8, paddingBottom: 6, alignItems: 'center', gap: 6 },
-  grabber: { width: 38, height: 4, borderRadius: 2, opacity: 0.4 },
+  grabber: { width: 38, height: 4, borderRadius: 2 },
   collapsedRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingBottom: 2, paddingHorizontal: 16 },
   collapsedText: { fontSize: 11.5, letterSpacing: 0.5, textTransform: 'uppercase', flexShrink: 1 },
   collapsedHint: { fontSize: 10.5 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerTitle: { fontSize: 15 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, height: 44 },
-  searchInput: { flex: 1, fontSize: 15 },
+  searchBar: { gap: 10, paddingHorizontal: 12, height: 44 },
+  searchInput: { fontSize: 15, paddingVertical: 0 },
   filterRow: { gap: 7, paddingBottom: 2, paddingRight: 8 },
-  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, height: 34, justifyContent: 'center' },
+  chip: { paddingHorizontal: 13, height: 34 },
+  chipText: { fontSize: 12 },
   list: { paddingHorizontal: 16, paddingBottom: 40, gap: 8 },
   recentHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 2 },
   recentLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 },
   empty: { textAlign: 'center', fontSize: 14, marginTop: 24 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 10, paddingVertical: 9, borderWidth: 1, borderRadius: 12 },
+  row: { gap: 10, paddingHorizontal: 10, paddingVertical: 9 },
   thumb: { width: 40, height: 40, borderRadius: 9, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   thumbImg: { width: 40, height: 40 },
   exName: { fontSize: 14 },
@@ -257,7 +258,7 @@ const styles = StyleSheet.create({
   mDot: { width: 8, height: 8, borderRadius: 4 },
   exMuscle: { fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.3, flex: 1 },
   eyeBtn: { padding: 6 },
-  addBtn: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  addBtn: { width: 30, height: 30, borderRadius: 15 },
   pvBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   pvCard: { width: '100%', maxWidth: 420, borderWidth: 1, borderRadius: 18, padding: 16, gap: 8 },
   pvHead: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
@@ -266,6 +267,6 @@ const styles = StyleSheet.create({
   pvMedia: { width: '100%', height: 200, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   pvImg: { width: '100%', height: '100%' },
   pvPlay: { position: 'absolute', width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
-  pvYt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingVertical: 11, marginTop: 4 },
+  pvYt: { gap: 8, paddingVertical: 11, marginTop: 4 },
   pvYtTxt: { fontSize: 14 },
 })

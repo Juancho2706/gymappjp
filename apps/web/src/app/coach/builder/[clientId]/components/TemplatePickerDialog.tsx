@@ -150,7 +150,7 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
                         templates.map(tpl => (
                             <div
                                 key={tpl.id}
-                                className="flex items-center gap-4 p-4 rounded-xl border border-border bg-muted/30 hover:bg-muted/60 hover:border-primary/30 transition-all group"
+                                className="flex items-center gap-4 p-4 rounded-control border border-border bg-muted/30 hover:bg-muted/60 hover:border-primary/30 transition-all group"
                             >
                                 <div className="flex-1 min-w-0">
                                     <div className="font-bold text-xs uppercase tracking-widest text-foreground truncate group-hover:text-primary transition-colors">
@@ -168,7 +168,7 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
 
                                 {confirmId === tpl.id ? (
                                     <div className="flex items-center gap-2">
-                                        <div className="flex items-center gap-1 text-[9px] font-bold text-orange-500 uppercase">
+                                        <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600 dark:text-amber-400 uppercase">
                                             <AlertTriangle className="w-3 h-3" />
                                             ¿Reemplazar?
                                         </div>

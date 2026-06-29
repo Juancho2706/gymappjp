@@ -41,9 +41,9 @@ export interface ProgramRowProps {
 
 function accentBarClass(program: ProgramListModel) {
     const isTemplate = !program.client_id
-    if (isTemplate) return 'bg-primary'
-    if (program.is_active) return 'bg-emerald-500 dark:bg-emerald-400'
-    return 'bg-muted-foreground/35'
+    if (isTemplate) return 'bg-sport-500'
+    if (program.is_active) return 'bg-[var(--success-500)]'
+    return 'bg-[var(--ink-300)]'
 }
 
 export function ProgramRow({
@@ -93,11 +93,11 @@ export function ProgramRow({
                     : undefined
             }
             className={cn(
-                'touch-manipulation flex w-full min-w-0 max-w-full items-stretch gap-0 rounded-xl border border-border/60 bg-card text-card-foreground shadow-sm transition-[box-shadow,border-color,background-color]',
+                'touch-manipulation flex w-full min-w-0 max-w-full items-stretch gap-0 rounded-card border border-subtle bg-surface-card text-body shadow-sm transition-[box-shadow,border-color,background-color]',
                 onRowClick &&
-                    'cursor-pointer hover:border-primary/20 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+                    'cursor-pointer hover:border-[var(--sport-300)] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-app)]',
                 isSelected &&
-                    'border-primary/35 bg-primary/5 shadow-md ring-2 ring-primary/25 ring-offset-2 ring-offset-background dark:bg-primary/10 dark:ring-offset-background'
+                    'border-[var(--sport-300)] bg-[var(--sport-100)] shadow-md ring-2 ring-[var(--focus-ring)] ring-offset-2 ring-offset-[var(--surface-app)]'
             )}
         >
             <div
@@ -114,46 +114,39 @@ export function ProgramRow({
             >
                 <div className="min-w-0 w-full flex-1 text-left">
                     <div className="flex flex-wrap items-center justify-start gap-2">
-                        <span className={cn('truncate font-semibold text-foreground', compact && 'text-sm')}>
+                        <span className={cn('truncate font-semibold text-strong', compact && 'text-sm')}>
                             {program.name}
                         </span>
                         {stats.templateLabel === 'Plantilla' ? (
-                            <Badge
-                                variant="outline"
-                                className="shrink-0 border-primary/25 bg-primary/5 text-[10px] font-semibold text-primary"
-                            >
+                            <Badge tone="sport" variant="soft" size="sm" className="shrink-0">
                                 Plantilla
                             </Badge>
+                        ) : program.is_active ? (
+                            <Badge tone="success" variant="soft" size="sm" dot className="shrink-0">
+                                {stats.templateLabel}
+                            </Badge>
                         ) : (
-                            <Badge
-                                variant="outline"
-                                className={cn(
-                                    'shrink-0 text-[10px] font-semibold',
-                                    program.is_active
-                                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200'
-                                        : 'border-border text-muted-foreground'
-                                )}
-                            >
+                            <Badge tone="neutral" variant="soft" size="sm" className="shrink-0">
                                 {stats.templateLabel}
                             </Badge>
                         )}
                         {!compact && stats.hasPhases && (
-                            <Badge variant="secondary" className="shrink-0 text-[10px]">
+                            <Badge tone="neutral" variant="soft" size="sm" className="shrink-0">
                                 Fases
                             </Badge>
                         )}
                         {!compact && program.ab_mode && (
-                            <Badge variant="secondary" className="shrink-0 text-[10px]">
+                            <Badge tone="neutral" variant="soft" size="sm" className="shrink-0">
                                 A/B
                             </Badge>
                         )}
                         {!compact && program.duration_type === 'async' && (
-                            <Badge variant="secondary" className="shrink-0 text-[10px]">
+                            <Badge tone="neutral" variant="soft" size="sm" className="shrink-0">
                                 Asíncrono
                             </Badge>
                         )}
                         {compact && !isTemplate && clientName && (
-                            <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
+                            <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted">
                                 <Avatar size="sm" className="size-6">
                                     <AvatarFallback className="text-[10px] font-semibold">{initials}</AvatarFallback>
                                 </Avatar>
@@ -163,13 +156,13 @@ export function ProgramRow({
                     </div>
                     {!compact && (
                         <>
-                            <p className="mt-0.5 truncate text-xs text-muted-foreground">{meta}</p>
+                            <p className="mt-0.5 truncate text-xs text-muted">{meta}</p>
                             {!isTemplate && clientName && (
                                 <div className="mt-1.5 flex min-w-0 items-center gap-2">
                                     <Avatar size="sm" className="size-8 shrink-0">
                                         <AvatarFallback className="text-xs font-semibold">{initials}</AvatarFallback>
                                     </Avatar>
-                                    <span className="truncate text-sm font-medium text-foreground/90">{clientName}</span>
+                                    <span className="truncate text-sm font-medium text-body">{clientName}</span>
                                 </div>
                             )}
                         </>
@@ -183,7 +176,7 @@ export function ProgramRow({
                         type="button"
                         onClick={(e) => e.stopPropagation()}
                         className={cn(
-                            'inline-flex shrink-0 items-center justify-center rounded-full border-0 bg-transparent px-0 font-medium normal-case tracking-normal text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            'inline-flex shrink-0 items-center justify-center rounded-full border-0 bg-transparent px-0 font-medium normal-case tracking-normal text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]',
                             'min-h-11 min-w-11 sm:min-h-10 sm:min-w-10'
                         )}
                         aria-label="Acciones del programa"

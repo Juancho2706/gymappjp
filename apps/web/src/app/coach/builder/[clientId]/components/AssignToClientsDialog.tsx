@@ -102,7 +102,7 @@ export function AssignToClientsDialog({ open, onClose, programId, programName }:
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         placeholder="Buscar cliente..."
-                        className="w-full h-10 px-4 text-sm rounded-xl bg-muted border border-border text-foreground focus:border-primary focus:outline-none transition-all placeholder:text-muted-foreground"
+                        className="w-full h-10 px-4 text-sm rounded-control bg-muted border border-border text-foreground focus:border-primary focus:outline-none transition-all placeholder:text-muted-foreground"
                     />
 
                     {/* Lista de clientes */}
@@ -123,7 +123,7 @@ export function AssignToClientsDialog({ open, onClose, programId, programName }:
                                     <button
                                         key={client.id}
                                         onClick={() => toggleClient(client.id)}
-                                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
+                                        className={`w-full flex items-center gap-3 p-3 rounded-control border transition-all text-left ${
                                             isSelected
                                                 ? 'border-primary/50 bg-primary/10 text-primary'
                                                 : 'border-border bg-muted/20 hover:bg-muted/50 text-foreground'

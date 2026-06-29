@@ -68,20 +68,20 @@ export function BuilderOnboardingTour({ open, steps, getRect, onClose, remeasure
         <View pointerEvents="none" style={[styles.ring, { top: hy, left: hx, width: hw, height: hh, borderColor: theme.primary }]} />
 
         <View style={[styles.card, { top: cardTop, left: cardLeft, width: CARD_W, backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.counter, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>Guía del builder · {idx + 1}/{total}</Text>
-          <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{step.title}</Text>
+          <Text style={[styles.counter, { color: theme.primary, fontFamily: 'HankenGrotesk_700Bold' }]}>Guía del builder · {idx + 1}/{total}</Text>
+          <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{step.title}</Text>
           <Text style={[styles.desc, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{step.description}</Text>
           {step.footerHint ? <Text style={[styles.hint, { color: theme.mutedForeground, borderTopColor: theme.border, fontFamily: theme.fontSans }]}>{step.footerHint}</Text> : null}
           <View style={styles.actions}>
-            <TouchableOpacity onPress={() => onClose(false)} hitSlop={6}><Text style={[styles.skip, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>Saltar</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => onClose(false)} hitSlop={6}><Text style={[styles.skip, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Saltar</Text></TouchableOpacity>
             <View style={styles.navBtns}>
               {idx > 0 ? (
                 <TouchableOpacity onPress={() => setIdx((i) => Math.max(0, i - 1))} activeOpacity={0.85} style={[styles.btnOutline, { borderColor: theme.border }]}>
-                  <Text style={[styles.btnOutlineTxt, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>Atrás</Text>
+                  <Text style={[styles.btnOutlineTxt, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Atrás</Text>
                 </TouchableOpacity>
               ) : null}
               <TouchableOpacity onPress={() => { if (isLast) onClose(true); else setIdx((i) => i + 1) }} activeOpacity={0.85} style={[styles.btnPrimary, { backgroundColor: theme.primary }]}>
-                <Text style={[styles.btnPrimaryTxt, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>{isLast ? 'Finalizar' : 'Siguiente'}</Text>
+                <Text style={[styles.btnPrimaryTxt, { color: theme.primaryForeground, fontFamily: 'Archivo_700Bold' }]}>{isLast ? 'Finalizar' : 'Siguiente'}</Text>
               </TouchableOpacity>
             </View>
           </View>

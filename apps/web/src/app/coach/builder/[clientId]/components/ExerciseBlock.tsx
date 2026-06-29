@@ -119,7 +119,7 @@ function ExerciseBlockInner({
     return (
         <div ref={setNodeRef}
             className={cn(
-                'group relative flex min-w-0 max-w-full flex-col bg-background dark:bg-card/50 backdrop-blur-md border border-border rounded-xl overflow-hidden transition-all duration-300 shadow-sm dark:shadow-none border-l-4',
+                'group relative flex min-w-0 max-w-full flex-col bg-background dark:bg-card/50 backdrop-blur-md border border-border rounded-control overflow-hidden transition-all duration-300 shadow-sm dark:shadow-none border-l-4',
                 isDragging
                     ? 'z-50 ring-4 ring-primary/20 shadow-2xl scale-105 opacity-50'
                     : isDragPending
@@ -436,7 +436,7 @@ function ExerciseBlockInner({
                     onRemove(dayId, block.uid);
                 }}
                     aria-label="Eliminar ejercicio"
-                    className="p-2.5 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all flex-shrink-0 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center"
+                    className="p-2.5 rounded-control text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all flex-shrink-0 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center"
                 >
                     <X className="w-5 h-5 stroke-[2.5px]" />
                 </button>

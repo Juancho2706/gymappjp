@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import type { ViewStyle } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FlashList } from '@shopify/flash-list'
 import { Image } from 'expo-image'
@@ -7,7 +8,7 @@ import { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { ChevronRight, Dumbbell, Lock, Plus, Search, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../../context/ThemeContext'
-import { ScreenHeader, Badge, EmptyState } from '../../../components'
+import { ScreenHeader, Badge, EmptyState, Card, Input } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { ExerciseFormSheet } from '../../../components/coach/ExerciseFormSheet'
@@ -19,6 +20,15 @@ const DIFFICULTY_LABEL: Record<string, string> = {
   beginner: 'Principiante',
   intermediate: 'Intermedio',
   advanced: 'Avanzado',
+}
+
+// DS --shadow-sm (cool-tinted rgba 13 18 28) — lift for the active stat-tab pill.
+const SHADOW_SM: ViewStyle = {
+  shadowColor: '#0D121C',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.05,
+  shadowRadius: 2,
+  elevation: 1,
 }
 
 type Source = 'all' | 'system' | 'own'
@@ -144,47 +154,45 @@ export default function EjerciciosScreen() {
         title="Ejercicios"
         subtitle={`${exercises.length} en biblioteca · ${customCount} propios`}
         trailing={
-          <TouchableOpacity onPress={openCreate} activeOpacity={0.85}
-            style={[styles.headerBtn, { backgroundColor: canCreate ? theme.primary : theme.muted }]}>
+          <TouchableOpacity
+            onPress={openCreate}
+            activeOpacity={0.85}
+            className={`items-center justify-center rounded-control ${canCreate ? 'bg-sport-500' : 'bg-surface-sunken'}`}
+            style={styles.headerBtn}
+          >
             {canCreate ? <Plus size={20} color={theme.primaryForeground} /> : <Lock size={16} color={theme.mutedForeground} />}
           </TouchableOpacity>
         }
       />
 
-      {/* Pestañas de origen */}
+      {/* Pestañas de origen (segmented stat: número + etiqueta) */}
       <View style={styles.tabsWrap}>
-        <View style={[styles.tabs, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
-          <SourceTab theme={theme} label="Todos" count={exercises.length} active={source === 'all'} onPress={() => setSource('all')} />
-          <SourceTab theme={theme} label="Sistema EVA" count={systemCount} active={source === 'system'} onPress={() => setSource('system')} />
-          <SourceTab theme={theme} label="Míos" count={customCount} active={source === 'own'} onPress={() => setSource('own')} />
+        <View className="flex-row bg-surface-sunken rounded-control" style={styles.tabs}>
+          <SourceTab label="Todos" count={exercises.length} active={source === 'all'} onPress={() => setSource('all')} />
+          <SourceTab label="Sistema EVA" count={systemCount} active={source === 'system'} onPress={() => setSource('system')} />
+          <SourceTab label="Míos" count={customCount} active={source === 'own'} onPress={() => setSource('own')} />
         </View>
       </View>
 
       {/* Search */}
       <View style={styles.searchWrap}>
-        <View style={[styles.searchBar, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
-          <Search size={16} color={theme.mutedForeground} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Buscar ejercicio..."
-            placeholderTextColor={theme.mutedForeground}
-            style={[styles.searchInput, { color: theme.foreground, fontFamily: theme.fontSans }]}
-            autoCapitalize="none"
-          />
-          {query.length > 0 ? (
-            <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
-              <X size={16} color={theme.mutedForeground} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
+        <Input
+          leftIcon={Search}
+          rightIcon={query.length > 0 ? X : undefined}
+          onRightIconPress={() => setQuery('')}
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Buscar ejercicio..."
+          autoCapitalize="none"
+          returnKeyType="search"
+        />
       </View>
 
       {/* Muscle filter */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterRow}>
-        <FilterChip theme={theme} label="Todos" active={muscle === null} onPress={() => setMuscle(null)} />
+        <FilterChip label="Todos" active={muscle === null} onPress={() => setMuscle(null)} />
         {muscleOptions.map((m) => (
-          <FilterChip key={m} theme={theme} label={m} active={muscle === m} onPress={() => setMuscle(m)} />
+          <FilterChip key={m} label={m} active={muscle === m} onPress={() => setMuscle(m)} />
         ))}
       </ScrollView>
 
@@ -202,9 +210,9 @@ export default function EjerciciosScreen() {
           getItemType={(item) => item.type}
           renderItem={({ item }) =>
             item.type === 'header' ? (
-              <GroupHeader theme={theme} muscle={item.muscle} count={item.count} />
+              <GroupHeader muscle={item.muscle} count={item.count} />
             ) : (
-              <ExerciseCard row={item.row} theme={theme} onPress={() => openPreview(item.row)} />
+              <ExerciseCard row={item.row} onPress={() => openPreview(item.row)} />
             )
           }
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: insets.bottom + 96 }}
@@ -235,82 +243,98 @@ function orderRank(m: string): number {
   return i === -1 ? 999 : i
 }
 
-function SourceTab({ theme, label, count, active, onPress }: { theme: any; label: string; count: number; active: boolean; onPress: () => void }) {
+// Stat-tab (espeja las tabs-stats del diseño): número (mono) sobre etiqueta. El
+// segmento activo se eleva en un pill surface-card con shadow-sm.
+function SourceTab({ label, count, active, onPress }: { label: string; count: number; active: boolean; onPress: () => void }) {
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={[styles.tab, active && { backgroundColor: theme.primary }]}>
-      <Text numberOfLines={1} style={{ fontSize: 12.5, fontFamily: 'Inter_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>
-        {label} {count}
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.85}
+      className={`flex-1 items-center justify-center ${active ? 'bg-surface-card' : ''}`}
+      style={[styles.tab, active ? SHADOW_SM : null]}
+    >
+      <Text className={`font-mono ${active ? 'text-strong' : 'text-muted'}`} style={styles.tabCount}>{count}</Text>
+      <Text numberOfLines={1} className={active ? 'text-strong font-sans-bold' : 'text-muted font-sans-semibold'} style={styles.tabLabel}>
+        {label}
       </Text>
     </TouchableOpacity>
   )
 }
 
-function FilterChip({ theme, label, active, onPress }: { theme: any; label: string; active: boolean; onPress: () => void }) {
+function FilterChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.8}
-      style={[styles.filterChip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary + '14' : 'transparent' }]}>
-      <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: active ? theme.primary : theme.mutedForeground }}>{label}</Text>
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.8}
+      className={`rounded-pill justify-center ${active ? 'bg-sport-500' : 'bg-surface-card border border-default'}`}
+      style={styles.filterChip}
+    >
+      <Text className={`${active ? 'text-on-sport' : 'text-body'} font-sans-bold`} style={styles.filterChipText}>{label}</Text>
     </TouchableOpacity>
   )
 }
 
-function GroupHeader({ theme, muscle, count }: { theme: any; muscle: string; count: number }) {
+function GroupHeader({ muscle, count }: { muscle: string; count: number }) {
   return (
-    <View style={styles.groupHeader}>
-      <View style={[styles.dot, { backgroundColor: theme.primary }]} />
-      <Text style={[styles.groupTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{muscle.toUpperCase()}</Text>
-      <View style={[styles.countBadge, { borderColor: theme.border }]}>
-        <Text style={[styles.countText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{count}</Text>
+    <View className="flex-row items-center" style={styles.groupHeader}>
+      <View className="bg-sport-500" style={styles.dot} />
+      <Text className="text-strong font-sans-extra" style={styles.groupTitle}>{muscle.toUpperCase()}</Text>
+      <View className="bg-surface-sunken" style={styles.countBadge}>
+        <Text className="text-muted font-mono" style={styles.countText}>{count}</Text>
       </View>
     </View>
   )
 }
 
-function ExerciseCard({ row, theme, onPress }: { row: ExerciseRow; theme: any; onPress: () => void }) {
+function ExerciseCard({ row, onPress }: { row: ExerciseRow; onPress: () => void }) {
+  const { theme } = useTheme()
   const meta = [row.equipment, row.difficulty ? DIFFICULTY_LABEL[row.difficulty] ?? row.difficulty : null].filter(Boolean).join(' · ')
   const thumb = exerciseThumb(row)
   return (
-    <TouchableOpacity activeOpacity={0.82} onPress={onPress}
-      style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-      <View style={[styles.thumb, { backgroundColor: theme.secondary, borderRadius: theme.radius.md }]}>
+    <Card interactive onPress={onPress} padding={12} radius="card" style={styles.card}>
+      <View
+        className={`${thumb ? 'bg-surface-sunken' : 'bg-ink-950'} rounded-control items-center justify-center`}
+        style={styles.thumb}
+      >
         {thumb ? (
           <Image source={{ uri: thumb }} style={styles.thumbImg} contentFit="cover" transition={150} />
         ) : (
-          <Dumbbell size={22} color={theme.mutedForeground} strokeWidth={1.6} />
+          <Dumbbell size={22} color={theme.primary} strokeWidth={1.6} />
         )}
       </View>
       <View style={{ flex: 1, gap: 3 }}>
-        <Text numberOfLines={1} style={[styles.cardName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{row.name}</Text>
-        <Text numberOfLines={1} style={[styles.cardMuscle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        <Text numberOfLines={1} className="text-strong font-sans-bold" style={styles.cardName}>{row.name}</Text>
+        <Text numberOfLines={1} className="text-muted font-sans" style={styles.cardMuscle}>
           {row.muscle_group}{meta ? ` · ${meta}` : ''}
         </Text>
       </View>
       {row.isOwn ? <Badge label="Propio" tone="success" /> : null}
       <ChevronRight size={18} color={theme.mutedForeground} />
-    </TouchableOpacity>
+    </Card>
   )
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  headerBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  headerBtn: { width: 40, height: 40 },
   tabsWrap: { paddingHorizontal: 16, paddingBottom: 10 },
-  tabs: { flexDirection: 'row', borderWidth: 1, borderRadius: 12, padding: 3, gap: 3 },
-  tab: { flex: 1, paddingVertical: 9, alignItems: 'center', justifyContent: 'center', borderRadius: 9 },
+  tabs: { padding: 3, gap: 3 },
+  tab: { paddingVertical: 7, borderRadius: 11 },
+  tabCount: { fontSize: 16, lineHeight: 19 },
+  tabLabel: { fontSize: 11, marginTop: 1 },
   searchWrap: { paddingHorizontal: 16, paddingBottom: 10 },
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, height: 46 },
-  searchInput: { flex: 1, fontSize: 15 },
   filterScroll: { flexGrow: 0, maxHeight: 40 },
   filterRow: { paddingHorizontal: 16, gap: 8, paddingBottom: 12, alignItems: 'center' },
-  filterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
+  filterChip: { paddingHorizontal: 13, height: 32 },
+  filterChipText: { fontSize: 13 },
   listWrap: { flex: 1 },
-  groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 14, paddingBottom: 8, paddingHorizontal: 2 },
+  groupHeader: { gap: 8, paddingTop: 14, paddingBottom: 8, paddingHorizontal: 2 },
   dot: { width: 7, height: 7, borderRadius: 4 },
   groupTitle: { fontSize: 12, letterSpacing: 0.6 },
-  countBadge: { marginLeft: 'auto', borderWidth: 1, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 2 },
+  countBadge: { marginLeft: 'auto', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 2 },
   countText: { fontSize: 11 },
-  card: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderWidth: 1 },
-  thumb: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  card: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  thumb: { width: 52, height: 52, overflow: 'hidden' },
   thumbImg: { width: 52, height: 52 },
   cardName: { fontSize: 15 },
   cardMuscle: { fontSize: 12 },

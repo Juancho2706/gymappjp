@@ -9,7 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import BottomSheet, { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { ArrowLeft, ChevronLeft, ChevronRight, CircleHelp, Copy, Eye, Layers, Link2, Moon, MoreVertical, Plus, Printer, Redo2, Save, Scale, Settings, Sparkles, Sun, Undo2, Users, X } from 'lucide-react-native'
+import { ArrowLeft, ChevronLeft, ChevronRight, CircleHelp, Copy, Eye, History, Layers, Link2, Moon, MoreVertical, Plus, Printer, Redo2, Save, Scale, Settings, Sparkles, Sun, Undo2, Users, X } from 'lucide-react-native'
 import { NestableScrollContainer, NestableDraggableFlatList } from 'react-native-draggable-flatlist'
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { MotiView } from 'moti'
@@ -461,9 +461,9 @@ export default function ProgramBuilderScreen() {
     return (
       <TouchableOpacity key={d.id} onPress={() => { slideDir.current = d.id > activeDayId ? 1 : -1; setActiveDayId(d.id) }} activeOpacity={0.85}
         style={[styles.dayTab, fixed ? { width: 58 } : { flex: 1 }, active && { backgroundColor: theme.background, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 2 }]}>
-        <Text style={[styles.dayTabLabel, { color: active ? theme.foreground : theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>{dayLabel(structureType, d).slice(0, 3)}</Text>
+        <Text style={[styles.dayTabLabel, { color: active ? theme.foreground : theme.mutedForeground, fontFamily: 'Archivo_700Bold' }]}>{dayLabel(structureType, d).slice(0, 3)}</Text>
         {d.is_rest ? (
-          <Text style={[styles.dayTabCount, { color: '#818CF8' }]}>ZZZ</Text>
+          <Text style={[styles.dayTabCount, { color: theme.mutedForeground }]}>ZZZ</Text>
         ) : count > 0 ? (
           <Text style={[styles.dayTabCount, { color: active ? theme.primary : theme.mutedForeground }]}>{count}</Text>
         ) : (
@@ -526,7 +526,7 @@ export default function ProgramBuilderScreen() {
             <View style={styles.ssConnector}>
               <View style={[styles.ssLine, { backgroundColor: theme.primary + '33' }]} />
               <TouchableOpacity onPress={() => toggleSuperset(activeDayId, block.uid)} activeOpacity={0.8} style={[styles.ssPill, { borderColor: theme.primary + '33', backgroundColor: theme.primary + '1A' }]}>
-                <Text style={[styles.ssPillTxt, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>SS · {block.superset_group}</Text>
+                <Text style={[styles.ssPillTxt, { color: theme.primary, fontFamily: 'HankenGrotesk_700Bold' }]}>SS · {block.superset_group}</Text>
               </TouchableOpacity>
               <View style={[styles.ssLine, { backgroundColor: theme.primary + '33' }]} />
             </View>
@@ -534,7 +534,7 @@ export default function ProgramBuilderScreen() {
             <View style={styles.ssConnector}>
               <TouchableOpacity onPress={() => toggleSuperset(activeDayId, block.uid)} activeOpacity={0.8} style={[styles.ssLinkBtn, { borderColor: theme.border }]}>
                 <Link2 size={13} color={theme.mutedForeground} />
-                <Text style={[styles.ssLinkTxt, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Superserie</Text>
+                <Text style={[styles.ssLinkTxt, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>Superserie</Text>
               </TouchableOpacity>
             </View>
           )
@@ -545,13 +545,13 @@ export default function ProgramBuilderScreen() {
 
   // P8: encabezado fijo + lista draggable acotada a una sola sección.
   function renderSection(section: BuilderSection) {
-    const secColor = section === 'warmup' ? '#F59E0B' : section === 'cooldown' ? '#38BDF8' : theme.primary
+    const secColor = section === 'warmup' ? '#F5A524' : section === 'cooldown' ? theme.cyan : theme.primary
     const blocks = blocksInSection(section)
     return (
       <View key={section} style={{ gap: 8 }}>
         <View style={[styles.sectionHeader, { borderColor: secColor + '55', backgroundColor: secColor + '12' }]}>
           <View style={[styles.sectionDot, { backgroundColor: secColor }]} />
-          <Text style={[styles.sectionTitle, { color: secColor, fontFamily: 'Montserrat_700Bold' }]}>{SECTION_LABEL[section].toUpperCase()}</Text>
+          <Text style={[styles.sectionTitle, { color: secColor, fontFamily: 'Archivo_700Bold' }]}>{SECTION_LABEL[section].toUpperCase()}</Text>
           <View style={[styles.sectionCount, { borderColor: secColor + '55' }]}>
             <Text style={[styles.sectionCountText, { color: secColor, fontFamily: theme.fontSans }]}>{blocks.length}</Text>
           </View>
@@ -805,13 +805,13 @@ export default function ProgramBuilderScreen() {
         </TouchableOpacity>
 
         <View style={styles.titleWrap}>
-          <Text numberOfLines={1} style={[styles.progTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+          <Text numberOfLines={1} style={[styles.progTitle, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>
             {(name || 'Nuevo programa').toUpperCase()}
           </Text>
           {dirty ? (
             <View style={styles.statusRow}>
               <View style={styles.statusDot} />
-              <Text style={[styles.statusText, { fontFamily: 'Inter_700Bold' }]}>SIN GUARDAR</Text>
+              <Text style={[styles.statusText, { fontFamily: 'HankenGrotesk_700Bold' }]}>SIN GUARDAR</Text>
             </View>
           ) : clientName ? (
             <Text numberOfLines={1} style={[styles.statusMuted, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{clientName}</Text>
@@ -832,8 +832,8 @@ export default function ProgramBuilderScreen() {
               <MotiView pointerEvents="none" from={{ opacity: 0.45, scale: 1 }} animate={{ opacity: 0, scale: 1.7 }}
                 transition={{ loop: true, type: 'timing', duration: 1500 }} style={styles.pingAmber} />
             ) : null}
-            <TouchableOpacity ref={regTour('top-config-button')} onPress={() => { setConfigOpen(true); configRef.current?.present() }} hitSlop={6} style={[styles.gearBtn, { borderColor: '#F59E0B66' }]}>
-              <Settings size={17} color="#F59E0B" />
+            <TouchableOpacity ref={regTour('top-config-button')} onPress={() => { setConfigOpen(true); configRef.current?.present() }} hitSlop={6} style={[styles.gearBtn, { borderColor: '#F5A52466' }]}>
+              <Settings size={17} color="#F5A524" />
             </TouchableOpacity>
           </View>
           <TouchableOpacity ref={regTour('save-button')} onPress={handleSave} disabled={saving} activeOpacity={0.85} style={[styles.saveBtn, { backgroundColor: theme.primary, shadowColor: theme.primary, opacity: saving ? 0.6 : 1 }]}>
@@ -854,7 +854,7 @@ export default function ProgramBuilderScreen() {
             <View style={[styles.abSeg, { backgroundColor: theme.secondary }]}>
               {(['A', 'B'] as const).map((v) => (
                 <TouchableOpacity key={v} onPress={() => switchVariant(v)} activeOpacity={0.85} style={[styles.abSegItem, variant === v && { backgroundColor: theme.background }]}>
-                  <Text style={{ fontSize: 11, fontFamily: 'Montserrat_700Bold', color: variant === v ? theme.foreground : theme.mutedForeground }}>Sem {v}</Text>
+                  <Text style={{ fontSize: 11, fontFamily: 'Archivo_700Bold', color: variant === v ? theme.foreground : theme.mutedForeground }}>Sem {v}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -878,14 +878,15 @@ export default function ProgramBuilderScreen() {
       </View>
 
       {pendingDraft ? (
-        <View style={[styles.draftBanner, { borderColor: theme.border, backgroundColor: theme.card }]}>
+        <View style={[styles.draftBanner, { borderColor: theme.primary + '33', backgroundColor: theme.primary + '14' }]}>
+          <History size={18} color={theme.primary} />
           <Text style={[styles.draftText, { color: theme.foreground, fontFamily: theme.fontSans }]} numberOfLines={2}>Hay un borrador sin guardar de este programa.</Text>
           <View style={styles.draftActions}>
             <TouchableOpacity onPress={discardDraft} hitSlop={6}>
-              <Text style={[styles.draftDiscard, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>Descartar</Text>
+              <Text style={[styles.draftDiscard, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Descartar</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={recoverDraft} activeOpacity={0.85} style={[styles.draftBtn, { backgroundColor: theme.primary }]}>
-              <Text style={[styles.draftBtnText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>Recuperar</Text>
+              <Text style={[styles.draftBtnText, { color: theme.primaryForeground, fontFamily: 'Archivo_700Bold' }]}>Recuperar</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -906,7 +907,7 @@ export default function ProgramBuilderScreen() {
               <View style={[styles.abSeg, { backgroundColor: theme.secondary, alignSelf: 'center' }]}>
                 {(['A', 'B'] as const).map((v) => (
                   <TouchableOpacity key={v} onPress={() => switchVariant(v)} activeOpacity={0.85} style={[styles.abSegItem, variant === v && { backgroundColor: theme.background }]}>
-                    <Text style={{ fontSize: 11, fontFamily: 'Montserrat_700Bold', color: variant === v ? theme.foreground : theme.mutedForeground }}>{v}</Text>
+                    <Text style={{ fontSize: 11, fontFamily: 'Archivo_700Bold', color: variant === v ? theme.foreground : theme.mutedForeground }}>{v}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -916,9 +917,9 @@ export default function ProgramBuilderScreen() {
             <View style={[styles.dayCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
               <View style={styles.dayHeader}>
                 {currentDay.is_rest ? (
-                  <View style={[styles.dayTitleInput, styles.restTitleBox, { borderColor: theme.border, backgroundColor: theme.card }]}>
-                    <Moon size={14} color="#818CF8" />
-                    <Text style={[styles.restTitleText, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>DÍA DE DESCANSO</Text>
+                  <View style={[styles.dayTitleInput, styles.restTitleBox, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+                    <Moon size={14} color={theme.mutedForeground} />
+                    <Text style={[styles.restTitleText, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>DÍA DE DESCANSO</Text>
                   </View>
                 ) : (
                   <TextInput value={currentDay.title} onChangeText={(v) => updateDayTitle(currentDay.id, v)} placeholder={`Título de ${currentDay.name}`} placeholderTextColor={theme.mutedForeground}
@@ -954,11 +955,13 @@ export default function ProgramBuilderScreen() {
           {/* P8: una lista draggable por sección (headers fijos) o panel de descanso */}
           {currentDay.is_rest ? (
             <View style={styles.restPanel}>
-              <Moon size={40} color="#818CF866" />
-              <Text style={[styles.restPanelTitle, { color: '#818CF8', fontFamily: 'Montserrat_700Bold' }]}>DÍA DE DESCANSO</Text>
+              <View style={[styles.restIconBox, { backgroundColor: theme.secondary }]}>
+                <Moon size={26} color={theme.mutedForeground} />
+              </View>
+              <Text style={[styles.restPanelTitle, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>DÍA DE DESCANSO</Text>
               <Text style={[styles.restPanelSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Recuperación activa y descanso</Text>
-              <TouchableOpacity onPress={() => toggleRestDay(currentDay.id)} activeOpacity={0.85} style={[styles.restPanelBtn, { borderColor: '#818CF855' }]}>
-                <Text style={[styles.restPanelBtnText, { color: '#818CF8', fontFamily: 'Inter_700Bold' }]}>Añadir ejercicios</Text>
+              <TouchableOpacity onPress={() => toggleRestDay(currentDay.id)} activeOpacity={0.85} style={[styles.restPanelBtn, { borderColor: theme.border }]}>
+                <Text style={[styles.restPanelBtnText, { color: theme.foreground, fontFamily: 'HankenGrotesk_700Bold' }]}>Añadir ejercicios</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -967,7 +970,7 @@ export default function ProgramBuilderScreen() {
               <TouchableOpacity onPress={() => addToSection('main')} activeOpacity={0.8}
                 style={[styles.addBtn, { borderColor: theme.border, backgroundColor: theme.card }]}>
                 <Plus size={18} color={theme.primary} />
-                <Text style={[styles.addText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Agregar ejercicio a {currentDay.name}</Text>
+                <Text style={[styles.addText, { color: theme.primary, fontFamily: 'Archivo_700Bold' }]}>Agregar ejercicio a {currentDay.name}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -1014,7 +1017,7 @@ export default function ProgramBuilderScreen() {
         <View style={styles.modalWrap}>
           <Pressable style={styles.modalBackdrop} onPress={() => setCopyOpen(false)} />
           <View style={[styles.modalCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <Text style={[styles.modalTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Copiar {currentDay.name} a…</Text>
+            <Text style={[styles.modalTitle, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>Copiar {currentDay.name} a…</Text>
             {days.filter((d) => d.id !== currentDay.id).map((d) => (
               <TouchableOpacity key={d.id} onPress={() => { copyDay(currentDay.id, [d.id]); setCopyOpen(false) }} activeOpacity={0.8} style={styles.modalRow}>
                 <Text style={[styles.modalRowText, { color: theme.foreground, fontFamily: theme.fontSans }]}>{d.name}</Text>
@@ -1042,7 +1045,7 @@ export default function ProgramBuilderScreen() {
               return (
                 <TouchableOpacity key={it.label} onPress={it.on} activeOpacity={0.8} style={styles.menuItem}>
                   <Icon size={17} color={color} />
-                  <Text style={[styles.menuItemText, { color, fontFamily: 'Inter_600SemiBold' }]}>{it.label}</Text>
+                  <Text style={[styles.menuItemText, { color, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{it.label}</Text>
                 </TouchableOpacity>
               )
             })}
@@ -1052,8 +1055,8 @@ export default function ProgramBuilderScreen() {
 
       {/* FAB "+" verde (solo en Simple) */}
       {isSimpleMode ? (
-        <TouchableOpacity onPress={() => addToSection('main')} activeOpacity={0.85} style={styles.fabAdd}>
-          <Plus size={26} color="#fff" strokeWidth={3} />
+        <TouchableOpacity onPress={() => addToSection('main')} activeOpacity={0.85} style={[styles.fabAdd, { backgroundColor: theme.primary, shadowColor: theme.primary }]}>
+          <Plus size={26} color={theme.primaryForeground} strokeWidth={3} />
         </TouchableOpacity>
       ) : null}
 
@@ -1107,18 +1110,18 @@ const styles = StyleSheet.create({
   titleWrap: { flex: 1, minWidth: 0 },
   progTitle: { fontSize: 14, letterSpacing: 1 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 },
-  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#F97316' },
-  statusText: { fontSize: 9, letterSpacing: 0.8, color: '#F97316' },
+  statusDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#F5A524' },
+  statusText: { fontSize: 9, letterSpacing: 0.8, color: '#F5A524' },
   statusMuted: { fontSize: 10, letterSpacing: 0.6, marginTop: 1, textTransform: 'uppercase' },
   topActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   iconOutline: { width: 34, height: 34, borderWidth: 1, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   gearBtn: { width: 34, height: 34, borderWidth: 1, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  pingAmber: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 9, backgroundColor: '#F59E0B' },
+  pingAmber: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 9, backgroundColor: '#F5A524' },
   saveBtn: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
   abBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 8, borderBottomWidth: 1 },
   abToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, flexShrink: 1 },
-  abTag: { fontSize: 11, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
+  abTag: { fontSize: 11, fontFamily: 'HankenGrotesk_700Bold', letterSpacing: 0.5 },
   abLabelTxt: { fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', flexShrink: 1 },
   abSeg: { flexDirection: 'row', gap: 3, padding: 3, borderRadius: 10, marginLeft: 'auto' },
   abSegItem: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 7 },
@@ -1132,10 +1135,11 @@ const styles = StyleSheet.create({
   dayTabBar: { flexDirection: 'row', alignItems: 'stretch', gap: 3, padding: 4, borderRadius: 14 },
   dayTab: { paddingVertical: 7, paddingHorizontal: 4, borderRadius: 10, alignItems: 'center', justifyContent: 'center', gap: 2 },
   dayTabLabel: { fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase' },
-  dayTabCount: { fontSize: 9, fontFamily: 'Inter_700Bold' },
+  dayTabCount: { fontSize: 9, fontFamily: 'HankenGrotesk_700Bold' },
   restTitleBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   restTitleText: { fontSize: 11, letterSpacing: 1 },
   restPanel: { alignItems: 'center', justifyContent: 'center', paddingVertical: 48, gap: 8 },
+  restIconBox: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
   restPanelTitle: { fontSize: 12, letterSpacing: 2 },
   restPanelSub: { fontSize: 12, opacity: 0.7 },
   restPanelBtn: { marginTop: 10, borderWidth: 1, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 9 },
@@ -1187,14 +1191,14 @@ const styles = StyleSheet.create({
   blockCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderWidth: 1, borderRadius: 12 },
   blockTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   ssBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 6 },
-  ssText: { fontSize: 10, fontFamily: 'Inter_600SemiBold' },
+  ssText: { fontSize: 10, fontFamily: 'HankenGrotesk_600SemiBold' },
   blockName: { fontSize: 14, flexShrink: 1 },
   blockMeta: { fontSize: 12 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderStyle: 'dashed', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, marginTop: 6, marginBottom: 4 },
   volRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   volChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 4 },
-  volLbl: { fontSize: 9, fontFamily: 'Inter_700Bold', textTransform: 'uppercase', letterSpacing: 0.6 },
-  volVal: { fontSize: 12, fontFamily: 'Montserrat_700Bold' },
+  volLbl: { fontSize: 9, fontFamily: 'HankenGrotesk_700Bold', textTransform: 'uppercase', letterSpacing: 0.6 },
+  volVal: { fontSize: 12, fontFamily: 'Archivo_700Bold' },
   volDots: { flexDirection: 'row', gap: 4, marginLeft: 2 },
   muscleDot: { width: 9, height: 9, borderRadius: 5 },
   restBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingVertical: 16 },
@@ -1210,9 +1214,9 @@ const styles = StyleSheet.create({
   blockCardCompact: { padding: 9 },
   fabMode: { position: 'absolute', right: 16, bottom: 28, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 10, elevation: 6 },
   fabGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 24 },
-  fabAdd: { position: 'absolute', right: 16, bottom: 86, width: 56, height: 56, borderRadius: 28, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center', shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.45, shadowRadius: 12, elevation: 8 },
+  fabAdd: { position: 'absolute', right: 16, bottom: 86, width: 56, height: 56, borderRadius: 28, backgroundColor: '#2680FF', alignItems: 'center', justifyContent: 'center', shadowColor: '#2680FF', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.45, shadowRadius: 12, elevation: 8 },
   modeOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
-  modeOverlayText: { color: '#fff', fontSize: 26, fontFamily: 'Montserrat_700Bold', letterSpacing: 6, textTransform: 'uppercase' },
+  modeOverlayText: { color: '#fff', fontSize: 26, fontFamily: 'Archivo_700Bold', letterSpacing: 6, textTransform: 'uppercase' },
   modeLabelWrap: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   modeLabel: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 11 },
   modeLabelText: { fontSize: 14 },
