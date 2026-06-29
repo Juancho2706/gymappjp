@@ -9,7 +9,10 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo-google-fonts/archivo": "^0.2.3",
+    "@expo-google-fonts/hanken-grotesk": "^0.2.3",
     "@expo-google-fonts/inter": "^0.2.3",
+    "@expo-google-fonts/jetbrains-mono": "^0.2.3",
     "@expo-google-fonts/montserrat": "^0.2.3",
     "@gorhom/bottom-sheet": "^5.2.14",
     "@react-native-async-storage/async-storage": "3.1.1",

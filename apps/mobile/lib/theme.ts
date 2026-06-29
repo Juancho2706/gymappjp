@@ -1,5 +1,5 @@
 import type { ViewStyle } from 'react-native'
-import { resolveBrandTheme } from '@eva/brand-kit'
+import { resolveBrandTheme, deriveSportTokens } from '@eva/brand-kit'
 
 export interface Theme {
   // Core (used across all screens)
@@ -49,83 +49,83 @@ const radius = {
 }
 
 export const lightTheme: Theme = {
-  // Core (backward compat)
-  primary: '#007AFF',
-  background: '#F5F5F5',
-  card: '#FFFFFF',
-  text: '#121212',
-  textSecondary: '#6B7280',
-  muted: '#E5E7EB',
-  border: 'rgba(0,0,0,0.1)',
-  destructive: '#FF3B30',
-  success: '#34C759',
+  // Core (backward compat) — values from EVA DS (token-contract.md, light)
+  primary: '#2680FF',           // sport-500 (brand); applyCoachBranding() overrides at runtime
+  background: '#FBFCFD',        // surface-app (paper)
+  card: '#FFFFFF',              // surface-card
+  text: '#0B0E13',             // text-strong (ink-950)
+  textSecondary: '#5A6573',    // text-muted (ink-500)
+  muted: '#F4F6F8',            // surface-sunken (ink-50)
+  border: '#E6E9ED',           // border-subtle (ink-100)
+  destructive: '#F4365A',      // danger-500
+  success: '#1FB877',          // success-500
   // Extended
-  primaryForeground: '#FFFFFF',
-  foreground: '#121212',
-  mutedForeground: '#6B7280',
-  secondary: '#E5E7EB',
-  secondaryForeground: '#121212',
-  accent: '#E5E7EB',
-  accentForeground: '#007AFF',
-  cyan: '#00E5FF',
+  primaryForeground: '#FFFFFF',// text-on-sport
+  foreground: '#0B0E13',       // text-strong
+  mutedForeground: '#5A6573',  // text-muted
+  secondary: '#F4F6F8',        // surface-sunken
+  secondaryForeground: '#0B0E13',
+  accent: '#F4F6F8',           // subtle surface
+  accentForeground: '#2680FF', // brand; applyCoachBranding() overrides
+  cyan: '#18ABD4',             // aqua-500 (recovery)
   input: 'rgba(0,0,0,0.05)',
   radius,
   shadowGlowBlue: {
-    shadowColor: '#007AFF',
+    shadowColor: '#2680FF',    // glow-sport
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 15,
+    shadowOpacity: 0.42,
+    shadowRadius: 20,
     elevation: 8,
   },
   shadowGlowCyan: {
-    shadowColor: '#00E5FF',
+    shadowColor: '#18ABD4',    // aqua glow (recovery)
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
     shadowRadius: 15,
     elevation: 8,
   },
-  fontSans: 'Inter_400Regular',
-  fontDisplay: 'Montserrat_600SemiBold',
+  fontSans: 'HankenGrotesk_400Regular',
+  fontDisplay: 'Archivo_700Bold',
 }
 
 export const darkTheme: Theme = {
-  // Core (backward compat)
-  primary: '#007AFF',
-  background: '#121212',
-  card: '#1E1E1E',
-  text: '#F8F9FA',
-  textSecondary: '#A1A1AA',
-  muted: '#27272A',
-  border: 'rgba(255,255,255,0.1)',
-  destructive: '#FF3B30',
-  success: '#30D158',
+  // Core (backward compat) — values from EVA DS (token-contract.md, dark)
+  primary: '#2680FF',           // sport-500 (brand); applyCoachBranding() overrides at runtime
+  background: '#0A0D12',        // surface-app (dark)
+  card: '#161B22',             // surface-card (dark)
+  text: '#F4F6F8',            // text-strong (dark)
+  textSecondary: '#8A95A3',   // text-muted (dark)
+  muted: '#1F262F',           // surface-sunken (dark)
+  border: 'rgba(255,255,255,0.07)', // border-subtle (dark)
+  destructive: '#F4365A',     // danger-500
+  success: '#1FB877',         // success-500
   // Extended
   primaryForeground: '#FFFFFF',
-  foreground: '#F8F9FA',
-  mutedForeground: '#A1A1AA',
-  secondary: '#27272A',
-  secondaryForeground: '#F8F9FA',
-  accent: '#27272A',
-  accentForeground: '#00E5FF',
-  cyan: '#00E5FF',
+  foreground: '#F4F6F8',      // text-strong (dark)
+  mutedForeground: '#8A95A3', // text-muted (dark)
+  secondary: '#1F262F',       // surface-sunken (dark)
+  secondaryForeground: '#F4F6F8',
+  accent: '#1F262F',          // subtle surface (dark)
+  accentForeground: '#2680FF',// brand; applyCoachBranding() overrides
+  cyan: '#18ABD4',            // aqua-500 (recovery)
   input: 'rgba(255,255,255,0.05)',
   radius,
   shadowGlowBlue: {
-    shadowColor: '#007AFF',
+    shadowColor: '#2680FF',   // glow-sport
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 15,
+    shadowOpacity: 0.42,
+    shadowRadius: 20,
     elevation: 8,
   },
   shadowGlowCyan: {
-    shadowColor: '#00E5FF',
+    shadowColor: '#18ABD4',   // aqua glow (recovery)
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.4,
     shadowRadius: 15,
     elevation: 8,
   },
-  fontSans: 'Inter_400Regular',
-  fontDisplay: 'Montserrat_600SemiBold',
+  fontSans: 'HankenGrotesk_400Regular',
+  fontDisplay: 'Archivo_700Bold',
 }
 
 const DEFAULT_BRAND = '#007AFF'
@@ -160,11 +160,27 @@ export function applyCoachBranding(base: Theme, primaryColor?: string | null): T
  * text-primary, border-accent…) pick up the live brand color.
  */
 export function brandVars(primaryColor: string | null | undefined, scheme: 'light' | 'dark'): Record<string, string> {
-  const t = resolveBrandTheme({ brandColor: primaryColor || DEFAULT_BRAND })[scheme]
+  const brand = primaryColor || DEFAULT_BRAND
+  const t = resolveBrandTheme({ brandColor: brand })[scheme]
+  // D2 white-label: rampa SPORT derivada (misma engine que web/PWA) → recolorea --sport-* en vivo.
+  // En dark, 600/700 usan los foregrounds aclarados legibles sobre la superficie oscura.
+  const sport = deriveSportTokens(brand)
+  const sport600 = scheme === 'dark' ? sport.dark['600'] : sport.ramp['600']
+  const sport700 = scheme === 'dark' ? sport.dark['700'] : sport.ramp['700']
   return {
     '--color-primary': hexToChannels(t.accent),
     '--color-primary-foreground': hexToChannels(t.accentText),
     '--color-accent': hexToChannels(t.accent),
     '--color-accent-foreground': hexToChannels(t.accent),
+    '--color-brand': hexToChannels(sport.ramp['500']),
+    '--color-sport-100': hexToChannels(sport.ramp['100']),
+    '--color-sport-200': hexToChannels(sport.ramp['200']),
+    '--color-sport-300': hexToChannels(sport.ramp['300']),
+    '--color-sport-400': hexToChannels(sport.ramp['400']),
+    '--color-sport-500': hexToChannels(sport.ramp['500']),
+    '--color-sport-600': hexToChannels(sport600),
+    '--color-sport-700': hexToChannels(sport700),
+    '--color-cta-fill': hexToChannels(sport.ctaFill),
+    '--color-focus-ring': hexToChannels(brand),
   }
 }

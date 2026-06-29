@@ -284,7 +284,16 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@expo-google-fonts/archivo':
+        specifier: ^0.2.3
+        version: 0.2.3
+      '@expo-google-fonts/hanken-grotesk':
+        specifier: ^0.2.3
+        version: 0.2.3
       '@expo-google-fonts/inter':
+        specifier: ^0.2.3
+        version: 0.2.3
+      '@expo-google-fonts/jetbrains-mono':
         specifier: ^0.2.3
         version: 0.2.3
       '@expo-google-fonts/montserrat':
@@ -1633,8 +1642,17 @@ packages:
       '@noble/hashes':
         optional: true
 
+  '@expo-google-fonts/archivo@0.2.3':
+    resolution: {integrity: sha512-WD3Ad+oMOqCCBwJDPJcmFWyhqT2tF1aPOtKPT0xZejYMExcHCiqbog1om/mAupR1A+7q2f5qt1lEBecDiG+ClA==}
+
+  '@expo-google-fonts/hanken-grotesk@0.2.3':
+    resolution: {integrity: sha512-pEaoCp/F8EYJdXf8GvaCOSpTTQQ5SM+8DSuIz9DBLSF7fG3ZF3gwMDS6U2jJAuFo6G35N4WoNj7iX2dI9rNofQ==}
+
   '@expo-google-fonts/inter@0.2.3':
     resolution: {integrity: sha512-iHK9FI+dnE45X5c2Z5hSFwNH4zUWethizpbv3XUn0FIGw5jwvzriENz0a6wCdkI4/d+1QkurnHo5XHti7TbNJA==}
+
+  '@expo-google-fonts/jetbrains-mono@0.2.3':
+    resolution: {integrity: sha512-TlAlQzlDYT/cwg3kjME54P/iOl5dxv+EZ0iYSMZ6+3Jhw0oImBI/BVPVKLP+KT+sAs8ze1FvGTYXrtfiYolxtw==}
 
   '@expo-google-fonts/montserrat@0.2.3':
     resolution: {integrity: sha512-9imhwIs6j5uyTkTxoNplC5T8ERES1W98ZgF7kf7OaypnbcoLoIW0wKH6oudecZyiEqoSktC7epkRpj+UEUvzWg==}
@@ -10494,7 +10512,13 @@ snapshots:
     optionalDependencies:
       '@noble/hashes': 1.8.0
 
+  '@expo-google-fonts/archivo@0.2.3': {}
+
+  '@expo-google-fonts/hanken-grotesk@0.2.3': {}
+
   '@expo-google-fonts/inter@0.2.3': {}
+
+  '@expo-google-fonts/jetbrains-mono@0.2.3': {}
 
   '@expo-google-fonts/montserrat@0.2.3': {}
 

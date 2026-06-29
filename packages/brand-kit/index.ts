@@ -187,5 +187,143 @@ export function isThemeReadable(input: BrandThemeInput): boolean {
     return contrastReport(resolveBrandTheme(input)).passes
 }
 
+// ============================================================================
+// D2 — White-label SPORT ramp (redesign 2026, token-contract §7)
+// ----------------------------------------------------------------------------
+// El diseño nuevo recolorea TODO el white-label sobreescribiendo la rampa
+// `--sport-100..700` (7 pasos) derivada del ÚNICO color de marca del coach.
+// Ember/aqua/ink/status son FIJOS (no se derivan acá). Este motor produce esa
+// rampa con el MISMO stack OKLCH + clamp WCAG que ya usa resolveBrandTheme, así
+// web y RN renderizan idéntico.
+//
+// Pareo de texto del diseño (token-contract §2/§7):
+//   - 500 = marca exacta. Los fills 500/600/700 cargan TEXTO BLANCO
+//     (`--text-on-sport`). `cta-fill` (~600) es white-safe (≥4.5:1 con blanco)
+//     para botones sólidos.
+//   - 600/700 (modo CLARO) además son legibles como TEXTO sobre el surface
+//     claro (`--surface-app` = #FBFCFD).
+//   - 100/200 son tints CLAROS: su texto legible es OSCURO (ink/strong) cuando
+//     son chip-bg en claro, y ELLOS sirven de foreground claro sobre el surface
+//     OSCURO (#0A0D12) en dark mode.
+//   - Zona muerta de luminancia: un MISMO color sólido NO puede pasar 4.5:1 como
+//     texto sobre #FBFCFD (claro) Y #0A0D12 (oscuro) a la vez. Por eso el modo
+//     oscuro usa foregrounds aclarados `dark['600'|'700']` — espejo de
+//     theme-dark.css, que en el diseño base mapea sport-600→#7FB0FF / 700→#A9CBFF.
+// ============================================================================
+
+/** Light app surface (design `--surface-app` light = `--paper`). */
+const SURFACE_APP_LIGHT = '#FBFCFD'
+/** Dark app surface (design `--surface-app` under `.dark`). */
+const SURFACE_APP_DARK = '#0A0D12'
+
+const toRgb = converter('rgb')
+
+/** `rgba(r, g, b, a)` string from a hex + alpha (focus ring / translucent tints). */
+function rgbaFromHex(hex: string, alpha: number): string {
+    const c = toRgb(hex)
+    const r = Math.round(clamp(c?.r ?? 0, 0, 1) * 255)
+    const g = Math.round(clamp(c?.g ?? 0, 0, 1) * 255)
+    const b = Math.round(clamp(c?.b ?? 0, 0, 1) * 255)
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+/** 7-step sport scale (light-mode base). Keys mirror `--sport-100..700`. */
+export type SportRamp = {
+    '100': string
+    '200': string
+    '300': string
+    '400': string
+    '500': string
+    '600': string
+    '700': string
+}
+
+export type SportTokens = {
+    /** Rampa de 7 pasos (modo claro). `500` === marca exacta; hue heredado del brand. */
+    ramp: SportRamp
+    /** Fill sólido de CTA (~paso 600), white-safe (≥4.5:1 con texto blanco) → `--cta-fill`. */
+    ctaFill: string
+    /** Anillo de foco = marca @ 0.40 alpha, string `rgba(...)` → `--focus-ring`. */
+    focusRing: string
+    /** Texto legible SOBRE el fill de marca (white|ink) — espejo de `--text-on-sport`. */
+    textOnSport: string
+    /** Foregrounds sport ACLARADOS para modo OSCURO (legibles ≥4.5:1 sobre #0A0D12). */
+    dark: { '600': string; '700': string }
+}
+
+/**
+ * Derive the 7-step SPORT ramp from a single coach brand color.
+ *
+ * `500` is returned VERBATIM (the brand, exactly). The other steps inherit the
+ * brand hue, desaturate toward the light tints, and clamp chroma to stay
+ * in-gamut. The dark steps (600/700) are pushed (lightness only, via the
+ * existing `clampAccent`) until they read as text on the LIGHT surface AND are
+ * white-text safe. Pure/framework-free — same output on web and RN.
+ */
+export function deriveSportRamp(brandHex: string): SportRamp {
+    const h = hueOf(brandHex)
+    const cBrand = chromaOf(brandHex)
+    // Clamp brand lightness into a sane mid range purely to GENERATE the
+    // siblings (the 500 swatch itself is emitted verbatim, untouched).
+    const bl = clamp(lightnessOf(brandHex), 0.45, 0.72)
+
+    const lightOf = (t: number) => bl + (0.965 - bl) * t
+    const darkOf = (t: number) => bl - (bl - 0.4) * t
+
+    const step100 = oklchHex(lightOf(0.86), Math.min(cBrand * 0.22, 0.05), h)
+    const step200 = oklchHex(lightOf(0.66), Math.min(cBrand * 0.42, 0.09), h)
+    const step300 = oklchHex(lightOf(0.4), Math.min(cBrand * 0.62, 0.14), h)
+    const step400 = oklchHex(lightOf(0.18), cBrand * 0.85, h)
+    const cand600 = oklchHex(darkOf(0.32), cBrand * 0.95, h)
+    const cand700 = oklchHex(darkOf(0.62), cBrand * 0.85, h)
+
+    // 600/700 must read as text on the light surface AND carry white text.
+    // Clamping against the (slightly off-white) light surface guarantees both:
+    // pure white yields ≥ the same contrast as paper, so white-on-fill passes too.
+    const step600 = clampAccent(cand600, SURFACE_APP_LIGHT, AA_TEXT)
+    const step700 = clampAccent(cand700, SURFACE_APP_LIGHT, AA_TEXT)
+
+    return {
+        '100': step100,
+        '200': step200,
+        '300': step300,
+        '400': step400,
+        '500': brandHex,
+        '600': step600,
+        '700': step700,
+    }
+}
+
+/**
+ * Full white-label sport token bundle: the 7-step ramp + the derived
+ * `cta-fill`, `focus-ring`, on-sport text color, and dark-mode sport
+ * foregrounds. This is the single entry point web (`coach/layout.tsx` inline
+ * `<style>`, `/c/[slug]` via headers) and mobile (`brandVars()` →
+ * `nativewind.vars()`) wire into `--sport-*` / `--cta-fill` / `--focus-ring`.
+ *
+ * Free coach → pass `#007AFF` (SYSTEM_PRIMARY). Default EVA → `#2680FF`.
+ */
+export function deriveSportTokens(brandHex: string): SportTokens {
+    const ramp = deriveSportRamp(brandHex)
+    const h = hueOf(brandHex)
+    const cBrand = chromaOf(brandHex)
+
+    // cta-fill = white-safe brand fill (~step 600). The ramp's 600 is already
+    // clamped white-safe against the light surface, so reuse it.
+    const ctaFill = ramp['600']
+
+    // Dark-mode sport foregrounds: lightened brand, legible ON the dark surface.
+    const dark600 = clampAccent(oklchHex(0.72, Math.min(cBrand * 0.7, 0.16), h), SURFACE_APP_DARK, AA_TEXT)
+    const dark700 = clampAccent(oklchHex(0.8, Math.min(cBrand * 0.55, 0.13), h), SURFACE_APP_DARK, AA_TEXT)
+
+    return {
+        ramp,
+        ctaFill,
+        focusRing: rgbaFromHex(brandHex, 0.4),
+        textOnSport: pickOnColor(ctaFill),
+        dark: { '600': dark600, '700': dark700 },
+    }
+}
+
 // Tokens de motion compartidos (duraciones/easings/springs). Pure TS.
 export * from './motion'

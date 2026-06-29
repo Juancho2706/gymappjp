@@ -12,7 +12,7 @@ import { getUnreadNewsCount, getPublishedNewsItems } from '@/lib/news/queries'
 import type { Metadata } from 'next'
 import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { generateBrandPalette } from '@/lib/color-utils'
-import { resolveBrandTheme } from '@eva/brand-kit'
+import { resolveBrandTheme, deriveSportTokens } from '@eva/brand-kit'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { getCoachEnterpriseContext, getCoachTeamContext } from './_data/layout.queries'
@@ -126,6 +126,9 @@ export default async function CoachLayout({
     const brandFontStack = resolveBrandFontStack(standaloneBrandOn ? (coach.brand_font_key ?? '') : '')
     const brandTheme = resolveBrandTheme({ brandColor: primaryColor, accentLight, accentDark, neutralTint, secondaryLight: secondaryColor, secondaryDark: secondaryColor })
     const palette = generateBrandPalette(brandTheme.light.accent, brandTheme.light.accent2)
+    // D2 white-label: rampa SPORT derivada (--sport-100..700 + cta-fill + focus-ring) del color de marca.
+    // El diseño recolorea TODO sobreescribiendo --sport-*; ember/aqua/ink/status quedan fijos.
+    const sportTokens = deriveSportTokens(primaryColor)
 
     // Loader del panel: custom solo si la marca está activa (standalone Pro+) o si es managed con toggle on.
     const useCustomStyles = isManaged ? (coach.use_brand_colors_coach !== false) : standaloneBrandOn
@@ -170,6 +173,16 @@ export default async function CoachLayout({
                 --theme-secondary: ${brandTheme.light.accent2};
                 --theme-secondary-rgb: ${palette.secondaryRgb ?? palette.primaryRgb};
                 --theme-secondary-foreground: ${brandTheme.light.accent2Text};
+                --sport-100: ${sportTokens.ramp['100']};
+                --sport-200: ${sportTokens.ramp['200']};
+                --sport-300: ${sportTokens.ramp['300']};
+                --sport-400: ${sportTokens.ramp['400']};
+                --sport-500: ${sportTokens.ramp['500']};
+                --sport-600: ${sportTokens.ramp['600']};
+                --sport-700: ${sportTokens.ramp['700']};
+                --cta-fill: ${sportTokens.ctaFill};
+                --focus-ring: ${sportTokens.focusRing};
+                --text-on-sport: ${sportTokens.textOnSport};
                 --brand-font: ${brandFontStack};
                 --coach-loader-text: '${(loaderConfig.customText || '').replace(/'/g, "\\'")}';
                 --coach-use-custom-loader: ${loaderConfig.useCustom ? '1' : '0'};
@@ -184,6 +197,9 @@ export default async function CoachLayout({
                 --primary-foreground: ${brandTheme.dark.accentText};
                 --theme-secondary: ${brandTheme.dark.accent2};
                 --theme-secondary-foreground: ${brandTheme.dark.accent2Text};
+                --sport-600: ${sportTokens.dark['600']};
+                --sport-700: ${sportTokens.dark['700']};
+                --cta-fill: ${sportTokens.ctaFill};
             }
         ` }} />
         <div

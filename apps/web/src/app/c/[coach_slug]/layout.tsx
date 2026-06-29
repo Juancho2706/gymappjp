@@ -18,7 +18,7 @@ import { NetworkProvider } from '@/components/client/OfflineScreen'
 import { OfflineNutritionQueueSync } from '@/app/c/[coach_slug]/_components/OfflineNutritionQueueSync'
 import { OfflineWorkoutQueueSync } from '@/app/c/[coach_slug]/_components/OfflineWorkoutQueueSync'
 import { generateBrandPalette } from '@/lib/color-utils'
-import { resolveBrandTheme } from '@eva/brand-kit'
+import { resolveBrandTheme, deriveSportTokens } from '@eva/brand-kit'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { resolveLoaderVariant } from '@/lib/brand-loaders'
@@ -180,6 +180,8 @@ export default async function ClientBrandLayout({ children, params }: Props) {
 
     // Generate full brand palette (derived shades) from the resolved light accent + secondary.
     const palette = generateBrandPalette(brandTheme.light.accent, brandTheme.light.accent2)
+    // D2 white-label: rampa SPORT derivada (--sport-100..700 + cta-fill + focus-ring) del color de marca.
+    const sportTokens = deriveSportTokens(primaryColor)
     const lightAccent = brandTheme.light.accent
     const lightOnAccent = brandTheme.light.accentText
     const darkAccent = brandTheme.dark.accent
@@ -241,6 +243,16 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                     --theme-secondary: ${lightAccent2};
                     --theme-secondary-rgb: ${palette.secondaryRgb ?? palette.primaryRgb};
                     --theme-secondary-foreground: ${lightOnAccent2};
+                    --sport-100: ${sportTokens.ramp['100']};
+                    --sport-200: ${sportTokens.ramp['200']};
+                    --sport-300: ${sportTokens.ramp['300']};
+                    --sport-400: ${sportTokens.ramp['400']};
+                    --sport-500: ${sportTokens.ramp['500']};
+                    --sport-600: ${sportTokens.ramp['600']};
+                    --sport-700: ${sportTokens.ramp['700']};
+                    --cta-fill: ${sportTokens.ctaFill};
+                    --focus-ring: ${sportTokens.focusRing};
+                    --text-on-sport: ${sportTokens.textOnSport};
                     --brand-font: ${brandFontStack};
                     --coach-loader-variant: '${loaderVariant}';
                     --coach-loader-text: '${safeLoaderText}';
@@ -256,6 +268,9 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                     --primary-foreground: ${darkOnAccent};
                     --theme-secondary: ${darkAccent2};
                     --theme-secondary-foreground: ${darkOnAccent2};
+                    --sport-600: ${sportTokens.dark['600']};
+                    --sport-700: ${sportTokens.dark['700']};
+                    --cta-fill: ${sportTokens.ctaFill};
                 }
             ` }} />
             <div

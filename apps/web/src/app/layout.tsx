@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import {
-  Inter, Montserrat,
+  Inter, Montserrat, Archivo, JetBrains_Mono,
   Plus_Jakarta_Sans, Hanken_Grotesk, Manrope, Poppins, Sora,
   Space_Grotesk, Outfit, Figtree, DM_Sans, Lexend,
 } from 'next/font/google'
@@ -33,6 +33,25 @@ const montserrat = Montserrat({
   variable: '--font-montserrat',
   subsets: ['latin'],
   display: 'swap',
+})
+
+// EVA Design System (token-contract Fase 0) — roles display + mono.
+// Archivo = display/headings (variable 400-900, tracking apretado para números grandes).
+// preload por defecto (es la fuente de display de la cara EVA → candidato LCP del hero).
+// El override per-coach (`--brand-font`) sigue ganando sobre Archivo en `--font-display`.
+const archivo = Archivo({
+  variable: '--font-archivo',
+  subsets: ['latin'],
+  display: 'swap',
+})
+
+// JetBrains Mono = métricas / timers / datos tabulares. No es crítico para LCP → preload:false.
+const jetbrainsMono = JetBrains_Mono({
+  variable: '--font-jetbrains-mono',
+  subsets: ['latin'],
+  display: 'swap',
+  weight: ['400', '500', '700'],
+  preload: false,
 })
 
 // White-label v2 — fuentes curadas (Pro+, decisión CEO 2026-06-21). preload:false es CRÍTICO:
@@ -116,7 +135,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" data-scroll-behavior="smooth" suppressHydrationWarning>
-      <body className={`${inter.variable} ${montserrat.variable} ${BRAND_FONT_VARS} antialiased`} suppressHydrationWarning>
+      <body className={`${inter.variable} ${montserrat.variable} ${archivo.variable} ${jetbrainsMono.variable} ${BRAND_FONT_VARS} antialiased`} suppressHydrationWarning>
         <PostHogProvider>
           <ThemeScriptSuppressor />
           <ThemeProvider

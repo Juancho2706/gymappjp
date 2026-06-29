@@ -9,6 +9,9 @@ docs/BRANDING-IMAGENES-IA.md
 docs/COACH_ONBOARDING_PREMIUM_PLAN.md
 docs/WHITE-LABEL-ROADMAP.md
 
+# ── Snapshot del Design System (referencia local del rediseño; re-pulleable vía claude_design MCP) ──
+docs/design-source/
+
 # ── AI tool configs ──
 .claude/
 

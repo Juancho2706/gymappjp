@@ -12,10 +12,14 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  /* EVA DS (token-contract Fase 0): rol UI/body = Hanken Grotesk (ya cargada como
+     --font-brand-hanken en layout.tsx). Habilita la utilidad `font-ui`. */
+  --font-ui: var(--font-brand-hanken), var(--font-inter), system-ui, -apple-system, sans-serif;
   /* white-label v2: si el coach eligió fuente, --brand-font (lo setea el layout /c) gana; si no,
-     cae a Montserrat → la cara EVA queda byte-idéntica (no se setea --brand-font fuera de /c). */
-  --font-display: var(--brand-font, var(--font-montserrat), var(--font-inter), ui-sans-serif);
-  --font-mono: var(--font-geist-mono);
+     cae a Archivo (display del DS). La cara EVA usa Archivo en headings; los coaches sin fuente
+     custom siguen recibiendo Montserrat vía --brand-font (resolveBrandFontStack, sin cambios). */
+  --font-display: var(--brand-font, var(--font-archivo), var(--font-inter), ui-sans-serif);
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, 'SF Mono', monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -70,6 +74,59 @@
 }
 
 /* ============================================================
+   EVA Design System — Tailwind v4 utility surface (Fase 0)
+   Expone los aliases semánticos + ramps del DS como utilidades
+   (bg/text/border-*, rounded-*, font-*) SIN tocar las utilidades
+   shadcn legacy (esas se remapean por valor más abajo). Migración
+   de componentes a estos nombres = incremental (Fase 1+).
+   ============================================================ */
+@theme inline {
+  /* Surfaces / text / borders → bg-surface-*, text-text-*, border-border-* */
+  --color-surface-app:    var(--surface-app);
+  --color-surface-card:   var(--surface-card);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-text-strong:    var(--text-strong);
+  --color-text-body:      var(--text-body);
+  --color-text-muted:     var(--text-muted);
+  --color-text-subtle:    var(--text-subtle);
+  --color-border-subtle:  var(--border-subtle);
+  --color-border-default: var(--border-default);
+
+  /* Sport ramp (primario — destino del override white-label) → bg-sport-500, etc. */
+  --color-sport-100: var(--sport-100);
+  --color-sport-200: var(--sport-200);
+  --color-sport-300: var(--sport-300);
+  --color-sport-400: var(--sport-400);
+  --color-sport-500: var(--sport-500);
+  --color-sport-600: var(--sport-600);
+  --color-sport-700: var(--sport-700);
+
+  /* Ember ramp (nutrición — fijo) → bg-ember-500, etc. */
+  --color-ember-100: var(--ember-100);
+  --color-ember-200: var(--ember-200);
+  --color-ember-300: var(--ember-300);
+  --color-ember-400: var(--ember-400);
+  --color-ember-500: var(--ember-500);
+  --color-ember-600: var(--ember-600);
+  --color-ember-700: var(--ember-700);
+
+  /* Aqua ramp (recovery — fijo; sin paso 300) → bg-aqua-500, etc. */
+  --color-aqua-100: var(--aqua-100);
+  --color-aqua-200: var(--aqua-200);
+  --color-aqua-400: var(--aqua-400);
+  --color-aqua-500: var(--aqua-500);
+  --color-aqua-600: var(--aqua-600);
+  --color-aqua-700: var(--aqua-700);
+
+  /* Radios semánticos → rounded-card / rounded-control / rounded-pill / rounded-sheet.
+     Valores literales (no var(--radius-lg)) para no colisionar con el --radius-lg legacy. */
+  --radius-card:    20px;
+  --radius-control: 14px;
+  --radius-pill:    999px;
+  --radius-sheet:   28px;
+}
+
+/* ============================================================
    LIGHT MODE (Default / Base)
    ============================================================ */
 :root {
@@ -87,119 +144,441 @@
   --coach-mobile-content-top-offset: calc(env(safe-area-inset-top, 0px) + var(--mobile-top-bar-h));
   --mobile-content-bottom-offset: calc(env(safe-area-inset-bottom, 0px) + var(--mobile-bottom-bar-h));
 
-  /* Pale Grey Background from Brand Guidelines */
-  --background: #F5F5F5;
-  --foreground: #121212;
+  /* shadcn semantic tokens → remapeados a aliases del EVA DS (light).
+     Los NOMBRES shadcn se conservan (componentes actuales siguen compilando);
+     solo cambia el VALOR para apuntar al token semántico del diseño. */
+  --background: var(--surface-app);
+  --foreground: var(--text-body);
 
-  /* Surfaces: Snow White */
-  --card: #FFFFFF;
-  --card-foreground: #121212;
-  --popover: #FFFFFF;
-  --popover-foreground: #121212;
+  /* Surfaces */
+  --card: var(--surface-card);
+  --card-foreground: var(--text-strong);
+  --popover: var(--surface-card);
+  --popover-foreground: var(--text-body);
 
-  /* Accent: Electric Blue (#007AFF) */
-  --primary: var(--theme-primary, #007AFF);
-  --primary-foreground: #FFFFFF;
+  /* Brand / primary — conserva el hook white-label (--theme-primary gana si está seteado) */
+  --primary: var(--theme-primary, var(--brand));
+  --primary-foreground: var(--text-on-sport);
 
-  /* Secondary & Muted for High Density UI */
-  --secondary: #E5E7EB;
-  --secondary-foreground: #121212;
+  /* Secondary & Muted */
+  --secondary: var(--surface-sunken);
+  --secondary-foreground: var(--text-body);
 
-  --muted: #E5E7EB;
-  --muted-foreground: #6B7280;
+  --muted: var(--surface-sunken);
+  --muted-foreground: var(--text-muted);
 
-  --accent: #E5E7EB;
-  --accent-foreground: var(--theme-primary, #007AFF);
+  --accent: var(--surface-sunken);
+  --accent-foreground: var(--theme-primary, var(--brand));
 
   /* State Colors */
-  --destructive: #FF3B30; /* iOS Red for consistency */
+  --destructive: var(--cta-danger);
 
-  /* Borders: Subtly visible on light bg */
-  --border: rgba(0, 0, 0, 0.1);
-  --input: rgba(0, 0, 0, 0.05);
-  --ring: var(--theme-primary, #007AFF);
+  /* Borders */
+  --border: var(--border-subtle);
+  --input: var(--border-default);
+  --ring: var(--focus-ring);
 
-  /* Charts: Primary-aware colors */
-  --chart-1: var(--theme-primary, #007AFF);
-  --chart-2: #00E5FF;
-  --chart-3: #5856D6;
-  --chart-4: #00C7BE;
-  --chart-5: #0040DD;
+  /* Charts → paleta categórica viz del DS (chart-1 conserva hook white-label) */
+  --chart-1: var(--theme-primary, var(--viz-1));
+  --chart-2: var(--viz-2);
+  --chart-3: var(--viz-3);
+  --chart-4: var(--viz-4);
+  --chart-5: var(--viz-5);
 
-  /* Sidebar: Light Look */
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #6B7280;
-  --sidebar-primary: var(--theme-primary, #007AFF);
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #E5E7EB;
-  --sidebar-accent-foreground: #121212;
-  --sidebar-border: rgba(0, 0, 0, 0.08);
-  --sidebar-ring: var(--theme-primary, #007AFF);
+  /* Sidebar */
+  --sidebar: var(--surface-card);
+  --sidebar-foreground: var(--text-muted);
+  --sidebar-primary: var(--theme-primary, var(--brand));
+  --sidebar-primary-foreground: var(--text-on-sport);
+  --sidebar-accent: var(--surface-sunken);
+  --sidebar-accent-foreground: var(--text-strong);
+  --sidebar-border: var(--border-subtle);
+  --sidebar-ring: var(--theme-primary, var(--brand));
 
   --radius: 0.75rem;
 
-  /* White-label variables */
-  --theme-primary: #007AFF;
-  --theme-primary-rgb: 0, 122, 255;
+  /* White-label variables — default EVA ahora = sport-500 (#2680FF) del DS.
+     El layout /c y /coach siguen inyectando --theme-primary por coach (override). */
+  --theme-primary: var(--sport-500);
+  --theme-primary-rgb: 38, 128, 255;
 }
 
 /* ============================================================
    NATIVE DARK MODE
    ============================================================ */
 .dark {
-  /* Deep Charcoal Background */
-  --background: #121212;
-  --foreground: #F8F9FA;
+  /* shadcn semantic tokens → mismos aliases del EVA DS; los aliases flipean a sus
+     valores oscuros en el bloque ".dark — EVA DS overrides" más abajo. */
+  --background: var(--surface-app);
+  --foreground: var(--text-body);
 
-  /* Surfaces: Pure Black or Deep Neutral */
-  --card: #1E1E1E;
-  --card-foreground: #F8F9FA;
-  --popover: #1E1E1E;
-  --popover-foreground: #F8F9FA;
+  /* Surfaces */
+  --card: var(--surface-card);
+  --card-foreground: var(--text-strong);
+  --popover: var(--surface-card);
+  --popover-foreground: var(--text-body);
 
-  /* Accent: follows coach brand color */
-  --primary: var(--theme-primary, #007AFF);
-  --primary-foreground: #FFFFFF;
+  /* Brand / primary — conserva hook white-label */
+  --primary: var(--theme-primary, var(--brand));
+  --primary-foreground: var(--text-on-sport);
 
-  /* Secondary & Muted for High Density UI */
-  --secondary: #27272A;
-  --secondary-foreground: #F8F9FA;
+  /* Secondary & Muted */
+  --secondary: var(--surface-sunken);
+  --secondary-foreground: var(--text-body);
 
-  --muted: #27272A;
-  --muted-foreground: #A1A1AA;
+  --muted: var(--surface-sunken);
+  --muted-foreground: var(--text-muted);
 
-  --accent: #27272A;
-  --accent-foreground: #00E5FF;
+  --accent: var(--surface-sunken);
+  --accent-foreground: var(--theme-primary, var(--brand));
 
   /* State Colors */
-  --destructive: #FF3B30; /* iOS Red for consistency */
+  --destructive: var(--cta-danger);
 
-  /* Borders: Subtly visible on dark bg */
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.05);
-  --ring: var(--theme-primary, #007AFF);
+  /* Borders */
+  --border: var(--border-subtle);
+  --input: var(--border-default);
+  --ring: var(--focus-ring);
 
-  /* Charts: Primary-aware colors */
-  --chart-1: var(--theme-primary, #007AFF);
-  --chart-2: #00E5FF;
-  --chart-3: #5856D6;
-  --chart-4: #00C7BE;
-  --chart-5: #0040DD;
+  /* Charts → paleta viz del DS */
+  --chart-1: var(--theme-primary, var(--viz-1));
+  --chart-2: var(--viz-2);
+  --chart-3: var(--viz-3);
+  --chart-4: var(--viz-4);
+  --chart-5: var(--viz-5);
 
-  /* Sidebar: Unified Deep Look */
-  --sidebar: #121212;
-  --sidebar-foreground: #A1A1AA;
-  --sidebar-primary: var(--theme-primary, #007AFF);
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1E1E1E;
-  --sidebar-accent-foreground: #F8F9FA;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: var(--theme-primary, #007AFF);
+  /* Sidebar */
+  --sidebar: var(--surface-card);
+  --sidebar-foreground: var(--text-muted);
+  --sidebar-primary: var(--theme-primary, var(--brand));
+  --sidebar-primary-foreground: var(--text-on-sport);
+  --sidebar-accent: var(--surface-sunken);
+  --sidebar-accent-foreground: var(--text-strong);
+  --sidebar-border: var(--border-subtle);
+  --sidebar-ring: var(--theme-primary, var(--brand));
 
   /* Compliance ring colors (avoid hydration mismatch) */
   --compliance-ring-trail: #374151;
   --compliance-ring-text: #f9fafb;
   --compliance-ring-text-empty: #9ca3af;
+}
+
+/* ============================================================
+   EVA DESIGN SYSTEM — TOKEN LAYER (Fase 0)
+   Valores verbatim de docs/design-source/tokens/*.css.
+   Ramps base (constantes salvo `sport` = override white-label) +
+   aliases semánticos (light). El .dark los flipea más abajo.
+   Aditivo: no pisa animaciones, glass, safe-area ni macro tokens.
+   ============================================================ */
+:root {
+  /* ---- Ink (cool neutral) ---- */
+  --ink-950: #0B0E13;
+  --ink-900: #12161D;
+  --ink-800: #1B2129;
+  --ink-700: #2A323D;
+  --ink-600: #3D4754;
+  --ink-500: #5A6573;
+  --ink-400: #818C9A;
+  --ink-300: #A8B1BD;
+  --ink-200: #CDD3DB;
+  --ink-100: #E6E9ED;
+  --ink-50:  #F4F6F8;
+  --paper:   #FBFCFD;
+  --white:   #FFFFFF;
+
+  /* ---- Sport (signature primary, performance blue) ---- */
+  --sport-700: #0B47B0;
+  --sport-600: #1462DC;
+  --sport-500: #2680FF;  /* signature / primary */
+  --sport-400: #5C9DFF;
+  --sport-300: #93BEFF;
+  --sport-200: #C5DCFF;
+  --sport-100: #E8F1FF;
+
+  /* ---- Ember (nutrition / warm) ---- */
+  --ember-700: #C23E14;
+  --ember-600: #E8511E;
+  --ember-500: #FF6A3D;
+  --ember-400: #FF8C66;
+  --ember-300: #FFB199;
+  --ember-200: #FFD6C7;
+  --ember-100: #FFEDE6;
+
+  /* ---- Aqua (recovery / cool blue-green support) ---- */
+  --aqua-700: #0A6E8D;
+  --aqua-600: #0E8FB8;
+  --aqua-500: #18ABD4;
+  --aqua-400: #57C7E6;
+  --aqua-200: #BEE8F4;
+  --aqua-100: #E3F5FB;
+
+  /* ---- Semantic status ---- */
+  --success-700: #0E7A50;
+  --success-600: #0F7D50;
+  --success-500: #1FB877;
+  --success-100: #DBF5EA;
+  --warning-700: #8F5A05;
+  --warning-600: #A8690A;
+  --warning-500: #F5A524;
+  --warning-100: #FDEFD3;
+  --danger-700:  #A8163A;
+  --danger-600:  #BE183C;
+  --danger-500:  #F4365A;
+  --danger-100:  #FCDDE4;
+  --info-600:    #1462DC;
+  --info-500:    #2680FF;
+  --info-100:    #E8F1FF;
+
+  /* ============ Semantic aliases (light) ============ */
+  /* Surfaces */
+  --surface-app:      var(--paper);
+  --surface-card:     var(--white);
+  --surface-sunken:   var(--ink-50);
+  --surface-inverse:  var(--ink-950);
+  --surface-inverse-2:var(--ink-900);
+  --surface-overlay:  rgba(11, 14, 19, 0.55);
+
+  /* Text */
+  --text-strong:   var(--ink-950);
+  --text-body:     var(--ink-800);
+  --text-muted:    var(--ink-500);
+  --text-subtle:   #646F7D;
+  --text-on-sport: var(--white);
+  --text-on-success: var(--ink-950);
+  --text-on-warning: var(--ink-950);
+  --text-on-ember:   var(--ink-950);
+  --text-on-dark:  var(--ink-50);
+  --text-on-dark-muted: #939DAB;
+  --text-link:     var(--sport-600);
+
+  /* Borders & dividers */
+  --border-subtle: var(--ink-100);
+  --border-default:var(--ink-200);
+  --border-strong: var(--ink-300);
+  --border-inverse:rgba(255,255,255,0.10);
+
+  /* Neutral track for meters/sparklines (flips in dark mode) */
+  --track: var(--ink-100);
+
+  /* Brand / action */
+  --brand:            var(--sport-500);
+  --brand-strong:     var(--sport-600);
+  --action-primary:   var(--ink-950);
+  --action-primary-hover: var(--ink-800);
+  --cta-fill:    #1A6BE6;
+  --cta-danger:  #D31E45;
+  --accent-training:  var(--sport-500);
+  --accent-nutrition: var(--ember-500);
+  --accent-recovery:  var(--aqua-500);
+
+  /* Focus ring */
+  --focus-ring: rgba(38, 128, 255, 0.40);
+
+  /* Data-viz categorical */
+  --viz-1: var(--sport-500);
+  --viz-2: var(--ember-500);
+  --viz-3: var(--aqua-500);
+  --viz-4: var(--sport-300);
+  --viz-5: var(--ember-300);
+  --viz-6: var(--ink-400);
+
+  /* ============ Typography (familias en @theme: --font-display/-ui/-mono) ============ */
+  /* Weights */
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semibold:600;
+  --fw-bold:    700;
+  --fw-extra:   800;
+  --fw-black:   900;
+
+  /* Type scale (px) */
+  --text-3xs: 11px;
+  --text-2xs: 12px;
+  --text-xs:  13px;
+  --text-sm:  14px;
+  --text-md:  16px;
+  --text-lg:  18px;
+  --text-xl:  21px;
+  --text-2xl: 25px;
+  --text-3xl: 31px;
+  --text-4xl: 39px;
+  --text-5xl: 49px;
+  --text-6xl: 62px;
+
+  /* Line heights */
+  --lh-tight:   1.05;
+  --lh-snug:    1.18;
+  --lh-normal:  1.4;
+  --lh-relaxed: 1.6;
+
+  /* Letter spacing */
+  --ls-tighter: -0.03em;
+  --ls-tight:   -0.015em;
+  --ls-normal:  0;
+  --ls-wide:    0.04em;
+  --ls-eyebrow: 0.12em;
+
+  /* Tabular figures for metrics */
+  --fnum-tabular: "tnum" 1, "lnum" 1;
+
+  /* Semantic roles */
+  --role-display-size:  var(--text-5xl);
+  --role-display-weight:var(--fw-black);
+  --role-h1-size:       var(--text-4xl);
+  --role-h2-size:       var(--text-3xl);
+  --role-h3-size:       var(--text-2xl);
+  --role-title-size:    var(--text-xl);
+  --role-body-size:     var(--text-md);
+  --role-label-size:    var(--text-sm);
+  --role-caption-size:  var(--text-xs);
+  --role-eyebrow-size:  var(--text-2xs);
+
+  /* ============ Spacing & sizing — 4px grid ============ */
+  --space-0:  0;
+  --space-1:  2px;
+  --space-2:  4px;
+  --space-3:  8px;
+  --space-4:  12px;
+  --space-5:  16px;
+  --space-6:  20px;
+  --space-7:  24px;
+  --space-8:  32px;
+  --space-9:  40px;
+  --space-10: 48px;
+  --space-11: 64px;
+  --space-12: 80px;
+  --space-13: 96px;
+
+  --gutter-screen: 20px;
+  --gutter-card:   16px;
+  --max-content:   440px;
+
+  --hit-min: 44px;
+  --control-sm: 36px;
+  --control-md: 48px;
+  --control-lg: 56px;
+
+  --icon-xs: 16px;
+  --icon-sm: 18px;
+  --icon-md: 20px;
+  --icon-lg: 24px;
+  --icon-xl: 32px;
+
+  /* ============ Radius — escala DS (semánticos card/control/pill/sheet en @theme) ============ */
+  /* NOTA: --radius-sm/md/lg/xl/2xl también existen como theme-keys legacy (inline desde
+     --radius); estos valores DS solo afectan a usos directos var(--radius-*), no a las
+     utilidades rounded-* legacy (que inlinean su propio calc). */
+  --radius-xs:   6px;
+  --radius-sm:   10px;
+  --radius-md:   14px;
+  --radius-lg:   20px;
+  --radius-xl:   28px;
+  --radius-2xl:  36px;
+
+  /* ============ Motion ============ */
+  --dur-instant: 80ms;
+  --dur-fast:    140ms;
+  --dur-base:    220ms;
+  --dur-slow:    320ms;
+  --dur-slower:  480ms;
+
+  --ease-out:     cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out:  cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-emphasis:cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --transition-control: all var(--dur-fast) var(--ease-out);
+  --transition-press:   transform var(--dur-instant) var(--ease-out);
+
+  /* ============ Elevation & shadows (cool-tinted) ============ */
+  --shadow-xs:  0 1px 2px rgba(13, 18, 28, 0.06);
+  --shadow-sm:  0 1px 3px rgba(13, 18, 28, 0.08), 0 1px 2px rgba(13, 18, 28, 0.04);
+  --shadow-md:  0 4px 12px rgba(13, 18, 28, 0.08), 0 2px 4px rgba(13, 18, 28, 0.05);
+  --shadow-lg:  0 12px 28px rgba(13, 18, 28, 0.12), 0 4px 10px rgba(13, 18, 28, 0.06);
+  --shadow-xl:  0 24px 56px rgba(13, 18, 28, 0.18), 0 8px 18px rgba(13, 18, 28, 0.08);
+  --shadow-sheet: 0 -8px 40px rgba(13, 18, 28, 0.16);
+  --shadow-inset: inset 0 1px 2px rgba(13, 18, 28, 0.08);
+
+  /* Energy glows */
+  --glow-sport: 0 6px 20px rgba(38, 128, 255, 0.42);
+  --glow-ember: 0 6px 20px rgba(255, 106, 61, 0.40);
+
+  /* Ring for focus / selection */
+  --ring-focus: 0 0 0 3px var(--focus-ring);
+  --ring-brand: 0 0 0 2px var(--sport-500);
+}
+
+/* ============================================================
+   .dark — EVA DS overrides (verbatim de tokens/theme-dark.css,
+   scoped a .dark en vez de [data-theme="dark"]).
+   Solo flipean los aliases; las ramps base quedan constantes
+   salvo los ink-* de chips/tracks/iconos que el diseño re-tunea.
+   ============================================================ */
+.dark {
+  /* Surfaces */
+  --surface-app:      #0A0D12;
+  --surface-card:     #161B22;
+  --surface-sunken:   #1F262F;
+  --surface-inverse:  #16273C;
+  --surface-inverse-2:#0E1722;
+  --surface-overlay:  rgba(0, 0, 0, 0.62);
+
+  /* Text */
+  --text-strong:   #F4F6F8;
+  --text-body:     #CDD3DB;
+  --text-muted:    #8A95A3;
+  --text-subtle:   #86919E;
+  --text-link:     var(--sport-400);
+
+  /* Borders & dividers */
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-default:rgba(255, 255, 255, 0.13);
+  --border-strong: rgba(255, 255, 255, 0.22);
+
+  /* Meters / tracks */
+  --track: rgba(255, 255, 255, 0.10);
+
+  /* Primary action flips from ink to brand so it stays visible on dark */
+  --action-primary:       var(--cta-fill);
+  --action-primary-hover: var(--cta-fill);
+
+  /* Status soft tints — translucent for dark cards */
+  --success-100: rgba(31, 184, 119, 0.18);
+  --warning-100: rgba(245, 165, 36, 0.18);
+  --danger-100:  rgba(244, 54, 90, 0.18);
+  --info-100:    rgba(38, 128, 255, 0.18);
+  --sport-100:   rgba(38, 128, 255, 0.20);
+  --ember-100:   rgba(255, 106, 61, 0.20);
+  --aqua-100:    rgba(24, 171, 212, 0.18);
+
+  /* Soft-chip foregrounds lighten for contrast on dark */
+  --success-700: #6FE3B4;
+  --success-600: #4FD9A0;
+  --warning-700: #FFD489;
+  --warning-600: #FFC861;
+  --danger-700:  #FF9CB0;
+  --danger-600:  #FF7C97;
+  --info-600:    #7FB0FF;
+  --sport-600:   #7FB0FF;
+  --sport-700:   #A9CBFF;
+  --ember-600:   #FF9D7E;
+  --ember-700:   #FFB79E;
+  --aqua-700:    #6FD3EA;
+  --aqua-600:    #6FD3EA;
+
+  /* Neutral soft chip + icon foregrounds flip to light */
+  --ink-100: #232A33;
+  --ink-200: #313A45;
+  --ink-300: #414C5A;
+  --ink-700: #C2C9D2;
+  --ink-800: #DDE2E8;
+
+  /* Dark elevation: lean on borders + a faint lift */
+  --shadow-xs:  0 1px 2px rgba(0,0,0,0.5);
+  --shadow-sm:  0 1px 3px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.04);
+  --shadow-md:  0 6px 16px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05);
+  --shadow-lg:  0 16px 36px rgba(0,0,0,0.66), 0 0 0 1px rgba(255,255,255,0.05);
+  --shadow-xl:  0 28px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06);
 }
 
 /* Force Dark Mode on root since it's native and mandatory */

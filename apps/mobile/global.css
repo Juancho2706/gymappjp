@@ -2,39 +2,225 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Base token values (rgb channels). Mirror lib/theme.ts. Dynamic brand color
-   (coach/org) overrides --color-primary/--color-accent at runtime via vars(). */
+/* ============================================================
+   EVA Design System tokens (rgb channels for rgb(var(--x)/<alpha>)).
+   Mirrors apps/web globals.css + specs/redesign-eva-ds/token-contract.md.
+   Channels are space-separated "r g b" so NativeWind opacity modifiers
+   work (bg-sport-500/40, border-border-subtle/[0.07], ...).
+
+   Dynamic brand color (coach/org) overrides --color-primary / --color-accent
+   / the --color-sport-* ramp at runtime via vars() in ThemeContext.
+
+   Layering of this file:
+     1. Base ramps (ink / sport / ember / aqua / status) — constant across
+        themes except the neutral/status pieces that flip in dark.
+     2. Semantic aliases (surface / text / border / brand / cta / accent).
+     3. Legacy compat names (--color-primary/-background/-card/-foreground/
+        -muted/-border/...) remapped onto the DS aliases so existing
+        components keep compiling.
+   ============================================================ */
 @layer base {
   :root {
-    --color-primary: 0 122 255;
-    --color-primary-foreground: 255 255 255;
-    --color-background: 245 245 245;
-    --color-card: 255 255 255;
-    --color-foreground: 18 18 18;
-    --color-muted: 229 231 235;
-    --color-muted-foreground: 107 114 128;
-    --color-border: 0 0 0;
-    --color-accent: 0 122 255;
-    --color-accent-foreground: 0 122 255;
-    --color-cyan: 0 229 255;
-    --color-destructive: 255 59 48;
-    --color-success: 52 199 89;
+    color-scheme: light;
+
+    /* ---- Ink (cool neutral) ---- */
+    --color-ink-950: 11 14 19;
+    --color-ink-900: 18 22 29;
+    --color-ink-800: 27 33 41;
+    --color-ink-700: 42 50 61;
+    --color-ink-600: 61 71 84;
+    --color-ink-500: 90 101 115;
+    --color-ink-400: 129 140 154;
+    --color-ink-300: 168 177 189;
+    --color-ink-200: 205 211 219;
+    --color-ink-100: 230 233 237;
+    --color-ink-50: 244 246 248;
+    --color-paper: 251 252 253;
+    --color-white: 255 255 255;
+
+    /* ---- Sport (signature primary; white-label overrides 100..700) ---- */
+    --color-sport-700: 11 71 176;
+    --color-sport-600: 20 98 220;
+    --color-sport-500: 38 128 255;
+    --color-sport-400: 92 157 255;
+    --color-sport-300: 147 190 255;
+    --color-sport-200: 197 220 255;
+    --color-sport-100: 232 241 255;
+
+    /* ---- Ember (nutrition / warm) ---- */
+    --color-ember-700: 194 62 20;
+    --color-ember-600: 232 81 30;
+    --color-ember-500: 255 106 61;
+    --color-ember-400: 255 140 102;
+    --color-ember-300: 255 177 153;
+    --color-ember-200: 255 214 199;
+    --color-ember-100: 255 237 230;
+
+    /* ---- Aqua (recovery / cool support) ---- */
+    --color-aqua-700: 10 110 141;
+    --color-aqua-600: 14 143 184;
+    --color-aqua-500: 24 171 212;
+    --color-aqua-400: 87 199 230;
+    --color-aqua-200: 190 232 244;
+    --color-aqua-100: 227 245 251;
+
+    /* ---- Semantic status ---- */
+    --color-success-700: 14 122 80;
+    --color-success-600: 15 125 80;
+    --color-success-500: 31 184 119;
+    --color-success-100: 219 245 234;
+    --color-warning-700: 143 90 5;
+    --color-warning-600: 168 105 10;
+    --color-warning-500: 245 165 36;
+    --color-warning-100: 253 239 211;
+    --color-danger-700: 168 22 58;
+    --color-danger-600: 190 24 60;
+    --color-danger-500: 244 54 90;
+    --color-danger-100: 252 221 228;
+    --color-info-600: 20 98 220;
+    --color-info-500: 38 128 255;
+    --color-info-100: 232 241 255;
+
+    /* ============ Semantic aliases (LIGHT) ============ */
+    /* Surfaces */
+    --color-surface-app: 251 252 253;       /* paper */
+    --color-surface-card: 255 255 255;
+    --color-surface-sunken: 244 246 248;    /* ink-50 */
+    --color-surface-inverse: 11 14 19;      /* ink-950 */
+    --color-surface-inverse-2: 18 22 29;    /* ink-900 */
+    --color-surface-overlay: 11 14 19;      /* apply /55 -> rgba(11,14,19,.55) */
+
+    /* Text */
+    --color-text-strong: 11 14 19;          /* ink-950 */
+    --color-text-body: 27 33 41;            /* ink-800 */
+    --color-text-muted: 90 101 115;         /* ink-500 */
+    --color-text-subtle: 100 111 125;       /* #646F7D */
+    --color-text-on-sport: 255 255 255;
+    --color-text-on-success: 11 14 19;      /* ink glyph on saturated status fills */
+    --color-text-on-warning: 11 14 19;
+    --color-text-on-ember: 11 14 19;
+    --color-text-on-dark: 244 246 248;      /* ink-50 */
+    --color-text-on-dark-muted: 147 157 171;/* #939DAB */
+    --color-text-link: 20 98 220;           /* sport-600 */
+
+    /* Borders & dividers */
+    --color-border-subtle: 230 233 237;     /* ink-100 (solid) */
+    --color-border-default: 205 211 219;    /* ink-200 */
+    --color-border-strong: 168 177 189;     /* ink-300 */
+    --color-border-inverse: 255 255 255;    /* apply /10 -> rgba(255,255,255,.10) */
+
+    /* Neutral track for meters/sparklines (flips in dark) */
+    --color-track: 230 233 237;             /* ink-100 */
+
+    /* Brand / action */
+    --color-brand: 38 128 255;              /* sport-500 */
+    --color-brand-strong: 20 98 220;        /* sport-600 */
+    --color-action-primary: 11 14 19;       /* ink-950 (default solid buttons = ink) */
+    --color-action-primary-hover: 27 33 41; /* ink-800 */
+    --color-cta-fill: 26 107 230;           /* #1A6BE6 (Button variant=sport bg) */
+    --color-cta-danger: 211 30 69;          /* #D31E45 */
+    --color-accent-training: 38 128 255;    /* sport-500 */
+    --color-accent-nutrition: 255 106 61;   /* ember-500 */
+    --color-accent-recovery: 24 171 212;    /* aqua-500 */
+
+    /* Focus ring */
+    --color-focus-ring: 38 128 255;         /* apply /40 -> rgba(38,128,255,.40) */
+
+    /* ============ Legacy compat — existing names remapped to DS aliases ============ */
+    --color-primary: 38 128 255;            /* brand (sport-500); brandVars() overrides at runtime */
+    --color-primary-foreground: 255 255 255;/* text-on-sport */
+    --color-background: 251 252 253;        /* surface-app */
+    --color-card: 255 255 255;              /* surface-card */
+    --color-foreground: 11 14 19;           /* text-strong (preserves existing high-contrast text) */
+    --color-muted: 244 246 248;             /* surface-sunken */
+    --color-muted-foreground: 90 101 115;   /* text-muted */
+    --color-border: 0 0 0;                  /* neutral alpha-base (legacy: used as border-border/N) */
+    --color-accent: 38 128 255;             /* brand; brandVars() overrides */
+    --color-accent-foreground: 38 128 255;  /* brand */
+    --color-cyan: 24 171 212;               /* aqua-500 (recovery) */
+    --color-destructive: 244 54 90;         /* danger-500 */
+    --color-success: 31 184 119;            /* success-500 */
   }
 
   .dark:root,
   .dark {
-    --color-primary: 0 122 255;
+    color-scheme: dark;
+
+    /* Neutral ramp pieces flip (chips / tracks / icon fills) */
+    --color-ink-100: 35 42 51;              /* #232A33 */
+    --color-ink-200: 49 58 69;              /* #313A45 */
+    --color-ink-300: 65 76 90;              /* #414C5A */
+    --color-ink-700: 194 201 210;           /* #C2C9D2 */
+    --color-ink-800: 221 226 232;           /* #DDE2E8 */
+
+    /* Soft-chip status foregrounds lighten for contrast on dark */
+    --color-success-700: 111 227 180;       /* #6FE3B4 */
+    --color-success-600: 79 217 160;        /* #4FD9A0 */
+    --color-warning-700: 255 212 137;       /* #FFD489 */
+    --color-warning-600: 255 200 97;        /* #FFC861 */
+    --color-danger-700: 255 156 176;        /* #FF9CB0 */
+    --color-danger-600: 255 124 151;        /* #FF7C97 */
+    --color-info-600: 127 176 255;          /* #7FB0FF */
+    --color-sport-700: 169 203 255;         /* #A9CBFF */
+    --color-sport-600: 127 176 255;         /* #7FB0FF */
+    --color-ember-600: 255 157 126;         /* #FF9D7E */
+    --color-ember-700: 255 183 158;         /* #FFB79E */
+    --color-aqua-700: 111 211 234;          /* #6FD3EA */
+    --color-aqua-600: 111 211 234;          /* #6FD3EA */
+
+    /* Status soft tints — translucent on dark cards (apply /18..20) */
+    --color-success-100: 31 184 119;        /* rgba(31,184,119,.18) */
+    --color-warning-100: 245 165 36;        /* rgba(245,165,36,.18) */
+    --color-danger-100: 244 54 90;          /* rgba(244,54,90,.18) */
+    --color-info-100: 38 128 255;           /* rgba(38,128,255,.18) */
+    --color-sport-100: 38 128 255;          /* rgba(38,128,255,.20) */
+    --color-ember-100: 255 106 61;          /* rgba(255,106,61,.20) */
+    --color-aqua-100: 24 171 212;           /* rgba(24,171,212,.18) */
+
+    /* ============ Semantic aliases (DARK) ============ */
+    /* Surfaces */
+    --color-surface-app: 10 13 18;          /* #0A0D12 */
+    --color-surface-card: 22 27 34;         /* #161B22 */
+    --color-surface-sunken: 31 38 47;       /* #1F262F */
+    --color-surface-inverse: 22 39 60;      /* #16273C (brand-tinted hero) */
+    --color-surface-inverse-2: 14 23 34;    /* #0E1722 */
+    --color-surface-overlay: 0 0 0;         /* apply /62 -> rgba(0,0,0,.62) */
+
+    /* Text */
+    --color-text-strong: 244 246 248;       /* #F4F6F8 */
+    --color-text-body: 205 211 219;         /* #CDD3DB */
+    --color-text-muted: 138 149 163;        /* #8A95A3 */
+    --color-text-subtle: 134 145 158;       /* #86919E */
+    --color-text-on-dark: 244 246 248;
+    --color-text-on-dark-muted: 147 157 171;
+    --color-text-link: 92 157 255;          /* sport-400 */
+
+    /* Borders & dividers — translucent white (apply alpha; see notes) */
+    --color-border-subtle: 255 255 255;     /* apply /[0.07] */
+    --color-border-default: 255 255 255;    /* apply /[0.13] */
+    --color-border-strong: 255 255 255;     /* apply /[0.22] */
+
+    /* Meters / tracks */
+    --color-track: 255 255 255;             /* apply /[0.10] */
+
+    /* Primary action + strong brand flip to stay visible on dark */
+    --color-action-primary: 26 107 230;     /* cta-fill */
+    --color-action-primary-hover: 26 107 230;
+    --color-brand-strong: 127 176 255;      /* follows sport-600 lighten */
+
+    /* ============ Legacy compat (dark) ============ */
+    --color-primary: 38 128 255;            /* brand; brandVars() overrides */
     --color-primary-foreground: 255 255 255;
-    --color-background: 18 18 18;
-    --color-card: 30 30 30;
-    --color-foreground: 248 249 250;
-    --color-muted: 39 39 42;
-    --color-muted-foreground: 161 161 170;
-    --color-border: 255 255 255;
-    --color-accent: 0 229 255;
-    --color-accent-foreground: 0 229 255;
-    --color-cyan: 0 229 255;
-    --color-destructive: 255 59 48;
-    --color-success: 48 209 88;
+    --color-background: 10 13 18;           /* surface-app */
+    --color-card: 22 27 34;                 /* surface-card */
+    --color-foreground: 244 246 248;        /* text-strong */
+    --color-muted: 31 38 47;                /* surface-sunken */
+    --color-muted-foreground: 138 149 163;  /* text-muted */
+    --color-border: 255 255 255;            /* neutral alpha-base (legacy) */
+    --color-accent: 38 128 255;             /* brand */
+    --color-accent-foreground: 38 128 255;
+    --color-cyan: 24 171 212;
+    --color-destructive: 244 54 90;
+    --color-success: 31 184 119;
   }
 }

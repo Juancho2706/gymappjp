@@ -3,6 +3,8 @@ import {
     clampAccent,
     contrastRatio,
     contrastReport,
+    deriveSportRamp,
+    deriveSportTokens,
     isThemeReadable,
     pickOnColor,
     resolveBrandTheme,
@@ -98,5 +100,94 @@ describe('resolveBrandTheme — color2 / accent2 (white-label v2)', () => {
         const t = resolveBrandTheme({ brandColor: '#8B5CF6', secondaryLight: '#fafafa', secondaryDark: '#050505' })
         expect(contrastRatio(t.light.accent2, t.light.bg)).toBeGreaterThanOrEqual(3)
         expect(contrastRatio(t.dark.accent2, t.dark.bg)).toBeGreaterThanOrEqual(3)
+    })
+})
+
+// ────────────────────────────────────────────────────────────────────────────
+// D2 — White-label SPORT ramp (--sport-100..700) — token-contract §7
+// ────────────────────────────────────────────────────────────────────────────
+describe('deriveSportRamp / deriveSportTokens (D2 white-label sport ramp)', () => {
+    // design `--surface-app`: light = paper, dark = #0A0D12
+    const SURFACE_LIGHT = '#FBFCFD'
+    const SURFACE_DARK = '#0A0D12'
+    const WHITE = '#ffffff' // --text-on-sport
+    const RAMP_KEYS = ['100', '200', '300', '400', '500', '600', '700'] as const
+
+    const brands: Record<string, string> = {
+        'EVA default (#2680FF)': '#2680FF',
+        'system blue (#007AFF)': '#007AFF',
+        'green (#10B981)': '#10B981',
+        'magenta (#C026D3)': '#C026D3',
+    }
+
+    for (const [name, brand] of Object.entries(brands)) {
+        describe(name, () => {
+            const ramp = deriveSportRamp(brand)
+            const tokens = deriveSportTokens(brand)
+
+            it('500 === brand exactly (verbatim)', () => {
+                expect(ramp['500']).toBe(brand)
+                expect(tokens.ramp['500']).toBe(brand)
+            })
+
+            it('exposes all 7 ramp keys + ctaFill + focusRing + textOnSport + dark', () => {
+                for (const k of RAMP_KEYS) {
+                    expect(typeof ramp[k]).toBe('string')
+                    expect(ramp[k]).toMatch(/^#/)
+                }
+                expect(tokens.ctaFill).toMatch(/^#/)
+                expect(tokens.focusRing).toMatch(/^rgba\(/)
+                expect(tokens.focusRing).toContain('0.4') // brand @ 0.40 alpha
+                expect(typeof tokens.textOnSport).toBe('string')
+                expect(typeof tokens.dark['600']).toBe('string')
+                expect(typeof tokens.dark['700']).toBe('string')
+            })
+
+            it('600/700 pass AA (>=4.5:1) as text/CTA on the LIGHT surface (#FBFCFD)', () => {
+                expect(contrastRatio(ramp['600'], SURFACE_LIGHT)).toBeGreaterThanOrEqual(4.5)
+                expect(contrastRatio(ramp['700'], SURFACE_LIGHT)).toBeGreaterThanOrEqual(4.5)
+            })
+
+            it('600/700 + ctaFill are white-text safe (--text-on-sport white, >=4.5:1)', () => {
+                expect(contrastRatio(ramp['600'], WHITE)).toBeGreaterThanOrEqual(4.5)
+                expect(contrastRatio(ramp['700'], WHITE)).toBeGreaterThanOrEqual(4.5)
+                expect(contrastRatio(tokens.ctaFill, WHITE)).toBeGreaterThanOrEqual(4.5)
+                // textOnSport is genuinely legible on the fill it labels
+                expect(contrastRatio(tokens.textOnSport, tokens.ctaFill)).toBeGreaterThanOrEqual(4.5)
+            })
+
+            it('light tints 100/200 are legible foregrounds on the DARK surface (#0A0D12, >=4.5:1)', () => {
+                expect(contrastRatio(ramp['100'], SURFACE_DARK)).toBeGreaterThanOrEqual(4.5)
+                expect(contrastRatio(ramp['200'], SURFACE_DARK)).toBeGreaterThanOrEqual(4.5)
+            })
+
+            it('light tints 100/200 carry legible dark text (chip bg, >=4.5:1)', () => {
+                expect(contrastRatio(ramp['100'], pickOnColor(ramp['100']))).toBeGreaterThanOrEqual(4.5)
+                expect(contrastRatio(ramp['200'], pickOnColor(ramp['200']))).toBeGreaterThanOrEqual(4.5)
+            })
+
+            it('dark-mode sport foregrounds pass AA on the DARK surface (#0A0D12, >=4.5:1)', () => {
+                expect(contrastRatio(tokens.dark['600'], SURFACE_DARK)).toBeGreaterThanOrEqual(4.5)
+                expect(contrastRatio(tokens.dark['700'], SURFACE_DARK)).toBeGreaterThanOrEqual(4.5)
+            })
+
+            it('is deterministic (web/RN parity)', () => {
+                expect(deriveSportTokens(brand)).toEqual(deriveSportTokens(brand))
+            })
+        })
+    }
+
+    it('focusRing encodes the brand RGB at 0.40 alpha (default #2680FF → 38,128,255)', () => {
+        expect(deriveSportTokens('#2680FF').focusRing).toBe('rgba(38, 128, 255, 0.4)')
+    })
+
+    it('survives achromatic / extreme brand inputs (no throw, still WCAG-safe)', () => {
+        for (const brand of ['#808080', '#000000', '#ffffff']) {
+            const t = deriveSportTokens(brand)
+            expect(t.ramp['500']).toBe(brand)
+            expect(contrastRatio(t.ctaFill, '#ffffff')).toBeGreaterThanOrEqual(4.5)
+            expect(contrastRatio(t.ramp['100'], '#0A0D12')).toBeGreaterThanOrEqual(4.5)
+            expect(contrastRatio(t.dark['600'], '#0A0D12')).toBeGreaterThanOrEqual(4.5)
+        }
     })
 })
