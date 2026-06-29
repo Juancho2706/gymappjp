@@ -1,12 +1,26 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Modal, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
-import { Check, Share2, Trophy, X, Zap } from 'lucide-react-native'
+import { Check, Share2 } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { Confetti } from 'react-native-fast-confetti'
 import { useTheme } from '../../context/ThemeContext'
 import { useEvaMotion } from '../../lib/motion'
 import { haptics } from '../../lib/haptics'
 import { AnimatedNumber } from '../AnimatedNumber'
+
+// Immersive "gym mode" palette — the summary is always-dark (1:1 with web
+// WorkoutSummaryOverlay on ink-950). Brand accent stays white-label aware.
+const INK_950 = '#0B0E13'
+const INK_900 = '#12161D'
+const BORDER_INV = 'rgba(255,255,255,0.10)'
+const ON_DARK = '#F4F6F8'
+const ON_DARK_MUTED = '#939DAB'
+const W08 = 'rgba(255,255,255,0.08)'
+const W10 = 'rgba(255,255,255,0.10)'
+
+const FONT_DISPLAY = 'Archivo_900Black'
+const FONT_BOLD = 'HankenGrotesk_700Bold'
+const FONT_MONO = 'JetBrainsMono_700Bold'
 
 interface LogEntry {
   blockId: string
@@ -106,71 +120,66 @@ export function WorkoutSummaryModal({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
-      <View style={[styles.root, { backgroundColor: theme.background }]}>
+      <View style={[styles.root, { backgroundColor: INK_950 }]}>
         {/* Deleite: ráfaga de confetti del color de marca (respeta reduce-motion). */}
         {visible && !motion.reduced ? (
           <Confetti autoplay fadeOutOnEnd colors={[theme.primary, '#F59E0B', '#10B981', theme.cyan]} />
         ) : null}
 
         {/* Sheet close handle */}
-        <View style={[styles.handle, { backgroundColor: theme.border }]} />
+        <View style={[styles.handle, { backgroundColor: W10 }]} />
 
         {/* Dismiss button */}
         {onClose && (
-          <TouchableOpacity style={[styles.closeBtn, { backgroundColor: theme.secondary }]} onPress={onClose} activeOpacity={0.7}>
-            <X size={16} color={theme.mutedForeground} />
+          <TouchableOpacity style={[styles.closeBtn, { backgroundColor: W08 }]} onPress={onClose} activeOpacity={0.7}>
+            <Text style={[styles.closeGlyph, { color: ON_DARK }]}>✕</Text>
           </TouchableOpacity>
         )}
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* Header */}
           <View style={styles.header}>
-            <View style={styles.iconRow}>
-              <View style={[styles.iconWrap, { backgroundColor: '#F59E0B22', borderRadius: 40 }]}>
-                <Trophy size={28} color="#F59E0B" />
-              </View>
-              <View style={[styles.iconWrap, { backgroundColor: theme.primary + '18', borderRadius: 40 }]}>
-                <Zap size={28} color={theme.primary} />
-              </View>
+            <View style={[styles.iconWrap, { backgroundColor: theme.primary }, theme.shadowGlowBlue]}>
+              <Check size={38} color={theme.primaryForeground} strokeWidth={2.5} />
             </View>
-            <Text style={[styles.headline, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+            <Text style={[styles.headline, { color: ON_DARK, fontFamily: FONT_DISPLAY }]}>
               ¡Sesión completada!
             </Text>
-            <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            <Text style={[styles.subtitle, { color: ON_DARK_MUTED, fontFamily: theme.fontSans }]}>
               {planTitle}
             </Text>
           </View>
 
           {/* Stats */}
           <View style={styles.statsRow}>
-            <StatCard label="Sets" value={stats.completedSets} theme={theme} />
+            <StatCard label="Series" value={stats.completedSets} theme={theme} />
             <StatCard label="Reps" value={stats.totalReps} theme={theme} />
-            <StatCard label="Volumen" value={Math.round(stats.totalVolume)} suffix=" kg" theme={theme} />
+            <StatCard label="Volumen kg" value={Math.round(stats.totalVolume)} theme={theme} />
           </View>
 
           {/* Exercise breakdown */}
           {exerciseBreakdown.length > 0 && (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
+              <Text style={[styles.sectionTitle, { color: ON_DARK_MUTED, fontFamily: FONT_BOLD }]}>
                 Por ejercicio
               </Text>
               {exerciseBreakdown.map((ex, i) => (
-                <View key={`${ex.name}-${i}`} style={[styles.exRow, { borderColor: theme.border, backgroundColor: theme.card }]}>
+                <View key={`${ex.name}-${i}`} style={[styles.exRow, { borderColor: BORDER_INV, backgroundColor: INK_900 }]}>
                   <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={[styles.exName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+                    <Text style={[styles.exName, { color: ON_DARK, fontFamily: FONT_BOLD }]}>
                       {ex.name}
                     </Text>
-                    <Text style={[styles.exMuscle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                    <Text style={[styles.exMuscle, { color: ON_DARK_MUTED, fontFamily: theme.fontSans }]}>
                       {ex.muscleGroup}
                     </Text>
                   </View>
-                  <Text style={[styles.exMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                    <Text style={{ color: theme.foreground, fontFamily: 'Montserrat_700Bold' }}>{ex.sets}</Text>
+                  <Text style={[styles.exMeta, { color: ON_DARK_MUTED, fontFamily: FONT_MONO }]}>
+                    <Text style={{ color: ON_DARK, fontFamily: FONT_MONO }}>{ex.sets}</Text>
                     {' series'}
                     {ex.volume > 0 ? (
                       <>
                         {' · '}
-                        <Text style={{ color: theme.foreground, fontFamily: 'Montserrat_700Bold' }}>
+                        <Text style={{ color: ON_DARK, fontFamily: FONT_MONO }}>
                           {Math.round(ex.volume)}
                         </Text>
                         {' kg'}
@@ -184,19 +193,19 @@ export function WorkoutSummaryModal({
 
           {/* Muscle group bars */}
           {muscleGroupVolume.length > 0 && (
-            <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
+            <View style={[styles.section, styles.muscleCard, { backgroundColor: INK_900, borderColor: BORDER_INV }]}>
+              <Text style={[styles.sectionTitle, { color: ON_DARK_MUTED, fontFamily: FONT_BOLD }]}>
                 Volumen por grupo
               </Text>
               {muscleGroupVolume.map(({ group, vol, pct }) => (
                 <View key={group} style={styles.barRow}>
                   <View style={styles.barHeader}>
-                    <Text style={[styles.barLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>{group}</Text>
-                    <Text style={[styles.barValue, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                    <Text style={[styles.barLabel, { color: ON_DARK, fontFamily: theme.fontSans }]}>{group}</Text>
+                    <Text style={[styles.barValue, { color: ON_DARK_MUTED, fontFamily: FONT_MONO }]}>
                       {Math.round(vol)} kg
                     </Text>
                   </View>
-                  <View style={[styles.barTrack, { backgroundColor: theme.border }]}>
+                  <View style={[styles.barTrack, { backgroundColor: W10 }]}>
                     <View style={[styles.barFill, { backgroundColor: theme.primary, width: `${pct}%` as any }]} />
                   </View>
                 </View>
@@ -206,30 +215,30 @@ export function WorkoutSummaryModal({
         </ScrollView>
 
         {/* Actions */}
-        <View style={[styles.actions, { borderTopColor: theme.border, backgroundColor: theme.background }]}>
+        <View style={[styles.actions, { borderTopColor: BORDER_INV, backgroundColor: INK_950 }]}>
           <TouchableOpacity
-            style={[styles.shareBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
+            style={[styles.shareBtn, { borderColor: BORDER_INV, backgroundColor: W08 }]}
             onPress={handleShare}
             activeOpacity={0.7}
           >
             {shared ? (
               <>
-                <Check size={16} color={theme.success} />
-                <Text style={[styles.shareBtnLabel, { color: theme.success, fontFamily: theme.fontSans }]}>Copiado</Text>
+                <Check size={16} color={theme.primary} />
+                <Text style={[styles.shareBtnLabel, { color: ON_DARK, fontFamily: FONT_BOLD }]}>Copiado</Text>
               </>
             ) : (
               <>
-                <Share2 size={16} color={theme.foreground} />
-                <Text style={[styles.shareBtnLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>Compartir logro</Text>
+                <Share2 size={16} color={ON_DARK} />
+                <Text style={[styles.shareBtnLabel, { color: ON_DARK, fontFamily: FONT_BOLD }]}>Compartir</Text>
               </>
             )}
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.doneBtn, { backgroundColor: theme.primary }]}
+            style={[styles.doneBtn, { backgroundColor: theme.primary }, theme.shadowGlowBlue]}
             onPress={onDone}
             activeOpacity={0.85}
           >
-            <Text style={[styles.doneBtnLabel, { fontFamily: 'Montserrat_700Bold' }]}>Volver al inicio</Text>
+            <Text style={[styles.doneBtnLabel, { color: theme.primaryForeground, fontFamily: FONT_BOLD }]}>Volver al inicio</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -237,15 +246,15 @@ export function WorkoutSummaryModal({
   )
 }
 
-function StatCard({ label, value, suffix, theme }: { label: string; value: number; suffix?: string; theme: any }) {
+function StatCard({ label, value, theme }: { label: string; value: number; theme: any }) {
   return (
-    <View style={[styles.statCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
-      <Text style={[styles.statLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+    <View style={[styles.statCard, { borderColor: BORDER_INV, backgroundColor: INK_900 }]}>
       <AnimatedNumber
         value={value}
-        format={(n) => `${Math.round(n)}${suffix ?? ''}`}
-        style={[styles.statValue, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}
+        format={(n) => `${Math.round(n)}`}
+        style={[styles.statValue, { color: theme.primary, fontFamily: FONT_MONO }]}
       />
+      <Text style={[styles.statLabel, { color: ON_DARK_MUTED, fontFamily: theme.fontSans }]}>{label}</Text>
     </View>
   )
 }
@@ -257,25 +266,26 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 16,
     right: 16,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
   },
-  scroll: { padding: 24, paddingBottom: 16, gap: 20 },
-  header: { alignItems: 'center', gap: 10, paddingTop: 8 },
-  iconRow: { flexDirection: 'row', gap: 10 },
-  iconWrap: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
-  headline: { fontSize: 22, letterSpacing: -0.3, textAlign: 'center' },
-  subtitle: { fontSize: 14, textAlign: 'center', opacity: 0.8 },
-  statsRow: { flexDirection: 'row', gap: 8 },
-  statCard: { flex: 1, borderRadius: 12, borderWidth: 1, padding: 12, alignItems: 'center', gap: 3 },
-  statLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.8 },
-  statValue: { fontSize: 18 },
+  closeGlyph: { fontSize: 16, fontFamily: 'HankenGrotesk_700Bold' },
+  scroll: { padding: 20, paddingBottom: 16, gap: 16 },
+  header: { alignItems: 'center', gap: 8, paddingTop: 24, paddingBottom: 8 },
+  iconWrap: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  headline: { fontSize: 27, letterSpacing: -0.4, textAlign: 'center' },
+  subtitle: { fontSize: 14.5, textAlign: 'center' },
+  statsRow: { flexDirection: 'row', gap: 10 },
+  statCard: { flex: 1, borderRadius: 14, borderWidth: 1, paddingVertical: 16, paddingHorizontal: 10, alignItems: 'center', gap: 3 },
+  statLabel: { fontSize: 11 },
+  statValue: { fontSize: 24 },
   section: { gap: 8 },
-  sectionTitle: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.2 },
+  sectionTitle: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.6 },
+  muscleCard: { borderWidth: 1, borderRadius: 20, padding: 16 },
   exRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -285,8 +295,8 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 8,
   },
-  exName: { fontSize: 13 },
-  exMuscle: { fontSize: 11 },
+  exName: { fontSize: 14 },
+  exMuscle: { fontSize: 11.5 },
   exMeta: { fontSize: 12 },
   barRow: { gap: 5 },
   barHeader: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -299,17 +309,19 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     gap: 10,
     borderTopWidth: 1,
+    flexDirection: 'row',
   },
   shareBtn: {
-    height: 44,
-    borderRadius: 12,
+    height: 52,
+    paddingHorizontal: 18,
+    borderRadius: 14,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
-  shareBtnLabel: { fontSize: 14 },
-  doneBtn: { height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  doneBtnLabel: { fontSize: 16, color: '#fff' },
+  shareBtnLabel: { fontSize: 15 },
+  doneBtn: { flex: 1, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  doneBtnLabel: { fontSize: 16 },
 })

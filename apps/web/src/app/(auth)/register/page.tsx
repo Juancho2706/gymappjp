@@ -46,9 +46,8 @@ function SubmitButton({ isFreeTier }: { isFreeTier: boolean }) {
             type="submit"
             disabled={pending}
             className={cn(
-                'w-full h-12 text-base font-semibold rounded-xl transition-all duration-200',
-                'bg-primary hover:opacity-90 text-primary-foreground',
-                'shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30',
+                'w-full h-12 text-base font-bold tracking-[-0.01em] rounded-control transition-all duration-200 active:scale-[0.98]',
+                'bg-[var(--cta-fill)] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)]',
                 'disabled:opacity-60 disabled:cursor-not-allowed'
             )}
         >
@@ -197,10 +196,10 @@ export default function RegisterPage() {
         <div className="w-full max-w-md mx-auto animate-slide-up">
             {/* Header */}
             <div className="text-center mb-8 flex flex-col items-center">
-                <h1 className="text-3xl font-extrabold tracking-tight text-foreground font-display">
+                <h1 className="text-3xl font-black tracking-[-0.03em] text-text-strong font-display">
                     Crea tu cuenta
                 </h1>
-                <p className="mt-2 text-muted-foreground text-sm">
+                <p className="mt-2 text-text-muted text-sm">
                     {fromGoogle && step === 1
                         ? 'Paso 1 de 3 — Un solo dato más y listo'
                         : isFreeTier
@@ -210,7 +209,7 @@ export default function RegisterPage() {
             </div>
 
             {/* Card */}
-            <div className="bg-card border border-border rounded-2xl p-8 shadow-sm">
+            <div className="bg-surface-card border border-border-subtle rounded-card p-8 shadow-[var(--shadow-sm)]">
                 <form action={fromGoogle ? googleFormAction : formAction} className="space-y-4">
                     <input type="hidden" name="subscription_tier" value={tier} />
                     <input type="hidden" name="billing_cycle" value={billingCycle} />
@@ -246,8 +245,8 @@ export default function RegisterPage() {
                             <div
                                 key={s}
                                 className={cn(
-                                    'h-2 flex-1 rounded-full',
-                                    step >= s ? 'bg-primary' : 'bg-border'
+                                    'h-1.5 flex-1 rounded-pill transition-colors duration-300',
+                                    step >= s ? 'bg-sport-500' : 'bg-surface-sunken'
                                 )}
                             />
                         ))}
@@ -256,24 +255,24 @@ export default function RegisterPage() {
                     {step === 1 ? (
                         <>
                     {fromGoogle && email && (
-                        <div className="flex items-center gap-2 rounded-xl bg-secondary/60 border border-border px-3 py-2 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-2 rounded-control bg-surface-sunken border border-border-subtle px-3 py-2 text-xs text-text-muted">
                             <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
                                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
                                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                             </svg>
-                            <span>Cuenta Google: <strong className="text-foreground">{email}</strong></span>
+                            <span>Cuenta Google: <strong className="text-text-strong">{email}</strong></span>
                         </div>
                     )}
 
                     {/* Full Name */}
                     <div className="space-y-1.5">
-                        <label htmlFor="full_name" className="text-foreground text-sm font-medium">
+                        <label htmlFor="full_name" className="text-text-strong text-[13px] font-semibold">
                             Nombre completo
                         </label>
                         <div className="relative">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
                             <input
                                 id="full_name"
                                 name={fromGoogle ? undefined : 'full_name'}
@@ -282,18 +281,18 @@ export default function RegisterPage() {
                                 required
                                 value={fullName}
                                 onChange={(event) => setFullName(event.target.value)}
-                                className="w-full pl-10 h-12 bg-secondary border border-border text-foreground rounded-xl placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                                className="w-full pl-10 h-12 bg-surface-card border-[1.5px] border-border-default text-text-strong text-[15px] font-medium rounded-control placeholder:text-text-muted focus:border-sport-600 focus:shadow-[var(--ring-focus)] transition-all outline-none"
                             />
                         </div>
                     </div>
 
                     {/* Brand Name */}
                     <div className="space-y-1.5">
-                        <label htmlFor="brand_name" className="text-foreground text-sm font-medium">
+                        <label htmlFor="brand_name" className="text-text-strong text-[13px] font-semibold">
                             Nombre de tu marca
                         </label>
                         <div className="relative">
-                            <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                            <Store className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
                             <input
                                 id="brand_name"
                                 name={fromGoogle ? undefined : 'brand_name'}
@@ -302,7 +301,7 @@ export default function RegisterPage() {
                                 required
                                 value={brandName}
                                 onChange={(event) => setBrandName(event.target.value)}
-                                className="w-full pl-10 h-12 bg-secondary border border-border text-foreground rounded-xl placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                                className="w-full pl-10 h-12 bg-surface-card border-[1.5px] border-border-default text-text-strong text-[15px] font-medium rounded-control placeholder:text-text-muted focus:border-sport-600 focus:shadow-[var(--ring-focus)] transition-all outline-none"
                             />
                         </div>
                         <p className="text-xs text-muted-foreground pl-1">
@@ -314,11 +313,11 @@ export default function RegisterPage() {
                     {!fromGoogle && (
                         <>
                         <div className="space-y-1.5">
-                            <label htmlFor="email" className="text-foreground text-sm font-medium">
+                            <label htmlFor="email" className="text-text-strong text-[13px] font-semibold">
                                 Email
                             </label>
                             <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
                                 <input
                                     id="email"
                                     name="email"
@@ -328,16 +327,16 @@ export default function RegisterPage() {
                                     required
                                     value={email}
                                     onChange={(event) => setEmail(event.target.value)}
-                                    className="w-full pl-10 h-12 bg-secondary border border-border text-foreground rounded-xl placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                                    className="w-full pl-10 h-12 bg-surface-card border-[1.5px] border-border-default text-text-strong text-[15px] font-medium rounded-control placeholder:text-text-muted focus:border-sport-600 focus:shadow-[var(--ring-focus)] transition-all outline-none"
                                 />
                             </div>
                         </div>
                         <div className="space-y-1.5">
-                            <label htmlFor="password" className="text-foreground text-sm font-medium">
+                            <label htmlFor="password" className="text-text-strong text-[13px] font-semibold">
                                 Contraseña
                             </label>
                             <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
                                 <input
                                     id="password"
                                     name="password"
@@ -348,9 +347,38 @@ export default function RegisterPage() {
                                     minLength={8}
                                     value={password}
                                     onChange={(event) => setPassword(event.target.value)}
-                                    className="w-full pl-10 h-12 bg-secondary border border-border text-foreground rounded-xl placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                                    className="w-full pl-10 h-12 bg-surface-card border-[1.5px] border-border-default text-text-strong text-[15px] font-medium rounded-control placeholder:text-text-muted focus:border-sport-600 focus:shadow-[var(--ring-focus)] transition-all outline-none"
                                 />
                             </div>
+                            {password.length > 0 && (() => {
+                                const checks = [password.length >= 8, /\d/.test(password), /[a-zA-Z]/.test(password)]
+                                const score = checks.filter(Boolean).length
+                                return (
+                                    <div className="mt-2">
+                                        <div className="flex gap-1">
+                                            {[0, 1, 2].map((i) => (
+                                                <div
+                                                    key={i}
+                                                    className="h-1 flex-1 rounded-pill"
+                                                    style={{
+                                                        background:
+                                                            i < score
+                                                                ? score === 3
+                                                                    ? 'var(--success-500)'
+                                                                    : score === 2
+                                                                        ? 'var(--warning-500)'
+                                                                        : 'var(--danger-500)'
+                                                                : 'var(--surface-sunken)',
+                                                    }}
+                                                />
+                                            ))}
+                                        </div>
+                                        <p className="mt-1.5 text-[11px] text-text-muted">
+                                            {score === 3 ? 'Contraseña segura ✓' : '8+ caracteres con letras y números.'}
+                                        </p>
+                                    </div>
+                                )
+                            })()}
                         </div>
                         </>
                     )}
@@ -377,45 +405,45 @@ export default function RegisterPage() {
                                                 type="button"
                                                 onClick={() => setTier(key)}
                                                 className={cn(
-                                                    'rounded-xl border p-3 text-left transition',
+                                                    'rounded-card border-[1.5px] p-3.5 text-left transition',
                                                     tier === key
-                                                        ? 'border-primary bg-primary/10'
+                                                        ? 'border-sport-500 bg-sport-100 shadow-[var(--glow-sport)]'
                                                         : isPopular
-                                                            ? 'border-primary/50 hover:border-primary/70'
-                                                            : 'border-border hover:border-primary/40'
+                                                            ? 'border-sport-500/50 hover:border-sport-500/70'
+                                                            : 'border-border-subtle hover:border-sport-500/40'
                                                 )}
                                             >
                                                 <div className="flex items-start justify-between gap-2">
                                                     <div className="flex items-center gap-1.5">
-                                                        <p className="font-semibold text-foreground">{option.label}</p>
+                                                        <p className="font-semibold text-text-strong">{option.label}</p>
                                                         {isFree && (
-                                                            <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-slate-500/15 text-slate-600 dark:text-slate-400">
+                                                            <span className="rounded-pill px-1.5 py-0.5 text-[10px] font-bold bg-[var(--success-100)] text-[var(--success-600)]">
                                                                 Gratis para siempre
                                                             </span>
                                                         )}
                                                         {isPopular && (
-                                                            <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-violet-500/15 text-violet-600 dark:text-violet-400">
+                                                            <span className="rounded-pill px-1.5 py-0.5 text-[10px] font-bold bg-sport-500 text-[var(--text-on-sport)]">
                                                                 Más popular
                                                             </span>
                                                         )}
                                                     </div>
                                                     <span
                                                         className={cn(
-                                                            'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold',
+                                                            'shrink-0 rounded-pill px-1.5 py-0.5 text-[10px] font-bold',
                                                             caps.canUseNutrition
-                                                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                                                                : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                                                                ? 'bg-[var(--success-100)] text-[var(--success-600)]'
+                                                                : 'bg-[var(--warning-100)] text-[var(--warning-700)]'
                                                         )}
                                                     >
                                                         {nutritionText}
                                                     </span>
                                                 </div>
-                                                <p className="text-xs text-muted-foreground mt-0.5">
+                                                <p className="text-xs text-text-muted mt-0.5">
                                                     Hasta {option.maxClients} alumnos · {cycleText}
                                                 </p>
-                                                <p className="text-sm text-foreground mt-1 font-medium">
+                                                <p className="text-sm text-text-body mt-1 font-medium">
                                                     {isFree ? (
-                                                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">$0 · Sin tarjeta</span>
+                                                        <span className="text-[var(--success-600)] font-bold">$0 · Sin tarjeta</span>
                                                     ) : (
                                                         <>
                                                             ${displayPrice.toLocaleString('es-CL')} CLP /{' '}
@@ -439,14 +467,14 @@ export default function RegisterPage() {
                                                 type="button"
                                                 onClick={() => setBillingCycle(key)}
                                                 className={cn(
-                                                    'rounded-xl border p-3 text-left transition',
+                                                    'rounded-card border-[1.5px] p-3 text-left transition',
                                                     billingCycle === key
-                                                        ? 'border-primary bg-primary/10'
-                                                        : 'border-border hover:border-primary/40'
+                                                        ? 'border-sport-500 bg-sport-100'
+                                                        : 'border-border-subtle hover:border-sport-500/40'
                                                 )}
                                             >
-                                                <p className="font-semibold text-foreground text-sm">{option.label}</p>
-                                                <p className="text-xs text-muted-foreground">
+                                                <p className="font-semibold text-text-strong text-sm">{option.label}</p>
+                                                <p className="text-xs text-text-muted">
                                                     {option.discountPercent > 0 ? `Ahorro ${option.discountPercent}%` : 'Sin descuento'}
                                                 </p>
                                             </button>
@@ -471,12 +499,12 @@ export default function RegisterPage() {
                                                 <label
                                                     key={key}
                                                     className={cn(
-                                                        'flex items-start gap-2 rounded-xl border p-3 text-left transition',
+                                                        'flex items-start gap-2 rounded-control border-[1.5px] p-3 text-left transition',
                                                         requiresNutrition
-                                                            ? 'border-border opacity-60'
+                                                            ? 'border-border-subtle opacity-60'
                                                             : checked
-                                                                ? 'border-primary bg-primary/10 cursor-pointer'
-                                                                : 'border-border hover:border-primary/40 cursor-pointer'
+                                                                ? 'border-sport-500 bg-sport-100 cursor-pointer'
+                                                                : 'border-border-subtle hover:border-sport-500/40 cursor-pointer'
                                                     )}
                                                 >
                                                     <input
@@ -488,18 +516,18 @@ export default function RegisterPage() {
                                                                 e.target.checked ? [...prev, key] : prev.filter((k) => k !== key)
                                                             )
                                                         }
-                                                        className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
+                                                        className="mt-0.5 h-4 w-4 rounded border-border-default accent-[var(--sport-500)] shrink-0"
                                                     />
                                                     <span className="min-w-0 flex-1">
                                                         <span className="flex items-center justify-between gap-2">
-                                                            <span className="font-semibold text-foreground text-sm">{cfg.label}</span>
-                                                            <span className="text-xs font-semibold text-foreground shrink-0">
+                                                            <span className="font-semibold text-text-strong text-sm">{cfg.label}</span>
+                                                            <span className="text-xs font-semibold text-text-strong shrink-0">
                                                                 ${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes
                                                             </span>
                                                         </span>
-                                                        <span className="block text-xs text-muted-foreground mt-0.5">{cfg.description}</span>
+                                                        <span className="block text-xs text-text-muted mt-0.5">{cfg.description}</span>
                                                         {requiresNutrition && (
-                                                            <span className="mt-1 inline-block text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                                                            <span className="mt-1 inline-block text-[11px] font-semibold text-[var(--warning-700)]">
                                                                 Requiere un plan con nutrición (Pro o superior).
                                                             </span>
                                                         )}
@@ -509,38 +537,38 @@ export default function RegisterPage() {
                                         })}
                                     </div>
                                     {selectedAddons.length > 0 && (
-                                        <div className="rounded-xl border border-border bg-secondary/40 p-3 text-sm">
-                                            <div className="flex justify-between font-semibold text-foreground">
+                                        <div className="rounded-control border border-border-subtle bg-surface-sunken p-3 text-sm">
+                                            <div className="flex justify-between font-semibold text-text-strong">
                                                 <span>Total {BILLING_CYCLE_CONFIG[billingCycle].label.toLowerCase()}</span>
                                                 <span>${liveTotal.toLocaleString('es-CL')} CLP</span>
                                             </div>
-                                            <p className="mt-1 text-xs text-muted-foreground">Plan ${selectedPrice.toLocaleString('es-CL')} + módulos ${addonsCycleTotal.toLocaleString('es-CL')} CLP</p>
+                                            <p className="mt-1 text-xs text-text-muted">Plan ${selectedPrice.toLocaleString('es-CL')} + módulos ${addonsCycleTotal.toLocaleString('es-CL')} CLP</p>
                                         </div>
                                     )}
                                     {/* REGISTER-CODE: código de descuento colapsado (camino primario = link auto-aplicado ?codigo=). */}
-                                    <div className="rounded-xl border border-border bg-secondary/20 p-3">
+                                    <div className="rounded-control border border-border-subtle bg-surface-sunken/60 p-3">
                                         {!couponFieldOpen ? (
                                             <button
                                                 type="button"
                                                 onClick={() => setCouponFieldOpen(true)}
-                                                className="text-sm font-medium text-primary hover:underline"
+                                                className="text-sm font-semibold text-sport-600 hover:underline"
                                             >
                                                 ¿Tenés un código de descuento?
                                             </button>
                                         ) : couponAutoApplied && couponCode ? (
-                                            <p className="text-sm text-emerald-600 dark:text-emerald-400">
+                                            <p className="text-sm text-[var(--success-600)]">
                                                 Código <span className="font-mono font-semibold">{couponCode}</span> aplicado. Verás el descuento con su detalle antes de pagar.
                                             </p>
                                         ) : (
                                             <div>
-                                                <label className="block text-xs font-medium text-muted-foreground mb-1">Código de descuento</label>
+                                                <label className="block text-xs font-semibold text-text-muted mb-1">Código de descuento</label>
                                                 <input
                                                     value={couponCode}
                                                     onChange={(e) => setCouponCode(e.target.value.toUpperCase().replace(/[\s-]+/g, ''))}
                                                     placeholder="PARTNER20"
-                                                    className="w-full h-11 rounded-lg border border-border bg-background px-3 text-sm font-mono uppercase focus:outline-none focus:ring-1 focus:ring-primary"
+                                                    className="w-full h-11 rounded-control border-[1.5px] border-border-default bg-surface-card px-3 text-sm font-mono uppercase text-text-strong focus:outline-none focus:border-sport-600 focus:shadow-[var(--ring-focus)]"
                                                 />
-                                                <p className="mt-1 text-[11px] text-muted-foreground">El descuento se confirma con su detalle antes del primer cobro.</p>
+                                                <p className="mt-1 text-[11px] text-text-muted">El descuento se confirma con su detalle antes del primer cobro.</p>
                                             </div>
                                         )}
                                     </div>
@@ -561,44 +589,44 @@ export default function RegisterPage() {
                     ) : null}
 
                     {step === 3 ? (
-                        <section className="rounded-xl border border-border p-4 space-y-3">
-                            <h2 className="font-semibold text-foreground">
+                        <section className="rounded-card border border-border-subtle p-4 space-y-3">
+                            <h2 className="font-display font-extrabold tracking-[-0.01em] text-text-strong">
                                 {isFreeTier ? 'Tu plan gratuito' : 'Resumen antes de pagar'}
                             </h2>
                             <div className="space-y-1.5 text-sm">
                                 <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Plan</span>
-                                    <span className="font-semibold text-foreground">{selectedTier.label}</span>
+                                    <span className="text-text-muted">Plan</span>
+                                    <span className="font-semibold text-text-strong">{selectedTier.label}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Alumnos</span>
-                                    <span className="font-semibold text-foreground">Hasta {selectedTier.maxClients}</span>
+                                    <span className="text-text-muted">Alumnos</span>
+                                    <span className="font-semibold text-text-strong">Hasta {selectedTier.maxClients}</span>
                                 </div>
                                 {!isFreeTier && (
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Facturación</span>
-                                        <span className="font-semibold text-foreground">{BILLING_CYCLE_CONFIG[billingCycle].label}</span>
+                                        <span className="text-text-muted">Facturación</span>
+                                        <span className="font-semibold text-text-strong">{BILLING_CYCLE_CONFIG[billingCycle].label}</span>
                                     </div>
                                 )}
                                 <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Nutrición</span>
-                                    <span className={cn('font-semibold', getTierCapabilities(tier).canUseNutrition ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400')}>
+                                    <span className="text-text-muted">Nutrición</span>
+                                    <span className={cn('font-semibold', getTierCapabilities(tier).canUseNutrition ? 'text-[var(--success-600)]' : 'text-[var(--warning-700)]')}>
                                         {getTierCapabilities(tier).canUseNutrition ? 'Incluida' : 'No incluida'}
                                     </span>
                                 </div>
                                 {!isFreeTier && selectedAddons.length > 0 && (
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">
+                                        <span className="text-text-muted">
                                             Módulos ({selectedAddons.map((k) => ADDON_CONFIG[k].label).join(', ')})
                                         </span>
-                                        <span className="font-semibold text-foreground">${addonsCycleTotal.toLocaleString('es-CL')} CLP</span>
+                                        <span className="font-semibold text-text-strong">${addonsCycleTotal.toLocaleString('es-CL')} CLP</span>
                                     </div>
                                 )}
-                                <div className="flex justify-between border-t border-border pt-2 mt-2">
-                                    <span className="text-muted-foreground">{isFreeTier ? 'Costo' : 'Total a pagar'}</span>
-                                    <span className="text-lg font-black text-foreground">
+                                <div className="flex justify-between border-t border-border-default pt-2 mt-2">
+                                    <span className="text-text-muted">{isFreeTier ? 'Costo' : 'Total a pagar'}</span>
+                                    <span className="text-lg font-black text-text-strong">
                                         {isFreeTier ? (
-                                            <span className="text-emerald-600 dark:text-emerald-400">$0 — Gratis</span>
+                                            <span className="text-[var(--success-600)]">$0 — Gratis</span>
                                         ) : (
                                             `$${liveTotal.toLocaleString('es-CL')} CLP`
                                         )}
@@ -606,14 +634,14 @@ export default function RegisterPage() {
                                 </div>
                             </div>
                             {isFreeTier ? (
-                                <div className="flex items-start gap-2 pt-1 text-xs text-muted-foreground">
-                                    <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5 text-emerald-500" />
+                                <div className="flex items-start gap-2 pt-1 text-xs text-text-muted">
+                                    <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[var(--success-500)]" />
                                     <span>
                                         Sin tarjeta de crédito. Acceso inmediato. Podés hacer upgrade cuando quieras desde tu dashboard.
                                     </span>
                                 </div>
                             ) : (
-                                <p className="text-xs text-muted-foreground pt-1">
+                                <p className="text-xs text-text-muted pt-1">
                                     Al crear tu cuenta, te llevaremos directamente al checkout de MercadoPago para completar el pago.
                                 </p>
                             )}
@@ -631,58 +659,58 @@ export default function RegisterPage() {
 
                     {/* Error */}
                     {(clientError || state?.error || googleState?.error) && (
-                        <div className="animate-fade-in rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+                        <div className="animate-fade-in rounded-control border border-transparent bg-[var(--danger-100)] px-4 py-3 text-sm font-semibold text-[var(--danger-600)]">
                             {clientError ?? (fromGoogle ? googleState?.error : state?.error)}
                         </div>
                     )}
 
-                    <div className="rounded-xl border border-border bg-secondary/40 p-3 space-y-3">
+                    <div className="rounded-control border border-border-subtle bg-surface-sunken p-3 space-y-3">
                         {/* Checkbox 1: ToS + Privacy (required) */}
-                        <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <label className="flex items-start gap-2 text-xs text-text-muted">
                             <input
                                 type="checkbox"
                                 name="accept_legal"
                                 required
-                                className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
+                                className="mt-0.5 h-4 w-4 rounded border-border-default accent-[var(--sport-500)] shrink-0"
                             />
                             <span>
                                 Acepto los{' '}
-                                <Link href="/legal" className="text-primary hover:opacity-80">
+                                <Link href="/legal" className="text-sport-600 hover:opacity-80">
                                     términos de servicio
                                 </Link>{' '}
                                 y la{' '}
-                                <Link href="/privacidad" className="text-primary hover:opacity-80">
+                                <Link href="/privacidad" className="text-sport-600 hover:opacity-80">
                                     política de privacidad
                                 </Link>
                                 .{' '}
-                                <span className="text-destructive font-medium">*</span>
+                                <span className="text-[var(--danger-600)] font-medium">*</span>
                             </span>
                         </label>
                         {/* Checkbox 2: Health data consent (required — Ley 21.719 Art. 16) */}
-                        <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <label className="flex items-start gap-2 text-xs text-text-muted">
                             <input
                                 type="checkbox"
                                 name="accept_health_data"
                                 required
-                                className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
+                                className="mt-0.5 h-4 w-4 rounded border-border-default accent-[var(--sport-500)] shrink-0"
                             />
                             <span>
                                 Acepto el tratamiento de datos de salud de mis alumnos (registros de entrenamiento,
                                 nutrición y métricas corporales) para prestar el servicio de coaching digital,
                                 conforme a la Ley 21.719.{' '}
-                                <span className="text-destructive font-medium">*</span>
+                                <span className="text-[var(--danger-600)] font-medium">*</span>
                             </span>
                         </label>
                         {/* Checkbox 3: Marketing (optional — must be unchecked by default) */}
-                        <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <label className="flex items-start gap-2 text-xs text-text-muted">
                             <input
                                 type="checkbox"
                                 name="accept_marketing"
-                                className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
+                                className="mt-0.5 h-4 w-4 rounded border-border-default accent-[var(--sport-500)] shrink-0"
                             />
                             <span>
                                 Quiero recibir novedades, ofertas y consejos de EVA por email.{' '}
-                                <span className="text-muted-foreground/60">(opcional)</span>
+                                <span className="text-text-muted/60">(opcional)</span>
                             </span>
                         </label>
                     </div>
@@ -692,7 +720,7 @@ export default function RegisterPage() {
                             <button
                                 type="button"
                                 onClick={prevStep}
-                                className="h-12 px-4 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:text-foreground"
+                                className="h-12 px-4 rounded-control border-[1.5px] border-border-default bg-surface-card text-sm font-semibold text-text-strong hover:bg-surface-sunken transition-colors"
                             >
                                 Atrás
                             </button>
@@ -701,7 +729,7 @@ export default function RegisterPage() {
                             <button
                                 type="button"
                                 onClick={nextStep}
-                                className="flex-1 h-12 text-base font-semibold rounded-xl transition-all duration-200 bg-primary hover:opacity-90 text-primary-foreground"
+                                className="flex-1 h-12 text-base font-bold tracking-[-0.01em] rounded-control transition-all duration-200 active:scale-[0.98] bg-[var(--cta-fill)] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)]"
                             >
                                 Continuar
                             </button>
@@ -717,14 +745,14 @@ export default function RegisterPage() {
                 {!fromGoogle && (
                     <>
                         <div className="mt-6 flex items-center gap-3">
-                            <div className="flex-1 h-px bg-border" />
+                            <div className="flex-1 h-px bg-border-subtle" />
                             <span className="text-xs text-muted-foreground">o registrate con</span>
-                            <div className="flex-1 h-px bg-border" />
+                            <div className="flex-1 h-px bg-border-subtle" />
                         </div>
                         <button
                             type="button"
                             onClick={startCoachGoogleRegistration}
-                            className="mt-4 w-full h-11 flex items-center justify-center gap-2.5 rounded-xl border border-border bg-card hover:bg-secondary transition-colors text-sm font-medium text-foreground"
+                            className="mt-4 w-full h-12 flex items-center justify-center gap-2.5 rounded-control border-[1.5px] border-border-default bg-surface-card hover:bg-surface-sunken transition-colors text-sm font-semibold text-text-strong"
                         >
                             <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -739,22 +767,22 @@ export default function RegisterPage() {
 
                 {/* Divider */}
                 <div className="mt-6 flex items-center gap-3">
-                    <div className="flex-1 h-px bg-border" />
+                    <div className="flex-1 h-px bg-border-subtle" />
                     <span className="text-xs text-muted-foreground">¿Ya tienes cuenta?</span>
-                    <div className="flex-1 h-px bg-border" />
+                    <div className="flex-1 h-px bg-border-subtle" />
                 </div>
 
                 <div className="mt-4 text-center">
                     <Link
                         href="/login"
-                        className="text-sm text-primary hover:opacity-80 transition-opacity font-medium"
+                        className="text-sm text-sport-600 hover:opacity-80 transition-opacity font-semibold"
                     >
                         Iniciar sesión →
                     </Link>
                 </div>
             </div>
 
-            <p className="mt-6 text-center text-xs text-muted-foreground flex items-center justify-center gap-1">
+            <p className="mt-6 text-center text-xs text-text-muted flex items-center justify-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 {isFreeTier ? 'Registro seguro · Acceso inmediato · Sin tarjeta.' : 'Registro seguro + activación automática de suscripción.'}
             </p>

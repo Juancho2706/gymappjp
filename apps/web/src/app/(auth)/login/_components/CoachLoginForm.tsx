@@ -65,7 +65,7 @@ export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: Coac
                 labelEnd={
                     <Link
                         href="/forgot-password"
-                        className="text-xs text-primary hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
+                        className="text-xs font-semibold text-sport-600 hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] rounded"
                     >
                         ¿Olvidaste tu contraseña?
                     </Link>
@@ -94,15 +94,15 @@ export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: Coac
             </div>
 
             <div className="mt-6 flex items-center gap-3">
-                <div className="flex-1 h-px bg-border" />
-                <span className="text-xs text-muted-foreground">o ingresá con</span>
-                <div className="flex-1 h-px bg-border" />
+                <div className="flex-1 h-px bg-border-subtle" />
+                <span className="text-xs text-text-muted">o ingresá con</span>
+                <div className="flex-1 h-px bg-border-subtle" />
             </div>
 
             <button
                 type="button"
                 onClick={startCoachGoogleLogin}
-                className="w-full h-11 flex items-center justify-center gap-2.5 rounded-xl border border-border bg-card hover:bg-secondary transition-colors text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                className="w-full h-12 flex items-center justify-center gap-2.5 rounded-control border-[1.5px] border-border-default bg-surface-card hover:bg-surface-sunken transition-colors text-sm font-semibold text-text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
             >
                 <svg
                     className="w-4 h-4 shrink-0"
@@ -119,15 +119,15 @@ export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: Coac
             </button>
 
             <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-border" />
-                <span className="text-xs text-muted-foreground">¿Nuevo en EVA?</span>
-                <div className="flex-1 h-px bg-border" />
+                <div className="flex-1 h-px bg-border-subtle" />
+                <span className="text-xs text-text-muted">¿Nuevo en EVA?</span>
+                <div className="flex-1 h-px bg-border-subtle" />
             </div>
 
             <div className="text-center">
                 <Link
                     href="/register"
-                    className="inline-flex items-center gap-1.5 text-sm text-primary hover:opacity-80 transition-opacity font-medium"
+                    className="inline-flex items-center gap-1.5 text-sm text-sport-600 hover:opacity-80 transition-opacity font-semibold"
                 >
                     Crear cuenta
                     <ArrowRight className="w-3.5 h-3.5" />

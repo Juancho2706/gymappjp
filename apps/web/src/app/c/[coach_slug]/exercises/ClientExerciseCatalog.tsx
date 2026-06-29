@@ -9,7 +9,9 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog";
-import { Dumbbell, Search, X, Info, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Dumbbell, Search, X, Info, Loader2, ChevronDown } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
 import { filterExercises } from "@/lib/utils";
 import { extractYoutubeVideoId } from "@/lib/youtube";
@@ -37,7 +39,7 @@ function FadeImage({ src, alt }: { src: string; alt: string }) {
       sizes="(max-width: 768px) 45vw, 200px"
       loading="lazy"
       onLoad={() => setLoaded(true)}
-      className={`object-cover group-hover:scale-110 transition-transform duration-500 transition-opacity ${
+      className={`object-cover transition-transform transition-opacity duration-500 group-hover/card:scale-110 ${
         loaded ? "opacity-100" : "opacity-0"
       }`}
       unoptimized
@@ -45,16 +47,8 @@ function FadeImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-/** A single exercise card: thumbnail + muscle group + name. */
-function ExerciseCard({
-  ex,
-  primaryColor,
-  onSelect,
-}: {
-  ex: Exercise;
-  primaryColor: string;
-  onSelect: () => void;
-}) {
+/** A single exercise card: media banner + muscle badge + name + equipment. */
+function ExerciseCard({ ex, onSelect }: { ex: Exercise; onSelect: () => void }) {
   const renderThumb = () => {
     if (ex.gif_url) {
       return <FadeImage src={ex.gif_url} alt={ex.name} />;
@@ -77,30 +71,27 @@ function ExerciseCard({
       return <FadeImage src={url} alt={ex.name} />;
     }
 
-    return <Dumbbell className="w-6 h-6 text-muted-foreground/50" />;
+    return <Dumbbell className="h-7 w-7 text-white/30" />;
   };
 
   return (
     <div
       onClick={onSelect}
-      className="bg-card border border-border rounded-2xl p-3 flex gap-4 items-center cursor-pointer hover:border-border/80 hover:bg-muted/30 transition-all shadow-sm group animate-in fade-in duration-300"
+      className="group/card cursor-pointer overflow-hidden rounded-card border border-subtle bg-surface-card shadow-sm transition-[transform,box-shadow] duration-150 ease-[cubic-bezier(.22,1,.36,1)] hover:-translate-y-px hover:shadow-md active:scale-[0.98]"
     >
-      <div className="w-16 h-16 rounded-xl bg-muted overflow-hidden flex-shrink-0 relative flex items-center justify-center">
+      <div className="relative flex h-24 items-center justify-center overflow-hidden bg-gradient-to-br from-[#1B2129] to-[#0B0E13]">
         {renderThumb()}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p
-          className="text-xs font-bold uppercase tracking-wider mb-1"
-          style={{ color: primaryColor }}
-        >
+        <span className="absolute bottom-1.5 left-1.5 rounded-[5px] bg-black/40 px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.05em] text-sport-300">
           {ex.muscle_group}
-        </p>
-        <h3 className="font-semibold text-foreground leading-tight">
+        </span>
+      </div>
+      <div className="p-3">
+        <h3 className="line-clamp-2 text-[13.5px] font-bold leading-tight text-strong">
           {ex.name}
         </h3>
-      </div>
-      <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground group-hover:text-foreground transition-colors mr-1">
-        <Info className="w-4 h-4" />
+        {ex.equipment && (
+          <p className="mt-0.5 text-[11.5px] text-muted">{ex.equipment}</p>
+        )}
       </div>
     </div>
   );
@@ -156,76 +147,66 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Filters */}
-      <div className="space-y-4">
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Buscar por nombre de ejercicio..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full h-12 pl-11 pr-4 bg-card border border-border rounded-2xl text-sm focus:outline-none focus:ring-2 transition-all shadow-sm"
-            style={
-              {
-                "--tw-ring-color":
-                  "color-mix(in srgb, var(--theme-primary) 50%, transparent)",
-              } as React.CSSProperties
-            }
-          />
-        </div>
+      <div className="space-y-3">
+        <Input
+          iconLeft={<Search className="h-5 w-5" />}
+          placeholder="Buscar por nombre de ejercicio..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
 
-        <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar snap-x">
-          {muscleGroups.map((m) => (
-            <button
-              key={m}
-              onClick={() => setSelectedMuscle(m)}
-              className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all snap-start shadow-sm
-                            ${
-                              selectedMuscle === m
-                                ? "text-white"
-                                : "bg-card border border-border text-muted-foreground hover:bg-muted"
-                            }`}
-              style={
-                selectedMuscle === m ? { backgroundColor: primaryColor } : {}
-              }
-            >
-              {m}
-            </button>
-          ))}
+        <div className="hide-scrollbar flex snap-x gap-2 overflow-x-auto pb-1">
+          {muscleGroups.map((m) => {
+            const on = selectedMuscle === m;
+            return (
+              <button
+                key={m}
+                onClick={() => setSelectedMuscle(m)}
+                className={`h-9 flex-none snap-start whitespace-nowrap rounded-pill px-[15px] text-[13px] font-bold transition-all ${
+                  on
+                    ? "text-on-sport"
+                    : "border-[1.5px] border-default bg-surface-card text-body hover:bg-surface-sunken"
+                }`}
+                style={on ? { backgroundColor: primaryColor } : undefined}
+              >
+                {m}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* Results Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {displayed.map((ex) => (
-          <ExerciseCard
-            key={ex.id}
-            ex={ex}
-            primaryColor={primaryColor}
-            onSelect={() => openExercise(ex)}
-          />
-        ))}
-
-        {filteredExercises.length === 0 && (
-          <div className="col-span-full py-12 text-center bg-card border border-dashed border-border rounded-3xl">
-            <Dumbbell className="w-12 h-12 mx-auto text-muted-foreground/30 mb-3" />
-            <p className="text-muted-foreground">
-              No encontramos ejercicios que coincidan con tu búsqueda.
-            </p>
-          </div>
-        )}
-      </div>
+      {filteredExercises.length === 0 ? (
+        <div className="py-12 text-center text-subtle">
+          <Dumbbell className="mx-auto mb-3 h-9 w-9 opacity-40" />
+          <p className="text-sm">
+            No encontramos ejercicios que coincidan con tu búsqueda.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {displayed.map((ex) => (
+            <ExerciseCard
+              key={ex.id}
+              ex={ex}
+              onSelect={() => openExercise(ex)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Infinite-scroll sentinel + contador */}
       {hasMore && (
-        <div ref={sentinelRef} className="flex flex-col items-center gap-2 py-6">
-          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground/50" />
+        <div ref={sentinelRef} className="flex flex-col items-center gap-3 py-4">
+          <Loader2 className="h-5 w-5 animate-spin text-muted opacity-60" />
           <button
             onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-            className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-control border-[1.5px] border-default bg-surface-card text-[13.5px] font-bold text-strong transition-colors hover:bg-surface-sunken"
           >
+            <ChevronDown className="h-4 w-4" />
             Ver más ({filteredExercises.length - displayed.length} restantes)
           </button>
         </div>
@@ -238,14 +219,14 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
       >
         <DialogContent
           showCloseButton={false}
-          className="bg-card border-border rounded-3xl overflow-y-auto custom-scrollbar p-0 max-w-md w-[90vw] max-h-[85dvh] focus:outline-none"
+          className="custom-scrollbar w-[90vw] max-w-md overflow-y-auto rounded-[28px] border-subtle bg-surface-card p-0 max-h-[85dvh] focus:outline-none"
         >
           {selectedExercise && (
             <>
               {(() => {
                 if (selectedExercise.gif_url) {
                   return (
-                    <div className="sticky top-0 z-10 relative w-full h-48 md:h-64 shrink-0 bg-white flex items-center justify-center border-b border-border/50">
+                    <div className="sticky top-0 z-10 flex h-48 w-full shrink-0 items-center justify-center border-b border-subtle bg-white md:h-64">
                       <Image
                         src={selectedExercise.gif_url}
                         alt={selectedExercise.name}
@@ -264,7 +245,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                   const ytId = extractYoutubeVideoId(url!);
                   const ex = selectedExercise as any
                   return ytId ? (
-                    <div className="sticky top-0 z-10 relative w-full h-48 md:h-64 shrink-0 bg-black/5 dark:bg-black/20 flex items-center justify-center border-b border-border/50">
+                    <div className="sticky top-0 z-10 flex h-48 w-full shrink-0 items-center justify-center border-b border-subtle bg-gradient-to-br from-[#1B2129] to-[#0B0E13] md:h-64">
                       <ExerciseVideo
                         videoId={ytId}
                         start={ex.video_start_time}
@@ -282,7 +263,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
 
                   if (isMp4) {
                     return (
-                      <div className="sticky top-0 z-10 relative w-full h-48 md:h-64 shrink-0 bg-white flex items-center justify-center border-b border-border/50">
+                      <div className="sticky top-0 z-10 flex h-48 w-full shrink-0 items-center justify-center border-b border-subtle bg-white md:h-64">
                         <video
                           src={selectedExercise.video_url}
                           autoPlay
@@ -296,7 +277,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                   }
 
                   return (
-                    <div className="sticky top-0 z-10 relative w-full h-48 md:h-64 shrink-0 bg-white flex items-center justify-center border-b border-border/50">
+                    <div className="sticky top-0 z-10 flex h-48 w-full shrink-0 items-center justify-center border-b border-subtle bg-white md:h-64">
                       <Image
                         src={selectedExercise.video_url}
                         alt={selectedExercise.name}
@@ -311,47 +292,38 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
 
                 return null;
               })()}
-              <div className="p-6 flex-1">
+              <div className="flex-1 p-6">
                 <DialogHeader className="mb-4">
                   <div className="flex items-start justify-between gap-4">
-                    <DialogTitle className="text-xl font-bold">
+                    <DialogTitle className="font-display text-xl font-extrabold tracking-tight text-strong">
                       {selectedExercise.name}
                     </DialogTitle>
-                    <DialogClose className="p-2 -mr-2 -mt-2 rounded-full hover:bg-muted transition-colors shrink-0">
-                      <X className="w-5 h-5 text-muted-foreground" />
+                    <DialogClose className="-mr-2 -mt-2 shrink-0 rounded-full p-2 text-muted transition-colors hover:bg-surface-sunken">
+                      <X className="h-5 w-5" />
                     </DialogClose>
                   </div>
-                  <p
-                    className="text-sm font-bold uppercase tracking-widest mt-1"
-                    style={{ color: primaryColor }}
-                  >
+                  <p className="mt-1 text-[11px] font-extrabold uppercase tracking-[0.08em] text-sport-600">
                     {selectedExercise.muscle_group}
+                    {selectedExercise.equipment
+                      ? ` · ${selectedExercise.equipment}`
+                      : ""}
                   </p>
                 </DialogHeader>
 
                 {loadingDetail ? (
-                  <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                  <div className="flex items-center gap-2 py-4 text-sm text-muted">
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     Cargando instrucciones…
                   </div>
                 ) : instructions && instructions.length > 0 ? (
                   <div className="space-y-4 pr-2">
-                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                      <Info className="w-4 h-4" /> Instrucciones paso a paso
+                    <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted">
+                      <Info className="h-4 w-4" /> Instrucciones paso a paso
                     </h4>
                     <ol className="space-y-3">
                       {instructions.map((step, i) => (
-                        <li
-                          key={i}
-                          className="flex gap-3 text-sm text-foreground/80"
-                        >
-                          <span
-                            className="flex-shrink-0 w-6 h-6 rounded-full font-bold flex items-center justify-center text-xs mt-0.5"
-                            style={{
-                              backgroundColor: "color-mix(in srgb, var(--theme-primary) 15%, transparent)",
-                              color: "var(--theme-primary)",
-                            }}
-                          >
+                        <li key={i} className="flex gap-3 text-sm text-body">
+                          <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-sport-100 text-xs font-extrabold text-sport-600">
                             {i + 1}
                           </span>
                           <span className="leading-relaxed">
@@ -362,20 +334,21 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                     </ol>
                   </div>
                 ) : (
-                  <p className="text-muted-foreground text-sm">
+                  <p className="text-sm text-muted">
                     El entrenador aún no ha añadido instrucciones específicas
                     para este ejercicio.
                   </p>
                 )}
 
-                <button
+                <Button
+                  variant="sport"
+                  size="lg"
                   onClick={() => setSelectedExercise(null)}
-                  className="w-full mt-8 py-3.5 rounded-2xl font-bold text-white shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2 shrink-0"
-                  style={{ backgroundColor: primaryColor }}
+                  className="mt-8 w-full"
                 >
-                  <X className="w-5 h-5" />
+                  <X className="h-5 w-5" />
                   Cerrar
-                </button>
+                </Button>
               </div>
             </>
           )}

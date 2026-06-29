@@ -33,26 +33,17 @@ export default async function ClientExercisesPage({ params }: Props) {
   }, {} as Record<string, any[]>);
 
   return (
-    <div className="min-h-dvh bg-background pb-32">
-      <header className="border-b border-border/10 px-4 py-4 md:px-8 sticky top-0 pt-safe bg-background/80 backdrop-blur-xl z-40 flex items-center gap-3 shadow-sm">
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
-          style={{
-            backgroundColor:
-              "color-mix(in srgb, var(--theme-primary) 10%, transparent)",
-          }}
-        >
-          <Dumbbell
-            className="w-5 h-5"
-            style={{ color: "var(--theme-primary)" }}
-          />
+    <div className="min-h-dvh bg-surface-app pb-32">
+      <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-subtle px-4 py-4 pt-safe backdrop-blur-xl md:px-8 bg-[color-mix(in_srgb,var(--surface-app)_80%,transparent)]">
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-control bg-sport-100 text-sport-600">
+          <Dumbbell className="h-5 w-5" />
         </div>
-        <div className="flex-1 flex items-center justify-between gap-2">
+        <div className="flex flex-1 items-center justify-between gap-2">
           <div>
-            <h1 className="font-display text-xl md:text-2xl font-bold text-foreground">
+            <h1 className="font-display text-xl font-extrabold tracking-tight text-strong md:text-2xl">
               Aprender Técnica
             </h1>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted">
               Catálogo completo de ejercicios
             </p>
           </div>

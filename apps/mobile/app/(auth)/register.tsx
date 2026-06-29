@@ -98,16 +98,16 @@ export default function RegisterScreen() {
             transition={{ type: 'timing', duration: 420 }}
             style={styles.content}
           >
-            <View style={[styles.stepPill, { backgroundColor: theme.primary + '12', borderColor: theme.primary + '30', borderRadius: theme.radius.lg }]}>
+            <View className="flex-row items-center self-start rounded-control bg-sport-100" style={styles.stepPill}>
               <Sparkles size={13} color={theme.primary} />
-              <Text style={[styles.stepPillText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
+              <Text className="text-sport-600 font-display-bold" style={styles.stepPillText}>
                 Cuenta free
               </Text>
             </View>
-            <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            <Text className="text-strong font-display-bold" style={styles.title}>
               Crear cuenta coach
             </Text>
-            <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            <Text className="text-muted font-sans" style={styles.subtitle}>
               {step === 0 ? 'Datos basicos para tu marca.' : step === 1 ? 'Mobile v1 permite partir gratis.' : 'Confirma y revisa tu correo.'}
             </Text>
 
@@ -117,23 +117,23 @@ export default function RegisterScreen() {
                 <Input label="Marca" leftIcon={Globe} placeholder="JP Fitness" value={brandName} onChangeText={setBrandName} />
                 <Input label="Email" leftIcon={Mail} placeholder="coach@ejemplo.com" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
                 <Input label="Contrasena" leftIcon={Lock} placeholder="Minimo 8 caracteres" value={password} onChangeText={setPassword} secureTextEntry autoComplete="new-password" error={password && password.length < 8 ? 'Minimo 8 caracteres' : null} />
-                <Button label="Continuar" rightIcon={ArrowRight} onPress={next} disabled={!canContinue} full size="lg" />
+                <Button label="Continuar" variant="sport" rightIcon={ArrowRight} onPress={next} disabled={!canContinue} full size="lg" />
               </View>
             ) : step === 1 ? (
               <View style={styles.form}>
                 <Card variant="highlighted" padding={18} style={styles.planCard}>
                   <View style={styles.planTop}>
-                    <Text style={[styles.planName, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>Free</Text>
-                    <View style={[styles.freeBadge, { backgroundColor: theme.success + '18', borderRadius: theme.radius.sm }]}>
+                    <Text className="text-strong font-display-black" style={styles.planName}>Free</Text>
+                    <View className="bg-success-100 rounded-sm" style={styles.freeBadge}>
                       <Check size={13} color={theme.success} />
-                      <Text style={[styles.freeText, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>Incluido</Text>
+                      <Text className="text-success-600 font-display-bold" style={styles.freeText}>Incluido</Text>
                     </View>
                   </View>
-                  <Text style={[styles.planMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                  <Text className="text-muted font-sans" style={styles.planMeta}>
                     Hasta 3 alumnos activos. Planes pagos se completan desde eva-app.cl.
                   </Text>
                 </Card>
-                <Button label="Elegir free" rightIcon={ArrowRight} onPress={next} full size="lg" />
+                <Button label="Elegir free" variant="sport" rightIcon={ArrowRight} onPress={next} full size="lg" />
               </View>
             ) : (
               <View style={styles.form}>
@@ -162,6 +162,7 @@ export default function RegisterScreen() {
                 </Card>
                 <Button
                   label="Crear cuenta"
+                  variant="sport"
                   rightIcon={ArrowRight}
                   onPress={handleCreate}
                   loading={loading}
@@ -173,7 +174,7 @@ export default function RegisterScreen() {
             )}
 
             <Pressable onPress={() => router.replace('/(auth)/login?role=coach')} hitSlop={10}>
-              <Text style={[styles.loginLink, { color: theme.primary, fontFamily: theme.fontSans }]}>
+              <Text className="text-sport-600 font-sans-semibold" style={styles.loginLink}>
                 Ya tengo cuenta
               </Text>
             </Pressable>
@@ -189,18 +190,18 @@ function ConsentRow({ checked, onPress, label }: { checked: boolean; onPress: ()
   return (
     <HapticPressable onPress={onPress} style={styles.consentRow}>
       <View
+        className="rounded-sm items-center justify-center"
         style={[
           styles.checkbox,
           {
             backgroundColor: checked ? theme.primary : 'transparent',
             borderColor: checked ? theme.primary : theme.border,
-            borderRadius: theme.radius.sm,
           },
         ]}
       >
         {checked ? <Check size={14} color={theme.primaryForeground} strokeWidth={2.5} /> : <Square size={14} color="transparent" />}
       </View>
-      <Text style={[styles.consentText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+      <Text className="text-body font-sans" style={styles.consentText}>
         {label}
       </Text>
     </HapticPressable>
@@ -211,8 +212,8 @@ function SummaryRow({ label, value, last }: { label: string; value: string; last
   const { theme } = useTheme()
   return (
     <View style={[styles.summaryRow, !last && { borderBottomColor: theme.border }]}>
-      <Text style={[styles.summaryLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
-      <Text style={[styles.summaryValue, { color: theme.foreground, fontFamily: theme.fontSans }]} numberOfLines={1}>{value}</Text>
+      <Text className="text-muted font-sans" style={styles.summaryLabel}>{label}</Text>
+      <Text className="text-strong font-sans-semibold" style={styles.summaryValue} numberOfLines={1}>{value}</Text>
     </View>
   )
 }
@@ -222,9 +223,9 @@ const styles = StyleSheet.create({
   kav: { flex: 1 },
   scroll: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 32 },
   content: { gap: 12 },
-  stepPill: { borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, alignSelf: 'flex-start' },
+  stepPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, alignSelf: 'flex-start' },
   stepPillText: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
-  title: { fontSize: 28, letterSpacing: -0.5 },
+  title: { fontSize: 28, letterSpacing: -0.6 },
   subtitle: { fontSize: 14, lineHeight: 20 },
   form: { gap: 16, marginTop: 16 },
   planCard: { gap: 10 },
@@ -236,10 +237,10 @@ const styles = StyleSheet.create({
   summaryCard: { paddingTop: 4, paddingBottom: 4 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   summaryLabel: { fontSize: 13 },
-  summaryValue: { fontSize: 13, fontWeight: '600', flexShrink: 1, textAlign: 'right' },
+  summaryValue: { fontSize: 13, flexShrink: 1, textAlign: 'right' },
   consentCard: { gap: 12 },
   consentRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   checkbox: { width: 22, height: 22, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
   consentText: { flex: 1, fontSize: 12, lineHeight: 17 },
-  loginLink: { textAlign: 'center', fontSize: 13, fontWeight: '600', marginTop: 8 },
+  loginLink: { textAlign: 'center', fontSize: 13, marginTop: 8 },
 })

@@ -18,15 +18,15 @@ export default async function SuspendedPage({ params }: Props) {
     const brandName = coachData?.brand_name || (isTeam ? 'tu equipo' : 'tu Coach')
 
     return (
-        <div className="min-h-dvh bg-background flex flex-col items-center justify-center p-6 pt-safe text-center">
-            <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mb-6">
-                <AlertCircle className="w-10 h-10 text-red-500" />
+        <div className="min-h-dvh bg-surface-app flex flex-col items-center justify-center p-6 pt-safe text-center">
+            <div className="w-20 h-20 bg-[var(--danger-100)] text-[var(--danger-600)] rounded-full flex items-center justify-center mb-6">
+                <AlertCircle className="w-10 h-10" />
             </div>
-            <h1 className="font-display text-2xl font-bold text-foreground mb-3">
+            <h1 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-text-strong mb-3">
                 Acceso Pausado
             </h1>
-            <p className="text-muted-foreground mb-8 max-w-sm leading-relaxed">
-                Tu acceso a la plataforma está temporalmente suspendido. Por favor, contacta a <strong className="text-foreground">{brandName}</strong> para reactivar tu cuenta. Todos tus progresos y datos están a salvo.
+            <p className="text-text-muted mb-8 max-w-sm leading-relaxed">
+                Tu acceso a la plataforma está temporalmente suspendido. Por favor, contacta a <strong className="text-text-strong">{brandName}</strong> para reactivar tu cuenta. Todos tus progresos y datos están a salvo.
             </p>
 
             <div className="flex flex-col w-full max-w-xs gap-3">
@@ -35,14 +35,14 @@ export default async function SuspendedPage({ params }: Props) {
                         href={`https://wa.me/${coachData.whatsapp.replace(/\D/g, '')}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-full py-3 rounded-xl bg-primary text-primary-foreground font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 flex items-center justify-center"
+                        className="w-full py-3 rounded-control bg-primary text-primary-foreground font-bold tracking-[-0.01em] hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 active:scale-[0.98] flex items-center justify-center"
                     >
                         {isTeam ? 'Contactar a mi equipo' : 'Contactar a mi Coach'}
                     </a>
                 )}
-                
+
                 <form action="/auth/signout" method="post" className="w-full">
-                    <button type="submit" className="w-full py-3 rounded-xl bg-secondary text-secondary-foreground font-bold hover:bg-secondary/80 transition-all flex items-center justify-center gap-2">
+                    <button type="submit" className="w-full py-3 rounded-control bg-surface-sunken text-text-strong font-bold tracking-[-0.01em] hover:opacity-90 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
                         <LogOut className="w-4 h-4" /> Cerrar Sesión
                     </button>
                 </form>

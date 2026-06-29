@@ -91,7 +91,7 @@ export default async function ClientLoginPage({ params }: Props) {
                     <div className="flex justify-center mb-4">
                         {logoUrl ? (
                             <div
-                                className="relative flex items-center justify-center w-20 h-20 rounded-2xl overflow-hidden border shadow-lg"
+                                className="relative flex items-center justify-center w-20 h-20 rounded-card overflow-hidden border shadow-lg"
                                 style={{ borderColor: 'rgb(var(--login-accent-rgb) / 0.19)', boxShadow: '0 8px 32px rgb(var(--login-accent-rgb) / 0.12)' }}
                             >
                                 <Image
@@ -103,7 +103,7 @@ export default async function ClientLoginPage({ params }: Props) {
                             </div>
                         ) : (
                             <div
-                                className="flex items-center justify-center w-20 h-20 rounded-2xl border shadow-lg"
+                                className="flex items-center justify-center w-20 h-20 rounded-card border shadow-lg"
                                 style={{
                                     backgroundColor: 'rgb(var(--login-accent-rgb) / 0.08)',
                                     borderColor: 'rgb(var(--login-accent-rgb) / 0.19)',
@@ -114,10 +114,10 @@ export default async function ClientLoginPage({ params }: Props) {
                             </div>
                         )}
                     </div>
-                    <h1 className="font-display text-2xl font-bold tracking-tight text-foreground" style={{ fontFamily: 'var(--login-font)' }}>
+                    <h1 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-text-strong" style={{ fontFamily: 'var(--login-font)' }}>
                         {coach.brand_name}
                     </h1>
-                    <p className="mt-1.5 text-sm text-muted-foreground max-w-[260px] mx-auto leading-relaxed">
+                    <p className="mt-1.5 text-sm text-text-muted max-w-[260px] mx-auto leading-relaxed">
                         {coach.welcome_message?.trim() || 'Tu plataforma de entrenamiento personalizado'}
                     </p>
                 </LoginEntranceItem>

@@ -14,13 +14,16 @@ import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { flushLogQueue, getPendingLogCount } from '../../../lib/offline-cache'
 import { useTheme } from '../../../context/ThemeContext'
-import { Badge, EmptyState, ScreenHeader } from '../../../components'
+import { Badge, Card, EmptyState, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AppBackground } from '../../../components/AppBackground'
 
 const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 const TODAY_DOW = new Date().getDay()
+
+const FONT_BOLD = 'HankenGrotesk_700Bold'
+const FONT_SEMI = 'HankenGrotesk_600SemiBold'
 
 interface Plan {
   id: string
@@ -102,36 +105,40 @@ export default function WorkoutScreen() {
         animate={{ opacity: 1, translateY: 0 }}
         transition={{ type: 'timing', duration: 350, delay: Math.min(index * 60, 400) }}
       >
-        <TouchableOpacity
-          style={[
-            styles.card,
-            {
-              backgroundColor: theme.card,
-              borderColor: isToday ? theme.primary : theme.border,
-              borderRadius: theme.radius.xl,
-              borderWidth: isToday ? 2 : 1,
-            },
-            isToday && theme.shadowGlowBlue,
-          ]}
+        <Card
+          variant={isToday ? 'highlighted' : 'default'}
+          interactive
+          padding={18}
           onPress={() => router.push(`/alumno/workout/${item.id}`)}
-          activeOpacity={0.85}
+          style={styles.card}
         >
+          <View
+            style={[
+              styles.iconChip,
+              {
+                backgroundColor: isToday ? theme.primary : theme.muted,
+                borderRadius: theme.radius.md,
+              },
+            ]}
+          >
+            <Dumbbell size={20} color={isToday ? theme.primaryForeground : theme.primary} strokeWidth={2} />
+          </View>
           <View style={styles.cardLeft}>
             {item.day_of_week != null && (
               <View style={styles.dowRow}>
                 <Text
                   style={[
                     styles.dow,
-                    { color: isToday ? theme.primary : theme.mutedForeground, fontFamily: 'Montserrat_700Bold' },
+                    { color: isToday ? theme.primary : theme.mutedForeground, fontFamily: FONT_BOLD },
                   ]}
                 >
                   {DAY_NAMES[item.day_of_week]}
                 </Text>
-                {isToday && <Badge label="HOY" tone="primary" />}
+                {isToday && <Badge label="HOY" tone="sport" variant="solid" />}
               </View>
             )}
             <Text
-              style={[styles.planTitle, { color: theme.foreground, fontFamily: 'Montserrat_600SemiBold' }]}
+              style={[styles.planTitle, { color: theme.foreground, fontFamily: FONT_SEMI }]}
               numberOfLines={2}
             >
               {item.title}
@@ -141,7 +148,7 @@ export default function WorkoutScreen() {
             </Text>
           </View>
           <ChevronRight size={22} color={isToday ? theme.primary : theme.mutedForeground} />
-        </TouchableOpacity>
+        </Card>
       </MotiView>
     )
   }
@@ -172,7 +179,7 @@ export default function WorkoutScreen() {
               ) : (
                 <>
                   <RefreshCw size={13} color={theme.primary} strokeWidth={2.25} />
-                  <Text style={[styles.syncText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
+                  <Text style={[styles.syncText, { color: theme.primary, fontFamily: FONT_BOLD }]}>
                     Sync ({pendingLogs})
                   </Text>
                 </>
@@ -216,14 +223,14 @@ const styles = StyleSheet.create({
   syncText: { fontSize: 12, letterSpacing: 0.3 },
   list: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
   card: {
-    padding: 18,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 14,
   },
-  cardLeft: { gap: 6, flex: 1 },
+  iconChip: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  cardLeft: { gap: 5, flex: 1, minWidth: 0 },
   dowRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dow: { fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' },
-  planTitle: { fontSize: 17, letterSpacing: -0.2 },
+  planTitle: { fontSize: 16, letterSpacing: -0.2 },
   planSub: { fontSize: 13 },
 })

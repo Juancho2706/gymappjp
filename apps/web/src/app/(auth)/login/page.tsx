@@ -48,29 +48,29 @@ export default async function CoachLoginPage({ searchParams }: CoachLoginPagePro
                 </div>
 
                 <div className="relative z-10 flex-1 flex flex-col justify-center py-16">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/70 backdrop-blur-sm px-3 py-1.5 mb-8 w-fit">
-                        <Sparkles className="w-3.5 h-3.5 text-primary" aria-hidden="true" />
-                        <span className="text-xs font-medium text-muted-foreground">Plataforma para coaches</span>
+                    <div className="inline-flex items-center gap-2 rounded-pill border border-border-subtle bg-surface-card/70 backdrop-blur-sm px-3 py-1.5 mb-8 w-fit">
+                        <Sparkles className="w-3.5 h-3.5 text-sport-600" aria-hidden="true" />
+                        <span className="text-xs font-semibold text-text-muted">Plataforma para coaches</span>
                     </div>
-                    <h1 className="font-display text-4xl xl:text-5xl font-black leading-[1.1] tracking-tighter text-foreground mb-5">
+                    <h1 className="font-display text-4xl xl:text-5xl font-black leading-[1.05] tracking-[-0.03em] text-text-strong mb-5">
                         Tu negocio de fitness,{' '}
-                        <span className="bg-gradient-to-r from-primary to-sky-500 bg-clip-text text-transparent">
+                        <span className="bg-gradient-to-r from-sport-600 to-sport-400 bg-clip-text text-transparent">
                             profesionalizado
                         </span>
                     </h1>
-                    <p className="text-muted-foreground text-base leading-relaxed max-w-sm mb-12">
+                    <p className="text-text-muted text-base leading-relaxed max-w-sm mb-12">
                         Gestiona alumnos, crea rutinas y planes de nutrición desde un solo panel.
                     </p>
 
                     <ul className="space-y-6" aria-label="Características principales">
                         {FEATURES.map(({ icon: Icon, label, desc }) => (
                             <li key={label} className="flex items-start gap-4">
-                                <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 border border-primary/20">
-                                    <Icon className="h-4.5 w-4.5 text-primary" aria-hidden="true" />
+                                <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-sport-100 text-sport-600">
+                                    <Icon className="h-4.5 w-4.5" aria-hidden="true" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-semibold text-foreground">{label}</p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+                                    <p className="text-sm font-semibold text-text-strong">{label}</p>
+                                    <p className="text-xs text-text-muted mt-0.5">{desc}</p>
                                 </div>
                             </li>
                         ))}
@@ -94,10 +94,10 @@ export default async function CoachLoginPage({ searchParams }: CoachLoginPagePro
 
                 <div className="w-full max-w-sm mx-auto">
                     <div className="mb-8">
-                        <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                        <h2 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-text-strong">
                             Bienvenido de vuelta
                         </h2>
-                        <p className="mt-2 text-sm text-muted-foreground">
+                        <p className="mt-2 text-sm text-text-muted">
                             Ingresa tus credenciales para acceder al panel
                         </p>
                     </div>

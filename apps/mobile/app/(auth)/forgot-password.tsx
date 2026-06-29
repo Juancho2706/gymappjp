@@ -48,26 +48,18 @@ export default function ForgotPasswordScreen() {
             transition={{ type: 'spring', damping: 14 }}
             style={styles.inner}
           >
-            <View
-              style={[
-                styles.successIcon,
-                {
-                  backgroundColor: theme.success + '1A',
-                  borderColor: theme.success + '33',
-                  borderRadius: theme.radius['2xl'],
-                },
-              ]}
-            >
+            <View className="bg-success-100" style={[styles.successIcon, { borderRadius: theme.radius['2xl'] }]}>
               <Mail size={28} color={theme.success} strokeWidth={1.75} />
             </View>
-            <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            <Text className="text-strong font-display-black" style={styles.title}>
               Revisa tu correo
             </Text>
-            <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            <Text className="text-muted font-sans" style={styles.subtitle}>
               Si existe una cuenta con ese email, recibirás un enlace para restablecer tu contraseña.
             </Text>
             <Button
               label="Volver al login"
+              variant="sport"
               rightIcon={ArrowRight}
               onPress={() => router.back()}
               full
@@ -82,22 +74,13 @@ export default function ForgotPasswordScreen() {
             transition={{ type: 'timing', duration: 500 }}
             style={styles.inner}
           >
-            <View
-              style={[
-                styles.heroIcon,
-                {
-                  backgroundColor: theme.primary + '1A',
-                  borderColor: theme.primary + '33',
-                  borderRadius: theme.radius['2xl'],
-                },
-              ]}
-            >
+            <View className="bg-sport-100" style={[styles.heroIcon, { borderRadius: theme.radius['2xl'] }]}>
               <KeyRound size={26} color={theme.primary} strokeWidth={1.75} />
             </View>
-            <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            <Text className="text-strong font-display-black" style={styles.title}>
               Restablecer contraseña
             </Text>
-            <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            <Text className="text-muted font-sans" style={styles.subtitle}>
               Ingresá tu email y te enviaremos un enlace para crear una nueva contraseña.
             </Text>
 
@@ -115,6 +98,7 @@ export default function ForgotPasswordScreen() {
               />
               <Button
                 label="Enviar enlace"
+                variant="sport"
                 rightIcon={ArrowRight}
                 onPress={handleReset}
                 loading={loading}
@@ -137,7 +121,6 @@ const styles = StyleSheet.create({
   heroIcon: {
     width: 56,
     height: 56,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
@@ -145,7 +128,6 @@ const styles = StyleSheet.create({
   successIcon: {
     width: 64,
     height: 64,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,

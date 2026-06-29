@@ -40,8 +40,9 @@ export function AuthFormField({
                 <label
                     htmlFor={id}
                     className={cn(
-                        'text-sm font-medium',
-                        isEnterprise ? 'text-zinc-300' : 'text-foreground',
+                        isEnterprise
+                            ? 'text-sm font-medium text-zinc-300'
+                            : 'text-[13px] font-semibold text-text-strong',
                     )}
                 >
                     {label}
@@ -54,8 +55,8 @@ export function AuthFormField({
                     <span
                         aria-hidden="true"
                         className={cn(
-                            'pointer-events-none absolute left-3 flex items-center',
-                            isEnterprise ? 'text-zinc-500' : 'text-muted-foreground',
+                            'pointer-events-none absolute left-3.5 flex items-center',
+                            isEnterprise ? 'text-zinc-500' : 'text-text-muted',
                         )}
                     >
                         {leadingIcon}
@@ -67,24 +68,25 @@ export function AuthFormField({
                     aria-invalid={error ? true : undefined}
                     aria-describedby={describedBy}
                     className={cn(
-                        'w-full min-h-[48px] rounded-xl border px-4 py-3 text-base outline-none transition-all',
-                        'placeholder:text-muted-foreground',
+                        'w-full min-h-[48px] border px-4 py-3 outline-none transition-all',
                         'disabled:pointer-events-none disabled:opacity-50',
-                        // focus ring
-                        'focus-visible:ring-2 focus-visible:ring-offset-2',
                         // leading icon padding
                         leadingIcon && 'pl-10',
                         // trailing slot padding
                         trailingSlot && 'pr-12',
-                        // coach variant
+                        // coach variant — EVA Design System control (sport focus ring)
                         !isEnterprise && [
-                            'bg-background border-input text-foreground',
-                            'focus-visible:ring-primary/50 focus-visible:ring-offset-background',
-                            error && 'border-destructive focus-visible:ring-destructive/50',
+                            'rounded-control border-[1.5px] bg-surface-card border-border-default text-text-strong text-[15px] font-medium',
+                            'placeholder:text-text-muted',
+                            'focus-visible:border-sport-600 focus-visible:shadow-[var(--ring-focus)]',
+                            error &&
+                                'border-[var(--danger-500)] focus-visible:border-[var(--danger-500)]',
                         ],
-                        // enterprise variant
+                        // enterprise variant (preserved)
                         isEnterprise && [
-                            'bg-zinc-900 border-zinc-700 text-zinc-100',
+                            'rounded-xl text-base bg-zinc-900 border-zinc-700 text-zinc-100',
+                            'placeholder:text-muted-foreground',
+                            'focus-visible:ring-2 focus-visible:ring-offset-2',
                             'focus-visible:border-amber-500 focus-visible:ring-amber-500/30 focus-visible:ring-offset-zinc-950',
                             error && 'border-red-500 focus-visible:ring-red-500/30',
                         ],
@@ -103,8 +105,7 @@ export function AuthFormField({
                     id={errorId}
                     role="alert"
                     className={cn(
-                        'text-xs',
-                        isEnterprise ? 'text-red-400' : 'text-destructive',
+                        isEnterprise ? 'text-xs text-red-400' : 'text-[12px] text-[var(--danger-600)]',
                     )}
                 >
                     {error}
@@ -115,8 +116,7 @@ export function AuthFormField({
                 <p
                     id={hintId}
                     className={cn(
-                        'text-xs',
-                        isEnterprise ? 'text-zinc-500' : 'text-muted-foreground',
+                        isEnterprise ? 'text-xs text-zinc-500' : 'text-[12px] text-text-muted',
                     )}
                 >
                     {hint}

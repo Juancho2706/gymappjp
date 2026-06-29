@@ -18,8 +18,7 @@ import { LoginSchema } from '@eva/schemas'
 import { supabase } from '../../lib/supabase'
 import { translateAuthError } from '../../lib/auth-errors'
 import { useTheme } from '../../context/ThemeContext'
-import { Button, Input } from '../../components'
-import { GlassCard } from '../../components/GlassCard'
+import { Button, Card, Input } from '../../components'
 
 const REMEMBER_KEY = 'eva_remember_email'
 
@@ -63,8 +62,8 @@ export default function LoginScreen() {
   }
 
   return (
-    <View className="flex-1 bg-background">
-      {/* Brand wash — subtle, dark-first (no saturated disc) */}
+    <View className="flex-1 bg-surface-app">
+      {/* Brand wash — subtle, brand-aware (per-coach sport accent) */}
       <LinearGradient
         colors={[theme.primary + '24', theme.primary + '0A', 'transparent']}
         locations={[0, 0.4, 0.75]}
@@ -93,29 +92,29 @@ export default function LoginScreen() {
             style={{ marginBottom: 24, gap: 8 }}
           >
             <View
-              className="flex-row items-center self-start"
-              style={{ gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: theme.radius['3xl'], backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }}
+              className="flex-row items-center self-start rounded-pill bg-surface-card border border-subtle"
+              style={{ gap: 6, paddingHorizontal: 12, paddingVertical: 6 }}
             >
               <Sparkles size={12} color={theme.primary} strokeWidth={2.25} />
-              <Text style={{ fontSize: 11, letterSpacing: 0.3, color: theme.mutedForeground, fontFamily: theme.fontSans }}>
+              <Text className="text-muted font-sans-medium" style={{ fontSize: 11, letterSpacing: 0.3 }}>
                 {isCoach ? 'Panel del coach' : 'Tu entrenamiento'}
               </Text>
             </View>
-            <Text style={{ fontSize: 30, letterSpacing: -0.5, color: theme.foreground, fontFamily: 'Montserrat_700Bold' }}>
+            <Text className="text-strong font-display-black" style={{ fontSize: 30, letterSpacing: -0.6, lineHeight: 34 }}>
               Bienvenido de vuelta
             </Text>
-            <Text style={{ fontSize: 14, lineHeight: 20, color: theme.mutedForeground, fontFamily: theme.fontSans }}>
+            <Text className="text-muted font-sans" style={{ fontSize: 14, lineHeight: 20 }}>
               {isCoach ? 'Ingresá tus credenciales para acceder al panel' : 'Accedé a tu entrenamiento personalizado'}
             </Text>
           </MotiView>
 
-          {/* Form card (glass-lite spotlight) */}
+          {/* Form card */}
           <MotiView
             from={{ opacity: 0, translateY: 20 }}
             animate={{ opacity: 1, translateY: 0 }}
             transition={{ type: 'timing', duration: 500, delay: 120 }}
           >
-            <GlassCard variant="solid" style={{ padding: 20 }}>
+            <Card variant="default" padding={20} radius="card">
               <View style={{ gap: 16 }}>
                 <Input
                   label="Email"
@@ -144,7 +143,8 @@ export default function LoginScreen() {
                   trailingLabel={
                     <Text
                       onPress={() => router.push('/(auth)/forgot-password')}
-                      style={{ fontSize: 12, fontWeight: '500', color: theme.primary, fontFamily: theme.fontSans }}
+                      className="text-sport-600 font-sans-medium"
+                      style={{ fontSize: 12 }}
                     >
                       ¿Olvidaste tu contraseña?
                     </Text>
@@ -154,8 +154,9 @@ export default function LoginScreen() {
                 {/* Remember me */}
                 <Pressable onPress={() => setRemember((r) => !r)} className="flex-row items-center" style={{ gap: 8 }}>
                   <View
+                    className="items-center justify-center"
                     style={{
-                      width: 20, height: 20, borderRadius: 6, alignItems: 'center', justifyContent: 'center',
+                      width: 20, height: 20, borderRadius: 6,
                       borderWidth: 1.5,
                       borderColor: remember ? theme.primary : theme.border,
                       backgroundColor: remember ? theme.primary : 'transparent',
@@ -163,11 +164,12 @@ export default function LoginScreen() {
                   >
                     {remember ? <Check size={13} color={theme.primaryForeground} strokeWidth={3} /> : null}
                   </View>
-                  <Text style={{ fontSize: 13, color: theme.mutedForeground, fontFamily: theme.fontSans }}>Recordarme</Text>
+                  <Text className="text-muted font-sans" style={{ fontSize: 13 }}>Recordarme</Text>
                 </Pressable>
 
                 <Button
                   label={isCoach ? 'Ingresar al panel' : 'Iniciar sesión'}
+                  variant="sport"
                   rightIcon={ArrowRight}
                   onPress={handleLogin}
                   loading={loading}
@@ -176,7 +178,7 @@ export default function LoginScreen() {
                   style={{ marginTop: 4 }}
                 />
               </View>
-            </GlassCard>
+            </Card>
           </MotiView>
 
           {/* Footer */}
@@ -189,12 +191,13 @@ export default function LoginScreen() {
             {isCoach ? (
               <Text
                 onPress={() => router.push('/(auth)/register')}
-                style={{ fontSize: 13, fontWeight: '600', color: theme.primary, fontFamily: theme.fontSans }}
+                className="text-sport-600 font-sans-semibold"
+                style={{ fontSize: 13 }}
               >
                 Crear cuenta nueva
               </Text>
             ) : null}
-            <Text style={{ fontSize: 12, letterSpacing: 0.3, color: theme.mutedForeground, fontFamily: theme.fontSans }}>
+            <Text className="text-subtle font-sans" style={{ fontSize: 12, letterSpacing: 0.3 }}>
               eva-app.cl
             </Text>
           </MotiView>

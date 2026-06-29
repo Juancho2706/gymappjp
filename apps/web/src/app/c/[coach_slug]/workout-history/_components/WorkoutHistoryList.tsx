@@ -18,7 +18,7 @@ export function WorkoutHistoryList({ items }: { items: WorkoutLogDaySummary[] })
                 <RevealItem key={item.dayKey} variant="fadeUp">
                     <div className="flex items-center gap-3 px-4 py-3">
                         <div
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control"
                             style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
                         >
                             <Dumbbell className="h-4 w-4" style={{ color: 'var(--theme-primary)' }} />

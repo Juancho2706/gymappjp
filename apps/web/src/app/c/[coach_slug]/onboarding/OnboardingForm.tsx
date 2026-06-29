@@ -170,7 +170,7 @@ export function OnboardingForm({ coachSlug }: Props) {
                             className="space-y-6"
                         >
                             <div className="space-y-1">
-                                <h2 className="text-xl font-bold text-foreground">Tus datos biométricos</h2>
+                                <h2 className="font-display text-xl font-extrabold tracking-[-0.01em] text-text-strong">Tus datos biométricos</h2>
                                 <p className="text-sm text-muted-foreground">Empecemos con lo básico para personalizar tu plan.</p>
                             </div>
 
@@ -187,9 +187,9 @@ export function OnboardingForm({ coachSlug }: Props) {
                                         value={formData.weight}
                                         onChange={handleInputChange}
                                         onBlur={handleBlur}
-                                        className={`bg-background/50 border-border text-foreground focus:border-[var(--theme-primary)] ${fieldError('weight') ? 'border-red-500 focus:border-red-500' : ''}`}
+                                        className={`border-border-default focus-visible:border-[var(--theme-primary)] focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] ${fieldError('weight') ? 'border-[var(--danger-500)] focus-visible:border-[var(--danger-500)]' : ''}`}
                                     />
-                                    {fieldError('weight') && <p className="text-xs text-red-400">{fieldError('weight')}</p>}
+                                    {fieldError('weight') && <p className="text-xs text-[var(--danger-600)]">{fieldError('weight')}</p>}
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="height" className="text-muted-foreground">Estatura (cm)*</Label>
@@ -202,9 +202,9 @@ export function OnboardingForm({ coachSlug }: Props) {
                                         value={formData.height}
                                         onChange={handleInputChange}
                                         onBlur={handleBlur}
-                                        className={`bg-background/50 border-border text-foreground focus:border-[var(--theme-primary)] ${fieldError('height') ? 'border-red-500 focus:border-red-500' : ''}`}
+                                        className={`border-border-default focus-visible:border-[var(--theme-primary)] focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] ${fieldError('height') ? 'border-[var(--danger-500)] focus-visible:border-[var(--danger-500)]' : ''}`}
                                     />
-                                    {fieldError('height') && <p className="text-xs text-red-400">{fieldError('height')}</p>}
+                                    {fieldError('height') && <p className="text-xs text-[var(--danger-600)]">{fieldError('height')}</p>}
                                 </div>
                             </div>
                         </motion.div>
@@ -220,7 +220,7 @@ export function OnboardingForm({ coachSlug }: Props) {
                             className="space-y-6"
                         >
                             <div className="space-y-1">
-                                <h2 className="text-xl font-bold text-foreground">Metas y disponibilidad</h2>
+                                <h2 className="font-display text-xl font-extrabold tracking-[-0.01em] text-text-strong">Metas y disponibilidad</h2>
                                 <p className="text-sm text-muted-foreground">¿Qué quieres lograr y cuánto tiempo tienes?</p>
                             </div>
 
@@ -233,7 +233,7 @@ export function OnboardingForm({ coachSlug }: Props) {
                                     value={formData.goals}
                                     onChange={handleInputChange}
                                     onBlur={handleBlur}
-                                    className={`flex h-10 w-full rounded-md border bg-background/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)] ${fieldError('goals') ? 'border-red-500' : 'border-border'}`}
+                                    className={`flex h-12 w-full rounded-control border-[1.5px] bg-surface-card px-3.5 text-[15px] font-medium text-text-strong outline-none transition-all focus:border-[var(--theme-primary)] focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] ${fieldError('goals') ? 'border-[var(--danger-500)]' : 'border-border-default'}`}
                                 >
                                     <option value="">Selecciona tu meta</option>
                                     <option value="Perder grasa">Perder grasa / Definición</option>
@@ -242,7 +242,7 @@ export function OnboardingForm({ coachSlug }: Props) {
                                     <option value="Mantenimiento general">Mantenimiento general / Salud</option>
                                     <option value="Rendimiento deportivo">Mejorar rendimiento deportivo</option>
                                 </select>
-                                {fieldError('goals') && <p className="text-xs text-red-400">{fieldError('goals')}</p>}
+                                {fieldError('goals') && <p className="text-xs text-[var(--danger-600)]">{fieldError('goals')}</p>}
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
@@ -255,14 +255,14 @@ export function OnboardingForm({ coachSlug }: Props) {
                                         value={formData.experience_level}
                                         onChange={handleInputChange}
                                         onBlur={handleBlur}
-                                        className={`flex h-10 w-full rounded-md border bg-background/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)] ${fieldError('experience_level') ? 'border-red-500' : 'border-border'}`}
+                                        className={`flex h-12 w-full rounded-control border-[1.5px] bg-surface-card px-3.5 text-[15px] font-medium text-text-strong outline-none transition-all focus:border-[var(--theme-primary)] focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] ${fieldError('experience_level') ? 'border-[var(--danger-500)]' : 'border-border-default'}`}
                                     >
                                         <option value="">Nivel</option>
                                         <option value="Principiante">Principiante</option>
                                         <option value="Intermedio">Intermedio</option>
                                         <option value="Avanzado">Avanzado</option>
                                     </select>
-                                    {fieldError('experience_level') && <p className="text-xs text-red-400">{fieldError('experience_level')}</p>}
+                                    {fieldError('experience_level') && <p className="text-xs text-[var(--danger-600)]">{fieldError('experience_level')}</p>}
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="availability" className="text-muted-foreground">Días/semana*</Label>
@@ -273,7 +273,7 @@ export function OnboardingForm({ coachSlug }: Props) {
                                         value={formData.availability}
                                         onChange={handleInputChange}
                                         onBlur={handleBlur}
-                                        className={`flex h-10 w-full rounded-md border bg-background/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)] ${fieldError('availability') ? 'border-red-500' : 'border-border'}`}
+                                        className={`flex h-12 w-full rounded-control border-[1.5px] bg-surface-card px-3.5 text-[15px] font-medium text-text-strong outline-none transition-all focus:border-[var(--theme-primary)] focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] ${fieldError('availability') ? 'border-[var(--danger-500)]' : 'border-border-default'}`}
                                     >
                                         <option value="">Días</option>
                                         <option value="2 días">2 días</option>
@@ -282,7 +282,7 @@ export function OnboardingForm({ coachSlug }: Props) {
                                         <option value="5 días">5 días</option>
                                         <option value="6+ días">6+ días</option>
                                     </select>
-                                    {fieldError('availability') && <p className="text-xs text-red-400">{fieldError('availability')}</p>}
+                                    {fieldError('availability') && <p className="text-xs text-[var(--danger-600)]">{fieldError('availability')}</p>}
                                 </div>
                             </div>
                         </motion.div>
@@ -298,10 +298,10 @@ export function OnboardingForm({ coachSlug }: Props) {
                             className="space-y-6"
                         >
                             <div className="space-y-1">
-                                <h2 className="text-xl font-bold text-foreground">Salud y seguridad</h2>
+                                <h2 className="font-display text-xl font-extrabold tracking-[-0.01em] text-text-strong">Salud y seguridad</h2>
                                 <p className="text-sm text-muted-foreground">Esta información es vital para evitar lesiones.</p>
                             </div>
-                            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                            <div className="rounded-control border border-[var(--warning-500)]/30 bg-[var(--warning-100)] px-3 py-2 text-xs text-[var(--warning-700)]">
                                 EVA no es un dispositivo medico ni sustituye el consejo de profesionales de la salud.
                             </div>
 
@@ -314,7 +314,7 @@ export function OnboardingForm({ coachSlug }: Props) {
                                     placeholder="Ej. Dolor en rodilla derecha al correr..." 
                                     value={formData.injuries}
                                     onChange={handleInputChange}
-                                    className="flex w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)] placeholder:text-muted-foreground"
+                                    className="flex w-full rounded-control border-[1.5px] border-border-default bg-surface-card px-3.5 py-2.5 text-[15px] text-text-strong outline-none transition-all focus:border-[var(--theme-primary)] focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] placeholder:text-text-muted"
                                 />
                             </div>
 
@@ -327,7 +327,7 @@ export function OnboardingForm({ coachSlug }: Props) {
                                     placeholder="Ej. Hipertensión, asma, diabetes..." 
                                     value={formData.medical_conditions}
                                     onChange={handleInputChange}
-                                    className="flex w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--theme-primary)] placeholder:text-muted-foreground"
+                                    className="flex w-full rounded-control border-[1.5px] border-border-default bg-surface-card px-3.5 py-2.5 text-[15px] text-text-strong outline-none transition-all focus:border-[var(--theme-primary)] focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] placeholder:text-text-muted"
                                 />
                             </div>
 
@@ -352,7 +352,7 @@ export function OnboardingForm({ coachSlug }: Props) {
                                         name="age_confirmed"
                                         checked={ageConfirmed}
                                         onChange={e => { setAgeConfirmed(e.target.checked); setAgeError(false) }}
-                                        className="mt-0.5 h-4 w-4 rounded border-border accent-[var(--theme-primary)] cursor-pointer flex-shrink-0"
+                                        className="mt-0.5 h-4 w-4 rounded border-border-default accent-[var(--theme-primary)] cursor-pointer flex-shrink-0"
                                     />
                                     <span className="text-xs text-muted-foreground leading-snug">
                                         Confirmo que tengo 14 años o más y acepto los{' '}
@@ -361,7 +361,7 @@ export function OnboardingForm({ coachSlug }: Props) {
                                         <a href="/legal/privacy" target="_blank" className="underline hover:text-foreground">política de privacidad</a>.*
                                     </span>
                                 </label>
-                                {ageError && <p className="text-xs text-red-400 pl-6">Debes confirmar tu edad para continuar.</p>}
+                                {ageError && <p className="text-xs text-[var(--danger-600)] pl-6">Debes confirmar tu edad para continuar.</p>}
                             </div>
 
                             <input type="hidden" name="weight" value={formData.weight} />
@@ -374,7 +374,7 @@ export function OnboardingForm({ coachSlug }: Props) {
                 </AnimatePresence>
 
                 {state.error && (
-                    <div className="mt-4 p-3 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-md">
+                    <div className="mt-4 p-3 text-sm font-semibold text-[var(--danger-600)] bg-[var(--danger-100)] border border-transparent rounded-control">
                         {state.error}
                     </div>
                 )}

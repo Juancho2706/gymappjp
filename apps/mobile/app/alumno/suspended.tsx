@@ -6,6 +6,9 @@ import { useTheme } from '../../context/ThemeContext'
 import { Button } from '../../components'
 import { signOutAndCleanup } from '../../lib/auth-actions'
 
+// DS warning-500 (fixed status token, not brand/white-label).
+const WARNING_500 = '#F5A524'
+
 export default function SuspendedScreen() {
   const { theme } = useTheme()
   const router = useRouter()
@@ -18,13 +21,13 @@ export default function SuspendedScreen() {
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]}>
       <View style={styles.content}>
-        <View style={[styles.iconWrap, { backgroundColor: '#F59E0B18', borderRadius: 40 }]}>
-          <AlertCircle size={40} color="#F59E0B" />
+        <View className="bg-warning-100" style={styles.iconWrap}>
+          <AlertCircle size={40} color={WARNING_500} />
         </View>
-        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+        <Text className="text-strong font-display-black" style={styles.title}>
           Acceso pausado
         </Text>
-        <Text style={[styles.body, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        <Text className="text-muted font-sans" style={styles.body}>
           Tu coach ha pausado temporalmente el acceso a la app. Contacta a tu coach para más información y para restablecer el acceso.
         </Text>
       </View>
@@ -44,7 +47,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     gap: 16,
   },
-  iconWrap: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  iconWrap: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   title: { fontSize: 22, textAlign: 'center' },
   body: { fontSize: 15, lineHeight: 23, textAlign: 'center' },
   footer: { padding: 24, paddingBottom: 32 },

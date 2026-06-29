@@ -31,9 +31,9 @@ function SubmitButton({ isFreeTier }: { isFreeTier: boolean }) {
             type="submit"
             disabled={pending}
             className={cn(
-                'w-full h-12 text-base font-semibold rounded-xl transition-all duration-200',
-                'bg-primary hover:opacity-90 text-primary-foreground',
-                'shadow-lg shadow-primary/20 disabled:opacity-60 disabled:cursor-not-allowed'
+                'w-full h-12 text-base font-bold tracking-[-0.01em] rounded-control transition-all duration-200 active:scale-[0.98]',
+                'bg-[var(--cta-fill)] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)]',
+                'disabled:opacity-60 disabled:cursor-not-allowed'
             )}
         >
             {pending ? (
@@ -72,26 +72,26 @@ export function CompleteOnboardingForm({ defaultName }: { defaultName: string })
     return (
         <div className="w-full max-w-md mx-auto animate-slide-up">
             <div className="text-center mb-8">
-                <h1 className="text-3xl font-extrabold tracking-tight text-foreground font-display">
+                <h1 className="text-3xl font-black tracking-[-0.03em] text-text-strong font-display">
                     Un último paso
                 </h1>
-                <p className="mt-2 text-muted-foreground text-sm">
+                <p className="mt-2 text-text-muted text-sm">
                     Completá tu perfil y elegí tu plan para empezar
                 </p>
             </div>
 
-            <div className="bg-card border border-border rounded-2xl p-8 shadow-sm space-y-6">
+            <div className="bg-surface-card border border-border-subtle rounded-card p-8 shadow-[var(--shadow-sm)] space-y-6">
                 <form action={formAction} className="space-y-5">
                     <input type="hidden" name="subscription_tier" value={tier} />
                     <input type="hidden" name="billing_cycle" value={billingCycle} />
 
                     {/* Name */}
                     <div className="space-y-1.5">
-                        <label htmlFor="full_name" className="text-foreground text-sm font-medium">
+                        <label htmlFor="full_name" className="text-text-strong text-[13px] font-semibold">
                             Nombre completo
                         </label>
                         <div className="relative">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
                             <input
                                 id="full_name"
                                 name="full_name"
@@ -100,18 +100,18 @@ export function CompleteOnboardingForm({ defaultName }: { defaultName: string })
                                 placeholder="Juan Pérez"
                                 required
                                 minLength={2}
-                                className="w-full pl-10 h-12 bg-secondary border border-border text-foreground rounded-xl placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                                className="w-full pl-10 h-12 bg-surface-card border-[1.5px] border-border-default text-text-strong text-[15px] font-medium rounded-control placeholder:text-text-muted focus:border-sport-600 focus:shadow-[var(--ring-focus)] transition-all outline-none"
                             />
                         </div>
                     </div>
 
                     {/* Brand */}
                     <div className="space-y-1.5">
-                        <label htmlFor="brand_name" className="text-foreground text-sm font-medium">
+                        <label htmlFor="brand_name" className="text-text-strong text-[13px] font-semibold">
                             Nombre de tu marca
                         </label>
                         <div className="relative">
-                            <Store className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                            <Store className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
                             <input
                                 id="brand_name"
                                 name="brand_name"
@@ -119,7 +119,7 @@ export function CompleteOnboardingForm({ defaultName }: { defaultName: string })
                                 placeholder="Ej: JotaP Fitness"
                                 required
                                 minLength={2}
-                                className="w-full pl-10 h-12 bg-secondary border border-border text-foreground rounded-xl placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                                className="w-full pl-10 h-12 bg-surface-card border-[1.5px] border-border-default text-text-strong text-[15px] font-medium rounded-control placeholder:text-text-muted focus:border-sport-600 focus:shadow-[var(--ring-focus)] transition-all outline-none"
                             />
                         </div>
                     </div>
@@ -141,36 +141,36 @@ export function CompleteOnboardingForm({ defaultName }: { defaultName: string })
                                         type="button"
                                         onClick={() => handleTierChange(key)}
                                         className={cn(
-                                            'rounded-xl border p-3 text-left transition',
+                                            'rounded-card border-[1.5px] p-3.5 text-left transition',
                                             tier === key
-                                                ? 'border-primary bg-primary/10'
-                                                : 'border-border hover:border-primary/40'
+                                                ? 'border-sport-500 bg-sport-100 shadow-[var(--glow-sport)]'
+                                                : 'border-border-subtle hover:border-sport-500/40'
                                         )}
                                     >
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="flex items-center gap-1.5">
-                                                <p className="font-semibold text-foreground">{option.label}</p>
+                                                <p className="font-semibold text-text-strong">{option.label}</p>
                                                 {isFree && (
-                                                    <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-slate-500/15 text-slate-600 dark:text-slate-400">
+                                                    <span className="rounded-pill px-1.5 py-0.5 text-[10px] font-bold bg-[var(--success-100)] text-[var(--success-600)]">
                                                         Gratis para siempre
                                                     </span>
                                                 )}
                                             </div>
                                             <span className={cn(
-                                                'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold',
+                                                'shrink-0 rounded-pill px-1.5 py-0.5 text-[10px] font-bold',
                                                 caps.canUseNutrition
-                                                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                                                    : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                                                    ? 'bg-[var(--success-100)] text-[var(--success-600)]'
+                                                    : 'bg-[var(--warning-100)] text-[var(--warning-700)]'
                                             )}>
                                                 {nutritionText}
                                             </span>
                                         </div>
-                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                        <p className="text-xs text-text-muted mt-0.5">
                                             Hasta {option.maxClients} alumnos · {cycleText}
                                         </p>
-                                        <p className="text-sm text-foreground mt-1 font-medium">
+                                        <p className="text-sm text-text-body mt-1 font-medium">
                                             {isFree ? (
-                                                <span className="text-emerald-600 dark:text-emerald-400 font-bold">$0 · Sin tarjeta</span>
+                                                <span className="text-[var(--success-600)] font-bold">$0 · Sin tarjeta</span>
                                             ) : (
                                                 <>${displayPrice.toLocaleString('es-CL')} CLP / {BILLING_CYCLE_CONFIG[defaultCycleForKey].label.toLowerCase()}</>
                                             )}
@@ -192,14 +192,14 @@ export function CompleteOnboardingForm({ defaultName }: { defaultName: string })
                                         type="button"
                                         onClick={() => setBillingCycle(key)}
                                         className={cn(
-                                            'rounded-xl border p-3 text-left transition',
+                                            'rounded-card border-[1.5px] p-3 text-left transition',
                                             billingCycle === key
-                                                ? 'border-primary bg-primary/10'
-                                                : 'border-border hover:border-primary/40'
+                                                ? 'border-sport-500 bg-sport-100'
+                                                : 'border-border-subtle hover:border-sport-500/40'
                                         )}
                                     >
-                                        <p className="font-semibold text-foreground text-sm">{option.label}</p>
-                                        <p className="text-xs text-muted-foreground">
+                                        <p className="font-semibold text-text-strong text-sm">{option.label}</p>
+                                        <p className="text-xs text-text-muted">
                                             {option.discountPercent > 0 ? `Ahorro ${option.discountPercent}%` : 'Sin descuento'}
                                         </p>
                                     </button>
@@ -210,39 +210,39 @@ export function CompleteOnboardingForm({ defaultName }: { defaultName: string })
 
                     {/* Price summary */}
                     {!isFreeTier && (
-                        <div className="rounded-xl border border-border bg-secondary/40 p-3 flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Total</span>
-                            <span className="font-bold text-foreground">${selectedPrice.toLocaleString('es-CL')} CLP / {BILLING_CYCLE_CONFIG[billingCycle].label.toLowerCase()}</span>
+                        <div className="rounded-control border border-border-subtle bg-surface-sunken p-3 flex items-center justify-between text-sm">
+                            <span className="text-text-muted">Total</span>
+                            <span className="font-bold text-text-strong">${selectedPrice.toLocaleString('es-CL')} CLP / {BILLING_CYCLE_CONFIG[billingCycle].label.toLowerCase()}</span>
                         </div>
                     )}
 
                     {/* Legal checkboxes */}
-                    <div className="rounded-xl border border-border bg-secondary/40 p-3 space-y-3">
-                        <label className="flex items-start gap-2 text-xs text-muted-foreground">
-                            <input type="checkbox" name="accept_legal" required className="mt-0.5 h-4 w-4 rounded border-border shrink-0" />
+                    <div className="rounded-control border border-border-subtle bg-surface-sunken p-3 space-y-3">
+                        <label className="flex items-start gap-2 text-xs text-text-muted">
+                            <input type="checkbox" name="accept_legal" required className="mt-0.5 h-4 w-4 rounded border-border-default accent-[var(--sport-500)] shrink-0" />
                             <span>
                                 Acepto los{' '}
-                                <Link href="/legal" className="text-primary hover:opacity-80">términos de servicio</Link>
+                                <Link href="/legal" className="text-sport-600 hover:opacity-80">términos de servicio</Link>
                                 {' '}y la{' '}
-                                <Link href="/privacidad" className="text-primary hover:opacity-80">política de privacidad</Link>.{' '}
-                                <span className="text-destructive font-medium">*</span>
+                                <Link href="/privacidad" className="text-sport-600 hover:opacity-80">política de privacidad</Link>.{' '}
+                                <span className="text-[var(--danger-600)] font-medium">*</span>
                             </span>
                         </label>
-                        <label className="flex items-start gap-2 text-xs text-muted-foreground">
-                            <input type="checkbox" name="accept_health_data" required className="mt-0.5 h-4 w-4 rounded border-border shrink-0" />
+                        <label className="flex items-start gap-2 text-xs text-text-muted">
+                            <input type="checkbox" name="accept_health_data" required className="mt-0.5 h-4 w-4 rounded border-border-default accent-[var(--sport-500)] shrink-0" />
                             <span>
                                 Acepto el tratamiento de datos de salud de mis alumnos conforme a la Ley 21.719.{' '}
-                                <span className="text-destructive font-medium">*</span>
+                                <span className="text-[var(--danger-600)] font-medium">*</span>
                             </span>
                         </label>
-                        <label className="flex items-start gap-2 text-xs text-muted-foreground">
-                            <input type="checkbox" name="accept_marketing" className="mt-0.5 h-4 w-4 rounded border-border shrink-0" />
-                            <span>Quiero recibir novedades y ofertas de EVA. <span className="text-muted-foreground/60">(opcional)</span></span>
+                        <label className="flex items-start gap-2 text-xs text-text-muted">
+                            <input type="checkbox" name="accept_marketing" className="mt-0.5 h-4 w-4 rounded border-border-default accent-[var(--sport-500)] shrink-0" />
+                            <span>Quiero recibir novedades y ofertas de EVA. <span className="text-text-muted/60">(opcional)</span></span>
                         </label>
                     </div>
 
                     {state?.error && (
-                        <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+                        <div className="rounded-control border border-transparent bg-[var(--danger-100)] px-4 py-3 text-sm font-semibold text-[var(--danger-600)]">
                             {state.error}
                         </div>
                     )}
@@ -250,19 +250,19 @@ export function CompleteOnboardingForm({ defaultName }: { defaultName: string })
                     <SubmitButton isFreeTier={isFreeTier} />
                 </form>
 
-                <p className="text-center text-xs text-muted-foreground flex items-center justify-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                <p className="text-center text-xs text-text-muted flex items-center justify-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[var(--success-500)]" />
                     {isFreeTier ? 'Sin tarjeta · Acceso inmediato.' : 'Registro seguro + activación automática.'}
                 </p>
 
                 {isFreeTier && (
-                    <div className="rounded-xl bg-primary/5 border border-primary/20 p-3 space-y-1.5">
-                        <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                            <Sparkles className="w-3.5 h-3.5 text-primary" /> Plan Free incluye:
+                    <div className="rounded-control bg-sport-100 border border-sport-500/20 p-3 space-y-1.5">
+                        <p className="text-xs font-semibold text-text-strong flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-sport-600" /> Plan Free incluye:
                         </p>
                         {['3 alumnos activos', 'Entrenos ilimitados', 'App para tus alumnos', 'Check-ins'].map(item => (
-                            <div key={item} className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+                            <div key={item} className="flex items-center gap-2 text-xs text-text-muted">
+                                <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-[var(--success-500)]" />
                                 {item}
                             </div>
                         ))}

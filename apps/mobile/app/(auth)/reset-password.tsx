@@ -65,26 +65,18 @@ export default function ResetPasswordScreen() {
             transition={{ type: 'spring', damping: 14 }}
             style={styles.inner}
           >
-            <View
-              style={[
-                styles.successIcon,
-                {
-                  backgroundColor: theme.success + '1A',
-                  borderColor: theme.success + '33',
-                  borderRadius: theme.radius['2xl'],
-                },
-              ]}
-            >
+            <View className="bg-success-100" style={[styles.successIcon, { borderRadius: theme.radius['2xl'] }]}>
               <Check size={30} color={theme.success} strokeWidth={1.75} />
             </View>
-            <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            <Text className="text-strong font-display-black" style={styles.title}>
               Contrasena actualizada
             </Text>
-            <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            <Text className="text-muted font-sans" style={styles.subtitle}>
               Ya puedes volver a EVA con tu nueva contrasena.
             </Text>
             <Button
               label="Continuar"
+              variant="sport"
               rightIcon={ArrowRight}
               onPress={handleContinue}
               full
@@ -99,22 +91,13 @@ export default function ResetPasswordScreen() {
             transition={{ type: 'timing', duration: 500 }}
             style={styles.inner}
           >
-            <View
-              style={[
-                styles.heroIcon,
-                {
-                  backgroundColor: theme.primary + '1A',
-                  borderColor: theme.primary + '33',
-                  borderRadius: theme.radius['2xl'],
-                },
-              ]}
-            >
+            <View className="bg-sport-100" style={[styles.heroIcon, { borderRadius: theme.radius['2xl'] }]}>
               <KeyRound size={26} color={theme.primary} strokeWidth={1.75} />
             </View>
-            <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            <Text className="text-strong font-display-black" style={styles.title}>
               Nueva contrasena
             </Text>
-            <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            <Text className="text-muted font-sans" style={styles.subtitle}>
               Elige una contrasena segura de al menos 8 caracteres.
             </Text>
 
@@ -138,6 +121,7 @@ export default function ResetPasswordScreen() {
               />
               <Button
                 label="Guardar contrasena"
+                variant="sport"
                 rightIcon={ArrowRight}
                 onPress={handleSave}
                 loading={loading}
@@ -201,7 +185,6 @@ const styles = StyleSheet.create({
   heroIcon: {
     width: 56,
     height: 56,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
@@ -209,7 +192,6 @@ const styles = StyleSheet.create({
   successIcon: {
     width: 64,
     height: 64,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,

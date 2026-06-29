@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import * as FileSystem from 'expo-file-system'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
-import { ArrowLeft, ArrowRight, Camera, Check, Scale, Zap } from 'lucide-react-native'
+import { ArrowLeft, ArrowRight, Camera, Check, History, Scale, X, Zap } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
@@ -26,6 +26,11 @@ import { AppBackground } from '../../../components/AppBackground'
 
 const MAX_BYTES = 5 * 1024 * 1024
 const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp']
+
+const FONT_BOLD = 'HankenGrotesk_700Bold'
+const FONT_SEMI = 'HankenGrotesk_600SemiBold'
+const FONT_DISPLAY = 'Archivo_800ExtraBold'
+const FONT_MONO = 'JetBrainsMono_700Bold'
 
 interface LastCheckIn {
   weight: number | null
@@ -208,16 +213,14 @@ export default function CheckInScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScreenHeader title="Check-in" subtitle="Registrá tu progreso semanal" />
 
-        {/* Step dots */}
-        <View style={styles.dotsRow}>
+        {/* Stepper (3 segmentos, activo más ancho) */}
+        <View style={styles.stepperRow}>
           {([1, 2, 3] as const).map((s) => (
-            <MotiView
+            <View
               key={s}
-              animate={{ width: step === s ? 24 : 8, opacity: step >= s ? 1 : 0.35 }}
-              transition={{ type: 'timing', duration: 250 }}
               style={[
-                styles.dot,
-                { backgroundColor: step >= s ? theme.primary : theme.border },
+                styles.stepSeg,
+                { flex: s === step ? 1.6 : 1, backgroundColor: s <= step ? theme.primary : theme.border },
               ]}
             />
           ))}
@@ -240,7 +243,7 @@ export default function CheckInScreen() {
               ]}
             >
               <Check size={16} color={theme.success} strokeWidth={2.5} />
-              <Text style={[styles.successText, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>
+              <Text style={[styles.successText, { color: theme.success, fontFamily: FONT_BOLD }]}>
                 Check-in registrado
               </Text>
             </MotiView>
@@ -287,12 +290,12 @@ export default function CheckInScreen() {
         <View style={[styles.navBar, { borderTopColor: theme.border, backgroundColor: theme.background }]}>
           {step > 1 ? (
             <TouchableOpacity
-              style={[styles.navBtnSecondary, { borderColor: theme.border, borderRadius: theme.radius.lg }]}
+              style={[styles.navBtnSecondary, { borderColor: theme.border, borderRadius: 14 }]}
               onPress={goPrev}
               activeOpacity={0.75}
             >
               <ArrowLeft size={16} color={theme.foreground} strokeWidth={2} />
-              <Text style={[styles.navBtnText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Anterior</Text>
+              <Text style={[styles.navBtnText, { color: theme.foreground, fontFamily: FONT_BOLD }]}>Anterior</Text>
             </TouchableOpacity>
           ) : (
             <View style={{ flex: 1 }} />
@@ -300,6 +303,7 @@ export default function CheckInScreen() {
           <Button
             label={step === 3 ? 'Enviar check-in' : 'Continuar'}
             rightIcon={step === 3 ? Check : ArrowRight}
+            variant="sport"
             onPress={goNext}
             loading={submitting}
             disabled={!canGoNext()}
@@ -326,34 +330,39 @@ function StepOne({
   return (
     <View style={{ gap: 20 }}>
       {lastCheckIn && (
-        <View style={[styles.lastCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-          <Text style={[styles.lastCardLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Último check-in — {formatRelativeDate(lastCheckIn.date.slice(0, 10), todayIso)}
-          </Text>
-          <View style={styles.lastCardRow}>
-            {lastCheckIn.weight != null && (
-              <View style={styles.lastCardItem}>
-                <Scale size={13} color={theme.mutedForeground} strokeWidth={2} />
-                <Text style={[styles.lastCardValue, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-                  {lastCheckIn.weight} kg
-                </Text>
-              </View>
-            )}
-            {lastCheckIn.energy_level != null && (
-              <View style={styles.lastCardItem}>
-                <Zap size={13} color={theme.mutedForeground} strokeWidth={2} />
-                <Text style={[styles.lastCardValue, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-                  Energía {lastCheckIn.energy_level}/10
-                </Text>
-              </View>
-            )}
+        <View style={[styles.lastCard, { backgroundColor: theme.muted, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+          <View style={[styles.lastChip, { backgroundColor: theme.card, borderRadius: 999 }]}>
+            <History size={17} color={theme.primary} strokeWidth={2} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.lastCardLabel, { color: theme.mutedForeground, fontFamily: FONT_SEMI }]}>
+              Último check-in — {formatRelativeDate(lastCheckIn.date.slice(0, 10), todayIso)}
+            </Text>
+            <View style={styles.lastCardRow}>
+              {lastCheckIn.weight != null && (
+                <View style={styles.lastCardItem}>
+                  <Scale size={13} color={theme.mutedForeground} strokeWidth={2} />
+                  <Text style={[styles.lastCardValue, { color: theme.foreground, fontFamily: FONT_BOLD }]}>
+                    {lastCheckIn.weight} kg
+                  </Text>
+                </View>
+              )}
+              {lastCheckIn.energy_level != null && (
+                <View style={styles.lastCardItem}>
+                  <Zap size={13} color={theme.mutedForeground} strokeWidth={2} />
+                  <Text style={[styles.lastCardValue, { color: theme.foreground, fontFamily: FONT_BOLD }]}>
+                    Energía {lastCheckIn.energy_level}/10
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
         </View>
       )}
 
       <Field label="Peso (kg) *" icon={Scale} theme={theme}>
         <TextInput
-          style={[styles.input, { borderColor: theme.border, color: theme.foreground, backgroundColor: theme.secondary, borderRadius: theme.radius.lg, fontFamily: theme.fontSans }]}
+          style={[styles.input, { borderColor: theme.border, color: theme.foreground, backgroundColor: theme.card, borderRadius: 14, fontFamily: FONT_MONO }]}
           placeholder="75.5"
           placeholderTextColor={theme.mutedForeground}
           value={weight}
@@ -372,12 +381,12 @@ function StepOne({
                 key={n}
                 style={[
                   styles.energyBtn,
-                  { borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? theme.primary : theme.secondary, borderRadius: theme.radius.md },
+                  { borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? theme.primary : theme.card, borderRadius: theme.radius.md },
                 ]}
                 onPress={() => setEnergyLevel(selected ? null : n)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.energyBtnText, { color: selected ? theme.primaryForeground : theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+                <Text style={[styles.energyBtnText, { color: selected ? theme.primaryForeground : theme.foreground, fontFamily: FONT_BOLD }]}>
                   {n}
                 </Text>
               </TouchableOpacity>
@@ -401,28 +410,30 @@ function StepTwo({
   onClearBack: () => void
 }) {
   return (
-    <View style={{ gap: 20 }}>
-      <Text style={[styles.stepHeading, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+    <View style={{ gap: 16 }}>
+      <Text style={[styles.stepHeading, { color: theme.foreground, fontFamily: FONT_DISPLAY }]}>
         Fotos de progreso
       </Text>
       <Text style={[styles.stepSubtext, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
         Las fotos son opcionales pero ayudan a visualizar tu progreso.
       </Text>
 
-      <PhotoPickerSlot
-        theme={theme}
-        label="Foto frontal"
-        uri={frontPhotoUri}
-        onPick={onPickFront}
-        onClear={onClearFront}
-      />
-      <PhotoPickerSlot
-        theme={theme}
-        label="Foto espalda"
-        uri={backPhotoUri}
-        onPick={onPickBack}
-        onClear={onClearBack}
-      />
+      <View style={styles.photoRow}>
+        <PhotoPickerSlot
+          theme={theme}
+          label="Foto frontal"
+          uri={frontPhotoUri}
+          onPick={onPickFront}
+          onClear={onClearFront}
+        />
+        <PhotoPickerSlot
+          theme={theme}
+          label="Foto espalda"
+          uri={backPhotoUri}
+          onPick={onPickBack}
+          onClear={onClearBack}
+        />
+      </View>
     </View>
   )
 }
@@ -437,32 +448,46 @@ function PhotoPickerSlot({
   onClear: () => void
 }) {
   return (
-    <View style={{ gap: 8 }}>
-      <Text style={[styles.label, { color: theme.foreground, fontFamily: theme.fontSans }]}>{label}</Text>
+    <TouchableOpacity
+      style={[
+        styles.photoSlot,
+        {
+          backgroundColor: uri ? '#0B0E13' : theme.muted,
+          borderColor: uri ? theme.primary : theme.border,
+          borderStyle: uri ? 'solid' : 'dashed',
+          borderRadius: 14,
+        },
+      ]}
+      activeOpacity={uri ? 1 : 0.8}
+      onPress={uri ? undefined : onPick}
+    >
       {uri ? (
-        <View style={[styles.photoPreviewWrap, { borderRadius: theme.radius.lg, borderColor: theme.border }]}>
-          <Image source={{ uri }} style={styles.photoPreview} resizeMode="cover" />
+        <>
+          <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
           <TouchableOpacity
             style={[styles.clearBtn, { backgroundColor: theme.destructive }]}
             onPress={onClear}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
+            hitSlop={8}
           >
-            <Text style={[styles.clearBtnText, { fontFamily: 'Montserrat_700Bold' }]}>✕ Quitar</Text>
+            <X size={16} color="#fff" strokeWidth={2.5} />
           </TouchableOpacity>
-        </View>
+          <View style={styles.photoLabelStrip}>
+            <Text style={[styles.photoLabelStripText, { fontFamily: FONT_BOLD }]}>{label}</Text>
+          </View>
+        </>
       ) : (
-        <TouchableOpacity
-          style={[styles.photoBtn, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}
-          onPress={onPick}
-          activeOpacity={0.75}
-        >
-          <Camera size={18} color={theme.mutedForeground} strokeWidth={2} />
-          <Text style={[styles.photoBtnText, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
-            Seleccionar foto
+        <>
+          <Camera size={28} color={theme.mutedForeground} strokeWidth={2} />
+          <Text style={[styles.photoBtnText, { color: theme.foreground, fontFamily: FONT_BOLD }]}>
+            {label}
           </Text>
-        </TouchableOpacity>
+          <Text style={[styles.photoBtnHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Opcional · toca para subir
+          </Text>
+        </>
       )}
-    </View>
+    </TouchableOpacity>
   )
 }
 
@@ -477,23 +502,16 @@ function StepThree({
   notes: string
   setNotes: (v: string) => void
 }) {
+  const photoCount = [frontPhotoUri, backPhotoUri].filter(Boolean).length
   return (
-    <View style={{ gap: 20 }}>
-      <Text style={[styles.stepHeading, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+    <View style={{ gap: 16 }}>
+      <Text style={[styles.stepHeading, { color: theme.foreground, fontFamily: FONT_DISPLAY }]}>
         Resumen y notas
       </Text>
 
-      {/* Summary card */}
-      <View style={[styles.summaryCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-        <SummaryRow theme={theme} label="Peso" value={weight ? `${weight} kg` : '—'} />
-        <SummaryRow theme={theme} label="Energía" value={energyLevel != null ? `${energyLevel}/10` : '—'} />
-        <SummaryRow theme={theme} label="Foto frontal" value={frontPhotoUri ? '✓ Cargada' : 'Sin foto'} />
-        <SummaryRow theme={theme} label="Foto espalda" value={backPhotoUri ? '✓ Cargada' : 'Sin foto'} />
-      </View>
-
       <Field label="Notas (opcional)" theme={theme}>
         <TextInput
-          style={[styles.notesInput, { borderColor: theme.border, color: theme.foreground, backgroundColor: theme.secondary, borderRadius: theme.radius.lg, fontFamily: theme.fontSans }]}
+          style={[styles.notesInput, { borderColor: theme.border, color: theme.foreground, backgroundColor: theme.card, borderRadius: 14, fontFamily: theme.fontSans }]}
           placeholder="¿Cómo te sentiste esta semana?"
           placeholderTextColor={theme.mutedForeground}
           value={notes}
@@ -503,15 +521,25 @@ function StepThree({
           textAlignVertical="top"
         />
       </Field>
+
+      {/* Summary card */}
+      <View style={[styles.summaryCard, { backgroundColor: theme.muted, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+        <Text style={[styles.summaryTitle, { color: theme.mutedForeground, fontFamily: FONT_BOLD }]}>Resumen</Text>
+        <View style={styles.summaryRow}>
+          <SummaryMetric theme={theme} label="Peso" value={weight ? `${weight} kg` : '—'} />
+          <SummaryMetric theme={theme} label="Energía" value={energyLevel != null ? `${energyLevel}/10` : '—'} />
+          <SummaryMetric theme={theme} label="Fotos" value={`${photoCount} adj.`} />
+        </View>
+      </View>
     </View>
   )
 }
 
-function SummaryRow({ theme, label, value }: { theme: any; label: string; value: string }) {
+function SummaryMetric({ theme, label, value }: { theme: any; label: string; value: string }) {
   return (
-    <View style={styles.summaryRow}>
-      <Text style={[styles.summaryLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
-      <Text style={[styles.summaryValue, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{value}</Text>
+    <View style={styles.summaryMetric}>
+      <Text style={[styles.summaryValue, { color: theme.foreground, fontFamily: FONT_MONO }]}>{value}</Text>
+      <Text style={[styles.summaryLabel, { color: theme.mutedForeground, fontFamily: FONT_SEMI }]}>{label}</Text>
     </View>
   )
 }
@@ -531,7 +559,7 @@ function Field({
     <View style={styles.field}>
       <View style={styles.labelRow}>
         {Icon ? <Icon size={14} color={theme.mutedForeground} strokeWidth={2} /> : null}
-        <Text style={[styles.label, { color: theme.foreground, fontFamily: theme.fontSans }]}>{label}</Text>
+        <Text style={[styles.label, { color: theme.foreground, fontFamily: FONT_SEMI }]}>{label}</Text>
       </View>
       {children}
     </View>
@@ -540,49 +568,53 @@ function Field({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  dotsRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 12 },
-  dot: { height: 8, borderRadius: 4 },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 12 },
+  stepSeg: { height: 6, borderRadius: 999 },
   scroll: { paddingHorizontal: 20, paddingBottom: 24, gap: 0 },
   successBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1,
     paddingVertical: 14, paddingHorizontal: 16, justifyContent: 'center', marginBottom: 20,
   },
   successText: { fontSize: 14, letterSpacing: 0.3 },
-  stepHeading: { fontSize: 18, letterSpacing: -0.3 },
-  stepSubtext: { fontSize: 13, lineHeight: 20, marginTop: -12 },
-  lastCard: { borderWidth: 1, padding: 14, gap: 8 },
+  stepHeading: { fontSize: 20, letterSpacing: -0.3 },
+  stepSubtext: { fontSize: 13, lineHeight: 20, marginTop: -8 },
+  lastCard: { borderWidth: 1, padding: 14, gap: 12, flexDirection: 'row', alignItems: 'center' },
+  lastChip: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   lastCardLabel: { fontSize: 12 },
-  lastCardRow: { flexDirection: 'row', gap: 16 },
+  lastCardRow: { flexDirection: 'row', gap: 16, marginTop: 2 },
   lastCardItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   lastCardValue: { fontSize: 13 },
   field: { gap: 8 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  label: { fontSize: 14, fontWeight: '500' },
-  input: { borderWidth: 1, height: 48, paddingHorizontal: 16, fontSize: 15 },
+  label: { fontSize: 14 },
+  input: { borderWidth: 1.5, height: 52, paddingHorizontal: 16, fontSize: 16 },
   energyRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  energyBtn: { width: 42, height: 42, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  energyBtn: { width: 42, height: 42, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   energyBtnText: { fontSize: 14 },
-  photoBtn: {
-    borderWidth: 1.5, borderStyle: 'dashed', paddingVertical: 22,
-    alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8,
+  photoRow: { flexDirection: 'row', gap: 10 },
+  photoSlot: {
+    flex: 1, aspectRatio: 3 / 4, borderWidth: 2, overflow: 'hidden',
+    alignItems: 'center', justifyContent: 'center', gap: 8,
   },
-  photoBtnText: { fontSize: 13, letterSpacing: 0.3 },
-  photoPreviewWrap: { borderWidth: 1, overflow: 'hidden', gap: 0 },
-  photoPreview: { width: '100%', height: 220 },
-  clearBtn: { padding: 10, alignItems: 'center' },
-  clearBtnText: { color: '#fff', fontSize: 13 },
+  photoBtnText: { fontSize: 12.5, letterSpacing: 0.2 },
+  photoBtnHint: { fontSize: 10.5 },
+  clearBtn: { position: 'absolute', top: 8, right: 8, width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  photoLabelStrip: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center' },
+  photoLabelStripText: { color: '#fff', fontSize: 11.5 },
   summaryCard: { borderWidth: 1, padding: 14, gap: 10 },
-  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  summaryLabel: { fontSize: 13 },
-  summaryValue: { fontSize: 13 },
-  notesInput: { borderWidth: 1, padding: 14, fontSize: 14, minHeight: 110 },
+  summaryTitle: { fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.6 },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  summaryMetric: { flex: 1, alignItems: 'center', gap: 2 },
+  summaryLabel: { fontSize: 11 },
+  summaryValue: { fontSize: 18 },
+  notesInput: { borderWidth: 1.5, padding: 14, fontSize: 14, minHeight: 110 },
   navBar: {
     flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingVertical: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   navBtnSecondary: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, borderWidth: 1, paddingVertical: 14,
+    gap: 6, borderWidth: 1.5, paddingVertical: 14,
   },
   navBtnText: { fontSize: 15 },
 })

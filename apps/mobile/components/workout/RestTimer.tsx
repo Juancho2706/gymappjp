@@ -99,6 +99,12 @@ export function RestTimer({ duration, onComplete, onSkip }: RestTimerProps) {
   const dashOffset = CIRC * (1 - progress)
   const done = timeLeft === 0
 
+  // Immersive "gym mode" palette — RestTimer sits on the always-dark execution screen.
+  const INK_900 = '#12161D'
+  const BORDER_INV = 'rgba(255,255,255,0.10)'
+  const ON_DARK = '#F4F6F8'
+  const ON_DARK_MUTED = '#939DAB'
+
   return (
     <MotiView
       from={{ opacity: 0, translateY: -12 }}
@@ -107,14 +113,14 @@ export function RestTimer({ duration, onComplete, onSkip }: RestTimerProps) {
       style={[
         styles.card,
         {
-          backgroundColor: theme.card,
-          borderColor: done ? theme.primary : theme.border,
+          backgroundColor: INK_900,
+          borderColor: done ? theme.primary : BORDER_INV,
         },
       ]}
     >
       <View style={styles.ring}>
         <Svg width={SIZE} height={SIZE}>
-          <Circle cx={CX} cy={CY} r={R} stroke={theme.border} strokeWidth={SW} fill="none" />
+          <Circle cx={CX} cy={CY} r={R} stroke={BORDER_INV} strokeWidth={SW} fill="none" />
           <Circle
             cx={CX}
             cy={CY}
@@ -130,24 +136,24 @@ export function RestTimer({ duration, onComplete, onSkip }: RestTimerProps) {
           />
         </Svg>
         <View style={styles.ringCenter}>
-          <Text style={[styles.timeText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+          <Text style={[styles.timeText, { color: ON_DARK, fontFamily: 'JetBrainsMono_700Bold' }]}>
             {fmt(timeLeft)}
           </Text>
-          <Text style={[styles.ringLabel, { color: done ? theme.primary : theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          <Text style={[styles.ringLabel, { color: done ? theme.primary : ON_DARK_MUTED, fontFamily: theme.fontSans }]}>
             {done ? '¡Listo!' : 'descanso'}
           </Text>
         </View>
       </View>
 
       <View style={styles.controls}>
-        <TouchableOpacity style={[styles.iconBtn, { borderColor: theme.border }]} onPress={reset} activeOpacity={0.7}>
-          <RotateCcw size={16} color={theme.mutedForeground} />
+        <TouchableOpacity style={[styles.iconBtn, { borderColor: BORDER_INV, backgroundColor: 'rgba(255,255,255,0.06)' }]} onPress={reset} activeOpacity={0.7}>
+          <RotateCcw size={16} color={ON_DARK_MUTED} />
         </TouchableOpacity>
         <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: theme.primary }]} onPress={toggle} activeOpacity={0.8}>
-          {isActive ? <Pause size={18} color="#fff" /> : <Play size={18} color="#fff" />}
+          {isActive ? <Pause size={18} color={theme.primaryForeground} /> : <Play size={18} color={theme.primaryForeground} />}
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.iconBtn, { borderColor: theme.border }]} onPress={onSkip} activeOpacity={0.7}>
-          <X size={16} color={theme.mutedForeground} />
+        <TouchableOpacity style={[styles.iconBtn, { borderColor: BORDER_INV, backgroundColor: 'rgba(255,255,255,0.06)' }]} onPress={onSkip} activeOpacity={0.7}>
+          <X size={16} color={ON_DARK_MUTED} />
         </TouchableOpacity>
       </View>
     </MotiView>

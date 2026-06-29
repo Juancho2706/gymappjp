@@ -36,13 +36,13 @@ export default async function ClientWorkoutHistoryPage({ params, searchParams }:
             <header className="sticky top-0 z-40 flex items-center gap-3 border-b border-border/10 bg-background/95 px-4 py-3 pt-safe backdrop-blur-xl">
                 <Link
                     href={`${base}/dashboard`}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                     aria-label="Volver al inicio"
                 >
                     <ArrowLeft className="h-5 w-5" />
                 </Link>
                 <div
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control"
                     style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
                 >
                     <Dumbbell className="h-5 w-5" style={{ color: 'var(--theme-primary)' }} />
@@ -55,7 +55,7 @@ export default async function ClientWorkoutHistoryPage({ params, searchParams }:
 
             <main className="relative z-0 mx-auto max-w-5xl px-4 py-4 pb-8 sm:px-6">
                 {items.length === 0 ? (
-                    <p className="rounded-2xl border border-border/40 bg-card/40 px-4 py-8 text-center text-sm text-muted-foreground">
+                    <p className="rounded-card border border-border bg-card/60 px-4 py-8 text-center text-sm text-muted-foreground">
                         Aún no hay series registradas en este periodo. Cuando completes entrenos, aparecerán aquí.
                     </p>
                 ) : (
@@ -67,7 +67,7 @@ export default async function ClientWorkoutHistoryPage({ params, searchParams }:
                             <div className="mt-4 flex justify-center">
                                 <Link
                                     href={`${base}/workout-history?range=${EXTENDED_DAYS}`}
-                                    className="inline-flex items-center gap-1.5 rounded-full border border-border/40 bg-card/40 px-4 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                                    className="inline-flex items-center gap-1.5 rounded-pill border border-border bg-card/60 px-4 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                                 >
                                     Ver últimos 6 meses
                                     <ChevronDown className="h-3.5 w-3.5" />

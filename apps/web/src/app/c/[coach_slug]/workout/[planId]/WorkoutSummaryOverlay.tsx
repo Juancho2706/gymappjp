@@ -192,7 +192,7 @@ export function WorkoutSummaryOverlay({
                             <Zap className="w-7 h-7 text-primary" />
                         </div>
                     </div>
-                    <h2 className="text-2xl font-black tracking-tight text-foreground">¡Sesión completada!</h2>
+                    <h2 className="font-display text-2xl font-black tracking-tight text-foreground">¡Sesión completada!</h2>
                     <p className="text-sm text-muted-foreground mt-1">{planTitle}</p>
                 </motion.header>
 
@@ -202,17 +202,17 @@ export function WorkoutSummaryOverlay({
                     transition={motionOpts ?? { delay: 0.05, duration: 0.3 }}
                     className="grid grid-cols-3 gap-2 mb-6"
                 >
-                    <div className="rounded-xl border border-border bg-card/50 p-3 text-center">
+                    <div className="rounded-card border border-border bg-card/50 p-3 text-center">
                         <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Sets</p>
-                        <p className="text-lg font-bold">{completedSets}</p>
+                        <p className="font-display text-lg font-bold tabular-nums">{completedSets}</p>
                     </div>
-                    <div className="rounded-xl border border-border bg-card/50 p-3 text-center">
+                    <div className="rounded-card border border-border bg-card/50 p-3 text-center">
                         <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Reps</p>
-                        <p className="text-lg font-bold">{totalReps}</p>
+                        <p className="font-display text-lg font-bold tabular-nums">{totalReps}</p>
                     </div>
-                    <div className="rounded-xl border border-border bg-card/50 p-3 text-center">
+                    <div className="rounded-card border border-border bg-card/50 p-3 text-center">
                         <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Volumen</p>
-                        <p className="text-lg font-bold">{Math.round(totalVolume)} kg</p>
+                        <p className="font-display text-lg font-bold tabular-nums">{Math.round(totalVolume)} kg</p>
                     </div>
                 </motion.div>
 
@@ -222,7 +222,7 @@ export function WorkoutSummaryOverlay({
                         animate={{ opacity: 1 }}
                         className="mb-6"
                     >
-                        <div className="rounded-xl border border-yellow-400/40 bg-gradient-to-br from-amber-500/15 to-yellow-500/10 p-4 mb-3">
+                        <div className="rounded-card border border-yellow-400/40 bg-gradient-to-br from-amber-500/15 to-yellow-500/10 p-4 mb-3">
                             <p className="text-sm font-black text-amber-800 dark:text-amber-200 mb-3">
                                 🏆 {detectedPRs.length}{' '}
                                 {detectedPRs.length === 1 ? 'récord personal' : 'récords personales'}
@@ -268,13 +268,13 @@ export function WorkoutSummaryOverlay({
                         <motion.div
                             key={`${ex.exerciseId}-${i}`}
                             variants={reducedMotion ? undefined : fadeSlideUp}
-                            className="rounded-xl border border-border bg-card/40 px-3 py-2.5 flex flex-wrap items-baseline justify-between gap-2"
+                            className="rounded-card border border-border bg-card/40 px-3 py-2.5 flex flex-wrap items-baseline justify-between gap-2"
                         >
                             <div>
                                 <p className="font-semibold text-sm">{ex.name}</p>
                                 <p className="text-[10px] text-muted-foreground">{ex.muscleGroup}</p>
                             </div>
-                            <div className="text-right text-xs text-muted-foreground">
+                            <div className="text-right text-xs text-muted-foreground tabular-nums">
                                 <span className="font-bold text-foreground">{ex.sets.length}</span> series ·{' '}
                                 <span className="font-bold text-foreground">{Math.round(ex.totalVolume)}</span> kg vol.
                             </div>
@@ -313,7 +313,7 @@ export function WorkoutSummaryOverlay({
                     <button
                         type="button"
                         onClick={handleShare}
-                        className="w-full h-10 rounded-2xl font-semibold text-sm border border-border bg-card/60 hover:bg-accent transition-colors flex items-center justify-center gap-2"
+                        className="w-full h-10 rounded-control font-semibold text-sm border border-border bg-card/60 hover:bg-accent transition-colors flex items-center justify-center gap-2"
                     >
                         {shared ? (
                             <><Check className="w-4 h-4 text-emerald-500" /> Copiado</>
@@ -324,7 +324,7 @@ export function WorkoutSummaryOverlay({
                     <button
                         type="button"
                         onClick={onDone}
-                        className="w-full h-12 rounded-2xl font-bold text-primary-foreground shadow-lg"
+                        className="w-full h-12 rounded-control font-bold text-primary-foreground shadow-lg"
                         style={{ backgroundColor: 'var(--theme-primary)' }}
                     >
                         Volver al inicio

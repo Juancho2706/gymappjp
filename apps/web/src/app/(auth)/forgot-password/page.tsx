@@ -20,9 +20,9 @@ function SubmitButton() {
             type="submit"
             disabled={pending}
             className={cn(
-                'w-full h-12 text-base font-bold rounded-xl transition-all duration-200',
-                'bg-gradient-to-r from-blue-500 to-cyan-600 text-white',
-                'hover:shadow-lg hover:shadow-blue-500/25 hover:-translate-y-0.5',
+                'w-full h-12 text-base font-bold tracking-[-0.01em] rounded-control transition-all duration-200 active:scale-[0.98]',
+                'bg-[var(--cta-fill)] text-[var(--text-on-sport)] shadow-[var(--glow-sport)]',
+                'hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)]',
                 'disabled:opacity-60 disabled:cursor-not-allowed'
             )}
         >
@@ -53,20 +53,22 @@ function ForgotPasswordForm() {
     return (
         <div className="animate-slide-up">
             <div className="text-center mb-8 flex flex-col items-center">
-                <h1 className="text-2xl font-extrabold tracking-tight text-foreground font-display">
+                <h1 className="text-2xl font-black tracking-[-0.02em] text-text-strong font-display">
                     Recuperar contraseña
                 </h1>
-                <p className="mt-2 text-muted-foreground text-sm">
+                <p className="mt-2 text-text-muted text-sm">
                     Te enviaremos un link para resetear tu acceso
                 </p>
             </div>
 
-            <div className="bg-card border border-border rounded-2xl p-8 shadow-xl">
+            <div className="bg-surface-card border border-border-subtle rounded-card p-8 shadow-[var(--shadow-lg)]">
                 {state?.success ? (
                     <div className="text-center py-4">
-                        <CheckCircle className="w-12 h-12 text-blue-500 mx-auto mb-4" />
-                        <h2 className="text-lg font-bold text-foreground mb-2">¡Email enviado!</h2>
-                        <p className="text-muted-foreground text-sm">
+                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[var(--success-100)] text-[var(--success-700)] mb-4">
+                            <CheckCircle className="w-8 h-8" />
+                        </div>
+                        <h2 className="font-display text-lg font-extrabold text-text-strong mb-2">¡Email enviado!</h2>
+                        <p className="text-text-muted text-sm">
                             Revisa tu bandeja de entrada. El link expira en 1 hora.
                         </p>
                     </div>
@@ -75,11 +77,11 @@ function ForgotPasswordForm() {
                         {coachSlug && <input type="hidden" name="coach_slug" value={coachSlug} />}
                         {teamSlug && <input type="hidden" name="team_slug" value={teamSlug} />}
                         <div className="space-y-2">
-                            <Label htmlFor="email" className="text-foreground text-sm font-semibold">
+                            <Label htmlFor="email" className="text-text-strong text-[13px] font-semibold">
                                 Email de tu cuenta
                             </Label>
                             <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none z-10" />
                                 <Input
                                     id="email"
                                     name="email"
@@ -87,17 +89,13 @@ function ForgotPasswordForm() {
                                     placeholder="tu@email.com"
                                     autoComplete="email"
                                     required
-                                    className={cn(
-                                        'pl-10 h-12 bg-secondary border-border text-foreground rounded-xl',
-                                        'placeholder:text-muted-foreground/50 focus:border-primary focus:ring-primary/30',
-                                        'transition-colors duration-200'
-                                    )}
+                                    className="pl-10"
                                 />
                             </div>
                         </div>
 
                         {state?.error && (
-                            <div className="animate-fade-in rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+                            <div className="animate-fade-in rounded-control border border-transparent bg-[var(--danger-100)] px-4 py-3 text-sm font-semibold text-[var(--danger-600)]">
                                 {state.error}
                             </div>
                         )}
@@ -125,7 +123,7 @@ export default function ForgotPasswordPage() {
         <div className="w-full max-w-md mx-auto">
             <Suspense fallback={
                 <div className="flex flex-col items-center justify-center gap-6 p-12 text-center">
-                    <h1 className="text-2xl font-extrabold tracking-tight text-foreground font-display">
+                    <h1 className="text-2xl font-black tracking-[-0.02em] text-text-strong font-display">
                         Recuperar contraseña
                     </h1>
                     <EvaRouteLoader subtitle="Cargando formulario…" size="md" />

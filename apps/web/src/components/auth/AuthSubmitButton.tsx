@@ -31,20 +31,19 @@ export function AuthSubmitButton({
             disabled={pending}
             aria-busy={pending}
             className={cn(
-                'w-full min-h-[48px] rounded-xl text-base font-semibold transition-all duration-200',
+                'w-full min-h-[48px] rounded-control text-base font-bold tracking-[-0.01em] transition-all duration-200',
                 'flex items-center justify-center gap-2',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
-                'disabled:opacity-60 disabled:cursor-not-allowed',
+                'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]',
+                'active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed',
                 isEnterprise
                     ? [
-                          'bg-amber-500 hover:bg-amber-400 text-zinc-950',
+                          'bg-amber-500 hover:bg-amber-400 text-zinc-950 ring-offset-2',
                           'shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30',
                           'focus-visible:ring-amber-400 focus-visible:ring-offset-zinc-950',
                       ]
                     : [
-                          'bg-primary hover:opacity-90 text-primary-foreground',
-                          'shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30',
-                          'focus-visible:ring-primary/60 focus-visible:ring-offset-background',
+                          'bg-[var(--cta-fill)] text-[var(--text-on-sport)] border-transparent',
+                          'shadow-[var(--glow-sport)] hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)]',
                       ],
                 className,
             )}

@@ -3,7 +3,7 @@
 import { startTransition, useActionState, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
-import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, X } from 'lucide-react'
+import { Camera, Check, CheckCircle2, ChevronLeft, ChevronRight, Loader2, Lock, X } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
@@ -12,6 +12,7 @@ import { formatRelativeDate } from '@/lib/date-utils'
 import { springs } from '@/lib/animation-presets'
 import { useBasePath } from '@/components/client/BasePathProvider'
 import { SuccessWaveOverlay } from '@/components/ui/SuccessWaveOverlay'
+import { Button } from '@/components/ui/button'
 
 const initialState: CheckinState = {}
 
@@ -170,23 +171,24 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                     initial={reducedMotion ? false : { scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={reducedMotion ? { duration: 0 } : springs.elastic}
-                    className="bg-card border border-border rounded-2xl p-8 text-center"
+                    className="rounded-card border border-subtle bg-surface-card p-8 text-center shadow-sm"
                 >
-                    <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto mb-4">
-                        <CheckCircle2 className="w-8 h-8" />
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--success-500)] text-white shadow-[0_8px_28px_rgba(31,184,119,0.4)]">
+                        <CheckCircle2 className="h-8 w-8" />
                     </div>
-                    <h3 className="text-xl font-bold text-foreground mb-2">¡Check-in Enviado!</h3>
-                    <p className="text-muted-foreground text-sm mb-6">
+                    <h3 className="mb-2 font-display text-xl font-extrabold tracking-tight text-strong">¡Check-in Enviado!</h3>
+                    <p className="mb-6 text-sm text-muted">
                         Tu coach ha recibido tu actualización mensual.
                     </p>
-                    <button
+                    <Button
                         type="button"
+                        variant="sport"
+                        size="lg"
                         onClick={() => router.push(`${base}/dashboard`)}
-                        className="px-6 py-2.5 rounded-xl font-semibold text-sm transition-all text-white w-full"
-                        style={{ backgroundColor: coachPrimaryColor }}
+                        className="w-full"
                     >
                         Volver al Inicio
-                    </button>
+                    </Button>
                 </motion.div>
             </>
         )
@@ -194,22 +196,22 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-center gap-2 mb-2">
+            <div className="mb-2 flex items-center justify-center gap-2">
                 {[1, 2, 3].map((step) => (
                     <motion.div
                         key={step}
                         animate={{
-                            width: currentStep === step ? 24 : 8,
+                            width: currentStep === step ? 26 : 8,
                             backgroundColor:
-                                currentStep >= step ? coachPrimaryColor : 'hsl(var(--muted))',
+                                currentStep >= step ? coachPrimaryColor : 'var(--ink-200)',
                         }}
-                        className="h-2 rounded-full"
+                        className="h-1.5 rounded-full"
                         transition={reducedMotion ? { duration: 0 } : springs.snappy}
                     />
                 ))}
             </div>
 
-            <div className="bg-card border border-border rounded-2xl p-6 overflow-hidden relative min-h-[320px]">
+            <div className="relative min-h-[320px] overflow-hidden rounded-card border border-subtle bg-surface-card p-6 shadow-sm">
                 <AnimatePresence mode="wait" custom={direction}>
                     {currentStep === 1 && (
                         <motion.div
@@ -222,19 +224,19 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                             className="space-y-4"
                         >
                             {lastCheckIn ? (
-                                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm mb-4">
-                                    <p className="text-xs text-muted-foreground">Tu último check-in</p>
-                                    <p className="font-bold">
+                                <div className="mb-4 rounded-control bg-surface-sunken p-3 text-sm">
+                                    <p className="text-xs font-bold text-muted">Tu último check-in</p>
+                                    <p className="font-semibold text-strong">
                                         {lastCheckIn.weight != null ? `${lastCheckIn.weight} kg` : '—'} · Energía{' '}
                                         {lastCheckIn.energy_level ?? '—'}/10
                                     </p>
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-xs text-muted">
                                         {formatRelativeDate(lastCheckIn.created_at.slice(0, 10))}
                                     </p>
                                 </div>
                             ) : (
-                                <div className="rounded-xl border border-dashed border-border bg-muted/40 p-4 text-sm text-muted-foreground mb-4">
-                                    <p className="font-medium text-foreground">Tu primer check-in</p>
+                                <div className="mb-4 rounded-control border border-dashed border-default bg-surface-sunken p-4 text-sm text-muted">
+                                    <p className="font-semibold text-strong">Tu primer check-in</p>
                                     <p className="mt-1 text-xs leading-relaxed">
                                         Registra peso y energía; las fotos ayudan a tu coach a ver el progreso.
                                     </p>
@@ -242,7 +244,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                             )}
                             <div>
                                 <label
-                                    className="block text-sm font-medium text-muted-foreground mb-1.5"
+                                    className="mb-1.5 block text-[13px] font-semibold text-strong"
                                     htmlFor="weight"
                                 >
                                     Peso actual (kg)
@@ -255,31 +257,31 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                                     onChange={(e) => setWeight(e.target.value.replace(',', '.'))}
                                     onFocus={handleInputFocus}
                                     placeholder="75.5"
-                                    className="w-full h-11 px-3.5 rounded-xl bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none"
+                                    className="h-12 w-full rounded-control border-[1.5px] border-default bg-surface-card px-3.5 font-ui text-[15px] font-medium text-strong outline-none transition-colors placeholder:text-muted focus-visible:border-sport-600 focus-visible:shadow-[var(--ring-focus)]"
                                 />
                             </div>
                             <div>
-                                <label
-                                    className="block text-sm font-medium text-muted-foreground mb-1.5"
-                                    htmlFor="energy_level"
-                                >
-                                    Nivel de energía (1–10)
-                                </label>
-                                <div className="flex items-center gap-4">
-                                    <input
-                                        id="energy_level"
-                                        type="range"
-                                        min={1}
-                                        max={10}
-                                        value={energyLevel}
-                                        onChange={(e) => setEnergyLevel(Number(e.target.value))}
-                                        className="flex-1"
-                                        style={{ accentColor: coachPrimaryColor }}
-                                    />
-                                    <span className="w-6 text-center text-lg font-bold text-foreground">
-                                        {energyLevel}
+                                <div className="mb-1.5 flex items-center justify-between">
+                                    <label
+                                        className="text-[13px] font-semibold text-strong"
+                                        htmlFor="energy_level"
+                                    >
+                                        Nivel de energía (1–10)
+                                    </label>
+                                    <span className="font-display text-base font-extrabold tabular-nums text-sport-600">
+                                        {energyLevel}<span className="text-xs font-semibold text-muted">/10</span>
                                     </span>
                                 </div>
+                                <input
+                                    id="energy_level"
+                                    type="range"
+                                    min={1}
+                                    max={10}
+                                    value={energyLevel}
+                                    onChange={(e) => setEnergyLevel(Number(e.target.value))}
+                                    className="w-full"
+                                    style={{ accentColor: coachPrimaryColor }}
+                                />
                             </div>
                         </motion.div>
                     )}
@@ -292,9 +294,9 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                             initial="hidden"
                             animate="visible"
                             exit="exit"
-                            className="space-y-5"
+                            className="space-y-4"
                         >
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-sm text-muted">
                                 Las fotos son opcionales pero ayudan a tu coach a ver tu evolución.
                             </p>
 
@@ -327,78 +329,93 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                                 }
                             />
 
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground mb-2">
-                                    Foto frontal <span className="text-xs font-normal">— Opcional</span>
-                                </p>
-                                {frontPreview ? (
-                                    <div className="relative w-full aspect-[3/4] max-h-72 rounded-xl overflow-hidden border border-border">
-                                        <Image src={frontPreview} alt="Frontal" fill sizes="(max-width: 768px) 100vw, 400px" className="object-cover" />
+                            <div className="flex items-start gap-3">
+                                {/* Foto frontal */}
+                                <div className="min-w-0 flex-1">
+                                    {frontPreview ? (
+                                        <div className="relative aspect-[3/4] w-full overflow-hidden rounded-control border-2 border-sport-500">
+                                            <Image src={frontPreview} alt="Frontal" fill sizes="(max-width: 768px) 50vw, 200px" className="object-cover" />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setFrontPreview(null)
+                                                    setFrontFile(null)
+                                                    if (frontInputRef.current) frontInputRef.current.value = ''
+                                                }}
+                                                aria-label="Quitar foto"
+                                                className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-[var(--danger-500)] text-white shadow-md"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                            <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-2 pt-3.5 text-center text-[11.5px] font-bold text-white">
+                                                Foto frontal
+                                            </span>
+                                        </div>
+                                    ) : (
                                         <button
                                             type="button"
-                                            onClick={() => {
-                                                setFrontPreview(null)
-                                                setFrontFile(null)
-                                                if (frontInputRef.current) frontInputRef.current.value = ''
-                                            }}
-                                            className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full"
+                                            onClick={() => frontInputRef.current?.click()}
+                                            className={`flex aspect-[3/4] w-full flex-col items-center justify-center gap-2 rounded-control transition-colors ${
+                                                fileErrors.front
+                                                    ? 'border-2 border-[var(--danger-500)] bg-[var(--danger-100)]'
+                                                    : 'border-2 border-dashed border-default bg-surface-sunken hover:bg-surface-sunken/70'
+                                            }`}
                                         >
-                                            <X className="w-4 h-4" />
+                                            <Camera className="h-7 w-7 text-subtle" />
+                                            <span className="text-[12.5px] font-bold text-body">Foto frontal</span>
+                                            <span className="text-[10.5px] text-subtle">Opcional · toca para subir</span>
                                         </button>
-                                    </div>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={() => frontInputRef.current?.click()}
-                                        className={`w-full flex flex-col items-center justify-center py-6 border-2 border-dashed rounded-xl ${
-                                            fileErrors.front
-                                                ? 'border-red-500/50 bg-red-500/5'
-                                                : 'border-border hover:bg-secondary/50'
-                                        }`}
-                                    >
-                                        <Camera className="w-8 h-8 mb-2 text-muted-foreground" />
-                                        <span className="text-sm text-muted-foreground">
-                                            {fileErrors.front || 'Seleccionar foto frontal'}
-                                        </span>
-                                    </button>
-                                )}
+                                    )}
+                                    {fileErrors.front && (
+                                        <p className="mt-1.5 text-[11px] font-semibold leading-tight text-[var(--danger-600)]">{fileErrors.front}</p>
+                                    )}
+                                </div>
+
+                                {/* Foto de espalda o perfil */}
+                                <div className="min-w-0 flex-1">
+                                    {backPreview ? (
+                                        <div className="relative aspect-[3/4] w-full overflow-hidden rounded-control border-2 border-sport-500">
+                                            <Image src={backPreview} alt="Espalda" fill sizes="(max-width: 768px) 50vw, 200px" className="object-cover" />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setBackPreview(null)
+                                                    setBackFile(null)
+                                                    if (backInputRef.current) backInputRef.current.value = ''
+                                                }}
+                                                aria-label="Quitar foto"
+                                                className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-[var(--danger-500)] text-white shadow-md"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                            <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 pb-2 pt-3.5 text-center text-[11.5px] font-bold text-white">
+                                                Espalda o perfil
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            onClick={() => backInputRef.current?.click()}
+                                            className={`flex aspect-[3/4] w-full flex-col items-center justify-center gap-2 rounded-control transition-colors ${
+                                                fileErrors.back
+                                                    ? 'border-2 border-[var(--danger-500)] bg-[var(--danger-100)]'
+                                                    : 'border-2 border-dashed border-default bg-surface-sunken hover:bg-surface-sunken/70'
+                                            }`}
+                                        >
+                                            <Camera className="h-7 w-7 text-subtle" />
+                                            <span className="text-[12.5px] font-bold text-body">Espalda o perfil</span>
+                                            <span className="text-[10.5px] text-subtle">Opcional · toca para subir</span>
+                                        </button>
+                                    )}
+                                    {fileErrors.back && (
+                                        <p className="mt-1.5 text-[11px] font-semibold leading-tight text-[var(--danger-600)]">{fileErrors.back}</p>
+                                    )}
+                                </div>
                             </div>
 
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground mb-2">
-                                    Foto de espalda o perfil <span className="text-xs font-normal">— Opcional</span>
-                                </p>
-                                {backPreview ? (
-                                    <div className="relative w-full aspect-[3/4] max-h-72 rounded-xl overflow-hidden border border-border">
-                                        <Image src={backPreview} alt="Espalda" fill sizes="(max-width: 768px) 100vw, 400px" className="object-cover" />
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setBackPreview(null)
-                                                setBackFile(null)
-                                                if (backInputRef.current) backInputRef.current.value = ''
-                                            }}
-                                            className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full"
-                                        >
-                                            <X className="w-4 h-4" />
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={() => backInputRef.current?.click()}
-                                        className={`w-full flex flex-col items-center justify-center py-6 border-2 border-dashed rounded-xl ${
-                                            fileErrors.back
-                                                ? 'border-red-500/50 bg-red-500/5'
-                                                : 'border-border hover:bg-secondary/50'
-                                        }`}
-                                    >
-                                        <Camera className="w-8 h-8 mb-2 text-muted-foreground" />
-                                        <span className="text-sm text-muted-foreground">
-                                            {fileErrors.back || 'Seleccionar foto'}
-                                        </span>
-                                    </button>
-                                )}
+                            <div className="flex items-center gap-1.5 text-[11px] text-subtle">
+                                <Lock className="h-3 w-3 shrink-0" />
+                                <span>JPG, PNG o WEBP · máx 5 MB · privadas, solo tu coach las ve.</span>
                             </div>
                         </motion.div>
                     )}
@@ -415,10 +432,10 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                         >
                             <div>
                                 <label
-                                    className="block text-sm font-medium text-muted-foreground mb-1.5"
+                                    className="mb-1.5 block text-[13px] font-semibold text-strong"
                                     htmlFor="notes"
                                 >
-                                    Notas <span className="text-xs font-normal">— Opcional (máx. 1000)</span>
+                                    Notas <span className="text-xs font-normal text-muted">— Opcional (máx. 1000)</span>
                                 </label>
                                 <textarea
                                     id="notes"
@@ -428,23 +445,26 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                                     onChange={(e) => setNotes(e.target.value)}
                                     onFocus={handleInputFocus}
                                     placeholder="Cómo te sentiste, sueño, comentarios para tu coach…"
-                                    className="w-full p-3.5 rounded-xl bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none resize-none"
+                                    className="w-full resize-none rounded-control border-[1.5px] border-default bg-surface-card p-3.5 font-ui text-[15px] text-strong outline-none transition-colors placeholder:text-muted focus-visible:border-sport-600 focus-visible:shadow-[var(--ring-focus)]"
                                 />
                             </div>
-                            <div className="rounded-xl border border-border p-3 text-sm space-y-1 mb-4">
-                                <p>
-                                    Peso: <strong>{weight || '—'} kg</strong>
-                                </p>
-                                <p>
-                                    Energía: <strong>{energyLevel}/10</strong>
-                                </p>
-                                <p>
-                                    Fotos:{' '}
-                                    <strong>{[frontFile, backFile].filter(Boolean).length} adjuntas</strong>
-                                </p>
+                            <div className="mb-4 rounded-control bg-surface-sunken p-4">
+                                <p className="mb-3 text-[11.5px] font-bold uppercase tracking-[0.06em] text-muted">Resumen</p>
+                                <div className="flex justify-between">
+                                    {[
+                                        ['Peso', `${weight || '—'} kg`],
+                                        ['Energía', `${energyLevel}/10`],
+                                        ['Fotos', `${[frontFile, backFile].filter(Boolean).length} adj.`],
+                                    ].map(([label, value]) => (
+                                        <div key={label} className="text-center">
+                                            <div className="font-display text-lg font-extrabold tabular-nums text-strong">{value}</div>
+                                            <div className="text-[11px] font-semibold text-muted">{label}</div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                             {state.error && (
-                                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+                                <div className="rounded-control border border-[var(--danger-500)] bg-[var(--danger-100)] p-3 text-sm text-[var(--danger-600)]">
                                     {state.error}
                                 </div>
                             )}
@@ -452,40 +472,46 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                     )}
                 </AnimatePresence>
 
-                <div className="flex gap-3 mt-6">
+                <div className="mt-6 flex gap-3">
                     {currentStep > 1 && (
-                        <button
+                        <Button
                             type="button"
+                            variant="secondary"
+                            size="lg"
                             onClick={goPrev}
-                            className="flex-1 h-11 rounded-xl border border-border font-semibold flex items-center justify-center gap-1.5"
+                            className="flex-1"
                         >
-                            <ChevronLeft className="w-4 h-4" /> Atrás
-                        </button>
+                            <ChevronLeft className="h-4 w-4" /> Atrás
+                        </Button>
                     )}
                     {currentStep < 3 ? (
-                        <button
+                        <Button
                             type="button"
+                            variant="sport"
+                            size="lg"
                             onClick={goNext}
                             disabled={currentStep === 1 && !weight}
-                            className="flex-1 h-11 rounded-xl font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-1.5"
-                            style={{ backgroundColor: coachPrimaryColor }}
+                            className="flex-1"
                         >
-                            Continuar <ChevronRight className="w-4 h-4" />
-                        </button>
+                            Continuar <ChevronRight className="h-4 w-4" />
+                        </Button>
                     ) : (
-                        <button
+                        <Button
                             type="button"
+                            variant="sport"
+                            size="lg"
                             onClick={() => void handleAction()}
                             disabled={isSubmitting}
-                            className="flex-1 h-11 rounded-xl font-semibold text-white flex items-center justify-center gap-2 disabled:opacity-50"
-                            style={{ backgroundColor: coachPrimaryColor }}
+                            className="flex-1"
                         >
                             {isSubmitting ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                                'Enviar Check-in'
+                                <>
+                                    <Check className="h-4 w-4" /> Enviar Check-in
+                                </>
                             )}
-                        </button>
+                        </Button>
                     )}
                 </div>
             </div>

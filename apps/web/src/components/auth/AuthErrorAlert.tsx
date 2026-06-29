@@ -36,10 +36,10 @@ export function AuthErrorAlert({
             aria-atomic="true"
             tabIndex={-1}
             className={cn(
-                'flex items-start gap-2.5 rounded-xl border px-4 py-3 text-sm outline-none',
+                'flex items-start gap-2.5 rounded-control border px-4 py-3 text-sm font-semibold outline-none',
                 isEnterprise
                     ? 'border-red-500/30 bg-red-500/10 text-red-300'
-                    : 'border-destructive/30 bg-destructive/10 text-destructive',
+                    : 'border-transparent bg-[var(--danger-100)] text-[var(--danger-600)]',
                 className,
             )}
         >

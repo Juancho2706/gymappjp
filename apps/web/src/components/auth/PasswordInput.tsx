@@ -43,11 +43,11 @@ export function PasswordInput({
             aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
             onClick={() => setVisible((v) => !v)}
             className={cn(
-                'flex h-11 w-11 items-center justify-center rounded-lg transition-colors',
+                'flex h-11 w-11 items-center justify-center rounded-control transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1',
                 isEnterprise
                     ? 'text-zinc-500 hover:text-zinc-300 focus-visible:ring-amber-500/50 focus-visible:ring-offset-zinc-900'
-                    : 'text-muted-foreground hover:text-foreground focus-visible:ring-primary/50',
+                    : 'text-text-muted hover:text-text-strong focus-visible:ring-[var(--focus-ring)]',
             )}
         >
             {visible ? (
@@ -81,7 +81,7 @@ export function PasswordInput({
                     aria-live="polite"
                     className={cn(
                         'text-xs flex items-center gap-1',
-                        isEnterprise ? 'text-amber-400' : 'text-amber-600 dark:text-amber-400',
+                        isEnterprise ? 'text-amber-400' : 'text-[var(--warning-600)]',
                     )}
                 >
                     Bloq Mayús está activo

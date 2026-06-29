@@ -50,14 +50,14 @@ export default function AlumnoOnboardingScreen() {
     <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]}>
       <AppBackground />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>¡Bienvenido/a!</Text>
-        <Text style={[styles.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        <Text className="text-strong font-display-black" style={styles.title}>¡Bienvenido/a!</Text>
+        <Text className="text-muted font-sans" style={styles.sub}>
           Completá tu perfil para que tu coach arme tu plan.
         </Text>
 
         {error ? (
-          <View style={[styles.errorBox, { borderColor: theme.destructive + '55', backgroundColor: theme.destructive + '14' }]}>
-            <Text style={{ color: theme.destructive, fontSize: 13, fontFamily: theme.fontSans }}>{error}</Text>
+          <View className="bg-danger-100 border-danger-500" style={styles.errorBox}>
+            <Text className="text-danger-600 font-sans" style={{ fontSize: 13 }}>{error}</Text>
           </View>
         ) : null}
 
@@ -66,54 +66,64 @@ export default function AlumnoOnboardingScreen() {
           <Field theme={theme} label="Altura (cm) *" value={height} onChangeText={setHeight} keyboardType="decimal-pad" placeholder="178" />
         </View>
 
-        <Label theme={theme}>Objetivo principal *</Label>
-        <Chips theme={theme} options={GOAL_OPTIONS as readonly string[]} value={goals} onSelect={setGoals} />
+        <Label>Objetivo principal *</Label>
+        <Chips options={GOAL_OPTIONS as readonly string[]} value={goals} onSelect={setGoals} />
 
-        <Label theme={theme}>Experiencia *</Label>
-        <Chips theme={theme} options={EXPERIENCE_OPTIONS as readonly string[]} value={experience} onSelect={setExperience} />
+        <Label>Experiencia *</Label>
+        <Chips options={EXPERIENCE_OPTIONS as readonly string[]} value={experience} onSelect={setExperience} />
 
-        <Label theme={theme}>Días por semana *</Label>
-        <Chips theme={theme} options={AVAILABILITY_OPTIONS as readonly string[]} value={availability} onSelect={setAvailability} />
+        <Label>Días por semana *</Label>
+        <Chips options={AVAILABILITY_OPTIONS as readonly string[]} value={availability} onSelect={setAvailability} />
 
         <Field theme={theme} label="Lesiones (opcional)" value={injuries} onChangeText={setInjuries} placeholder="Ej: hombro derecho" multiline />
         <Field theme={theme} label="Condiciones médicas (opcional)" value={medical} onChangeText={setMedical} placeholder="Ej: hipertensión" multiline />
 
         <TouchableOpacity onPress={() => setAgeOk((v) => !v)} activeOpacity={0.8} style={styles.ageRow}>
-          <View style={[styles.checkbox, { borderColor: ageOk ? theme.primary : theme.border, backgroundColor: ageOk ? theme.primary : 'transparent' }]}>
+          <View className="rounded-sm items-center justify-center" style={[styles.checkbox, { borderColor: ageOk ? theme.primary : theme.border, backgroundColor: ageOk ? theme.primary : 'transparent' }]}>
             {ageOk ? <Check size={13} color={theme.primaryForeground} strokeWidth={3} /> : null}
           </View>
-          <Text style={[styles.ageText, { color: theme.foreground, fontFamily: theme.fontSans }]}>Confirmo que tengo 14 años o más.</Text>
+          <Text className="text-body font-sans" style={styles.ageText}>Confirmo que tengo 14 años o más.</Text>
         </TouchableOpacity>
 
-        <Button label={saving ? 'Guardando...' : 'Empezar'} onPress={submit} disabled={saving} full size="lg" />
+        <Button label={saving ? 'Guardando...' : 'Empezar'} variant="sport" onPress={submit} disabled={saving} full size="lg" />
       </ScrollView>
     </SafeAreaView>
   )
 }
 
-function Label({ children, theme }: { children: React.ReactNode; theme: any }) {
-  return <Text style={[styles.label, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{children}</Text>
+function Label({ children }: { children: React.ReactNode }) {
+  return <Text className="text-muted font-sans" style={styles.label}>{children}</Text>
 }
 
 function Field({ theme, label, multiline, ...rest }: any) {
   return (
     <View style={{ gap: 6, flex: 1 }}>
-      <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
-      <TextInput placeholderTextColor={theme.mutedForeground} multiline={multiline}
-        style={[styles.input, multiline && { height: 70, textAlignVertical: 'top', paddingTop: 10 }, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} {...rest} />
+      <Text className="text-muted font-sans" style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        placeholderTextColor={theme.mutedForeground}
+        multiline={multiline}
+        className="bg-surface-card border border-default rounded-control text-strong font-sans"
+        style={[styles.input, multiline && { height: 70, textAlignVertical: 'top', paddingTop: 10 }]}
+        {...rest}
+      />
     </View>
   )
 }
 
-function Chips({ theme, options, value, onSelect }: { theme: any; options: readonly string[]; value: string; onSelect: (v: string) => void }) {
+function Chips({ options, value, onSelect }: { options: readonly string[]; value: string; onSelect: (v: string) => void }) {
   return (
     <View style={styles.chips}>
       {options.map((o) => {
         const active = o === value
         return (
-          <TouchableOpacity key={o} onPress={() => onSelect(o)} activeOpacity={0.8}
-            style={[styles.chip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary + '1A' : 'transparent' }]}>
-            <Text style={{ fontSize: 13, fontFamily: 'Inter_600SemiBold', color: active ? theme.primary : theme.mutedForeground }}>{o}</Text>
+          <TouchableOpacity
+            key={o}
+            onPress={() => onSelect(o)}
+            activeOpacity={0.8}
+            className={active ? 'border border-sport-500 bg-sport-100' : 'border border-default'}
+            style={styles.chip}
+          >
+            <Text className={active ? 'text-sport-600 font-sans-semibold' : 'text-muted font-sans-semibold'} style={{ fontSize: 13 }}>{o}</Text>
           </TouchableOpacity>
         )
       })}
@@ -130,10 +140,10 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: 12 },
   label: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 6 },
   fieldLabel: { fontSize: 12 },
-  input: { minHeight: 46, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 15 },
+  input: { minHeight: 46, borderWidth: 1, paddingHorizontal: 12, fontSize: 15 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 9 },
+  chip: { borderRadius: 999, paddingHorizontal: 13, paddingVertical: 9 },
   ageRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
-  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  checkbox: { width: 22, height: 22, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   ageText: { fontSize: 14, flex: 1 },
 })

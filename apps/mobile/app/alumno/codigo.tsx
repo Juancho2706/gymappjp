@@ -56,37 +56,20 @@ export default function CodigoScreen() {
           transition={{ type: 'timing', duration: 500 }}
           style={styles.inner}
         >
-          <View
-            style={[
-              styles.heroIcon,
-              {
-                backgroundColor: theme.primary + '1A',
-                borderColor: theme.primary + '33',
-                borderRadius: theme.radius['2xl'],
-              },
-            ]}
-          >
+          <View className="bg-sport-100" style={[styles.heroIcon, { borderRadius: theme.radius['2xl'] }]}>
             <Hash size={26} color={theme.primary} strokeWidth={1.75} />
           </View>
 
-          <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+          <Text className="text-strong font-display-black" style={styles.title}>
             Ingresa tu código
           </Text>
-          <Text style={[styles.subtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          <Text className="text-muted font-sans" style={styles.subtitle}>
             Usa el código corto de tu coach. También aceptamos links antiguos /c/slug.
           </Text>
 
           <TextInput
-            style={[
-              styles.input,
-              {
-                borderColor: error ? theme.destructive : theme.primary,
-                color: theme.foreground,
-                backgroundColor: theme.secondary,
-                borderRadius: theme.radius.xl,
-                fontFamily: 'Montserrat_800ExtraBold',
-              },
-            ]}
+            className={`bg-surface-card text-strong font-display-black ${error ? 'border-danger-500' : 'border-sport-500'}`}
+            style={[styles.input, { borderRadius: theme.radius.xl }]}
             placeholder="ABCDE o eva-app.cl/c/coach"
             placeholderTextColor={theme.mutedForeground}
             value={code}
@@ -100,17 +83,8 @@ export default function CodigoScreen() {
           />
 
           {error ? (
-            <View
-              style={[
-                styles.errorBanner,
-                {
-                  backgroundColor: theme.destructive + '1A',
-                  borderColor: theme.destructive + '33',
-                  borderRadius: theme.radius.lg,
-                },
-              ]}
-            >
-              <Text style={[styles.errorText, { color: theme.destructive, fontFamily: theme.fontSans }]}>
+            <View className="bg-danger-100 border-danger-500 rounded-lg" style={styles.errorBanner}>
+              <Text className="text-danger-600 font-sans" style={styles.errorText}>
                 {error}
               </Text>
             </View>
@@ -118,6 +92,7 @@ export default function CodigoScreen() {
 
           <Button
             label="Continuar"
+            variant="sport"
             rightIcon={ArrowRight}
             onPress={handleSubmit}
             loading={loading}
@@ -139,7 +114,6 @@ const styles = StyleSheet.create({
   heroIcon: {
     width: 56,
     height: 56,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,

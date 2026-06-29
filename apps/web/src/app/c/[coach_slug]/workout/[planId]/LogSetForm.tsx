@@ -160,7 +160,7 @@ function StrengthLogSetForm({
 
     return (
         <div
-            className={`rounded-xl transition-colors duration-[400ms] ${isLogged ? 'bg-emerald-500/10' : 'bg-transparent'}`}
+            className={`rounded-control transition-colors duration-[400ms] ${isLogged ? 'bg-primary/10' : 'bg-transparent'}`}
         >
             <form
                 key={existingLog ? `log-${existingLog.weight_kg}-${existingLog.reps_done}` : 'new'}
@@ -172,7 +172,7 @@ function StrengthLogSetForm({
                 <input type="hidden" name="set_number" value={setNumber} />
 
                 <div
-                    className={`w-4 md:w-5 text-center text-xs md:text-sm font-medium ${isLogged ? 'text-emerald-500' : 'text-muted-foreground'}`}
+                    className={`w-4 md:w-5 text-center text-xs md:text-sm font-medium font-mono ${isLogged ? 'text-primary' : 'text-on-dark-muted'}`}
                 >
                     {setNumber}
                 </div>
@@ -186,8 +186,8 @@ function StrengthLogSetForm({
                     inputMode="decimal"
                     defaultValue={existingLog?.weight_kg ?? ''}
                     placeholder="-"
-                    className={`h-11 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
-                ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'}`}
+                    className={`h-11 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold font-mono rounded-control bg-white/[0.06] border transition-colors focus:outline-none focus:ring-1
+                ${isLogged ? 'text-primary border-primary/40 focus:border-primary focus:ring-primary' : 'text-on-dark border-[var(--border-inverse)] focus:border-primary focus:ring-primary'}`}
                 />
 
                 <input
@@ -198,8 +198,8 @@ function StrengthLogSetForm({
                     inputMode="numeric"
                     defaultValue={existingLog?.reps_done ?? ''}
                     placeholder="-"
-                    className={`h-11 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
-                ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'}`}
+                    className={`h-11 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold font-mono rounded-control bg-white/[0.06] border transition-colors focus:outline-none focus:ring-1
+                ${isLogged ? 'text-primary border-primary/40 focus:border-primary focus:ring-primary' : 'text-on-dark border-[var(--border-inverse)] focus:border-primary focus:ring-primary'}`}
                 />
 
                 {/* Hidden inputs carry current RPE/RIR on main form submit */}
@@ -219,7 +219,7 @@ function StrengthLogSetForm({
                         <button
                             type="button"
                             onClick={() => formRef.current?.requestSubmit()}
-                            className="text-[10px] font-bold text-red-400 border border-red-500/30 rounded-md px-2 py-0.5 hover:bg-red-500/10 transition-colors shrink-0"
+                            className="text-[10px] font-bold text-red-400 border border-red-500/30 rounded-control px-2 py-0.5 hover:bg-red-500/10 transition-colors shrink-0"
                         >
                             Reintentar
                         </button>
@@ -228,7 +228,7 @@ function StrengthLogSetForm({
             </form>
 
             {isLogged && !showMetrics && (
-                <p className="text-[10px] text-emerald-500/50 text-center pb-1.5 px-2 leading-none">
+                <p className="text-[10px] text-primary/60 text-center pb-1.5 px-2 leading-none">
                     Cambia los valores y presiona ✓ para actualizar
                 </p>
             )}
@@ -244,7 +244,7 @@ function StrengthLogSetForm({
                     >
                         {/* RPE slider */}
                         <div>
-                            <div className="text-[10px] font-semibold text-muted-foreground mb-1 mt-1 flex items-center gap-1">
+                            <div className="text-[10px] font-semibold text-on-dark-muted mb-1 mt-1 flex items-center gap-1">
                                 <span>RPE {rpeLocal != null ? `· ${rpeLocal}` : '(opcional)'}</span>
                                 <InfoTooltip content={t('tooltip.rpe')} />
                             </div>
@@ -254,7 +254,7 @@ function StrengthLogSetForm({
                                 max={10}
                                 step={1}
                                 value={rpeDraft}
-                                className="w-full accent-emerald-500"
+                                className="w-full accent-[var(--theme-primary)]"
                                 aria-label="RPE"
                                 onChange={(e) => setRpeDraft(Number(e.target.value))}
                                 onPointerUp={(e) => {
@@ -263,7 +263,7 @@ function StrengthLogSetForm({
                                     submitMetricsUpdate(val, rirLocal)
                                 }}
                             />
-                            <div className="flex justify-between text-[10px] text-muted-foreground">
+                            <div className="flex justify-between text-[10px] text-on-dark-muted">
                                 <span>6</span>
                                 <span>10</span>
                             </div>
@@ -271,7 +271,7 @@ function StrengthLogSetForm({
 
                         {/* RIR slider */}
                         <div>
-                            <div className="text-[10px] font-semibold text-muted-foreground mb-1 flex items-center gap-1">
+                            <div className="text-[10px] font-semibold text-on-dark-muted mb-1 flex items-center gap-1">
                                 <span>RIR {rirLocal != null ? `· ${rirLocal}` : '(opcional)'}</span>
                                 <InfoTooltip content={t('tooltip.rir')} />
                             </div>
@@ -281,7 +281,7 @@ function StrengthLogSetForm({
                                 max={5}
                                 step={1}
                                 value={rirDraft}
-                                className="w-full accent-violet-500"
+                                className="w-full accent-[var(--theme-primary)]"
                                 aria-label="RIR"
                                 onChange={(e) => setRirDraft(Number(e.target.value))}
                                 onPointerUp={(e) => {
@@ -290,7 +290,7 @@ function StrengthLogSetForm({
                                     submitMetricsUpdate(rpeLocal, val)
                                 }}
                             />
-                            <div className="flex justify-between text-[10px] text-muted-foreground">
+                            <div className="flex justify-between text-[10px] text-on-dark-muted">
                                 <span>0</span>
                                 <span>5</span>
                             </div>
@@ -303,10 +303,10 @@ function StrengthLogSetForm({
 }
 
 const TYPED_INPUT_CLASS = (isLogged: boolean) =>
-    `h-11 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1 ${
+    `h-11 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold font-mono rounded-control bg-white/[0.06] border transition-colors focus:outline-none focus:ring-1 ${
         isLogged
-            ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500'
-            : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'
+            ? 'text-primary border-primary/40 focus:border-primary focus:ring-primary'
+            : 'text-on-dark border-[var(--border-inverse)] focus:border-primary focus:ring-primary'
     }`
 
 /**
@@ -422,7 +422,7 @@ function TypedLogSetRow({
                 : 'grid-cols-[auto_5rem_auto] md:grid-cols-[auto_1fr_auto]'
 
     return (
-        <div className={`rounded-xl transition-colors duration-[400ms] ${isLogged ? 'bg-emerald-500/10' : 'bg-transparent'}`}>
+        <div className={`rounded-control transition-colors duration-[400ms] ${isLogged ? 'bg-primary/10' : 'bg-transparent'}`}>
             <form
                 key={existingLog ? `tlog-${existingLog.actual_duration_sec}-${existingLog.actual_hold_sec}-${existingLog.reps_done}` : 'new'}
                 ref={formRef}
@@ -433,7 +433,7 @@ function TypedLogSetRow({
                 <input type="hidden" name="set_number" value={setNumber} />
                 {rpeLocal != null && <input type="hidden" name="rpe" value={rpeLocal} />}
 
-                <div className={`w-4 md:w-5 text-center text-xs md:text-sm font-medium ${isLogged ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                <div className={`w-4 md:w-5 text-center text-xs md:text-sm font-medium font-mono ${isLogged ? 'text-primary' : 'text-on-dark-muted'}`}>
                     {setNumber}
                 </div>
 
@@ -521,7 +521,7 @@ function TypedLogSetRow({
                         <button
                             type="button"
                             onClick={() => formRef.current?.requestSubmit()}
-                            className="text-[10px] font-bold text-red-400 border border-red-500/30 rounded-md px-2 py-0.5 hover:bg-red-500/10 transition-colors shrink-0"
+                            className="text-[10px] font-bold text-red-400 border border-red-500/30 rounded-control px-2 py-0.5 hover:bg-red-500/10 transition-colors shrink-0"
                         >
                             Reintentar
                         </button>
@@ -538,7 +538,7 @@ function TypedLogSetRow({
                         transition={reducedMotion ? { duration: 0 } : { duration: 0.25 }}
                         className="overflow-hidden px-2 pb-2"
                     >
-                        <div className="text-[10px] font-semibold text-muted-foreground mb-1 mt-1">
+                        <div className="text-[10px] font-semibold text-on-dark-muted mb-1 mt-1">
                             RPE {rpeLocal != null ? `· ${rpeLocal}` : '(opcional)'}
                         </div>
                         <input
@@ -547,7 +547,7 @@ function TypedLogSetRow({
                             max={10}
                             step={1}
                             value={rpeDraft}
-                            className="w-full accent-emerald-500"
+                            className="w-full accent-[var(--theme-primary)]"
                             aria-label="RPE"
                             onChange={(e) => setRpeDraft(Number(e.target.value))}
                             onPointerUp={(e) => {
@@ -556,7 +556,7 @@ function TypedLogSetRow({
                                 submitRpeUpdate(val)
                             }}
                         />
-                        <div className="flex justify-between text-[10px] text-muted-foreground">
+                        <div className="flex justify-between text-[10px] text-on-dark-muted">
                             <span>6</span>
                             <span>10</span>
                         </div>
@@ -572,8 +572,8 @@ function SubmitSetButton({ isLogged }: { isLogged: boolean }) {
     return (
         <button
             type="submit"
-            className={`w-11 h-11 md:w-7 md:h-7 rounded-md flex items-center justify-center transition-all shadow-sm
-            ${isLogged ? 'bg-emerald-500/20 text-emerald-400' : 'bg-secondary text-muted-foreground hover:bg-violet-600 hover:text-white'}`}
+            className={`w-11 h-11 md:w-7 md:h-7 rounded-control flex items-center justify-center transition-all shadow-sm
+            ${isLogged ? 'bg-primary/20 text-primary' : 'bg-white/10 text-on-dark-muted hover:bg-primary hover:text-primary-foreground'}`}
             title={pending ? 'Guardando set...' : isLogged ? 'Set guardado · toca para editar' : 'Guardar set'}
             aria-label={pending ? 'Guardando set...' : isLogged ? 'Set guardado, toca para editar' : 'Guardar set'}
         >
