@@ -81,7 +81,7 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
     >
       {mode === 'search' ? (
         <>
-          {title ? <Text style={[styles.sheetTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{title}</Text> : null}
+          {title ? <Text style={[styles.sheetTitle, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{title}</Text> : null}
           <View style={styles.headerRow}>
             <View style={[styles.searchBar, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
               <Search size={16} color={theme.mutedForeground} />
@@ -101,7 +101,7 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
               return (
                 <TouchableOpacity key={s.key} onPress={() => applyScope(s.key)} activeOpacity={0.8}
                   style={[styles.scopeChip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary + '14' : 'transparent' }]}>
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: active ? theme.primary : theme.mutedForeground }}>{s.label}</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'HankenGrotesk_600SemiBold', color: active ? theme.primary : theme.mutedForeground }}>{s.label}</Text>
                 </TouchableOpacity>
               )
             })}
@@ -112,7 +112,7 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
               return (
                 <TouchableOpacity key={c} onPress={() => applyCategory(c)} activeOpacity={0.8}
                   style={[styles.catFilterChip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary + '14' : 'transparent' }]}>
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: active ? theme.primary : theme.mutedForeground, textTransform: 'capitalize' }}>{c}</Text>
+                  <Text style={{ fontSize: 12, fontFamily: 'HankenGrotesk_600SemiBold', color: active ? theme.primary : theme.mutedForeground, textTransform: 'capitalize' }}>{c}</Text>
                 </TouchableOpacity>
               )
             })}
@@ -135,7 +135,7 @@ export const FoodSearchSheet = forwardRef<BottomSheetModal, Props>(function Food
                   <View style={{ flex: 1 }}>
                     <View style={styles.nameRow}>
                       {fav ? <Star size={13} color={theme.primary} fill={theme.primary} /> : null}
-                      <Text style={[styles.foodName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>
+                      <Text style={[styles.foodName, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]} numberOfLines={1}>
                         {item.name}{item.brand ? ` · ${item.brand}` : ''}
                       </Text>
                     </View>
@@ -197,8 +197,8 @@ function CreateFoodForm({ theme, initialName, onCancel, onCreated }: { theme: an
   return (
     <BottomSheetScrollView contentContainerStyle={styles.form} keyboardShouldPersistTaps="handled">
       <View style={styles.formHeader}>
-        <Text style={[styles.formTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Nuevo alimento</Text>
-        <TouchableOpacity onPress={onCancel} activeOpacity={0.7}><Text style={{ color: theme.primary, fontFamily: 'Inter_600SemiBold', fontSize: 14 }}>Buscar</Text></TouchableOpacity>
+        <Text style={[styles.formTitle, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>Nuevo alimento</Text>
+        <TouchableOpacity onPress={onCancel} activeOpacity={0.7}><Text style={{ color: theme.primary, fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14 }}>Buscar</Text></TouchableOpacity>
       </View>
 
       {error ? <Text style={{ color: theme.destructive, fontSize: 13, fontFamily: theme.fontSans }}>{error}</Text> : null}
@@ -217,7 +217,7 @@ function CreateFoodForm({ theme, initialName, onCancel, onCreated }: { theme: an
           <View style={[styles.unitWrap, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
             {FOOD_UNITS.map((u) => (
               <TouchableOpacity key={u} onPress={() => setUnit(u)} activeOpacity={0.8} style={[styles.unitChip, unit === u && { backgroundColor: theme.primary }]}>
-                <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: unit === u ? theme.primaryForeground : theme.mutedForeground }}>{u}</Text>
+                <Text style={{ fontSize: 12, fontFamily: 'HankenGrotesk_600SemiBold', color: unit === u ? theme.primaryForeground : theme.mutedForeground }}>{u}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -231,7 +231,7 @@ function CreateFoodForm({ theme, initialName, onCancel, onCreated }: { theme: an
           return (
             <TouchableOpacity key={c} onPress={() => setCategory(c)} activeOpacity={0.8}
               style={[styles.catChip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary + '1A' : 'transparent' }]}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: active ? theme.primary : theme.mutedForeground }}>{c}</Text>
+              <Text style={{ fontSize: 12, fontFamily: 'HankenGrotesk_600SemiBold', color: active ? theme.primary : theme.mutedForeground }}>{c}</Text>
             </TouchableOpacity>
           )
         })}
@@ -239,7 +239,7 @@ function CreateFoodForm({ theme, initialName, onCancel, onCreated }: { theme: an
 
       <TouchableOpacity onPress={submit} disabled={saving} activeOpacity={0.85} style={[styles.submitBtn, { backgroundColor: theme.primary, opacity: saving ? 0.6 : 1 }]}>
         {saving ? <ActivityIndicator size="small" color={theme.primaryForeground} /> : (
-          <Text style={[styles.submitText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>Crear y agregar</Text>
+          <Text style={[styles.submitText, { color: theme.primaryForeground, fontFamily: 'Archivo_700Bold' }]}>Crear y agregar</Text>
         )}
       </TouchableOpacity>
     </BottomSheetScrollView>
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   foodName: { fontSize: 14, flexShrink: 1 },
   macroLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' },
-  macroSeg: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  macroSeg: { fontSize: 12, fontFamily: 'JetBrainsMono_500Medium' },
   macroServing: { fontSize: 12 },
   form: { paddingHorizontal: 16, paddingBottom: 40, gap: 12 },
   formHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

@@ -204,9 +204,9 @@ function VirtualFoodList({
                     <div className="mt-1.5 flex flex-wrap items-center gap-1">
                       <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{f.calories} kcal</span>
                       <span className="text-zinc-300 dark:text-zinc-600">·</span>
-                      <MacroPill label="P " value={f.protein_g} color="text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-500/10" />
-                      <MacroPill label="C " value={f.carbs_g} color="text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-500/10" />
-                      <MacroPill label="G " value={f.fats_g} color="text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-500/10" />
+                      <MacroPill label="P " value={f.protein_g} color="text-[var(--ember-600)] bg-[var(--ember-100)]" />
+                      <MacroPill label="C " value={f.carbs_g} color="text-[var(--sport-600)] bg-[var(--sport-100)]" />
+                      <MacroPill label="G " value={f.fats_g} color="text-[var(--aqua-700)] bg-[var(--aqua-100)]" />
                       {f.is_liquid && (
                         <span className="rounded-md bg-sky-50 px-1.5 py-0.5 text-[10px] font-bold text-sky-500 dark:bg-sky-500/10">ml</span>
                       )}
@@ -733,9 +733,9 @@ export function FoodSearchDrawer({
                 <span className="rounded-lg bg-white border border-zinc-200 px-2 py-1 text-xs font-bold text-zinc-700 dark:bg-white/10 dark:border-white/10 dark:text-white">
                   {picked.calories} kcal / {picked.serving_size}{picked.serving_unit ?? 'g'}
                 </span>
-                <MacroPill label="P " value={picked.protein_g} color="text-blue-600 bg-blue-50 dark:text-blue-400 dark:bg-blue-500/10" />
-                <MacroPill label="C " value={picked.carbs_g} color="text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-500/10" />
-                <MacroPill label="G " value={picked.fats_g} color="text-rose-600 bg-rose-50 dark:text-rose-400 dark:bg-rose-500/10" />
+                <MacroPill label="P " value={picked.protein_g} color="text-[var(--ember-600)] bg-[var(--ember-100)]" />
+                <MacroPill label="C " value={picked.carbs_g} color="text-[var(--sport-600)] bg-[var(--sport-100)]" />
+                <MacroPill label="G " value={picked.fats_g} color="text-[var(--aqua-700)] bg-[var(--aqua-100)]" />
               </div>
             </div>
 
@@ -794,15 +794,15 @@ export function FoodSearchDrawer({
                 </div>
                 <div className="mt-2 flex gap-3 text-xs">
                   <span>
-                    <span className="font-bold text-blue-500">{preview.protein}g</span>
+                    <span className="font-bold text-[var(--ember-500)]">{preview.protein}g</span>
                     <span className="text-zinc-400"> P</span>
                   </span>
                   <span>
-                    <span className="font-bold text-amber-500">{preview.carbs}g</span>
+                    <span className="font-bold text-[var(--sport-500)]">{preview.carbs}g</span>
                     <span className="text-zinc-400"> C</span>
                   </span>
                   <span>
-                    <span className="font-bold text-rose-500">{preview.fats}g</span>
+                    <span className="font-bold text-[var(--aqua-600)]">{preview.fats}g</span>
                     <span className="text-zinc-400"> G</span>
                   </span>
                 </div>

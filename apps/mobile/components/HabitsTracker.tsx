@@ -94,12 +94,12 @@ export function HabitsTracker({ clientId, logDate, isToday, initialData }: Props
     <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
       <TouchableOpacity style={styles.header} onPress={() => setIsOpen(!isOpen)} activeOpacity={0.75}>
         <Droplets size={16} color={theme.primary} strokeWidth={2} />
-        <Text style={[styles.headerTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+        <Text style={[styles.headerTitle, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>
           Hábitos del día
         </Text>
         {water != null && (
           <View style={[styles.badge, { backgroundColor: theme.primary + '20' }]}>
-            <Text style={[styles.badgeText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
+            <Text style={[styles.badgeText, { color: theme.primary, fontFamily: 'Archivo_700Bold' }]}>
               {water >= 1000 ? `${water / 1000}L` : `${water}ml`}
             </Text>
           </View>
@@ -259,7 +259,7 @@ export function HabitsTracker({ clientId, logDate, isToday, initialData }: Props
 function Section({ label, theme, children }: { label: string; theme: any; children: React.ReactNode }) {
   return (
     <View style={styles.section}>
-      <Text style={[styles.sectionLabel, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
+      <Text style={[styles.sectionLabel, { color: theme.mutedForeground, fontFamily: 'Archivo_700Bold' }]}>
         {label}
       </Text>
       {children}
@@ -287,7 +287,7 @@ function Chip({
         },
       ]}
     >
-      <Text style={[styles.chipText, { color: selected ? theme.primaryForeground : theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+      <Text style={[styles.chipText, { color: selected ? theme.primaryForeground : theme.foreground, fontFamily: 'Archivo_700Bold' }]}>
         {label}
       </Text>
     </TouchableOpacity>

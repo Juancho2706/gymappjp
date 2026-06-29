@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
-import { Apple, Share2 } from 'lucide-react-native'
+import { Apple, Flame, History, Share2 } from 'lucide-react-native'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { useOnline } from '../../../lib/use-online'
@@ -56,6 +56,9 @@ import { AppBackground } from '../../../components/AppBackground'
 import { getDailyHabits } from '../../../lib/habits.queries'
 import type { HabitsData } from '../../../lib/habits.queries'
 import { readNutritionCache, writeNutritionCache } from '../../../lib/nutrition-offline-cache'
+
+// Ember-500 (nutrition domain accent — token-contract.md §1; constant across light/dark).
+const EMBER_500 = '#FF6A3D'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -416,7 +419,7 @@ export default function AlumnoNutricionScreen() {
           title="Nutrición"
           subtitle={plan.name}
           trailing={
-            <TouchableOpacity onPress={handleShare} style={styles.shareBtn} activeOpacity={0.75} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity onPress={handleShare} className="bg-surface-sunken rounded-full items-center justify-center" style={styles.shareBtn} activeOpacity={0.75} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Share2 size={18} color={theme.foreground} strokeWidth={2} />
             </TouchableOpacity>
           }
@@ -440,7 +443,8 @@ export default function AlumnoNutricionScreen() {
           />
 
           {!isToday && (
-            <View style={[styles.readOnlyBanner, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+            <View className="bg-surface-sunken rounded-card" style={styles.readOnlyBanner}>
+              <History size={16} color={theme.mutedForeground} strokeWidth={2} />
               <Text style={[styles.readOnlyText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
                 Día histórico — solo lectura
               </Text>
@@ -448,9 +452,17 @@ export default function AlumnoNutricionScreen() {
           )}
 
           {streak >= 2 && (
-            <View style={[styles.streakBanner, { backgroundColor: '#f97316' + '1A', borderColor: '#f97316' + '40', borderRadius: theme.radius.lg }]}>
-              <Text style={[styles.streakText, { color: '#f97316', fontFamily: 'Montserrat_700Bold' }]}>
-                🔥 {streak} días de racha
+            <View className="bg-ember-500/10 border border-ember-500/20 rounded-card" style={styles.streakBanner}>
+              <View className="bg-ember-500 items-center justify-center" style={styles.streakIcon}>
+                <Flame size={20} color="#FFFFFF" strokeWidth={2.25} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text className="text-ember-700" style={[styles.streakText, { fontFamily: 'Montserrat_700Bold' }]}>
+                  {streak} días de racha
+                </Text>
+              </View>
+              <Text className="text-ember-700" style={[styles.streakMetric, { fontFamily: 'Montserrat_800ExtraBold' }]}>
+                {streak}
               </Text>
             </View>
           )}
@@ -468,7 +480,7 @@ export default function AlumnoNutricionScreen() {
               <Text style={[styles.progressLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
                 {completedCount}/{totalCount} comidas completadas
               </Text>
-              <ProgressBar value={totalCount > 0 ? completedCount / totalCount : 0} color={theme.success} height={6} />
+              <ProgressBar value={totalCount > 0 ? completedCount / totalCount : 0} color={EMBER_500} height={6} />
             </View>
           )}
 
@@ -479,7 +491,7 @@ export default function AlumnoNutricionScreen() {
           ) : null}
 
           {mealsForDay.length === 0 ? (
-            <View style={styles.noMeals}>
+            <View className="bg-surface-sunken border border-subtle rounded-card" style={styles.noMeals}>
               <Apple size={22} color={theme.mutedForeground} />
               <Text style={[styles.noMealsText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sin comidas para este día</Text>
             </View>
@@ -524,24 +536,28 @@ export default function AlumnoNutricionScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingBottom: 40, gap: 12 },
-  shareBtn: { padding: 8 },
+  scroll: { paddingHorizontal: 16, paddingBottom: 40, gap: 14 },
+  shareBtn: { width: 36, height: 36 },
   readOnlyBanner: {
-    borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
   },
-  readOnlyText: { fontSize: 13 },
+  readOnlyText: { fontSize: 12.5, flex: 1 },
   streakBanner: {
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
+  streakIcon: { width: 40, height: 40, borderRadius: 20 },
   streakText: { fontSize: 14 },
+  streakMetric: { fontSize: 24, letterSpacing: -0.5 },
   progressRow: { gap: 6 },
   progressLabel: { fontSize: 12 },
-  noMeals: { paddingVertical: 32, alignItems: 'center', gap: 8 },
+  noMeals: { paddingVertical: 28, alignItems: 'center', gap: 8 },
   noMealsText: { fontSize: 13 },
 })

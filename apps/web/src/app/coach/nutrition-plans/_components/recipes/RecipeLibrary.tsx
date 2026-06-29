@@ -52,8 +52,8 @@ export function RecipeLibrary({ recipes, clients }: Props) {
 
       {recipes.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-            <ChefHat className="h-6 w-6 text-emerald-500" />
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--ember-100)] text-[var(--ember-600)]">
+            <ChefHat className="h-6 w-6" />
           </div>
           <p className="text-sm font-bold text-foreground">Todavía no tienes recetas</p>
           <p className="text-xs text-muted-foreground mt-1 mb-4 max-w-xs mx-auto">
@@ -66,7 +66,7 @@ export function RecipeLibrary({ recipes, clients }: Props) {
           {recipes.map((recipe) => (
             <div
               key={recipe.id}
-              className="group flex flex-col rounded-2xl border border-border bg-card overflow-hidden transition-all hover:border-emerald-500/30 hover:shadow-lg"
+              className="group flex flex-col rounded-2xl border border-border bg-card overflow-hidden transition-all hover:border-[color:var(--ember-300)] hover:shadow-lg"
             >
               {recipe.image_url ? (
                 <div className="relative aspect-[16/9] w-full bg-muted">
@@ -80,8 +80,8 @@ export function RecipeLibrary({ recipes, clients }: Props) {
                   />
                 </div>
               ) : (
-                <div className="flex aspect-[16/9] w-full items-center justify-center bg-gradient-to-br from-emerald-500/10 to-card">
-                  <ChefHat className="h-8 w-8 text-emerald-500/40" />
+                <div className="flex aspect-[16/9] w-full items-center justify-center bg-gradient-to-br from-[var(--ember-100)] to-card">
+                  <ChefHat className="h-8 w-8 text-[var(--ember-300)]" />
                 </div>
               )}
 
@@ -99,7 +99,8 @@ export function RecipeLibrary({ recipes, clients }: Props) {
                 <div className="mt-auto flex items-center gap-2 pt-2">
                   <Button
                     size="sm"
-                    className="flex-1 h-9 gap-1.5 rounded-xl bg-emerald-500 text-white hover:bg-emerald-400 font-bold uppercase tracking-widest text-[10px]"
+                    variant="primary"
+                    className="flex-1 h-9 gap-1.5 font-bold uppercase tracking-widest text-[10px]"
                     onClick={() => setAssignTarget(recipe)}
                   >
                     <Users className="w-3.5 h-3.5" />
@@ -122,12 +123,12 @@ export function RecipeLibrary({ recipes, clients }: Props) {
                     aria-label="Eliminar receta"
                     disabled={pending && deletingId === recipe.id}
                     onClick={() => handleDelete(recipe)}
-                    className="h-9 w-9 inline-flex items-center justify-center rounded-xl border border-border bg-background hover:bg-rose-500/10 hover:border-rose-500/30 transition-colors disabled:opacity-50"
+                    className="h-9 w-9 inline-flex items-center justify-center rounded-xl border border-border bg-background hover:bg-[var(--danger-100)] hover:border-[color:var(--danger-500)] transition-colors disabled:opacity-50"
                   >
                     {pending && deletingId === recipe.id ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--danger-500)]" />
                     ) : (
-                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                      <Trash2 className="w-3.5 h-3.5 text-[var(--danger-500)]" />
                     )}
                   </button>
                 </div>

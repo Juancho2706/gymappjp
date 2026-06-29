@@ -415,10 +415,10 @@ function CustomFoodForm({
       {(c > 0 || p > 0 || cb > 0 || f > 0) && (
         <div className="rounded-xl border border-border/60 p-3 space-y-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">% calorías aprox.</p>
-          <div className="flex h-2 rounded-full overflow-hidden bg-muted">
-            <div className="h-full bg-blue-500/90" style={{ width: `${pct.p}%` }} />
-            <div className="h-full bg-emerald-500/90" style={{ width: `${pct.c}%` }} />
-            <div className="h-full bg-purple-500/90" style={{ width: `${pct.f}%` }} />
+          <div className="flex h-2 rounded-full overflow-hidden bg-surface-sunken">
+            <div className="h-full bg-[var(--ember-500)]" style={{ width: `${pct.p}%` }} />
+            <div className="h-full bg-[var(--sport-600)]" style={{ width: `${pct.c}%` }} />
+            <div className="h-full bg-[var(--aqua-500)]" style={{ width: `${pct.f}%` }} />
           </div>
           <p className="text-xs text-muted-foreground">
             P {pct.p}% · C {pct.c}% · G {pct.f}%
@@ -486,7 +486,7 @@ function CustomFoodForm({
       {!isUnitMode && <input type="hidden" name="serving_size" value="100" />}
 
       <SubmitButton />
-      {state.error && <p className="text-xs text-rose-500 font-bold text-center">{state.error}</p>}
+      {state.error && <p className="text-xs text-[var(--cta-danger)] font-bold text-center">{state.error}</p>}
     </form>
   )
 }

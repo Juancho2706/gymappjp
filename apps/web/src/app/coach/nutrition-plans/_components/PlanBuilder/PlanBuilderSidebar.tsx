@@ -417,11 +417,11 @@ export function PlanBuilderSidebar({
                     <span className="text-muted-foreground">kcal:</span>
                     <span className="tabular-nums text-violet-700 dark:text-violet-300">{suggested.calories}</span>
                     <span className="text-muted-foreground">Proteína:</span>
-                    <span className="tabular-nums text-orange-600">{suggested.protein}g</span>
+                    <span className="tabular-nums text-[var(--ember-600)]">{suggested.protein}g</span>
                     <span className="text-muted-foreground">Carbos:</span>
-                    <span className="tabular-nums text-blue-600">{suggested.carbs}g</span>
+                    <span className="tabular-nums text-[var(--sport-600)]">{suggested.carbs}g</span>
                     <span className="text-muted-foreground">Grasas:</span>
-                    <span className="tabular-nums text-yellow-600">{suggested.fats}g</span>
+                    <span className="tabular-nums text-[var(--aqua-600)]">{suggested.fats}g</span>
                   </div>
                   <Button
                     type="button"
@@ -605,11 +605,11 @@ export function PlanBuilderSidebar({
                         <span className="text-muted-foreground">kcal:</span>
                         <span className="tabular-nums text-indigo-700 dark:text-indigo-300">{bcSuggested.calories}</span>
                         <span className="text-muted-foreground">Proteína:</span>
-                        <span className="tabular-nums text-orange-600">{bcSuggested.protein}g</span>
+                        <span className="tabular-nums text-[var(--ember-600)]">{bcSuggested.protein}g</span>
                         <span className="text-muted-foreground">Carbos:</span>
-                        <span className="tabular-nums text-blue-600">{bcSuggested.carbs}g</span>
+                        <span className="tabular-nums text-[var(--sport-600)]">{bcSuggested.carbs}g</span>
                         <span className="text-muted-foreground">Grasas:</span>
-                        <span className="tabular-nums text-yellow-600">{bcSuggested.fats}g</span>
+                        <span className="tabular-nums text-[var(--aqua-600)]">{bcSuggested.fats}g</span>
                       </div>
                       <Button
                         type="button"

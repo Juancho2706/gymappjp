@@ -301,7 +301,7 @@ export function ShoppingListView({ list, coachSlug }: ShoppingListViewProps) {
                             className={cn(
                               'flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition-colors',
                               checked
-                                ? 'border-[var(--color-macro-protein)] bg-[var(--color-macro-protein)] text-white'
+                                ? 'border-[var(--success-500)] bg-[var(--success-500)] text-white'
                                 : 'border-border bg-background text-transparent'
                             )}
                             initial={false}

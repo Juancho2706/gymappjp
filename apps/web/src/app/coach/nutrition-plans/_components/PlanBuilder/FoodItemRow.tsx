@@ -245,16 +245,16 @@ export function FoodItemRow({
                   })
                   return (
                     <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-black">
-                      <span className="rounded-md bg-rose-500/15 px-1.5 py-0.5 text-rose-600 dark:text-rose-300">
+                      <span className="rounded-md bg-[var(--ember-100)] px-1.5 py-0.5 text-[var(--ember-600)]">
                         P {Math.round(m.protein)}g
                       </span>
-                      <span className="rounded-md bg-blue-500/15 px-1.5 py-0.5 text-blue-600 dark:text-blue-300">
+                      <span className="rounded-md bg-[var(--sport-100)] px-1.5 py-0.5 text-[var(--sport-600)]">
                         C {Math.round(m.carbs)}g
                       </span>
-                      <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-amber-600 dark:text-amber-300">
+                      <span className="rounded-md bg-[var(--aqua-100)] px-1.5 py-0.5 text-[var(--aqua-700)]">
                         G {Math.round(m.fats)}g
                       </span>
-                      <span className="rounded-md bg-orange-500/15 px-1.5 py-0.5 text-orange-600 dark:text-orange-300">
+                      <span className="rounded-md bg-surface-sunken px-1.5 py-0.5 text-[var(--text-body)]">
                         {Math.round(m.calories)} kcal
                       </span>
                     </div>

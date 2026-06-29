@@ -143,7 +143,7 @@ export function ExchangeModePanel({
                     disabled={variantPending}
                     onClick={() => onDeleteVariant(v.id)}
                     aria-label={`${t('nutrition.exchange.deleteVariant')} ${v.name}`}
-                    className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-red-600 touch-manipulation"
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-[var(--danger-600)] touch-manipulation"
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>

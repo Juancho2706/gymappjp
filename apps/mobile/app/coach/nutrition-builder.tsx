@@ -29,6 +29,9 @@ import {
 import { coerceSwapOptionUnit } from '../../lib/nutrition-utils'
 import { getTemplateDraft, saveTemplate } from '../../lib/nutrition-templates'
 
+// Acento de dominio nutrición / intercambios (ember-500, fijo — token-contract).
+const EMBER = '#FF6A3D'
+
 function unitsForFood(item: { unit: string; serving_unit?: string; is_liquid?: boolean }) {
   const units = item.is_liquid || item.serving_unit === 'ml' ? ['ml', 'un'] : ['g', 'un']
   return units.includes(item.unit) ? units : [item.unit, ...units.filter((u) => u !== item.unit)]
@@ -206,15 +209,15 @@ export default function NutritionBuilderScreen() {
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={styles.headerBack} activeOpacity={0.7}>
           <ChevronLeft size={20} color={theme.primary} />
-          <Text style={[styles.headerBackText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Volver</Text>
+          <Text style={[styles.headerBackText, { color: theme.primary, fontFamily: 'Archivo_700Bold' }]}>Volver</Text>
         </TouchableOpacity>
-        <Text numberOfLines={1} style={[styles.headerTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+        <Text numberOfLines={1} style={[styles.headerTitle, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>
           {isTemplate ? (templateId ? 'Editar plantilla' : 'Nueva plantilla') : (planId ? 'Editar plan' : 'Nuevo plan')}
         </Text>
         <TouchableOpacity onPress={save} disabled={saving} activeOpacity={0.85}
           style={[styles.saveBtn, { backgroundColor: theme.primary, opacity: saving ? 0.6 : 1 }]}>
           {saving ? <ActivityIndicator size="small" color={theme.primaryForeground} /> : (
-            <Text style={[styles.saveText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>Guardar</Text>
+            <Text style={[styles.saveText, { color: theme.primaryForeground, fontFamily: 'Archivo_700Bold' }]}>Guardar</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -232,10 +235,10 @@ export default function NutritionBuilderScreen() {
             <Label theme={theme}>Objetivos diarios</Label>
             {macrosManual ? (
               <TouchableOpacity onPress={() => setMacrosManual(false)} activeOpacity={0.7}>
-                <Text style={[styles.autoChip, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>↺ Auto desde alimentos</Text>
+                <Text style={[styles.autoChip, { color: theme.primary, fontFamily: 'HankenGrotesk_600SemiBold' }]}>↺ Auto desde alimentos</Text>
               </TouchableOpacity>
             ) : (
-              <Text style={[styles.autoChip, { color: theme.success, fontFamily: 'Inter_600SemiBold' }]}>Auto desde alimentos ✓</Text>
+              <Text style={[styles.autoChip, { color: theme.success, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Auto desde alimentos ✓</Text>
             )}
           </View>
           <View style={styles.macroRow}>
@@ -250,7 +253,7 @@ export default function NutritionBuilderScreen() {
           {/* Live totals from foods */}
           <View style={[styles.totals, { backgroundColor: theme.secondary, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
             <Text style={[styles.totalsLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Suma de alimentos</Text>
-            <Text style={[styles.totalsValue, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            <Text style={[styles.totalsValue, { color: theme.foreground, fontFamily: 'JetBrainsMono_500Medium' }]}>
               {totals.kcal} kcal · P{totals.protein} C{totals.carbs} G{totals.fats}
             </Text>
           </View>
@@ -264,7 +267,7 @@ export default function NutritionBuilderScreen() {
               style={[styles.mealCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
               <View style={styles.mealTop}>
                 <TextInput value={meal.name} onChangeText={(v) => updateMeal(meal.uid, { name: v })} placeholder="Nombre comida" placeholderTextColor={theme.mutedForeground}
-                  style={[styles.mealName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} />
+                  style={[styles.mealName, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]} />
                 <TouchableOpacity onPress={() => moveMeal(meal.uid, -1)} disabled={mealIdx === 0} hitSlop={6} style={styles.moveBtn}>
                   <ChevronUp size={17} color={mealIdx === 0 ? theme.muted : theme.mutedForeground} />
                 </TouchableOpacity>
@@ -283,7 +286,7 @@ export default function NutritionBuilderScreen() {
                   return (
                     <TouchableOpacity key={String(d.value)} onPress={() => updateMeal(meal.uid, { day_of_week: d.value })} activeOpacity={0.8}
                       style={[styles.dayChip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary + '1A' : 'transparent' }]}>
-                      <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: active ? theme.primary : theme.mutedForeground }}>{d.label}</Text>
+                      <Text style={{ fontSize: 12, fontFamily: 'HankenGrotesk_600SemiBold', color: active ? theme.primary : theme.mutedForeground }}>{d.label}</Text>
                     </TouchableOpacity>
                   )
                 })}
@@ -297,8 +300,8 @@ export default function NutritionBuilderScreen() {
                   <View key={it.uid} style={{ gap: 6 }}>
                     <View style={[styles.itemRow, { borderColor: theme.border }]}>
                       <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text numberOfLines={1} style={[styles.itemName, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>{it.name}</Text>
-                        <Text style={[styles.itemMacro, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                        <Text numberOfLines={1} style={[styles.itemName, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{it.name}</Text>
+                        <Text style={[styles.itemMacro, { color: theme.mutedForeground, fontFamily: 'JetBrainsMono_400Regular' }]}>
                           {Math.round(im.calories)} kcal · P{Math.round(im.protein)} C{Math.round(im.carbs)} G{Math.round(im.fats)}
                         </Text>
                       </View>
@@ -315,7 +318,7 @@ export default function NutritionBuilderScreen() {
                           return (
                             <TouchableOpacity key={u} onPress={() => updateItemUnit(meal.uid, it.uid, u)} activeOpacity={0.8}
                               style={[styles.unitChip, active && { backgroundColor: theme.primary }]}>
-                              <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>{u}</Text>
+                              <Text style={{ fontSize: 11, fontFamily: 'HankenGrotesk_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>{u}</Text>
                             </TouchableOpacity>
                           )
                         })}
@@ -326,9 +329,9 @@ export default function NutritionBuilderScreen() {
                     </View>
                     <View style={styles.itemActionRow}>
                       <TouchableOpacity onPress={() => openSwap(meal.uid, it.uid)} activeOpacity={0.8}
-                        style={[styles.swapBtn, { flex: 1, borderColor: swapCount ? theme.primary + '66' : theme.border, backgroundColor: swapCount ? theme.primary + '12' : 'transparent' }]}>
-                        <ArrowLeftRight size={13} color={swapCount ? theme.primary : theme.mutedForeground} />
-                        <Text style={[styles.swapBtnText, { color: swapCount ? theme.primary : theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>
+                        style={[styles.swapBtn, { flex: 1, borderColor: swapCount ? EMBER + '66' : theme.border, backgroundColor: swapCount ? EMBER + '14' : 'transparent' }]}>
+                        <ArrowLeftRight size={13} color={swapCount ? EMBER : theme.mutedForeground} />
+                        <Text style={[styles.swapBtnText, { color: swapCount ? EMBER : theme.mutedForeground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>
                           {swapCount ? `${swapCount} alternativa${swapCount !== 1 ? 's' : ''}` : 'Configurar cambios'}
                         </Text>
                       </TouchableOpacity>
@@ -345,7 +348,7 @@ export default function NutritionBuilderScreen() {
 
               {showEmptyWarn && meal.items.length === 0 ? (
                 <View style={[styles.warnBox, { borderColor: '#F9731640', backgroundColor: '#F9731614' }]}>
-                  <Text style={[styles.warnText, { color: '#F97316', fontFamily: 'Inter_600SemiBold' }]}>Comida vacía: agregá al menos 1 alimento.</Text>
+                  <Text style={[styles.warnText, { color: '#F97316', fontFamily: 'HankenGrotesk_600SemiBold' }]}>Comida vacía: agregá al menos 1 alimento.</Text>
                 </View>
               ) : null}
 
@@ -355,14 +358,14 @@ export default function NutritionBuilderScreen() {
               <TouchableOpacity onPress={() => openFoodSearch(meal.uid)} activeOpacity={0.8}
                 style={[styles.addFood, { borderColor: theme.primary + '55' }]}>
                 <Plus size={15} color={theme.primary} />
-                <Text style={[styles.addFoodText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Agregar alimento</Text>
+                <Text style={[styles.addFoodText, { color: theme.primary, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Agregar alimento</Text>
               </TouchableOpacity>
             </MotiView>
           ))}
 
           <TouchableOpacity onPress={addMeal} activeOpacity={0.85} style={[styles.addMeal, { borderColor: theme.border, backgroundColor: theme.card }]}>
             <UtensilsCrossed size={17} color={theme.foreground} />
-            <Text style={[styles.addMealText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Agregar comida</Text>
+            <Text style={[styles.addMealText, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>Agregar comida</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -435,7 +438,7 @@ function CalcChips({ theme, label, value, options, onPick }: { theme: any; label
           return (
             <TouchableOpacity key={o.k} onPress={() => onPick(o.k)} activeOpacity={0.8}
               style={{ borderWidth: 1, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7, borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : 'transparent' }}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: on ? theme.primary : theme.mutedForeground }}>{o.l}</Text>
+              <Text style={{ fontSize: 12, fontFamily: 'HankenGrotesk_600SemiBold', color: on ? theme.primary : theme.mutedForeground }}>{o.l}</Text>
             </TouchableOpacity>
           )
         })}

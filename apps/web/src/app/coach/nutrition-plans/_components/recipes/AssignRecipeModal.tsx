@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition } from 'react'
-import { Search, Users, Check, Loader2 } from 'lucide-react'
+import { useEffect, useState, useTransition } from 'react'
+import { Search, ChefHat, Check, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -28,20 +28,11 @@ export function AssignRecipeModal({ open, onOpenChange, recipe, clients, onAssig
   const [selected, setSelected] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [pending, startTransition] = useTransition()
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [themeColor, setThemeColor] = useState('')
 
   useEffect(() => {
     if (!open) {
       setSelected([])
       setSearch('')
-    }
-  }, [open])
-
-  useEffect(() => {
-    if (containerRef.current) {
-      const color = getComputedStyle(containerRef.current).getPropertyValue('--theme-primary')
-      if (color) setThemeColor(color.trim())
     }
   }, [open])
 
@@ -65,31 +56,19 @@ export function AssignRecipeModal({ open, onOpenChange, recipe, clients, onAssig
   }
 
   return (
-    <div ref={containerRef}>
+    <div>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent
-          className="sm:max-w-md bg-white dark:bg-zinc-950 border-slate-200 dark:border-white/10 p-6"
-          style={{ '--theme-primary': themeColor || 'inherit' } as React.CSSProperties}
-        >
+        <DialogContent className="sm:max-w-md bg-white dark:bg-zinc-950 border-slate-200 dark:border-white/10 p-6">
           <DialogHeader className="mb-2">
             <DialogTitle className="text-xl font-black uppercase tracking-tight flex items-center gap-2">
-              <Users className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />
+              <ChefHat className="w-5 h-5 text-[var(--ember-500)]" />
               Compartir receta
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-5">
-            <div
-              className="p-4 rounded-xl border"
-              style={{
-                backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)',
-                borderColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)',
-              }}
-            >
-              <p
-                className="text-xs font-bold uppercase tracking-widest mb-1"
-                style={{ color: 'var(--theme-primary)' }}
-              >
+            <div className="p-4 rounded-xl border bg-[var(--ember-100)] border-[color:var(--ember-200)]">
+              <p className="text-xs font-bold uppercase tracking-widest mb-1 text-[var(--ember-600)]">
                 Receta seleccionada
               </p>
               <p className="text-base font-black text-slate-900 dark:text-white">{recipe?.name}</p>
@@ -107,8 +86,7 @@ export function AssignRecipeModal({ open, onOpenChange, recipe, clients, onAssig
                 {clients.length > 0 && (
                   <button
                     type="button"
-                    className="text-[10px] font-bold hover:underline"
-                    style={{ color: 'var(--theme-primary)' }}
+                    className="text-[10px] font-bold hover:underline text-[var(--ember-600)]"
                     onClick={() =>
                       setSelected(selected.length === clients.length ? [] : clients.map((c) => c.id))
                     }
@@ -151,32 +129,19 @@ export function AssignRecipeModal({ open, onOpenChange, recipe, clients, onAssig
                         className={cn(
                           'flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all',
                           isSelected
-                            ? 'border-transparent'
+                            ? 'bg-[var(--ember-100)] border-[color:var(--ember-500)]'
                             : 'bg-white dark:bg-zinc-900 border-slate-100 dark:border-white/5 hover:border-slate-300 dark:hover:border-slate-700'
                         )}
-                        style={
-                          isSelected
-                            ? {
-                                backgroundColor: 'color-mix(in srgb, var(--theme-primary) 5%, transparent)',
-                                borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)',
-                              }
-                            : {}
-                        }
                       >
                         <div
                           className={cn(
                             'w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0',
                             isSelected
-                              ? 'border-transparent'
+                              ? 'bg-[var(--ember-500)] border-[color:var(--ember-500)]'
                               : 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-zinc-800'
                           )}
-                          style={
-                            isSelected
-                              ? { backgroundColor: 'var(--theme-primary)', borderColor: 'var(--theme-primary)' }
-                              : {}
-                          }
                         >
-                          {isSelected && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                          {isSelected && <Check className="w-3 h-3 text-[var(--text-on-ember)]" strokeWidth={3} />}
                         </div>
                         <p className="font-bold text-sm truncate text-slate-900 dark:text-white min-w-0 flex-1">
                           {client.full_name}
@@ -189,10 +154,10 @@ export function AssignRecipeModal({ open, onOpenChange, recipe, clients, onAssig
             </div>
 
             <Button
-              className="h-12 w-full gap-2 border-none font-black uppercase tracking-widest text-white shadow-lg transition-all hover:opacity-90"
+              variant="primary"
+              className="h-12 w-full gap-2 font-black uppercase tracking-widest"
               disabled={pending || selected.length === 0}
               onClick={handleAssign}
-              style={{ backgroundColor: 'var(--theme-primary)' }}
             >
               {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
               {pending ? 'Procesando…' : `Compartir${selected.length > 0 ? ` (${selected.length})` : ''}`}

@@ -84,7 +84,7 @@ export function NutritionStreakBanner({ adherenceData, planMeals }: Props) {
               : { opacity: 1, y: 0, scale: [1, 1.025, 1] }
           }
           transition={reduceMotion ? { duration: 0.2 } : { duration: 0.55, ease: 'easeOut', times: [0, 0.5, 1] }}
-          className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/25 rounded-2xl px-4 py-3"
+          className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/25 rounded-card px-4 py-3"
         >
           <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
           <div className="min-w-0 flex-1">
@@ -115,20 +115,22 @@ export function NutritionStreakBanner({ adherenceData, planMeals }: Props) {
       <motion.div
         initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
         animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-        className="flex items-center gap-3 bg-orange-500/10 border border-orange-500/20 rounded-2xl px-4 py-3"
+        className="flex items-center gap-3 rounded-card border border-ember-200 bg-ember-100 px-4 py-3"
       >
-        <Flame className="w-5 h-5 text-orange-500 flex-shrink-0" />
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ember-500 text-white">
+          <Flame className="h-5 w-5" />
+        </span>
         <div className="min-w-0 flex-1">
-          <p className="flex flex-wrap items-center gap-1 text-sm font-black text-orange-600 dark:text-orange-400">
+          <p className="flex flex-wrap items-center gap-1 text-sm font-black text-ember-700">
             <span>{streakFrame} de racha</span>
             <InfoTooltip
               title="Cómo se calcula la racha"
               content="Se cuenta un día si marcaste como completada al menos la mitad de las comidas que aplican a ese día según tu plan (mismo criterio que la barra de adherencia). Si fallas un día completo, te queda un día de gracia antes de reiniciar."
               className="shrink-0"
-              iconClassName="text-orange-600/80 dark:text-orange-300/90"
+              iconClassName="text-ember-700/80"
             />
           </p>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-[11px] text-ember-700/80">
             {count >= 7
               ? '¡Semana perfecta! Sigue así.'
               : count >= 3
@@ -136,6 +138,7 @@ export function NutritionStreakBanner({ adherenceData, planMeals }: Props) {
                 : 'Buen comienzo, mantén el ritmo.'}
           </p>
         </div>
+        <span className="font-display text-2xl font-black tabular-nums text-ember-700">{count}</span>
       </motion.div>
     </AnimatePresence>
   )

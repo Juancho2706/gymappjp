@@ -79,11 +79,11 @@ export function MealCardExpandable({
         </View>
 
         <View style={styles.headerMid}>
-          <Text style={[styles.mealName, { color: isCompleted ? theme.success : theme.foreground, fontFamily: 'Montserrat_600SemiBold' }]} numberOfLines={1}>
+          <Text style={[styles.mealName, { color: isCompleted ? theme.success : theme.foreground, fontFamily: 'Archivo_700Bold' }]} numberOfLines={1}>
             {meal.name}
           </Text>
           {macros && (
-            <Text style={[styles.macrosSummary, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            <Text style={[styles.macrosSummary, { color: theme.mutedForeground, fontFamily: 'JetBrainsMono_400Regular' }]}>
               {Math.round(macros.calories)} kcal · P {Math.round(macros.protein)}g · C {Math.round(macros.carbs)}g · G {Math.round(macros.fats)}g
             </Text>
           )}
@@ -139,7 +139,7 @@ export function MealCardExpandable({
                         onPress={() => onPortionChange(pct)}
                         activeOpacity={0.75}
                       >
-                        <Text style={{ color: active ? theme.primary : theme.mutedForeground, fontSize: 12.5, fontFamily: 'Inter_600SemiBold' }}>{pct}%</Text>
+                        <Text style={{ color: active ? theme.primary : theme.mutedForeground, fontSize: 12.5, fontFamily: 'HankenGrotesk_600SemiBold' }}>{pct}%</Text>
                       </TouchableOpacity>
                     )
                   })}

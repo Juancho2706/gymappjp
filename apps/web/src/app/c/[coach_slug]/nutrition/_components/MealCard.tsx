@@ -80,8 +80,8 @@ export function MealCard({
     <motion.div
       layout
       className={cn(
-        'rounded-2xl border transition-colors duration-300 overflow-hidden',
-        isCompleted ? 'bg-emerald-500/[0.04] border-emerald-500/25' : 'bg-card border-border'
+        'rounded-card border transition-colors duration-300 overflow-hidden',
+        isCompleted ? 'bg-ember-500/[0.04] border-ember-500/25' : 'bg-card border-border'
       )}
     >
       <div
@@ -100,11 +100,7 @@ export function MealCard({
           aria-label={isCompleted ? 'Marcar incompleta' : 'Marcar completa'}
         >
           <motion.div
-            animate={
-              isCompleted
-                ? { scale: 1, backgroundColor: '#10b981' }
-                : { scale: 1, backgroundColor: 'transparent' }
-            }
+            animate={{ scale: 1 }}
             transition={
               reduceMotion
                 ? { duration: 0 }
@@ -113,9 +109,9 @@ export function MealCard({
                   : { duration: 0.2, ease: 'easeOut' }
             }
             className={cn(
-              'w-7 h-7 rounded-full border-2 flex items-center justify-center',
+              'w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors duration-200',
               isCompleted
-                ? 'border-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)]'
+                ? 'border-ember-500 bg-ember-500 shadow-[var(--glow-ember)]'
                 : 'border-muted-foreground/30'
             )}
           >
@@ -141,7 +137,7 @@ export function MealCard({
               className={cn(
                 'font-black text-base tracking-tight truncate',
                 isCompleted
-                  ? 'text-emerald-600 dark:text-emerald-400 line-through'
+                  ? 'text-ember-700 line-through'
                   : 'text-foreground'
               )}
             >
@@ -152,7 +148,7 @@ export function MealCard({
               <span className="text-xs font-black text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                 {Math.round(mealMacros.calories * macroScale)} kcal
                 {isCompleted && partialPlanPct != null && partialPlanPct < 100 ? (
-                  <span className="ml-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                  <span className="ml-1 text-[10px] font-bold text-ember-700">
                     ({partialPlanPct}%)
                   </span>
                 ) : null}
@@ -233,7 +229,7 @@ export function MealCard({
                         className={cn(
                           'min-w-[2.75rem] rounded-lg px-2 py-1.5 text-[11px] font-bold transition-colors touch-manipulation',
                           partialPlanPct === pct
-                            ? 'bg-emerald-500 text-white'
+                            ? 'bg-ember-500 text-white'
                             : 'bg-background border border-border/80 text-foreground hover:bg-muted/60'
                         )}
                       >
@@ -250,7 +246,7 @@ export function MealCard({
                       className={cn(
                         'min-w-[2.75rem] rounded-lg px-2 py-1.5 text-[11px] font-bold transition-colors touch-manipulation',
                         partialPlanPct === 100
-                          ? 'bg-emerald-500 text-white'
+                          ? 'bg-ember-500 text-white'
                           : 'bg-background border border-border/80 text-foreground hover:bg-muted/60'
                       )}
                     >
@@ -266,7 +262,7 @@ export function MealCard({
                       className={cn(
                         'rounded-lg px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-colors touch-manipulation',
                         partialPlanPct == null
-                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/40'
+                          ? 'bg-ember-500/20 text-ember-700 ring-1 ring-ember-500/40'
                           : 'bg-background border border-border/80 text-muted-foreground hover:bg-muted/60'
                       )}
                     >
@@ -300,7 +296,7 @@ export function MealCard({
                         className={cn(
                           'flex-1 rounded-xl py-2 text-xl transition-all touch-manipulation',
                           satisfactionScore === score
-                            ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40 scale-110'
+                            ? 'bg-ember-500/15 ring-1 ring-ember-500/40 scale-110'
                             : 'bg-background border border-border/80 hover:bg-muted/60 opacity-70 hover:opacity-100'
                         )}
                       >

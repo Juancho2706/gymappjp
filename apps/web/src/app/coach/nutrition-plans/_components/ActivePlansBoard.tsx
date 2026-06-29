@@ -107,38 +107,39 @@ export function ActivePlansBoard({ coachId, activePlans, clientsWithoutPlan }: P
   const PlanCard = ({ row }: { row: ActivePlanBoardRow }) => {
     const client = row.clients
     const label = client?.full_name ?? 'Alumno'
+    const isCustom = row.is_custom
+    const accent = isCustom ? 'var(--ember-500)' : 'var(--sport-500)'
+    const accentSoft = isCustom ? 'var(--ember-100)' : 'var(--sport-100)'
+    const accentFg = isCustom ? 'var(--ember-600)' : 'var(--sport-600)'
     return (
-      <Card className="group border-border/50 bg-card/50 backdrop-blur-sm hover:border-primary/40 transition-all">
+      <Card className="group border-[var(--border-subtle)] bg-surface-card backdrop-blur-sm hover:border-[color:var(--border-strong)] transition-all">
         <div className="p-4 space-y-3">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold shrink-0">
+                <div
+                  className="w-9 h-9 rounded-full flex items-center justify-center font-bold shrink-0"
+                  style={{ backgroundColor: accentSoft, color: accentFg }}
+                >
                   {label.charAt(0)}
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-bold text-sm leading-tight truncate">{label}</h3>
-                  <p className="text-xs text-muted-foreground truncate">{row.name}</p>
+                  <h3 className="font-bold text-sm leading-tight truncate text-[var(--text-strong)]">{label}</h3>
+                  <p className="text-xs text-[var(--text-muted)] truncate">{row.name}</p>
                 </div>
               </div>
             </div>
-            {row.is_custom ? (
-              <Badge variant="outline" className="text-[8px] py-0 h-5 bg-amber-500/10 text-amber-600 border-amber-500/20 shrink-0">
-                CUSTOM
-              </Badge>
-            ) : (
-              <Badge variant="outline" className="text-[8px] py-0 h-5 bg-emerald-500/10 text-emerald-600 border-emerald-500/20 shrink-0">
-                SYNCED
-              </Badge>
-            )}
+            <Badge tone={isCustom ? 'ember' : 'sport'} variant="soft" size="sm" className="shrink-0">
+              {isCustom ? 'CUSTOM' : 'SYNCED'}
+            </Badge>
           </div>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Últimos 7 días</p>
-              <p className="text-[10px] text-muted-foreground tabular-nums">
+              <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-subtle)]">Últimos 7 días</p>
+              <p className="text-[10px] text-[var(--text-muted)] tabular-nums">
                 Hoy:{' '}
-                <span className="font-bold text-foreground">{row.todayCaloriesConsumed}</span>
+                <span className="font-bold text-[var(--text-strong)]">{row.todayCaloriesConsumed}</span>
                 {row.dailyTargetCalories != null && row.dailyTargetCalories > 0 ? (
                   <>
                     {' '}
@@ -153,21 +154,23 @@ export function ActivePlansBoard({ coachId, activePlans, clientsWithoutPlan }: P
               {row.sparkline7d.map((v, i) => (
                 <div
                   key={i}
-                  className="flex-1 min-w-0 rounded-sm bg-emerald-500/35 dark:bg-emerald-400/25"
+                  className="flex-1 min-w-0 rounded-sm"
                   style={{
                     height: `${Math.max(6, Math.round((Math.min(v, 100) / 100) * 100))}%`,
+                    backgroundColor: accent,
+                    opacity: 0.4 + Math.min(v, 100) / 200,
                   }}
                 />
               ))}
             </div>
-            <p className="text-[10px] text-muted-foreground">
-              Más detalle: <span className="text-foreground/80">perfil del alumno</span>
+            <p className="text-[10px] text-[var(--text-subtle)]">
+              Más detalle: <span className="text-[var(--text-body)]">perfil del alumno</span>
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <Link href={`/coach/nutrition-plans/client/${row.client_id}`} className="flex-1 min-w-[120px]">
-              <Button variant="outline" className="w-full justify-between h-9 text-xs">
+              <Button variant="secondary" className="w-full justify-between h-9 text-xs">
                 Gestionar plan
                 <ChevronRight className="w-3.5 h-3.5" />
               </Button>
@@ -188,11 +191,32 @@ export function ActivePlansBoard({ coachId, activePlans, clientsWithoutPlan }: P
     )
   }
 
-  const Column = ({ title, rows }: { title: string; rows: ActivePlanBoardRow[] }) => (
+  const Column = ({
+    title,
+    subtitle,
+    tone,
+    rows,
+  }: {
+    title: string
+    subtitle: string
+    tone: 'sport' | 'ember'
+    rows: ActivePlanBoardRow[]
+  }) => (
     <div className="space-y-3 min-w-0">
-      <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">{title}</h3>
+      <div className="px-1 space-y-0.5">
+        <div className="flex items-center gap-2">
+          <h3
+            className="text-xs font-extrabold uppercase tracking-wide"
+            style={{ color: tone === 'ember' ? 'var(--ember-600)' : 'var(--sport-600)' }}
+          >
+            {title}
+          </h3>
+          <span className="text-[11px] font-bold text-[var(--text-subtle)] tabular-nums">{rows.length}</span>
+        </div>
+        <p className="text-[11px] text-[var(--text-subtle)]">{subtitle}</p>
+      </div>
       {rows.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border/60 p-8 text-center text-sm text-muted-foreground">
+        <div className="rounded-card border border-dashed border-[var(--border-default)] p-8 text-center text-sm text-[var(--text-subtle)]">
           Sin planes en esta columna
         </div>
       ) : (
@@ -253,22 +277,32 @@ export function ActivePlansBoard({ coachId, activePlans, clientsWithoutPlan }: P
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Column title="Sincronizados (SYNCED)" rows={synced} />
-        <Column title="Personalizados (CUSTOM)" rows={custom} />
+        <Column
+          title="Sincronizados"
+          subtitle="Siguen una plantilla — los cambios se propagan."
+          tone="sport"
+          rows={synced}
+        />
+        <Column
+          title="Personalizados"
+          subtitle="Editados a mano — no sincronizan con la plantilla."
+          tone="ember"
+          rows={custom}
+        />
       </div>
 
       {clientsWithoutPlan.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-black uppercase tracking-tight flex items-center gap-2">
-            <Users className="w-4 h-4" />
+          <h3 className="text-sm font-black uppercase tracking-tight flex items-center gap-2 text-[var(--text-strong)]">
+            <Users className="w-4 h-4 text-[var(--text-muted)]" />
             Sin plan activo ({clientsWithoutPlan.length})
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {clientsWithoutPlan.map((c) => (
-              <Card key={c.id} className="p-4 border-border/50 bg-muted/20 flex items-center justify-between gap-3">
+              <Card key={c.id} className="p-4 border-[var(--border-subtle)] bg-surface-card flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-bold text-sm truncate">{c.full_name}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Asigna desde Plantillas</p>
+                  <p className="font-bold text-sm truncate text-[var(--text-strong)]">{c.full_name}</p>
+                  <p className="text-[10px] text-[var(--text-subtle)] uppercase tracking-widest">Asigna desde Plantillas</p>
                 </div>
                 <AssignButton coachId={coachId} clientId={c.id} />
               </Card>
@@ -278,9 +312,9 @@ export function ActivePlansBoard({ coachId, activePlans, clientsWithoutPlan }: P
       )}
 
       {activePlans.length === 0 && clientsWithoutPlan.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 bg-muted/30 rounded-3xl border-2 border-dashed border-border/50">
-          <Users className="w-12 h-12 text-muted-foreground/30 mb-4" />
-          <p className="text-muted-foreground font-medium">No hay alumnos en tu cartera</p>
+        <div className="flex flex-col items-center justify-center py-20 bg-surface-sunken rounded-card border border-dashed border-[var(--border-default)]">
+          <Users className="w-12 h-12 text-[var(--text-subtle)] mb-4" />
+          <p className="text-[var(--text-muted)] font-medium">No hay alumnos en tu cartera</p>
         </div>
       )}
     </div>

@@ -62,7 +62,7 @@ export function MealIngredientRow({
                     showSwaps && 'bg-muted'
                   )}
                 >
-                  <ArrowLeftRight className="w-3.5 h-3.5 text-sky-500" />
+                  <ArrowLeftRight className="w-3.5 h-3.5 text-sport-500" />
                 </button>
                 <InfoTooltip
                   content="Tu coach dejó opciones de cambio para este alimento. Elige una y pulsa Aplicar."
@@ -93,15 +93,15 @@ export function MealIngredientRow({
             )}
           </div>
           <div className="flex gap-2 mt-0.5">
-            <span className="text-[10px] font-bold text-orange-500">P {Math.round(macros.protein)}g</span>
-            <span className="text-[10px] font-bold text-blue-500">C {Math.round(macros.carbs)}g</span>
-            <span className="text-[10px] font-bold text-yellow-500">G {Math.round(macros.fats)}g</span>
+            <span className="text-[10px] font-bold text-[color:var(--color-macro-protein)]">P {Math.round(macros.protein)}g</span>
+            <span className="text-[10px] font-bold text-[color:var(--color-macro-carbs)]">C {Math.round(macros.carbs)}g</span>
+            <span className="text-[10px] font-bold text-[color:var(--color-macro-fats)]">G {Math.round(macros.fats)}g</span>
           </div>
         </div>
         <div className="text-right flex-shrink-0 space-y-0.5">
-          <p className="text-xs font-black text-emerald-500">{displayQty}</p>
+          <p className="text-xs font-black text-ember-700">{displayQty}</p>
           <p className="text-[10px] text-muted-foreground tabular-nums flex items-center gap-1 justify-end">
-            <Flame className="w-3 h-3 text-orange-400" />
+            <Flame className="w-3 h-3 text-ember-500" />
             {Math.round(macros.calories)} kcal
           </p>
         </div>
@@ -109,7 +109,7 @@ export function MealIngredientRow({
 
       {showSwaps && swapOptions.length > 0 && (
         <div className="px-3 pb-3 pt-0 space-y-2 border-t border-border/30">
-          <p className="text-[9px] font-bold uppercase tracking-widest text-sky-500 mt-2">Opciones de cambio</p>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-sport-600 mt-2">Opciones de cambio</p>
           {swapOptions.map((f) => {
             const isLiquid = swapOptionIsLiquid(f)
             const coachQty =
@@ -139,12 +139,12 @@ export function MealIngredientRow({
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs font-semibold text-foreground/80 min-w-0 flex-1 truncate">{f.name}</p>
                   <div className="flex flex-wrap items-center gap-2 shrink-0 text-[10px] font-bold">
-                    <span className="text-orange-500">P{Math.round(previewMacros.protein)}g</span>
-                    <span className="text-blue-500">C{Math.round(previewMacros.carbs)}g</span>
-                    <span className="text-yellow-500">G{Math.round(previewMacros.fats)}g</span>
+                    <span className="text-[color:var(--color-macro-protein)]">P{Math.round(previewMacros.protein)}g</span>
+                    <span className="text-[color:var(--color-macro-carbs)]">C{Math.round(previewMacros.carbs)}g</span>
+                    <span className="text-[color:var(--color-macro-fats)]">G{Math.round(previewMacros.fats)}g</span>
                     <span className="text-muted-foreground">{Math.round(previewMacros.calories)}kcal</span>
                     {activeSwapFoodId === f.food_id && (
-                      <span className="rounded-md px-2 py-0.5 text-[9px] font-black uppercase tracking-wide border bg-emerald-500/15 text-emerald-600 border-emerald-500/40">
+                      <span className="rounded-md px-2 py-0.5 text-[9px] font-black uppercase tracking-wide border bg-sport-100 text-sport-600 border-sport-500/40">
                         Activo
                       </span>
                     )}
@@ -164,7 +164,7 @@ export function MealIngredientRow({
                         e.stopPropagation()
                         onApplySwap(mealId, foodId, f.food_id)
                       }}
-                      className="shrink-0 rounded-md bg-sky-500/15 px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-sky-700 border border-sky-500/35 hover:bg-sky-500/25"
+                      className="shrink-0 rounded-md bg-[var(--cta-fill)] px-2.5 py-1 text-[9px] font-black uppercase tracking-wide text-[var(--text-on-sport)] hover:opacity-90"
                     >
                       Aplicar
                     </button>

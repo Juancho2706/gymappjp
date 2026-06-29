@@ -45,16 +45,17 @@ interface SegmentMeta {
 }
 
 /**
- * Plate segment hues. Reuses the canonical macro tokens so the plate never
- * collides with the adherence green (`--color-macro-goal`):
- * - veg     → macro "fats" green hue (vegetal, not success-green)
- * - protein → macro protein blue
- * - carb    → macro carbs amber
+ * Plate segment hues (EVA redesign). Vegetables keep a vegetal green that is
+ * NOT the success/adherence green; protein + carb follow the design's macro
+ * triad so the plate stays consistent with the rings/bars:
+ * - veg     → vegetal green (`--color-macro-fats`, never success-green)
+ * - protein → ember (nutrition accent)
+ * - carb    → sport (brand blue)
  */
 const SEGMENT_META: Record<PlateSegmentKey, SegmentMeta> = {
   veg: { label: 'Verduras', color: 'var(--color-macro-fats)' },
-  protein: { label: 'Proteína', color: 'var(--color-macro-protein)' },
-  carb: { label: 'Carbohidrato', color: 'var(--color-macro-carbs)' },
+  protein: { label: 'Proteína', color: 'var(--ember-500)' },
+  carb: { label: 'Carbohidrato', color: 'var(--sport-500)' },
 }
 
 const SEGMENT_ORDER: PlateSegmentKey[] = ['veg', 'protein', 'carb']

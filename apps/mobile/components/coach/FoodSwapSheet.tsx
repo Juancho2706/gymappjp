@@ -3,8 +3,12 @@ import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-nativ
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { ArrowLeftRight, Plus, X } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
+import { MACRO_COLORS } from '../MacroRingSummary'
 import { swapMacros, type DraftFoodItem, type SwapOption } from '../../lib/nutrition-builder'
 import { swapOptionAllowedUnits, swapOptionIsLiquid } from '../../lib/nutrition-utils'
+
+// Acento de dominio nutrición / intercambios (ember-500, fijo — token-contract).
+const EMBER = '#FF6A3D'
 
 interface Props {
   item: DraftFoodItem | null
@@ -32,8 +36,8 @@ export const FoodSwapSheet = forwardRef<BottomSheetModal, Props>(function FoodSw
     >
       <BottomSheetScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         <View style={styles.headerRow}>
-          <ArrowLeftRight size={16} color={theme.primary} />
-          <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>Intercambios · {item?.name ?? ''}</Text>
+          <ArrowLeftRight size={16} color={EMBER} />
+          <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]} numberOfLines={1}>Intercambios · {item?.name ?? ''}</Text>
         </View>
         <Text style={[styles.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
           Definí alternativas para este alimento. El alumno podrá elegir entre estas opciones.
@@ -45,9 +49,9 @@ export const FoodSwapSheet = forwardRef<BottomSheetModal, Props>(function FoodSw
           swaps.map((opt) => <SwapRow key={opt.food_id} opt={opt} theme={theme} onUpdate={onUpdateSwap} onRemove={onRemoveSwap} />)
         )}
 
-        <TouchableOpacity onPress={onAddPress} activeOpacity={0.85} style={[styles.addBtn, { borderColor: theme.primary + '55' }]}>
-          <Plus size={16} color={theme.primary} />
-          <Text style={[styles.addText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Agregar alternativa</Text>
+        <TouchableOpacity onPress={onAddPress} activeOpacity={0.85} style={[styles.addBtn, { borderColor: EMBER + '55' }]}>
+          <Plus size={16} color={EMBER} />
+          <Text style={[styles.addText, { color: EMBER, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Agregar alternativa</Text>
         </TouchableOpacity>
       </BottomSheetScrollView>
     </BottomSheetModal>
@@ -59,10 +63,10 @@ function SwapRow({ opt, theme, onUpdate, onRemove }: { opt: SwapOption; theme: a
   const units = swapOptionAllowedUnits(isLiquid)
   const m = swapMacros(opt)
   return (
-    <View style={[styles.swapCard, { borderColor: '#38BDF840', backgroundColor: '#38BDF814' }]}>
+    <View style={[styles.swapCard, { borderColor: EMBER + '40', backgroundColor: EMBER + '14' }]}>
       <View style={styles.swapTop}>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={[styles.swapName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{opt.food.name}</Text>
+          <Text numberOfLines={1} style={[styles.swapName, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{opt.food.name}</Text>
           <Text style={[styles.swapBase, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Porción base: {Math.round(opt.food.serving_size)} {opt.food.serving_unit ?? 'g'}</Text>
         </View>
         <TouchableOpacity onPress={() => onRemove(opt.food_id)} hitSlop={8} activeOpacity={0.7}><X size={16} color={theme.mutedForeground} /></TouchableOpacity>
@@ -81,7 +85,7 @@ function SwapRow({ opt, theme, onUpdate, onRemove }: { opt: SwapOption; theme: a
             return (
               <TouchableOpacity key={u} onPress={() => onUpdate(opt.food_id, opt.quantity, u)} activeOpacity={0.8}
                 style={[styles.unitChip, active && { backgroundColor: theme.primary }]}>
-                <Text style={{ fontSize: 11, fontFamily: 'Inter_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>{u}</Text>
+                <Text style={{ fontSize: 11, fontFamily: 'HankenGrotesk_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>{u}</Text>
               </TouchableOpacity>
             )
           })}
@@ -89,10 +93,10 @@ function SwapRow({ opt, theme, onUpdate, onRemove }: { opt: SwapOption; theme: a
       </View>
 
       <View style={styles.macroRow}>
-        <MacroTag label={`P ${Math.round(m.protein)}g`} color="#EF4444" />
-        <MacroTag label={`C ${Math.round(m.carbs)}g`} color="#F59E0B" />
-        <MacroTag label={`G ${Math.round(m.fats)}g`} color="#8B5CF6" />
-        <MacroTag label={`${Math.round(m.calories)} kcal`} color={theme.primary} />
+        <MacroTag label={`P ${Math.round(m.protein)}g`} color={MACRO_COLORS.protein} />
+        <MacroTag label={`C ${Math.round(m.carbs)}g`} color={MACRO_COLORS.carbs} />
+        <MacroTag label={`G ${Math.round(m.fats)}g`} color={MACRO_COLORS.fats} />
+        <MacroTag label={`${Math.round(m.calories)} kcal`} color={MACRO_COLORS.kcal} />
       </View>
     </View>
   )
@@ -122,7 +126,7 @@ const styles = StyleSheet.create({
   unitChip: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 8 },
   macroRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
   macroTag: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3 },
-  macroTagText: { fontSize: 10, fontFamily: 'Inter_700Bold' },
+  macroTagText: { fontSize: 10, fontFamily: 'HankenGrotesk_700Bold' },
   addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1, borderStyle: 'dashed', borderRadius: 10, paddingVertical: 12, marginTop: 4 },
   addText: { fontSize: 13 },
 })

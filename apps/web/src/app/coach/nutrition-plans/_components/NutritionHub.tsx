@@ -56,6 +56,13 @@ export function NutritionHub({
   const [hubTab, setHubTab] = useState('clients')
   const hasClients = assignClients.length > 0
 
+  const hubTabs: { value: string; label: string; shortLabel?: string; count: number }[] = [
+    { value: 'templates', label: 'Plantillas', shortLabel: 'Planes', count: templates.length },
+    { value: 'clients', label: 'Alumnos', count: activePlans.length },
+    { value: 'foods', label: 'Alimentos', count: foods.total },
+    { value: 'recipes', label: 'Recetas', count: recipes.length },
+  ]
+
   return (
     <div className="w-full max-w-[2000px] mx-auto animate-fade-in space-y-8">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -68,12 +75,12 @@ export function NutritionHub({
               onAssign={() => setHubTab('clients')}
             />
           </div>
-          <p className="text-muted-foreground font-bold text-sm uppercase tracking-widest flex items-center gap-2">
+          <p className="text-[var(--text-muted)] font-bold text-sm uppercase tracking-widest flex items-center gap-2">
             <span
               className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0"
-              style={{ backgroundColor: 'var(--theme-primary)' }}
+              style={{ backgroundColor: 'var(--accent-nutrition)' }}
             />
-            Centro de protocolos y alimentos
+            Planes, alimentos y recetas
           </p>
         </div>
         <Link
@@ -86,62 +93,39 @@ export function NutritionHub({
         </Link>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        <div className="bg-card border border-border rounded-2xl px-4 py-3 text-center">
-          <p className="text-2xl font-black text-foreground">{templates.length}</p>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Plantillas</p>
-        </div>
-        <div className="bg-card border border-border rounded-2xl px-4 py-3 text-center">
-          <p className="text-2xl font-black text-foreground">{activePlans.length}</p>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Con plan</p>
-        </div>
-        <div className="bg-card border border-border rounded-2xl px-4 py-3 text-center">
-          <p className="text-2xl font-black text-foreground">{foods.total}</p>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Alimentos</p>
-        </div>
-      </div>
-
       <Tabs value={hubTab} onValueChange={setHubTab} className="w-full flex flex-col gap-8">
         <div className="sticky top-[var(--coach-mobile-content-top-offset)] md:top-0 z-20 bg-background/80 backdrop-blur-md pb-4 pt-2 -mx-4 px-4 md:mx-0 md:px-0 flex justify-center">
           <TabsList
-            className="bg-muted/50 p-1.5 h-auto flex gap-1 w-full max-w-2xl rounded-2xl border border-border/50 shadow-sm"
+            className="bg-surface-sunken p-[3px] h-auto flex gap-1 w-full max-w-2xl rounded-control"
             style={{ '--theme-primary': 'var(--theme-primary)' } as CSSProperties}
           >
-            <TabsTrigger
-              value="templates"
-              className="flex-1 h-12 rounded-xl data-active:bg-background data-active:text-[var(--theme-primary)] data-active:shadow-lg data-active:font-black data-active:ring-1 data-active:ring-[var(--theme-primary)]/30 transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
-            >
-              <LayoutTemplate className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Plantillas</span>
-              <span className="sm:hidden text-[8px]">Planes</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="clients"
-              className="flex-1 h-12 rounded-xl data-active:bg-background data-active:text-[var(--theme-primary)] data-active:shadow-lg data-active:font-black data-active:ring-1 data-active:ring-[var(--theme-primary)]/30 transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
-            >
-              <Users className="w-3.5 h-3.5" />
-              Alumnos
-            </TabsTrigger>
-            <TabsTrigger
-              value="foods"
-              className="flex-1 h-12 rounded-xl data-active:bg-background data-active:text-[var(--theme-primary)] data-active:shadow-lg data-active:font-black data-active:ring-1 data-active:ring-[var(--theme-primary)]/30 transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
-            >
-              <Apple className="w-3.5 h-3.5" />
-              Alimentos
-            </TabsTrigger>
-            <TabsTrigger
-              value="recipes"
-              className="flex-1 h-12 rounded-xl data-active:bg-background data-active:text-[var(--theme-primary)] data-active:shadow-lg data-active:font-black data-active:ring-1 data-active:ring-[var(--theme-primary)]/30 transition-all duration-300 font-bold uppercase tracking-widest text-[10px] gap-2"
-            >
-              <ChefHat className="w-3.5 h-3.5" />
-              Recetas
-            </TabsTrigger>
+            {hubTabs.map((t) => (
+              <TabsTrigger
+                key={t.value}
+                value={t.value}
+                className="group/tab flex-1 min-w-0 h-[46px] flex flex-col items-center justify-center gap-0.5 rounded-[11px] px-1 transition-[background-color,box-shadow] duration-150 data-active:bg-surface-card data-active:shadow-sm"
+              >
+                <span className="max-w-full truncate text-[12.5px] leading-none font-semibold text-[var(--text-muted)] group-data-[active]/tab:font-extrabold group-data-[active]/tab:text-[var(--text-strong)]">
+                  {t.shortLabel ? (
+                    <>
+                      <span className="hidden sm:inline">{t.label}</span>
+                      <span className="sm:hidden">{t.shortLabel}</span>
+                    </>
+                  ) : (
+                    t.label
+                  )}
+                </span>
+                <span className="font-mono text-[10.5px] leading-none font-bold tabular-nums text-[var(--text-subtle)] group-data-[active]/tab:text-[color:var(--theme-primary)]">
+                  {t.count}
+                </span>
+              </TabsTrigger>
+            ))}
           </TabsList>
         </div>
 
         <TabsContent value="templates" className="mt-0 focus-visible:outline-none">
           <div className="space-y-6">
-            <SectionHeading icon={<LayoutTemplate className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />} title="Protocolos maestros" />
+            <SectionHeading icon={<LayoutTemplate className="w-5 h-5 text-[var(--ember-600)]" />} title="Protocolos maestros" />
             {templates.length === 0 && (
               <NutritionOnboarding
                 coachId={coachId}
@@ -155,7 +139,7 @@ export function NutritionHub({
 
         <TabsContent value="clients" className="mt-0 focus-visible:outline-none">
           <div className="space-y-6">
-            <SectionHeading icon={<Users className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />} title="Seguimiento de alumnos" />
+            <SectionHeading icon={<Users className="w-5 h-5 text-[var(--ember-600)]" />} title="Seguimiento de alumnos" />
             <ActivePlansBoard
               coachId={coachId}
               activePlans={activePlans}
@@ -166,7 +150,7 @@ export function NutritionHub({
 
         <TabsContent value="foods" className="mt-0 focus-visible:outline-none">
           <div className="space-y-6">
-            <SectionHeading icon={<Apple className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />} title="Biblioteca nutricional" />
+            <SectionHeading icon={<Apple className="w-5 h-5 text-[var(--ember-600)]" />} title="Biblioteca nutricional" />
             <FoodLibrary initialFoods={foods.foods} totalFoods={foods.total} coachId={coachId} />
           </div>
         </TabsContent>
@@ -174,7 +158,7 @@ export function NutritionHub({
         <TabsContent value="recipes" className="mt-0 focus-visible:outline-none">
           <div className="space-y-6">
             <SectionHeading
-              icon={<ChefHat className="w-5 h-5" style={{ color: 'var(--theme-primary)' }} />}
+              icon={<ChefHat className="w-5 h-5 text-[var(--ember-600)]" />}
               title="Recetas"
               trailing={
                 <>
@@ -193,14 +177,8 @@ export function NutritionHub({
 
 function SectionHeading({ icon, title, trailing }: { icon: ReactNode; title: string; trailing?: ReactNode }) {
   return (
-    <div
-      className="flex items-center gap-4 pb-2 border-b-2"
-      style={{ borderColor: 'color-mix(in srgb, var(--theme-primary) 20%, transparent)' }}
-    >
-      <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center"
-        style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
-      >
+    <div className="flex items-center gap-4 pb-2 border-b-2 border-[color:var(--ember-100)]">
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-[var(--ember-100)]">
         {icon}
       </div>
       <h2 className="text-xl font-black uppercase tracking-tight font-display">{title}</h2>

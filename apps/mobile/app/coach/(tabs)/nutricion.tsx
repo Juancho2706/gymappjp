@@ -15,6 +15,12 @@ import { Sparkline } from '../../../components/Sparkline'
 import { assignTemplateToClients, deleteTemplate, listTemplates, type TemplateSummary } from '../../../lib/nutrition-templates'
 import { canUseNutrition, type SubscriptionTier } from '../../../lib/coach-tiers'
 import { getApiBaseUrl } from '../../../lib/api'
+import { MACRO_COLORS } from '../../../components/MacroRingSummary'
+
+// Acentos fijos del token-contract: ember-500 = dominio nutrición (planes custom),
+// warning-500 = estado (sin plan / reemplazo). No son white-label.
+const EMBER = '#FF6A3D'
+const WARNING = '#F5A524'
 
 interface Client { id: string; full_name: string }
 type HubTab = 'templates' | 'clients' | 'foods'
@@ -149,8 +155,8 @@ export default function CoachNutricionScreen() {
         title="Nutrición"
         subtitle="Centro de protocolos y alimentos"
         trailing={
-          <TouchableOpacity onPress={() => setGuideOpen(true)} activeOpacity={0.85} style={[styles.headerBtn, { backgroundColor: '#F59E0B22', borderWidth: 1, borderColor: '#F59E0B55' }]}>
-            <HelpCircle size={18} color="#F59E0B" />
+          <TouchableOpacity onPress={() => setGuideOpen(true)} activeOpacity={0.85} style={[styles.headerBtn, { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }]}>
+            <HelpCircle size={18} color={theme.foreground} />
           </TouchableOpacity>
         }
       />
@@ -163,7 +169,7 @@ export default function CoachNutricionScreen() {
             <View style={[styles.upsellIcon, { backgroundColor: theme.primary + '1A' }]}>
               <Lock size={26} color={theme.primary} />
             </View>
-            <Text style={[styles.upsellTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>Nutrición en Pro o superior</Text>
+            <Text style={[styles.upsellTitle, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>Nutrición en Pro o superior</Text>
             <Text style={[styles.upsellText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
               Tu plan actual incluye entrenos. Al subir a Pro desbloqueás plantillas de nutrición, catálogo de alimentos y asignación de planes a tus alumnos.
             </Text>
@@ -186,9 +192,9 @@ export default function CoachNutricionScreen() {
               const Icon = t.icon
               return (
                 <TouchableOpacity key={t.key} onPress={() => setTab(t.key)} activeOpacity={0.85}
-                  style={[styles.tab, on && { backgroundColor: theme.background }]}>
+                  style={[styles.tab, on && { backgroundColor: theme.card, shadowColor: '#0D121C', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3, elevation: 2 }]}>
                   <Icon size={15} color={on ? theme.primary : theme.mutedForeground} />
-                  <Text style={[styles.tabText, { color: on ? theme.foreground : theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>{t.label}</Text>
+                  <Text style={[styles.tabText, { color: on ? theme.foreground : theme.mutedForeground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{t.label}</Text>
                 </TouchableOpacity>
               )
             })}
@@ -202,17 +208,17 @@ export default function CoachNutricionScreen() {
               ) : (
                 templates.map((t) => (
                   <View key={t.id} style={[styles.tplCard, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.lg }]}>
-                    <Text style={[styles.tplName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{t.name}</Text>
+                    <Text style={[styles.tplName, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]} numberOfLines={1}>{t.name}</Text>
                     <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{t.daily_calories ?? 0} kcal · {t.mealCount} comida{t.mealCount !== 1 ? 's' : ''}</Text>
                     <View style={styles.tplActions}>
                       <TouchableOpacity style={styles.tplBtn} activeOpacity={0.8} onPress={() => router.push(`/coach/nutrition-builder?templateId=${t.id}`)}>
-                        <Pencil size={14} color={theme.foreground} /><Text style={[styles.tplBtnText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>Editar</Text>
+                        <Pencil size={14} color={theme.foreground} /><Text style={[styles.tplBtnText, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Editar</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={styles.tplBtn} activeOpacity={0.8} onPress={() => { setAssignIds([]); setAssignTemplate(t) }}>
-                        <Users size={14} color={theme.primary} /><Text style={[styles.tplBtnText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Asignar</Text>
+                        <Users size={14} color={theme.primary} /><Text style={[styles.tplBtnText, { color: theme.primary, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Asignar</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={styles.tplBtn} activeOpacity={0.8} onPress={() => confirmDeleteTemplate(t)}>
-                        <Trash2 size={14} color={theme.destructive} /><Text style={[styles.tplBtnText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>Borrar</Text>
+                        <Trash2 size={14} color={theme.destructive} /><Text style={[styles.tplBtnText, { color: theme.destructive, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Borrar</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -226,10 +232,10 @@ export default function CoachNutricionScreen() {
                   const active = selectedClient?.id === c.id
                   const noPlan = !clientsWithPlan.has(c.id)
                   return (
-                    <TouchableOpacity key={c.id} style={[styles.clientChip, { borderColor: active ? theme.primary : noPlan ? '#F59E0B55' : theme.border, backgroundColor: active ? theme.primary : theme.secondary, borderRadius: theme.radius.lg, flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+                    <TouchableOpacity key={c.id} style={[styles.clientChip, { borderColor: active ? theme.primary : noPlan ? WARNING + '55' : theme.border, backgroundColor: active ? theme.primary : theme.secondary, borderRadius: theme.radius.lg, flexDirection: 'row', alignItems: 'center', gap: 6 }]}
                       onPress={() => selectClient(c)} activeOpacity={0.8}>
-                      {noPlan && !active ? <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#F59E0B' }} /> : null}
-                      <Text style={[styles.chipText, { color: active ? theme.primaryForeground : theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{c.full_name}</Text>
+                      {noPlan && !active ? <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: WARNING }} /> : null}
+                      <Text style={[styles.chipText, { color: active ? theme.primaryForeground : theme.foreground, fontFamily: 'Archivo_700Bold' }]} numberOfLines={1}>{c.full_name}</Text>
                     </TouchableOpacity>
                   )
                 })}
@@ -246,13 +252,13 @@ export default function CoachNutricionScreen() {
                           onPress={() => selectClient({ id: row.clientId, full_name: row.clientName })}
                           style={[styles.boardCard, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.lg }]}>
                           <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text style={[styles.boardName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{row.clientName}</Text>
+                            <Text style={[styles.boardName, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]} numberOfLines={1}>{row.clientName}</Text>
                             <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
                               {row.todayKcal}{row.targetKcal ? ` / ${row.targetKcal}` : ''} kcal hoy · {row.planName}
                             </Text>
                           </View>
                           {row.sparkline7d.some((v) => v > 0) ? <Sparkline values={row.sparkline7d} width={70} height={26} color={c} /> : null}
-                          <Text style={[styles.boardPct, { color: c, fontFamily: 'Montserrat_800ExtraBold' }]}>{row.avg7d}%</Text>
+                          <Text style={[styles.boardPct, { color: c, fontFamily: 'Archivo_800ExtraBold' }]}>{row.avg7d}%</Text>
                         </TouchableOpacity>
                       )
                     })}
@@ -269,7 +275,7 @@ export default function CoachNutricionScreen() {
                   ListHeaderComponent={
                     <TouchableOpacity onPress={() => openBuilder()} activeOpacity={0.85} style={[styles.newPlanBtn, { borderColor: theme.primary + '55' }]}>
                       <Plus size={16} color={theme.primary} />
-                      <Text style={[styles.newPlanText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Nuevo plan para {selectedClient.full_name}</Text>
+                      <Text style={[styles.newPlanText, { color: theme.primary, fontFamily: 'Archivo_700Bold' }]}>Nuevo plan para {selectedClient.full_name}</Text>
                     </TouchableOpacity>
                   }
                   ListEmptyComponent={<EmptyState icon={Apple} title="Sin planes" subtitle="Creá el primer plan de este alumno." />}
@@ -279,20 +285,20 @@ export default function CoachNutricionScreen() {
                         style={[styles.planCard, { backgroundColor: theme.card, borderColor: item.is_active ? theme.success : theme.border, borderWidth: item.is_active ? 2 : 1, borderRadius: theme.radius.xl }]}>
                         <View style={styles.planTop}>
                           <View style={styles.titleRow}>
-                            <Apple size={18} color={theme.primary} strokeWidth={1.75} />
-                            <Text style={[styles.planName, { color: theme.foreground, fontFamily: 'Montserrat_600SemiBold' }]} numberOfLines={2}>{item.name}</Text>
+                            <Apple size={18} color={EMBER} strokeWidth={1.75} />
+                            <Text style={[styles.planName, { color: theme.foreground, fontFamily: 'Archivo_600SemiBold' }]} numberOfLines={2}>{item.name}</Text>
                           </View>
                           {item.is_active ? (
                             <View style={[styles.activeBadge, { backgroundColor: theme.success + '22', borderRadius: theme.radius.sm }]}>
-                              <BadgeCheck size={12} color={theme.success} /><Text style={[styles.activeBadgeText, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>Activo</Text>
+                              <BadgeCheck size={12} color={theme.success} /><Text style={[styles.activeBadgeText, { color: theme.success, fontFamily: 'Archivo_700Bold' }]}>Activo</Text>
                             </View>
                           ) : null}
                         </View>
                         {/* Badge sincronizado / personalizado */}
                         {item.template_id ? (
                           item.is_custom ? (
-                            <View style={[styles.syncBadge, { borderColor: '#F59E0B55', backgroundColor: '#F59E0B14' }]}>
-                              <Pencil size={11} color="#F59E0B" /><Text style={[styles.syncText, { color: '#F59E0B' }]}>PERSONALIZADO</Text>
+                            <View style={[styles.syncBadge, { borderColor: EMBER + '55', backgroundColor: EMBER + '14' }]}>
+                              <Pencil size={11} color={EMBER} /><Text style={[styles.syncText, { color: EMBER }]}>PERSONALIZADO</Text>
                             </View>
                           ) : (
                             <View style={[styles.syncBadge, { borderColor: theme.success + '55', backgroundColor: theme.success + '14' }]}>
@@ -303,23 +309,23 @@ export default function CoachNutricionScreen() {
                         <Text style={[styles.planSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{item.mealCount} comida{item.mealCount !== 1 ? 's' : ''}</Text>
                         {(item.daily_calories || item.protein_g || item.carbs_g || item.fats_g) ? (
                           <View style={styles.macrosRow}>
-                            {item.daily_calories != null && <MacroPill label="kcal" value={item.daily_calories} color={theme.primary} />}
-                            {item.protein_g != null && <MacroPill label="P" value={item.protein_g} color="#EF4444" />}
-                            {item.carbs_g != null && <MacroPill label="C" value={item.carbs_g} color="#F59E0B" />}
-                            {item.fats_g != null && <MacroPill label="G" value={item.fats_g} color="#8B5CF6" />}
+                            {item.daily_calories != null && <MacroPill label="kcal" value={item.daily_calories} color={MACRO_COLORS.kcal} />}
+                            {item.protein_g != null && <MacroPill label="P" value={item.protein_g} color={MACRO_COLORS.protein} />}
+                            {item.carbs_g != null && <MacroPill label="C" value={item.carbs_g} color={MACRO_COLORS.carbs} />}
+                            {item.fats_g != null && <MacroPill label="G" value={item.fats_g} color={MACRO_COLORS.fats} />}
                           </View>
                         ) : null}
                         <View style={[styles.actionRow, { borderTopColor: theme.border }]}>
                           {!item.is_active ? (
                             <TouchableOpacity onPress={() => activate(item)} activeOpacity={0.8} style={styles.actionBtn}>
-                              <CheckCircle2 size={15} color={theme.success} /><Text style={[styles.actionText, { color: theme.success, fontFamily: 'Inter_600SemiBold' }]}>Activar</Text>
+                              <CheckCircle2 size={15} color={theme.success} /><Text style={[styles.actionText, { color: theme.success, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Activar</Text>
                             </TouchableOpacity>
                           ) : <View style={styles.actionBtn} />}
                           <TouchableOpacity onPress={() => setCopyPlan(item)} activeOpacity={0.8} style={styles.actionBtn}>
-                            <Copy size={15} color={theme.primary} /><Text style={[styles.actionText, { color: theme.primary, fontFamily: 'Inter_600SemiBold' }]}>Copiar</Text>
+                            <Copy size={15} color={theme.primary} /><Text style={[styles.actionText, { color: theme.primary, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Copiar</Text>
                           </TouchableOpacity>
                           <TouchableOpacity onPress={() => confirmDelete(item)} activeOpacity={0.8} style={styles.actionBtn}>
-                            <Trash2 size={15} color={theme.destructive} /><Text style={[styles.actionText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>Eliminar</Text>
+                            <Trash2 size={15} color={theme.destructive} /><Text style={[styles.actionText, { color: theme.destructive, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Eliminar</Text>
                           </TouchableOpacity>
                         </View>
                       </TouchableOpacity>
@@ -336,7 +342,7 @@ export default function CoachNutricionScreen() {
                 style={[styles.foodsCta, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
                 <View style={[styles.foodsIcon, { backgroundColor: theme.primary + '1A' }]}><Apple size={22} color={theme.primary} /></View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.foodsTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Biblioteca de alimentos</Text>
+                  <Text style={[styles.foodsTitle, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>Biblioteca de alimentos</Text>
                   <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{foodsCount} alimento{foodsCount !== 1 ? 's' : ''} · crear / editar / borrar</Text>
                 </View>
                 <ChevronRight size={20} color={theme.mutedForeground} />
@@ -353,7 +359,7 @@ export default function CoachNutricionScreen() {
           {clients.filter((c) => c.id !== selectedClient?.id).map((c) => (
             <TouchableOpacity key={c.id} disabled={copyBusy} onPress={() => copyToClient(c.id)} activeOpacity={0.8}
               style={[styles.copyRow, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg, opacity: copyBusy ? 0.5 : 1 }]}>
-              <Text style={[styles.copyName, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={2}>{c.full_name}</Text>
+              <Text style={[styles.copyName, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]} numberOfLines={2}>{c.full_name}</Text>
               <Copy size={15} color={theme.primary} />
             </TouchableOpacity>
           ))}
@@ -365,14 +371,14 @@ export default function CoachNutricionScreen() {
         <View style={{ gap: 8 }}>
           <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Cada alumno elegido recibe esta plantilla como plan activo (queda SINCRONIZADO).</Text>
           {/* N-F7: aviso de reemplazo + seleccionar todos. */}
-          <View style={[styles.assignWarn, { backgroundColor: '#F59E0B14', borderColor: '#F59E0B40' }]}>
-            <Text style={[styles.assignWarnTxt, { color: '#F59E0B', fontFamily: 'Inter_600SemiBold' }]}>
+          <View style={[styles.assignWarn, { backgroundColor: WARNING + '14', borderColor: WARNING + '40' }]}>
+            <Text style={[styles.assignWarnTxt, { color: WARNING, fontFamily: 'HankenGrotesk_600SemiBold' }]}>
               ⚠ Si un alumno ya tiene un plan activo, se reemplazará por esta plantilla.
             </Text>
           </View>
           {clients.length > 0 ? (
             <TouchableOpacity onPress={() => setAssignIds((ids) => ids.length === clients.length ? [] : clients.map((c) => c.id))} activeOpacity={0.8} style={styles.selectAllRow}>
-              <Text style={[styles.selectAllTxt, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>
+              <Text style={[styles.selectAllTxt, { color: theme.primary, fontFamily: 'HankenGrotesk_700Bold' }]}>
                 {assignIds.length === clients.length ? 'Quitar selección' : 'Seleccionar todos'}
               </Text>
             </TouchableOpacity>
@@ -383,7 +389,7 @@ export default function CoachNutricionScreen() {
               return (
                 <TouchableOpacity key={c.id} activeOpacity={0.8} onPress={() => setAssignIds((ids) => on ? ids.filter((x) => x !== c.id) : [...ids, c.id])}
                   style={[styles.copyRow, { borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : theme.secondary, borderRadius: theme.radius.lg }]}>
-                  <Text style={[styles.copyName, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={2}>{c.full_name}</Text>
+                  <Text style={[styles.copyName, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]} numberOfLines={2}>{c.full_name}</Text>
                   {on ? <CheckCircle2 size={16} color={theme.primary} /> : <View style={{ width: 16 }} />}
                 </TouchableOpacity>
               )
@@ -398,7 +404,7 @@ export default function CoachNutricionScreen() {
         <View style={{ gap: 12 }}>
           <GuideRow theme={theme} color={theme.primary} title="1. Plantillas (moldes)" text="Son moldes reutilizables. No pertenecen a un alumno hasta que las asignás. Si editás una plantilla, los alumnos SINCRONIZADOS se actualizan con ese molde." />
           <GuideRow theme={theme} color={theme.success} title="2. Alumnos (planes activos)" text="Al asignar una plantilla, el plan del alumno queda SINCRONIZADO con el molde." />
-          <GuideRow theme={theme} color="#F59E0B" title="3. Edición individual (custom)" text="Si ajustás el plan solo para un alumno, pasa a PERSONALIZADO y deja de seguir el molde (editar la plantilla ya no lo cambia)." />
+          <GuideRow theme={theme} color={EMBER} title="3. Edición individual (custom)" text="Si ajustás el plan solo para un alumno, pasa a PERSONALIZADO y deja de seguir el molde (editar la plantilla ya no lo cambia)." />
         </View>
       </NativeDialog>
     </SafeAreaView>
@@ -406,14 +412,15 @@ export default function CoachNutricionScreen() {
 }
 
 function adherenceColorFor(p: number): string {
-  return p >= 80 ? '#10B981' : p >= 50 ? '#F59E0B' : '#EF4444'
+  // DS status ramp: success-500 · warning-500 · danger-500.
+  return p >= 80 ? '#1FB877' : p >= 50 ? '#F5A524' : '#F4365A'
 }
 
 function Stat({ theme, value, label }: { theme: any; value: number; label: string }) {
   return (
     <View style={[styles.stat, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-      <Text style={[styles.statValue, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>{value}</Text>
-      <Text style={[styles.statLabel, { color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold' }]}>{label}</Text>
+      <Text style={[styles.statValue, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{label}</Text>
     </View>
   )
 }
@@ -421,7 +428,7 @@ function Stat({ theme, value, label }: { theme: any; value: number; label: strin
 function GuideRow({ theme, color, title, text }: { theme: any; color: string; title: string; text: string }) {
   return (
     <View style={{ gap: 3 }}>
-      <Text style={[styles.guideTitle, { color, fontFamily: 'Montserrat_700Bold' }]}>{title}</Text>
+      <Text style={[styles.guideTitle, { color, fontFamily: 'Archivo_700Bold' }]}>{title}</Text>
       <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{text}</Text>
     </View>
   )
@@ -431,7 +438,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   boardCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, padding: 12 },
   boardName: { fontSize: 14 },
-  boardPct: { fontSize: 16, minWidth: 44, textAlign: 'right' },
+  boardPct: { fontSize: 16, minWidth: 44, textAlign: 'right', fontVariant: ['tabular-nums'] },
   upsellWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
   upsellCard: { borderWidth: 1, padding: 24, gap: 14, alignItems: 'center', maxWidth: 420, width: '100%' },
   upsellIcon: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
@@ -444,7 +451,7 @@ const styles = StyleSheet.create({
   headerBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   statsRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 10 },
   stat: { flex: 1, borderWidth: 1, paddingVertical: 10, alignItems: 'center', gap: 2 },
-  statValue: { fontSize: 20 },
+  statValue: { fontSize: 20, fontVariant: ['tabular-nums'] },
   statLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
   tabBar: { flexDirection: 'row', gap: 3, marginHorizontal: 16, padding: 4, borderRadius: 14, marginBottom: 8 },
   tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderRadius: 10 },
@@ -464,7 +471,7 @@ const styles = StyleSheet.create({
   activeBadge: { paddingHorizontal: 8, paddingVertical: 3, flexDirection: 'row', alignItems: 'center', gap: 4 },
   activeBadgeText: { fontSize: 11, letterSpacing: 0.3 },
   syncBadge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
-  syncText: { fontSize: 9, fontFamily: 'Inter_700Bold', letterSpacing: 0.5 },
+  syncText: { fontSize: 9, fontFamily: 'HankenGrotesk_700Bold', letterSpacing: 0.5 },
   planSub: { fontSize: 13 },
   macrosRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 },
   actionRow: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, marginTop: 6, paddingTop: 10, gap: 10 },

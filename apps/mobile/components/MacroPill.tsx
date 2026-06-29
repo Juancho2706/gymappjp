@@ -22,7 +22,7 @@ export function MacroPill({ label, value, color, unit }: MacroPillProps) {
         },
       ]}
     >
-      <Text style={[styles.value, { color: c, fontFamily: 'Montserrat_700Bold' }]}>
+      <Text style={[styles.value, { color: c, fontFamily: 'Archivo_800ExtraBold' }]}>
         {value}
         {unit ? <Text style={styles.unit}>{unit}</Text> : null}
       </Text>
@@ -42,7 +42,7 @@ const styles = StyleSheet.create({
     minWidth: 60,
     gap: 2,
   },
-  value: { fontSize: 16 },
+  value: { fontSize: 16, fontVariant: ['tabular-nums'] },
   unit: { fontSize: 11, fontWeight: '500' },
   label: { fontSize: 10, letterSpacing: 0.3, textTransform: 'uppercase' },
 })

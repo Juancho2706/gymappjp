@@ -7,8 +7,9 @@ import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming } from '
 import { useTheme } from '../context/ThemeContext'
 import { ProgressBar } from './ProgressBar'
 
-// P5: paleta de macros compartida (rings + siglas en filas de alimentos).
-export const MACRO_COLORS = { kcal: '#10B981', protein: '#f97316', carbs: '#3b82f6', fats: '#eab308' } as const
+// Paleta de macros canónica EVA DS (token-contract): energía=success · proteína=ember ·
+// carbos=sport-ref · grasas=aqua. Colores de dominio FIJOS (no white-label).
+export const MACRO_COLORS = { kcal: '#1FB877', protein: '#FF6A3D', carbs: '#2680FF', fats: '#18ABD4' } as const
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
@@ -66,14 +67,14 @@ function MacroRing({ consumed, target, label, color, size = 80 }: MacroRingProps
           {over ? (
             <AlertTriangle size={16} color={theme.destructive} strokeWidth={2.5} />
           ) : (
-            <Text style={[styles.ringValue, { color: ringColor, fontFamily: 'Montserrat_800ExtraBold' }]}>
+            <Text style={[styles.ringValue, { color: ringColor, fontFamily: 'Archivo_800ExtraBold' }]}>
               {Math.round(consumed)}
             </Text>
           )}
         </View>
       </View>
       <View style={styles.ringLabelWrap}>
-        <Text style={[styles.ringLabel, { color: ringColor, fontFamily: 'Montserrat_700Bold' }]}>
+        <Text style={[styles.ringLabel, { color: ringColor, fontFamily: 'HankenGrotesk_700Bold' }]}>
           {label}
         </Text>
         <Text style={[styles.ringTarget, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -117,11 +118,11 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
     >
       <View style={styles.calRow}>
         <View>
-          <Text style={[styles.calLabel, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
+          <Text style={[styles.calLabel, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>
             ENERGÍA {isReadOnly ? '· SOLO LECTURA' : 'DIARIA'}
           </Text>
           <View style={styles.calValueRow}>
-            <Text style={[styles.calValue, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+            <Text style={[styles.calValue, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>
               {Math.round(calories.consumed)}
             </Text>
             <Text style={[styles.calTarget, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -129,14 +130,14 @@ export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }:
             </Text>
           </View>
         </View>
-        <Text style={[styles.calPct, { color: calOver ? theme.destructive : '#10B981', fontFamily: 'Montserrat_800ExtraBold' }]}>
+        <Text style={[styles.calPct, { color: calOver ? theme.destructive : MACRO_COLORS.kcal, fontFamily: 'Archivo_800ExtraBold' }]}>
           {calPctDisplay}%
         </Text>
       </View>
 
       <ProgressBar
         value={calPct}
-        color={calOver ? theme.destructive : '#10B981'}
+        color={calOver ? theme.destructive : MACRO_COLORS.kcal}
         height={10}
       />
 
@@ -154,9 +155,9 @@ const styles = StyleSheet.create({
   calRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   calLabel: { fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 2 },
   calValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
-  calValue: { fontSize: 36, letterSpacing: -1 },
+  calValue: { fontSize: 36, letterSpacing: -1, fontVariant: ['tabular-nums'] },
   calTarget: { fontSize: 13 },
-  calPct: { fontSize: 24 },
+  calPct: { fontSize: 24, fontVariant: ['tabular-nums'] },
   ringsRow: { flexDirection: 'row', justifyContent: 'space-around', paddingTop: 4 },
   ringWrap: { alignItems: 'center', gap: 6 },
   ringCenter: { alignItems: 'center', justifyContent: 'center' },

@@ -11,6 +11,10 @@ import {
 } from '../lib/nutrition-utils'
 import { useTheme } from '../context/ThemeContext'
 import { ProgressBar } from './ProgressBar'
+import { MACRO_COLORS } from './MacroRingSummary'
+
+// Acento de dominio nutrición (ember-500, fijo — token-contract).
+const EMBER = '#FF6A3D'
 
 interface Props {
   clientId: string
@@ -98,9 +102,9 @@ export function NutritionDailySummaryWidget({ clientId }: Props) {
 
     setCalories({ consumed: consumed.calories, target: goals.calories })
     setMacros([
-      { label: 'Proteína', value: consumed.protein, target: goals.protein, color: '#f97316' },
-      { label: 'Carbos', value: consumed.carbs, target: goals.carbs, color: '#3b82f6' },
-      { label: 'Grasas', value: consumed.fats, target: goals.fats, color: '#eab308' },
+      { label: 'Proteína', value: consumed.protein, target: goals.protein, color: MACRO_COLORS.protein },
+      { label: 'Carbos', value: consumed.carbs, target: goals.carbs, color: MACRO_COLORS.carbs },
+      { label: 'Grasas', value: consumed.fats, target: goals.fats, color: MACRO_COLORS.fats },
     ])
   }
 
@@ -116,18 +120,18 @@ export function NutritionDailySummaryWidget({ clientId }: Props) {
       style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}
     >
       <View style={styles.header}>
-        <Apple size={15} color={theme.primary} strokeWidth={2} />
-        <Text style={[styles.label, { color: theme.mutedForeground, fontFamily: 'Montserrat_700Bold' }]}>
+        <Apple size={15} color={EMBER} strokeWidth={2} />
+        <Text style={[styles.label, { color: theme.mutedForeground, fontFamily: 'Archivo_700Bold' }]}>
           PLAN ALIMENTICIO
         </Text>
       </View>
 
-      <Text style={[styles.planName, { color: theme.foreground, fontFamily: 'Montserrat_600SemiBold' }]} numberOfLines={1}>
+      <Text style={[styles.planName, { color: theme.foreground, fontFamily: 'Archivo_600SemiBold' }]} numberOfLines={1}>
         {planName}
       </Text>
 
       <View style={styles.calRow}>
-        <Text style={[styles.calValue, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+        <Text style={[styles.calValue, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>
           {Math.round(calories.consumed)}
         </Text>
         <Text style={[styles.calTarget, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -139,7 +143,7 @@ export function NutritionDailySummaryWidget({ clientId }: Props) {
         </Text>
       </View>
 
-      <ProgressBar value={calPct} color="#10B981" height={6} />
+      <ProgressBar value={calPct} color={MACRO_COLORS.kcal} height={6} />
 
       <View style={styles.macrosRow}>
         {macros.map((m) => {
@@ -150,7 +154,7 @@ export function NutritionDailySummaryWidget({ clientId }: Props) {
                 {m.label}
               </Text>
               <ProgressBar value={pct} color={m.color} height={4} />
-              <Text style={[styles.macroValue, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+              <Text style={[styles.macroValue, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>
                 {Math.round(m.value)}g
               </Text>
             </View>
@@ -163,7 +167,7 @@ export function NutritionDailySummaryWidget({ clientId }: Props) {
         onPress={() => router.push('/alumno/nutricion')}
         activeOpacity={0.75}
       >
-        <Text style={[styles.linkText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
+        <Text style={[styles.linkText, { color: theme.primary, fontFamily: 'Archivo_700Bold' }]}>
           Ver plan completo
         </Text>
         <ArrowRight size={13} color={theme.primary} strokeWidth={2.5} />
@@ -178,7 +182,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase' },
   planName: { fontSize: 15 },
   calRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  calValue: { fontSize: 28, letterSpacing: -0.8 },
+  calValue: { fontSize: 28, letterSpacing: -0.8, fontVariant: ['tabular-nums'] },
   calTarget: { fontSize: 12 },
   mealsCount: { fontSize: 12 },
   macrosRow: { flexDirection: 'row', gap: 8 },

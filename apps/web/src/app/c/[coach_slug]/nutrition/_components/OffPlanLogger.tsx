@@ -148,7 +148,7 @@ export function OffPlanLogger({ recents, coachSlug, today }: OffPlanLoggerProps)
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-11 items-center gap-2 rounded-xl border border-dashed border-border bg-background px-4 text-sm font-bold text-foreground transition-colors hover:border-foreground/40 hover:bg-muted/40 touch-manipulation"
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-control border border-dashed border-border bg-background px-4 text-sm font-bold text-foreground transition-colors hover:border-foreground/40 hover:bg-muted/40 touch-manipulation"
       >
         <Plus className="h-4 w-4" aria-hidden />
         Registrar algo más

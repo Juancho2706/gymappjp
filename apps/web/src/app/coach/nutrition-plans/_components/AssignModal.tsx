@@ -200,11 +200,11 @@ export function AssignModal({ open, onOpenChange, template, coachId, clients, on
                         <div className="min-w-0 flex-1">
                           <p className="font-bold text-sm truncate text-slate-900 dark:text-white">{client.full_name}</p>
                           {alreadyHasThisTemplate ? (
-                            <p className="text-[10px] text-emerald-600 dark:text-emerald-500 font-medium">
+                            <p className="text-[10px] text-[var(--sport-600)] font-medium">
                               ✓ Ya tiene esta plantilla (reasignar actualizará el plan)
                             </p>
                           ) : client.active_plan ? (
-                            <p className="text-[10px] text-amber-600 dark:text-amber-500 font-medium">
+                            <p className="text-[10px] text-[var(--warning-700)] font-medium">
                               Plan activo: {client.active_plan.name} (se reemplazará)
                             </p>
                           ) : null}

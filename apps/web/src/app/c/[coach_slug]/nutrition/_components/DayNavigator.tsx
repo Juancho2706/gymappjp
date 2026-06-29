@@ -104,7 +104,7 @@ export function DayNavigator({ selectedDate, onDateChange, adherenceDates, isLoa
             </AnimatePresence>
           )}
         </span>
-        {hasDot && !isToday && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
+        {hasDot && !isToday && <span className="w-1.5 h-1.5 rounded-full bg-ember-500" />}
         {!isToday && (
           <span className="text-[10px] font-semibold text-[color:var(--theme-primary)] uppercase tracking-wider">
             Volver a hoy

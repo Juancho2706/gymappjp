@@ -122,7 +122,7 @@ export function CreateRecipeDialog({ recipe, trigger, onSaved }: Props) {
       <DialogContent className="sm:max-w-lg bg-white dark:bg-zinc-950 border-border/50">
         <DialogHeader>
           <DialogTitle className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
-            <ChefHat className="w-5 h-5 text-emerald-500" />
+            <ChefHat className="w-5 h-5 text-[var(--ember-500)]" />
             {isEdit ? 'Editar receta' : 'Nueva receta'}
           </DialogTitle>
         </DialogHeader>

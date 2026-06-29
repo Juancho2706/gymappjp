@@ -9,13 +9,11 @@ import {
   animate,
   type Transition,
 } from 'framer-motion'
-import { AlertTriangle } from 'lucide-react'
 import { easings } from '@/lib/animation-presets'
 import { cn } from '@/lib/utils'
-import { InfoTooltip } from '@/components/ui/info-tooltip'
 
 /**
- * Número que cuenta hacia arriba acoplado al llenado del anillo/barra.
+ * Número que cuenta hacia arriba acoplado al llenado del anillo.
  * Respeta reduced-motion mostrando el valor final al instante.
  */
 function CountUp({
@@ -44,15 +42,6 @@ function CountUp({
   return <motion.span className={className}>{rounded}</motion.span>
 }
 
-interface MacroData {
-  consumed: number
-  target: number
-  label: string
-  color: string
-  bgColor: string
-  tooltip?: string
-}
-
 interface Props {
   calories: { consumed: number; target: number }
   protein: { consumed: number; target: number }
@@ -70,191 +59,158 @@ export function macroRingAriaLabel(label: string, consumed: number, target: numb
   return `${label}: ${c} de ${t} gramos respecto a la meta del día`
 }
 
-function MacroRing({
-  consumed,
-  target,
-  label,
+/** Anillo SVG con trazo animado (track + arco). Cool-tinted para superficie inverse. */
+function Ring({
+  size,
+  stroke,
+  pct,
   color,
-  tooltip,
-  size = 80,
-  ringTransition: ringTrans,
   reduce,
-  countDuration,
-}: MacroData & { size?: number; ringTransition: Transition; reduce: boolean; countDuration: number }) {
-  const pct = target > 0 ? Math.min(consumed / target, 1.1) : 0
-  const over = consumed > target && target > 0
-  const radius = (size - 8) / 2
+  children,
+  ringLabel,
+}: {
+  size: number
+  stroke: number
+  pct: number
+  color: string
+  reduce: boolean
+  children: React.ReactNode
+  ringLabel: string
+}) {
+  const radius = (size - stroke) / 2
   const circumference = 2 * Math.PI * radius
   const strokeDash = circumference * Math.min(pct, 1)
-  const ringLabel = macroRingAriaLabel(label, consumed, target, over)
+  const ringTrans: Transition = reduce ? { duration: 0 } : { duration: 0.8, ease: easings.ringFill }
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div
-        role="img"
-        aria-label={ringLabel}
-        className="relative"
-        style={{ width: size, height: size }}
-      >
-        <svg width={size} height={size} className="-rotate-90" aria-hidden>
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            strokeWidth={7}
-            className="stroke-muted-foreground/25"
-          />
-          <motion.circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            strokeWidth={7}
-            strokeLinecap="round"
-            className={over ? 'stroke-destructive' : ''}
-            style={over ? undefined : { stroke: color }}
-            strokeDasharray={`${circumference}`}
-            initial={{ strokeDashoffset: circumference }}
-            animate={{ strokeDashoffset: circumference - strokeDash }}
-            transition={ringTrans}
-          />
-        </svg>
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center" aria-hidden>
-          {over ? (
-            <AlertTriangle className="w-4 h-4 text-red-500" />
-          ) : (
-            <CountUp
-              value={consumed}
-              duration={countDuration}
-              reduce={reduce}
-              className="text-sm font-black tabular-nums leading-none"
-            />
-          )}
-        </div>
-      </div>
-      <div className="text-center">
-        <div className="flex items-center justify-center gap-0.5">
-          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{label}</p>
-          {tooltip && <InfoTooltip content={tooltip} iconClassName="w-3 h-3" />}
-        </div>
-        <p className="text-[9px] text-muted-foreground/60 tabular-nums">/ {Math.round(target)}g</p>
+    <div role="img" aria-label={ringLabel} className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90" aria-hidden>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          strokeWidth={stroke}
+          stroke="rgba(255,255,255,0.12)"
+        />
+        <motion.circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          style={{ stroke: color }}
+          strokeDasharray={`${circumference}`}
+          initial={{ strokeDashoffset: circumference }}
+          animate={{ strokeDashoffset: circumference - strokeDash }}
+          transition={ringTrans}
+        />
+      </svg>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center" aria-hidden>
+        {children}
       </div>
     </div>
   )
 }
 
+const MACROS = [
+  { key: 'protein', label: 'Proteína', color: 'var(--ember-500)' },
+  { key: 'carbs', label: 'Carbos', color: 'var(--sport-500)' },
+  { key: 'fats', label: 'Grasas', color: 'var(--aqua-500)' },
+] as const
+
 export function MacroRingSummary({ calories, protein, carbs, fats, isReadOnly }: Props) {
   const reduceMotion = useReducedMotion()
   const reduce = !!reduceMotion
-  const ringTrans: Transition = reduce
-    ? { duration: 0 }
-    : { duration: 0.8, ease: easings.ringFill }
-  const barTrans: Transition = reduce ? { duration: 0 } : { duration: 0.6, ease: 'easeOut' }
-  // Count-up acoplado al anillo (0.8s) y a la barra (0.6s) para que número y trazo lleguen juntos.
-  const ringCountDuration = 0.8
-  const barCountDuration = 0.6
 
-  const calPct = calories.target > 0 ? Math.min((calories.consumed / calories.target) * 100, 100) : 0
+  const data: Record<'protein' | 'carbs' | 'fats', { consumed: number; target: number }> = {
+    protein,
+    carbs,
+    fats,
+  }
+
+  const calPct = calories.target > 0 ? Math.min(calories.consumed / calories.target, 1) : 0
   const calOver = calories.consumed > calories.target && calories.target > 0
+  const remaining = calories.target - calories.consumed
+  // Centro del anillo de kcal: "RESTANTES" (objetivo − consumido) o "DE MÁS" si se pasó.
+  const kcalCenterValue =
+    calories.target <= 0 ? calories.consumed : calOver ? calories.consumed - calories.target : remaining
+  const kcalCenterLabel = calories.target <= 0 ? 'KCAL' : calOver ? 'DE MÁS' : 'RESTANTES'
 
   return (
     <div
       className={cn(
-        'bg-card border border-border rounded-3xl p-5 space-y-5 shadow-sm overflow-hidden relative',
+        // Card inverse (DS): superficie oscura fija, hero de progreso del día.
+        'relative overflow-hidden rounded-card border border-[var(--border-inverse)] bg-[var(--surface-inverse)] p-5 text-[var(--text-on-dark)] shadow-md',
         isReadOnly && 'opacity-80'
       )}
     >
-      <div className="space-y-2">
-        <div className="flex items-baseline justify-between">
-          <div>
-            <div className="flex items-center gap-1">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
-                Energía {isReadOnly ? '· Solo lectura' : 'diaria'}
-              </p>
-              <InfoTooltip content="Meta calórica diaria definida por tu coach. Si completaste todas tus comidas, estarás cerca del 100%." iconClassName="w-3 h-3" />
-            </div>
-            <div className="flex items-baseline gap-1.5 mt-0.5">
-              <CountUp
-                value={calories.consumed}
-                duration={barCountDuration}
-                reduce={reduce}
-                className="text-4xl font-black tabular-nums tracking-tight"
-              />
-              <span className="text-sm font-bold text-muted-foreground/50">/ {calories.target} kcal</span>
-            </div>
-          </div>
-          <div className="text-right">
-            <span
-              className={cn(
-                'inline-flex items-baseline text-2xl font-black tabular-nums',
-                calOver ? 'text-red-500' : 'text-emerald-500'
-              )}
-            >
-              <CountUp value={calPct} duration={barCountDuration} reduce={reduce} />%
-            </span>
-          </div>
-        </div>
+      {isReadOnly && (
+        <span className="absolute right-3 top-3 rounded-pill bg-white/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-[var(--text-on-dark-muted)]">
+          Solo lectura
+        </span>
+      )}
 
-        <div
-          className="h-3 w-full bg-muted rounded-full overflow-hidden"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(calPct)}
-          aria-valuetext={`${Math.round(calories.consumed)} de ${calories.target} kilocalorías, ${Math.round(calPct)} por ciento`}
-          aria-label="Progreso de calorías del día respecto a la meta"
+      <div className="flex items-center gap-4">
+        {/* Anillo de energía (kcal) — acento ember (dominio nutrición). */}
+        <Ring
+          size={92}
+          stroke={8}
+          pct={calPct}
+          color={calOver ? 'var(--danger-500)' : 'var(--ember-500)'}
+          reduce={reduce}
+          ringLabel={
+            calories.target > 0
+              ? `Energía: ${Math.round(calories.consumed)} de ${calories.target} kilocalorías, ${Math.round(calPct * 100)} por ciento`
+              : `Energía: ${Math.round(calories.consumed)} kilocalorías, sin meta definida`
+          }
         >
-          <motion.div
-            className={cn(
-              'h-full rounded-full shadow-[0_0_10px_rgba(16,185,129,0.3)]',
-              calOver ? 'bg-red-500' : 'bg-emerald-500'
-            )}
-            initial={{ width: '0%' }}
-            animate={{ width: `${calPct}%` }}
-            transition={barTrans}
-            aria-hidden
+          <CountUp
+            value={Math.max(0, kcalCenterValue)}
+            duration={reduce ? 0 : 0.8}
+            reduce={reduce}
+            className="font-display text-xl font-black leading-none tracking-[-0.03em] tabular-nums"
           />
-        </div>
-      </div>
+          <span className="mt-0.5 text-[8.5px] font-black uppercase tracking-[0.1em] text-[var(--text-on-dark-muted)]">
+            {kcalCenterLabel}
+          </span>
+        </Ring>
 
-      <div className="grid grid-cols-3 gap-2 pt-1">
-        <MacroRing
-          consumed={protein.consumed}
-          target={protein.target}
-          label="Proteína"
-          color="var(--color-macro-protein)"
-          bgColor="#7c2d12"
-          size={88}
-          ringTransition={ringTrans}
-          reduce={reduce}
-          countDuration={ringCountDuration}
-          tooltip="La proteína ayuda a mantener y construir músculo. Tu meta diaria está definida en tu plan."
-        />
-        <MacroRing
-          consumed={carbs.consumed}
-          target={carbs.target}
-          label="Carbos"
-          color="var(--color-macro-carbs)"
-          bgColor="#1e3a5f"
-          size={88}
-          ringTransition={ringTrans}
-          reduce={reduce}
-          countDuration={ringCountDuration}
-          tooltip="Los carbohidratos son tu fuente principal de energía. Son especialmente importantes en días de entrenamiento."
-        />
-        <MacroRing
-          consumed={fats.consumed}
-          target={fats.target}
-          label="Grasas"
-          color="var(--color-macro-fats)"
-          bgColor="#713f12"
-          size={88}
-          ringTransition={ringTrans}
-          reduce={reduce}
-          countDuration={ringCountDuration}
-          tooltip="Las grasas saludables son esenciales para el equilibrio hormonal y la absorción de vitaminas."
-        />
+        {/* Anillos de macros (proteína / carbos / grasas). */}
+        <div className="flex flex-1 items-start justify-around">
+          {MACROS.map((m) => {
+            const { consumed, target } = data[m.key]
+            const pct = target > 0 ? Math.min(consumed / target, 1) : 0
+            const over = consumed > target && target > 0
+            return (
+              <div key={m.key} className="flex flex-col items-center gap-1.5">
+                <Ring
+                  size={52}
+                  stroke={5}
+                  pct={pct}
+                  color={over ? 'var(--danger-500)' : m.color}
+                  reduce={reduce}
+                  ringLabel={macroRingAriaLabel(m.label, consumed, target, over)}
+                >
+                  <CountUp
+                    value={consumed}
+                    duration={reduce ? 0 : 0.8}
+                    reduce={reduce}
+                    className={cn(
+                      'text-[11px] font-black leading-none tabular-nums',
+                      over ? 'text-[var(--danger-500)]' : 'text-[var(--text-on-dark)]'
+                    )}
+                  />
+                </Ring>
+                <span className="text-[10px] font-bold text-[var(--text-on-dark-muted)]">{m.label}</span>
+                <span className="-mt-1 text-[9px] tabular-nums text-[var(--text-on-dark-muted)] opacity-70">
+                  / {Math.round(target)}g
+                </span>
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

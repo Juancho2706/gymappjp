@@ -44,8 +44,8 @@ export function AdherenceStrip({ data, planMeals }: Props) {
   const registeredDays = days.filter((d) => d.completed > 0).length
 
   const getColor = (pct: number) => {
-    if (pct === 0) return 'bg-muted/60'
-    if (pct >= 0.8) return 'bg-emerald-500'
+    if (pct === 0) return 'bg-[var(--track)]'
+    if (pct >= 0.8) return 'bg-ember-500'
     if (pct >= 0.5) return 'bg-amber-400'
     return 'bg-red-400'
   }
@@ -96,7 +96,7 @@ export function AdherenceStrip({ data, planMeals }: Props) {
 
       <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
         <span className="flex items-center gap-1">
-          <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> 80%+
+          <span className="w-2.5 h-2.5 rounded-sm bg-ember-500" /> 80%+
         </span>
         <span className="flex items-center gap-1">
           <span className="w-2.5 h-2.5 rounded-sm bg-amber-400" /> 50–79%
@@ -105,7 +105,7 @@ export function AdherenceStrip({ data, planMeals }: Props) {
           <span className="w-2.5 h-2.5 rounded-sm bg-red-400" /> 1–49%
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-2.5 h-2.5 rounded-sm bg-muted/60" /> Sin reg.
+          <span className="w-2.5 h-2.5 rounded-sm bg-[var(--track)]" /> Sin reg.
         </span>
       </div>
     </div>

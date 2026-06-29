@@ -3,8 +3,11 @@ import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View 
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { FlashList } from '@shopify/flash-list'
 import { useRouter } from 'expo-router'
-import { Apple, ChevronLeft, Pencil, Plus, Search, Trash2, X } from 'lucide-react-native'
+import { Apple, ChevronLeft, Globe, Pencil, Plus, Search, Star, Trash2, X } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
+
+// Acento de dominio nutrición (ember-500, fijo — token-contract).
+const EMBER = '#FF6A3D'
 import { EmptyState, NativeDialog } from '../../components'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { AppBackground } from '../../components/AppBackground'
@@ -79,9 +82,9 @@ export default function CoachFoodsScreen() {
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={10} style={styles.back} activeOpacity={0.7}>
           <ChevronLeft size={20} color={theme.primary} />
-          <Text style={[styles.backText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>Volver</Text>
+          <Text style={[styles.backText, { color: theme.primary, fontFamily: 'Archivo_700Bold' }]}>Volver</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Mis alimentos</Text>
+        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>Mis alimentos</Text>
         <TouchableOpacity onPress={() => setCreating(true)} activeOpacity={0.85} style={[styles.addBtn, { backgroundColor: theme.primary }]}>
           <Plus size={20} color={theme.primaryForeground} />
         </TouchableOpacity>
@@ -93,7 +96,7 @@ export default function CoachFoodsScreen() {
           return (
             <TouchableOpacity key={s} onPress={() => setScope(s)} activeOpacity={0.8}
               style={[styles.scopeChip, { borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : 'transparent' }]}>
-              <Text style={{ fontSize: 12.5, fontFamily: 'Inter_600SemiBold', color: on ? theme.primary : theme.mutedForeground }}>{s === 'mine' ? 'Míos' : 'Catálogo'}</Text>
+              <Text style={{ fontSize: 12.5, fontFamily: 'HankenGrotesk_600SemiBold', color: on ? theme.primary : theme.mutedForeground }}>{s === 'mine' ? 'Míos' : 'Catálogo'}</Text>
             </TouchableOpacity>
           )
         })}
@@ -121,9 +124,14 @@ export default function CoachFoodsScreen() {
           }
           renderItem={({ item }) => (
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+              <View style={styles.foodMark}>
+                {scope === 'mine'
+                  ? <Star size={15} color={EMBER} fill={EMBER} />
+                  : <Globe size={15} color={theme.mutedForeground} />}
+              </View>
               <TouchableOpacity style={{ flex: 1 }} activeOpacity={scope === 'mine' ? 0.8 : 1} onPress={() => { if (scope === 'mine') setEditing(item) }}>
-                <Text style={[styles.foodName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={1}>{item.name}</Text>
-                <Text style={[styles.foodMacros, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                <Text style={[styles.foodName, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]} numberOfLines={1}>{item.name}</Text>
+                <Text style={[styles.foodMacros, { color: theme.mutedForeground, fontFamily: 'JetBrainsMono_400Regular' }]}>
                   {item.calories} kcal · P{item.protein_g} C{item.carbs_g} G{item.fats_g} / {item.serving_size}{item.serving_unit}
                 </Text>
               </TouchableOpacity>
@@ -194,7 +202,7 @@ function FoodForm({ theme, food, onDone, onCancel }: { theme: any; food: FoodRow
           <View style={[styles.unitWrap, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
             {FOOD_UNITS.map((u) => (
               <TouchableOpacity key={u} onPress={() => setUnit(u)} activeOpacity={0.8} style={[styles.unitChip, unit === u && { backgroundColor: theme.primary }]}>
-                <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: unit === u ? theme.primaryForeground : theme.mutedForeground }}>{u}</Text>
+                <Text style={{ fontSize: 12, fontFamily: 'HankenGrotesk_600SemiBold', color: unit === u ? theme.primaryForeground : theme.mutedForeground }}>{u}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -207,17 +215,17 @@ function FoodForm({ theme, food, onDone, onCancel }: { theme: any; food: FoodRow
           return (
             <TouchableOpacity key={c} onPress={() => setCategory(c)} activeOpacity={0.8}
               style={[styles.catChip, { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary + '1A' : 'transparent' }]}>
-              <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: active ? theme.primary : theme.mutedForeground }}>{c}</Text>
+              <Text style={{ fontSize: 12, fontFamily: 'HankenGrotesk_600SemiBold', color: active ? theme.primary : theme.mutedForeground }}>{c}</Text>
             </TouchableOpacity>
           )
         })}
       </View>
       <View style={styles.formActions}>
         <TouchableOpacity onPress={onCancel} disabled={saving} style={[styles.cancelBtn, { borderColor: theme.border }]} activeOpacity={0.8}>
-          <Text style={{ color: theme.mutedForeground, fontFamily: 'Inter_600SemiBold', fontSize: 14 }}>Cancelar</Text>
+          <Text style={{ color: theme.mutedForeground, fontFamily: 'HankenGrotesk_600SemiBold', fontSize: 14 }}>Cancelar</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={submit} disabled={saving} style={[styles.saveBtn, { backgroundColor: theme.primary, opacity: saving ? 0.6 : 1 }]} activeOpacity={0.85}>
-          <Text style={{ color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold', fontSize: 14 }}>{saving ? 'Guardando...' : food ? 'Guardar' : 'Crear'}</Text>
+          <Text style={{ color: theme.primaryForeground, fontFamily: 'Archivo_700Bold', fontSize: 14 }}>{saving ? 'Guardando...' : food ? 'Guardar' : 'Crear'}</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -248,6 +256,7 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 15 },
   list: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 40 },
   card: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, borderWidth: 1 },
+  foodMark: { width: 22, alignItems: 'center', justifyContent: 'center' },
   foodName: { fontSize: 14 },
   foodMacros: { fontSize: 12, marginTop: 3 },
   iconBtn: { padding: 4 },

@@ -3,6 +3,9 @@ import { useTheme } from '../context/ThemeContext'
 import { calculateFoodItemMacros } from '../lib/nutrition-utils'
 import type { FoodItemForMacros } from '../lib/nutrition-utils'
 
+// Acento de dominio nutrición (ember-500, fijo — token-contract).
+const EMBER = '#FF6A3D'
+
 interface Props {
   item: FoodItemForMacros
   hasActiveSwap?: boolean
@@ -20,8 +23,8 @@ export function FoodItemRow({ item, hasActiveSwap }: Props) {
             {item.foods.name}
           </Text>
           {hasActiveSwap && (
-            <View style={[styles.swapBadge, { backgroundColor: theme.primary + '20', borderColor: theme.primary + '40' }]}>
-              <Text style={[styles.swapText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>swap</Text>
+            <View style={[styles.swapBadge, { backgroundColor: EMBER + '20', borderColor: EMBER + '40' }]}>
+              <Text style={[styles.swapText, { color: EMBER, fontFamily: 'HankenGrotesk_700Bold' }]}>swap</Text>
             </View>
           )}
         </View>
@@ -29,7 +32,7 @@ export function FoodItemRow({ item, hasActiveSwap }: Props) {
           {item.quantity}{item.unit}
         </Text>
       </View>
-      <Text style={[styles.macros, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+      <Text style={[styles.macros, { color: theme.mutedForeground, fontFamily: 'JetBrainsMono_400Regular' }]}>
         {Math.round(macros.calories)} kcal · P {Math.round(macros.protein)}g · C {Math.round(macros.carbs)}g · G {Math.round(macros.fats)}g
       </Text>
     </View>
