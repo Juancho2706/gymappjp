@@ -10,7 +10,9 @@ import {
   ArrowUpRight,
   CalendarClock,
   Camera,
+  Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Clock,
   Copy,
@@ -22,7 +24,10 @@ import {
   Minus,
   Monitor,
   Palette,
+  PartyPopper,
+  Plus,
   Receipt,
+  Rocket,
   Sparkles,
   Smartphone,
   TrendingDown,
@@ -31,11 +36,13 @@ import {
   UserPlus,
   Users,
   Utensils,
+  X,
   XCircle,
   Zap,
   type LucideIcon,
 } from 'lucide-react-native'
 import Svg, { Rect } from 'react-native-svg'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BlurView } from 'expo-blur'
 import { LinearGradient } from 'expo-linear-gradient'
 import { CartesianChart, Area, Line, Bar, useChartPressState } from 'victory-native'
@@ -1085,6 +1092,273 @@ export function MobileQuickActionsBar({
   )
 }
 
+/**
+ * FAB de acciones rapidas (1:1 con coach-dashboard.jsx → FAB + bottom sheet).
+ * Reemplaza la vieja barra de chips superior. Reutiliza los forms de alumno/pago.
+ */
+export function MobileQuickActionsFab({
+  clients,
+  onClientCreated,
+  onPaymentCreated,
+}: {
+  clients: QuickActionClient[]
+  onClientCreated: () => void
+  onPaymentCreated: () => void
+}) {
+  const router = useRouter()
+  const { theme } = useTheme()
+  const insets = useSafeAreaInsets()
+  const [sheet, setSheet] = useState(false)
+  const [modal, setModal] = useState<null | 'client' | 'payment'>(null)
+
+  const actions: Array<{ label: string; icon: LucideIcon; on: () => void }> = [
+    { label: 'Crear alumno', icon: UserPlus, on: () => { setSheet(false); setModal('client') } },
+    { label: 'Crear programa', icon: Layers, on: () => { setSheet(false); router.push('/coach/(tabs)/builder') } },
+    { label: 'Crear nutricion', icon: Utensils, on: () => { setSheet(false); router.push('/coach/(tabs)/nutricion') } },
+    { label: 'Registrar pago', icon: Receipt, on: () => { setSheet(false); setModal('payment') } },
+  ]
+
+  return (
+    <>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Acciones rapidas"
+        activeOpacity={0.85}
+        onPress={() => setSheet(true)}
+        style={[
+          {
+            position: 'absolute',
+            right: 18,
+            bottom: insets.bottom + 84,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: theme.primary,
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          theme.shadowGlowBlue,
+        ]}
+      >
+        <Plus size={26} color="#FFFFFF" strokeWidth={2.4} />
+      </TouchableOpacity>
+
+      <NativeDialog open={sheet} title="Accion rapida" onClose={() => setSheet(false)}>
+        <View style={{ gap: 2 }}>
+          {actions.map((a) => {
+            const Icon = a.icon
+            return (
+              <TouchableOpacity
+                key={a.label}
+                activeOpacity={0.8}
+                onPress={a.on}
+                className="flex-row items-center gap-3.5 py-3"
+              >
+                <View className="h-10 w-10 items-center justify-center rounded-control bg-surface-inverse">
+                  <Icon size={19} color={theme.primary} />
+                </View>
+                <Text className="font-sans-bold text-[15.5px] text-strong">{a.label}</Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      </NativeDialog>
+
+      <NativeDialog
+        open={modal != null}
+        title={modal === 'payment' ? 'Registrar pago' : 'Agregar alumno'}
+        onClose={() => setModal(null)}
+      >
+        {modal === 'payment' ? (
+          <QuickAddPaymentForm
+            clients={clients}
+            onDone={() => { setModal(null); onPaymentCreated() }}
+            onCancel={() => setModal(null)}
+          />
+        ) : (
+          <QuickCreateClientForm
+            onDone={() => { setModal(null); onClientCreated() }}
+            onCancel={() => setModal(null)}
+          />
+        )}
+      </NativeDialog>
+    </>
+  )
+}
+
+const GUIDE_CHIP_HIDDEN_KEY = (coachId: string) => `eva_coach_guide_chip_hidden:${coachId}`
+
+/**
+ * P3 — Guia de inicio como chip expandible (1:1 con coach-dashboard.jsx).
+ * Libera el fold: barra colapsada con progreso → expande 4 pasos + upsell Pro + "Saltar guia".
+ * Los pasos se auto-completan desde la senal real (logo, alumnos, planes, uso 30d).
+ */
+export function MobileOnboardingGuideChip({
+  coach,
+  totalClients,
+  activePlans,
+  hasStudentSignal30d,
+}: {
+  coach: CoachProfile
+  totalClients: number
+  activePlans: number
+  hasStudentSignal30d: boolean
+}) {
+  const { theme } = useTheme()
+  const router = useRouter()
+  const steps = [
+    { key: 'brand', label: 'Personaliza tu marca', done: Boolean(coach.hasCoachLogo) },
+    { key: 'client', label: 'Suma tu primer alumno', done: totalClients > 0 },
+    { key: 'plan', label: 'Crea tu primer plan', done: activePlans > 0 },
+    { key: 'checkin', label: 'Recibe el primer check-in', done: hasStudentSignal30d },
+  ]
+  const doneCount = steps.filter((s) => s.done).length
+  const allDone = doneCount === steps.length
+
+  const [open, setOpen] = useState(doneCount === 0)
+  const [hidden, setHidden] = useState(false)
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+    AsyncStorage.getItem(GUIDE_CHIP_HIDDEN_KEY(coach.id))
+      .then((v) => { if (mounted) { setHidden(v === '1'); setReady(true) } })
+      .catch(() => { if (mounted) setReady(true) })
+    return () => { mounted = false }
+  }, [coach.id])
+
+  function skip() {
+    setHidden(true)
+    AsyncStorage.setItem(GUIDE_CHIP_HIDDEN_KEY(coach.id), '1').catch(() => null)
+    postMobileOnboardingEvent('profile_branding', 'guide_engagement', {
+      widget: 'onboarding_chip',
+      action: 'dismiss',
+      progress_pct: Math.round((doneCount / steps.length) * 100),
+    })
+  }
+
+  if (!ready || hidden) return null
+
+  // Momento aha: circuito completo → card de celebracion (cerrable).
+  if (allDone) {
+    return (
+      <Card
+        padding="md"
+        radius="card"
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 11, backgroundColor: 'rgba(16,185,129,0.1)', borderColor: 'rgba(16,185,129,0.32)', borderWidth: 1 }}
+      >
+        <View className="h-9 w-9 items-center justify-center rounded-pill" style={{ backgroundColor: '#10B981' }}>
+          <PartyPopper size={18} color="#FFFFFF" />
+        </View>
+        <View className="flex-1" style={{ minWidth: 0 }}>
+          <Text className="font-sans-bold text-[14.5px]" style={{ color: '#10B981' }}>
+            Activacion lista
+          </Text>
+          <Text className="font-sans text-[12.5px] text-muted">Tu cuenta esta configurada. A entrenar.</Text>
+        </View>
+        <TouchableOpacity onPress={skip} accessibilityLabel="Cerrar" hitSlop={8}>
+          <X size={18} color={theme.mutedForeground} />
+        </TouchableOpacity>
+      </Card>
+    )
+  }
+
+  return (
+    <View>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => setOpen((o) => !o)}
+        className="flex-row items-center gap-3 px-3 py-[11px]"
+        style={{
+          borderWidth: 1,
+          borderColor: hexToRgba(theme.primary, 0.28),
+          borderBottomWidth: open ? 0 : 1,
+          backgroundColor: hexToRgba(theme.primary, 0.08),
+          borderTopLeftRadius: theme.radius.md,
+          borderTopRightRadius: theme.radius.md,
+          borderBottomLeftRadius: open ? 0 : theme.radius.md,
+          borderBottomRightRadius: open ? 0 : theme.radius.md,
+        }}
+      >
+        <Rocket size={16} color={theme.primary} />
+        <Text className="flex-1 font-sans-bold text-[13px]" style={{ color: theme.primary }}>
+          Guia de inicio
+        </Text>
+        <View className="flex-row items-center" style={{ gap: 4 }}>
+          {steps.map((s) => (
+            <View
+              key={s.key}
+              style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: s.done ? theme.primary : hexToRgba(theme.primary, 0.3) }}
+            />
+          ))}
+        </View>
+        <Text className="font-sans-extra text-[12.5px]" style={{ color: theme.primary, minWidth: 26, textAlign: 'right' }}>
+          {doneCount}/{steps.length}
+        </Text>
+        <ChevronDown size={16} color={theme.primary} style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }} />
+      </TouchableOpacity>
+
+      {open ? (
+        <View
+          style={{
+            borderWidth: 1,
+            borderTopWidth: 0,
+            borderColor: hexToRgba(theme.primary, 0.28),
+            backgroundColor: hexToRgba(theme.primary, 0.08),
+            borderBottomLeftRadius: theme.radius.md,
+            borderBottomRightRadius: theme.radius.md,
+            paddingHorizontal: 13,
+            paddingTop: 4,
+            paddingBottom: 13,
+          }}
+        >
+          <View style={{ gap: 7 }}>
+            {steps.map((s) => (
+              <View key={s.key} className="flex-row items-center" style={{ gap: 9 }}>
+                <View
+                  className="items-center justify-center rounded-pill"
+                  style={{
+                    width: 20,
+                    height: 20,
+                    backgroundColor: s.done ? theme.primary : 'transparent',
+                    borderWidth: s.done ? 0 : 2,
+                    borderColor: hexToRgba(theme.primary, 0.4),
+                  }}
+                >
+                  {s.done ? <Check size={12} color="#FFFFFF" strokeWidth={3} /> : null}
+                </View>
+                <Text
+                  className="font-sans-semibold text-[13.5px]"
+                  style={{ color: s.done ? theme.mutedForeground : theme.foreground, textDecorationLine: s.done ? 'line-through' : 'none', opacity: s.done ? 0.75 : 1 }}
+                >
+                  {s.label}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <View
+            className="flex-row items-center"
+            style={{ gap: 9, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: hexToRgba(theme.primary, 0.2) }}
+          >
+            <Sparkles size={15} color={theme.primary} />
+            <Text className="flex-1 font-sans text-[12px]" style={{ color: theme.foreground, lineHeight: 16 }}>
+              Suma planes de nutricion con <Text className="font-sans-bold" style={{ color: theme.primary }}>Pro</Text>.
+            </Text>
+            <TouchableOpacity onPress={() => openCoachWebPath('/coach/subscription')} hitSlop={6}>
+              <Text className="font-sans-extra text-[12px]" style={{ color: theme.primary }}>Mejorar</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity onPress={skip} style={{ marginTop: 10 }} hitSlop={6}>
+            <Text className="font-sans-bold text-[12px]" style={{ color: theme.mutedForeground }}>Saltar guia</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+    </View>
+  )
+}
+
 type CreateClientResponse = {
   ok: true
   clientName: string
@@ -1486,6 +1760,84 @@ export function MobileGreetingHeader({ coachName, pendingCount }: { coachName: s
   )
 }
 
+/** Cabecera de sección DS (título display + acción opcional a la derecha). */
+function SectionHeader({ title, action }: { title: string; action?: string }) {
+  return (
+    <View className="flex-row items-center justify-between">
+      <Text className="font-display-bold text-[17px] text-strong">{title}</Text>
+      {action ? <Text className="font-sans text-[12px] text-muted">{action}</Text> : null}
+    </View>
+  )
+}
+
+/**
+ * P1 — Pulse hero: 3 stats tocables en una sola card (Activos · En riesgo · Adherencia).
+ * Una sola fuente de verdad (reemplaza el viejo strip de 4 KPIs con "Ingresos del mes").
+ * 1:1 con coach-dashboard.jsx → heroStats.
+ */
+export function MobilePulseHero({
+  kpi,
+  onActivosPress,
+  onRiesgoPress,
+  onAdherencePress,
+}: {
+  kpi: MobileKpiSummary
+  onActivosPress: () => void
+  onRiesgoPress: () => void
+  onAdherencePress: () => void
+}) {
+  const { theme } = useTheme()
+  const stats: Array<{ key: string; label: string; value: string; sub: string; danger: boolean; onPress: () => void }> = [
+    { key: 'activos', label: 'Activos', value: String(kpi.totalClients), sub: 'En tu cartera', danger: false, onPress: onActivosPress },
+    {
+      key: 'riesgo',
+      label: 'En riesgo',
+      value: String(kpi.riskCount),
+      sub: kpi.riskCount > 0 ? 'Requieren atencion' : 'Todo al dia',
+      danger: kpi.riskCount > 0,
+      onPress: onRiesgoPress,
+    },
+    { key: 'adherencia', label: 'Adherencia', value: `${kpi.avgAdherence}%`, sub: 'Promedio 30d', danger: false, onPress: onAdherencePress },
+  ]
+
+  return (
+    <Card padding="none" radius="card" style={{ flexDirection: 'row', overflow: 'hidden' }}>
+      {stats.map((s, i) => (
+        <TouchableOpacity
+          key={s.key}
+          activeOpacity={0.82}
+          onPress={s.onPress}
+          style={{
+            flex: 1,
+            paddingVertical: 14,
+            paddingHorizontal: 12,
+            gap: 5,
+            borderLeftWidth: i > 0 ? StyleSheet.hairlineWidth : 0,
+            borderLeftColor: theme.border,
+          }}
+        >
+          <Text className="font-sans-extra uppercase text-[10.5px] tracking-[0.6px] text-muted" numberOfLines={1}>
+            {s.label}
+          </Text>
+          <Text
+            className="font-display-black text-[27px]"
+            style={{ lineHeight: 28, color: s.danger ? theme.destructive : theme.foreground }}
+          >
+            {s.value}
+          </Text>
+          <Text
+            className="font-sans-bold text-[11px]"
+            style={{ color: s.danger ? theme.destructive : theme.mutedForeground }}
+            numberOfLines={1}
+          >
+            {s.sub}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </Card>
+  )
+}
+
 export function MobileKpiStrip({
   kpi,
   onMrrPress,
@@ -1585,10 +1937,55 @@ function focusRiskBand(score: number): { label: string; color: string } {
   return { label: 'Seguimiento', color: '#939DAB' }
 }
 
-export function MobileFocusList({ items }: { items: MobileRiskAlertItem[] }) {
+// Etiqueta humana por flag (1:1 con coach-dashboard.jsx → FLAG_LABEL).
+const FOCUS_FLAG_LABEL: Record<string, string> = {
+  SIN_CHECKIN_1M: 'Sin check-in en 1 mes',
+  SIN_EJERCICIO_7D: 'Sin ejercicio en 7 dias',
+  NUTRICION_RIESGO: 'Nutricion en riesgo',
+  PROGRAMA_VENCIDO: 'Programa vencido',
+  PROGRAMA_POR_VENCER: 'Programa por vencer',
+  FUERZA_CAYENDO: 'Fuerza cayendo',
+}
+
+/**
+ * P2 + P6 — Zona de prioridad unica (card oscura inverse): titulo + alumnos nombrados
+ * con score/100 + banda de riesgo + NextBestAction embebido. 1:1 con coach-dashboard.jsx.
+ * La card es SIEMPRE oscura → colores fijos on-dark.
+ */
+export function MobileFocusList({
+  items,
+  kpi,
+  agenda,
+  expiringPrograms,
+  onAdherencePress,
+}: {
+  items: MobileRiskAlertItem[]
+  kpi: MobileKpiSummary
+  agenda: MobileAgendaItem[]
+  expiringPrograms: MobileExpiringProgramItem[]
+  onAdherencePress: () => void
+}) {
   const router = useRouter()
   const { theme } = useTheme()
   const hasRisk = items.length > 0
+  const riesgoCount = items.length
+  const nba = resolveMobileNextBestAction({ kpi, topRiskClients: items, agenda, expiringPrograms })
+
+  function handleNba() {
+    if (nba.id === 'programas-vencidos') {
+      router.push('/coach/(tabs)/builder')
+    } else if (nba.id === 'focus-list') {
+      const first = items[0]
+      if (first) router.push(`/coach/cliente/${first.clientId}`)
+    } else if (nba.id === 'adherencia-baja') {
+      onAdherencePress()
+    } else if (nba.id === 'agenda-hoy') {
+      const first = agenda[0]
+      if (first) router.push(`/coach/cliente/${first.clientId}`)
+    } else {
+      router.push('/coach/(tabs)/clientes')
+    }
+  }
 
   return (
     <Card variant="inverse" padding="md" radius="card" style={{ overflow: 'hidden' }}>
@@ -1601,7 +1998,7 @@ export function MobileFocusList({ items }: { items: MobileRiskAlertItem[] }) {
           style={{ backgroundColor: hasRisk ? '#F4365A' : '#1FB877' }}
         >
           <Text className="font-sans-bold text-[11px]" style={{ color: '#0B0E13' }}>
-            {items.length}
+            {riesgoCount}
           </Text>
         </View>
       </View>
@@ -1621,9 +2018,16 @@ export function MobileFocusList({ items }: { items: MobileRiskAlertItem[] }) {
         </View>
       ) : (
         <>
+          <Text
+            className="font-display-black text-[20px] text-on-dark"
+            style={{ lineHeight: 23, letterSpacing: -0.4, marginBottom: 12 }}
+          >
+            {riesgoCount} {riesgoCount === 1 ? 'alumno necesita' : 'alumnos necesitan'} tu atencion
+          </Text>
           <View>
             {items.map((item, index) => {
               const band = focusRiskBand(item.attentionScore)
+              const flagLabel = FOCUS_FLAG_LABEL[item.flags?.[0] ?? ''] ?? item.label
               return (
                 <TouchableOpacity
                   key={item.clientId}
@@ -1642,7 +2046,7 @@ export function MobileFocusList({ items }: { items: MobileRiskAlertItem[] }) {
                       {item.clientName}
                     </Text>
                     <Text className="font-sans text-[12px] text-on-dark-muted" numberOfLines={1}>
-                      {item.label}
+                      {flagLabel}
                     </Text>
                   </View>
                   <View className="items-end" style={{ gap: 2 }}>
@@ -1662,6 +2066,28 @@ export function MobileFocusList({ items }: { items: MobileRiskAlertItem[] }) {
               )
             })}
           </View>
+
+          {/* NextBestAction embebido — paso complementario sobre la card oscura. */}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={handleNba}
+            className="mt-3 flex-row items-center gap-2.5 rounded-xl px-3 py-2.5"
+            style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}
+          >
+            <Sparkles size={16} color={theme.primary} />
+            <View className="flex-1" style={{ minWidth: 0 }}>
+              <Text className="font-sans-bold text-[13px] text-on-dark" numberOfLines={1}>
+                {nba.title}
+              </Text>
+              <Text className="font-sans text-[12px] text-on-dark-muted" numberOfLines={2}>
+                {nba.description}
+              </Text>
+            </View>
+            <Text className="font-sans-bold text-[12px] text-sport-400" numberOfLines={1}>
+              {nba.ctaLabel}
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => router.push('/coach/(tabs)/clientes')}
@@ -1979,6 +2405,115 @@ export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
                   trailing={<Text className="font-sans text-[11px] text-muted">{timeAgo(item.date)}</Text>}
                   disabled={!item.clientId}
                   onPress={item.clientId ? () => router.push(`/coach/cliente/${item.clientId}`) : undefined}
+                />
+              </View>
+            )
+          })}
+        </Card>
+      )}
+    </View>
+  )
+}
+
+/**
+ * Novedades — programas por vencer + actividad reciente en una sola card.
+ * 1:1 con coach-dashboard.jsx → feed (expiringPrograms ++ coachActivity).
+ */
+export function MobileNovedades({
+  expiringPrograms,
+  activities,
+}: {
+  expiringPrograms: MobileExpiringProgramItem[]
+  activities: MobileActivityItem[]
+}) {
+  const router = useRouter()
+  const { theme } = useTheme()
+  const isEmpty = expiringPrograms.length === 0 && activities.length === 0
+  let rowIndex = -1
+
+  function Divider({ index }: { index: number }) {
+    if (index <= 0) return null
+    return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginHorizontal: 14 }} />
+  }
+
+  return (
+    <View style={{ gap: 10 }}>
+      <SectionHeader title="Novedades" />
+      {isEmpty ? (
+        <Card padding="md" radius="card">
+          <Text className="font-sans text-[12px] text-muted" style={{ textAlign: 'center' }}>
+            Sin novedades por ahora.
+          </Text>
+        </Card>
+      ) : (
+        <Card padding="none" radius="card" style={{ overflow: 'hidden' }}>
+          {expiringPrograms.map((it) => {
+            rowIndex += 1
+            const expired = it.daysLeft <= 0
+            const urgent = expired || it.daysLeft <= 2
+            return (
+              <View key={`prog-${it.id}`}>
+                <Divider index={rowIndex} />
+                <TouchableOpacity
+                  activeOpacity={0.82}
+                  onPress={() =>
+                    it.clientId
+                      ? router.push(`/coach/cliente/${it.clientId}`)
+                      : router.push('/coach/(tabs)/builder')
+                  }
+                  className="flex-row items-center gap-3 px-[14px] py-[11px]"
+                >
+                  <View
+                    className="h-[34px] w-[34px] items-center justify-center rounded-pill"
+                    style={{ backgroundColor: urgent ? 'rgba(244,54,90,0.12)' : 'rgba(245,158,11,0.14)' }}
+                  >
+                    <CalendarClock size={16} color={urgent ? '#F4365A' : '#F59E0B'} />
+                  </View>
+                  <View className="flex-1" style={{ minWidth: 0 }}>
+                    <Text className="font-sans text-[13.5px] text-body" numberOfLines={1}>
+                      Plan de <Text className="font-sans-bold text-strong">{it.clientName}</Text>{' '}
+                      {expired ? 'vencio' : 'vence pronto'}
+                    </Text>
+                    <Text className="font-sans text-[12px] text-muted" numberOfLines={1}>
+                      {it.name}
+                    </Text>
+                  </View>
+                  <Badge tone={urgent ? 'danger' : 'warning'} variant="soft" size="sm">
+                    {expired ? 'Vencido' : `${it.daysLeft} dias`}
+                  </Badge>
+                </TouchableOpacity>
+              </View>
+            )
+          })}
+          {activities.map((it) => {
+            rowIndex += 1
+            const iconColor = it.type === 'nuevo alumno' ? '#10B981' : it.type === 'check-in' ? '#3B82F6' : theme.primary
+            return (
+              <View key={`act-${it.id}`}>
+                <Divider index={rowIndex} />
+                <ListRow
+                  leading={
+                    it.type === 'check-in' && it.photoUrl ? (
+                      <Image
+                        source={{ uri: it.photoUrl }}
+                        style={{ width: 34, height: 34, borderRadius: 11 }}
+                        contentFit="cover"
+                        transition={200}
+                      />
+                    ) : (
+                      <View
+                        className="h-[34px] w-[34px] items-center justify-center rounded-pill"
+                        style={{ backgroundColor: hexToRgba(iconColor, 0.11) }}
+                      >
+                        <ActivityTypeIcon type={it.type} size={16} color={iconColor} />
+                      </View>
+                    )
+                  }
+                  title={it.title}
+                  subtitle={it.subtitle}
+                  trailing={<Text className="font-sans text-[11px] text-muted">{timeAgo(it.date)}</Text>}
+                  disabled={!it.clientId}
+                  onPress={it.clientId ? () => router.push(`/coach/cliente/${it.clientId}`) : undefined}
                 />
               </View>
             )

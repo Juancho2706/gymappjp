@@ -1,27 +1,16 @@
 import type { ReactNode } from 'react'
 
-interface DashboardShellProps {
-    /** Header, calendario, check-in, hero (orden §5 mobile). */
-    beforeSidebar: ReactNode
-    /** Columna lateral en &lt; md (debajo del hero). Misma UI que `sidebarDesktop`; datos deduplicados con cache(). */
-    sidebarMobile: ReactNode
-    sidebarDesktop: ReactNode
-    /** Programa, historial, gráfico peso (main col). */
-    afterSidebar: ReactNode
-}
-
-export function DashboardShell({ beforeSidebar, sidebarMobile, sidebarDesktop, afterSidebar }: DashboardShellProps) {
+/**
+ * Shell del dashboard del alumno — columna ÚNICA centrada (estructura eva-app).
+ * El kit desktop monta el MISMO `StudentDashboard` (no hay bento de escritorio para el alumno),
+ * así que la estructura mobile-first sirve a todos los anchos: una sola columna app-like.
+ * El orden de las secciones lo decide `page.tsx` (1:1 con el jsx del diseño).
+ */
+export function DashboardShell({ children }: { children: ReactNode }) {
     return (
         <div className="min-h-dvh bg-background">
-            <div className="mx-auto max-w-5xl px-4 pt-2 pb-[calc(1rem+var(--mobile-content-bottom-offset))] sm:px-6 md:pb-6 lg:pt-4">
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_280px] lg:grid-cols-[minmax(0,1fr)_300px]">
-                    <div className="min-w-0 space-y-4">
-                        {beforeSidebar}
-                        <div className="space-y-4 md:hidden">{sidebarMobile}</div>
-                        {afterSidebar}
-                    </div>
-                    <aside className="hidden flex-col gap-4 self-start md:sticky md:top-6 md:flex">{sidebarDesktop}</aside>
-                </div>
+            <div className="mx-auto max-w-xl px-5 pt-2 pb-[calc(1.5rem+var(--mobile-content-bottom-offset))] md:pb-8 lg:pt-4">
+                <div className="flex flex-col gap-3.5">{children}</div>
             </div>
         </div>
     )

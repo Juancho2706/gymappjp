@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   RefreshControl,
   ScrollView,
@@ -9,37 +9,57 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { CalendarDays, Check, ChevronRight, Droplets, Dumbbell, Footprints, Moon, Scale, TrendingDown, TrendingUp } from 'lucide-react-native'
+import {
+  ArrowRight,
+  Check,
+  ChevronRight,
+  ClipboardCheck,
+  Dumbbell,
+  Flame,
+  MessageCircle,
+  Moon,
+  Play,
+  Scale,
+  TrendingDown,
+  TrendingUp,
+  Trophy,
+} from 'lucide-react-native'
 import { MotiView } from 'moti'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile, type ClientProfile } from '../../../lib/client'
 import { getOnboardingStatus } from '../../../lib/alumno-onboarding'
 import { useTheme } from '../../../context/ThemeContext'
 import {
+  Avatar,
   Badge,
   Button,
   Card,
+  HabitsTracker,
   NutritionDailySummaryWidget,
   PersonalRecordsBanner,
-  ProgressBar,
   ScreenHeader,
   Sparkline,
-  StreakWidget,
   WelcomeModal,
 } from '../../../components'
 import { ProgressRing } from '../../../components/ProgressRing'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AppBackground } from '../../../components/AppBackground'
-import { getTodayInSantiago, timeGreeting, formatLongDate } from '../../../lib/date-utils'
+import { getTodayInSantiago, timeGreeting } from '../../../lib/date-utils'
 import { getDailyHabits, type HabitsData } from '../../../lib/habits.queries'
 
-const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab']
 const MS_DAY = 24 * 60 * 60 * 1000
-
-// Fixed DS accents (constant ramp values; sport follows the runtime brand).
+// Fixed DS accents (constant ramps; never white-labeled — sport follows brand at runtime).
 const EMBER_500 = '#FF6A3D' // accent-nutrition
-const WARNING_500 = '#F5A524' // warning glyph (weight uptrend)
+const EMBER_600 = '#E8511E'
+const WARNING_500 = '#F5A524'
+const SUCCESS_500 = '#1FB877'
+
+// Semana Lun..Dom — etiquetas verbatim del diseño (Dash week strip).
+const WEEK_LETTERS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
+// Etiqueta corta de día para las day-cards del programa (dbDay 1..7 = Lun..Dom).
+const DAY_SHORT = ['', 'LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM']
 
 interface Plan {
   id: string
@@ -76,6 +96,7 @@ interface WelcomeModalConfig {
 
 interface HomeData {
   client: ClientProfile | null
+  coachName: string | null
   program: Program | null
   recentWorkouts: RecentWorkout[]
   workoutDates: Set<string>
@@ -103,13 +124,17 @@ function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
 }
 
-
 export default function AlumnoHomeScreen() {
   const { theme } = useTheme()
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const [data, setData] = useState<HomeData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+
+  // Sticky CTA: se muestra cuando el hero sale de vista (Ola 2 del diseño).
+  const [scrollY, setScrollY] = useState(0)
+  const heroBottom = useRef(0)
 
   useEffect(() => {
     // Gate: alumno sin intake → onboarding antes del dashboard.
@@ -191,6 +216,7 @@ export default function AlumnoHomeScreen() {
 
     setData({
       client,
+      coachName: coachData?.brand_name ?? null,
       program,
       recentWorkouts: (workoutRows ?? []) as RecentWorkout[],
       workoutDates: new Set((workoutRows ?? []).map((row) => isoDate(new Date(row.logged_at)))),
@@ -218,7 +244,7 @@ export default function AlumnoHomeScreen() {
       plans.find((p) => p.day_of_week === todayDbDay) ??
       null
     const nextPlan = plans.find((p) => p.id !== todayPlan?.id) ?? null
-    const workoutTargetDays = plans.length ? Math.min(plans.length, 30) : 12
+    const workoutTargetDays = plans.length ? Math.min(plans.length * 4, 30) : 12
     const workoutCompliance = data ? Math.min(1, data.workoutDates.size / workoutTargetDays) : 0
     const nutritionCompliance = data ? Math.min(1, data.nutritionDates.size / 30) : 0
     const checkInCompliance = data ? Math.min(1, data.checkIns.length / 4) : 0
@@ -228,17 +254,19 @@ export default function AlumnoHomeScreen() {
     const firstWeight = weights[0] ?? null
     const weightDelta = currentWeight != null && firstWeight != null ? currentWeight - firstWeight : null
     const streak = calculateStreak(data?.workoutDates ?? new Set<string>())
+    const bestStreak = Math.max(streak, bestStreakInWindow(data?.workoutDates ?? new Set<string>()))
+    const checkInDaysSince = daysSinceLastCheckIn(data?.checkIns ?? [])
 
-    // Build a set of ISO dates in the 7-day window that have planned workouts
+    // ISO dates de Lun..Dom de la semana actual + qué días tienen workout planificado.
+    const monday = startOfWeekMonday(today)
+    const weekDates = Array.from({ length: 7 }, (_, i) => isoDate(new Date(monday.getTime() + i * MS_DAY)))
     const plannedDays = new Set<string>()
     if (plans.length > 0) {
-      for (let i = -3; i <= 3; i++) {
-        const d = new Date(today.getTime() + i * MS_DAY)
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday.getTime() + i * MS_DAY)
         const dIso = isoDate(d)
         const dbDay = jsDayToDbDay(d.getDay())
-        if (plans.some((p) => p.day_of_week === dbDay || p.assigned_date === dIso)) {
-          plannedDays.add(dIso)
-        }
+        if (plans.some((p) => p.day_of_week === dbDay || p.assigned_date === dIso)) plannedDays.add(dIso)
       }
     }
 
@@ -248,7 +276,6 @@ export default function AlumnoHomeScreen() {
       workoutCompliance,
       nutritionCompliance,
       checkInCompliance,
-      // Estado "sin datos" → ring gris en vez de 0% (no confundir sin-uso con mal-cumplimiento).
       nutritionEmpty: data ? data.nutritionDates.size === 0 : true,
       checkInEmpty: data ? data.checkIns.length === 0 : true,
       recentUnique,
@@ -256,7 +283,11 @@ export default function AlumnoHomeScreen() {
       currentWeight,
       weightDelta,
       streak,
+      bestStreak,
+      checkInDaysSince,
+      weekDates,
       plannedDays,
+      todayIso,
     }
   }, [data])
 
@@ -268,87 +299,139 @@ export default function AlumnoHomeScreen() {
     )
   }
 
+  const firstName = data?.client?.fullName?.split(' ')[0] ?? ''
+  const doneToday = !!derived.todayPlan && (data?.workoutDates.has(getTodayInSantiago().iso) ?? false)
+  const subtitle = !data?.program
+    ? 'Sin plan activo'
+    : derived.todayPlan
+    ? data.program.name
+    : 'Hoy es día de descanso'
+
+  // Check-in variant-aware (diseño): <3 días ok · 3–7 warning · >7 overdue.
+  const ciDays = derived.checkInDaysSince
+  const ciVariant: 'ok' | 'warning' | 'overdue' =
+    ciDays == null || ciDays > 7 ? 'overdue' : ciDays >= 3 ? 'warning' : 'ok'
+
+  const showStickyCta = !!derived.todayPlan && !doneToday && scrollY > heroBottom.current - 120
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
-      <ScreenHeader
-        title={`${timeGreeting()}, ${data?.client?.fullName?.split(' ')[0] ?? ''}`.trim()}
-        subtitle={formatLongDate()}
-        trailing={<StreakWidget streak={derived.streak} />}
-      />
+      <ScreenHeader title={`${timeGreeting()}, ${firstName}`.trim()} subtitle={subtitle} />
 
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={32}
+        onScroll={(e) => setScrollY(e.nativeEvent.contentOffset.y)}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
       >
-        <WeekCalendar workoutDates={data?.workoutDates ?? new Set<string>()} plannedDays={derived.plannedDays} />
+        {/* Racha ribbon — protagonista de retención */}
+        <StreakRibbon streak={derived.streak} best={derived.bestStreak} />
 
-        {!hasCheckInThisMonth(data?.checkIns ?? []) ? (
-          <MotiView
-            from={{ opacity: 0, translateY: 14 }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={{ type: 'timing', duration: 400 }}
-          >
-            <TouchableOpacity
-              className="flex-row items-center rounded-card border border-ember-200 bg-ember-100 dark:bg-ember-100/20"
-              style={styles.checkInBanner}
-              onPress={() => router.push('/alumno/check-in')}
-              activeOpacity={0.82}
-            >
-              <View className="items-center justify-center rounded-control bg-ember-500" style={styles.bannerIcon}>
-                <Scale size={18} color="#fff" strokeWidth={2.25} />
-              </View>
-              <View className="flex-1" style={styles.bannerText}>
-                <Text className="font-sans-bold text-[13.5px] text-ember-700">
-                  Check-in pendiente
+        {/* Check-in banner (variant-aware) */}
+        {ciVariant !== 'ok' && (
+          <CheckInBanner variant={ciVariant} days={ciDays} onPress={() => router.push('/alumno/check-in')} />
+        )}
+
+        {/* HERO — qué hago hoy */}
+        <View onLayout={(e) => { heroBottom.current = e.nativeEvent.layout.y + e.nativeEvent.layout.height }}>
+          {!data?.program ? (
+            <NoPlanHero coachName={data?.coachName} onPress={() => router.push('/alumno/check-in')} />
+          ) : derived.todayPlan ? (
+            <WorkoutHero plan={derived.todayPlan} doneToday={doneToday} onStart={(id) => router.push(`/alumno/workout/${id}`)} />
+          ) : (
+            <RestHero nextPlan={derived.nextPlan} onPress={() => router.push('/alumno/nutricion')} />
+          )}
+        </View>
+
+        {/* Coach presence */}
+        {data?.coachName && (
+          <MotiView from={{ opacity: 0, translateY: 12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 360, delay: 60 }}>
+            <Card interactive onPress={() => router.push('/alumno/check-in')} style={styles.coachCard}>
+              <Avatar name={data.coachName} size="md" ring="ember" />
+              <View style={styles.coachBody}>
+                <View style={styles.coachNameRow}>
+                  <Text className="font-sans-bold text-strong text-[13.5px]" numberOfLines={1} style={styles.flexShrink}>
+                    {data.coachName}
+                  </Text>
+                  <Badge tone="ember" variant="soft" size="sm">Tu coach</Badge>
+                </View>
+                <Text className="font-sans text-muted text-[12.5px]" numberOfLines={2} style={styles.coachNote}>
+                  Escríbele si tenés dudas de tu plan o tu progreso.
                 </Text>
-                <Text className="font-sans text-[12px] text-ember-700">
-                  Registra tu peso y energia de este mes.
-                </Text>
               </View>
-              <ChevronRight size={18} color={EMBER_500} />
-            </TouchableOpacity>
+              <View style={[styles.coachIcon, { backgroundColor: EMBER_500 + '1A' }]}>
+                <MessageCircle size={17} color={EMBER_600} strokeWidth={2.25} />
+              </View>
+            </Card>
           </MotiView>
-        ) : null}
+        )}
 
-        <WorkoutHero
-          plan={derived.todayPlan}
-          nextPlan={derived.nextPlan}
-          doneToday={!!derived.todayPlan && (data?.workoutDates.has(getTodayInSantiago().iso) ?? false)}
-          onStart={(planId) => router.push(`/alumno/workout/${planId}`)}
-        />
+        {/* Momentum — semana + cumplimiento */}
+        <SectionTitle title="Momentum" accent={theme.primary} />
+        <Card>
+          <WeekStrip
+            weekDates={derived.weekDates}
+            todayIso={derived.todayIso}
+            workoutDates={data?.workoutDates ?? new Set<string>()}
+            plannedDays={derived.plannedDays}
+          />
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          <View style={styles.ringsRow}>
+            <ComplianceItem value={derived.workoutCompliance} label="Entrenos" sub={`${data?.workoutDates.size ?? 0} días`} color={theme.primary} />
+            <ComplianceItem value={derived.nutritionCompliance} label="Nutrición" sub={`${data?.nutritionDates.size ?? 0} días`} color={EMBER_500} empty={derived.nutritionEmpty} />
+            <ComplianceItem value={derived.checkInCompliance} label="Check-ins" sub={`${data?.checkIns.length ?? 0} de 4`} color={theme.success} empty={derived.checkInEmpty} />
+          </View>
+        </Card>
 
-        <MotiView
-          from={{ opacity: 0, translateY: 14 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: 'timing', duration: 400, delay: 120 }}
-        >
-          <Card>
-            <Text className="font-sans-bold text-[13px] uppercase text-subtle" style={styles.cardEyebrow}>
-              Cumplimiento 30 dias
-            </Text>
-            <View style={styles.ringsRow}>
-              <ComplianceItem value={derived.workoutCompliance} label="Entrenos" color={theme.primary} />
-              <ComplianceItem value={derived.nutritionCompliance} label="Nutrición" color={EMBER_500} empty={derived.nutritionEmpty} />
-              <ComplianceItem value={derived.checkInCompliance} label="Check-in" color={theme.success} empty={derived.checkInEmpty} />
-            </View>
-          </Card>
-        </MotiView>
+        {/* Tu programa */}
+        {data?.program && (
+          <>
+            <SectionTitle title="Tu programa" accent={theme.primary} />
+            <ProgramCard program={data.program} todayPlanId={derived.todayPlan?.id ?? null} onStart={(id) => router.push(`/alumno/workout/${id}`)} />
+          </>
+        )}
 
-        <ActiveProgramSection program={data?.program ?? null} />
+        {/* Peso y records */}
+        <SectionTitle title="Peso y records" accent={theme.primary} />
+        <WeightCard weights={derived.weights} currentWeight={derived.currentWeight} delta={derived.weightDelta} />
+        {data?.client && <PersonalRecordsBanner clientId={data.client.id} />}
+
+        {/* Actividad reciente */}
+        <SectionTitle title="Actividad reciente" accent={theme.primary} />
         <RecentWorkouts workouts={derived.recentUnique} />
-        <WeightSparkline weights={derived.weights} currentWeight={derived.currentWeight} delta={derived.weightDelta} />
+
+        {/* Hábitos de hoy */}
+        <SectionTitle title="Hábitos de hoy" accent={theme.cyan} />
         {data?.client && (
-          <PersonalRecordsBanner clientId={data.client.id} />
+          <HabitsTracker clientId={data.client.id} logDate={derived.todayIso} isToday initialData={data.habitsToday} />
         )}
-        {data?.client && (
-          <NutritionDailySummaryWidget clientId={data.client.id} />
-        )}
-        {data?.habitsToday && (data.habitsToday.water_ml != null || data.habitsToday.steps != null) && (
-          <HabitsMiniRow habits={data.habitsToday} />
-        )}
+
+        {/* Nutrición de hoy */}
+        <SectionTitle title="Nutrición de hoy" accent={EMBER_500} action="Ver dieta" onAction={() => router.push('/alumno/nutricion')} />
+        {data?.client && <NutritionDailySummaryWidget clientId={data.client.id} />}
       </ScrollView>
+
+      {/* Sticky primary CTA — aparece cuando el hero sale de vista */}
+      {showStickyCta && derived.todayPlan && (
+        <MotiView
+          from={{ opacity: 0, translateY: 20 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: 'timing', duration: 240 }}
+          style={[styles.stickyCta, { bottom: insets.bottom + 12 }]}
+          pointerEvents="box-none"
+        >
+          <Button
+            label="Empezar entrenamiento"
+            variant="sport"
+            size="lg"
+            leftIcon={Play}
+            full
+            onPress={() => router.push(`/alumno/workout/${derived.todayPlan!.id}`)}
+          />
+        </MotiView>
+      )}
 
       {data?.welcomeModal && (
         <WelcomeModal
@@ -363,8 +446,201 @@ export default function AlumnoHomeScreen() {
   )
 }
 
-/** One compliance ring + label (DS ProgressRing, 0..1 fraction → percent). */
-function ComplianceItem({ value, label, color, empty = false }: { value: number; label: string; color: string; empty?: boolean }) {
+/** Eyebrow de sección con barra de acento (Dash_SectionTitle). */
+function SectionTitle({ title, accent, action, onAction }: { title: string; accent: string; action?: string; onAction?: () => void }) {
+  const { theme } = useTheme()
+  return (
+    <View style={styles.sectionTitle}>
+      <View style={styles.sectionTitleLeft}>
+        <View style={[styles.sectionAccent, { backgroundColor: accent }]} />
+        <Text className="font-sans-bold text-subtle text-[11px] uppercase" style={styles.sectionEyebrow}>
+          {title}
+        </Text>
+      </View>
+      {action ? (
+        <TouchableOpacity onPress={onAction} activeOpacity={0.7}>
+          <Text className="font-sans-bold text-[12.5px]" style={{ color: theme.primary }}>{action}</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  )
+}
+
+/** 🔥 Racha ribbon — streak + camino al récord. Ember FIJO (no white-label). */
+function StreakRibbon({ streak, best }: { streak: number; best: number }) {
+  const { theme } = useTheme()
+  const safeBest = Math.max(best, 1)
+  const toRecord = Math.max(0, safeBest - streak)
+  const pct = Math.min(100, Math.round((streak / safeBest) * 100))
+  return (
+    <MotiView from={{ opacity: 0, translateY: 10 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 380 }}>
+      <View style={[styles.ribbon, { backgroundColor: EMBER_500 + '1A', borderColor: EMBER_500 + '38' }]}>
+        <View style={styles.ribbonRow}>
+          <View style={[styles.ribbonFlame, { backgroundColor: EMBER_500 + '29' }]}>
+            <Flame size={26} color={EMBER_600} strokeWidth={2.25} />
+          </View>
+          <View style={styles.flex1}>
+            <View style={styles.ribbonValueRow}>
+              <Text className="font-display-black text-strong" style={styles.ribbonValue}>{streak}</Text>
+              <Text style={[styles.ribbonUnit, { color: EMBER_600 }]}>días de racha</Text>
+            </View>
+            <Text numberOfLines={1} style={[styles.ribbonSub, { color: EMBER_600 }]}>
+              {streak === 0
+                ? 'Entrená hoy para empezar tu racha.'
+                : toRecord === 0
+                ? '¡Igualaste tu récord! Seguí así.'
+                : `Te ${toRecord === 1 ? 'falta' : 'faltan'} ${toRecord} para tu récord de ${safeBest}`}
+            </Text>
+          </View>
+        </View>
+        <View style={[styles.ribbonTrack, { backgroundColor: EMBER_500 + '2E' }]}>
+          <MotiView
+            from={{ width: '0%' }}
+            animate={{ width: `${pct}%` }}
+            transition={{ type: 'timing', duration: 900 }}
+            style={[styles.ribbonFill, { backgroundColor: EMBER_500 }]}
+          />
+        </View>
+      </View>
+    </MotiView>
+  )
+}
+
+function CheckInBanner({ variant, days, onPress }: { variant: 'warning' | 'overdue'; days: number | null; onPress: () => void }) {
+  const overdue = variant === 'overdue'
+  const accent = overdue ? '#F4365A' : EMBER_500
+  const accentFg = overdue ? '#BE183C' : EMBER_600
+  return (
+    <MotiView from={{ opacity: 0, translateY: 12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 400 }}>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={0.82}
+        style={[styles.checkInBanner, { backgroundColor: accent + '1A', borderColor: accent + '38' }]}
+      >
+        <View style={[styles.bannerIcon, { backgroundColor: accent }]}>
+          <ClipboardCheck size={18} color="#fff" strokeWidth={2.25} />
+        </View>
+        <View style={styles.bannerText}>
+          <Text className="font-sans-bold text-[13.5px]" style={{ color: accentFg }}>
+            {overdue ? '¡Check-in pendiente!' : 'Check-in próximo'}
+          </Text>
+          <Text className="font-sans text-[12px]" style={{ color: accentFg }}>
+            {days == null ? 'Sin check-ins este mes' : `Último hace ${days} días`} · peso y energía en segundos
+          </Text>
+        </View>
+        <ChevronRight size={18} color={accentFg} />
+      </TouchableOpacity>
+    </MotiView>
+  )
+}
+
+/** HERO activo — inverse (dark) card. */
+function WorkoutHero({ plan, doneToday, onStart }: { plan: Plan; doneToday: boolean; onStart: (id: string) => void }) {
+  const { theme } = useTheme()
+  return (
+    <MotiView from={{ opacity: 0, translateY: 16 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 450, delay: 80 }}>
+      <Card variant="inverse" padding="lg">
+        <View style={styles.heroTopRow}>
+          <View style={styles.flex1}>
+            <Text className="font-sans-bold text-sport-400 text-[11px] uppercase" style={styles.heroEyebrow}>
+              Hoy entrenás
+            </Text>
+            <Text className="font-display-black text-on-dark text-[23px]" numberOfLines={2} style={styles.heroTitle}>
+              {plan.title}
+            </Text>
+            <Text className="font-sans text-on-dark-muted text-[13px]" style={styles.heroMeta}>
+              {plan.blockCount} {plan.blockCount === 1 ? 'ejercicio' : 'ejercicios'}
+            </Text>
+          </View>
+          <ProgressRing
+            value={doneToday ? 100 : 0}
+            size={64}
+            stroke={6}
+            color={theme.primary}
+            track="rgba(255,255,255,0.12)"
+            showValue={false}
+            label={doneToday ? <Check size={24} color={SUCCESS_500} strokeWidth={3} /> : <Dumbbell size={22} color="#939DAB" strokeWidth={2.25} />}
+          />
+        </View>
+
+        <View style={styles.heroCta}>
+          <Button label={doneToday ? 'Entrenar de nuevo' : 'Empezar entrenamiento'} variant="sport" size="lg" leftIcon={Play} full onPress={() => onStart(plan.id)} />
+        </View>
+      </Card>
+    </MotiView>
+  )
+}
+
+/** HERO descanso — sunken card positivo. */
+function RestHero({ nextPlan, onPress }: { nextPlan: Plan | null; onPress: () => void }) {
+  const { theme } = useTheme()
+  return (
+    <MotiView from={{ opacity: 0, translateY: 16 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 450, delay: 80 }}>
+      <Card variant="sunken" padding="lg" style={styles.centerCard}>
+        <View style={[styles.heroBigIcon, { backgroundColor: theme.cyan + '22' }]}>
+          <Moon size={26} color={theme.cyan} strokeWidth={2.25} />
+        </View>
+        <Text className="font-display-black text-strong text-[21px]" style={styles.centerTitle}>Día de descanso</Text>
+        <Text className="font-sans text-muted text-[13.5px]" style={styles.centerText}>
+          Recuperarte también es entrenar. {nextPlan ? `Mañana toca ${nextPlan.title}.` : 'Tu coach te avisa el próximo entreno.'}
+        </Text>
+        <Button label="Ver nutrición de hoy" variant="secondary" size="lg" rightIcon={ArrowRight} onPress={onPress} style={styles.centerBtn} />
+      </Card>
+    </MotiView>
+  )
+}
+
+/** HERO sin plan — coach armando programa. */
+function NoPlanHero({ coachName, onPress }: { coachName: string | null | undefined; onPress: () => void }) {
+  const { theme } = useTheme()
+  const short = coachName?.split(' ')[0] ?? 'tu coach'
+  return (
+    <MotiView from={{ opacity: 0, translateY: 16 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 450, delay: 80 }}>
+      <Card padding="lg" style={styles.centerCard}>
+        <View style={[styles.heroBigIcon, { backgroundColor: theme.primary + '1A' }]}>
+          <Dumbbell size={28} color={theme.primary} strokeWidth={2.25} />
+        </View>
+        <Text className="font-display-black text-strong text-[20px]" style={styles.centerTitle}>Tu coach está armando tu plan</Text>
+        <Text className="font-sans text-muted text-[13.5px]" style={styles.centerText}>
+          {coachName ?? 'Tu coach'} está preparando tu programa. Te avisamos apenas esté listo.
+        </Text>
+        <Button label={`Escribir a ${short}`} variant="sport" size="lg" leftIcon={MessageCircle} onPress={onPress} style={styles.centerBtn} />
+      </Card>
+    </MotiView>
+  )
+}
+
+/** Tira semanal Lun..Dom con check / hoy / planificado. */
+function WeekStrip({ weekDates, todayIso, workoutDates, plannedDays }: { weekDates: string[]; todayIso: string; workoutDates: Set<string>; plannedDays: Set<string> }) {
+  const { theme } = useTheme()
+  return (
+    <View style={styles.weekRow}>
+      {weekDates.map((dIso, i) => {
+        const isToday = dIso === todayIso
+        const done = workoutDates.has(dIso)
+        const planned = plannedDays.has(dIso) && !done && !isToday
+        const bgClass = isToday ? 'bg-cta-fill' : done ? 'bg-surface-card border border-subtle' : 'bg-surface-sunken border border-subtle'
+        return (
+          <View key={dIso} className={`flex-1 items-center justify-center rounded-control ${bgClass}`} style={styles.dayPill}>
+            <Text className={`font-display-bold text-[12px] ${isToday ? 'text-on-sport' : 'text-subtle'}`}>{WEEK_LETTERS[i]}</Text>
+            <View style={styles.dayGlyph}>
+              {done ? (
+                <Check size={14} color={isToday ? '#fff' : theme.success} strokeWidth={3} />
+              ) : isToday ? (
+                <View style={[styles.dot, { backgroundColor: '#fff' }]} />
+              ) : planned ? (
+                <View style={[styles.dot, { backgroundColor: theme.primary, opacity: 0.5 }]} />
+              ) : null}
+            </View>
+          </View>
+        )
+      })}
+    </View>
+  )
+}
+
+/** Un anillo de cumplimiento + label + sub. */
+function ComplianceItem({ value, label, sub, color, empty = false }: { value: number; label: string; sub: string; color: string; empty?: boolean }) {
   const { theme } = useTheme()
   const pct = Math.round(Math.max(0, Math.min(1, value)) * 100)
   return (
@@ -374,169 +650,95 @@ function ComplianceItem({ value, label, color, empty = false }: { value: number;
         size={74}
         stroke={7}
         color={empty ? theme.mutedForeground : color}
-        label={
-          <Text className="font-display-black text-strong text-[19px]" style={styles.tnum}>
-            {empty ? '—' : pct}
-          </Text>
-        }
+        label={<Text className="font-display-black text-strong text-[19px]" style={styles.tnum}>{empty ? '—' : pct}</Text>}
       />
       <View className="items-center">
         <Text className="font-sans-bold text-strong text-[12px]">{label}</Text>
-        {empty ? <Text className="font-sans text-subtle text-[10.5px]">Sin datos</Text> : null}
+        <Text className="font-sans text-subtle text-[10.5px]">{empty ? 'Sin datos' : sub}</Text>
       </View>
     </View>
   )
 }
 
-function WeekCalendar({ workoutDates, plannedDays }: { workoutDates: Set<string>; plannedDays: Set<string> }) {
+/** Programa activo + day-cards horizontales. */
+function ProgramCard({ program, todayPlanId, onStart }: { program: Program; todayPlanId: string | null; onStart: (id: string) => void }) {
   const { theme } = useTheme()
-  const today = startOfToday()
-  const days = Array.from({ length: 7 }, (_, i) => new Date(today.getTime() + (i - 3) * MS_DAY))
-  const todayIso = isoDate(today)
-
-  return (
-    <MotiView
-      from={{ opacity: 0, translateY: 14 }}
-      animate={{ opacity: 1, translateY: 0 }}
-      transition={{ type: 'timing', duration: 400 }}
-      style={styles.weekRow}
-    >
-      {days.map((day) => {
-        const dIso = isoDate(day)
-        const active = dIso === todayIso
-        const done = workoutDates.has(dIso)
-        const planned = plannedDays.has(dIso)
-        // today = brand cta-fill; completed = card + border; otherwise = sunken.
-        const bgClass = active
-          ? 'bg-cta-fill'
-          : done
-          ? 'bg-surface-card border border-subtle'
-          : 'bg-surface-sunken border border-subtle'
-
-        return (
-          <View key={dIso} className={`flex-1 items-center justify-center rounded-control ${bgClass}`} style={styles.dayPill}>
-            <Text className={`font-sans-bold text-[10px] uppercase ${active ? 'text-on-sport' : 'text-subtle'}`} style={styles.dayLabel}>
-              {DAY_LABELS[day.getDay()]}
-            </Text>
-            <Text className={`font-display-bold text-[16px] ${active ? 'text-on-sport' : 'text-strong'}`}>
-              {day.getDate()}
-            </Text>
-            <View style={styles.dayGlyph}>
-              {done ? (
-                <Check size={13} color={active ? '#fff' : theme.success} strokeWidth={3} />
-              ) : active ? (
-                <View style={[styles.dot, { backgroundColor: '#fff' }]} />
-              ) : planned ? (
-                <View style={[styles.dot, { backgroundColor: theme.primary, opacity: 0.5 }]} />
-              ) : null}
-            </View>
-          </View>
-        )
-      })}
-    </MotiView>
-  )
-}
-
-function WorkoutHero({ plan, nextPlan, doneToday, onStart }: { plan: Plan | null; nextPlan: Plan | null; doneToday: boolean; onStart: (id: string) => void }) {
-  const { theme } = useTheme()
-
-  // ── Rest day (no plan today) — recessed sunken card ──
-  if (!plan) {
-    return (
-      <MotiView
-        from={{ opacity: 0, translateY: 16 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: 'timing', duration: 450, delay: 80 }}
-      >
-        <Card variant="sunken" padding="lg">
-          <View className="flex-row items-center" style={styles.heroTop}>
-            <View className="items-center justify-center rounded-xl" style={[styles.heroIcon, { backgroundColor: theme.cyan + '1A' }]}>
-              <Moon size={24} color={theme.cyan} strokeWidth={2.25} />
-            </View>
-            <View className="flex-1" style={styles.heroCopy}>
-              <Text className="font-sans-bold text-[11px] uppercase" style={{ color: theme.cyan, letterSpacing: 1 }}>
-                Dia de descanso
-              </Text>
-              <Text className="font-display-black text-strong text-[18px]" numberOfLines={2} style={styles.restTitle}>
-                Recupera y prepara el siguiente entreno
-              </Text>
-            </View>
-          </View>
-          <Text className="font-sans text-muted text-[13px]" style={styles.restText}>
-            Proximo workout: {nextPlan?.title ?? 'cuando tu coach lo asigne'}
-          </Text>
-        </Card>
-      </MotiView>
-    )
-  }
-
-  // ── Active workout — inverse (dark) hero ──
-  return (
-    <MotiView
-      from={{ opacity: 0, translateY: 16 }}
-      animate={{ opacity: 1, translateY: 0 }}
-      transition={{ type: 'timing', duration: 450, delay: 80 }}
-    >
-      <Card variant="inverse" padding="lg">
-        <View className="flex-row items-center" style={styles.heroTop}>
-          <View className="items-center justify-center rounded-xl" style={[styles.heroIcon, { backgroundColor: 'rgba(255,255,255,0.08)' }]}>
-            <Dumbbell size={24} color={theme.primary} strokeWidth={2.25} />
-          </View>
-          <View className="flex-1" style={styles.heroCopy}>
-            <Text className="font-sans-bold text-sport-400 text-[11px] uppercase" style={{ letterSpacing: 1 }}>
-              Workout de hoy
-            </Text>
-            <Text className="font-display-black text-on-dark text-[20px]" numberOfLines={2} style={styles.heroTitle}>
-              {plan.title}
-            </Text>
-            <Text className="font-sans text-on-dark-muted text-[13px]">
-              {plan.blockCount} {plan.blockCount === 1 ? 'ejercicio' : 'ejercicios'}
-            </Text>
-          </View>
-        </View>
-
-        {doneToday ? (
-          <View style={styles.heroProgress}>
-            <View className="overflow-hidden" style={[styles.progressTrack, { backgroundColor: 'rgba(255,255,255,0.12)' }]}>
-              <View style={[styles.progressFill, { backgroundColor: theme.success, width: '100%' }]} />
-            </View>
-            <Text className="font-sans-semibold text-[12.5px]" style={{ color: theme.success }}>✓ Completado hoy</Text>
-          </View>
-        ) : null}
-
-        <View style={styles.heroCta}>
-          <Button
-            label={doneToday ? 'Entrenar de nuevo' : 'Empezar'}
-            variant="sport"
-            rightIcon={ChevronRight}
-            onPress={() => onStart(plan.id)}
-            full
-          />
-        </View>
-      </Card>
-    </MotiView>
-  )
-}
-
-function ActiveProgramSection({ program }: { program: Program | null }) {
-  const { theme } = useTheme()
-  if (!program) return null
-  const progress = program.plans.length ? 1 / program.plans.length : 0
   return (
     <Card>
-      <View className="flex-row items-center" style={styles.sectionTitleRow}>
-        <CalendarDays size={16} color={theme.primary} strokeWidth={2.25} />
-        <Text className="font-sans-bold text-[12px] uppercase text-subtle" style={styles.sectionEyebrow}>
-          Programa activo
-        </Text>
+      <View style={styles.programHeader}>
+        <View style={styles.flexShrink}>
+          <Text className="font-display-bold text-strong text-[16px]" numberOfLines={1}>{program.name}</Text>
+          <Text className="font-sans text-muted text-[12px]" style={styles.programMeta}>
+            {program.plans.length} plan{program.plans.length !== 1 ? 'es' : ''} en rotación
+          </Text>
+        </View>
+        <Badge tone="sport" variant="soft">Activo</Badge>
       </View>
-      <Text className="font-display-bold text-strong text-[18px]" numberOfLines={2} style={styles.programName}>
-        {program.name}
-      </Text>
-      <Text className="font-sans text-muted text-[13px]" style={styles.programMeta}>
-        {program.plans.length} plan{program.plans.length !== 1 ? 'es' : ''} en rotacion
-      </Text>
-      <ProgressBar value={Math.max(0.08, progress)} color={theme.primary} style={styles.programBar} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayCardsRow}>
+        {program.plans.map((p) => {
+          const isToday = p.id === todayPlanId
+          return (
+            <TouchableOpacity
+              key={p.id}
+              onPress={() => onStart(p.id)}
+              activeOpacity={0.8}
+              style={[styles.dayCard, { borderColor: isToday ? theme.primary : theme.border, backgroundColor: isToday ? theme.primary + '14' : theme.card }]}
+            >
+              <View style={styles.dayCardTop}>
+                <Text className="font-sans-bold text-[10.5px] uppercase" style={{ color: isToday ? theme.primary : theme.mutedForeground, letterSpacing: 0.5 }}>
+                  {p.day_of_week ? DAY_SHORT[p.day_of_week] : 'PLAN'}
+                </Text>
+                {isToday ? <Play size={12} color={theme.primary} strokeWidth={2.5} /> : <ChevronRight size={13} color={theme.mutedForeground} />}
+              </View>
+              <Text className="font-sans-bold text-strong text-[13px]" numberOfLines={2} style={styles.dayCardTitle}>{p.title}</Text>
+              <Text className="font-sans text-subtle text-[10.5px]" style={styles.dayCardMeta}>
+                {p.blockCount} {p.blockCount === 1 ? 'ejercicio' : 'ejercicios'}
+              </Text>
+            </TouchableOpacity>
+          )
+        })}
+      </ScrollView>
+    </Card>
+  )
+}
+
+/** Peso actual + delta pill + sparkline de área. */
+function WeightCard({ weights, currentWeight, delta }: { weights: number[]; currentWeight: number | null; delta: number | null }) {
+  const { theme } = useTheme()
+  const { width } = useWindowDimensions()
+  const sparkWidth = Math.max(0, width - 64)
+  const good = delta != null && delta <= 0
+  const TrendIcon = delta != null && delta < 0 ? TrendingDown : TrendingUp
+  const deltaText = delta != null ? `${Math.abs(delta).toFixed(1)} kg` : '—'
+
+  return (
+    <Card>
+      {weights.length < 2 ? (
+        <>
+          <Text className="font-sans-bold text-muted text-[11px] uppercase" style={styles.weightEyebrow}>Peso actual</Text>
+          <Text className="font-sans text-muted text-[13px]" style={styles.emptyText}>
+            Registrá más check-ins para ver tu tendencia.
+          </Text>
+        </>
+      ) : (
+        <>
+          <View style={styles.weightTopRow}>
+            <View>
+              <Text className="font-sans-bold text-muted text-[11px] uppercase" style={styles.weightEyebrow}>Peso actual</Text>
+              <View style={styles.weightValueRow}>
+                <Text className="font-display-black text-strong" style={styles.weightValue}>{currentWeight?.toFixed(1)}</Text>
+                <Text className="font-sans-semibold text-muted text-[13px]">kg</Text>
+              </View>
+            </View>
+            <Badge tone={good ? 'success' : 'warning'} variant="soft" size="md" icon={<TrendIcon size={12} color={good ? theme.success : WARNING_500} strokeWidth={2.5} />}>
+              {deltaText}
+            </Badge>
+          </View>
+          <View style={styles.sparkWrap}>
+            <Sparkline values={weights} width={sparkWidth} height={56} color={theme.primary} />
+          </View>
+        </>
+      )}
     </Card>
   )
 }
@@ -546,15 +748,9 @@ function RecentWorkouts({ workouts }: { workouts: RecentWorkout[] }) {
   const rows = workouts.slice(0, 4)
   return (
     <Card padding="none" style={styles.listCard}>
-      <View className="flex-row items-center" style={styles.listHeader}>
-        <Dumbbell size={16} color={theme.primary} strokeWidth={2.25} />
-        <Text className="font-sans-bold text-[12px] uppercase text-subtle" style={styles.sectionEyebrow}>
-          Ultimos workouts
-        </Text>
-      </View>
       {rows.length === 0 ? (
         <Text className="font-sans text-muted text-[13px]" style={styles.listEmpty}>
-          Aun no hay entrenamientos registrados.
+          Aún no hay entrenamientos registrados.
         </Text>
       ) : (
         rows.map((w, idx) => (
@@ -569,90 +765,11 @@ function RecentWorkouts({ workouts }: { workouts: RecentWorkout[] }) {
             <Text className="flex-1 font-sans-semibold text-strong text-[14px]" numberOfLines={1}>
               {w.exercise_name_at_log ?? 'Workout registrado'}
             </Text>
-            <Text className="font-sans text-muted text-[12px]">
-              {formatDateTime(w.logged_at)}
-            </Text>
+            <Text className="font-sans text-muted text-[12px]">{formatDateTime(w.logged_at)}</Text>
           </View>
         ))
       )}
     </Card>
-  )
-}
-
-function WeightSparkline({ weights, currentWeight, delta }: { weights: number[]; currentWeight: number | null; delta: number | null }) {
-  const { theme } = useTheme()
-  const { width } = useWindowDimensions()
-  const sparkWidth = Math.max(0, width - 64) // scroll px (16×2) + card md padding (16×2)
-  const good = delta != null && delta <= 0
-  const TrendIcon = delta != null && delta < 0 ? TrendingDown : TrendingUp
-  const deltaText = delta != null ? `${delta > 0 ? '+' : ''}${delta.toFixed(1)} kg` : '-'
-
-  return (
-    <Card>
-      <View className="flex-row items-center" style={styles.sectionTitleRow}>
-        <Scale size={16} color={theme.primary} strokeWidth={2.25} />
-        <Text className="font-sans-bold text-[12px] uppercase text-subtle" style={styles.sectionEyebrow}>
-          Peso 30 dias
-        </Text>
-      </View>
-      {weights.length < 2 ? (
-        <Text className="font-sans text-muted text-[13px]" style={styles.listEmpty}>
-          Registra mas check-ins para ver tendencia.
-        </Text>
-      ) : (
-        <>
-          <View className="flex-row items-end justify-between" style={styles.weightTop}>
-            <View className="flex-row items-baseline" style={styles.weightValueRow}>
-              <Text className="font-display-black text-strong" style={styles.weightValue}>
-                {currentWeight?.toFixed(1)}
-              </Text>
-              <Text className="font-sans-semibold text-muted text-[13px]">kg</Text>
-            </View>
-            <Badge
-              tone={good ? 'success' : 'warning'}
-              variant="soft"
-              size="md"
-              icon={<TrendIcon size={12} color={good ? theme.success : WARNING_500} strokeWidth={2.5} />}
-            >
-              {deltaText}
-            </Badge>
-          </View>
-          <View style={styles.sparkWrap}>
-            <Sparkline values={weights} width={sparkWidth} height={64} color={theme.primary} />
-          </View>
-        </>
-      )}
-    </Card>
-  )
-}
-
-function HabitsMiniRow({ habits }: { habits: HabitsData }) {
-  const { theme } = useTheme()
-  return (
-    <MotiView
-      from={{ opacity: 0, translateY: 10 }}
-      animate={{ opacity: 1, translateY: 0 }}
-      transition={{ type: 'timing', duration: 350 }}
-    >
-      <View style={styles.habitsRow}>
-        {habits.water_ml != null && (
-          <View className="flex-row items-center rounded-pill border border-subtle bg-surface-card" style={styles.habitChip}>
-            <Droplets size={14} color={theme.cyan} strokeWidth={2.25} />
-            <Text className="font-sans-semibold text-body text-[13px]">
-              {habits.water_ml >= 1000 ? `${(habits.water_ml / 1000).toFixed(1)}L` : `${habits.water_ml}ml`}
-            </Text>
-          </View>
-        )}
-        {habits.steps != null && (
-          <View className="flex-row items-center rounded-pill border border-subtle bg-surface-card" style={styles.habitChip}>
-            <Footprints size={14} color={theme.primary} strokeWidth={2.25} />
-            <Text className="font-sans-semibold text-body text-[13px]">
-              {habits.steps.toLocaleString('es-CL')} pasos
-            </Text>
-          </View>
-        )}
-      </View>
-    </MotiView>
   )
 }
 
@@ -676,71 +793,121 @@ function calculateStreak(dates: Set<string>): number {
   return streak
 }
 
-function hasCheckInThisMonth(checkIns: CheckInPoint[]): boolean {
-  const now = new Date()
-  return checkIns.some((c) => {
-    const d = new Date(c.date)
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
-  })
+/** Mejor racha (run consecutivo más largo) dentro de la ventana de fechas conocida. */
+function bestStreakInWindow(dates: Set<string>): number {
+  if (dates.size === 0) return 0
+  const sorted = Array.from(dates).sort()
+  let best = 1
+  let run = 1
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = new Date(`${sorted[i - 1]}T00:00:00Z`).getTime()
+    const cur = new Date(`${sorted[i]}T00:00:00Z`).getTime()
+    if (cur - prev === MS_DAY) {
+      run += 1
+      best = Math.max(best, run)
+    } else {
+      run = 1
+    }
+  }
+  return best
+}
+
+function daysSinceLastCheckIn(checkIns: CheckInPoint[]): number | null {
+  if (checkIns.length === 0) return null
+  const last = checkIns[checkIns.length - 1]
+  const lastMs = new Date(`${last.date}T00:00:00`).getTime()
+  return Math.max(0, Math.round((startOfToday().getTime() - lastMs) / MS_DAY))
+}
+
+/** Lunes (00:00) de la semana que contiene `d`. */
+function startOfWeekMonday(d: Date): Date {
+  const jsDay = d.getDay() // 0 Sun..6 Sat
+  const offset = jsDay === 0 ? -6 : 1 - jsDay
+  return new Date(d.getTime() + offset * MS_DAY)
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingBottom: 32, gap: 12 },
+  scroll: { paddingHorizontal: 16, paddingBottom: 120, gap: 12 },
+  flex1: { flex: 1, minWidth: 0 },
+  flexShrink: { flexShrink: 1, minWidth: 0 },
+
+  // Section titles
+  sectionTitle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, marginBottom: 2 },
+  sectionTitleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sectionAccent: { width: 3, height: 13, borderRadius: 2 },
+  sectionEyebrow: { letterSpacing: 0.8 },
+
+  // Streak ribbon
+  ribbon: { borderWidth: 1, borderRadius: 20, padding: 14 },
+  ribbonRow: { flexDirection: 'row', alignItems: 'center', gap: 13 },
+  ribbonFlame: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
+  ribbonValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  ribbonValue: { fontSize: 30, lineHeight: 32, letterSpacing: -1, fontVariant: ['tabular-nums'] },
+  ribbonUnit: { fontSize: 14, fontFamily: 'HankenGrotesk_700Bold' },
+  ribbonSub: { fontSize: 12, fontFamily: 'HankenGrotesk_600SemiBold', marginTop: 4 },
+  ribbonTrack: { height: 6, borderRadius: 999, overflow: 'hidden', marginTop: 12 },
+  ribbonFill: { height: 6, borderRadius: 999 },
+
+  // Check-in banner
+  checkInBanner: { flexDirection: 'row', alignItems: 'center', gap: 11, borderWidth: 1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 12 },
+  bannerIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  bannerText: { flex: 1, minWidth: 0, gap: 2 },
+
+  // Coach card
+  coachCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  coachBody: { flex: 1, minWidth: 0, gap: 2 },
+  coachNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  coachNote: { lineHeight: 17 },
+  coachIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+
+  // Hero
+  heroTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  heroEyebrow: { letterSpacing: 1 },
+  heroTitle: { letterSpacing: -0.4, marginTop: 7 },
+  heroMeta: { marginTop: 4 },
+  heroCta: { marginTop: 14 },
+  centerCard: { alignItems: 'center' },
+  heroBigIcon: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  centerTitle: { textAlign: 'center', letterSpacing: -0.4 },
+  centerText: { textAlign: 'center', lineHeight: 20, marginTop: 6, maxWidth: 300 },
+  centerBtn: { marginTop: 16 },
 
   // Week strip
   weekRow: { flexDirection: 'row', gap: 6 },
-  dayPill: { minHeight: 60, paddingVertical: 8, gap: 5 },
-  dayLabel: { letterSpacing: 0.6 },
+  dayPill: { height: 54, paddingVertical: 8, gap: 5 },
   dayGlyph: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
   dot: { width: 6, height: 6, borderRadius: 3 },
-
-  // Check-in banner
-  checkInBanner: { paddingHorizontal: 12, paddingVertical: 12, gap: 12 },
-  bannerIcon: { width: 34, height: 34 },
-  bannerText: { minWidth: 0, gap: 2 },
-
-  // Cards / section titles
-  cardEyebrow: { letterSpacing: 0.8, marginBottom: 14 },
-  sectionTitleRow: { gap: 7, marginBottom: 2 },
-  sectionEyebrow: { letterSpacing: 0.6 },
+  divider: { height: StyleSheet.hairlineWidth, marginVertical: 16 },
 
   // Compliance rings
   ringsRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  ringItem: { gap: 8 },
+  ringItem: { gap: 7 },
   tnum: { fontVariant: ['tabular-nums'] },
 
-  // Hero
-  heroTop: { gap: 12 },
-  heroIcon: { width: 54, height: 54 },
-  heroCopy: { minWidth: 0, gap: 3 },
-  heroTitle: { letterSpacing: -0.4, marginTop: 1 },
-  heroProgress: { gap: 6, marginTop: 16 },
-  heroCta: { marginTop: 16 },
-  progressTrack: { height: 6, borderRadius: 9999 },
-  progressFill: { height: 6, borderRadius: 9999 },
-  restTitle: { letterSpacing: -0.3, marginTop: 1 },
-  restText: { marginTop: 12, lineHeight: 19 },
+  // Program
+  programHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 },
+  programMeta: { marginTop: 1 },
+  dayCardsRow: { gap: 8, paddingRight: 2 },
+  dayCard: { width: 116, padding: 11, borderRadius: 14, borderWidth: 1 },
+  dayCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dayCardTitle: { marginTop: 6, lineHeight: 16 },
+  dayCardMeta: { marginTop: 2 },
 
-  // Active program
-  programName: { letterSpacing: -0.3, marginTop: 6 },
-  programMeta: { marginTop: 2 },
-  programBar: { marginTop: 12 },
+  // Weight
+  weightEyebrow: { letterSpacing: 0.6 },
+  weightTopRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 },
+  weightValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 5, marginTop: 3 },
+  weightValue: { fontSize: 28, lineHeight: 30, letterSpacing: -1, fontVariant: ['tabular-nums'] },
+  sparkWrap: { marginTop: 12 },
+  emptyText: { marginTop: 8, lineHeight: 19 },
 
-  // Recent workouts list
+  // Recent workouts
   listCard: { overflow: 'hidden' },
-  listHeader: { gap: 7, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
-  listEmpty: { paddingHorizontal: 16, paddingBottom: 16, lineHeight: 19 },
+  listEmpty: { padding: 16, lineHeight: 19 },
   listRow: { gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
   listIcon: { width: 38, height: 38 },
 
-  // Weight
-  weightTop: { marginTop: 4 },
-  weightValueRow: { gap: 5 },
-  weightValue: { fontSize: 28, lineHeight: 30, letterSpacing: -1, fontVariant: ['tabular-nums'] },
-  sparkWrap: { marginTop: 12 },
-
-  // Habits
-  habitsRow: { flexDirection: 'row', gap: 8 },
-  habitChip: { gap: 6, paddingHorizontal: 12, paddingVertical: 7 },
+  // Sticky CTA
+  stickyCta: { position: 'absolute', left: 16, right: 16 },
 })

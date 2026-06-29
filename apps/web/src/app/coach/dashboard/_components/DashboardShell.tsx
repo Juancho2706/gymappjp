@@ -1,53 +1,24 @@
 'use client'
 
-import dynamic from 'next/dynamic'
-import { Suspense, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
+import { Suspense, useState } from 'react'
+import Link from 'next/link'
+import { Sparkles } from 'lucide-react'
 import { BillingBanners } from './banners/BillingBanners'
 import { FreeWelcomeModal } from './FreeWelcomeModal'
-import { GreetingHeader } from './header/GreetingHeader'
-import { AppOnlyBadge } from '@/components/AppOnlyBadge'
-import { QuickActionsBar } from './header/QuickActionsBar'
-import { KpiStrip } from './kpi/KpiStrip'
-import { FocusList } from './focus/FocusList'
-import { NextBestAction } from './cs/NextBestAction'
-import { TodayAgenda } from './today/TodayAgenda'
-import { ExpiringPrograms } from './expiring/ExpiringPrograms'
-import { ActivityFeed } from './activity/ActivityFeed'
+import { PulseHero } from './PulseHero'
+import { PriorityCard } from './PriorityCard'
+import { AgendaCard } from './AgendaCard'
+import { NewsFeed } from './NewsFeed'
+import { DashboardFab } from './DashboardFab'
+import { DesktopBento } from './DesktopBento'
 import { ClientStatsSheet } from './sheets/ClientStatsSheet'
-import { RevenueSheet } from './sheets/RevenueSheet'
 import { CoachOnboardingChecklist } from '../CoachOnboardingChecklist'
-import { resolveNextBestAction } from '../_lib/nextBestAction.rules'
+import { todayLabel } from '../_lib/dashboard-design'
 import type { DashboardV2Data } from '../_data/types'
-
-const DashboardCharts = dynamic(
-    () =>
-        import('@/components/coach/dashboard/DashboardCharts').then((m) => ({
-            default: m.DashboardCharts,
-        })),
-    {
-        ssr: false,
-        loading: () => (
-            <div className="h-64 w-full animate-pulse rounded-2xl bg-muted/40" aria-hidden />
-        ),
-    }
-)
-
-const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
-}
-
-const itemVariants = {
-    hidden: { opacity: 0, y: 18 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.25, 0.4, 0.25, 1] as const } },
-}
-
 import type { Json } from '@/lib/database.types'
 import type { SubscriptionTier } from '@/lib/constants'
 import { TIER_CONFIG } from '@/lib/constants'
 import { cn } from '@/lib/utils'
-import Link from 'next/link'
 
 interface Props {
     data: DashboardV2Data
@@ -71,25 +42,18 @@ export function DashboardShell({
     hasCoachLogo,
 }: Props) {
     const [statsSheetOpen, setStatsSheetOpen] = useState(false)
-    const [revenueSheetOpen, setRevenueSheetOpen] = useState(false)
-
-    const nextAction = useMemo(() => resolveNextBestAction(data), [data])
-    const pendingCount = data.agenda.length + data.topRiskClients.length
+    const firstName = coachName?.split(' ')[0] || 'Coach'
+    const openInsights = () => setStatsSheetOpen(true)
 
     return (
         <>
-            <AmbientBackground />
             <Suspense>
                 <FreeWelcomeModal />
             </Suspense>
 
-            <motion.div
-                variants={containerVariants}
-                initial="hidden"
-                animate="visible"
-                className="relative z-10 flex flex-col gap-6 p-4 pb-24 sm:p-6 lg:p-8"
-            >
-                <motion.div variants={itemVariants}>
+            <div className="relative z-10 mx-auto w-full max-w-[1100px] px-5 pb-10 pt-2 sm:px-6 lg:px-8">
+                {/* Billing / tier banners (functional — not part of the design tree) */}
+                <div className="mb-4">
                     <BillingBanners
                         subscriptionStatus={data.subscriptionStatus}
                         currentPeriodEnd={data.currentPeriodEnd}
@@ -102,46 +66,54 @@ export function DashboardShell({
                     {subscriptionTier === 'elite' && data.kpi.totalClients >= 80 && (
                         <TeamsBridgeBanner totalClients={data.kpi.totalClients} />
                     )}
-                </motion.div>
+                </div>
 
-                <motion.header
-                    variants={itemVariants}
-                    className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between"
-                >
-                    <GreetingHeader coachName={coachName} pendingCount={pendingCount} />
-                    <div className="flex flex-col items-start gap-2">
-                        <QuickActionsBar clients={data.clientList} />
-                        <AppOnlyBadge>Notificaciones, offline y gestos: todo mejor en la app de EVA</AppOnlyBadge>
+                {/* ───────── Mobile (eva-app structure, <md) ───────── */}
+                <div className="md:hidden">
+                    <header className="flex items-center justify-between pb-3.5 pt-1.5">
+                        <div>
+                            <div className="text-[13px] font-semibold text-[var(--text-muted)]">
+                                {todayLabel()}
+                            </div>
+                            <h1 className="font-display text-[28px] font-black leading-[1.05] tracking-[-0.03em] text-[var(--text-strong)]">
+                                Hola, {firstName}
+                            </h1>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={openInsights}
+                            aria-label="Insights"
+                            className="flex size-10 shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-card text-[var(--text-strong)] transition-colors hover:bg-surface-sunken"
+                        >
+                            <Sparkles className="size-[19px]" />
+                        </button>
+                    </header>
+
+                    <PulseHero kpi={data.kpi} onAdherence={openInsights} />
+
+                    <div className="mb-5">
+                        <PriorityCard items={data.topRiskClients} />
                     </div>
-                </motion.header>
 
-                <motion.section variants={itemVariants}>
-                    <KpiStrip kpi={data.kpi} onAdherenceClick={() => setStatsSheetOpen(true)} onMrrClick={() => setRevenueSheetOpen(true)} />
-                </motion.section>
-
-                <motion.section variants={itemVariants} className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-                    <div className="lg:col-span-8">
-                        <FocusList items={data.topRiskClients} />
+                    <div className="mb-6">
+                        <AgendaCard items={data.agenda} />
                     </div>
-                    <div className="lg:col-span-4">
-                        <NextBestAction action={nextAction} />
-                    </div>
-                </motion.section>
 
-                <motion.section variants={itemVariants} className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-                    <div className="lg:col-span-8">
-                        <TodayAgenda items={data.agenda} />
+                    <div className="mb-4">
+                        <NewsFeed
+                            expiring={data.expiringPrograms}
+                            activities={data.recentActivities}
+                        />
                     </div>
-                    <div className="lg:col-span-4">
-                        <ExpiringPrograms items={data.expiringPrograms} />
-                    </div>
-                </motion.section>
+                </div>
 
-                <motion.section variants={itemVariants}>
-                    <ActivityFeed items={data.recentActivities} />
-                </motion.section>
+                {/* ───────── Desktop (eva-desktop bento, md+) ───────── */}
+                <div className="hidden md:block">
+                    <DesktopBento data={data} coachName={coachName} onAdherence={openInsights} />
+                </div>
 
-                <motion.section variants={itemVariants}>
+                {/* Guía de inicio — onboarding engine (real signals + server actions) */}
+                <div className="mt-5">
                     <CoachOnboardingChecklist
                         coachId={coachId}
                         coachSlug={coachSlug}
@@ -153,25 +125,16 @@ export function DashboardShell({
                         subscriptionTier={subscriptionTier}
                         hasCoachLogo={hasCoachLogo}
                     />
-                </motion.section>
+                </div>
+            </div>
 
-                <motion.section variants={itemVariants}>
-                    <DashboardCharts areaData={data.areaData} barData={data.barData} />
-                </motion.section>
-
-            </motion.div>
+            <DashboardFab />
 
             <ClientStatsSheet
                 open={statsSheetOpen}
                 onOpenChange={setStatsSheetOpen}
                 adherenceStats={data.adherenceStats}
                 nutritionStats={data.nutritionStats}
-            />
-            <RevenueSheet
-                open={revenueSheetOpen}
-                onOpenChange={setRevenueSheetOpen}
-                kpi={data.kpi}
-                clientPaymentSummary={data.clientPaymentSummary}
             />
         </>
     )
@@ -236,26 +199,6 @@ function TeamsBridgeBanner({ totalClients }: { totalClients: number }) {
             >
                 Conversemos →
             </a>
-        </div>
-    )
-}
-
-function AmbientBackground() {
-    return (
-        <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
-            <div
-                className="absolute -top-32 left-1/4 h-[500px] w-[500px] rounded-full blur-3xl opacity-[0.08]"
-                style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
-            />
-            <div className="absolute bottom-0 right-0 h-[400px] w-[400px] rounded-full bg-sky-400/10 blur-3xl" />
-            <div
-                className="absolute inset-0 opacity-[0.03]"
-                style={{
-                    backgroundImage:
-                        'linear-gradient(currentColor 1px, transparent 1px), linear-gradient(90deg, currentColor 1px, transparent 1px)',
-                    backgroundSize: '40px 40px',
-                }}
-            />
         </div>
     )
 }

@@ -1,8 +1,7 @@
 import { ClientSettingsModal } from '@/components/client/ClientSettingsModal'
-import { getClientProfile, getDashboardStreak } from '../_data/dashboard.queries'
+import { getClientProfile } from '../_data/dashboard.queries'
 import { formatLongDateSantiago, getTodayInSantiago, timeGreetingSantiago } from '@/lib/date-utils'
 import { ClientGreeting } from './header/ClientGreeting'
-import { StreakWidget } from './streak/StreakWidget'
 
 interface DashboardHeaderProps {
     userId: string
@@ -15,7 +14,6 @@ interface DashboardHeaderProps {
 export async function DashboardHeader({ userId, coachSlug, initialUseBrandColors, brandName, welcomeMessage }: DashboardHeaderProps) {
     const { client } = await getClientProfile(userId)
     const firstName = client?.full_name?.split(' ')[0] ?? 'Atleta'
-    const streak = await getDashboardStreak(userId)
     const greet = timeGreetingSantiago()
     const dateLabel = formatLongDateSantiago()
     const { iso } = getTodayInSantiago()
@@ -35,7 +33,6 @@ export async function DashboardHeader({ userId, coachSlug, initialUseBrandColors
                     ) : null}
                 </div>
                 <div className="flex flex-shrink-0 items-center gap-2">
-                    <StreakWidget streak={streak} />
                     <ClientSettingsModal coachSlug={coachSlug} initialUseBrandColors={initialUseBrandColors} />
                 </div>
             </div>

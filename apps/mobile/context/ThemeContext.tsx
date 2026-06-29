@@ -21,7 +21,7 @@ const THEME_MODE_KEY = 'eva_theme_mode'
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const colorScheme = useColorScheme()
   const [branding, setBranding] = useState<CoachBranding | null>(null)
-  const [mode, setMode] = useState<ThemeMode>('system')
+  const [mode, setMode] = useState<ThemeMode>('light')
 
   useEffect(() => {
     loadStoredBranding().then(setBranding)

@@ -1,22 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { useRouter } from 'expo-router'
 import { CoachMainWrapper } from '../../../components/coach/CoachMainWrapper'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import {
-  MobileActivityFeed,
   MobileBillingBanners,
   MobileClientStatsSheet,
-  MobileDashboardCharts,
-  MobileExpiringPrograms,
   MobileFreeWelcomeModal,
   MobileFocusList,
   MobileGreetingHeader,
-  MobileKpiStrip,
-  MobileNextBestAction,
-  MobileOnboardingChecklist,
+  MobileNovedades,
+  MobileOnboardingGuideChip,
   MobilePublicCodeRequiredModal,
-  MobileQuickActionsBar,
-  MobileRevenueSheet,
+  MobilePulseHero,
+  MobileQuickActionsFab,
   MobileTierUsageBanners,
   MobileTodayAgenda,
 } from '../../../components/coach/CoachDashboardSections'
@@ -25,11 +22,11 @@ import { getCoachDashboardDataMobile, type MobileDashboardData } from '../../../
 
 export default function CoachHomeScreen() {
   const { theme } = useTheme()
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [data, setData] = useState<MobileDashboardData | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [revenueOpen, setRevenueOpen] = useState(false)
   const [statsOpen, setStatsOpen] = useState(false)
 
   const load = useCallback(async (mode: 'initial' | 'refresh' = 'initial') => {
@@ -78,70 +75,77 @@ export default function CoachHomeScreen() {
     (data.coach.subscriptionTier === 'elite' && data.kpi.totalClients >= 48)
 
   return (
-    <CoachMainWrapper
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => load('refresh')}
-          tintColor={theme.primary}
-          colors={[theme.primary]}
+    <View style={{ flex: 1 }}>
+      <CoachMainWrapper
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => load('refresh')}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
+          />
+        }
+      >
+        <MobileBillingBanners coach={data.coach} activeClientCount={data.kpi.totalClients} />
+        {showTierBanners ? (
+          <MobileTierUsageBanners coach={data.coach} totalClients={data.kpi.totalClients} />
+        ) : null}
+
+        {/* Header — fecha + saludo */}
+        <MobileGreetingHeader coachName={data.coach.fullName || data.coach.brandName || 'Coach'} pendingCount={pendingCount} />
+
+        {/* P1 — Pulse hero (Activos · En riesgo · Adherencia) */}
+        <MobilePulseHero
+          kpi={data.kpi}
+          onActivosPress={() => router.push('/coach/(tabs)/clientes')}
+          onRiesgoPress={() => router.push('/coach/(tabs)/clientes')}
+          onAdherencePress={() => setStatsOpen(true)}
         />
-      }
-    >
-      <MobileBillingBanners coach={data.coach} activeClientCount={data.kpi.totalClients} />
-      {showTierBanners ? (
-        <MobileTierUsageBanners coach={data.coach} totalClients={data.kpi.totalClients} />
-      ) : null}
-      <MobileGreetingHeader coachName={data.coach.fullName || data.coach.brandName || 'Coach'} pendingCount={pendingCount} />
-      <MobileQuickActionsBar
+
+        {/* P2 — Prioridad de hoy (card oscura + NextBestAction embebido) */}
+        <MobileFocusList
+          items={data.topRiskClients}
+          kpi={data.kpi}
+          agenda={data.agenda}
+          expiringPrograms={data.expiringPrograms}
+          onAdherencePress={() => setStatsOpen(true)}
+        />
+
+        {/* Agenda de hoy */}
+        <MobileTodayAgenda items={data.agenda} />
+
+        {/* Novedades — programas por vencer + actividad reciente */}
+        <MobileNovedades expiringPrograms={data.expiringPrograms} activities={data.recentActivities} />
+
+        {/* P3 — Guia de inicio como chip expandible */}
+        <MobileOnboardingGuideChip
+          coach={data.coach}
+          totalClients={data.kpi.totalClients}
+          activePlans={data.activePlans}
+          hasStudentSignal30d={data.hasStudentSignal30d}
+        />
+
+        {/* Sheets / modales */}
+        <MobileClientStatsSheet
+          open={statsOpen}
+          onClose={() => setStatsOpen(false)}
+          clientStats={data.clientStats}
+        />
+        <MobileFreeWelcomeModal enabled={data.coach.subscriptionTier === 'free'} />
+        <MobilePublicCodeRequiredModal
+          visible={Boolean(data.publicCode?.shouldConfirm && data.publicCode.inviteCode)}
+          inviteCode={data.publicCode?.inviteCode ?? ''}
+          onConfirmed={() => load('refresh')}
+        />
+      </CoachMainWrapper>
+
+      {/* FAB — acciones rapidas (fijo sobre el scroll) */}
+      <MobileQuickActionsFab
         clients={data.clientList}
-        onPaymentCreated={() => load('refresh')}
         onClientCreated={() => load('refresh')}
+        onPaymentCreated={() => load('refresh')}
       />
-      <MobileOnboardingChecklist
-        coach={data.coach}
-        publicInviteCode={data.publicCode?.inviteCode}
-        initialOnboardingGuide={data.onboardingGuide}
-        totalClients={data.kpi.totalClients}
-        activePlans={data.activePlans}
-        hasStudentSignal30d={data.hasStudentSignal30d}
-      />
-      <MobileKpiStrip
-        kpi={data.kpi}
-        onMrrPress={() => setRevenueOpen(true)}
-        onAdherencePress={() => setStatsOpen(true)}
-      />
-      <MobileFocusList items={data.topRiskClients} />
-      <MobileNextBestAction
-        kpi={data.kpi}
-        topRiskClients={data.topRiskClients}
-        agenda={data.agenda}
-        expiringPrograms={data.expiringPrograms}
-        onAdherencePress={() => setStatsOpen(true)}
-        onRevenuePress={() => setRevenueOpen(true)}
-      />
-      <MobileTodayAgenda items={data.agenda} />
-      <MobileExpiringPrograms items={data.expiringPrograms} />
-      <MobileActivityFeed items={data.recentActivities} />
-      <MobileDashboardCharts areaData={data.areaData} barData={data.barData} />
-      <MobileRevenueSheet
-        open={revenueOpen}
-        onClose={() => setRevenueOpen(false)}
-        kpi={data.kpi}
-        clientPaymentSummary={data.clientPaymentSummary}
-      />
-      <MobileClientStatsSheet
-        open={statsOpen}
-        onClose={() => setStatsOpen(false)}
-        clientStats={data.clientStats}
-      />
-      <MobileFreeWelcomeModal enabled={data.coach.subscriptionTier === 'free'} />
-      <MobilePublicCodeRequiredModal
-        visible={Boolean(data.publicCode?.shouldConfirm && data.publicCode.inviteCode)}
-        inviteCode={data.publicCode?.inviteCode ?? ''}
-        onConfirmed={() => load('refresh')}
-      />
-    </CoachMainWrapper>
+    </View>
   )
 }
 

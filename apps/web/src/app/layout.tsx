@@ -140,8 +140,8 @@ export default function RootLayout({
           <ThemeScriptSuppressor />
           <ThemeProvider
             attribute="class"
-            defaultTheme="dark"
-            enableSystem
+            defaultTheme="light"
+            enableSystem={false}
             disableTransitionOnChange={false}
           >
             <LanguageProvider>
