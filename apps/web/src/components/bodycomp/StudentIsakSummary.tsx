@@ -1,6 +1,6 @@
 'use client'
 
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
@@ -34,51 +34,51 @@ export function StudentIsakSummary({ rows }: { rows: BodyCompositionRow[] }) {
     const isValidated = latest.is_validated
 
     return (
-        <GlassCard className="p-4 md:p-5">
+        <Card padding="md" className="gap-0 md:p-5">
             <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-black uppercase tracking-widest text-muted-foreground">
+                <h2 className="text-sm font-black uppercase tracking-widest text-muted">
                     {t('bodycomp.student.latest')}
                 </h2>
                 <div className="flex items-center gap-2">
                     {!isValidated && (
-                        <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                        <span className="rounded-full bg-[var(--warning-100)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[var(--warning-700)]">
                             {t('bodycomp.student.preliminary')}
                         </span>
                     )}
-                    <span className="text-[11px] font-semibold text-muted-foreground">{deviceLabel(latest)}</span>
+                    <span className="text-[11px] font-semibold text-muted">{deviceLabel(latest)}</span>
                 </div>
             </div>
 
             {/* Headlines: % grasa + somatotipo con count-up */}
             <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-border/40 bg-secondary/20 px-3 py-2.5 dark:border-white/10">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                <div className="rounded-control border border-subtle bg-surface-sunken px-3 py-2.5">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted">
                         {t('bodycomp.metric.bodyFat')}
                     </p>
                     <CountUpValue
                         value={bodyFat.percent}
                         format={fmtPct}
-                        className="mt-0.5 block text-lg font-black tabular-nums text-foreground"
+                        className="mt-0.5 block text-lg font-black tabular-nums text-strong"
                     />
-                    <p className="text-[9px] font-semibold text-muted-foreground">{bodyFat.equation}</p>
+                    <p className="text-[9px] font-semibold text-muted">{bodyFat.equation}</p>
                 </div>
-                <div className="rounded-xl border border-border/40 bg-secondary/20 px-3 py-2.5 dark:border-white/10">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                <div className="rounded-control border border-subtle bg-surface-sunken px-3 py-2.5">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-muted">
                         {t('bodycomp.metric.somatotype')}
                     </p>
-                    <p className="mt-0.5 text-sm font-black tabular-nums text-foreground">
+                    <p className="mt-0.5 text-sm font-black tabular-nums text-strong">
                         {s.endomorphy.toFixed(1)} – {s.mesomorphy.toFixed(1)} – {s.ectomorphy.toFixed(1)}
                     </p>
-                    <p className="text-[9px] font-semibold text-muted-foreground">{t('bodycomp.metric.somatotypeAxes')}</p>
+                    <p className="text-[9px] font-semibold text-muted">{t('bodycomp.metric.somatotypeAxes')}</p>
                 </div>
             </div>
 
             {/* Composicion: barra apilada Kerr 5C (--chart-1..5) */}
             <div className="mt-4">
-                <p className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                <p className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-muted">
                     {t('bodycomp.student.composition')}
                 </p>
-                <div className="flex h-4 w-full overflow-hidden rounded-full bg-secondary/40">
+                <div className="flex h-4 w-full overflow-hidden rounded-full bg-surface-sunken">
                     {COMPONENTS.map(({ key, chart }) => {
                         // M4: null-guard del pct (default 0) y clamp a [0,100] — la suma de los 5
                         // componentes Kerr puede pasar de 100% y desbordaria la barra.
@@ -104,8 +104,8 @@ export function StudentIsakSummary({ rows }: { rows: BodyCompositionRow[] }) {
                                     style={{ backgroundColor: chart }}
                                     aria-hidden
                                 />
-                                <span className="font-semibold text-muted-foreground">{t(labelKey)}</span>
-                                <span className="ml-auto font-bold tabular-nums text-foreground">
+                                <span className="font-semibold text-muted">{t(labelKey)}</span>
+                                <span className="ml-auto font-bold tabular-nums text-strong">
                                     {comp.pct.toFixed(1)}%
                                 </span>
                             </li>
@@ -115,19 +115,19 @@ export function StudentIsakSummary({ rows }: { rows: BodyCompositionRow[] }) {
             </div>
 
             {/* Validez interna del fraccionamiento (Σ masas vs peso medido) */}
-            <p className="mt-3 text-[10px] text-muted-foreground">
+            <p className="mt-3 text-[10px] text-muted">
                 Σ {formatKg(f.predictedMassKg)} · {formatKg(f.measuredWeightKg)} ·{' '}
                 <span
                     className={cn(
                         Math.abs(f.massDifferenceKg) <= 3
-                            ? 'text-emerald-600 dark:text-emerald-400'
-                            : 'text-amber-600 dark:text-amber-400'
+                            ? 'text-[var(--success-600)]'
+                            : 'text-[var(--warning-600)]'
                     )}
                 >
                     {f.massDifferenceKg > 0 ? '+' : ''}
                     {formatKg(f.massDifferenceKg)}
                 </span>
             </p>
-        </GlassCard>
+        </Card>
     )
 }

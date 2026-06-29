@@ -22,14 +22,21 @@ export default async function CardioPage() {
 
     return (
         <div className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 md:px-6">
-            <header className="space-y-1">
-                <h1 className="flex items-center gap-2 text-xl font-bold text-foreground">
-                    <HeartPulse className="h-5 w-5 text-primary" />
-                    Cardio
-                </h1>
-                <p className="text-sm text-muted-foreground">
+            <header className="space-y-1.5">
+                <div className="flex items-center justify-between gap-3">
+                    <h1 className="flex items-center gap-2 font-display text-xl font-extrabold tracking-[-0.02em] text-strong">
+                        <span className="inline-flex size-9 items-center justify-center rounded-control bg-aqua-100 text-aqua-700">
+                            <HeartPulse className="size-5" />
+                        </span>
+                        Cardio
+                    </h1>
+                    <span className="inline-flex h-6 shrink-0 items-center rounded-pill bg-sport-100 px-2.5 text-[12px] font-bold text-sport-700">
+                        Módulo
+                    </span>
+                </div>
+                <p className="text-sm text-muted">
                     Zonas de frecuencia cardiaca personalizadas, calculadora de pace y plantillas de
-                    intervalos. La prescripción guarda la <strong>zona</strong>; los bpm se calculan
+                    intervalos. La prescripción guarda la <strong className="text-body">zona</strong>; los bpm se calculan
                     por alumno al renderizar.
                 </p>
             </header>

@@ -44,8 +44,8 @@ export function EvolutionCharts({ finals }: { finals: MovementAssessmentWithItem
     }))
 
     return (
-        <Reveal as="section" className="rounded-2xl border border-border bg-card p-4 sm:p-6">
-            <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
+        <Reveal as="section" className="rounded-card border border-subtle bg-surface-card p-4 shadow-sm sm:p-6">
+            <h2 className="text-sm font-bold uppercase tracking-[0.06em] text-muted">
                 {t('assessment.evolution.title')}
             </h2>
 
@@ -62,7 +62,7 @@ export function EvolutionCharts({ finals }: { finals: MovementAssessmentWithItem
                             type="monotone"
                             dataKey="composite"
                             name={t('assessment.evolution.composite')}
-                            stroke="#10B981"
+                            stroke="#1FB877"
                             strokeWidth={2.5}
                             dot={{ r: 4 }}
                             isAnimationActive={!reduce}
@@ -80,16 +80,16 @@ export function EvolutionCharts({ finals }: { finals: MovementAssessmentWithItem
                         <Radar
                             name={t('assessment.evolution.first')}
                             dataKey="first"
-                            stroke="#94a3b8"
-                            fill="#94a3b8"
+                            stroke="#818C9A"
+                            fill="#818C9A"
                             fillOpacity={0.25}
                             isAnimationActive={!reduce}
                         />
                         <Radar
                             name={t('assessment.evolution.last')}
                             dataKey="last"
-                            stroke="#10B981"
-                            fill="#10B981"
+                            stroke="#1FB877"
+                            fill="#1FB877"
                             fillOpacity={0.35}
                             isAnimationActive={!reduce}
                         />

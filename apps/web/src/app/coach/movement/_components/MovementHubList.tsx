@@ -1,9 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { ClipboardList, FilePen } from 'lucide-react'
+import { ChevronRight, ClipboardList } from 'lucide-react'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import type { MovementHubData } from '@/services/assessment/movement-assessment.service'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { PriorityBadge } from '@/components/movement/PriorityBadge'
 import { MovementDisclaimer } from '@/components/movement/MovementDisclaimer'
 
@@ -14,62 +16,77 @@ export function MovementHubList({ data }: { data: MovementHubData }) {
 
     return (
         <div className="mx-auto w-full max-w-3xl px-4 py-6">
-            <header className="mb-5">
-                <h1 className="text-2xl font-bold text-foreground">{t('assessment.title')}</h1>
-                <p className="mt-1 text-sm text-muted-foreground">{t('assessment.hub.subtitle')}</p>
+            <header className="mb-5 flex items-start justify-between gap-3">
+                <div>
+                    <h1 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-strong">
+                        {t('assessment.title')}
+                    </h1>
+                    <p className="mt-1 text-sm text-muted">{t('assessment.hub.subtitle')}</p>
+                </div>
+                <span className="inline-flex h-6 shrink-0 items-center rounded-pill bg-sport-100 px-2.5 text-[12px] font-bold text-sport-700">
+                    Módulo
+                </span>
             </header>
 
             {data.clients.length === 0 ? (
-                <p className="rounded-2xl border border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
+                <Card padding="lg" className="text-center text-sm text-muted">
                     {t('assessment.hub.empty')}
-                </p>
+                </Card>
             ) : (
-                <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border bg-card">
-                    {data.clients.map((c) => (
-                        <li key={c.client_id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <Card padding="none">
+                    {data.clients.map((c, i) => (
+                        <div
+                            key={c.client_id}
+                            className={`flex items-center gap-3 px-3.5 py-3 ${i > 0 ? 'border-t border-subtle' : ''}`}
+                        >
                             <Link
                                 href={`/coach/movement/${c.client_id}`}
-                                className="min-h-11 min-w-0 flex-1 py-1"
+                                className="flex min-h-11 min-w-0 flex-1 items-center gap-3 rounded-control py-1 outline-none transition-colors hover:bg-surface-sunken focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]"
                             >
-                                <p className="truncate text-sm font-semibold text-foreground">
-                                    {c.full_name ?? '—'}
-                                </p>
-                                <span className="mt-1 flex flex-wrap items-center gap-2">
-                                    {c.latest_final?.risk_band ? (
-                                        <>
-                                            <PriorityBadge band={c.latest_final.risk_band} />
-                                            <span className="text-xs tabular-nums text-muted-foreground">
-                                                {c.latest_final.composite_score}/21 ·{' '}
-                                                {new Date(c.latest_final.assessed_at).toLocaleDateString(locale, {
-                                                    day: '2-digit',
-                                                    month: 'short',
-                                                    year: 'numeric',
-                                                })}
-                                            </span>
-                                        </>
-                                    ) : (
-                                        <span className="text-xs text-muted-foreground">
-                                            {t('assessment.hub.noAssessment')}
-                                        </span>
-                                    )}
-                                    {c.draft_id && (
-                                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
-                                            <FilePen className="h-3 w-3" aria-hidden />
-                                            {t('assessment.report.draftPending')}
-                                        </span>
-                                    )}
+                                <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--ink-900)] font-display text-[15px] font-extrabold text-sport-400">
+                                    {(c.full_name ?? '—').charAt(0).toUpperCase()}
                                 </span>
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-[15px] font-bold text-strong">
+                                        {c.full_name ?? '—'}
+                                    </p>
+                                    <span className="mt-0.5 flex flex-wrap items-center gap-2">
+                                        {c.latest_final?.risk_band ? (
+                                            <>
+                                                <PriorityBadge band={c.latest_final.risk_band} />
+                                                <span className="text-xs tabular-nums text-muted">
+                                                    {c.latest_final.composite_score}/21 ·{' '}
+                                                    {new Date(c.latest_final.assessed_at).toLocaleDateString(locale, {
+                                                        day: '2-digit',
+                                                        month: 'short',
+                                                        year: 'numeric',
+                                                    })}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <span className="text-xs text-subtle">
+                                                {t('assessment.hub.noAssessment')}
+                                            </span>
+                                        )}
+                                        {c.draft_id && (
+                                            <Badge tone="warning" variant="soft" size="sm">
+                                                {t('assessment.report.draftPending')}
+                                            </Badge>
+                                        )}
+                                    </span>
+                                </div>
+                                <ChevronRight className="size-[18px] shrink-0 text-[var(--ink-300)]" aria-hidden />
                             </Link>
                             <Link
                                 href={`/coach/movement/${c.client_id}/new`}
-                                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground shadow transition-opacity hover:opacity-90"
+                                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-control bg-[var(--cta-fill)] px-4 text-xs font-bold text-[var(--text-on-sport)] shadow-[var(--shadow-sm)] transition-opacity hover:opacity-90 active:scale-[0.97]"
                             >
-                                <ClipboardList className="h-4 w-4" aria-hidden />
+                                <ClipboardList className="size-4" aria-hidden />
                                 {c.draft_id ? t('assessment.hub.resume') : t('assessment.hub.evaluate')}
                             </Link>
-                        </li>
+                        </div>
                     ))}
-                </ul>
+                </Card>
             )}
 
             <MovementDisclaimer className="mt-5" />

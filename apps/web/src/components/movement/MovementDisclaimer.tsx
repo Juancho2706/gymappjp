@@ -10,11 +10,11 @@ export function MovementDisclaimer({ className }: { className?: string }) {
     return (
         <p
             className={cn(
-                'flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground',
+                'flex items-start gap-2 rounded-control bg-surface-sunken px-3.5 py-3 text-[11px] leading-relaxed text-muted',
                 className
             )}
         >
-            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+            <Info className="mt-0.5 size-3.5 shrink-0 text-subtle" aria-hidden />
             {t('assessment.disclaimer')}
         </p>
     )

@@ -11,7 +11,7 @@ import {
     XAxis,
     YAxis,
 } from 'recharts'
-import { GlassCard } from '@/components/ui/glass-card'
+import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
@@ -66,9 +66,9 @@ export function StudentIsakTrend({ rows }: { rows: BodyCompositionRow[] }) {
     if (chartData.length < 2) return null
 
     return (
-        <GlassCard className="p-4 md:p-5">
+        <Card padding="md" className="gap-0 md:p-5">
             <div className="mb-3 flex flex-wrap items-center gap-2">
-                <h3 className="mr-auto text-sm font-black uppercase tracking-widest text-muted-foreground">
+                <h3 className="mr-auto text-sm font-black uppercase tracking-widest text-muted">
                     {t('bodycomp.student.trend')}
                 </h3>
                 {SERIES.map((s) => (
@@ -77,10 +77,10 @@ export function StudentIsakTrend({ rows }: { rows: BodyCompositionRow[] }) {
                         type="button"
                         onClick={() => setActive(s.key)}
                         className={cn(
-                            'min-h-11 rounded-xl px-3 py-2 text-xs font-bold transition-colors',
+                            'min-h-11 rounded-control px-3 py-2 text-xs font-bold transition-colors',
                             active === s.key
-                                ? 'text-primary-foreground'
-                                : 'bg-secondary/40 text-muted-foreground hover:bg-secondary/60'
+                                ? 'text-primary-foreground shadow-sm'
+                                : 'bg-surface-sunken text-muted hover:text-strong'
                         )}
                         style={active === s.key ? { backgroundColor: 'var(--theme-primary)' } : undefined}
                     >
@@ -103,9 +103,10 @@ export function StudentIsakTrend({ rows }: { rows: BodyCompositionRow[] }) {
                         <YAxis tick={{ fontSize: 11 }} stroke="currentColor" opacity={0.5} width={42} />
                         <Tooltip
                             contentStyle={{
-                                borderRadius: 12,
-                                border: '1px solid var(--border)',
-                                background: 'var(--background)',
+                                borderRadius: 14,
+                                border: '1px solid var(--border-subtle)',
+                                background: 'var(--surface-card)',
+                                color: 'var(--text-body)',
                                 fontSize: 12,
                             }}
                             formatter={(value) => [series.fmt(Number(value)), t(series.labelKey)]}
@@ -123,6 +124,6 @@ export function StudentIsakTrend({ rows }: { rows: BodyCompositionRow[] }) {
                     </AreaChart>
                 </ResponsiveContainer>
             </div>
-        </GlassCard>
+        </Card>
     )
 }

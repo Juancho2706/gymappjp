@@ -19,7 +19,11 @@ export interface CardioProfileFormValues {
 }
 
 const INPUT_CLASS =
-    'h-12 w-full rounded-lg border border-border bg-background px-3 text-sm font-semibold text-foreground focus:border-primary focus:outline-none placeholder:text-muted-foreground/50'
+    'h-12 w-full rounded-control border-[1.5px] border-default bg-surface-card px-3.5 text-sm font-semibold text-strong outline-none transition-colors focus:border-[var(--brand)] focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)] placeholder:text-subtle'
+
+const LABEL_CLASS = 'block text-[11px] font-bold uppercase tracking-[0.08em] text-muted'
+
+const HINT_CLASS = 'text-[11px] text-subtle'
 
 function SubmitButton() {
     const { pending } = useFormStatus()
@@ -27,9 +31,9 @@ function SubmitButton() {
         <button
             type="submit"
             disabled={pending}
-            className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold uppercase tracking-[0.2em] text-primary-foreground transition-all hover:opacity-90 disabled:opacity-50"
+            className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-control bg-[var(--cta-fill)] px-4 text-[15px] font-bold text-[var(--text-on-sport)] shadow-[var(--glow-sport)] transition-all hover:opacity-90 active:scale-[0.97] disabled:opacity-50 disabled:shadow-none"
         >
-            {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {pending ? <Loader2 className="size-[18px] animate-spin" /> : <Save className="size-[18px]" />}
             {pending ? 'Guardando…' : 'Guardar perfil cardio'}
         </button>
     )
@@ -52,7 +56,7 @@ export function CardioProfileForm({ client }: { client: CardioProfileFormValues 
 
             <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
-                    <label htmlFor="birth_date" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    <label htmlFor="birth_date" className={LABEL_CLASS}>
                         Fecha de nacimiento
                     </label>
                     <input
@@ -64,10 +68,10 @@ export function CardioProfileForm({ client }: { client: CardioProfileFormValues 
                         max={new Date().toISOString().slice(0, 10)}
                         className={INPUT_CLASS}
                     />
-                    <p className="text-[10px] text-muted-foreground/60">Habilita FCmax por Tanaka y las zonas Z1–Z5.</p>
+                    <p className={HINT_CLASS}>Habilita FCmax por Tanaka y las zonas Z1–Z5.</p>
                 </div>
                 <div className="space-y-1.5">
-                    <label htmlFor="resting_hr" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    <label htmlFor="resting_hr" className={LABEL_CLASS}>
                         FC en reposo (bpm)
                     </label>
                     <input
@@ -81,10 +85,10 @@ export function CardioProfileForm({ client }: { client: CardioProfileFormValues 
                         placeholder="Ej. 60"
                         className={INPUT_CLASS}
                     />
-                    <p className="text-[10px] text-muted-foreground/60">Medida al despertar — habilita Karvonen.</p>
+                    <p className={HINT_CLASS}>Medida al despertar — habilita Karvonen.</p>
                 </div>
                 <div className="space-y-1.5">
-                    <label htmlFor="max_hr_override" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    <label htmlFor="max_hr_override" className={LABEL_CLASS}>
                         FCmax medida (bpm, opcional)
                     </label>
                     <input
@@ -98,10 +102,10 @@ export function CardioProfileForm({ client }: { client: CardioProfileFormValues 
                         placeholder="Ej. 192"
                         className={INPUT_CLASS}
                     />
-                    <p className="text-[10px] text-muted-foreground/60">Solo si la mediste en test real — manda sobre las fórmulas.</p>
+                    <p className={HINT_CLASS}>Solo si la mediste en test real — manda sobre las fórmulas.</p>
                 </div>
                 <div className="space-y-1.5">
-                    <label htmlFor="ref_5k_time_sec" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                    <label htmlFor="ref_5k_time_sec" className={LABEL_CLASS}>
                         Referencia 5K (segundos, opcional)
                     </label>
                     <input
@@ -115,12 +119,12 @@ export function CardioProfileForm({ client }: { client: CardioProfileFormValues 
                         placeholder="Ej. 1500 (= 25:00)"
                         className={INPUT_CLASS}
                     />
-                    <p className="text-[10px] text-muted-foreground/60">Tiempo de 5K para prescribir por pace.</p>
+                    <p className={HINT_CLASS}>Tiempo de 5K para prescribir por pace.</p>
                 </div>
             </div>
 
             {state.error && (
-                <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-500">
+                <p className="rounded-control border border-[color:var(--danger-500)]/30 bg-[var(--danger-100)] px-3 py-2 text-xs font-semibold text-[color:var(--danger-600)]">
                     {state.error}
                 </p>
             )}

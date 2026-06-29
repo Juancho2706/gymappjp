@@ -6,16 +6,16 @@ import type { PriorityBand } from '@/domain/assessment/types'
 
 const BAND_STYLES: Record<PriorityBand, { chip: string; dot: string }> = {
     high: {
-        chip: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300',
-        dot: 'bg-red-500',
+        chip: 'border-transparent bg-[var(--danger-100)] text-[color:var(--danger-600)]',
+        dot: 'bg-[var(--danger-500)]',
     },
     moderate: {
-        chip: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-        dot: 'bg-amber-500',
+        chip: 'border-transparent bg-[var(--warning-100)] text-[color:var(--warning-700)]',
+        dot: 'bg-[var(--warning-500)]',
     },
     low: {
-        chip: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-        dot: 'bg-emerald-500',
+        chip: 'border-transparent bg-[var(--success-100)] text-[color:var(--success-600)]',
+        dot: 'bg-[var(--success-500)]',
     },
 }
 
@@ -37,7 +37,7 @@ export function PriorityBadge({
     return (
         <span
             className={cn(
-                'inline-flex items-center gap-2 rounded-full border font-semibold',
+                'inline-flex items-center gap-2 rounded-pill border font-bold',
                 size === 'lg' ? 'px-4 py-2 text-base' : 'px-3 py-1 text-xs',
                 styles.chip,
                 className

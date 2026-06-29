@@ -38,16 +38,16 @@ export function DeleteAssessmentButton({
                 type="button"
                 onClick={handleDelete}
                 disabled={isPending}
-                className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-red-500/30 px-3 py-2 text-xs font-semibold text-red-600 transition-colors hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-control border-[1.5px] border-[color:var(--danger-500)]/30 px-3 py-2 text-xs font-bold text-[color:var(--danger-600)] transition-colors hover:bg-[var(--danger-100)] disabled:opacity-50"
             >
                 {isPending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                    <Loader2 className="size-3.5 animate-spin" aria-hidden />
                 ) : (
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                    <Trash2 className="size-3.5" aria-hidden />
                 )}
                 {t('assessment.report.delete')}
             </button>
-            {error && <span className="text-[10px] text-red-600 dark:text-red-400">{error}</span>}
+            {error && <span className="text-[10px] text-[color:var(--danger-600)]">{error}</span>}
         </span>
     )
 }

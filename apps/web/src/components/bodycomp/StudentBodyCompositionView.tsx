@@ -2,10 +2,11 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Info } from 'lucide-react'
+import { ArrowLeft, Gauge, Info } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { cn } from '@/lib/utils'
+import { Card } from '@/components/ui/card'
 import { fadeSlideLeft } from '@/lib/animation-presets'
 import { RevealStagger, RevealItem } from '@/components/motion/Reveal'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
@@ -42,17 +43,26 @@ export function StudentBodyCompositionView({
     const active: Method = hasBoth ? method : hasBia ? 'bia' : 'isak'
 
     return (
-        <div className="min-h-dvh bg-background pb-20">
-            <header className="sticky top-0 z-40 border-b border-border/10 bg-background/95 px-4 py-4 pt-safe backdrop-blur-xl">
+        <div className="min-h-dvh bg-surface-app pb-20">
+            <header className="sticky top-0 z-40 border-b border-subtle bg-surface-app/95 px-4 py-4 pt-safe backdrop-blur-xl">
                 <Link
                     href={`${basePath}/dashboard`}
-                    className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-strong"
                 >
                     <ArrowLeft className="h-4 w-4" aria-hidden />
                     {t('bodycomp.student.back')}
                 </Link>
-                <h1 className="mt-2 text-2xl font-bold text-foreground">{t('bodycomp.student.title')}</h1>
-                <p className="mt-1 text-sm text-muted-foreground">{t('bodycomp.student.intro')}</p>
+                <div className="mt-2 flex items-start gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-[var(--success-100)] text-[var(--success-700)]">
+                        <Gauge className="h-[22px] w-[22px]" aria-hidden />
+                    </span>
+                    <div className="min-w-0">
+                        <h1 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-strong">
+                            {t('bodycomp.student.title')}
+                        </h1>
+                        <p className="mt-0.5 text-sm text-muted">{t('bodycomp.student.intro')}</p>
+                    </div>
+                </div>
             </header>
 
             <main className="mx-auto w-full max-w-2xl space-y-5 px-4 py-6">
@@ -60,7 +70,7 @@ export function StudentBodyCompositionView({
                     <>
                         {/* Switcher de metodo: solo si AMBOS metodos tienen data. */}
                         {hasBoth && (
-                            <div className="flex gap-1.5 rounded-2xl bg-secondary/30 p-1.5">
+                            <div className="flex gap-1 rounded-control bg-surface-sunken p-1">
                                 {([
                                     { key: 'bia', label: t('bodycomp.student.methodBia') },
                                     { key: 'isak', label: t('bodycomp.student.methodIsak') },
@@ -70,10 +80,10 @@ export function StudentBodyCompositionView({
                                         type="button"
                                         onClick={() => setMethod(m.key)}
                                         className={cn(
-                                            'min-h-12 flex-1 rounded-xl px-3 py-2 text-sm font-bold transition-colors',
+                                            'min-h-12 flex-1 rounded-[10px] px-3 py-2 text-sm font-bold transition-colors',
                                             active === m.key
-                                                ? 'bg-background text-foreground shadow-sm'
-                                                : 'text-muted-foreground hover:text-foreground'
+                                                ? 'bg-surface-card text-strong shadow-sm'
+                                                : 'text-muted hover:text-strong'
                                         )}
                                         style={active === m.key ? { color: 'var(--theme-primary)' } : undefined}
                                     >
@@ -127,10 +137,13 @@ export function StudentBodyCompositionView({
                         <Disclaimer />
                     </>
                 ) : (
-                    <div className="rounded-2xl border border-border bg-card px-4 py-10 text-center">
-                        <p className="text-sm text-muted-foreground">{t('bodycomp.student.empty')}</p>
+                    <Card padding="lg" className="gap-0 text-center">
+                        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-card bg-surface-sunken text-subtle">
+                            <Gauge className="h-7 w-7" aria-hidden />
+                        </div>
+                        <p className="text-sm text-muted">{t('bodycomp.student.empty')}</p>
                         <Disclaimer className="mt-4 text-left" />
-                    </div>
+                    </Card>
                 )}
             </main>
         </div>
@@ -140,7 +153,7 @@ export function StudentBodyCompositionView({
 function NeedTwo() {
     const { t } = useTranslation()
     return (
-        <p className="rounded-2xl border border-border bg-card px-4 py-4 text-center text-xs text-muted-foreground">
+        <p className="rounded-card border border-subtle bg-surface-sunken px-4 py-4 text-center text-xs text-muted">
             {t('bodycomp.student.needTwo')}
         </p>
     )
@@ -151,7 +164,7 @@ function Disclaimer({ className }: { className?: string }) {
     return (
         <p
             className={cn(
-                'flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground',
+                'flex items-start gap-2 rounded-control border border-subtle bg-surface-sunken px-3 py-2 text-xs leading-relaxed text-muted',
                 className
             )}
         >
