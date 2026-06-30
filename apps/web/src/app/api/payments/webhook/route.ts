@@ -127,7 +127,20 @@ async function handleWebhook(request: Request, rawBody: string) {
     }
 
     const payload = buildPayload(request, parsed)
-    console.info('[payments.webhook] received', { traceId, provider: provider.name, payload })
+    // Redactado (path de plata, logs con retención): NO logueamos el payload completo del provider —
+    // una variante con email/identificación del pagador filtraría PII. Solo id/type/action para trazar.
+    const plSummary = (typeof payload === 'object' && payload !== null ? payload : {}) as {
+        type?: unknown
+        action?: unknown
+        data?: { id?: unknown }
+    }
+    console.info('[payments.webhook] received', {
+        traceId,
+        provider: provider.name,
+        type: plSummary.type,
+        action: plSummary.action,
+        dataId: plSummary.data?.id,
+    })
 
     let result
     try {

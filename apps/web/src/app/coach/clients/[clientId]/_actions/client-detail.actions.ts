@@ -38,11 +38,15 @@ export async function addPayment(data: {
     payment_date: string
     status?: string
 }) {
-    return addPaymentService(data)
+    const res = await addPaymentService(data)
+    revalidatePath(`/coach/clients/${data.client_id}`)
+    return res
 }
 
 export async function deletePayment(paymentId: string, clientId: string) {
-    return deletePaymentService(paymentId, clientId)
+    const res = await deletePaymentService(paymentId, clientId)
+    revalidatePath(`/coach/clients/${clientId}`)
+    return res
 }
 
 export async function markCheckInReviewed(clientId: string, checkInId: string) {

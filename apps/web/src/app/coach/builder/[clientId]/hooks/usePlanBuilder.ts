@@ -32,12 +32,20 @@ type BuilderAction =
     | { type: 'UPDATE_DAY_TITLE'; payload: { dayId: number; title: string } }
     | { type: 'COPY_DAY'; payload: { sourceId: number; targetIds: number[] } }
     | { type: 'TOGGLE_REST_DAY'; payload: { dayId: number } }
-    | { type: 'TOGGLE_SUPERSET'; payload: { dayId: number; uid: string } }
+    | { type: 'TOGGLE_SUPERSET'; payload: { dayId: number; uid: string; intent?: 'link' | 'unlink' } }
     | { type: 'SET_BLOCK_SECTION'; payload: { dayId: number; uid: string; section: BuilderSection } }
     | { type: 'SET_BLOCK_AREA'; payload: { dayId: number; uid: string; areaId: string } }
     | { type: 'TOGGLE_OVERRIDE'; payload: { uid: string } }
 
 export type { BuilderAction }
+
+/** Primera letra A-Z no usada por ningún grupo de superserie del día (fallback 'A'). */
+function nextFreeSupersetLetter(used: ReadonlySet<string>): string {
+    for (const letter of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {
+        if (!used.has(letter)) return letter
+    }
+    return 'A'
+}
 
 export function builderReducer(
     state: DayState[],
@@ -114,11 +122,33 @@ export function builderReducer(
 
             return state.map(d => {
                 if (targetIds.includes(d.id)) {
-                    const clonedBlocks = sourceDay.blocks.map(b => ({
-                        ...b,
-                        uid: `clone-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                        dayId: d.id
-                    }))
+                    // Re-letramos los grupos de superserie copiados a letras libres en el
+                    // destino: preserva el agrupamiento dentro de la copia pero evita
+                    // fusionar con un grupo ajeno del destino (sobre todo en la costura,
+                    // donde un grupo copiado quedaría contiguo a uno existente con la misma letra).
+                    const usedGroups = new Set(
+                        d.blocks.map(b => b.superset_group).filter((g): g is string => !!g)
+                    )
+                    const remap = new Map<string, string>()
+                    const clonedBlocks = sourceDay.blocks.map(b => {
+                        const srcGroup = b.superset_group?.trim() || null
+                        let group: string | null = srcGroup
+                        if (srcGroup) {
+                            let mapped = remap.get(srcGroup)
+                            if (!mapped) {
+                                mapped = nextFreeSupersetLetter(usedGroups)
+                                usedGroups.add(mapped)
+                                remap.set(srcGroup, mapped)
+                            }
+                            group = mapped
+                        }
+                        return {
+                            ...b,
+                            uid: `clone-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                            dayId: d.id,
+                            superset_group: group,
+                        }
+                    })
                     return { ...d, blocks: [...d.blocks, ...clonedBlocks] }
                 }
                 return d
@@ -201,47 +231,94 @@ export function builderReducer(
         }
 
         case 'TOGGLE_SUPERSET': {
-            const { dayId, uid } = action.payload
+            const { dayId, uid, intent } = action.payload
             return state.map(d => {
                 if (d.id !== dayId) return d
                 const idx = d.blocks.findIndex(b => b.uid === uid)
                 if (idx === -1) return d
 
                 const block = d.blocks[idx]
+                const nextBlock = d.blocks[idx + 1]
+                const knownAreaIds = new Set(orderedAreaIds(areas))
+                const group = block.superset_group?.trim() || null
+                const linkedToNext = !!group && (nextBlock?.superset_group ?? null) === group
 
-                if (block.superset_group) {
-                    // Remove from group; if only 1 other member remains, clear that too
-                    const groupMembers = d.blocks.filter(b => b.superset_group === block.superset_group)
-                    const clearAll = groupMembers.length <= 2
-                    return {
-                        ...d,
-                        blocks: d.blocks.map(b => {
-                            if (b.uid === uid) return { ...b, superset_group: null }
-                            if (clearAll && b.superset_group === block.superset_group) return { ...b, superset_group: null }
-                            return b
-                        })
-                    }
-                } else {
-                    // Last block can't link forward
-                    if (idx === d.blocks.length - 1) return d
-                    const nextBlock = d.blocks[idx + 1]
-                    // Solo se enlazan bloques de la MISMA area efectiva (legacy: misma seccion)
-                    const knownAreaIds = new Set(orderedAreaIds(areas))
-                    if (effectiveAreaKey(block, knownAreaIds) !== effectiveAreaKey(nextBlock, knownAreaIds)) return d
-                    // Reuse next block's group, or find a new letter
-                    const groupToUse = nextBlock.superset_group || (() => {
-                        const usedGroups = new Set(d.blocks.map(b => b.superset_group).filter(Boolean))
-                        for (const letter of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {
-                            if (!usedGroups.has(letter)) return letter
-                        }
-                        return 'A'
-                    })()
+                // EXTENDER (fix bug 1): el bloque es el ÚLTIMO miembro de su grupo y el
+                // siguiente está libre y en la misma área efectiva → ampliamos el tramo
+                // contiguo con la misma letra en vez de romper el grupo.
+                if (
+                    // El badge "Quitar de la superserie" (intent 'unlink') NUNCA extiende: solo el
+                    // conector "Agrupar/Superserie" (intent 'link' o sin intent) amplía el tramo.
+                    intent !== 'unlink' &&
+                    group &&
+                    !linkedToNext &&
+                    nextBlock &&
+                    !nextBlock.superset_group &&
+                    effectiveAreaKey(block, knownAreaIds) === effectiveAreaKey(nextBlock, knownAreaIds)
+                ) {
                     return {
                         ...d,
                         blocks: d.blocks.map((b, i) =>
-                            (b.uid === uid || i === idx + 1) ? { ...b, superset_group: groupToUse } : b
-                        )
+                            i === idx + 1 ? { ...b, superset_group: group } : b
+                        ),
                     }
+                }
+
+                if (group) {
+                    // QUITAR / PARTIR (fix bug 3): el bloque deja su grupo. Vaciar un miembro
+                    // del medio puede partir el grupo en tramos no contiguos con la misma letra.
+                    // Re-letramos los tramos sobrantes y descartamos singletons para no
+                    // persistir grupos inconsistentes (un superset exige ≥2 bloques contiguos).
+                    const cleared = d.blocks.map((b, i) =>
+                        i === idx ? { ...b, superset_group: null } : b
+                    )
+                    const used = new Set(
+                        cleared.map(b => b.superset_group).filter((g): g is string => !!g)
+                    )
+                    let runsKept = 0
+                    let i = 0
+                    while (i < cleared.length) {
+                        if (cleared[i].superset_group !== group) {
+                            i += 1
+                            continue
+                        }
+                        let j = i
+                        while (j < cleared.length && cleared[j].superset_group === group) j += 1
+                        const runLen = j - i
+                        if (runLen === 1) {
+                            // Tramo de 1 → ya no es superset, se limpia.
+                            cleared[i] = { ...cleared[i], superset_group: null }
+                        } else {
+                            runsKept += 1
+                            // El primer tramo sobreviviente conserva la letra original; los
+                            // siguientes reciben una letra nueva para no quedar no-contiguos.
+                            if (runsKept > 1) {
+                                const letter = nextFreeSupersetLetter(used)
+                                used.add(letter)
+                                for (let k = i; k < j; k += 1) {
+                                    cleared[k] = { ...cleared[k], superset_group: letter }
+                                }
+                            }
+                        }
+                        i = j
+                    }
+                    return { ...d, blocks: cleared }
+                }
+
+                // ENLAZAR hacia adelante (crear grupo o unirse al del siguiente).
+                if (idx === d.blocks.length - 1) return d
+                if (!nextBlock) return d
+                // Solo se enlazan bloques de la MISMA area efectiva (legacy: misma seccion)
+                if (effectiveAreaKey(block, knownAreaIds) !== effectiveAreaKey(nextBlock, knownAreaIds)) return d
+                const usedGroups = new Set(
+                    d.blocks.map(b => b.superset_group).filter((g): g is string => !!g)
+                )
+                const groupToUse = nextBlock.superset_group || nextFreeSupersetLetter(usedGroups)
+                return {
+                    ...d,
+                    blocks: d.blocks.map((b, i) =>
+                        (b.uid === uid || i === idx + 1) ? { ...b, superset_group: groupToUse } : b
+                    ),
                 }
             })
         }
@@ -261,6 +338,9 @@ export function usePlanBuilder(initialDays: DayState[], areas: readonly WorkoutA
         (state: DayState[], action: BuilderAction) => builderReducer(state, action, areasRef.current),
         []
     )
+    // Falso positivo: boundReducer solo corre en dispatch (eventos/DnD), nunca en el render inicial
+    // (initializer no-lazy), por lo que leer areasRef.current dentro del reducer es correcto e intencional.
+    // eslint-disable-next-line react-hooks/refs
     const [days, dispatch] = useReducer(boundReducer, initialDays)
 
     // History tracking via refs to avoid extra re-renders on every change
@@ -324,8 +404,8 @@ export function usePlanBuilder(initialDays: DayState[], areas: readonly WorkoutA
         dispatchWithHistory({ type: 'TOGGLE_REST_DAY', payload: { dayId } })
     }, [dispatchWithHistory])
 
-    const toggleSuperset = useCallback((dayId: number, uid: string) => {
-        dispatchWithHistory({ type: 'TOGGLE_SUPERSET', payload: { dayId, uid } })
+    const toggleSuperset = useCallback((dayId: number, uid: string, intent?: 'link' | 'unlink') => {
+        dispatchWithHistory({ type: 'TOGGLE_SUPERSET', payload: { dayId, uid, intent } })
     }, [dispatchWithHistory])
 
     const setBlockSection = useCallback((dayId: number, uid: string, section: BuilderSection) => {

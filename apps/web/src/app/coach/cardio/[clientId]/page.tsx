@@ -100,7 +100,7 @@ export default async function CardioClientPage({ params }: Props) {
                 ) : (
                     <p className="text-xs text-muted">
                         Sin fecha de nacimiento ni FCmax medida no se pueden derivar zonas — el alumno
-                        verá solo la zona prescrita ("Z4") sin bpm.
+                        verá solo la zona prescrita (&quot;Z4&quot;) sin bpm.
                     </p>
                 )}
             </section>

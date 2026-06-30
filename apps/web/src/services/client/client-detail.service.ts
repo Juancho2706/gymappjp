@@ -4,7 +4,6 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { resolveCheckinPhotoUrls } from '@/lib/storage/checkin-photos'
 import { cache } from 'react'
-import { revalidatePath } from 'next/cache'
 import { format, parseISO, subDays } from 'date-fns'
 import {
     getTodayInSantiago,
@@ -347,8 +346,9 @@ export const getClientProfileData = cache(async (clientId: string) => {
     if (activeProgram?.start_date && activeProgram?.end_date) {
         const start = new Date(activeProgram.start_date);
         const end = new Date(activeProgram.end_date);
-        const diffTime = Math.abs(today.getTime() - start.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const diffTime = today.getTime() - start.getTime();
+        // start futuro → semana 1 (no contar días-hasta-inicio como transcurridos; ver programWeekVariant).
+        const diffDays = diffTime < 0 ? 0 : Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         currentWeek = Math.min(totalWeeks, Math.ceil(diffDays / 7));
         if (currentWeek < 1) currentWeek = 1;
 
@@ -709,8 +709,6 @@ export async function addPayment(data: {
 
     const scope = await getCoachClientScope(supabase, user.id)
     await addPaymentForCoach(supabase, user.id, data, scope)
-
-    revalidatePath(`/coach/clients/${data.client_id}`)
 }
 
 export async function deletePayment(paymentId: string, clientId: string) {
@@ -721,8 +719,6 @@ export async function deletePayment(paymentId: string, clientId: string) {
 
     const scope = await getCoachClientScope(supabase, user.id)
     await deletePaymentForCoach(supabase, user.id, paymentId, scope)
-
-    revalidatePath(`/coach/clients/${clientId}`)
 }
 
 export async function getWeeklyCompliance(clientId: string) {

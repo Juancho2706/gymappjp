@@ -48,21 +48,21 @@ export async function getSistemaData(): Promise<SistemaData> {
             orphanRes,
             ...cronRes
         ] = await Promise.all([
-            admin.from('coaches').select('*', { count: 'exact', head: true }),
-            admin.from('clients').select('*', { count: 'exact', head: true }),
-            admin.from('coaches').select('*', { count: 'exact', head: true })
+            admin.from('coaches').select('id', { count: 'exact', head: true }),
+            admin.from('clients').select('id', { count: 'exact', head: true }),
+            admin.from('coaches').select('id', { count: 'exact', head: true })
                 .in('subscription_status', ['active', 'trialing']),
-            admin.from('coaches').select('*', { count: 'exact', head: true })
+            admin.from('coaches').select('id', { count: 'exact', head: true })
                 .eq('payment_provider', 'beta'),
-            admin.from('coaches').select('*', { count: 'exact', head: true })
+            admin.from('coaches').select('id', { count: 'exact', head: true })
                 .eq('subscription_status', 'expired'),
-            admin.from('coaches').select('*', { count: 'exact', head: true })
+            admin.from('coaches').select('id', { count: 'exact', head: true })
                 .in('subscription_status', ['past_due', 'pending_payment']),
-            admin.from('admin_audit_logs').select('*', { count: 'exact', head: true })
+            admin.from('admin_audit_logs').select('id', { count: 'exact', head: true })
                 .gte('created_at', new Date(checkedAt.getTime() - 24 * 60 * 60 * 1000).toISOString()),
             admin.from('admin_audit_logs').select('created_at').order('created_at', { ascending: false }).limit(1),
             // Coaches with current_period_end expired but still active (legacy bug)
-            admin.from('coaches').select('*', { count: 'exact', head: true })
+            admin.from('coaches').select('id', { count: 'exact', head: true })
                 .eq('subscription_status', 'active')
                 .eq('payment_provider', 'beta')
                 .lt('current_period_end', checkedAt.toISOString()),

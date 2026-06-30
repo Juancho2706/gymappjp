@@ -28,6 +28,8 @@ export default async function WorkoutExecutionPage({ params }: Props) {
             coachSlug={coach_slug}
             exerciseMaxes={data.exerciseMaxes}
             activeWeekVariant={data.activeWeekVariant}
+            currentWeek={data.currentWeek}
+            lastSessionByBlock={data.lastSessionByBlock}
             areas={data.areas}
             cardio={data.cardio}
         />

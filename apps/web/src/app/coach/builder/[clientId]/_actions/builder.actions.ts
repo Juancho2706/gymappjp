@@ -18,6 +18,7 @@ import {
     saveWorkoutProgramAction as saveWorkoutProgramService,
     syncProgramFromTemplateAction as syncProgramFromTemplateService,
 } from '@/services/workout/workout.service'
+import { revalidatePath } from 'next/cache'
 import type { ProgramListModel } from '@/app/coach/workout-programs/libraryStats'
 import type { WorkoutProgramInput } from '@eva/schemas'
 
@@ -25,15 +26,32 @@ export type { WorkoutBlockInput, WorkoutDayInput, WorkoutProgramInput } from '@e
 export type { AssignProgramOptions, AssignProgramResult, ProgramState, SaveProgramOptions } from '@/services/workout/workout.service'
 
 export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, saveOptions?: SaveProgramOptions): Promise<ProgramState> {
-    return saveWorkoutProgramService(payload, saveOptions)
+    const res = await saveWorkoutProgramService(payload, saveOptions)
+    if (res.programId) {
+        if (payload.clientId) revalidatePath(`/coach/clients/${payload.clientId}`)
+        revalidatePath('/coach/workout-programs')
+        revalidatePath('/c', 'layout')
+    }
+    return res
 }
 
 export async function deleteWorkoutProgramAction(programId: string, clientId: string): Promise<{ error?: string }> {
-    return deleteWorkoutProgramService(programId, clientId)
+    const res = await deleteWorkoutProgramService(programId, clientId)
+    if (!res.error) {
+        if (clientId) revalidatePath(`/coach/clients/${clientId}`)
+        revalidatePath('/coach/workout-programs')
+        revalidatePath('/c', 'layout')
+    }
+    return res
 }
 
 export async function deletePlanAction(planId: string, clientId: string): Promise<{ error?: string }> {
-    return deletePlanService(planId, clientId)
+    const res = await deletePlanService(planId, clientId)
+    if (!res.error) {
+        if (clientId) revalidatePath(`/coach/clients/${clientId}`)
+        revalidatePath('/coach/workout-programs')
+    }
+    return res
 }
 
 export async function duplicateWorkoutProgramAction(
@@ -44,7 +62,11 @@ export async function duplicateWorkoutProgramAction(
     programId?: string
     program?: ProgramListModel
 }> {
-    return duplicateWorkoutProgramService(programId, newName)
+    const res = await duplicateWorkoutProgramService(programId, newName)
+    if (!res.error) {
+        revalidatePath('/coach/workout-programs')
+    }
+    return res
 }
 
 export async function assignProgramToClientsAction(
@@ -52,7 +74,17 @@ export async function assignProgramToClientsAction(
     clientIds: string[],
     options?: string | AssignProgramOptions
 ): Promise<AssignProgramResult> {
-    return assignProgramToClientsService(templateId, clientIds, options)
+    const res = await assignProgramToClientsService(templateId, clientIds, options)
+    for (const clientId of res.assignedClientIds ?? []) {
+        revalidatePath(`/coach/clients/${clientId}`)
+    }
+    // failedClients presente ⇒ el loop completó (éxito o 0-asignados, ambos revalidaban antes);
+    // ausente ⇒ outer-catch, que no revalidaba.
+    if (res.failedClients !== undefined) {
+        revalidatePath('/coach/workout-programs')
+        revalidatePath('/c', 'layout')
+    }
+    return res
 }
 
 export async function getExerciseHistoryAction(clientId: string, exerciseId: string) {
@@ -68,7 +100,13 @@ export async function loadTemplateForBuilderAction(templateId: string) {
 }
 
 export async function syncProgramFromTemplateAction(programId: string): Promise<ProgramState> {
-    return syncProgramFromTemplateService(programId)
+    const res = await syncProgramFromTemplateService(programId)
+    if (res.programId) {
+        if (res.clientId) revalidatePath(`/coach/clients/${res.clientId}`)
+        revalidatePath('/coach/workout-programs')
+        revalidatePath('/c', 'layout')
+    }
+    return res
 }
 
 export async function getCoachClientsAction(): Promise<{

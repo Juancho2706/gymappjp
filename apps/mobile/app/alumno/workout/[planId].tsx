@@ -16,7 +16,7 @@ import { useKeepAwake } from 'expo-keep-awake'
 import * as Haptics from 'expo-haptics'
 import { Confetti } from 'react-native-fast-confetti'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Check, ChevronLeft, Dumbbell, History, Play, Trophy } from 'lucide-react-native'
+import { Check, Dumbbell, Info, Trophy } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
@@ -25,33 +25,13 @@ import { cachePlan, enqueueLog, getCachedPlan } from '../../../lib/offline-cache
 import { haptics } from '../../../lib/haptics'
 import { useEvaMotion } from '../../../lib/motion'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, NativeDialog, OfflineBanner, ProgressBar } from '../../../components'
+import { Button, NativeDialog, OfflineBanner, ProgressBar, TopBar } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { RestTimer } from '../../../components/workout/RestTimer'
 import { WorkoutSummaryModal } from '../../../components/workout/WorkoutSummaryModal'
-
-// ── Immersive "gym mode" palette (fixed DS ink ramp — 1:1 with web alumno-rutina.jsx,
-//    which renders the execution screen always-dark on ink-950). Brand accent stays
-//    white-label aware via theme.primary; only the neutral dark tokens are literals. ──
-const INK_950 = '#0B0E13' // surface-inverse / screen bg
-const INK_900 = '#12161D' // ink-900 / card bg
-const BORDER_INV = 'rgba(255,255,255,0.10)' // border-inverse
-const ON_DARK = '#F4F6F8' // text-on-dark (ink-50)
-const ON_DARK_MUTED = '#939DAB' // text-on-dark-muted
-const W04 = 'rgba(255,255,255,0.04)'
-const W05 = 'rgba(255,255,255,0.05)'
-const W06 = 'rgba(255,255,255,0.06)'
-const W08 = 'rgba(255,255,255,0.08)'
-const W10 = 'rgba(255,255,255,0.10)'
-const SUCCESS = '#1FB877' // success-500 (reads on dark)
-const SUCCESS_TINT = 'rgba(31,184,119,0.16)'
-const SUCCESS_BORDER = 'rgba(31,184,119,0.40)'
-
-// DS font families (token-contract D3): Archivo display · Hanken UI · JetBrains mono.
-const FONT_DISPLAY_SM = 'Archivo_800ExtraBold'
-const FONT_BOLD = 'HankenGrotesk_700Bold'
-const FONT_MONO = 'JetBrainsMono_700Bold'
+import { programWeekIndex1Based } from '../../../lib/program-week-variant'
+import { computeEffectiveTarget, type EffectiveTarget } from '../../../lib/workout/progression'
 
 /** Redondea y acota un input numérico a [min,max]; '' / NaN → null. Para RPE/RIR (columnas integer con CHECK). */
 function clampIntInRange(v: string, min: number, max: number): number | null {
@@ -83,6 +63,7 @@ interface Block {
   superset_group: string | null
   progression_type: 'weight' | 'reps' | null
   progression_value: number | null
+  progression_mode: 'weekly_linear' | 'double' | 'session_linear' | 'adaptive' | null
   is_override: boolean | null
   notes: string | null
   exercises: Exercise | null
@@ -125,6 +106,8 @@ export default function WorkoutExecutionScreen() {
   const [blocks, setBlocks] = useState<Block[]>([])
   const [planTitle, setPlanTitle] = useState('')
   const [activeWeekVariant, setActiveWeekVariant] = useState<string | null>(null)
+  const [currentWeek, setCurrentWeek] = useState<number | null>(null)
+  const [weeksToRepeat, setWeeksToRepeat] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [clientId, setClientId] = useState<string | null>(null)
   const [logs, setLogs] = useState<Record<string, LogEntry[]>>({})
@@ -163,9 +146,9 @@ export default function WorkoutExecutionScreen() {
     const { data } = await supabase
       .from('workout_plans')
       .select(`
-        id, title, week_variant,
+        id, title, week_variant, program_id,
         workout_blocks (
-          id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, section, superset_group, progression_type, progression_value, is_override, notes,
+          id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, section, superset_group, progression_type, progression_value, progression_mode, is_override, notes,
           exercises ( id, name, muscle_group, video_url, gif_url, instructions )
         )
       `)
@@ -182,6 +165,20 @@ export default function WorkoutExecutionScreen() {
     setBlocks(sorted)
     setActiveWeekVariant((data as any).week_variant ?? null)
     await cachePlan(planId, { title: data.title, blocks: sorted, activeWeekVariant: (data as any).week_variant ?? null })
+
+    // Sobrecarga progresiva (weekly_linear): la semana sale de start_date del programa.
+    const programId = (data as any).program_id
+    if (programId) {
+      const { data: prog } = await supabase
+        .from('workout_programs')
+        .select('start_date, weeks_to_repeat')
+        .eq('id', programId)
+        .maybeSingle()
+      if (prog) {
+        setWeeksToRepeat((prog as any).weeks_to_repeat ?? null)
+        setCurrentWeek(programWeekIndex1Based(prog as any))
+      }
+    }
 
     const blockIds = sorted.map((b: Block) => b.id)
     if (client && blockIds.length > 0) {
@@ -373,10 +370,10 @@ export default function WorkoutExecutionScreen() {
         <View style={styles.sectionHeader}>
           <View style={[styles.sectionRail, { backgroundColor: section === 'main' ? theme.primary : theme.primary + '55' }]} />
           <View style={styles.sectionCopy}>
-            <Text style={[styles.sectionLabel, { color: ON_DARK, fontFamily: FONT_BOLD }]}>
+            <Text style={[styles.sectionLabel, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
               {SECTION_LABELS[section] ?? section}
             </Text>
-            <Text style={[styles.sectionSubtitle, { color: ON_DARK_MUTED, fontFamily: theme.fontSans }]}>
+            <Text style={[styles.sectionSubtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
               {SECTION_SUBTITLES[section] ?? 'Bloques de entrenamiento.'}
             </Text>
           </View>
@@ -388,16 +385,17 @@ export default function WorkoutExecutionScreen() {
               styles.groupCard,
               {
                 borderColor: group.superset ? theme.primary + '40' : 'transparent',
-                backgroundColor: group.superset ? theme.primary + '14' : 'transparent',
+                backgroundColor: group.superset ? theme.primary + '08' : 'transparent',
+                borderRadius: theme.radius.xl,
               },
             ]}
           >
             {group.superset ? (
               <View style={styles.supersetHeader}>
-                <Text style={[styles.supersetTitle, { color: theme.primary, fontFamily: FONT_BOLD }]}>
+                <Text style={[styles.supersetTitle, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
                   Superserie {group.key}
                 </Text>
-                <Text style={[styles.supersetHint, { color: ON_DARK_MUTED, fontFamily: theme.fontSans }]}>
+                <Text style={[styles.supersetHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
                   Completa una serie de cada ejercicio y repite.
                 </Text>
               </View>
@@ -412,6 +410,7 @@ export default function WorkoutExecutionScreen() {
               >
                 <BlockCard
                   block={block}
+                  effective={computeEffectiveTarget(block, { currentWeek, weeksToRepeat })}
                   logged={logs[block.id] ?? []}
                   previous={block.exercises?.id ? previousHistory[block.exercises.id] ?? [] : []}
                   onLogSet={logSet}
@@ -430,10 +429,9 @@ export default function WorkoutExecutionScreen() {
   const completion = requiredSets === 0 ? 0 : completedSetCount / requiredSets
   const allDone = requiredSets > 0 && completedSetCount >= requiredSets
   const sections = groupBySection(blocks)
-  const eyebrow = activeWeekVariant ? `Semana ${activeWeekVariant}` : 'Entrenamiento'
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: INK_950 }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       {prCelebration ? (
         <View pointerEvents="none" style={styles.prOverlay}>
           {!motion.reduced ? <Confetti autoplay fadeOutOnEnd colors={[theme.primary, '#F59E0B', '#10B981', theme.cyan]} /> : null}
@@ -451,42 +449,27 @@ export default function WorkoutExecutionScreen() {
       )}
 
       <OfflineBanner visible={!isOnline} />
-
-      {/* Header inmersivo (full-bleed gym mode) */}
-      <View style={styles.headerRow}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.headerBtn}
-          activeOpacity={0.8}
-          accessibilityLabel="Salir"
-          hitSlop={8}
-        >
-          <ChevronLeft size={20} color={ON_DARK} />
-        </TouchableOpacity>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={[styles.headerEyebrow, { color: ON_DARK_MUTED }]} numberOfLines={1}>
-            {eyebrow}
-          </Text>
-          <Text style={[styles.headerTitle, { color: ON_DARK }]} numberOfLines={1}>
-            {planTitle || 'Workout'}
-          </Text>
-        </View>
-      </View>
+      <TopBar back title={planTitle || 'Workout'} onBack={() => router.back()} />
 
       {loading ? (
         <EvaLoaderScreen subtitle="Cargando rutina…" />
       ) : (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <View style={styles.progressHeader}>
+          <View style={[styles.progressHeader, { borderBottomColor: theme.border }]}>
             <View style={styles.progressTop}>
-              <Text style={[styles.progressText, { color: ON_DARK_MUTED, fontFamily: FONT_MONO }]}>
+              <Text style={[styles.progressText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
                 {completedSetCount}/{requiredSets} series
               </Text>
-              <Text style={[styles.progressPct, { color: theme.primary, fontFamily: FONT_MONO }]}>
+              <Text style={[styles.progressPct, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
                 {Math.round(completion * 100)}%
               </Text>
             </View>
-            <ProgressBar value={completion} color={theme.primary} track={W10} height={6} />
+            <ProgressBar value={completion} />
+            {activeWeekVariant ? (
+              <Text style={[styles.variantText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+                Semana {activeWeekVariant}
+              </Text>
+            ) : null}
           </View>
 
           <ScrollView
@@ -501,14 +484,14 @@ export default function WorkoutExecutionScreen() {
                 from={{ opacity: 0, scale: 0.97 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ type: 'spring', damping: 14 }}
-                style={[styles.doneBanner, { backgroundColor: SUCCESS_TINT, borderColor: SUCCESS_BORDER }]}
+                style={[styles.doneBanner, { backgroundColor: theme.success + '18', borderColor: theme.success + '40', borderRadius: theme.radius.xl }]}
               >
-                <Trophy size={18} color={SUCCESS} strokeWidth={2} />
+                <Trophy size={18} color={theme.success} strokeWidth={2} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.doneBannerTitle, { color: SUCCESS, fontFamily: FONT_BOLD }]}>
+                  <Text style={[styles.doneBannerTitle, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>
                     ¡Entrenamiento completado!
                   </Text>
-                  <Text style={[styles.doneBannerSub, { color: SUCCESS, fontFamily: theme.fontSans, opacity: 0.85 }]}>
+                  <Text style={[styles.doneBannerSub, { color: theme.success, fontFamily: theme.fontSans, opacity: 0.8 }]}>
                     Todas las series registradas. El detalle queda sincronizado con tu coach.
                   </Text>
                 </View>
@@ -518,7 +501,7 @@ export default function WorkoutExecutionScreen() {
             <Button
               label="Finalizar entrenamiento"
               leftIcon={allDone ? Trophy : Check}
-              variant="sport"
+              variant={allDone ? 'primary' : 'secondary'}
               onPress={() => setSummaryOpen(true)}
               disabled={blocks.length === 0}
               full
@@ -541,6 +524,24 @@ export default function WorkoutExecutionScreen() {
       <TechniqueDialog exercise={techniqueExercise} onClose={() => setTechniqueExercise(null)} />
     </SafeAreaView>
   )
+}
+
+/** Texto del cartel de sobrecarga progresiva según el estado calculado (paridad con web). */
+function progressionLabel(
+  block: { progression_type: 'weight' | 'reps' | null; progression_value: number | null },
+  eff: EffectiveTarget,
+): string {
+  const v = block.progression_value
+  if (block.progression_type !== 'weight' || !eff.modeImplemented) {
+    return `Progresion: +${v} ${block.progression_type === 'weight' ? 'kg cada semana' : 'rep cada sesion'}`
+  }
+  if (eff.mode === 'double') {
+    if (eff.status === 'holding') return `Doble progresion: mante ${eff.weightKg}kg y completa ${eff.repsTopToUnlock} reps en todas las series para subir`
+    if (eff.status === 'progressed') return `Doble progresion: subiste! objetivo ${eff.weightKg}kg (base ${eff.baseWeightKg})`
+    return `Doble progresion: subi +${v}kg cuando completes ${eff.repsTopToUnlock} reps en todas las series`
+  }
+  if (eff.isProgressed) return `Semana ${eff.weeksApplied + 1}: objetivo ${eff.weightKg}kg (base ${eff.baseWeightKg} +${eff.addedKg})`
+  return `Sobrecarga progresiva: sube +${v}kg cada semana`
 }
 
 function groupBySection(blocks: Block[]): Record<string, Block[]> {
@@ -572,12 +573,14 @@ function groupSupersets(blocks: Block[]): Array<{ key: string; superset: boolean
 
 function BlockCard({
   block,
+  effective,
   logged,
   previous,
   onLogSet,
   onOpenTechnique,
 }: {
   block: Block
+  effective: EffectiveTarget
   logged: LogEntry[]
   previous: PreviousHistory[]
   onLogSet: (block: Block, setNumber: number, weight: string, reps: string, rpe: string, rir: string) => Promise<void>
@@ -585,7 +588,8 @@ function BlockCard({
 }) {
   const { theme } = useTheme()
   const nextSet = logged.length + 1
-  const [weight, setWeight] = useState('')
+  // Pre-llena el peso con el objetivo sugerido (sobrecarga progresiva); el alumno solo confirma.
+  const [weight, setWeight] = useState(effective.weightKg != null ? String(effective.weightKg) : '')
   const [reps, setReps] = useState('')
   const [rpe, setRpe] = useState('')
   const [rir, setRir] = useState('')
@@ -609,73 +613,68 @@ function BlockCard({
       style={[
         styles.blockCard,
         {
-          backgroundColor: INK_900,
-          borderColor: done ? SUCCESS_BORDER : BORDER_INV,
-          borderWidth: done ? 1.5 : 1,
+          backgroundColor: theme.card,
+          borderColor: done ? theme.success : theme.border,
+          borderWidth: done ? 2 : 1,
+          borderRadius: theme.radius.xl,
         },
       ]}
     >
       <View style={styles.blockHeader}>
         <View style={styles.exerciseCopy}>
-          <Text style={[styles.exerciseMeta, { color: ON_DARK_MUTED, fontFamily: FONT_BOLD }]}>
+          <Text style={[styles.exerciseMeta, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
             {block.exercises?.muscle_group ?? 'Ejercicio'}
           </Text>
-          <Text style={[styles.exerciseName, { color: ON_DARK, fontFamily: FONT_DISPLAY_SM }]} numberOfLines={2}>
+          <Text style={[styles.exerciseName, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={2}>
             {block.exercises?.name ?? 'Ejercicio'}
           </Text>
         </View>
         {hasTechnique ? (
           <TouchableOpacity
-            style={[styles.techBtn, { backgroundColor: theme.primary }]}
+            style={[styles.iconBtn, { borderColor: theme.border, borderRadius: theme.radius.md }]}
             onPress={onOpenTechnique}
-            activeOpacity={0.85}
-            accessibilityLabel="Ver técnica"
+            activeOpacity={0.75}
           >
-            <Play size={18} color={theme.primaryForeground} />
+            <Info size={17} color={theme.primary} />
           </TouchableOpacity>
         ) : null}
         {done ? (
-          <View style={[styles.doneBadge, { backgroundColor: SUCCESS_TINT }]}>
-            <Check size={14} color={SUCCESS} strokeWidth={2.5} />
+          <View style={[styles.doneBadge, { backgroundColor: theme.success + '22', borderRadius: theme.radius.sm }]}>
+            <Trophy size={13} color={theme.success} />
           </View>
         ) : null}
       </View>
 
       <View style={styles.metricGrid}>
-        <Metric label="Series × reps" value={`${block.sets} × ${block.reps}`} />
-        {block.target_weight_kg != null ? <Metric label="Peso" value={`${block.target_weight_kg} kg`} /> : null}
+        <Metric label="Series x reps" value={`${block.sets} x ${block.reps}`} />
+        {block.target_weight_kg != null ? <Metric label={effective.status === 'holding' ? 'Peso a mantener' : effective.status === 'progressed' ? 'Peso hoy' : 'Peso'} value={`${effective.weightKg ?? block.target_weight_kg}kg`} /> : null}
         {block.rest_time ? <Metric label="Descanso" value={block.rest_time} /> : null}
         {block.tempo ? <Metric label="Tempo" value={block.tempo} /> : null}
-        {block.rir ? <Metric label="RIR" value={block.rir} accent={theme.primary} /> : null}
+        {block.rir ? <Metric label="RIR" value={block.rir} /> : null}
       </View>
 
       {block.progression_type && block.progression_value != null ? (
-        <Text style={[styles.progression, { color: theme.primary, fontFamily: FONT_BOLD }]}>
-          Progresion: +{block.progression_value} {block.progression_type === 'weight' ? 'kg' : 'reps'}
+        <Text style={[styles.progression, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
+          {progressionLabel(block, effective)}
         </Text>
       ) : null}
 
       {block.notes ? (
-        <View style={[styles.noteBox, { backgroundColor: theme.primary + '14', borderColor: theme.primary + '33' }]}>
-          <Text style={[styles.notes, { color: ON_DARK, fontFamily: theme.fontSans }]}>
-            {block.notes}
-          </Text>
-        </View>
+        <Text style={[styles.notes, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          {block.notes}
+        </Text>
       ) : null}
 
       {previous.length > 0 ? (
-        <View style={[styles.previousWrap, { backgroundColor: W04 }]}>
-          <View style={styles.previousTitleRow}>
-            <History size={13} color={ON_DARK_MUTED} />
-            <Text style={[styles.previousTitle, { color: ON_DARK_MUTED, fontFamily: FONT_BOLD }]}>
-              Sesion anterior · {previous[0]?.date}
-            </Text>
-          </View>
+        <View style={[styles.previousWrap, { borderColor: theme.primary + '30', backgroundColor: theme.primary + '08', borderRadius: theme.radius.lg }]}>
+          <Text style={[styles.previousTitle, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
+            Sesion anterior · {previous[0]?.date}
+          </Text>
           <View style={styles.previousChips}>
             {previous.slice(0, block.sets).map((log, index) => (
-              <View key={`${log.date}-${index}`} style={[styles.previousChip, { backgroundColor: W06, borderColor: BORDER_INV }]}>
-                <Text style={[styles.previousText, { color: ON_DARK, fontFamily: FONT_MONO }]}>
-                  S{index + 1}: {log.weight_kg ?? '-'}kg × {log.reps_done ?? '-'}
+              <View key={`${log.date}-${index}`} style={[styles.previousChip, { backgroundColor: theme.background, borderColor: theme.border, borderRadius: theme.radius.sm }]}>
+                <Text style={[styles.previousText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
+                  S{index + 1}: {log.weight_kg ?? '-'}kg x {log.reps_done ?? '-'}
                 </Text>
               </View>
             ))}
@@ -684,13 +683,13 @@ function BlockCard({
       ) : null}
 
       {logged.length > 0 ? (
-        <View style={[styles.loggedWrap, { borderTopColor: BORDER_INV }]}>
+        <View style={[styles.loggedWrap, { borderTopColor: theme.border }]}>
           {logged.map((l) => (
             <View key={l.setNumber} style={styles.loggedRow}>
-              <Text style={[styles.loggedLabel, { color: ON_DARK_MUTED, fontFamily: theme.fontSans }]}>
+              <Text style={[styles.loggedLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
                 Serie {l.setNumber}
               </Text>
-              <Text style={[styles.loggedValue, { color: SUCCESS, fontFamily: FONT_MONO }]}>
+              <Text style={[styles.loggedValue, { color: theme.success, fontFamily: 'Montserrat_700Bold' }]}>
                 {l.repsDone || '-'} reps{l.weightKg ? ` · ${l.weightKg}kg` : ''}{l.rpe ? ` · RPE ${l.rpe}` : ''}{l.rir ? ` · RIR ${l.rir}` : ''}
               </Text>
             </View>
@@ -699,8 +698,8 @@ function BlockCard({
       ) : null}
 
       {!done ? (
-        <View style={[styles.logSection, { borderTopColor: BORDER_INV }]}>
-          <Text style={[styles.setLabel, { color: ON_DARK, fontFamily: FONT_BOLD }]}>
+        <View style={[styles.logSection, { borderTopColor: theme.border }]}>
+          <Text style={[styles.setLabel, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
             Serie {nextSet}
           </Text>
           <View style={styles.logRow}>
@@ -712,7 +711,6 @@ function BlockCard({
           <Button
             label={saving ? 'Guardando' : 'Registrar serie'}
             leftIcon={Check}
-            variant="sport"
             onPress={handleLog}
             loading={saving}
             full
@@ -724,20 +722,31 @@ function BlockCard({
 }
 
 function LogInput(props: React.ComponentProps<typeof TextInput>) {
+  const { theme } = useTheme()
   return (
     <TextInput
       {...props}
-      style={styles.logInput}
-      placeholderTextColor={ON_DARK_MUTED}
+      style={[
+        styles.logInput,
+        {
+          borderColor: theme.border,
+          color: theme.foreground,
+          backgroundColor: theme.secondary,
+          borderRadius: theme.radius.md,
+          fontFamily: theme.fontSans,
+        },
+      ]}
+      placeholderTextColor={theme.mutedForeground}
     />
   )
 }
 
-function Metric({ label, value, accent }: { label: string; value: string; accent?: string }) {
+function Metric({ label, value }: { label: string; value: string }) {
+  const { theme } = useTheme()
   return (
-    <View style={[styles.metric, { backgroundColor: W05, borderColor: BORDER_INV }]}>
-      <Text style={[styles.metricLabel, { color: ON_DARK_MUTED, fontFamily: FONT_BOLD }]}>{label}</Text>
-      <Text style={[styles.metricValue, { color: accent ?? ON_DARK, fontFamily: FONT_MONO }]}>{value}</Text>
+    <View style={[styles.metric, { borderColor: theme.border, borderRadius: theme.radius.md }]}>
+      <Text style={[styles.metricLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+      <Text style={[styles.metricValue, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>{value}</Text>
     </View>
   )
 }
@@ -760,7 +769,7 @@ function TechniqueDialog({ exercise, onClose }: { exercise: Exercise | null; onC
             {exercise.instructions.map((step, index) => (
               <View key={`${index}-${step}`} style={styles.instructionRow}>
                 <View style={[styles.instructionNum, { backgroundColor: theme.primary + '18', borderRadius: theme.radius.sm }]}>
-                  <Text style={[styles.instructionNumText, { color: theme.primary, fontFamily: FONT_DISPLAY_SM }]}>
+                  <Text style={[styles.instructionNumText, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
                     {index + 1}
                   </Text>
                 </View>
@@ -784,61 +793,52 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   prOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 90, zIndex: 50 },
   prBanner: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 999 },
-  prBannerText: { fontSize: 15, fontFamily: 'Archivo_900Black', letterSpacing: -0.2 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12 },
-  headerBtn: { width: 40, height: 40, marginLeft: -4, borderRadius: 12, backgroundColor: W08, alignItems: 'center', justifyContent: 'center' },
-  headerEyebrow: { fontSize: 11.5, letterSpacing: 1, textTransform: 'uppercase', fontFamily: 'HankenGrotesk_700Bold' },
-  headerTitle: { fontSize: 18, letterSpacing: -0.3, fontFamily: 'Archivo_800ExtraBold' },
-  progressHeader: { paddingHorizontal: 16, paddingBottom: 14, gap: 8 },
+  prBannerText: { fontSize: 15, fontFamily: 'Montserrat_800ExtraBold', letterSpacing: -0.2 },
+  progressHeader: { paddingHorizontal: 16, paddingBottom: 12, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth },
   progressTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  progressText: { fontSize: 12 },
-  progressPct: { fontSize: 12 },
-  scroll: { paddingHorizontal: 16, paddingVertical: 4, paddingBottom: 40, gap: 16 },
-  doneBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderWidth: 1, padding: 16, borderRadius: 20 },
+  progressText: { fontSize: 13 },
+  progressPct: { fontSize: 13 },
+  variantText: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 },
+  scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 40, gap: 14 },
+  doneBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderWidth: 1, padding: 16 },
   doneBannerTitle: { fontSize: 15 },
   doneBannerSub: { fontSize: 12, lineHeight: 17, marginTop: 2 },
-  section: { gap: 12 },
+  section: { gap: 10 },
   sectionHeader: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   sectionRail: { width: 4, minHeight: 34, borderRadius: 2 },
   sectionCopy: { flex: 1, gap: 2 },
   sectionLabel: { fontSize: 13, textTransform: 'uppercase', letterSpacing: 1 },
   sectionSubtitle: { fontSize: 12, lineHeight: 17 },
-  groupCard: { borderWidth: 1, padding: 8, gap: 10, borderRadius: 20 },
+  groupCard: { borderWidth: 1, padding: 8, gap: 8 },
   supersetHeader: { paddingHorizontal: 4, paddingTop: 4, gap: 2 },
   supersetTitle: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
   supersetHint: { fontSize: 12, lineHeight: 17 },
-  blockCard: { padding: 18, gap: 12, borderRadius: 20 },
-  blockHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  exerciseCopy: { flex: 1, minWidth: 0, gap: 3 },
+  blockCard: { padding: 16, gap: 10 },
+  blockHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  exerciseCopy: { flex: 1, minWidth: 0, gap: 2 },
   exerciseMeta: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 },
-  exerciseName: { fontSize: 21, letterSpacing: -0.3, lineHeight: 24 },
-  techBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  doneBadge: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  exerciseName: { fontSize: 17, letterSpacing: -0.2 },
+  iconBtn: { width: 36, height: 36, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  doneBadge: { paddingHorizontal: 8, paddingVertical: 7 },
   metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  metric: { borderWidth: 1, paddingHorizontal: 11, paddingVertical: 8, minWidth: '30%', flexGrow: 1, borderRadius: 7 },
-  metricLabel: { fontSize: 9.5, textTransform: 'uppercase', letterSpacing: 0.6 },
-  metricValue: { fontSize: 15, marginTop: 2 },
+  metric: { borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8, minWidth: '30%', flexGrow: 1 },
+  metricLabel: { fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6 },
+  metricValue: { fontSize: 13, marginTop: 2 },
   progression: { fontSize: 12 },
-  noteBox: { borderWidth: 1, borderRadius: 7, paddingHorizontal: 12, paddingVertical: 10 },
-  notes: { fontSize: 12.5, lineHeight: 18 },
-  previousWrap: { padding: 10, gap: 8, borderRadius: 7 },
-  previousTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  previousTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.6 },
+  notes: { fontSize: 12, fontStyle: 'italic', lineHeight: 17 },
+  previousWrap: { borderWidth: 1, padding: 10, gap: 8 },
+  previousTitle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 },
   previousChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  previousChip: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 7 },
+  previousChip: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 5 },
   previousText: { fontSize: 11 },
-  loggedWrap: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10, gap: 5 },
+  loggedWrap: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 8, gap: 5 },
   loggedRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
   loggedLabel: { fontSize: 12 },
   loggedValue: { fontSize: 12, letterSpacing: 0.2, flex: 1, textAlign: 'right' },
   logSection: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12, gap: 10 },
   setLabel: { fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.8 },
   logRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  logInput: {
-    flex: 1, height: 44, borderWidth: 1, borderColor: BORDER_INV, backgroundColor: W06,
-    color: ON_DARK, textAlign: 'center', fontSize: 14, borderRadius: 10,
-    fontFamily: 'JetBrainsMono_500Medium',
-  },
+  logInput: { flex: 1, height: 44, borderWidth: 1, textAlign: 'center', fontSize: 14, fontWeight: '500' },
   techBody: { gap: 14 },
   techImage: { width: '100%', height: 220 },
   instructions: { gap: 12 },

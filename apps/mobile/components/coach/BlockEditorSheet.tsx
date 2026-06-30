@@ -47,6 +47,10 @@ const PROGRESSIONS: { value: 'none' | 'weight' | 'reps'; label: string }[] = [
   { value: 'weight', label: 'Peso' },
   { value: 'reps', label: 'Reps' },
 ]
+const PROGRESSION_MODE_OPTS: { value: 'weekly_linear' | 'double'; label: string }[] = [
+  { value: 'weekly_linear', label: 'Cada semana' },
+  { value: 'double', label: 'Al completar reps' },
+]
 
 export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function BlockEditorSheet(
   { block, onChange, onRemove, onSetSection, onToggleOverride, onToggleSuperset, onClose, days, currentDayId, onMoveToDay, clientId },
@@ -161,6 +165,18 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
         {progression !== 'none' ? (
           <Field theme={theme} label="Valor por semana" value={draft.progression_value != null ? String(draft.progression_value) : ''} keyboardType="decimal-pad"
             onChangeText={(v: string) => patch({ progression_value: v.trim() ? Number(v) : null })} placeholder={progression === 'weight' ? '2.5 (kg)' : '1 (rep)'} />
+        ) : null}
+        {progression === 'weight' ? (
+          <>
+            <Label theme={theme}>¿Cómo sube el peso?</Label>
+            <Segmented theme={theme} options={PROGRESSION_MODE_OPTS} value={draft.progression_mode ?? 'weekly_linear'}
+              onChange={(v) => patch({ progression_mode: v as 'weekly_linear' | 'double' })} />
+            {draft.progression_mode === 'double' ? (
+              <Text style={{ color: theme.mutedForeground, fontFamily: theme.fontSans, fontSize: 11, lineHeight: 15 }}>
+                Doble progresión: necesita un rango de reps (ej. 8-12). El alumno mantiene el peso hasta completar el tope en todas las series; ahí sube.
+              </Text>
+            ) : null}
+          </>
         ) : null}
 
         {/* Notes */}

@@ -6,6 +6,24 @@ packages:
 overrides:
   react: 19.1.0
   react-dom: 19.1.0
+  # Security: Dependabot transitive bumps, in-major only (verified build+test+CI+preview green).
+  # Multi-major deps use pkg@major selectors so each consumer stays within its own major.
+  shell-quote: '>=1.8.4 <2'
+  dompurify: '>=3.4.11 <4'
+  protobufjs: '>=7.6.3 <8'
+  '@babel/core': '>=7.29.6 <8'
+  postcss: '>=8.5.15 <9'
+  '@opentelemetry/core': '>=2.8.0 <3'
+  tar: '>=7.5.16 <8'
+  vite: '>=7.3.5 <8'
+  vitest: '>=4.1.0 <5'
+  'uuid@11': '>=11.1.1 <12'
+  'js-yaml@4': '>=4.2.0 <5'
+  'undici@6': '>=6.27.0 <7'
+  'undici@7': '>=7.28.0 <8'
+  'ws@6': '>=6.2.4 <7'
+  'ws@7': '>=7.5.11 <8'
+  'ws@8': '>=8.21.0 <9'
 
 # Allowlist for packages that need legitimate postinstall scripts (native binaries, CLIs).
 # New packages are blocked by default — supply chain defense (pnpm v10+ behavior).

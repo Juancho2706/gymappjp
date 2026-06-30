@@ -1,14 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
-import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import type { Json } from '@/lib/database.types'
-import { WorkoutProgramSchema, type WorkoutBlockInput, type WorkoutDayInput, type WorkoutProgramInput } from '@eva/schemas'
+import { WorkoutProgramSchema, isCardioBlockComplete, type WorkoutBlockInput, type WorkoutDayInput, type WorkoutProgramInput } from '@eva/schemas'
+import { effectiveExerciseType } from '@/lib/workout-exercise-type'
 import { LIBRARY_PROGRAM_LIST_SELECT } from '@/lib/supabase/queries/workout-programs-library'
 import type { ProgramListModel } from '@/app/coach/workout-programs/libraryStats'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildProgramAssignedEmail } from '@/lib/email/transactional-templates'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { currentUserHasTeamAccessToClient } from '@/services/auth/team.service'
+import { matchPlans, diffBlocksByPosition, type ExistingPlan } from './workout-save-reconcile'
 
 // Re-export types for backward compatibility
 export type { WorkoutBlockInput, WorkoutDayInput, WorkoutProgramInput } from '@eva/schemas'
@@ -16,6 +17,8 @@ export type { WorkoutBlockInput, WorkoutDayInput, WorkoutProgramInput } from '@e
 export type ProgramState = {
     error?: string
     programId?: string
+    /** Set por sync para que su action wrapper revalide /coach/clients/[id] (el wrapper no ve el payload). */
+    clientId?: string
     /** E (awareness): el programa cambió en el server desde que el coach lo abrió. No se guardó nada. */
     conflict?: { editedBy: string | null; at: string }
 }
@@ -31,6 +34,8 @@ export type AssignProgramResult = {
     success?: boolean
     error?: string
     assignedCount?: number
+    /** IDs de alumnos asignados OK — el action wrapper revalida /coach/clients/[id] por cada uno. */
+    assignedClientIds?: string[]
     failedClients?: { clientId: string; reason: string }[]
 }
 
@@ -125,6 +130,129 @@ function polymorphicBlockColumns(block: Record<string, unknown>) {
         exercise_type_override: (block.exercise_type_override ?? null) as string | null,
         interval_config: (block.interval_config ?? null) as Json,
         extra_targets: (block.extra_targets ?? null) as Json,
+    }
+}
+
+/** Columnas de un workout_block (sin plan_id) — fuente ÚNICA para insert y reconcile (anti-drift). */
+function blockRow(block: WorkoutBlockInput, index: number, allowedAreaIds: Set<string>) {
+    return {
+        exercise_id: block.exercise_id,
+        order_index: index,
+        sets: block.sets,
+        reps: block.reps,
+        target_weight_kg: block.target_weight_kg ?? null,
+        tempo: block.tempo ?? null,
+        rir: block.rir ?? null,
+        rest_time: block.rest_time ?? null,
+        notes: block.notes ?? null,
+        superset_group: block.superset_group ?? null,
+        progression_type: block.progression_type ?? null,
+        progression_value: block.progression_value ?? null,
+        progression_mode: block.progression_mode ?? 'weekly_linear',
+        section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
+        section_template_id: scopedSectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id, allowedAreaIds),
+        is_override: block.is_override ?? false,
+        ...polymorphicBlockColumns(block as Record<string, unknown>),
+    }
+}
+
+/**
+ * Guardado de un programa de CLIENTE existente SIN destruir el historial del alumno.
+ * En vez de borrar todos los planes (CASCADE → workout_logs), reconcilia EN SITIO: reusa los ids
+ * de plan/bloque ya logueados (UPDATE), inserta lo nuevo y borra lo sobrante (sus logs sobreviven
+ * vía ON DELETE SET NULL, migración 20260630190000). Match posicional por order_index (ver
+ * workout-save-reconcile.ts). Solo para programas de cliente — plantillas (sin logs) siguen por el
+ * camino borrar+reinsertar.
+ */
+async function reconcileExistingClientProgram(args: {
+    supabase: Awaited<ReturnType<typeof createClient>>
+    programId: string
+    clientId: string
+    coachId: string
+    days: WorkoutDayInput[]
+    programName: string
+    startDateToUse: string | null
+    allowedAreaIds: Set<string>
+}): Promise<void> {
+    const { supabase, programId, clientId, coachId, days, programName, startDateToUse, allowedAreaIds } = args
+
+    const { data: existingRaw } = await supabase
+        .from('workout_plans')
+        .select('id, day_of_week, week_variant, workout_blocks(id, order_index)')
+        .eq('program_id', programId)
+
+    const existingPlans: ExistingPlan[] = (existingRaw ?? []).map((p: { id: string; day_of_week: number | null; week_variant: string | null; workout_blocks: { id: string; order_index: number | null }[] | null }) => ({
+        id: p.id,
+        day_of_week: p.day_of_week,
+        week_variant: p.week_variant,
+        blocks: (p.workout_blocks ?? []).map((b) => ({ id: b.id, order_index: b.order_index })),
+    }))
+
+    const desiredKeys = days.map((d) => ({ day_of_week: d.day_of_week, week_variant: d.week_variant || 'A' }))
+    const { reuse, insertDesiredIndexes, deletePlanIds } = matchPlans(existingPlans, desiredKeys)
+
+    // Planes que ya no se desean → borrar (sus logs sobreviven vía ON DELETE SET NULL).
+    if (deletePlanIds.length > 0) {
+        const { error } = await supabase.from('workout_plans').delete().in('id', deletePlanIds)
+        if (error) throw new Error('Error al limpiar planes obsoletos.')
+    }
+
+    // Planes reusados: update título + reconciliar bloques EN SITIO (ids estables → logs preservados).
+    for (const { desiredIndex, planId } of reuse) {
+        const day = days[desiredIndex]
+        const { error: planUpErr } = await supabase
+            .from('workout_plans')
+            .update({
+                title: day.title || `${programName} - Día ${day.day_of_week}`,
+                assigned_date: startDateToUse,
+                week_variant: day.week_variant || 'A',
+            })
+            .eq('id', planId)
+        if (planUpErr) throw new Error('Error al actualizar el plan.')
+
+        const existingPlan = existingPlans.find((p) => p.id === planId)
+        const { ops, deleteIds } = diffBlocksByPosition(existingPlan?.blocks ?? [], day.blocks.length)
+
+        if (deleteIds.length > 0) {
+            const { error } = await supabase.from('workout_blocks').delete().in('id', deleteIds)
+            if (error) throw new Error('Error al limpiar ejercicios.')
+        }
+        for (const op of ops) {
+            const block = day.blocks[op.desiredIndex]
+            const cols = blockRow(block, op.desiredIndex, allowedAreaIds)
+            if (op.kind === 'update') {
+                const { error } = await supabase.from('workout_blocks').update(cols).eq('id', op.id)
+                if (error) throw new Error(error.message)
+            } else {
+                const { error } = await supabase.from('workout_blocks').insert({ ...cols, plan_id: planId })
+                if (error) throw new Error(error.message)
+            }
+        }
+    }
+
+    // Planes nuevos (días que no existían) → insertar plan + bloques.
+    for (const di of insertDesiredIndexes) {
+        const day = days[di]
+        const { data: plan, error: planErr } = await supabase
+            .from('workout_plans')
+            .insert({
+                client_id: clientId,
+                coach_id: coachId,
+                program_id: programId,
+                day_of_week: day.day_of_week,
+                title: day.title || `${programName} - Día ${day.day_of_week}`,
+                group_name: 'Programa de Entrenamiento',
+                assigned_date: startDateToUse,
+                week_variant: day.week_variant || 'A',
+            })
+            .select('id')
+            .single()
+        if (planErr || !plan) throw new Error(planErr?.message ?? 'Error al crear plan.')
+        if (day.blocks.length > 0) {
+            const rows = day.blocks.map((b, i) => ({ ...blockRow(b, i, allowedAreaIds), plan_id: plan.id }))
+            const { error } = await supabase.from('workout_blocks').insert(rows)
+            if (error) throw new Error(error.message)
+        }
     }
 }
 
@@ -257,6 +385,28 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
         if (!access.ok) return { error: 'Alumno no encontrado.' }
     }
 
+    // Completitud de bloques CARDIO por tipo EFECTIVO: el superRefine del schema solo valida el
+    // cardio con override explícito; los ejercicios cuyo tipo INTRÍNSECO del catálogo es cardio
+    // (sin override) se colaban sin duración/distancia/intervalos. El schema no conoce el catálogo
+    // → se resuelve acá. Fail-open: si el catálogo no se puede leer, no bloquea el guardado.
+    const allBlocksForCardioCheck = days.flatMap((d) => d.blocks)
+    const cardioCheckExIds = [...new Set(allBlocksForCardioCheck.map((b) => b.exercise_id).filter(Boolean))]
+    if (cardioCheckExIds.length > 0) {
+        const { data: exTypeRows } = await supabase
+            .from('exercises')
+            .select('id, exercise_type')
+            .in('id', cardioCheckExIds)
+        if (exTypeRows && exTypeRows.length > 0) {
+            const exerciseTypeById = new Map(exTypeRows.map((e) => [e.id, e.exercise_type as string | null]))
+            for (const b of allBlocksForCardioCheck) {
+                const effType = effectiveExerciseType(b, { exercise_type: exerciseTypeById.get(b.exercise_id) ?? null })
+                if (effType === 'cardio' && !isCardioBlockComplete(b)) {
+                    return { error: 'Un bloque cardio necesita duración, distancia o intervalos.' }
+                }
+            }
+        }
+    }
+
     // Calcular end_date si hay startDate
     let endDate = null
     if (startDateToUse) {
@@ -363,7 +513,19 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
 
             if (updateError) throw new Error('Error al actualizar el programa.')
 
-            // Borrar planes antiguos asociados al programa (CASCADE borrará los bloques)
+            // Programa de CLIENTE existente: reconciliar EN SITIO (no borrar+reinsertar) para NO
+            // destruir los workout_logs del alumno (el delete + CASCADE los arrasaba: streaks,
+            // "sesión anterior", progreso). Ver workout-save-reconcile.ts + migración
+            // 20260630190000 (FK workout_logs.block_id → ON DELETE SET NULL, red de seguridad).
+            if (clientId) {
+                await reconcileExistingClientProgram({
+                    supabase, programId: finalProgramId, clientId, coachId: user.id,
+                    days, programName, startDateToUse, allowedAreaIds,
+                })
+                return { programId: finalProgramId }
+            }
+
+            // Plantilla existente (sin logs de alumno): borrar+reinsertar es seguro (camino histórico).
             const { error: deleteError } = await supabase
                 .from('workout_plans')
                 .delete()
@@ -451,22 +613,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
             // Insertar los bloques (ejercicios) para este plan
             const blocksToInsert = day.blocks.map((block, index) => ({
                 plan_id: plan.id,
-                exercise_id: block.exercise_id,
-                order_index: index,
-                sets: block.sets,
-                reps: block.reps,
-                target_weight_kg: block.target_weight_kg ?? null,
-                tempo: block.tempo ?? null,
-                rir: block.rir ?? null,
-                rest_time: block.rest_time ?? null,
-                notes: block.notes ?? null,
-                superset_group: block.superset_group ?? null,
-                progression_type: block.progression_type ?? null,
-                progression_value: block.progression_value ?? null,
-                section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
-                section_template_id: scopedSectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id, allowedAreaIds),
-                is_override: block.is_override ?? false,
-                ...polymorphicBlockColumns(block as Record<string, unknown>),
+                ...blockRow(block, index, allowedAreaIds),
             }))
 
             const { error: blocksError } = await supabase
@@ -476,12 +623,6 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
             if (blocksError) throw new Error(blocksError.message)
         }
 
-        if (clientId) {
-            revalidatePath(`/coach/clients/${clientId}`)
-        }
-        revalidatePath('/coach/workout-programs')
-        revalidatePath('/c', 'layout')
-        
         return { programId: finalProgramId }
     } catch (error: any) {
         console.error('Error en saveWorkoutProgramAction:', error)
@@ -517,11 +658,6 @@ export async function deleteWorkoutProgramAction(programId: string, clientId: st
 
     if (error) return { error: error.message }
 
-    if (clientId) {
-        revalidatePath(`/coach/clients/${clientId}`)
-    }
-    revalidatePath('/coach/workout-programs')
-    revalidatePath('/c', 'layout')
     return {}
 }
 
@@ -562,10 +698,6 @@ export async function deletePlanAction(planId: string, clientId: string): Promis
 
     if (error) return { error: error.message }
 
-    if (clientId) {
-        revalidatePath(`/coach/clients/${clientId}`)
-    }
-    revalidatePath('/coach/workout-programs')
     return {}
 }
 
@@ -695,6 +827,7 @@ export async function duplicateWorkoutProgramAction(
                 superset_group: block.superset_group ?? null,
                 progression_type: block.progression_type ?? null,
                 progression_value: block.progression_value ?? null,
+                progression_mode: block.progression_mode ?? 'weekly_linear',
                 section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
                 section_template_id: scopedSectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id, allowedAreaIds),
                 is_override: false,
@@ -708,8 +841,6 @@ export async function duplicateWorkoutProgramAction(
                 if (blocksError) throw new Error(blocksError.message)
             }
         }
-
-        revalidatePath('/coach/workout-programs')
 
         const { data: libraryRow, error: librarySelectError } = await supabase
             .from('workout_programs')
@@ -834,6 +965,7 @@ export async function assignProgramToClientsAction(
         const endDate = end.toISOString().split('T')[0]
 
         let assignedCount = 0
+        const assignedClientIds: string[] = []
         const coachBrand = await supabase
             .from('coaches')
             .select('brand_name, slug')
@@ -910,6 +1042,7 @@ export async function assignProgramToClientsAction(
                         superset_group: block.superset_group ?? null,
                         progression_type: block.progression_type ?? null,
                         progression_value: block.progression_value ?? null,
+                        progression_mode: block.progression_mode ?? 'weekly_linear',
                         section: block.section && ['warmup', 'main', 'cooldown'].includes(block.section) ? block.section : 'main',
                         section_template_id: scopedSectionTemplateIdFor(block.section, (block as { section_template_id?: string | null }).section_template_id, allowedAreaIds),
                         is_override: false,
@@ -947,7 +1080,7 @@ export async function assignProgramToClientsAction(
                         console.error(`Program assigned email error for ${clientId}:`, emailResult.error)
                     }
                 }
-                revalidatePath(`/coach/clients/${clientId}`)
+                assignedClientIds.push(clientId)
             } catch (clientError: any) {
                 failedClients.push({
                     clientId,
@@ -956,8 +1089,6 @@ export async function assignProgramToClientsAction(
             }
         }
 
-        revalidatePath('/coach/workout-programs')
-        revalidatePath('/c', 'layout')
         if (assignedCount === 0) {
             return {
                 error: 'No se pudo asignar el programa a ningún alumno.',
@@ -967,6 +1098,7 @@ export async function assignProgramToClientsAction(
         return {
             success: true,
             assignedCount,
+            assignedClientIds,
             failedClients,
         }
     } catch (error: any) {
@@ -1084,13 +1216,14 @@ export async function loadTemplateForBuilderAction(templateId: string): Promise<
         .from('workout_programs')
         .select(`
             id, name, weeks_to_repeat, duration_type, duration_days,
+            program_structure_type, cycle_length, ab_mode,
             start_date_flexible, program_notes, program_phases,
             workout_plans (
                 day_of_week, title, week_variant,
                 workout_blocks (
                     exercise_id, sets, reps, target_weight_kg,
                     tempo, rir, rest_time, notes, order_index, superset_group,
-                    progression_type, progression_value, section, section_template_id, is_override,
+                    progression_type, progression_value, progression_mode, section, section_template_id, is_override,
                     is_unilateral, side_mode, reps_value, reps_unit, load_type, load_value, load_unit,
                     distance_value, distance_unit, duration_sec, target_pace_sec_per_km, hr_zone,
                     instructions, exercise_type_override, interval_config, extra_targets,
@@ -1146,6 +1279,7 @@ function mapDbBlockToWorkoutInput(b: any): WorkoutBlockInput {
         superset_group: b.superset_group ?? null,
         progression_type: progType,
         progression_value: b.progression_value ?? null,
+        progression_mode: b.progression_mode ?? null,
         section: b.section && ['warmup', 'main', 'cooldown'].includes(b.section) ? b.section : 'main',
         section_template_id: sectionTemplateIdFor(b.section, (b as { section_template_id?: string | null }).section_template_id),
         is_override: !!b.is_override,
@@ -1236,7 +1370,7 @@ export async function syncProgramFromTemplateAction(programId: string): Promise<
         phasesSafe = []
     }
 
-    return saveWorkoutProgramAction({
+    const result = await saveWorkoutProgramAction({
         programId: program.id,
         clientId: program.client_id,
         programName: program.name,
@@ -1253,6 +1387,9 @@ export async function syncProgramFromTemplateAction(programId: string): Promise<
         source_template_id: templateId,
         days: mergedDays,
     })
+    // El save service ya no revalida (lo hace el action wrapper). Exponemos clientId para que el
+    // wrapper de sync revalide /coach/clients/[id] sin ver el payload original.
+    return result.programId ? { ...result, clientId: program.client_id } : result
 }
 
 /**
