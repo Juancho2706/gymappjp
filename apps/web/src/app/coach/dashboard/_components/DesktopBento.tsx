@@ -139,14 +139,14 @@ export function DesktopBento({ data, coachName, onAdherence }: Props) {
                     <button
                         type="button"
                         onClick={() => router.push('/coach/clients')}
-                        className="inline-flex h-12 items-center gap-2 rounded-control border-[1.5px] border-[var(--border-default)] bg-surface-card px-[18px] text-[15px] font-bold leading-none tracking-[-0.01em] text-[var(--text-strong)] transition-colors hover:bg-surface-sunken"
+                        className="eva-press inline-flex h-12 items-center justify-center gap-2 rounded-control border-[1.5px] border-[var(--border-default)] bg-surface-card px-[18px] font-ui text-[15px] font-bold leading-none tracking-[-0.01em] text-[var(--text-strong)]"
                     >
                         <Upload className="size-[17px]" /> Importar
                     </button>
                     <button
                         type="button"
                         onClick={() => setCreateOpen(true)}
-                        className="inline-flex h-12 items-center gap-2 rounded-control border-[1.5px] border-transparent bg-sport-500 px-[18px] text-[15px] font-bold leading-none tracking-[-0.01em] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] transition-transform hover:-translate-y-0.5"
+                        className="eva-press inline-flex h-12 items-center justify-center gap-2 rounded-control border-[1.5px] border-transparent bg-[var(--cta-fill)] px-[18px] font-ui text-[15px] font-bold leading-none tracking-[-0.01em] text-[var(--text-on-sport)] shadow-[var(--glow-sport)]"
                     >
                         <Plus className="size-[17px]" /> Nuevo alumno
                     </button>
@@ -154,7 +154,7 @@ export function DesktopBento({ data, coachName, onAdherence }: Props) {
             </div>
 
             {/* KPIs */}
-            <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <div className="mb-5 grid grid-cols-2 gap-4 min-[1000px]:grid-cols-4">
                 {kpis.map((k) => {
                     const Icon = k.icon
                     return (
@@ -174,7 +174,7 @@ export function DesktopBento({ data, coachName, onAdherence }: Props) {
                                     {k.label}
                                 </span>
                             </div>
-                            <div className="font-display text-[34px] font-black leading-none tabular-nums tracking-[-0.03em] text-[var(--text-strong)]">
+                            <div className="font-display text-[34px] font-extrabold leading-none tabular-nums tracking-[-0.01em] text-[var(--text-strong)]">
                                 <EvaCountUp value={k.value} suffix={k.suffix} />
                             </div>
                             <div className="mt-[7px] text-xs font-semibold text-[var(--text-muted)]">
@@ -186,9 +186,9 @@ export function DesktopBento({ data, coachName, onAdherence }: Props) {
             </div>
 
             {/* Bento grid */}
-            <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1.5fr_1fr]">
+            <div className="grid grid-cols-1 items-start gap-5 min-[1000px]:grid-cols-[1.5fr_1fr]">
                 {/* Card oscura — Prioridad de hoy (warroom) */}
-                <div className="overflow-hidden rounded-card bg-[var(--ink-950)]">
+                <div className="overflow-hidden rounded-card bg-[var(--ink-950)] shadow-[var(--shadow-sm)]">
                     <div className="flex items-center justify-between gap-3 px-[18px] py-4">
                         <div>
                             <div className="text-[11px] font-extrabold uppercase tracking-[0.08em] text-sport-400">

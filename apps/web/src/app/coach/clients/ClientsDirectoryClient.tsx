@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { ClientCardV2 } from '@/components/coach/ClientCardV2'
 import { DirectoryActionBar } from './DirectoryActionBar'
-import { ClientsDirectoryTable } from './ClientsDirectoryTable'
+import { DesktopRosterTable } from './DesktopRosterTable'
 import { ClientsDirectoryEmpty } from './ClientsDirectoryEmpty'
 import { CoachRosterMasterDetail } from './CoachRosterMasterDetail'
 import { DirRowCard } from './DirRowCard'
@@ -186,11 +186,6 @@ export function ClientsDirectoryClient({
         setSortDir(defaultSortDir(k))
     }
 
-    const handleSortFromTable = (k: DirectorySortKey, d: 'asc' | 'desc') => {
-        setSortKey(k)
-        setSortDir(d)
-    }
-
     const filteredClients = useMemo(() => {
         return clients.filter((client) => {
             const q = search.toLowerCase()
@@ -269,8 +264,21 @@ export function ClientsDirectoryClient({
                 </div>
             )}
 
-            {/* Directorio (tabla/grid + tarjetas móvil): móvil siempre · desktop solo en modo tabla */}
-            <div className={cn('space-y-6 md:space-y-8', rosterMode === 'ficha' && 'md:hidden')}>
+            {/* Directorio: DESKTOP (md+) = vista TABLA 1:1 (DesktopRosterTable, autocontenida);
+                MÓVIL (<md) = action bar + tarjetas. Oculto en desktop cuando el modo es Ficha. */}
+            <div className={cn(rosterMode === 'ficha' && 'md:hidden')}>
+            {/* DESKTOP — vista TABLA 1:1 con DesktopRosterTable del diseño */}
+            <div className="hidden md:block">
+                <DesktopRosterTable
+                    clients={clients}
+                    pulseByClientId={pulseByClientId}
+                    coachSlug={publicIdentifier}
+                    appUrl={appUrl}
+                />
+            </div>
+
+            {/* MÓVIL — action bar + tarjetas */}
+            <div className="space-y-6 md:hidden">
             <DirectoryActionBar
                 search={search}
                 onSearchChange={setSearch}
@@ -305,37 +313,22 @@ export function ClientsDirectoryClient({
                     </p>
                 </Card>
             : view === 'table' ?
-                <>
-                    {/* MÓVIL (<md): row-cards · diseño coach-directory.jsx.
+                <div className="space-y-2 px-0 pb-6">
+                    {/* row-cards · diseño coach-directory.jsx.
                         pb extra para que la última tarjeta no quede bajo la cápsula flotante. */}
-                    <div className="space-y-2 px-0 pb-6 md:hidden md:pb-0">
-                        {gridClients.map((client) => (
-                            <DirRowCard
-                                key={client.id}
-                                client={client}
-                                pulse={pulseByClientId[client.id]}
-                                loginUrl={loginUrl}
-                                onEdit={() =>
-                                    setEditingClient({ id: client.id, name: client.full_name })
-                                }
-                            />
-                        ))}
-                        {loadMoreButton}
-                    </div>
-
-                    {/* DESKTOP (md+): tabla limpia · diseño desktop-coach.jsx */}
-                    <div className="hidden md:block">
-                        <ClientsDirectoryTable
-                            clients={sortedClients}
-                            pulseByClientId={pulseByClientId}
-                            sortKey={sortKey}
-                            sortDir={sortDir}
-                            onSortChange={handleSortFromTable}
-                            coachSlug={publicIdentifier}
-                            appUrl={appUrl}
+                    {gridClients.map((client) => (
+                        <DirRowCard
+                            key={client.id}
+                            client={client}
+                            pulse={pulseByClientId[client.id]}
+                            loginUrl={loginUrl}
+                            onEdit={() =>
+                                setEditingClient({ id: client.id, name: client.full_name })
+                            }
                         />
-                    </div>
-                </>
+                    ))}
+                    {loadMoreButton}
+                </div>
             :   <div className="space-y-4">
                     <motion.div
                     className="grid grid-cols-1 gap-4 px-4 sm:grid-cols-2 lg:grid-cols-2 lg:px-0 xl:grid-cols-3 xl:gap-8"
@@ -383,6 +376,7 @@ export function ClientsDirectoryClient({
                 {loadMoreButton}
                 </div>
             }
+            </div>
             </div>
 
             {editingClient && (

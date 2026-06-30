@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react'
 import { CoachWarRoom, type DirectoryRiskFilter } from './CoachWarRoom'
 import { ClientsDirectoryClient } from './ClientsDirectoryClient'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
-import { cn } from '@/lib/utils'
 import { getCoachPublicIdentifier, type CoachPublicIdentifierSource } from '@/lib/coach/public-identifier'
 
 interface CoachClientsShellProps {
@@ -28,15 +27,10 @@ export function CoachClientsShell({ clients, coach, appUrl, pulse }: CoachClient
 
     return (
         <div>
-            {/* War room (pulso de riesgo): móvil siempre · desktop solo en modo tabla.
-                En desktop-ficha el rail del master-detail ya prioriza el riesgo (oculto sin
-                dejar hueco superior). */}
-            <div
-                className={cn(
-                    'mb-8 md:mb-12',
-                    rosterMode === 'ficha' && 'md:mb-0 md:hidden'
-                )}
-            >
+            {/* War room (pulso de riesgo): SOLO móvil. En desktop el diseño no muestra war
+                room sobre el directorio — Ficha prioriza riesgo en el rail del master-detail
+                y Tabla (DesktopRosterTable) ordena por estado por defecto (w3-table.png). */}
+            <div className="mb-8 md:hidden">
                 <CoachWarRoom
                     coachSlug={publicIdentifier}
                     appUrl={appUrl}

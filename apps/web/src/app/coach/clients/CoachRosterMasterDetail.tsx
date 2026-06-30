@@ -14,21 +14,26 @@ import type { ClientFichaPanelBundle } from './[clientId]/_data/ficha-panel.data
 
 type RosterStatus = 'aldia' | 'enriesgo' | 'atrasada'
 
-const STATUS_META: Record<RosterStatus, { label: string; dot: string; pill: string }> = {
+// Espejo VERBATIM del DS Badge (size="sm", variant="soft"): bg = soft (-100),
+// color = softFg (success-600 / warning-700 / danger-600), dot = base (-500).
+const STATUS_META: Record<RosterStatus, { label: string; dot: string; pillBg: string; pillFg: string }> = {
     aldia: {
         label: 'Al día',
-        dot: 'bg-[var(--success-500)]',
-        pill: 'bg-[var(--success-100)] text-[var(--success-700)]',
+        dot: 'var(--success-500)',
+        pillBg: 'var(--success-100)',
+        pillFg: 'var(--success-600)',
     },
     enriesgo: {
         label: 'En riesgo',
-        dot: 'bg-[var(--warning-500)]',
-        pill: 'bg-[var(--warning-100)] text-[var(--warning-700)]',
+        dot: 'var(--warning-500)',
+        pillBg: 'var(--warning-100)',
+        pillFg: 'var(--warning-700)',
     },
     atrasada: {
         label: 'Atrasada',
-        dot: 'bg-[var(--danger-500)]',
-        pill: 'bg-[var(--danger-100)] text-[var(--danger-700)]',
+        dot: 'var(--danger-500)',
+        pillBg: 'var(--danger-100)',
+        pillFg: 'var(--danger-600)',
     },
 }
 
@@ -51,6 +56,19 @@ function rosterStatus(pulse: DirectoryPulseRow | undefined): RosterStatus {
 }
 
 const STATUS_ORDER: Record<RosterStatus, number> = { enriesgo: 0, atrasada: 1, aldia: 2 }
+
+// Iniciales (hasta 2) — espejo VERBATIM del Avatar del DS.
+function initialsOf(name?: string | null): string {
+    return (
+        (name ?? '')
+            .split(' ')
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((w) => w[0])
+            .join('')
+            .toUpperCase() || '?'
+    )
+}
 
 interface CoachRosterMasterDetailProps {
     clients: any[]
@@ -137,10 +155,10 @@ export function CoachRosterMasterDetail({
     return (
         <div className="flex h-[calc(100dvh-8rem)] min-h-[600px] overflow-hidden rounded-card border border-subtle bg-surface-card">
             {/* ── Rail izquierdo (dt-md-list) ─────────────────────────────── */}
-            <aside className="flex w-[300px] shrink-0 flex-col border-r border-subtle bg-surface-card xl:w-[340px]">
+            <aside className="flex w-[240px] shrink-0 flex-col border-r border-subtle bg-surface-card min-[860px]:w-[280px] min-[1000px]:w-[340px]">
                 <div className="shrink-0 border-b border-subtle px-4 pb-3 pt-4">
                     <div className="mb-3 flex items-center gap-2">
-                        <span className="font-display text-[18px] font-extrabold tracking-[-0.02em] text-strong">
+                        <span className="font-display text-[16px] font-extrabold tracking-[-0.02em] text-strong min-[860px]:text-[18px]">
                             Alumnos
                         </span>
                         <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[12px] font-bold text-subtle">
@@ -152,7 +170,7 @@ export function CoachRosterMasterDetail({
                                 onClick={onShowTable}
                                 title="Vista tabla"
                                 aria-label="Vista tabla"
-                                className="flex h-[30px] w-[30px] items-center justify-center rounded-control border border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong"
+                                className="flex h-[30px] w-[30px] items-center justify-center rounded-[10px] border border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong"
                             >
                                 <LayoutGrid className="h-4 w-4" />
                             </button>
@@ -161,7 +179,7 @@ export function CoachRosterMasterDetail({
                                 onClick={() => setCreateOpen(true)}
                                 title="Nuevo alumno"
                                 aria-label="Nuevo alumno"
-                                className="flex h-[30px] w-[30px] items-center justify-center rounded-control border border-transparent bg-[var(--cta-fill)] text-[var(--text-on-sport)] transition-[filter] hover:brightness-105"
+                                className="flex h-[30px] w-[30px] items-center justify-center rounded-[10px] border border-transparent bg-[var(--cta-fill)] text-[var(--text-on-sport)] transition-[filter] hover:brightness-[1.06]"
                             >
                                 <Plus className="h-4 w-4" />
                             </button>
@@ -203,39 +221,50 @@ export function CoachRosterMasterDetail({
                                     type="button"
                                     onClick={() => loadFicha(client.id)}
                                     className={cn(
-                                        'relative mb-0.5 flex w-full items-center gap-2.5 rounded-control p-2.5 text-left transition-colors',
+                                        'relative mb-0.5 flex w-full items-center gap-[11px] rounded-control p-2.5 text-left transition-colors',
                                         active
                                             ? "bg-sport-100 before:absolute before:left-0 before:top-2 before:bottom-2 before:w-[3px] before:rounded-r-[3px] before:bg-sport-500 before:content-['']"
                                             : 'hover:bg-surface-sunken'
                                     )}
                                 >
+                                    {/* Avatar con anillo de estado — espejo VERBATIM del DS Avatar size="sm" */}
                                     <span
-                                        className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-sunken font-display text-sm font-black uppercase text-strong"
-                                        style={{ boxShadow: `0 0 0 2px ${STATUS_RING[status]}` }}
+                                        className="relative flex h-8 w-8 shrink-0 rounded-full"
+                                        style={{ padding: 2, background: STATUS_RING[status] }}
                                     >
-                                        {client.full_name?.[0] ?? '?'}
+                                        <span
+                                            className="flex h-full w-full items-center justify-center rounded-full font-display text-[11.5px] font-extrabold tracking-[-0.02em]"
+                                            style={{
+                                                background: 'var(--surface-inverse)',
+                                                color: 'var(--sport-400)',
+                                                border: '2px solid var(--surface-card)',
+                                            }}
+                                        >
+                                            {initialsOf(client.full_name)}
+                                        </span>
                                     </span>
                                     <span className="flex min-w-0 flex-1 flex-col gap-px">
                                         <span className="truncate text-[14px] font-bold text-strong">
                                             {client.full_name}
                                         </span>
-                                        <span className="truncate text-[11.5px] text-subtle">
+                                        <span className="hidden truncate text-[11.5px] text-subtle min-[860px]:block">
                                             {sub}
                                         </span>
                                     </span>
-                                    <span className="flex shrink-0 flex-col items-end gap-1">
+                                    <span className="flex shrink-0 flex-col items-end gap-[3px]">
                                         <span
-                                            className={cn(
-                                                'inline-flex items-center gap-1 rounded-pill px-1.5 py-0.5 text-[10px] font-bold',
-                                                meta.pill
-                                            )}
+                                            className="inline-flex h-5 items-center gap-1 rounded-pill border border-transparent px-2 text-[11px] font-bold tracking-[0.01em]"
+                                            style={{ background: meta.pillBg, color: meta.pillFg }}
                                         >
-                                            <span className={cn('h-1.5 w-1.5 rounded-full', meta.dot)} />
+                                            <span
+                                                className="h-1.5 w-1.5 rounded-full"
+                                                style={{ background: meta.dot }}
+                                            />
                                             {meta.label}
                                         </span>
                                         <span
                                             className={cn(
-                                                'text-[12px] font-bold tabular-nums',
+                                                'eva-mono text-[12px] font-bold',
                                                 adherence < 60
                                                     ? 'text-[var(--danger-600)]'
                                                     : 'text-muted'
