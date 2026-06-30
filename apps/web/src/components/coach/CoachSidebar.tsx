@@ -277,14 +277,13 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
             {!isBuilder && (
                 <nav
                     aria-label="Navegación principal"
-                    className="md:hidden"
+                    className="flex md:hidden"
                     style={{
                         position: 'fixed',
                         left: 14,
                         right: 14,
                         bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)',
                         zIndex: 50,
-                        display: 'flex',
                         alignItems: 'stretch',
                         padding: 8,
                         borderRadius: 30,

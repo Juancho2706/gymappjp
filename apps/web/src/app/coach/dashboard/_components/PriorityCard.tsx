@@ -93,7 +93,7 @@ function NextStepInset({ step }: { step: NextStep }) {
     return (
         <Link
             href={step.href}
-            className="flex w-full items-center gap-[11px] rounded-control border border-[var(--border-inverse)] px-3 py-[11px] text-left"
+            className="flex w-full items-center gap-[11px] rounded-[10px] border border-[var(--border-inverse)] px-3 py-[11px] text-left"
             style={{ background: 'rgba(255,255,255,0.05)' }}
         >
             <span
@@ -172,9 +172,9 @@ export function PriorityCard({
             </div>
 
             {riesgoCount === 0 ? (
-                <div className="flex items-center gap-3 px-0 pb-2.5 pt-1">
+                <div className="flex items-center gap-[11px] px-0 pb-2.5 pt-1">
                     <span
-                        className="flex size-9 shrink-0 items-center justify-center rounded-full"
+                        className="flex size-[38px] shrink-0 items-center justify-center rounded-full"
                         style={{ background: 'rgba(52,199,129,0.16)', color: '#4FD9A0' }}
                     >
                         <CheckCircle2 className="size-5" />
@@ -203,7 +203,7 @@ export function PriorityCard({
                                 <Link
                                     key={s.clientId}
                                     href={`/coach/clients/${s.clientId}`}
-                                    className={`flex items-center gap-3 py-2.5 outline-none transition-colors hover:opacity-90 focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)] ${
+                                    className={`flex items-center gap-[11px] py-2.5 outline-none transition-colors hover:opacity-90 focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)] ${
                                         i > 0 ? 'border-t border-[var(--border-inverse)]' : ''
                                     }`}
                                 >
@@ -218,7 +218,7 @@ export function PriorityCard({
                                     </div>
                                     <div className="flex shrink-0 flex-col items-end gap-0.5">
                                         <span
-                                            className="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-bold"
+                                            className="inline-flex items-center gap-[5px] whitespace-nowrap text-[11px] font-bold"
                                             style={{ color: band.color }}
                                         >
                                             <span
@@ -234,7 +234,7 @@ export function PriorityCard({
                                             </span>
                                         </span>
                                     </div>
-                                    <ChevronRight className="size-4 shrink-0 text-[var(--text-muted)]" />
+                                    <ChevronRight className="size-[17px] shrink-0 text-[var(--text-muted)]" />
                                 </Link>
                             )
                         })}

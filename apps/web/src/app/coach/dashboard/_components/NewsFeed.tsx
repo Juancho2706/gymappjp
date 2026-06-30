@@ -82,7 +82,7 @@ function ProgramRow({ item }: { item: ExpiringProgramItem }) {
     return (
         <Link
             href={item.clientId ? `/coach/clients/${item.clientId}` : '/coach/workout-programs'}
-            className="flex cursor-pointer items-center gap-3 px-3.5 py-2.5 transition-colors hover:bg-surface-sunken"
+            className="flex cursor-pointer items-center gap-3 px-3.5 py-[11px] transition-colors hover:bg-surface-sunken"
         >
             <span
                 className="flex size-[34px] shrink-0 items-center justify-center rounded-full"
@@ -111,7 +111,7 @@ function ActivityRow({ item }: { item: ActivityItemClient }) {
     return (
         <Link
             href={item.href}
-            className="flex cursor-pointer items-center gap-3 px-3.5 py-2.5 transition-colors hover:bg-surface-sunken"
+            className="flex cursor-pointer items-center gap-3 px-3.5 py-[11px] transition-colors hover:bg-surface-sunken"
         >
             {item.photoUrl ? (
                 <Image

@@ -101,7 +101,7 @@ export function PulseHero({ kpi, onAdherence }: Props) {
                             {c.label}
                         </span>
                         <span
-                            className="font-display text-[27px] font-black leading-none tabular-nums tracking-[-0.02em]"
+                            className="font-display text-[27px] font-black leading-none tabular-nums tracking-[-0.03em]"
                             style={{
                                 color: c.danger
                                     ? 'var(--danger-600)'

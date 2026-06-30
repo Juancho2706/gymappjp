@@ -139,14 +139,14 @@ export function DesktopBento({ data, coachName, onAdherence }: Props) {
                     <button
                         type="button"
                         onClick={() => router.push('/coach/clients')}
-                        className="inline-flex items-center gap-2 rounded-control border border-border-subtle bg-surface-card px-4 py-2.5 text-sm font-bold text-[var(--text-body)] shadow-[var(--shadow-sm)] transition-colors hover:border-[var(--border-default)]"
+                        className="inline-flex h-12 items-center gap-2 rounded-control border-[1.5px] border-[var(--border-default)] bg-surface-card px-[18px] text-[15px] font-bold leading-none tracking-[-0.01em] text-[var(--text-strong)] transition-colors hover:bg-surface-sunken"
                     >
                         <Upload className="size-[17px]" /> Importar
                     </button>
                     <button
                         type="button"
                         onClick={() => setCreateOpen(true)}
-                        className="inline-flex items-center gap-2 rounded-control bg-sport-500 px-4 py-2.5 text-sm font-bold text-[var(--text-on-sport)] shadow-[var(--glow-sport)] transition-transform hover:-translate-y-0.5"
+                        className="inline-flex h-12 items-center gap-2 rounded-control border-[1.5px] border-transparent bg-sport-500 px-[18px] text-[15px] font-bold leading-none tracking-[-0.01em] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] transition-transform hover:-translate-y-0.5"
                     >
                         <Plus className="size-[17px]" /> Nuevo alumno
                     </button>
@@ -166,7 +166,7 @@ export function DesktopBento({ data, coachName, onAdherence }: Props) {
                         >
                             <div className="mb-2.5 flex items-center gap-2">
                                 <span
-                                    className={`flex size-[30px] shrink-0 items-center justify-center rounded-control ${TONE_ICON[k.tone]}`}
+                                    className={`flex size-[30px] shrink-0 items-center justify-center rounded-[10px] ${TONE_ICON[k.tone]}`}
                                 >
                                     <Icon className="size-[17px]" />
                                 </span>
@@ -174,7 +174,7 @@ export function DesktopBento({ data, coachName, onAdherence }: Props) {
                                     {k.label}
                                 </span>
                             </div>
-                            <div className="font-display text-[34px] font-black leading-none tabular-nums text-[var(--text-strong)]">
+                            <div className="font-display text-[34px] font-black leading-none tabular-nums tracking-[-0.03em] text-[var(--text-strong)]">
                                 <EvaCountUp value={k.value} suffix={k.suffix} />
                             </div>
                             <div className="mt-[7px] text-xs font-semibold text-[var(--text-muted)]">
@@ -219,7 +219,7 @@ export function DesktopBento({ data, coachName, onAdherence }: Props) {
                                     <Link
                                         key={s.clientId}
                                         href={`/coach/clients/${s.clientId}`}
-                                        className="flex w-full items-center gap-3 border-t border-white/[0.07] px-[18px] py-3 text-left transition-colors first:border-t-0 hover:bg-white/5"
+                                        className="flex w-full items-center gap-3 border-t border-white/[0.07] px-[18px] py-3 text-left transition-colors hover:bg-white/5"
                                     >
                                         <Avatar name={s.clientName} size="sm" />
                                         <span className="flex min-w-0 flex-1 flex-col gap-px">
@@ -289,9 +289,9 @@ function ActiveProgramsCard({ items }: { items: ExpiringProgramItem[] }) {
                             <Link
                                 key={p.id}
                                 href={p.clientId ? `/coach/clients/${p.clientId}` : '/coach/workout-programs'}
-                                className="flex w-full items-center gap-[11px] rounded-card px-1.5 py-[9px] text-left transition-colors hover:bg-surface-sunken"
+                                className="flex w-full items-center gap-[11px] rounded-control px-1.5 py-[9px] text-left transition-colors hover:bg-surface-sunken"
                             >
-                                <span className="flex size-8 shrink-0 items-center justify-center rounded-control bg-[var(--sport-100)] text-[var(--sport-600)]">
+                                <span className="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-[var(--sport-100)] text-[var(--sport-600)]">
                                     <Dumbbell className="size-4" />
                                 </span>
                                 <span className="flex min-w-0 flex-1 flex-col gap-px">
@@ -341,7 +341,7 @@ function RecentActivityCard({ items }: { items: ActivityItemClient[] }) {
                             <Link
                                 key={a.id}
                                 href={a.href}
-                                className="flex items-center gap-2.5 rounded-card px-1.5 py-2 transition-colors hover:bg-surface-sunken"
+                                className="flex items-center gap-2.5 rounded-control px-1.5 py-2 transition-colors hover:bg-surface-sunken"
                             >
                                 <Avatar name={name} size="xs" />
                                 <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text-muted)]">

@@ -109,7 +109,7 @@ export function DashboardShell({
 
                     <PulseHero kpi={data.kpi} onAdherence={openInsights} />
 
-                    <div className="mb-5">
+                    <div className="mb-[22px]">
                         <PriorityCard
                             items={data.topRiskClients}
                             showNextStep
@@ -125,7 +125,7 @@ export function DashboardShell({
                         <AgendaCard items={data.agenda} />
                     </div>
 
-                    <div className="mb-4">
+                    <div className="mb-[18px]">
                         <NewsFeed
                             expiring={data.expiringPrograms}
                             activities={data.recentActivities}
