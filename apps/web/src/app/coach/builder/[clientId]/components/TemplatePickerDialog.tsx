@@ -104,6 +104,25 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
                         section: b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main',
                         section_template_id: b.section_template_id ?? null,
                         is_override: false,
+                        // Prescripción polimórfica (cardio/movilidad/roller/unilateral/carga): el query de
+                        // plantilla la trae; sin copiarla acá, saveWorkoutProgram la pisaba con null al
+                        // guardar (data-loss silencioso de toda la prescripción tipada). Espejo de
+                        // mapDbBlockToBuilderBlock (round-trip canónico).
+                        exercise_type: b.exercises?.exercise_type ?? null,
+                        exercise_type_override: b.exercise_type_override ?? null,
+                        side_mode: b.side_mode ?? null,
+                        reps_value: b.reps_value ?? null,
+                        reps_unit: b.reps_unit ?? null,
+                        load_type: b.load_type ?? null,
+                        load_value: b.load_value != null ? String(b.load_value) : '',
+                        load_unit: b.load_unit ?? null,
+                        distance_value: b.distance_value != null ? String(b.distance_value) : '',
+                        distance_unit: b.distance_unit ?? null,
+                        duration_sec: b.duration_sec ?? null,
+                        target_pace_sec_per_km: b.target_pace_sec_per_km ?? null,
+                        hr_zone: b.hr_zone ?? null,
+                        instructions: b.instructions || '',
+                        interval_config: b.interval_config ?? null,
                     })),
             }
         })
