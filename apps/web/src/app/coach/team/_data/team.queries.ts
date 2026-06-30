@@ -31,6 +31,8 @@ export type TeamOverview = {
     members: TeamMemberView[]
     activeMemberCount: number
     poolClientCount: number
+    /** Alumnos del pool asignados a cada coach (clients.coach_id), por coach_id. Data real. */
+    studentsByCoach: Record<string, number>
     isOwner: boolean
     isManager: boolean
 }
@@ -68,10 +70,17 @@ export const getCoachTeamOverview = cache(async (activeTeamId: string): Promise<
                     .order('joined_at', { ascending: true }),
                 supabase
                     .from('clients')
-                    .select('id', { count: 'exact', head: true })
+                    .select('coach_id')
                     .eq('team_id', t.id)
                     .eq('is_archived', false),
             ])
+
+            // Tally de alumnos del pool por coach asignado (clients.coach_id) — data real para el
+            // badge "{n} alumnos" del detalle desktop. El total del pool = filas devueltas.
+            const studentsByCoach: Record<string, number> = {}
+            for (const row of (poolRes.data ?? []) as Array<{ coach_id: string | null }>) {
+                if (row.coach_id) studentsByCoach[row.coach_id] = (studentsByCoach[row.coach_id] ?? 0) + 1
+            }
 
             const members: TeamMemberView[] = (membersRes.data ?? []).map((m) => {
                 const rel = (m as { coaches?: unknown }).coaches
@@ -111,7 +120,8 @@ export const getCoachTeamOverview = cache(async (activeTeamId: string): Promise<
                     : {}),
                 members,
                 activeMemberCount: members.length,
-                poolClientCount: poolRes.count ?? 0,
+                poolClientCount: poolRes.data?.length ?? 0,
+                studentsByCoach,
                 isOwner,
                 isManager,
             }

@@ -202,7 +202,7 @@ export default function TeamMembersManager({
     )
 }
 
-function AddCoachDialog({ teamId, isOwner, open, onOpenChange }: {
+export function AddCoachDialog({ teamId, isOwner, open, onOpenChange }: {
     teamId: string
     isOwner: boolean
     open: boolean
@@ -328,7 +328,7 @@ function NewCoachForm({ isOwner, pending, onSubmitForm }: {
     )
 }
 
-function EditRoleDialog({ member, pending, onOpenChange, onSave }: {
+export function EditRoleDialog({ member, pending, onOpenChange, onSave }: {
     member: TeamMemberView | null
     pending: boolean
     onOpenChange: (o: boolean) => void

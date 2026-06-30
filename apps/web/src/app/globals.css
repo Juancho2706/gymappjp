@@ -1260,3 +1260,45 @@ body > * {
     }
   }
 }
+
+/* ============================================================
+   EVA desktop · Opciones (settings 2-panel · SettingsShell) —
+   transcripción VERBATIM de docs/design-source/ui_kits/eva-desktop/index.html
+   (.dt-set-* / DesktopOpciones). Solo aplica en md+ (el shell se monta
+   `hidden md:block`); <760px usa el hub móvil verbatim.
+
+   Adaptación estructural única: el shell del coach es document-flow (no hay
+   viewport `position:absolute; inset:0` como en el mock SPA), así que
+   `.dt-settings` se hostea en `.dt-settings-host` (caja de altura fija + borde
+   redondeado, espejo del contenedor master-detail de Alumnos) en vez de
+   pegarse al viewport. El resto (rail / pane / items / paddings) es 1:1.
+   ============================================================ */
+.dt-settings-host {
+  position: relative;
+  height: calc(100dvh - 8.5rem);
+  min-height: 600px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+}
+.dt-settings { position: absolute; inset: 0; display: flex; }
+.dt-set-rail { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border-subtle); background: var(--surface-card); }
+.dt-set-railhd { padding: 18px 18px 12px; font-family: var(--font-display); font-weight: 800; font-size: 18px; color: var(--text-strong); flex-shrink: 0; }
+.dt-set-railscroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 10px 12px; }
+.dt-set-railgrp { margin-bottom: 10px; }
+.dt-set-raillbl { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-subtle); padding: 8px 10px 4px; }
+.dt-set-railitem { display: flex; align-items: center; gap: 11px; width: 100%; padding: 9px 10px; border: none; background: transparent; border-radius: var(--radius-md); color: var(--text-muted); font-family: var(--font-ui); font-size: 14px; font-weight: 650; cursor: pointer; text-align: left; transition: background .14s, color .14s; }
+.dt-set-railitem:hover { background: var(--surface-sunken); color: var(--text-strong); }
+.dt-set-railitem[data-active="1"] { background: var(--sport-100); color: var(--sport-600); font-weight: 750; }
+.dt-set-railitem[data-danger="1"] { color: var(--danger-600, #C62828); }
+.dt-set-railico { display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; flex-shrink: 0; }
+.dt-set-pane { flex: 1; min-width: 0; overflow-y: auto; }
+.dt-set-panehd { font-family: var(--font-display); font-weight: 900; font-size: 26px; letter-spacing: -0.02em; color: var(--text-strong); padding: 28px var(--dt-page-x) 4px; max-width: var(--dt-read-narrow); margin: 0 auto; }
+/* Subtítulo de sección (espejo del `<p>` de cada sub-página del app, no presente
+   en el mock que titula vía TopBar). Misma caja de lectura que panehd/embed. */
+.dt-set-panesub { max-width: var(--dt-read-narrow); margin: 0 auto; padding: 4px var(--dt-page-x) 0; font-size: 14px; line-height: 1.5; color: var(--text-muted); }
+/* Embed: el mock usa 12px horizontales porque la screen reusada trae su propio
+   padding; los componentes reales del app no lo traen → usamos --dt-page-x. */
+.dt-set-embed { max-width: var(--dt-read-narrow); margin: 0 auto; padding: 20px var(--dt-page-x) 40px; }

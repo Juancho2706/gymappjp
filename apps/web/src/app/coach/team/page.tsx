@@ -8,6 +8,7 @@ import { getCoachTeamOverview } from './_data/team.queries'
 import TeamMembersManager from './_components/TeamMembersManager'
 import { TeamBrandStudio } from './_components/TeamBrandStudio'
 import { TeamShareLink } from './_components/TeamShareLink'
+import { CoachTeamDesktop } from './_components/CoachTeamDesktop'
 
 export const metadata = { title: 'Mi Equipo' }
 
@@ -38,7 +39,7 @@ export default async function CoachTeamPage() {
     }
 
     return (
-        <div className="mx-auto max-w-5xl space-y-4 px-5 pb-6 pt-2 sm:px-6">
+        <div className="mx-auto w-full max-w-5xl space-y-4 px-5 pb-6 pt-2 sm:px-6 md:max-w-none md:px-0 md:pb-0 md:pt-0">
             {teams.map((team) => {
                 const accent = team.primary_color || '#10B981'
                 const seatPct = team.seat_limit > 0
@@ -61,7 +62,14 @@ export default async function CoachTeamPage() {
                 const RoleIcon = team.isOwner ? Crown : team.isManager ? Shield : User
 
                 return (
-                    <section key={team.id} className="space-y-4">
+                    <div key={team.id}>
+                        {/* ── DESKTOP (md+) — maestro-detalle 1:1 con DesktopTeamEquipo ── */}
+                        <div className="hidden md:block">
+                            <CoachTeamDesktop team={team} userId={userId} />
+                        </div>
+
+                        {/* ── MÓVIL (<md) — pantalla en columna verbatim, sin cambios ── */}
+                        <section className="space-y-4 md:hidden">
                         {/* ── Hero de identidad ─────────────────────────── */}
                         <header className="rounded-card border border-[var(--border-inverse)] bg-[var(--surface-inverse)] p-5 text-on-dark">
                             <div className="flex items-center gap-3.5">
@@ -184,7 +192,8 @@ export default async function CoachTeamPage() {
                             </div>
                             <span className="text-xs font-semibold text-subtle">EVA Teams · {team.name}</span>
                         </div>
-                    </section>
+                        </section>
+                    </div>
                 )
             })}
         </div>

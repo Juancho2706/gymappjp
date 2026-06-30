@@ -1,11 +1,21 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 import { getTierCapabilities, ADDON_MODULE_KEYS, type SubscriptionTier } from '@/lib/constants'
 import { Check, Palette, Package, ChevronRight, Users, CreditCard, SlidersHorizontal, LayoutGrid, Sparkles, ArrowRight, Image as ImageIcon, Type, MessageSquare, type LucideIcon } from 'lucide-react'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 import { DangerZone } from './_components/DangerZone'
 import { ThemeToggleCard } from './_components/ThemeToggleCard'
 import { getCoachSettingsForUser } from './_data/settings.queries'
+import { BrandSettingsForm } from './BrandSettingsForm'
+import { LogoUploadForm } from './LogoUploadForm'
+import { ModulesForm } from './modules/_components/ModulesForm'
+import { FeaturePrefsPanel } from '@/components/coach/FeaturePrefsPanel'
+import { AreasManager } from './areas/_components/AreasManager'
+import { getModulesContext } from './modules/_data/modules.queries'
+import { getFuncionesContext } from './funciones/_data/funciones.queries'
+import { getAreasContext } from './areas/_data/areas.queries'
+import { CoachSettingsDesktop, type SettingsSectionId } from './_components/CoachSettingsDesktop'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -116,6 +126,18 @@ function IdentityHero({ name, subtitle, badge }: { name: string; subtitle: strin
                 </span>
             </div>
         </div>
+    )
+}
+
+/** Cuerpo de un panel de la SettingsShell (desktop): subtítulo opcional + contenido embebido,
+ *  en la caja de lectura angosta del DS (--dt-read-narrow). El título grande (panehd) lo pone
+ *  CoachSettingsDesktop desde el label del rail. */
+function PaneBody({ desc, children }: { desc?: string; children: ReactNode }) {
+    return (
+        <>
+            {desc && <p className="dt-set-panesub">{desc}</p>}
+            <div className="dt-set-embed">{children}</div>
+        </>
     )
 }
 
@@ -316,73 +338,166 @@ export default async function CoachSettingsPage() {
         )
     }
 
-    // Standalone con branding: hub "Opciones" aplanado (un solo patrón de card).
-    // Marca · [Suscripción + Módulos = "lo que pagas"] · Funciones. Áreas vive en el builder.
-    return (
-        <div className="mx-auto max-w-3xl animate-fade-in space-y-6 px-4 py-6 md:px-8">
-            <div>
-                <h1 className="font-display text-xl font-black uppercase tracking-tighter text-strong md:text-2xl">Opciones</h1>
-                <p className="mt-2 text-sm leading-relaxed text-muted">
-                    Tu marca, tu suscripción y la configuración de tu cuenta, todo en un solo lugar.
-                </p>
-            </div>
+    // ── Desktop (≥760): SettingsShell de 2 paneles (rail + sección embebida) ──
+    // Las sub-páginas siguen vivas como rutas directas; en desktop embebemos su contenido REAL
+    // (mismos componentes + mismos datos) sin navegación. Data de cada sección en paralelo.
+    const [modulesRes, funcionesRes, areasRes] = await Promise.all([
+        getModulesContext(),
+        getFuncionesContext(),
+        getAreasContext(),
+    ])
 
-            <IdentityHero name={displayName} subtitle={`Coach · ${clientLabel}`} badge={`Plan ${TIER_LABEL[tier] ?? 'Starter'}`} />
-
-            <div className="space-y-3">
-                <Eyebrow>Apariencia</Eyebrow>
+    const sections: Partial<Record<SettingsSectionId, ReactNode>> = {
+        marca: (
+            <PaneBody desc="Personalizá la app de tus alumnos: logo, colores, nombre y mensajes. Cada alumno ve TU marca, no la de EVA.">
+                <div className="space-y-6">
+                    <LogoUploadForm currentLogoUrl={coach.logo_url} brandName={coach.brand_name} />
+                    <BrandSettingsForm coach={coach} />
+                </div>
+            </PaneBody>
+        ),
+        suscripcion: (
+            <PaneBody desc="Tu plan, facturación, alumnos activos y métodos de pago.">
+                <div className="rounded-card border border-subtle bg-surface-card p-5 shadow-[var(--shadow-sm)]">
+                    <div className="flex items-center gap-3.5">
+                        <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-control" style={{ background: 'var(--sport-100)', color: 'var(--sport-600)' }}>
+                            <CreditCard className="h-[22px] w-[22px]" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                            <p className="text-[15px] font-bold text-strong">Plan {TIER_LABEL[tier] ?? 'Starter'}</p>
+                            <p className="mt-0.5 text-[12.5px] text-muted">Gestioná tu suscripción, facturación y métodos de pago.</p>
+                        </div>
+                    </div>
+                    <Link
+                        href="/coach/subscription"
+                        className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-control px-5 text-sm font-bold transition-[filter] bg-[var(--cta-fill)] text-[var(--text-on-sport)] hover:brightness-[1.06]"
+                    >
+                        Abrir suscripción
+                        <ArrowRight className="h-4 w-4" />
+                    </Link>
+                </div>
+            </PaneBody>
+        ),
+        apariencia: (
+            <PaneBody desc="Tema claro u oscuro de la interfaz del panel.">
                 <ThemeToggleCard />
+            </PaneBody>
+        ),
+        eliminar: (
+            <PaneBody>
+                <DangerZone />
+            </PaneBody>
+        ),
+    }
+    if (modulesRes.ctx) {
+        sections.modulos = (
+            <PaneBody desc="Conocé los módulos disponibles para tu cuenta.">
+                <ModulesForm
+                    modules={modulesRes.ctx.modules}
+                    killedByOperator={modulesRes.ctx.killedByOperator}
+                    isTeamManager={modulesRes.ctx.isTeamManager}
+                    scope={modulesRes.ctx.scope}
+                    tier={modulesRes.ctx.tier}
+                    nutritionVisible={modulesRes.ctx.nutritionVisible}
+                />
+            </PaneBody>
+        )
+    }
+    if (funcionesRes.ctx) {
+        sections.funciones = (
+            <PaneBody desc="Elegí qué tan a fondo trabajás la nutrición y qué secciones ven vos y tus alumnos.">
+                {funcionesRes.ctx.scope === 'team' ? (
+                    <FeaturePrefsPanel scope="team" teamId={funcionesRes.ctx.teamId!} domains={funcionesRes.ctx.domains} />
+                ) : (
+                    <FeaturePrefsPanel scope="coach" domains={funcionesRes.ctx.domains} />
+                )}
+            </PaneBody>
+        )
+    }
+    if (areasRes.ctx) {
+        sections.areas = (
+            <PaneBody desc="Organizá los días de entrenamiento con tus propias áreas (Movilidad, Core, HYROX…).">
+                <AreasManager initialAreas={areasRes.ctx.areas} canEdit={areasRes.ctx.canEdit} scope={areasRes.ctx.scope} />
+            </PaneBody>
+        )
+    }
+
+    // Standalone con branding:
+    //  · Móvil (<760): hub "Opciones" aplanado (un solo patrón de card), verbatim del diseño móvil.
+    //  · Desktop (≥760): SettingsShell de 2 paneles 1:1 con DesktopOpciones.
+    return (
+        <>
+            <div className="mx-auto max-w-3xl animate-fade-in space-y-6 px-4 py-6 md:hidden">
+                <div>
+                    <h1 className="font-display text-xl font-black uppercase tracking-tighter text-strong">Opciones</h1>
+                    <p className="mt-2 text-sm leading-relaxed text-muted">
+                        Tu marca, tu suscripción y la configuración de tu cuenta, todo en un solo lugar.
+                    </p>
+                </div>
+
+                <IdentityHero name={displayName} subtitle={`Coach · ${clientLabel}`} badge={`Plan ${TIER_LABEL[tier] ?? 'Starter'}`} />
+
+                <div className="space-y-3">
+                    <Eyebrow>Apariencia</Eyebrow>
+                    <ThemeToggleCard />
+                </div>
+
+                <div className="space-y-3">
+                    <Eyebrow>Personalización</Eyebrow>
+                    <HubCard
+                        href="/coach/settings/brand"
+                        icon={Palette}
+                        title="Mi Marca"
+                        desc="Logo, colores, nombre y mensajes de la app del alumno"
+                        tone="sport"
+                    />
+                </div>
+
+                {/* Plan: suscripción base + módulos de pago, juntos. */}
+                <div className="space-y-3">
+                    <Eyebrow>Plan</Eyebrow>
+                    <HubCard
+                        href="/coach/subscription"
+                        icon={CreditCard}
+                        title="Suscripción"
+                        desc="Tu plan, facturación, alumnos activos y métodos de pago"
+                    />
+                    <HubCard
+                        href="/coach/settings/modules"
+                        icon={Package}
+                        title="Módulos"
+                        desc="Catálogo de módulos disponibles"
+                        badge={{ label: `${ADDON_MODULE_KEYS.length} módulos`, tone: 'sport' }}
+                    />
+                </div>
+
+                <div className="space-y-3">
+                    <Eyebrow>Configuración</Eyebrow>
+                    <HubCard
+                        href="/coach/settings/funciones"
+                        icon={SlidersHorizontal}
+                        title="Funciones de nutrición"
+                        desc="Qué tan a fondo trabajás la nutrición y qué ven los alumnos"
+                    />
+                    <HubCard
+                        href="/coach/settings/areas"
+                        icon={LayoutGrid}
+                        title="Áreas del builder"
+                        desc="Organizá los días del planificador"
+                    />
+                </div>
+
+                {/* Danger zone — account deletion (siempre alcanzable) */}
+                <DangerZone />
+
+                <SettingsFooter />
             </div>
 
-            <div className="space-y-3">
-                <Eyebrow>Personalización</Eyebrow>
-                <HubCard
-                    href="/coach/settings/brand"
-                    icon={Palette}
-                    title="Mi Marca"
-                    desc="Logo, colores, nombre y mensajes de la app del alumno"
-                    tone="sport"
-                />
+            <div className="hidden w-full animate-fade-in md:block">
+                <div className="mx-auto w-full max-w-[1600px] px-4 pb-3 pt-5 md:px-8">
+                    <CoachSettingsDesktop sections={sections} />
+                </div>
             </div>
-
-            {/* Plan: suscripción base + módulos de pago, juntos. */}
-            <div className="space-y-3">
-                <Eyebrow>Plan</Eyebrow>
-                <HubCard
-                    href="/coach/subscription"
-                    icon={CreditCard}
-                    title="Suscripción"
-                    desc="Tu plan, facturación, alumnos activos y métodos de pago"
-                />
-                <HubCard
-                    href="/coach/settings/modules"
-                    icon={Package}
-                    title="Módulos"
-                    desc="Catálogo de módulos disponibles"
-                    badge={{ label: `${ADDON_MODULE_KEYS.length} módulos`, tone: 'sport' }}
-                />
-            </div>
-
-            <div className="space-y-3">
-                <Eyebrow>Configuración</Eyebrow>
-                <HubCard
-                    href="/coach/settings/funciones"
-                    icon={SlidersHorizontal}
-                    title="Funciones de nutrición"
-                    desc="Qué tan a fondo trabajás la nutrición y qué ven los alumnos"
-                />
-                <HubCard
-                    href="/coach/settings/areas"
-                    icon={LayoutGrid}
-                    title="Áreas del builder"
-                    desc="Organizá los días del planificador"
-                />
-            </div>
-
-            {/* Danger zone — account deletion (siempre alcanzable) */}
-            <DangerZone />
-
-            <SettingsFooter />
-        </div>
+        </>
     )
 }
