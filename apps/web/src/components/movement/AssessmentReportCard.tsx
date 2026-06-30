@@ -35,23 +35,24 @@ function scoreSquareBg(score: number): string {
     return 'bg-surface-sunken'
 }
 
-function SideScore({ value, weak }: { value: number | null; weak: boolean }) {
-    if (value == null) return <span className="text-muted">—</span>
+/** Columna I/D/Ú: etiqueta de lado arriba, valor mono debajo (rojo si es el lado débil). */
+function SideCell({ label, value, weak }: { label: string; value: number | null; weak: boolean }) {
     return (
-        <span
-            className={cn(
-                'inline-flex size-7 items-center justify-center rounded-[8px] text-sm font-bold tabular-nums',
-                weak
-                    ? 'bg-[var(--danger-100)] text-[color:var(--danger-600)]'
-                    : 'bg-surface-sunken text-body'
-            )}
-        >
-            {value}
-        </span>
+        <div className="w-[30px] text-center">
+            <div className="text-[8.5px] font-bold uppercase text-subtle">{label}</div>
+            <div
+                className={cn(
+                    'font-mono text-[15px] font-bold tabular-nums',
+                    weak ? 'text-[color:var(--danger-600)]' : 'text-body'
+                )}
+            >
+                {value != null ? value : '—'}
+            </div>
+        </div>
     )
 }
 
-function ItemRow({ item }: { item: MovementAssessmentItem }) {
+function ItemRow({ item, index }: { item: MovementAssessmentItem; index: number }) {
     const { t } = useTranslation()
     const weakLeft =
         item.is_per_side && item.score_left != null && item.score_right != null && item.score_left < item.score_right
@@ -59,47 +60,49 @@ function ItemRow({ item }: { item: MovementAssessmentItem }) {
         item.is_per_side && item.score_left != null && item.score_right != null && item.score_right < item.score_left
 
     return (
-        <tr className="border-b border-subtle last:border-0">
-            <td className="py-2.5 pr-2">
-                <p className="text-sm font-semibold text-strong">{t(`assessment.pattern.${item.pattern}`)}</p>
-                {item.comment && <p className="mt-0.5 text-xs text-muted">{item.comment}</p>}
-                <span className="mt-1 flex flex-wrap gap-1.5">
-                    {item.pain && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[color:var(--danger-600)]">
-                            <AlertTriangle className="size-3" aria-hidden />
-                            {t('assessment.flag.pain')}
+        <>
+            {index > 0 && <div className="mx-3.5 h-px bg-subtle" aria-hidden />}
+            <div className="flex items-center gap-2.5 px-3.5 py-[11px]">
+                <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-strong">{t(`assessment.pattern.${item.pattern}`)}</p>
+                    {item.comment && <p className="mt-0.5 text-xs text-muted">{item.comment}</p>}
+                    {(item.pain || item.clearing_positive === true) && (
+                        <span className="mt-[3px] flex flex-wrap gap-1.5">
+                            {item.pain && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[color:var(--danger-600)]">
+                                    <AlertTriangle className="size-3" aria-hidden />
+                                    {t('assessment.flag.pain')}
+                                </span>
+                            )}
+                            {item.clearing_positive === true && (
+                                <span className="inline-flex items-center text-[10px] font-bold text-[color:var(--warning-600)]">
+                                    ● {t('assessment.report.clearing')}+
+                                </span>
+                            )}
                         </span>
                     )}
-                    {item.clearing_positive === true && (
-                        <span className="inline-flex items-center text-[10px] font-bold text-[color:var(--warning-600)]">
-                            {t('assessment.report.clearing')}: {t('assessment.report.clearingPositive')}
-                        </span>
-                    )}
-                </span>
-            </td>
-            <td className="px-2 py-2.5 text-center">
+                </div>
                 {item.is_per_side ? (
-                    <span className="inline-flex items-center gap-1.5">
-                        <SideScore value={item.score_left} weak={weakLeft} />
-                        <span className="text-xs text-muted">/</span>
-                        <SideScore value={item.score_right} weak={weakRight} />
-                    </span>
+                    <div className="mr-1 flex gap-1.5">
+                        <SideCell label={t('assessment.side.leftAbbr')} value={item.score_left} weak={weakLeft} />
+                        <SideCell label={t('assessment.side.rightAbbr')} value={item.score_right} weak={weakRight} />
+                    </div>
                 ) : (
-                    <SideScore value={item.score_single} weak={false} />
+                    <div className="mr-1">
+                        <SideCell label="Ú" value={item.score_single} weak={false} />
+                    </div>
                 )}
-            </td>
-            <td className="py-2.5 pl-2 text-right">
                 <span
                     className={cn(
-                        'inline-flex size-[30px] items-center justify-center rounded-[8px] font-display text-sm font-black tabular-nums',
+                        'inline-flex size-[30px] shrink-0 items-center justify-center rounded-[8px] font-display text-sm font-black tabular-nums',
                         scoreSquareBg(item.final_score),
                         scoreTone(item.final_score)
                     )}
                 >
                     {item.final_score}
                 </span>
-            </td>
-        </tr>
+            </div>
+        </>
     )
 }
 
@@ -161,27 +164,17 @@ export function AssessmentReportCard({ assessment }: { assessment: MovementAsses
                 </div>
             </Card>
 
-            {/* Tabla de 7 patrones */}
-            <Card padding="md">
-                <div className="overflow-x-auto">
-                    <table className="w-full min-w-[320px] border-collapse">
-                        <thead>
-                            <tr className="border-b border-subtle text-left text-[11px] uppercase tracking-[0.06em] text-muted">
-                                <th className="py-2 pr-2 font-bold">{t('assessment.report.pattern')}</th>
-                                <th className="px-2 py-2 text-center font-bold">
-                                    {t('assessment.side.leftAbbr')}/{t('assessment.side.rightAbbr')}
-                                </th>
-                                <th className="py-2 pl-2 text-right font-bold">{t('assessment.report.final')}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {orderedItems.map((item) => (
-                                <ItemRow key={item.id} item={item} />
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </Card>
+            {/* 7 patrones — filas (lado débil resaltado, cuadro de puntaje final) */}
+            <div>
+                <h2 className="mb-2.5 font-display text-[17px] font-extrabold tracking-[-0.02em] text-strong">
+                    {language === 'es' ? 'Patrones' : 'Patterns'}
+                </h2>
+                <Card padding="none" className="overflow-hidden">
+                    {orderedItems.map((item, i) => (
+                        <ItemRow key={item.id} item={item} index={i} />
+                    ))}
+                </Card>
+            </div>
 
             {assessment.notes && (
                 <Card padding="md">

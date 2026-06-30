@@ -1,6 +1,6 @@
 'use client'
 
-import { Dumbbell, Eye, Flame, Layers, Wind } from 'lucide-react'
+import { Copy, Dumbbell, Eye, Flame, GitMerge, Layers, Pencil, Trash2, UserPlus, Wind } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -311,12 +311,103 @@ export interface ProgramPreviewPanelProps {
     onOpenChange: (open: boolean) => void
     /** Areas visibles del workspace activo — resuelve nombres de areas custom/extra (fallback legacy si falta). */
     areas?: WorkoutArea[]
+    /** Acciones (diseño: hoja de vista previa con botonera). Opcionales: si faltan, sólo se muestra «Cerrar». */
+    onEdit?: () => void
+    onAssign?: () => void
+    onDuplicate?: () => void
+    onSync?: () => void
+    onDelete?: () => void
 }
 
-export function ProgramPreviewPanel({ program, open, onOpenChange, areas = [] }: ProgramPreviewPanelProps) {
+function PreviewActions({
+    program,
+    onEdit,
+    onAssign,
+    onDuplicate,
+    onSync,
+    onDelete,
+}: {
+    program: ProgramListModel
+    onEdit?: () => void
+    onAssign?: () => void
+    onDuplicate?: () => void
+    onSync?: () => void
+    onDelete?: () => void
+}) {
+    const isTemplate = !program.client_id
+    const hasAny = onEdit || onAssign || onDuplicate || onSync || onDelete
+    if (!hasAny) return null
+
+    return (
+        <div className="flex w-full flex-col gap-2.5">
+            {isTemplate ? (
+                onAssign && (
+                    <Button type="button" variant="sport" size="lg" className="w-full gap-2" onClick={onAssign}>
+                        <UserPlus className="size-[18px]" />
+                        Asignar a alumnos
+                    </Button>
+                )
+            ) : (
+                onEdit && (
+                    <Button type="button" variant="sport" size="lg" className="w-full gap-2" onClick={onEdit}>
+                        <Pencil className="size-[18px]" />
+                        Editar plan
+                    </Button>
+                )
+            )}
+            <div className="grid grid-cols-3 gap-2">
+                {isTemplate
+                    ? onEdit && (
+                          <Button type="button" variant="secondary" className="h-auto flex-col gap-1.5 py-3" onClick={onEdit}>
+                              <Pencil className="size-[18px] text-muted" />
+                              <span className="text-xs font-bold">Editar</span>
+                          </Button>
+                      )
+                    : program.source_template_id &&
+                      onSync && (
+                          <Button type="button" variant="secondary" className="h-auto flex-col gap-1.5 py-3" onClick={onSync}>
+                              <GitMerge className="size-[18px] text-muted" />
+                              <span className="text-xs font-bold">Sincronizar</span>
+                          </Button>
+                      )}
+                {onDuplicate && (
+                    <Button type="button" variant="secondary" className="h-auto flex-col gap-1.5 py-3" onClick={onDuplicate}>
+                        <Copy className="size-[18px] text-muted" />
+                        <span className="text-xs font-bold">Duplicar</span>
+                    </Button>
+                )}
+                {onDelete && (
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-auto flex-col gap-1.5 py-3 text-[var(--danger-600)] hover:bg-[var(--danger-100)] hover:text-[var(--danger-600)]"
+                        onClick={onDelete}
+                    >
+                        <Trash2 className="size-[18px] text-[var(--danger-500)]" />
+                        <span className="text-xs font-bold">Eliminar</span>
+                    </Button>
+                )}
+            </div>
+        </div>
+    )
+}
+
+export function ProgramPreviewPanel({
+    program,
+    open,
+    onOpenChange,
+    areas = [],
+    onEdit,
+    onAssign,
+    onDuplicate,
+    onSync,
+    onDelete,
+}: ProgramPreviewPanelProps) {
     const isDesktop = useIsDesktopMd()
 
     if (!program) return null
+
+    const hasActions = !!(onEdit || onAssign || onDuplicate || onSync || onDelete)
 
     const header = (
         <div className="flex items-start gap-3 border-b border-subtle px-4 py-4 sm:px-6">
@@ -330,7 +421,16 @@ export function ProgramPreviewPanel({ program, open, onOpenChange, areas = [] }:
         </div>
     )
 
-    const footer = (
+    const footer = hasActions ? (
+        <PreviewActions
+            program={program}
+            onEdit={onEdit}
+            onAssign={onAssign}
+            onDuplicate={onDuplicate}
+            onSync={onSync}
+            onDelete={onDelete}
+        />
+    ) : (
         <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => onOpenChange(false)}>
             Cerrar
         </Button>

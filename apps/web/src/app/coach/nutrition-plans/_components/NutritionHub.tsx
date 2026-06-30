@@ -1,11 +1,10 @@
 'use client'
 
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties } from 'react'
 import { useState } from 'react'
 import Link from 'next/link'
-import { LayoutTemplate, Users, Apple, Plus, ChefHat } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { AppOnlyBadge } from '@/components/AppOnlyBadge'
 import { TemplateLibrary, type TemplateLibraryItem } from './TemplateLibrary'
 import { ActivePlansBoard } from './ActivePlansBoard'
 import type { ActivePlanBoardRow } from '../_data/nutrition-coach.queries'
@@ -15,7 +14,6 @@ import { NutritionOnboarding } from './NutritionOnboarding'
 import { CoachNutritionGuideDialog } from './CoachNutritionGuideDialog'
 import { RecipeLibrary } from './recipes/RecipeLibrary'
 import type { RecipeRow } from '@/services/nutrition-recipes.service'
-import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { TierBadge } from '@/components/nutrition/TierBadge'
 
 type FoodLib = {
@@ -55,6 +53,7 @@ export function NutritionHub({
 }: Props) {
   const [hubTab, setHubTab] = useState('clients')
   const hasClients = assignClients.length > 0
+  const showCreate = hubTab === 'clients' || hubTab === 'templates'
 
   const hubTabs: { value: string; label: string; shortLabel?: string; count: number }[] = [
     { value: 'templates', label: 'Plantillas', shortLabel: 'Planes', count: templates.length },
@@ -64,36 +63,34 @@ export function NutritionHub({
   ]
 
   return (
-    <div className="w-full max-w-[2000px] mx-auto animate-fade-in space-y-8">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter font-display leading-none">Nutrición</h1>
-            <AppOnlyBadge>Gestiónalo desde el celular en la app de EVA</AppOnlyBadge>
-            <CoachNutritionGuideDialog
-              hasClients={hasClients}
-              onAssign={() => setHubTab('clients')}
-            />
-          </div>
-          <p className="text-[var(--text-muted)] font-bold text-sm uppercase tracking-widest flex items-center gap-2">
-            <span
-              className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0"
-              style={{ backgroundColor: 'var(--accent-nutrition)' }}
-            />
-            Planes, alimentos y recetas
-          </p>
+    <div className="w-full max-w-[2000px] mx-auto animate-fade-in space-y-5">
+      {/* TopBar — title + subtitle + acciones (1:1 diseño eva-app) */}
+      <div className="flex items-start justify-between gap-4 px-1">
+        <div className="min-w-0">
+          <h1 className="font-display font-extrabold text-2xl md:text-3xl leading-tight text-[var(--text-strong)]">
+            Nutrición
+          </h1>
+          <p className="text-[13px] text-[var(--text-muted)] mt-0.5">Planes, alimentos y recetas</p>
         </div>
-        <Link
-          href="/coach/nutrition-plans/new"
-          className="inline-flex items-center justify-center h-14 px-8 text-white font-black uppercase tracking-widest text-xs hover:opacity-90 shadow-xl rounded-2xl border-none transition-opacity group"
-          style={{ backgroundColor: 'var(--theme-primary)' }}
-        >
-          <Plus className="w-4 h-4 mr-2 group-hover:rotate-90 transition-transform duration-300" />
-          Nueva plantilla
-        </Link>
+        <div className="flex items-center gap-2 shrink-0">
+          <CoachNutritionGuideDialog
+            hasClients={hasClients}
+            onAssign={() => setHubTab('clients')}
+          />
+          {showCreate && (
+            <Link
+              href="/coach/nutrition-plans/new"
+              className="eva-press inline-flex h-9 items-center justify-center gap-1.5 rounded-control px-3.5 text-[13px] font-bold text-white transition-opacity hover:opacity-90"
+              style={{ backgroundColor: 'var(--theme-primary)' }}
+            >
+              <Plus className="h-4 w-4" />
+              Plantilla
+            </Link>
+          )}
+        </div>
       </div>
 
-      <Tabs value={hubTab} onValueChange={setHubTab} className="w-full flex flex-col gap-8">
+      <Tabs value={hubTab} onValueChange={setHubTab} className="w-full flex flex-col gap-5">
         <div className="sticky top-[var(--coach-mobile-content-top-offset)] md:top-0 z-20 bg-background/80 backdrop-blur-md pb-4 pt-2 -mx-4 px-4 md:mx-0 md:px-0 flex justify-center">
           <TabsList
             className="bg-surface-sunken p-[3px] h-auto flex gap-1 w-full max-w-2xl rounded-control"
@@ -124,8 +121,7 @@ export function NutritionHub({
         </div>
 
         <TabsContent value="templates" className="mt-0 focus-visible:outline-none">
-          <div className="space-y-6">
-            <SectionHeading icon={<LayoutTemplate className="w-5 h-5 text-[var(--ember-600)]" />} title="Protocolos maestros" />
+          <div className="space-y-4">
             {templates.length === 0 && (
               <NutritionOnboarding
                 coachId={coachId}
@@ -138,51 +134,30 @@ export function NutritionHub({
         </TabsContent>
 
         <TabsContent value="clients" className="mt-0 focus-visible:outline-none">
-          <div className="space-y-6">
-            <SectionHeading icon={<Users className="w-5 h-5 text-[var(--ember-600)]" />} title="Seguimiento de alumnos" />
-            <ActivePlansBoard
-              coachId={coachId}
-              activePlans={activePlans}
-              clientsWithoutPlan={clientsWithoutPlan}
-            />
-          </div>
+          <ActivePlansBoard
+            coachId={coachId}
+            activePlans={activePlans}
+            clientsWithoutPlan={clientsWithoutPlan}
+          />
         </TabsContent>
 
         <TabsContent value="foods" className="mt-0 focus-visible:outline-none">
-          <div className="space-y-6">
-            <SectionHeading icon={<Apple className="w-5 h-5 text-[var(--ember-600)]" />} title="Biblioteca nutricional" />
-            <FoodLibrary initialFoods={foods.foods} totalFoods={foods.total} coachId={coachId} />
-          </div>
+          <FoodLibrary initialFoods={foods.foods} totalFoods={foods.total} coachId={coachId} />
         </TabsContent>
 
         <TabsContent value="recipes" className="mt-0 focus-visible:outline-none">
-          <div className="space-y-6">
-            <SectionHeading
-              icon={<ChefHat className="w-5 h-5 text-[var(--ember-600)]" />}
-              title="Recetas"
-              trailing={
-                <>
-                  <TierBadge tier="base" />
-                  <InfoTooltip content="Ideas de recetas para inspirar a tus alumnos. Viene incluido en el módulo de nutrición (Base). No afectan macros ni adherencia." />
-                </>
-              }
-            />
+          <div className="space-y-3">
+            {/* Banner "Base" — recetas son inspiración (1:1 diseño) */}
+            <div className="flex items-center gap-2.5 rounded-card bg-surface-sunken px-3.5 py-2.5">
+              <TierBadge tier="base" />
+              <span className="text-xs leading-snug text-[var(--text-muted)]">
+                Vienen incluidas en el módulo. Son inspiración — no afectan macros ni adherencia.
+              </span>
+            </div>
             <RecipeLibrary recipes={recipes} clients={assignClients} />
           </div>
         </TabsContent>
       </Tabs>
-    </div>
-  )
-}
-
-function SectionHeading({ icon, title, trailing }: { icon: ReactNode; title: string; trailing?: ReactNode }) {
-  return (
-    <div className="flex items-center gap-4 pb-2 border-b-2 border-[color:var(--ember-100)]">
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-[var(--ember-100)]">
-        {icon}
-      </div>
-      <h2 className="text-xl font-black uppercase tracking-tight font-display">{title}</h2>
-      {trailing ? <div className="flex items-center gap-1.5">{trailing}</div> : null}
     </div>
   )
 }

@@ -6,18 +6,14 @@ import {
     UserPlus,
     Copy,
     Check,
-    Users,
-    ShieldCheck,
     AlertTriangle,
-    Flame,
-    Star,
+    AlertOctagon,
     RefreshCw,
     ChevronRight,
-    Salad,
+    ChevronDown,
 } from 'lucide-react'
 import { motion, useMotionValue, useSpring, useMotionValueEvent } from 'framer-motion'
 import { CreateClientModal } from './CreateClientModal'
-import { StatCard } from '@/components/ui/stat-card'
 import { Button } from '@/components/ui/button'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import type { DirectoryRiskFilter } from './directory-types'
@@ -56,24 +52,7 @@ function AnimatedNumber({ value }: { value: number }) {
     return <span className="tabular-nums">{text}</span>
 }
 
-const cardContainer = {
-    hidden: {},
-    show: {
-        transition: { staggerChildren: 0.08 },
-    },
-}
-
-const cardItem = {
-    hidden: { opacity: 0, y: 16, scale: 0.96 },
-    show: {
-        opacity: 1,
-        y: 0,
-        scale: 1,
-        transition: { type: 'spring' as const, stiffness: 300, damping: 24 },
-    },
-}
-
-// DS tones for the conditional alert banners.
+// ===== DS tones for the conditional alert banners (mobile-only triage) =====
 const BANNER_TONE = {
     danger: 'border-[color:var(--danger-500)]/40 bg-[var(--danger-100)] text-[var(--danger-700)]',
     warning: 'border-[color:var(--warning-500)]/40 bg-[var(--warning-100)] text-[var(--warning-700)]',
@@ -111,6 +90,124 @@ function AlertBanner({
     )
 }
 
+// ===== DirPulseCard · prioridad jerárquica (Riesgo / Atención) — botón-filtro =====
+const PULSE_TONE = {
+    danger: {
+        fg: 'text-[var(--danger-600)]',
+        bg: 'bg-[var(--danger-100)]',
+        solid: 'bg-[var(--danger-500)]',
+        border: 'border-[var(--danger-500)]',
+    },
+    warning: {
+        fg: 'text-[var(--warning-700)]',
+        bg: 'bg-[var(--warning-100)]',
+        solid: 'bg-[var(--warning-500)]',
+        border: 'border-[var(--warning-500)]',
+    },
+} as const
+
+function DirPulseCard({
+    tone,
+    label,
+    value,
+    hint,
+    selected,
+    onClick,
+}: {
+    tone: keyof typeof PULSE_TONE
+    label: string
+    value: number
+    hint: string
+    selected: boolean
+    onClick: () => void
+}) {
+    const t = PULSE_TONE[tone]
+    const Icon = tone === 'danger' ? AlertOctagon : AlertTriangle
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-pressed={selected}
+            className={cn(
+                'flex min-w-0 flex-1 cursor-pointer flex-col gap-1.5 rounded-card border-[1.5px] px-3.5 py-3 text-left transition-colors',
+                selected ? cn(t.solid, t.border) : cn(t.bg, 'border-subtle')
+            )}
+        >
+            <div className="flex items-center justify-between">
+                <span
+                    className={cn(
+                        'inline-flex items-center gap-1.5 text-[11.5px] font-black tracking-wide',
+                        selected ? 'text-white/95' : t.fg
+                    )}
+                >
+                    <Icon className="h-3.5 w-3.5" />
+                    {label}
+                </span>
+                {value > 0 && (
+                    <ChevronRight className={cn('h-4 w-4', selected ? 'text-white' : t.fg)} />
+                )}
+            </div>
+            <div
+                className={cn(
+                    'font-display text-[30px] font-black leading-none',
+                    selected ? 'text-white' : value > 0 ? t.fg : 'text-subtle'
+                )}
+            >
+                <AnimatedNumber value={value} />
+            </div>
+            <div className={cn('text-[11px] font-semibold', selected ? 'text-white/80' : 'text-muted')}>
+                {hint}
+            </div>
+        </button>
+    )
+}
+
+// ===== DirMetricChip · métrica secundaria =====
+function DirMetricChip({
+    label,
+    value,
+    suffix,
+    fg,
+    selected,
+    onClick,
+}: {
+    label: string
+    value: number
+    suffix?: string
+    fg?: string
+    selected?: boolean
+    onClick?: () => void
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-pressed={selected}
+            className={cn(
+                'flex min-w-0 flex-col gap-0.5 rounded-control border-[1.5px] px-2 py-2 text-left',
+                onClick ? 'cursor-pointer' : 'cursor-default',
+                selected ? 'border-strong bg-[var(--text-strong)]' : 'border-subtle bg-surface-card'
+            )}
+        >
+            <div
+                className={cn('font-display text-[15.5px] font-black leading-none', selected && 'text-white')}
+                style={!selected && fg ? { color: fg } : undefined}
+            >
+                <AnimatedNumber value={value} />
+                {suffix || ''}
+            </div>
+            <div
+                className={cn(
+                    'truncate text-[9.5px] font-semibold',
+                    selected ? 'text-white/70' : 'text-muted'
+                )}
+            >
+                {label}
+            </div>
+        </button>
+    )
+}
+
 export function CoachWarRoom({
     coachSlug,
     appUrl,
@@ -124,6 +221,27 @@ export function CoachWarRoom({
     const [open, setOpen] = useState(false)
     const [copied, setCopied] = useState(false)
     const [syncing, setSyncing] = useState(false)
+    const [resumenOpen, setResumenOpen] = useState(true)
+
+    // Persisted collapse state for the mobile "Resumen · hoy" pulse.
+    useEffect(() => {
+        try {
+            setResumenOpen(localStorage.getItem('eva.dir.resumenOpen') !== '0')
+        } catch {
+            /* ignore */
+        }
+    }, [])
+    const toggleResumen = () => {
+        setResumenOpen((o) => {
+            const v = !o
+            try {
+                localStorage.setItem('eva.dir.resumenOpen', v ? '1' : '0')
+            } catch {
+                /* ignore */
+            }
+            return v
+        })
+    }
 
     const loginUrl = coachSlug && appUrl ? `${appUrl}/c/${coachSlug}/login` : ''
 
@@ -161,61 +279,11 @@ export function CoachWarRoom({
         setTimeout(() => setSyncing(false), 800)
     }
 
-    const statCards = [
-        {
-            key: 'total' as const,
-            label: 'Total',
-            value: total,
-            icon: Users,
-            iconColor: 'text-[var(--text-subtle)]',
-            filter: 'all' as DirectoryRiskFilter,
-        },
-        {
-            key: 'active' as const,
-            label: 'Activos',
-            value: active,
-            icon: ShieldCheck,
-            iconColor: 'text-sport-500',
-            filter: 'all' as DirectoryRiskFilter,
-        },
-        {
-            key: 'review' as const,
-            label: 'Atención',
-            value: reviewCount,
-            icon: AlertTriangle,
-            iconColor: 'text-[var(--warning-500)]',
-            filter: 'review' as DirectoryRiskFilter,
-        },
-        {
-            key: 'urgent' as const,
-            label: 'Riesgo',
-            value: urgentCount,
-            icon: Flame,
-            iconColor: 'text-[var(--danger-500)]',
-            filter: 'urgent' as DirectoryRiskFilter,
-        },
-        {
-            key: 'avg' as const,
-            label: 'Adher. prom.',
-            value: avgAdherence,
-            icon: Star,
-            iconColor: 'text-[var(--success-500)]',
-            filter: 'all' as DirectoryRiskFilter,
-            isPercent: true,
-        },
-        {
-            key: 'nutrition_low' as const,
-            label: 'Nutri. baja',
-            value: nutritionLowCount,
-            icon: Salad,
-            iconColor: 'text-[var(--ember-500)]',
-            filter: 'nutrition_low' as DirectoryRiskFilter,
-        },
-    ]
+    const allClear = activeFilter === 'all'
 
     return (
         <>
-            <div className="mb-8 min-w-0 max-w-full space-y-6 md:mb-10 md:space-y-8">
+            <div className="mb-8 min-w-0 max-w-full space-y-6 md:mb-10 md:space-y-6">
                 <div className="relative flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
                     {/* Glow sutil con la rampa sport (white-label) — sin offsets negativos */}
                     <div
@@ -231,7 +299,7 @@ export function CoachWarRoom({
                             <InfoTooltip content={t('section.coachClients')} />
                         </div>
                         <p className="max-w-lg text-sm font-medium leading-relaxed text-muted">
-                            Gestión centralizada · panel operativo tipo War Room
+                            Tu seguimiento de hoy · gestión centralizada de la cartera
                         </p>
                         <p className="text-[10px] font-bold text-subtle uppercase tracking-widest">
                             Actualizado al cargar la página
@@ -291,79 +359,127 @@ export function CoachWarRoom({
                     </div>
                 </div>
 
-                <motion.div
-                    className="relative z-10 grid w-full min-w-0 max-w-full grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:gap-4 lg:grid-cols-6"
-                    variants={cardContainer}
-                    initial="hidden"
-                    animate="show"
-                >
-                    {statCards.map((stat) => {
-                        const selected =
-                            activeFilter === 'all'
-                                ? stat.key === 'total'
-                                : stat.filter !== 'all' && stat.filter === activeFilter
-                        const Icon = stat.icon
-                        return (
-                            <motion.button
-                                key={stat.key}
-                                type="button"
-                                variants={cardItem}
-                                onClick={() => onFilterChange(stat.filter)}
-                                aria-pressed={selected}
-                                className="min-w-0 cursor-pointer rounded-card text-left outline-none focus-visible:ring-[3px] focus-visible:ring-[color:var(--focus-ring)]"
-                            >
-                                <StatCard
-                                    label={stat.label}
-                                    value={<AnimatedNumber value={stat.value} />}
-                                    unit={stat.isPercent ? '%' : undefined}
-                                    icon={<Icon className={stat.iconColor} />}
-                                    accent="neutral"
-                                    className={cn(
-                                        'h-full transition-[box-shadow,transform,border-color] duration-[140ms] hover:-translate-y-px hover:shadow-md',
-                                        selected &&
-                                            'border-sport-500 ring-2 ring-[color:var(--sport-500)]/40'
-                                    )}
+                {/* ===== Resumen · hoy — pulso colapsable (SOLO móvil; en desktop la tabla limpia manda) ===== */}
+                <div className="relative z-10 md:hidden">
+                    <button
+                        type="button"
+                        onClick={toggleResumen}
+                        className="flex w-full items-center gap-2.5 px-0.5 pb-2 pt-0.5 text-left"
+                    >
+                        <span className="shrink-0 text-[11px] font-black uppercase tracking-[0.08em] text-subtle">
+                            Resumen · hoy
+                        </span>
+                        {!resumenOpen && (
+                            <span className="min-w-0 flex-1 truncate text-xs text-muted">
+                                {active} activos
+                                {urgentCount > 0 && (
+                                    <span className="font-bold text-[var(--danger-600)]"> · {urgentCount} en riesgo</span>
+                                )}{' '}
+                                · {avgAdherence}% adher.
+                            </span>
+                        )}
+                        <ChevronDown
+                            className={cn(
+                                'h-[18px] w-[18px] shrink-0 text-subtle transition-transform',
+                                resumenOpen ? 'ml-auto rotate-180' : 'ml-0'
+                            )}
+                        />
+                    </button>
+
+                    {resumenOpen && (
+                        <div className="animate-fade-in space-y-2">
+                            {/* Pulso de prioridad — 2 números jerárquicos */}
+                            <div className="flex gap-2">
+                                <DirPulseCard
+                                    tone="danger"
+                                    label="Riesgo"
+                                    value={urgentCount}
+                                    hint={
+                                        urgentCount
+                                            ? urgentCount === 1
+                                                ? 'Necesita atención hoy'
+                                                : 'Necesitan atención hoy'
+                                            : 'Todo en orden'
+                                    }
+                                    selected={activeFilter === 'urgent'}
+                                    onClick={() => onFilterChange(activeFilter === 'urgent' ? 'all' : 'urgent')}
                                 />
-                            </motion.button>
-                        )
-                    })}
-                </motion.div>
+                                <DirPulseCard
+                                    tone="warning"
+                                    label="Atención"
+                                    value={reviewCount}
+                                    hint={reviewCount ? 'Para revisar pronto' : 'Sin pendientes'}
+                                    selected={activeFilter === 'review'}
+                                    onClick={() => onFilterChange(activeFilter === 'review' ? 'all' : 'review')}
+                                />
+                            </div>
+                            {/* Métricas secundarias — grilla de 4 (sin scroll) */}
+                            <div className="grid grid-cols-4 gap-1.5">
+                                <DirMetricChip
+                                    label="Total"
+                                    value={total}
+                                    fg="var(--text-strong)"
+                                    selected={allClear}
+                                    onClick={() => onFilterChange('all')}
+                                />
+                                <DirMetricChip
+                                    label="Activos"
+                                    value={active}
+                                    fg="var(--sport-600)"
+                                />
+                                <DirMetricChip label="Adher." value={avgAdherence} suffix="%" fg="var(--text-strong)" />
+                                <DirMetricChip
+                                    label="Nutri."
+                                    value={nutritionLowCount}
+                                    fg="var(--ember-700)"
+                                    selected={activeFilter === 'nutrition_low'}
+                                    onClick={() =>
+                                        onFilterChange(activeFilter === 'nutrition_low' ? 'all' : 'nutrition_low')
+                                    }
+                                />
+                            </div>
+                        </div>
+                    )}
+                </div>
 
-                {urgentCount > 0 && (
-                    <AlertBanner tone="danger" onView={() => onFilterChange('urgent')}>
-                        {urgentCount} cliente{urgentCount !== 1 ? 's' : ''} con atención urgente
-                        (score ≥ 50)
-                    </AlertBanner>
-                )}
+                {/* ===== Señales accionables (banners) — SOLO móvil ===== */}
+                <div className="relative z-10 space-y-3 md:hidden">
+                    {urgentCount > 0 && (
+                        <AlertBanner tone="danger" onView={() => onFilterChange('urgent')}>
+                            {urgentCount} cliente{urgentCount !== 1 ? 's' : ''} con atención urgente
+                            (score ≥ 50)
+                        </AlertBanner>
+                    )}
 
-                {expiredProgramsCount > 0 && (
-                    <AlertBanner tone="warning" onView={() => onFilterChange('expired_program')}>
-                        {expiredProgramsCount} programa
-                        {expiredProgramsCount !== 1 ? 's' : ''} vencido
-                        {expiredProgramsCount !== 1 ? 's' : ''}
-                    </AlertBanner>
-                )}
+                    {expiredProgramsCount > 0 && (
+                        <AlertBanner tone="warning" onView={() => onFilterChange('expired_program')}>
+                            {expiredProgramsCount} programa
+                            {expiredProgramsCount !== 1 ? 's' : ''} vencido
+                            {expiredProgramsCount !== 1 ? 's' : ''}
+                        </AlertBanner>
+                    )}
 
-                {pendingPassword > 0 && (
-                    <AlertBanner tone="info" onView={() => onFilterChange('password_reset')}>
-                        {pendingPassword} alumno{pendingPassword !== 1 ? 's' : ''} con cambio de
-                        contraseña pendiente
-                    </AlertBanner>
-                )}
+                    {pendingPassword > 0 && (
+                        <AlertBanner tone="info" onView={() => onFilterChange('password_reset')}>
+                            {pendingPassword} alumno{pendingPassword !== 1 ? 's' : ''} con cambio de
+                            contraseña pendiente
+                        </AlertBanner>
+                    )}
 
-                {nutritionLowCount > 0 && (
-                    <AlertBanner tone="ember" onView={() => onFilterChange('nutrition_low')}>
-                        🥗 {nutritionLowCount} alumno{nutritionLowCount !== 1 ? 's' : ''} con
-                        cumplimiento nutricional bajo ({'<'}60%)
-                    </AlertBanner>
-                )}
+                    {nutritionLowCount > 0 && (
+                        <AlertBanner tone="ember" onView={() => onFilterChange('nutrition_low')}>
+                            🥗 {nutritionLowCount} alumno{nutritionLowCount !== 1 ? 's' : ''} con
+                            cumplimiento nutricional bajo ({'<'}60%)
+                        </AlertBanner>
+                    )}
 
-                {noCheckin1m > 0 && urgentCount === 0 && (
-                    <AlertBanner tone="warning" onView={() => onFilterChange('urgent')}>
-                        ALERTA: {noCheckin1m} cliente{noCheckin1m !== 1 ? 's' : ''} llevan mas de 1
-                        mes sin check-in (desde el ultimo registrado)
-                    </AlertBanner>
-                )}
+                    {noCheckin1m > 0 && urgentCount === 0 && (
+                        <AlertBanner tone="warning" onView={() => onFilterChange('urgent')}>
+                            ALERTA: {noCheckin1m} cliente{noCheckin1m !== 1 ? 's' : ''} llevan mas de 1
+                            mes sin check-in (desde el ultimo registrado)
+                        </AlertBanner>
+                    )}
+                </div>
             </div>
             <CreateClientModal open={open} onClose={() => setOpen(false)} />
         </>

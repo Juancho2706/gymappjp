@@ -34,11 +34,7 @@ export default async function CardioPage() {
                         Módulo
                     </span>
                 </div>
-                <p className="text-sm text-muted">
-                    Zonas de frecuencia cardiaca personalizadas, calculadora de pace y plantillas de
-                    intervalos. La prescripción guarda la <strong className="text-body">zona</strong>; los bpm se calculan
-                    por alumno al renderizar.
-                </p>
+                <p className="text-[12.5px] text-muted">Herramientas</p>
             </header>
             <CardioToolsClient
                 clients={data.clients.map((c) => ({
@@ -47,6 +43,7 @@ export default async function CardioPage() {
                     birth_date: c.birth_date,
                     resting_hr: c.resting_hr,
                     max_hr_override: c.max_hr_override,
+                    ref_5k_time_sec: c.ref_5k_time_sec,
                 }))}
             />
         </div>

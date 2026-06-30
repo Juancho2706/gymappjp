@@ -18,7 +18,7 @@ import {
 } from '@/lib/nutrition-utils'
 import { nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 import { toast } from 'sonner'
-import { FileDown, Share2 } from 'lucide-react'
+import { FileDown, Copy, MessageCircle } from 'lucide-react'
 import { HabitsTracker } from './HabitsTracker'
 import { WorkoutContextBanner } from './WorkoutContextBanner'
 import {
@@ -1027,7 +1027,7 @@ export function NutritionShell({
               disabled={isPending}
               className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-border/60 bg-muted/20 py-3 px-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/40 active:scale-[0.98] disabled:opacity-50"
             >
-              <Share2 className="h-3.5 w-3.5 shrink-0" />
+              <Copy className="h-3.5 w-3.5 shrink-0 text-primary" />
               Copiar detalle
             </button>
           </div>
@@ -1042,8 +1042,8 @@ export function NutritionShell({
               disabled={isPending}
               className="flex w-full items-center justify-center gap-1.5 rounded-2xl border border-border/60 bg-muted/10 py-3 px-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/30 active:scale-[0.98] disabled:opacity-50"
             >
-              <Share2 className="h-3.5 w-3.5 shrink-0" />
-              Copiar resumen
+              <MessageCircle className="h-3.5 w-3.5 shrink-0 text-primary" />
+              Resumen WhatsApp
             </button>
           </div>
           <div className="space-y-1">

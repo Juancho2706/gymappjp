@@ -403,10 +403,6 @@ export function ClientsDirectoryTable({
                     </div>
                 </div>
             </div>
-
-            <p className="border-t border-subtle px-3 py-2 text-[10px] text-muted md:hidden">
-                Desliza horizontalmente en móvil para ver todas las columnas.
-            </p>
         </div>
 
         {editingClient && (

@@ -197,7 +197,7 @@ export default function RegisterPage() {
             {/* Header */}
             <div className="text-center mb-8 flex flex-col items-center">
                 <h1 className="text-3xl font-black tracking-[-0.03em] text-text-strong font-display">
-                    Crea tu cuenta
+                    Creá tu cuenta de coach
                 </h1>
                 <p className="mt-2 text-text-muted text-sm">
                     {fromGoogle && step === 1
@@ -612,6 +612,12 @@ export default function RegisterPage() {
                                     <span className="text-text-muted">Nutrición</span>
                                     <span className={cn('font-semibold', getTierCapabilities(tier).canUseNutrition ? 'text-[var(--success-600)]' : 'text-[var(--warning-700)]')}>
                                         {getTierCapabilities(tier).canUseNutrition ? 'Incluida' : 'No incluida'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-text-muted">Tu marca (white-label)</span>
+                                    <span className={cn('font-semibold', getTierCapabilities(tier).canUseBranding ? 'text-[var(--success-600)]' : 'text-[var(--warning-700)]')}>
+                                        {getTierCapabilities(tier).canUseBranding ? 'Incluida' : 'No incluida'}
                                     </span>
                                 </div>
                                 {!isFreeTier && selectedAddons.length > 0 && (

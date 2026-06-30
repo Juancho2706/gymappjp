@@ -11,11 +11,11 @@ type CompKey = keyof IsakMetricsView['fractionation']
 
 /** Orden visual y color (--chart-1..5) de los 5 componentes del fraccionamiento Kerr. */
 const COMPONENTS: { key: CompKey; labelKey: string; chart: string }[] = [
-    { key: 'muscle', labelKey: 'bodycomp.component.muscle', chart: 'var(--chart-1)' },
-    { key: 'adipose', labelKey: 'bodycomp.component.adipose', chart: 'var(--chart-2)' },
-    { key: 'bone', labelKey: 'bodycomp.component.bone', chart: 'var(--chart-3)' },
-    { key: 'residual', labelKey: 'bodycomp.component.residual', chart: 'var(--chart-4)' },
-    { key: 'skin', labelKey: 'bodycomp.component.skin', chart: 'var(--chart-5)' },
+    { key: 'muscle', labelKey: 'bodycomp.component.muscle', chart: 'var(--viz-1)' },
+    { key: 'adipose', labelKey: 'bodycomp.component.adipose', chart: 'var(--viz-2)' },
+    { key: 'bone', labelKey: 'bodycomp.component.bone', chart: 'var(--viz-3)' },
+    { key: 'residual', labelKey: 'bodycomp.component.residual', chart: 'var(--viz-4)' },
+    { key: 'skin', labelKey: 'bodycomp.component.skin', chart: 'var(--viz-5)' },
 ]
 
 const fmtPct = (v: number) => `${v.toFixed(1)}%`

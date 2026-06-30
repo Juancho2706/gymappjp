@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Users, UserCheck, Package, Crown, Sparkles } from 'lucide-react'
+import { Users, Crown, Shield, User, ChevronRight, Sparkles, Lock } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import { getCoachTeamOverview } from './_data/team.queries'
@@ -38,115 +38,109 @@ export default async function CoachTeamPage() {
     }
 
     return (
-        <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mx-auto max-w-5xl space-y-4 px-5 pb-6 pt-2 sm:px-6">
             {teams.map((team) => {
                 const accent = team.primary_color || '#10B981'
                 const seatPct = team.seat_limit > 0
                     ? Math.min(100, Math.round((team.activeMemberCount / team.seat_limit) * 100))
                     : 0
-                // Anillo SVG de cupos: r=26 -> circunferencia ≈ 163.4
-                const ringLen = 163.4
+                // Anillo SVG de cupos: r=22 -> circunferencia ≈ 138.2 (diseño eva-app)
+                const ringLen = 2 * Math.PI * 22
                 const ringOffset = ringLen * (1 - seatPct / 100)
                 const activeModules = Object.values(team.enabled_modules).filter(Boolean).length
+                const initials = team.name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
+                // texto legible sobre el color de marca (claro -> tinta, oscuro -> blanco)
+                const onAccent = (() => {
+                    const h = accent.replace('#', '')
+                    if (h.length !== 6) return '#FFFFFF'
+                    const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+                    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+                    return lum > 0.6 ? '#0F1729' : '#FFFFFF'
+                })()
+                const roleLabel = team.isOwner ? 'Owner' : team.isManager ? 'Co-gestor' : 'Miembro'
+                const RoleIcon = team.isOwner ? Crown : team.isManager ? Shield : User
 
                 return (
-                    <section key={team.id} className="space-y-5">
+                    <section key={team.id} className="space-y-4">
                         {/* ── Hero de identidad ─────────────────────────── */}
-                        <header
-                            className="relative overflow-hidden rounded-card border border-[var(--border-inverse)] bg-[var(--surface-inverse)] p-5 text-on-dark sm:p-6"
-                        >
-                            <div
-                                className="pointer-events-none absolute inset-0"
-                                aria-hidden
-                                style={{ background: `radial-gradient(ellipse 80% 120% at 0% 0%, ${accent}33, transparent 60%)` }}
-                            />
-                            <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="flex min-w-0 items-center gap-4">
-                                    <div
-                                        className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-control border shadow-sm"
-                                        style={{ borderColor: `${accent}55`, backgroundColor: `${accent}26` }}
-                                    >
-                                        {team.logo_url ? (
-                                            <Image src={team.logo_url} alt={team.name} fill className="object-contain p-1.5" />
-                                        ) : (
-                                            <Users className="h-6 w-6" style={{ color: accent }} />
-                                        )}
+                        <header className="rounded-card border border-[var(--border-inverse)] bg-[var(--surface-inverse)] p-5 text-on-dark">
+                            <div className="flex items-center gap-3.5">
+                                <span
+                                    className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-control font-display text-[22px] font-black"
+                                    style={{
+                                        backgroundColor: team.logo_url ? 'var(--surface-card)' : accent,
+                                        color: onAccent,
+                                    }}
+                                >
+                                    {team.logo_url ? (
+                                        <Image src={team.logo_url} alt={team.name} fill className="object-contain p-1.5" />
+                                    ) : initials ? (
+                                        initials
+                                    ) : (
+                                        <Users className="h-6 w-6" />
+                                    )}
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                    <div className="truncate font-display text-[22px] font-black text-on-dark">{team.name}</div>
+                                    <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-pill bg-white/10 px-2.5 py-[3px]">
+                                        <RoleIcon className="h-[13px] w-[13px] text-sport-300" />
+                                        <span className="text-[11.5px] font-bold text-on-dark">{roleLabel}</span>
                                     </div>
-                                    <div className="min-w-0">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <h1 className="truncate font-display text-2xl font-bold tracking-tight text-on-dark">{team.name}</h1>
-                                            {team.isOwner ? (
-                                                <span className="inline-flex items-center gap-1 rounded-pill px-2.5 py-0.5 text-[11px] font-semibold text-white" style={{ backgroundColor: accent }}>
-                                                    <Crown className="h-3 w-3" /> Owner
-                                                </span>
-                                            ) : team.isManager ? (
-                                                <span className="inline-flex items-center rounded-pill bg-white/10 px-2.5 py-0.5 text-[11px] font-semibold text-on-dark">Co-gestor</span>
-                                            ) : (
-                                                <span className="inline-flex items-center rounded-pill bg-white/10 px-2.5 py-0.5 text-[11px] font-semibold text-on-dark">Miembro</span>
-                                            )}
-                                        </div>
-                                        <p className="mt-0.5 text-sm text-on-dark-muted">Pool compartido — todo el equipo ve a todos los alumnos</p>
-                                    </div>
-                                </div>
-                                <div className="flex shrink-0 items-center gap-2">
-                                    <TeamShareLink teamSlug={team.slug} inviteCode={team.invite_code} />
                                 </div>
                             </div>
 
-                            {/* Stats row */}
-                            <div className="relative mt-5 grid grid-cols-3 gap-3">
-                                <div className="flex items-center gap-3 rounded-control border border-[var(--border-inverse)] bg-white/5 p-3">
-                                    <svg viewBox="0 0 60 60" className="h-12 w-12 shrink-0 -rotate-90">
-                                        <circle cx="30" cy="30" r="26" fill="none" strokeWidth="6" stroke="rgba(255,255,255,0.14)" />
-                                        <circle
-                                            cx="30" cy="30" r="26" fill="none" strokeWidth="6" strokeLinecap="round"
-                                            stroke={accent} strokeDasharray={ringLen} strokeDashoffset={ringOffset}
-                                        />
-                                    </svg>
-                                    <div className="min-w-0">
-                                        <p className="font-display text-xl font-bold leading-none tracking-tight text-on-dark">
-                                            {team.activeMemberCount}<span className="text-sm font-semibold text-on-dark-muted">/{team.seat_limit}</span>
-                                        </p>
-                                        <p className="mt-1 text-[11px] uppercase tracking-wide text-on-dark-muted">Cupos</p>
+                            <p className="my-3 text-[12.5px] text-on-dark-muted">Pool compartido — todo el equipo ve a todos los alumnos.</p>
+
+                            {/* Accesos de alumnos */}
+                            <div className="mb-4">
+                                <TeamShareLink teamSlug={team.slug} inviteCode={team.invite_code} />
+                            </div>
+
+                            {/* Stats */}
+                            <div className="flex items-center gap-2.5 border-t border-[var(--border-inverse)] pt-3.5">
+                                <div className="flex-1 text-center">
+                                    <div className="relative mx-auto h-[52px] w-[52px]">
+                                        <svg width="52" height="52" className="-rotate-90">
+                                            <circle cx="26" cy="26" r="22" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="5" />
+                                            <circle
+                                                cx="26" cy="26" r="22" fill="none" strokeWidth="5" strokeLinecap="round"
+                                                stroke={accent} strokeDasharray={ringLen} strokeDashoffset={ringOffset}
+                                            />
+                                        </svg>
+                                        <span className="absolute inset-0 flex items-center justify-center font-mono text-xs font-bold text-on-dark">
+                                            {team.activeMemberCount}/{team.seat_limit}
+                                        </span>
                                     </div>
+                                    <div className="mt-1 text-[10.5px] font-bold uppercase tracking-[0.04em] text-on-dark-muted">Cupos</div>
                                 </div>
 
-                                <div className="flex items-center gap-3 rounded-control border border-[var(--border-inverse)] bg-white/5 p-3">
-                                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control" style={{ backgroundColor: `${accent}26` }}>
-                                        <UserCheck className="h-5 w-5" style={{ color: accent }} />
-                                    </span>
-                                    <div className="min-w-0">
-                                        <p className="font-display text-xl font-bold leading-none tracking-tight text-on-dark">{team.poolClientCount}</p>
-                                        <p className="mt-1 text-[11px] uppercase tracking-wide text-on-dark-muted">Alumnos</p>
-                                    </div>
+                                <div className="flex-1 text-center">
+                                    <div className="font-display text-[26px] font-black leading-none text-on-dark">{team.poolClientCount}</div>
+                                    <div className="mt-1 text-[10.5px] font-bold uppercase tracking-[0.04em] text-on-dark-muted">Alumnos</div>
                                 </div>
 
-                                <Link
-                                    href="/coach/settings/modules"
-                                    className="group flex items-center gap-3 rounded-control border border-[var(--border-inverse)] bg-white/5 p-3 transition-colors hover:border-white/25"
-                                >
-                                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control" style={{ backgroundColor: `${accent}26` }}>
-                                        <Package className="h-5 w-5" style={{ color: accent }} />
-                                    </span>
-                                    <div className="min-w-0">
-                                        <p className="font-display text-xl font-bold leading-none tracking-tight text-on-dark">{activeModules}</p>
-                                        <p className="mt-1 text-[11px] uppercase tracking-wide text-on-dark-muted group-hover:text-on-dark">Módulos →</p>
+                                <Link href="/coach/settings/modules" className="flex-1 text-center">
+                                    <div className="font-display text-[26px] font-black leading-none text-on-dark">{activeModules}</div>
+                                    <div className="mt-1 inline-flex items-center gap-0.5 text-[10.5px] font-bold uppercase tracking-[0.04em] text-sport-300">
+                                        Módulos <ChevronRight className="h-[11px] w-[11px]" />
                                     </div>
                                 </Link>
                             </div>
                         </header>
 
                         {/* ── Brand Studio ──────────────────────────────── */}
-                        <div className="rounded-card border border-subtle bg-surface-card p-4 sm:p-6">
-                            <div className="mb-4 flex items-center gap-2">
-                                <span className="flex h-8 w-8 items-center justify-center rounded-control" style={{ backgroundColor: `${accent}26` }}>
-                                    <Sparkles className="h-4 w-4" style={{ color: accent }} />
+                        <div className="mx-1 flex items-center justify-between">
+                            <h2 className="font-display text-[17px] font-extrabold tracking-[-0.02em] text-strong">
+                                {team.isManager ? 'Brand Studio' : 'Marca del equipo'}
+                            </h2>
+                            {!team.isManager && (
+                                <span className="inline-flex items-center gap-1 rounded-pill bg-surface-sunken px-2.5 py-1 text-[11px] font-semibold text-muted">
+                                    <Lock className="h-3 w-3" /> Solo lectura
                                 </span>
-                                <div>
-                                    <h2 className="font-display text-base font-bold leading-tight tracking-tight text-strong">Marca del equipo</h2>
-                                    <p className="text-xs text-muted">La identidad que ven tus alumnos y todo el pool</p>
-                                </div>
-                            </div>
+                            )}
+                        </div>
+
+                        <div className="rounded-card border border-subtle bg-surface-card p-4 sm:p-5">
                             <TeamBrandStudio
                                 teamId={team.id}
                                 teamSlug={team.slug}
@@ -169,7 +163,7 @@ export default async function CoachTeamPage() {
                         </div>
 
                         {/* ── Miembros ──────────────────────────────────── */}
-                        <div className="rounded-card border border-subtle bg-surface-card p-4 sm:p-6">
+                        <div className="rounded-card border border-subtle bg-surface-card p-4 sm:p-5">
                             <TeamMembersManager
                                 teamId={team.id}
                                 ownerCoachId={team.owner_coach_id}
@@ -180,6 +174,15 @@ export default async function CoachTeamPage() {
                                 activeMemberCount={team.activeMemberCount}
                                 members={team.members}
                             />
+                        </div>
+
+                        {/* ── Footer EVA Teams ──────────────────────────── */}
+                        <div className="flex flex-col items-center gap-2 pt-4 opacity-60">
+                            <div className="flex items-center gap-1.5 text-muted">
+                                <Sparkles className="h-4 w-4" />
+                                <span className="font-display text-sm font-extrabold tracking-tight">EVA</span>
+                            </div>
+                            <span className="text-xs font-semibold text-subtle">EVA Teams · {team.name}</span>
                         </div>
                     </section>
                 )

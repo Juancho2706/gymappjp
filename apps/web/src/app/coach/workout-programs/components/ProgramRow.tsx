@@ -1,225 +1,157 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import {
-    Copy,
-    Eye,
-    GitMerge,
-    Loader2,
-    MoreHorizontal,
-    Pencil,
-    Trash2,
-    Users,
-} from 'lucide-react'
+import { Calendar, ChevronRight, Dumbbell, Layers } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import type { ProgramListModel } from '../libraryStats'
-import { formatShortActivityDate, getProgramStats } from '../libraryStats'
-import { libraryInitialsFromName } from './libraryInitials'
+import { getProgramStats } from '../libraryStats'
 
 export interface ProgramRowProps {
     program: ProgramListModel
-    compact: boolean
-    isPending: boolean
-    isActionPending: boolean
+    /** Abre la vista previa (hoja en móvil / diálogo en desktop) con las acciones. */
+    onOpen: () => void
     isSelected?: boolean
-    onRowClick?: () => void
-    onAssign: () => void
-    onPreview: () => void
-    onDuplicate: () => void
-    onSync?: () => void
-    onDelete: () => void
 }
 
-function accentBarClass(program: ProgramListModel) {
+/** Progreso real del plan asignado a partir de start_date + weeks_to_repeat. */
+function assignedProgress(p: ProgramListModel): { curWeek: number; weeks: number; pct: number } | null {
+    const weeks = p.weeks_to_repeat || 0
+    if (!p.start_date || weeks <= 0) return null
+    const start = new Date(p.start_date).getTime()
+    if (Number.isNaN(start)) return null
+    const diffWeeks = Math.floor((Date.now() - start) / (7 * 24 * 60 * 60 * 1000))
+    const curWeek = Math.min(Math.max(diffWeeks + 1, 1), weeks)
+    return { curWeek, weeks, pct: Math.round((curWeek / weeks) * 100) }
+}
+
+function StatusBadge({ program }: { program: ProgramListModel }) {
     const isTemplate = !program.client_id
-    if (isTemplate) return 'bg-sport-500'
-    if (program.is_active) return 'bg-[var(--success-500)]'
-    return 'bg-[var(--ink-300)]'
+    if (isTemplate) {
+        return (
+            <Badge tone="sport" variant="soft" size="sm" className="shrink-0">
+                Plantilla
+            </Badge>
+        )
+    }
+    return program.is_active ? (
+        <Badge tone="success" variant="soft" size="sm" dot className="shrink-0">
+            Activo
+        </Badge>
+    ) : (
+        <Badge tone="neutral" variant="soft" size="sm" className="shrink-0">
+            Inactivo
+        </Badge>
+    )
 }
 
-export function ProgramRow({
-    program,
-    compact,
-    isPending,
-    isActionPending,
-    isSelected,
-    onRowClick,
-    onAssign,
-    onPreview,
-    onDuplicate,
-    onSync,
-    onDelete,
-}: ProgramRowProps) {
-    const router = useRouter()
+/** Tarjeta horizontal — diseño móvil (eva-app ProgramasHome). */
+export function ProgramRow({ program, onOpen, isSelected }: ProgramRowProps) {
     const stats = getProgramStats(program)
     const isTemplate = !program.client_id
-    const editHref = isTemplate
-        ? `/coach/workout-programs/builder?programId=${program.id}`
-        : `/coach/builder/${program.client_id}?programId=${program.id}`
-
-    const meta = [
-        `${stats.daysWithWork} días`,
-        `${stats.blockCount} bloques`,
-        stats.cycleLabel,
-        stats.weeksLabel,
-        `Act. ${formatShortActivityDate(stats.lastActivityIso)}`,
-    ].filter(Boolean).join(' · ')
-
     const clientName = program.client?.full_name
-    const initials = libraryInitialsFromName(clientName)
+    const progress = !isTemplate ? assignedProgress(program) : null
 
     return (
         <div
-            role={onRowClick ? 'button' : undefined}
-            tabIndex={onRowClick ? 0 : undefined}
-            onClick={onRowClick}
-            onKeyDown={
-                onRowClick
-                    ? (e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              onRowClick()
-                          }
-                      }
-                    : undefined
-            }
             className={cn(
-                'touch-manipulation flex w-full min-w-0 max-w-full items-stretch gap-0 rounded-card border border-subtle bg-surface-card text-body shadow-sm transition-[box-shadow,border-color,background-color]',
-                onRowClick &&
-                    'cursor-pointer hover:border-[var(--sport-300)] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-app)]',
-                isSelected &&
-                    'border-[var(--sport-300)] bg-[var(--sport-100)] shadow-md ring-2 ring-[var(--focus-ring)] ring-offset-2 ring-offset-[var(--surface-app)]'
+                'overflow-hidden rounded-card border border-subtle bg-surface-card shadow-sm transition-[box-shadow,border-color]',
+                'hover:border-[var(--sport-300)] hover:shadow-md',
+                isSelected && 'border-[var(--sport-300)] ring-2 ring-[var(--focus-ring)] ring-offset-2 ring-offset-[var(--surface-app)]'
             )}
         >
-            <div
-                className={cn('w-1 shrink-0 self-stretch min-h-[3rem]', accentBarClass(program))}
-                aria-hidden
-            />
-            <div
-                className={cn(
-                    'flex min-w-0 flex-1 gap-2',
-                    compact
-                        ? 'min-h-[52px] items-center py-2 pl-2.5 pr-1 sm:pl-3'
-                        : 'min-h-[64px] flex-col items-stretch justify-center gap-1.5 py-3 pl-3 pr-2 text-left'
-                )}
+            <button
+                type="button"
+                onClick={onOpen}
+                className="flex w-full items-center gap-3 px-3 py-3 text-left focus-visible:outline-none"
             >
-                <div className="min-w-0 w-full flex-1 text-left">
-                    <div className="flex flex-wrap items-center justify-start gap-2">
-                        <span className={cn('truncate font-semibold text-strong', compact && 'text-sm')}>
-                            {program.name}
-                        </span>
-                        {stats.templateLabel === 'Plantilla' ? (
-                            <Badge tone="sport" variant="soft" size="sm" className="shrink-0">
-                                Plantilla
-                            </Badge>
-                        ) : program.is_active ? (
-                            <Badge tone="success" variant="soft" size="sm" dot className="shrink-0">
-                                {stats.templateLabel}
-                            </Badge>
-                        ) : (
-                            <Badge tone="neutral" variant="soft" size="sm" className="shrink-0">
-                                {stats.templateLabel}
-                            </Badge>
-                        )}
-                        {!compact && stats.hasPhases && (
-                            <Badge tone="neutral" variant="soft" size="sm" className="shrink-0">
-                                Fases
-                            </Badge>
-                        )}
-                        {!compact && program.ab_mode && (
-                            <Badge tone="neutral" variant="soft" size="sm" className="shrink-0">
-                                A/B
-                            </Badge>
-                        )}
-                        {!compact && program.duration_type === 'async' && (
-                            <Badge tone="neutral" variant="soft" size="sm" className="shrink-0">
-                                Asíncrono
-                            </Badge>
-                        )}
-                        {compact && !isTemplate && clientName && (
-                            <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted">
-                                <Avatar size="sm" className="size-6">
-                                    <AvatarFallback className="text-[10px] font-semibold">{initials}</AvatarFallback>
-                                </Avatar>
-                                <span className="truncate">{clientName}</span>
-                            </span>
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-md bg-[var(--sport-100)] text-[var(--sport-600)]">
+                    <Dumbbell className="size-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                    <div className="truncate text-[15px] font-bold text-strong">{program.name}</div>
+                    <div className="mt-1 flex min-w-0 items-center gap-2">
+                        <StatusBadge program={program} />
+                        {clientName && (
+                            <span className="truncate text-xs text-muted">· {clientName}</span>
                         )}
                     </div>
-                    {!compact && (
-                        <>
-                            <p className="mt-0.5 truncate text-xs text-muted">{meta}</p>
-                            {!isTemplate && clientName && (
-                                <div className="mt-1.5 flex min-w-0 items-center gap-2">
-                                    <Avatar size="sm" className="size-8 shrink-0">
-                                        <AvatarFallback className="text-xs font-semibold">{initials}</AvatarFallback>
-                                    </Avatar>
-                                    <span className="truncate text-sm font-medium text-body">{clientName}</span>
-                                </div>
-                            )}
-                        </>
+                    {progress ? (
+                        <div className="mt-2">
+                            <div className="mb-1 flex items-center justify-between">
+                                <span className="font-mono text-[11px] text-muted">
+                                    {stats.daysWithWork} días · {program.weeks_to_repeat} sem
+                                </span>
+                                <span className="font-mono text-[11px] font-bold text-strong">
+                                    Sem {progress.curWeek}/{progress.weeks}
+                                </span>
+                            </div>
+                            <div className="h-[5px] overflow-hidden rounded-full bg-surface-sunken">
+                                <div
+                                    className={cn(
+                                        'h-full rounded-full transition-[width]',
+                                        program.is_active ? 'bg-[var(--success-500)]' : 'bg-[var(--ink-300)]'
+                                    )}
+                                    style={{ width: `${progress.pct}%` }}
+                                />
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="mt-2 flex flex-wrap gap-3 font-mono text-[11.5px] text-muted">
+                            <span>
+                                <b className="text-strong">{stats.daysWithWork}</b> días
+                            </span>
+                            <span>
+                                <b className="text-strong">{program.weeks_to_repeat}</b> sem
+                            </span>
+                            <span>
+                                <b className="text-strong">{stats.blockCount}</b> bloques
+                            </span>
+                        </div>
                     )}
                 </div>
-            </div>
-
-            <div className="flex shrink-0 items-center self-center pr-1 sm:pr-2">
-                <DropdownMenu>
-                    <DropdownMenuTrigger
-                        type="button"
-                        onClick={(e) => e.stopPropagation()}
-                        className={cn(
-                            'inline-flex shrink-0 items-center justify-center rounded-full border-0 bg-transparent px-0 font-medium normal-case tracking-normal text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]',
-                            'min-h-11 min-w-11 sm:min-h-10 sm:min-w-10'
-                        )}
-                        aria-label="Acciones del programa"
-                    >
-                        {isPending && isActionPending ? (
-                            <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                            <MoreHorizontal className="size-5 sm:size-4" />
-                        )}
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-[200px]">
-                        {!isTemplate ? null : (
-                            <DropdownMenuItem onClick={onAssign}>
-                                <Users className="mr-2 size-4" />
-                                Asignar
-                            </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem onClick={onPreview}>
-                            <Eye className="mr-2 size-4" />
-                            Vista previa
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={onDuplicate} disabled={isPending && isActionPending}>
-                            <Copy className="mr-2 size-4" />
-                            Duplicar
-                        </DropdownMenuItem>
-                        {program.source_template_id && onSync ? (
-                            <DropdownMenuItem onClick={onSync} disabled={isPending && isActionPending}>
-                                <GitMerge className="mr-2 size-4" />
-                                Sincronizar
-                            </DropdownMenuItem>
-                        ) : null}
-                        <DropdownMenuItem onClick={() => router.push(editHref)}>
-                            <Pencil className="mr-2 size-4" />
-                            Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem variant="destructive" onClick={onDelete} disabled={isPending && isActionPending}>
-                            <Trash2 className="mr-2 size-4" />
-                            Eliminar
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
+                <ChevronRight className="size-[18px] shrink-0 text-[var(--ink-300)]" />
+            </button>
         </div>
+    )
+}
+
+/** Tarjeta vertical — diseño desktop (eva-desktop DesktopPrograms card-grid). */
+export function ProgramCard({ program, onOpen, isSelected }: ProgramRowProps) {
+    const stats = getProgramStats(program)
+    const isTemplate = !program.client_id
+    const subtitle = program.client?.full_name ?? (isTemplate ? 'Plantilla reutilizable' : 'Programa')
+
+    return (
+        <button
+            type="button"
+            onClick={onOpen}
+            className={cn(
+                'flex flex-col items-start rounded-card border border-subtle bg-surface-card p-4 text-left shadow-sm transition-[box-shadow,border-color]',
+                'hover:border-[var(--sport-300)] hover:shadow-md focus-visible:outline-none',
+                isSelected && 'border-[var(--sport-300)] ring-2 ring-[var(--focus-ring)]'
+            )}
+        >
+            <div className="flex w-full items-center justify-between">
+                <span className="flex size-10 items-center justify-center rounded-md bg-[var(--sport-100)] text-[var(--sport-600)]">
+                    <Dumbbell className="size-5" />
+                </span>
+                <StatusBadge program={program} />
+            </div>
+            <div className="mt-3 line-clamp-2 font-display text-base font-bold leading-snug text-strong">
+                {program.name}
+            </div>
+            <div className="mt-0.5 truncate text-xs text-muted">{subtitle}</div>
+            <div className="mt-3 flex flex-wrap gap-3 font-mono text-xs text-muted">
+                <span className="inline-flex items-center gap-1">
+                    <Calendar className="size-3.5" /> {program.weeks_to_repeat} sem
+                </span>
+                <span className="inline-flex items-center gap-1">
+                    <Layers className="size-3.5" /> {stats.daysWithWork} días
+                </span>
+                <span className="inline-flex items-center gap-1">
+                    <Dumbbell className="size-3.5" /> {stats.blockCount}
+                </span>
+            </div>
+        </button>
     )
 }

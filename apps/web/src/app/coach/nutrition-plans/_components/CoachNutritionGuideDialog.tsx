@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, CircleHelp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
@@ -22,9 +22,10 @@ export function CoachNutritionGuideDialog({ hasClients, onAssign, triggerLabel =
         render={
           <button
             type="button"
-            className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border/70 bg-muted/40 px-3 text-[10px] font-black uppercase tracking-widest text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+            aria-label={triggerLabel}
+            className="eva-press inline-flex h-9 w-9 items-center justify-center rounded-control border-[1.5px] border-[color:var(--border-default)] bg-[var(--surface-card)] text-[var(--text-strong)] transition-colors hover:bg-[var(--surface-sunken)]"
           >
-            {triggerLabel}
+            <CircleHelp className="h-[17px] w-[17px]" />
           </button>
         }
       />

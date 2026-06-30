@@ -289,7 +289,7 @@ export function SupportForm() {
           ) : (
             <Send className="h-4 w-4" />
           )}
-          Enviar mensaje
+          Enviar consulta
         </button>
       </form>
     </Form>

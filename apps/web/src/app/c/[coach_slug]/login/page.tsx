@@ -1,4 +1,3 @@
-import { Dumbbell } from 'lucide-react'
 import { notFound } from 'next/navigation'
 import Image from 'next/image'
 import ClientLoginForm from './ClientLoginForm'
@@ -44,6 +43,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     }
 }
 
+/** Initials del nombre de marca para el brand-mark cuando no hay logo (estilo diseño). */
+function brandInitials(name: string): string {
+    const parts = name.trim().split(/\s+/).filter(Boolean)
+    if (parts.length === 0) return 'EVA'
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+    return (parts[0][0] + parts[1][0]).toUpperCase()
+}
+
 export default async function ClientLoginPage({ params }: Props) {
     const { coach_slug } = await params
     const coach = await getClientLoginCoach(coach_slug)
@@ -66,78 +73,80 @@ export default async function ClientLoginPage({ params }: Props) {
     // Fuente solo en el wordmark/título (decisión #4); inputs/cuerpo en Inter (primera pantalla, sin cache).
     const brandFontStack = resolveBrandFontStack(brandingAllowed ? (coach.brand_font_key ?? '') : '')
 
+    const initials = brandInitials(coach.brand_name)
+    const tagline = coach.welcome_message?.trim() || 'Tu plataforma de entrenamiento personalizado'
+
     return (
-        <div className="login-brand relative min-h-dvh flex flex-col items-center justify-center p-4 pt-safe bg-background overflow-hidden">
+        <div className="login-brand relative mx-auto flex min-h-dvh w-full max-w-md flex-col overflow-hidden bg-surface-app">
             {/* Acento por-modo + fuente: scoped a .login-brand para no tocar el resto del árbol. */}
             <style dangerouslySetInnerHTML={{ __html: `.login-brand{--login-accent:${theme.light.accent};--login-accent-rgb:${accentRgb};--login-font:${brandFontStack};}.dark .login-brand{--login-accent:${theme.dark.accent};}` }} />
-            {/* Ambient glow using the resolved brand accent (gated). */}
-            <div
-                className="fixed inset-0 pointer-events-none"
-                aria-hidden="true"
-                style={{
-                    background: 'radial-gradient(ellipse 90% 55% at 50% -10%, rgb(var(--login-accent-rgb) / 0.13), transparent 65%)',
-                }}
-            />
-            {/* Subtle grid */}
-            <div
-                className="fixed inset-0 pointer-events-none opacity-[0.03] dark:opacity-[0.05]"
-                aria-hidden
-                style={{ backgroundImage: 'linear-gradient(rgba(0,0,0,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.1) 1px,transparent 1px)', backgroundSize: '40px 40px' }}
-            />
 
-            <LoginEntrance className="relative z-10 w-full max-w-sm">
-                {/* Coach brand header */}
-                <LoginEntranceItem className="text-center mb-7">
-                    <div className="flex justify-center mb-4">
-                        {logoUrl ? (
-                            <div
-                                className="relative flex items-center justify-center w-20 h-20 rounded-card overflow-hidden border shadow-lg"
-                                style={{ borderColor: 'rgb(var(--login-accent-rgb) / 0.19)', boxShadow: '0 8px 32px rgb(var(--login-accent-rgb) / 0.12)' }}
-                            >
-                                <Image
-                                    src={logoUrl}
-                                    alt={coach.brand_name}
-                                    fill
-                                    className="object-contain p-2"
-                                />
-                            </div>
-                        ) : (
-                            <div
-                                className="flex items-center justify-center w-20 h-20 rounded-card border shadow-lg"
-                                style={{
-                                    backgroundColor: 'rgb(var(--login-accent-rgb) / 0.08)',
-                                    borderColor: 'rgb(var(--login-accent-rgb) / 0.19)',
-                                    boxShadow: '0 8px 32px rgb(var(--login-accent-rgb) / 0.08)',
-                                }}
-                            >
-                                <Dumbbell className="w-9 h-9" style={{ color: 'var(--login-accent)' }} />
-                            </div>
-                        )}
+            <LoginEntrance className="flex flex-1 flex-col">
+                {/* ── Hero full-bleed con el color del coach (variante Inmersivo del diseño) ── */}
+                <LoginEntranceItem className="relative flex-shrink-0 overflow-hidden px-7 pb-16 pt-[92px] text-center">
+                    <div
+                        aria-hidden
+                        className="absolute inset-0"
+                        style={{
+                            background:
+                                'radial-gradient(120% 90% at 50% 12%, var(--login-accent) 0%, color-mix(in oklab, var(--login-accent) 80%, black) 58%, color-mix(in oklab, var(--login-accent) 60%, black) 100%)',
+                        }}
+                    />
+                    {/* Brillo ambiente sutil sobre el hero */}
+                    <div
+                        aria-hidden
+                        className="absolute inset-0 opacity-50"
+                        style={{ background: 'radial-gradient(80% 60% at 20% 0%, rgba(255,255,255,0.18), transparent 60%)' }}
+                    />
+                    <div className="relative">
+                        {/* Brand-mark: logo del coach o iniciales sobre vidrio (onDark) */}
+                        <div className="inline-flex">
+                            {logoUrl ? (
+                                <div
+                                    className="relative flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-xl"
+                                    style={{ background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.28)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+                                >
+                                    <Image src={logoUrl} alt={coach.brand_name} fill className="object-contain p-2.5" />
+                                </div>
+                            ) : (
+                                <div
+                                    className="flex h-[76px] w-[76px] items-center justify-center rounded-xl font-display text-[27px] font-black text-white"
+                                    style={{ background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.28)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+                                >
+                                    {initials}
+                                </div>
+                            )}
+                        </div>
+                        <h1
+                            className="mt-4 font-display text-[27px] font-black tracking-[-0.02em] text-white"
+                            style={{ fontFamily: 'var(--login-font)' }}
+                        >
+                            {coach.brand_name}
+                        </h1>
+                        <p className="mx-auto mt-1.5 max-w-[280px] text-sm leading-relaxed text-white/80">
+                            {tagline}
+                        </p>
                     </div>
-                    <h1 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-text-strong" style={{ fontFamily: 'var(--login-font)' }}>
-                        {coach.brand_name}
-                    </h1>
-                    <p className="mt-1.5 text-sm text-text-muted max-w-[260px] mx-auto leading-relaxed">
-                        {coach.welcome_message?.trim() || 'Tu plataforma de entrenamiento personalizado'}
-                    </p>
                 </LoginEntranceItem>
 
-                {/* Login form */}
-                <LoginEntranceItem>
+                {/* ── Sheet con esquinas redondeadas que se superpone al hero ── */}
+                <LoginEntranceItem className="relative z-[2] -mt-[26px] flex-1 rounded-t-[var(--radius-2xl)] bg-surface-app px-6 pb-7 pt-[26px]">
+                    <p className="mb-[18px] text-center text-[13px] text-text-muted">
+                        Iniciá sesión para entrenar con <b className="text-text-strong">{coach.brand_name}</b>
+                    </p>
+
                     <ClientLoginForm
                         coachSlug={coach_slug}
                         primaryColor={theme.light.accent}
                         brandName={coach.brand_name}
                         logoUrl={logoUrl}
                     />
-                </LoginEntranceItem>
 
-                {/* Powered by EVA */}
-                <LoginEntranceItem>
-                    <p className="mt-5 text-center text-xs text-muted-foreground/60">
-                        Impulsado por{' '}
-                        <span className="font-semibold text-muted-foreground">EVA</span>
-                    </p>
+                    {/* Powered by EVA */}
+                    <div className="flex items-center justify-center gap-1.5 pt-[18px] text-[11px] text-text-subtle">
+                        con tecnología de
+                        <span className="font-semibold text-text-muted">EVA</span>
+                    </div>
                 </LoginEntranceItem>
             </LoginEntrance>
 

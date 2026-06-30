@@ -11,10 +11,8 @@ import {
     getAddonPaymentRulesForCycle,
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
-    getTierBillingCycleSummary,
     getTierCapabilities,
     getTierMaxClients,
-    getTierNutritionSummary,
     getTierPriceClp,
     computeDiscountedClp,
     isBillingCycleAllowedForTier,
@@ -31,26 +29,20 @@ import {
 import type { ModuleKey } from '@/services/entitlements.service'
 import { useCaptureAddonFunnel } from '@/lib/posthog/events'
 import Link from 'next/link'
-import { Zap, Crown, Rocket, TrendingUp, Building2, Check, Leaf, HelpCircle, Puzzle, Lock, Gift, ArrowLeft, type LucideIcon } from 'lucide-react'
+import { Check, Puzzle, Lock, Gift, ArrowLeft, ArrowRight, CreditCard, HeartPulse, Activity, Ruler, Utensils, type LucideIcon } from 'lucide-react'
 import { CouponRedeemCard } from './_components/CouponRedeemCard'
 
-// growth/scale: LEGACY (fuera de venta). Se mantienen en los mapas de display porque el PLAN
-// ACTUAL de un coach grandfathered puede ser legacy y debe renderizar su icono/color correcto.
-const TIER_ICON: Record<SubscriptionTier, LucideIcon> = {
-    free: Leaf, starter: Zap, pro: Rocket, elite: Crown, growth: TrendingUp, scale: Building2,
-}
-const TIER_COLOR: Record<SubscriptionTier, string> = {
-    free: 'text-slate-400', starter: 'text-sky-400', pro: 'text-violet-400',
-    elite: 'text-amber-400', growth: 'text-emerald-400', scale: 'text-rose-400',
-}
-const TIER_ICON_BG: Record<SubscriptionTier, string> = {
-    free: 'bg-slate-500/10 border-slate-500/20', starter: 'bg-sky-500/10 border-sky-500/20',
-    pro: 'bg-violet-500/10 border-violet-500/20', elite: 'bg-amber-500/10 border-amber-500/20',
-    growth: 'bg-emerald-500/10 border-emerald-500/20', scale: 'bg-rose-500/10 border-rose-500/20',
-}
 const TIER_BADGE: Partial<Record<SubscriptionTier, { label: string; cls: string }>> = {
     pro:    { label: 'Más popular', cls: 'bg-violet-500/15 text-violet-400' },
     growth: { label: 'Nuevo',       cls: 'bg-emerald-500/15 text-emerald-400' },
+}
+
+// Icono por módulo add-on (espejo del kit de diseño Suscripcion.jsx).
+const ADDON_ICON: Record<ModuleKey, LucideIcon> = {
+    cardio: HeartPulse,
+    movement_assessment: Activity,
+    body_composition: Ruler,
+    nutrition_exchanges: Utensils,
 }
 
 // Etiqueta legible de la marca a partir del payment_method_id de MercadoPago (P1-8): 'debvisa' es un id
@@ -140,6 +132,8 @@ export default function CoachSubscriptionPage() {
     const [blockedMsg, setBlockedMsg] = useState<string | null>(null)
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
     const [reason, setReason] = useState('')
+    // Panel de cancelación (diseño: ghost danger al pie que revela el motivo). Conserva handleCancel.
+    const [showCancelPanel, setShowCancelPanel] = useState(false)
     const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('starter')
     const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly')
     const [events, setEvents] = useState<SubscriptionEvent[]>([])
@@ -551,159 +545,160 @@ export default function CoachSubscriptionPage() {
     }
 
     return (
-        <main className="mx-auto max-w-4xl px-4 py-8">
-            <Link
-                href="/coach/settings"
-                className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-strong"
-            >
-                <ArrowLeft className="h-4 w-4" /> Opciones
-            </Link>
-            <h1 className="font-display text-2xl font-extrabold tracking-tight text-strong">Mi Suscripción</h1>
-            <p className="mt-1 text-sm text-muted">
-                Gestioná tu plan, frecuencia de cobro y cancelación.
-            </p>
-
-            {/* Código de descuento (cupones, F5) — self-gated: se oculta sin plan pago activo / flag OFF. */}
-            <div className="mt-6">
-                <CouponRedeemCard />
+        <main className="mx-auto max-w-2xl px-5 pb-12 pt-6">
+            {/* TopBar — título · subtítulo · estado */}
+            <div className="mb-5 flex items-center gap-3">
+                <Link
+                    href="/coach/settings"
+                    aria-label="Volver a Opciones"
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control border border-subtle text-muted transition-colors hover:text-strong"
+                >
+                    <ArrowLeft className="h-[18px] w-[18px]" />
+                </Link>
+                <div className="min-w-0 flex-1">
+                    <h1 className="font-display text-xl font-extrabold leading-tight tracking-tight text-strong">Suscripción</h1>
+                    <p className="text-xs text-muted">Standalone</p>
+                </div>
+                {coach
+                    ? (() => {
+                          const st = coach.subscription_status
+                          const label =
+                              st === 'active' ? 'Activa' :
+                              st === 'canceled' ? 'Cancelada' :
+                              st === 'trialing' ? 'En prueba' :
+                              st === 'pending_payment' ? 'Procesando' : st
+                          const cls =
+                              st === 'active' ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' :
+                              st === 'canceled' ? 'bg-red-500/15 text-red-600 dark:text-red-400' :
+                              st === 'trialing' ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400' :
+                              'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                          return (
+                              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${cls}`}>
+                                  <span className="h-1.5 w-1.5 rounded-full bg-current" /> {label}
+                              </span>
+                          )
+                      })()
+                    : null}
             </div>
 
-            {loading ? (
-                <p role="status" aria-live="polite" className="mt-6 text-sm text-muted-foreground">Cargando estado de suscripción...</p>
+            {/* Banners de feedback (arriba, como el diseño) */}
+            {error ? (
+                <p ref={feedbackBannerRef} role="alert" aria-live="assertive" className="mb-3.5 rounded-control border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-sm font-medium text-red-700 dark:text-red-300">
+                    {error}
+                </p>
+            ) : null}
+            {successMessage ? (
+                <p ref={feedbackBannerRef} aria-live="polite" className="mb-3.5 rounded-control border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                    {successMessage}
+                </p>
             ) : null}
 
+            {loading ? (
+                <p role="status" aria-live="polite" className="mb-4 text-sm text-muted">Cargando estado de suscripción...</p>
+            ) : null}
+
+            {/* Plan actual — tarjeta inversa (diseño Suscripcion.jsx) */}
             {coach ? (
-                <section className="mt-6 rounded-card border border-subtle bg-surface-card p-5">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-3">Plan actual</p>
-                    <div className="flex items-start gap-4">
-                        {(() => {
-                            // Un tier desconocido (ni venta ni legacy — data corrupta o tier nuevo
-                            // sin display) NO colapsa a 'starter' (mentiria con su icono/color).
-                            // Estado de error explicito: icono neutro + label crudo + aviso (abajo).
-                            const isKnownTier = coach.subscription_tier in TIER_CONFIG
-                            if (!isKnownTier) {
-                                return (
-                                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/40">
-                                        <HelpCircle className="h-5 w-5 text-muted-foreground" />
+                <section style={{ background: 'var(--surface-inverse)' }} className="mb-3.5 rounded-card p-5">
+                    {(() => {
+                        // Un tier desconocido (ni venta ni legacy) NO colapsa a 'starter' (mentiría con su label).
+                        const isKnownTier = coach.subscription_tier in TIER_CONFIG
+                        const t = coach.subscription_tier as SubscriptionTier
+                        const tierLabel = isKnownTier ? TIER_CONFIG[t].label : coach.subscription_tier
+                        // Total compuesto (base + add-ons) del endpoint — la UI NUNCA calcula precios.
+                        const total = billing?.totalClp ?? (isKnownTier ? getTierPriceClp(t, coach.billing_cycle as BillingCycle) : 0)
+                        const cycleLabel = BILLING_CYCLE_CONFIG[coachCycle]?.label.toLowerCase() ?? ''
+                        const periodDate = coach.current_period_end
+                            ? new Date(coach.current_period_end).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
+                            : null
+                        const couponOff = activeCoupon?.discountClp ?? 0
+                        return (
+                            <>
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-sport-400">Plan actual</p>
+                                        <p className="mt-1 font-display text-[26px] font-black leading-none text-on-dark">{tierLabel}</p>
+                                        <p className="mt-1.5 text-[13px] text-on-dark-muted">
+                                            {coach.subscription_tier === 'free'
+                                                ? 'Gratis para siempre'
+                                                : periodDate
+                                                ? `${coach.subscription_status === 'canceled' ? 'Acceso hasta' : 'Próximo cobro'} · ${periodDate}`
+                                                : TIER_STUDENT_RANGE_LABEL[t] ?? ''}
+                                        </p>
                                     </div>
-                                )
-                            }
-                            const t = coach.subscription_tier as SubscriptionTier
-                            const TierIcon = TIER_ICON[t]
-                            return (
-                                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${TIER_ICON_BG[t]}`}>
-                                    <TierIcon className={`h-5 w-5 ${TIER_COLOR[t]}`} />
+                                    {total > 0 ? (
+                                        <div className="shrink-0 text-right">
+                                            <span className="eva-metric text-sport-400" style={{ fontSize: 28 }}>${total.toLocaleString('es-CL')}</span>
+                                            {cycleLabel ? <p className="text-xs text-on-dark-muted">/ {cycleLabel}</p> : null}
+                                        </div>
+                                    ) : null}
                                 </div>
-                            )
-                        })()}
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <p className="font-bold text-foreground text-lg">
-                                    {(() => {
-                                        const t = coach.subscription_tier as SubscriptionTier
-                                        return (t in TIER_CONFIG) ? TIER_CONFIG[t].label : coach.subscription_tier
-                                    })()}
-                                </p>
-                                <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                                    coach.subscription_status === 'active'          ? 'bg-emerald-500/15 text-emerald-500' :
-                                    coach.subscription_status === 'canceled'        ? 'bg-red-500/15 text-red-400' :
-                                    coach.subscription_status === 'trialing'        ? 'bg-blue-500/15 text-blue-400' :
-                                    'bg-amber-500/15 text-amber-400'
-                                }`}>
-                                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                                    {coach.subscription_status === 'active'          ? 'Activo' :
-                                     coach.subscription_status === 'canceled'        ? 'Cancelado' :
-                                     coach.subscription_status === 'trialing'        ? 'En prueba' :
-                                     coach.subscription_status === 'pending_payment' ? 'Procesando' :
-                                     coach.subscription_status}
-                                </span>
-                            </div>
-                            <p className="text-sm text-muted-foreground mt-0.5">
-                                {TIER_STUDENT_RANGE_LABEL[coach.subscription_tier as SubscriptionTier] ?? ''}
-                            </p>
-                            {!(coach.subscription_tier in TIER_CONFIG) && (
-                                <p className="mt-1 text-sm font-medium text-amber-600 dark:text-amber-400">
-                                    Plan no reconocido — contacta soporte.
-                                </p>
-                            )}
-                            {coach.current_period_end ? (
-                                <p className="text-sm text-muted-foreground mt-1">
-                                    {coach.subscription_status === 'canceled' ? 'Acceso hasta' : 'Próximo cobro'}:{' '}
-                                    <span className="font-semibold text-foreground">
-                                        {new Date(coach.current_period_end).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}
-                                    </span>
-                                    {coach.subscription_status === 'active' && (() => {
-                                        // Total compuesto (base + add-ons) del endpoint — la UI NUNCA calcula precios.
-                                        const total = billing?.totalClp ?? getTierPriceClp(coach.subscription_tier as SubscriptionTier, coach.billing_cycle as BillingCycle)
-                                        return total > 0 ? <span className="text-muted-foreground"> · ${total.toLocaleString('es-CL')} CLP</span> : null
-                                    })()}
-                                </p>
-                            ) : coach.subscription_tier === 'free' ? (
-                                <p className="text-sm text-muted-foreground mt-1">
-                                    Sin fecha de vencimiento · <span className="text-foreground font-semibold">Gratis para siempre</span>
-                                </p>
-                            ) : null}
-                            {/* Cambiar tarjeta (Modalidad A) — flag ON + sub activa/en prueba o en dunning
-                                (paused/past_due): cambiar la tarjeta es la recuperación del cobro fallido (P0-3b). */}
-                            {changeCardEnabled &&
-                                ['active', 'trialing', 'paused', 'past_due'].includes(coach.subscription_status) && (
-                                    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                                        {coach.card_last4 ? (
-                                            <span className="text-muted-foreground">
-                                                Tarjeta:{' '}
-                                                <span className="font-medium text-foreground">
-                                                    {coach.card_brand ? `${mpBrandLabel(coach.card_brand)} ` : ''}···· {coach.card_last4}
-                                                </span>
-                                            </span>
-                                        ) : (
-                                            <span className="text-muted-foreground">Sin tarjeta registrada</span>
+
+                                {!isKnownTier && (
+                                    <p className="mt-2 text-sm font-medium text-amber-400">Plan no reconocido — contacta soporte.</p>
+                                )}
+
+                                {/* Desglose (base + módulos + cupón) — la UI NUNCA calcula precios, viene del endpoint */}
+                                {coach.subscription_status === 'active' && billing && (
+                                    <div className="mt-3.5 flex flex-col gap-1.5 border-t border-white/10 pt-3.5">
+                                        <div className="flex justify-between text-[13px]">
+                                            <span className="text-on-dark-muted">Plan {tierLabel}</span>
+                                            <span className="eva-mono font-semibold text-on-dark">${billing.baseClp.toLocaleString('es-CL')}</span>
+                                        </div>
+                                        {billing.addonsClp > 0 && (
+                                            <div className="flex justify-between text-[13px]">
+                                                <span className="text-on-dark-muted">Módulos</span>
+                                                <span className="eva-mono font-semibold text-on-dark">${billing.addonsClp.toLocaleString('es-CL')}</span>
+                                            </div>
                                         )}
-                                        <button
-                                            type="button"
-                                            onClick={() => router.push('/coach/subscription/update-card')}
-                                            className="font-medium text-link hover:underline"
-                                        >
-                                            Cambiar tarjeta
-                                        </button>
+                                        {couponOff > 0 && activeCoupon && (
+                                            <div className="flex justify-between text-[13px]">
+                                                <span className="text-on-dark-muted">Cupón {activeCoupon.code}</span>
+                                                <span className="eva-mono font-semibold text-emerald-400">−${couponOff.toLocaleString('es-CL')}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
-                            {/* Desglose compuesto (base + add-ons) — solo si hay add-ons facturables */}
-                            {coach.subscription_status === 'active' && billing && billing.addonsClp > 0 && (
-                                <div className="mt-2 rounded-control border border-subtle bg-surface-sunken px-3 py-2 text-xs">
-                                    <div className="flex justify-between text-muted">
-                                        <span>Plan base</span>
-                                        <span className="text-strong">${billing.baseClp.toLocaleString('es-CL')} CLP</span>
-                                    </div>
-                                    <div className="mt-0.5 flex justify-between text-muted">
-                                        <span>Módulos add-on</span>
-                                        <span className="text-strong">${billing.addonsClp.toLocaleString('es-CL')} CLP</span>
-                                    </div>
-                                    <div className="mt-1 flex justify-between border-t border-subtle pt-1 font-semibold text-strong">
-                                        <span>Total próximo cobro</span>
-                                        <span>${billing.totalClp.toLocaleString('es-CL')} CLP</span>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+
+                                {/* Cambiar tarjeta (Modalidad A) — flag ON + sub activa/en prueba o en dunning
+                                    (paused/past_due): cambiar la tarjeta es la recuperación del cobro fallido (P0-3b). */}
+                                {changeCardEnabled &&
+                                    ['active', 'trialing', 'paused', 'past_due'].includes(coach.subscription_status) && (
+                                        <div className="mt-3.5 flex items-center gap-2.5 rounded-control bg-white/[0.06] px-3 py-2.5">
+                                            <CreditCard className="h-[18px] w-[18px] text-on-dark" />
+                                            <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-on-dark">
+                                                {coach.card_last4
+                                                    ? `${coach.card_brand ? mpBrandLabel(coach.card_brand) + ' ' : ''}···· ${coach.card_last4}`
+                                                    : 'Sin tarjeta registrada'}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => router.push('/coach/subscription/update-card')}
+                                                className="shrink-0 text-[13px] font-bold text-sport-400 hover:opacity-80"
+                                            >
+                                                Cambiar
+                                            </button>
+                                        </div>
+                                    )}
+                            </>
+                        )
+                    })()}
                 </section>
             ) : null}
 
-            {/* ── Add-ons (módulos) — superficie de venta permitida #2 (anti-hostigamiento) ── */}
-            {coach ? (
-                <section id="addons" className="mt-6 rounded-card border border-subtle bg-surface-card p-5">
-                    <div className="flex items-center gap-2">
-                        <Puzzle className="h-5 w-5 text-primary" />
-                        <h2 className="font-display text-lg font-bold tracking-tight text-strong">Módulos add-on</h2>
-                    </div>
-                    <p className="mt-1 text-sm text-muted">
-                        Suma módulos a tu plan según los necesites. Cada módulo se cobra junto a tu suscripción
-                        y puedes quitarlo cuando quieras.
-                    </p>
+            {/* Cupón — código de descuento (cupones, F5) — self-gated: se oculta sin plan pago activo / flag OFF. */}
+            <div className="mb-4">
+                <CouponRedeemCard />
+            </div>
 
-                    <div className="mt-4 space-y-3">
-                        {ADDON_MODULE_KEYS.map((key) => {
+            {/* ── Módulos add-on — superficie de venta permitida #2 (anti-hostigamiento) ── */}
+            {coach ? (
+                <section id="addons" className="mb-5">
+                    <p className="mb-2 px-1 text-[13px] font-bold uppercase tracking-wide text-muted">Módulos add-on</p>
+                    <div className="overflow-hidden rounded-card border border-subtle bg-surface-card">
+                        {ADDON_MODULE_KEYS.map((key, i) => {
                             const cfg = ADDON_CONFIG[key]
+                            const Icon = ADDON_ICON[key]
                             const row = addonForKey(key)
                             // Estado por módulo (plan 05 F5.1).
                             const isCourtesy = row?.source === 'admin_grant'
@@ -713,59 +708,43 @@ export default function CoachSubscriptionPage() {
                             // D8: nutrition_exchanges requiere tier con nutrición (Pro+).
                             const requiresNutritionTier = key === 'nutrition_exchanges' && !getTierCapabilities(coachTier).canUseNutrition
                             const canAdd = hasActivePaidPlan && !requiresNutritionTier && !row
-
+                            const lit = isActive || isCourtesy
+                            // Badge de estado (texto + paleta), espejo del modState del diseño.
+                            const badge: { label: string; cls: string; icon: 'gift' | 'check' | 'lock' | null } =
+                                isCourtesy
+                                    ? { label: 'Activo sin costo', cls: 'bg-sky-500/15 text-sky-600 dark:text-sky-400', icon: 'gift' }
+                                    : isActive
+                                    ? { label: 'Activo', cls: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400', icon: 'check' }
+                                    : isCancelPendingCharged
+                                    ? { label: `Se desactiva el ${row?.expiresAt ? new Date(row.expiresAt).toLocaleDateString('es-CL', { day: 'numeric', month: 'long' }) : 'fin del período'}`, cls: 'bg-amber-500/15 text-amber-600 dark:text-amber-400', icon: null }
+                                    : isCommitted
+                                    ? { label: 'Baja programada', cls: 'bg-amber-500/15 text-amber-600 dark:text-amber-400', icon: null }
+                                    : requiresNutritionTier
+                                    ? { label: 'Requiere plan Pro+', cls: 'bg-surface-sunken text-muted', icon: 'lock' }
+                                    : { label: `$${cfg.priceClpMensual.toLocaleString('es-CL')}/mes`, cls: 'bg-surface-sunken text-muted', icon: null }
                             return (
-                                <div key={key} className="rounded-control border border-subtle p-4">
-                                    <div className="flex items-start justify-between gap-3 flex-wrap">
-                                        <div className="min-w-0 flex-1">
-                                            <p className="font-semibold text-strong">{cfg.label}</p>
-                                            <p className="mt-0.5 text-xs text-muted">{cfg.description}</p>
-                                        </div>
-                                        <div className="shrink-0 text-right">
-                                            {isCourtesy ? (
-                                                <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] font-semibold text-sky-500">
-                                                    <Gift className="h-3 w-3" /> Cortesía EVA
-                                                </span>
-                                            ) : isActive ? (
-                                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-500">
-                                                    <Check className="h-3 w-3" /> Activo
-                                                </span>
-                                            ) : isCancelPendingCharged ? (
-                                                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-500">
-                                                    Se desactiva el {row?.expiresAt ? new Date(row.expiresAt).toLocaleDateString('es-CL', { day: 'numeric', month: 'long' }) : 'fin del período'}
-                                                </span>
-                                            ) : isCommitted ? (
-                                                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-500">
-                                                    Comprometido hasta el primer cobro
-                                                </span>
-                                            ) : requiresNutritionTier ? (
-                                                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                                                    <Lock className="h-3 w-3" /> Requiere plan Pro+
-                                                </span>
-                                            ) : (
-                                                <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                                                    Disponible
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Acción Agregar / Quitar */}
-                                    <div className="mt-3 flex items-center justify-between gap-3">
-                                        <span className="min-w-0 flex-1 text-xs text-muted">
-                                            ${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes
-                                            {coachCycle !== 'monthly' && (
-                                                <span className="ml-1">
-                                                    (tu ciclo {coachCycle === 'annual' ? 'anual' : 'trimestral'} descuenta {BILLING_CYCLE_CONFIG[coachCycle].discountPercent}%)
-                                                </span>
-                                            )}
+                                <div key={key}>
+                                    {i > 0 && <div className="mx-3.5 h-px bg-[var(--border-subtle)]" />}
+                                    <div className="flex items-center gap-3 px-3.5 py-3">
+                                        <span className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-control ${lit ? 'bg-sport-100 text-sport-600' : 'bg-surface-sunken text-subtle'}`}>
+                                            <Icon className="h-[18px] w-[18px]" />
                                         </span>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-bold text-strong">{cfg.label}</p>
+                                            <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${badge.cls}`}>
+                                                {badge.icon === 'gift' && <Gift className="h-3 w-3" />}
+                                                {badge.icon === 'check' && <Check className="h-3 w-3" />}
+                                                {badge.icon === 'lock' && <Lock className="h-3 w-3" />}
+                                                {badge.label}
+                                            </span>
+                                        </div>
+                                        {/* Acción Agregar / Quitar */}
                                         {isActive || isCancelPendingCharged || isCommitted ? (
                                             <button
                                                 type="button"
                                                 disabled={addonSaving || isCancelPendingCharged || isCommitted || !SELF_SERVICE_ADDONS_ENABLED}
                                                 onClick={(e) => { modalTriggerRef.current = e.currentTarget; setCancelAddonEffective(undefined); setCancelAddonKey(key) }}
-                                                className="shrink-0 h-11 min-h-[44px] rounded-control border border-default px-4 text-xs font-semibold text-muted hover:text-strong disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                                className="shrink-0 h-9 rounded-control border border-default px-3.5 text-xs font-semibold text-red-600 hover:bg-red-500/10 disabled:opacity-60 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:text-red-400"
                                             >
                                                 {isCancelPendingCharged || isCommitted ? 'Baja solicitada' : 'Quitar'}
                                             </button>
@@ -774,32 +753,31 @@ export default function CoachSubscriptionPage() {
                                                 type="button"
                                                 disabled={addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
                                                 onClick={(e) => { modalTriggerRef.current = e.currentTarget; openAddonModal(key) }}
-                                                className="shrink-0 h-11 min-h-[44px] rounded-control bg-primary px-4 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                                className="shrink-0 h-9 rounded-control border border-default bg-surface-sunken px-3.5 text-xs font-semibold text-strong hover:bg-surface-card disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                             >
                                                 Agregar
                                             </button>
                                         ) : null}
                                     </div>
-
-                                    {isCourtesy && (
-                                        <p className="mt-2 text-[11px] text-muted">
-                                            Activo sin costo por cortesía de EVA. No se incluye en tu cobro.
-                                        </p>
-                                    )}
                                 </div>
                             )
                         })}
                     </div>
 
                     {!hasActivePaidPlan && (
-                        <p className="mt-4 rounded-control border border-subtle bg-surface-sunken px-3 py-2 text-xs text-muted">
+                        <p className="mt-3 rounded-control border border-subtle bg-surface-sunken px-3 py-2 text-xs text-muted">
                             Los módulos add-on están disponibles con un plan pago activo.
                         </p>
                     )}
                     {hasActivePaidPlan && !SELF_SERVICE_ADDONS_ENABLED && (
-                        <p className="mt-4 rounded-control border border-subtle bg-surface-sunken px-3 py-2 text-xs text-muted">
+                        <p className="mt-3 rounded-control border border-subtle bg-surface-sunken px-3 py-2 text-xs text-muted">
                             La compra y baja de módulos estará disponible muy pronto. Si necesitas un módulo ahora,
                             escríbenos a <a href="mailto:contacto@eva-app.cl" className="text-primary hover:opacity-80">contacto@eva-app.cl</a>.
+                        </p>
+                    )}
+                    {hasActivePaidPlan && SELF_SERVICE_ADDONS_ENABLED && (
+                        <p className="mt-2 px-1 text-[11px] text-subtle">
+                            Activá un módulo acá; usalo desde Alumnos › Herramientas. Cada uno se cobra aparte de tu plan.
                         </p>
                     )}
                 </section>
@@ -810,47 +788,39 @@ export default function CoachSubscriptionPage() {
                 unos segundos hasta que carga subscription-status. coach se setea junto a addons +
                 activeClientCount en el mismo fetch → al aparecer la sección, la data está completa. */}
             {coach && (
-            <section className="mt-6 rounded-card border border-subtle bg-surface-card p-5 space-y-5">
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                    <h2 className="font-display text-lg font-bold tracking-tight text-strong">Cambiar plan</h2>
-                    {/* Cycle pills — shown per selected tier */}
-                    {allowedCycleOptions.length > 1 && (
-                        <div className="flex flex-wrap items-center gap-1 rounded-control border border-subtle bg-surface-sunken p-1">
-                            {allowedCycleOptions.map((cycle) => (
+            <section className="mb-5 space-y-3.5">
+                <p className="px-1 text-[13px] font-bold uppercase tracking-wide text-muted">Cambiar plan</p>
+
+                {/* Selector de ciclo — pills full-width (diseño Suscripcion.jsx) */}
+                {allowedCycleOptions.length > 1 && (
+                    <div className="flex gap-1.5 rounded-control bg-surface-sunken p-1">
+                        {allowedCycleOptions.map((cycle) => {
+                            const disc = BILLING_CYCLE_CONFIG[cycle].discountPercent
+                            return (
                                 <button
                                     key={cycle}
                                     type="button"
                                     onClick={() => setSelectedCycle(cycle)}
-                                    className={`flex min-h-[44px] items-center rounded-control px-2.5 py-2 text-xs font-semibold transition-colors sm:px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+                                    className={`flex min-h-[44px] flex-1 flex-col items-center justify-center gap-px rounded-control px-1 py-2 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
                                         selectedCycle === cycle
                                             ? 'bg-surface-card text-strong shadow-sm'
                                             : 'text-muted hover:text-strong'
                                     }`}
                                 >
-                                    {BILLING_CYCLE_CONFIG[cycle].label}
-                                    {cycle === 'annual' && (
-                                        <span className="ml-1 rounded bg-emerald-500/15 px-1 py-0.5 text-[9px] font-bold text-emerald-400">−{BILLING_CYCLE_CONFIG[cycle].discountPercent}%</span>
-                                    )}
-                                    {cycle === 'quarterly' && (
-                                        <span className="ml-1 rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-bold text-amber-400">−{BILLING_CYCLE_CONFIG[cycle].discountPercent}%</span>
-                                    )}
+                                    <span>{BILLING_CYCLE_CONFIG[cycle].label}</span>
+                                    {disc > 0 && <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">−{disc}%</span>}
                                 </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                            )
+                        })}
+                    </div>
+                )}
 
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="flex flex-col gap-2.5">
                     {tierOptions.map((tier) => {
-                        const TierIcon = TIER_ICON[tier]
-                        const cycleForPrice = allowedCycleOptions.includes(selectedCycle)
-                            ? selectedCycle
-                            : getDefaultBillingCycleForTier(tier)
                         const price = getTierPriceClp(tier, isBillingCycleAllowedForTier(tier, selectedCycle) ? selectedCycle : getDefaultBillingCycleForTier(tier))
-                        const monthlyPrice = getTierPriceClp(tier, 'monthly')
                         const isSelected = selectedTier === tier
+                        const current = tier === coachTier
                         const badge = TIER_BADGE[tier]
-                        const hasNutrition = !getTierNutritionSummary(tier).startsWith('Sin')
                         const features = TIER_CONFIG[tier].features.slice(0, 3)
                         // Downgrade que no cabe: bajar a un tier con menos cupo que tus alumnos
                         // activos. Se bloquea (mismo guard que el 409 OVER_CAPACITY del server).
@@ -890,87 +860,46 @@ export default function CoachSubscriptionPage() {
                                     setBlockedMsg(null)
                                     setSelectedTier(tier)
                                 }}
-                                className={`relative rounded-card border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+                                className={`relative rounded-control px-4 py-3.5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
                                     isBlocked
-                                        ? 'cursor-not-allowed border-subtle opacity-50'
+                                        ? 'cursor-not-allowed border-[1.5px] border-subtle opacity-55'
                                         : isSelected
-                                        ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30'
-                                        : 'border-subtle hover:border-default hover:bg-surface-sunken'
+                                        ? 'border-2 border-sport-500 bg-sport-100/40'
+                                        : 'border-[1.5px] border-subtle bg-surface-card hover:bg-surface-sunken'
                                 }`}
                             >
                                 {/* Razón del bloqueo para lectores de pantalla (referida por aria-describedby) */}
                                 {isBlocked && (
                                     <span id={blockReasonId} className="sr-only">{blockTooltip}</span>
                                 )}
-                                {badge && !isBlocked && (
-                                    <span className={`absolute right-3 top-3 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${badge.cls}`}>
-                                        {badge.label}
-                                    </span>
-                                )}
-                                {isBlocked && (
-                                    <span
-                                        aria-label={wouldExceed ? 'Bloqueado: sin cupo' : 'Bloqueado: requiere quitar Nutrición'}
-                                        className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
-                                    >
-                                        <Lock className="h-3 w-3" aria-hidden="true" /> {wouldExceed ? 'Sin cupo' : 'Nutrición'}
-                                    </span>
-                                )}
-
-                                <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl border ${TIER_ICON_BG[tier]}`}>
-                                    <TierIcon className={`h-4.5 w-4.5 ${TIER_COLOR[tier]}`} />
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <span className="font-display text-[17px] font-extrabold tracking-tight text-strong">{TIER_CONFIG[tier].label}</span>
+                                        {current && (
+                                            <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Actual</span>
+                                        )}
+                                        {badge && !isBlocked && (
+                                            <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold ${badge.cls}`}>{badge.label}</span>
+                                        )}
+                                        {isBlocked && <Lock className="h-3.5 w-3.5 shrink-0 text-subtle" aria-hidden="true" />}
+                                    </div>
+                                    <div className="shrink-0 text-right">
+                                        <span className="eva-metric text-[18px] text-strong">${price.toLocaleString('es-CL')}</span>
+                                        <span className="text-[11px] text-muted"> /mes</span>
+                                    </div>
                                 </div>
-
-                                <p className="font-display font-bold tracking-tight text-strong">{TIER_CONFIG[tier].label}</p>
-                                <p className="text-[11px] text-muted mt-0.5">{TIER_STUDENT_RANGE_LABEL[tier]}</p>
-
-                                <div className="mt-3">
-                                    <span className="font-display text-xl font-extrabold tracking-tight text-strong">
-                                        ${price.toLocaleString('es-CL')}
-                                    </span>
-                                    <span className="text-xs text-muted"> CLP/mes</span>
-                                    {selectedCycle === 'annual' && isBillingCycleAllowedForTier(tier, 'annual') && (
-                                        <p className="text-[10px] text-muted mt-0.5">
-                                            ${(price * 12).toLocaleString('es-CL')} cobrado anualmente
-                                        </p>
-                                    )}
-                                </div>
-
-                                <ul className="mt-3 space-y-1.5">
-                                    {features.map((f) => (
-                                        <li key={f} className="flex items-start gap-1.5 text-[11px] text-muted">
-                                            <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400" />
-                                            {f}
-                                        </li>
-                                    ))}
-                                </ul>
-
-                                <div className="mt-3 flex flex-wrap gap-1.5">
-                                    <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                        {getTierBillingCycleSummary(tier)}
-                                    </span>
-                                    <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${
-                                        hasNutrition
-                                            ? 'bg-emerald-500/15 text-emerald-500'
-                                            : 'bg-amber-500/15 text-amber-500'
-                                    }`}>
-                                        {getTierNutritionSummary(tier)}
-                                    </span>
-                                </div>
-
-                                {/* Razón corta siempre visible bajo la card bloqueada (issue #8) */}
-                                {isBlocked && shortBlockReason && (
-                                    <p className="mt-3 flex items-start gap-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                                        <Lock className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
-                                        {shortBlockReason}
-                                    </p>
-                                )}
+                                <p className={`mt-1 text-[12.5px] ${isBlocked ? 'font-medium text-red-600 dark:text-red-400' : 'text-muted'}`}>
+                                    {isBlocked
+                                        ? (wouldExceed ? `Sin cupo · tenés ${activeClientCount} alumnos` : (shortBlockReason ?? 'No disponible'))
+                                        : features.join(' · ')}
+                                </p>
                             </button>
                         )
                     })}
                 </div>
 
                 {blockedMsg && (
-                    <div ref={blockedMsgRef} role="alert" className="mt-3 flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-600 dark:text-amber-300">
+                    <div ref={blockedMsgRef} role="alert" className="flex items-start gap-2 rounded-control border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-sm text-amber-600 dark:text-amber-300">
                         <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                         <span>{blockedMsg}</span>
                     </div>
@@ -1039,39 +968,43 @@ export default function CoachSubscriptionPage() {
                     </div>
                 )}
 
-                <div className="flex items-center justify-between gap-4 rounded-control border border-subtle bg-surface-sunken px-4 py-3">
-                    <div>
-                        <p className="text-xs text-muted">
-                            {upgradeAddons.length > 0 ? 'Total (plan + módulos)' : 'Total a pagar'}
-                        </p>
-                        <p className="font-display text-lg font-extrabold tracking-tight text-strong">
-                            {selectedCouponDiscount > 0 && (
-                                <span className="mr-2 text-sm font-normal text-muted line-through">${selectedComposite.toLocaleString('es-CL')}</span>
-                            )}
-                            ${selectedCompositeNet.toLocaleString('es-CL')} CLP
-                            <span className="text-sm font-normal text-muted"> / {BILLING_CYCLE_CONFIG[selectedCycle].label.toLowerCase()}</span>
-                        </p>
+                {/* Transparencia de precio (real) — desglose cupón/combo antes del CTA */}
+                {(selectedCouponDiscount > 0 || upgradeAddons.length > 0) && (
+                    <div className="rounded-control border border-subtle bg-surface-sunken px-4 py-3 text-[12px]">
                         {selectedCouponDiscount > 0 && activeCoupon && (
-                            <p className="text-[11px] font-medium text-emerald-500">
+                            <p className="font-medium text-emerald-600 dark:text-emerald-400">
                                 Cupón {activeCoupon.code} aplicado · −${selectedCouponDiscount.toLocaleString('es-CL')}
                             </p>
                         )}
                         {upgradeAddons.length > 0 && (
-                            <p className="text-[11px] text-muted">
+                            <p className="text-muted">
                                 plan ${selectedPrice.toLocaleString('es-CL')} + {upgradeAddons.length} módulo(s) ${upgradeAddonsCycleTotal.toLocaleString('es-CL')}
                             </p>
                         )}
                     </div>
-                    <button
-                        type="button"
-                        onClick={(e) => { modalTriggerRef.current = e.currentTarget; setShowUpgradeConfirm(true) }}
-                        disabled={saving || isNoOpChange}
-                        title={isNoOpChange ? 'Ya tienes este plan y ciclo. Elige un plan o ciclo distinto.' : undefined}
-                        className="shrink-0 h-11 rounded-control bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                    >
-                        Continuar →
-                    </button>
-                </div>
+                )}
+
+                {/* CTA full-width (diseño) — muestra el precio compuesto neto en la etiqueta */}
+                <button
+                    type="button"
+                    onClick={(e) => { modalTriggerRef.current = e.currentTarget; setShowUpgradeConfirm(true) }}
+                    disabled={saving || isNoOpChange}
+                    title={isNoOpChange ? 'Ya tienes este plan y ciclo. Elige un plan o ciclo distinto.' : undefined}
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-control bg-sport-500 px-5 text-sm font-bold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                >
+                    {isNoOpChange ? (
+                        'Plan y ciclo actuales'
+                    ) : (
+                        <>
+                            <span>
+                                Continuar · {selectedCouponDiscount > 0 && (
+                                    <span className="font-normal line-through opacity-70">${selectedComposite.toLocaleString('es-CL')}</span>
+                                )} ${selectedCompositeNet.toLocaleString('es-CL')}
+                            </span>
+                            <ArrowRight className="h-4 w-4" />
+                        </>
+                    )}
+                </button>
             </section>
             )}
 
@@ -1360,100 +1293,98 @@ export default function CoachSubscriptionPage() {
                 </div>
             )}
 
-            <section className="mt-6 rounded-card border border-subtle bg-surface-card p-5">
-                <h2 className="font-display text-lg font-bold tracking-tight text-strong">Historial de pagos</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                    Eventos registrados por Mercado Pago y confirmaciones manuales (zona horaria local en fechas).
-                </p>
+            <section className="mb-5">
+                <p className="mb-2 px-1 text-[13px] font-bold uppercase tracking-wide text-muted">Historial de pagos</p>
                 {events.length === 0 ? (
-                    <p className="mt-2 text-sm text-muted-foreground">Aún no hay movimientos de suscripción registrados.</p>
+                    <div className="rounded-card border border-subtle bg-surface-card p-4 text-sm text-muted">
+                        Aún no hay movimientos de suscripción registrados.
+                    </div>
                 ) : (
-                    <div className="mt-4 overflow-x-auto">
-                        <table className="w-full min-w-[520px] border-collapse text-left text-sm">
-                            <thead>
-                                <tr className="border-b border-subtle text-xs font-semibold uppercase tracking-wide text-muted">
-                                    <th className="py-2 pr-3">Fecha</th>
-                                    <th className="py-2 pr-3">Estado</th>
-                                    <th className="py-2 pr-3">Monto</th>
-                                    <th className="py-2">Referencia</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {events.map((event) => {
-                                    const amount = extractAmountClpFromEventPayload(event.payload)
-                                    const dateLabel = new Date(event.created_at).toLocaleString('es-CL', {
-                                        dateStyle: 'short',
-                                        timeStyle: 'short',
-                                    })
-                                    const ref = event.provider_checkout_id?.trim()
-                                    return (
-                                        <tr key={event.id} className="border-b border-border/80 dark:border-white/5 last:border-0">
-                                            <td className="py-2.5 pr-3 text-foreground">{dateLabel}</td>
-                                            <td className="py-2.5 pr-3">
-                                                <span className="rounded-md bg-secondary px-2 py-0.5 text-xs font-medium text-foreground">
-                                                    {event.provider_status ?? '—'}
-                                                </span>
-                                            </td>
-                                            <td className="py-2.5 pr-3 text-foreground">
-                                                {amount != null ? `$${amount.toLocaleString('es-CL')} CLP` : '—'}
-                                            </td>
-                                            <td className="py-2.5 text-xs text-muted-foreground">
-                                                {ref ? `${event.provider} · ${ref}` : event.provider}
-                                            </td>
-                                        </tr>
-                                    )
-                                })}
-                            </tbody>
-                        </table>
+                    <div className="overflow-hidden rounded-card border border-subtle bg-surface-card">
+                        {events.map((event, i) => {
+                            const amount = extractAmountClpFromEventPayload(event.payload)
+                            const dateLabel = new Date(event.created_at).toLocaleDateString('es-CL', {
+                                day: 'numeric', month: 'short',
+                            })
+                            const ref = event.provider_checkout_id?.trim()
+                            return (
+                                <div key={event.id}>
+                                    {i > 0 && <div className="mx-3.5 h-px bg-[var(--border-subtle)]" />}
+                                    <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                                        <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                                            <Check className="h-[15px] w-[15px]" />
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-[13.5px] font-bold text-strong">
+                                                {dateLabel}
+                                                {event.provider_status ? <span className="font-medium text-muted"> · {event.provider_status}</span> : null}
+                                            </p>
+                                            <p className="eva-mono text-[11px] text-subtle">{ref ? `${event.provider} · ${ref}` : event.provider}</p>
+                                        </div>
+                                        <span className="eva-mono shrink-0 text-[13.5px] font-bold text-strong">
+                                            {amount != null ? `$${amount.toLocaleString('es-CL')}` : '—'}
+                                        </span>
+                                    </div>
+                                </div>
+                            )
+                        })}
                     </div>
                 )}
+                <p className="mt-2 px-1 text-[11px] text-subtle">
+                    Eventos registrados por Mercado Pago y confirmaciones manuales (zona horaria local en fechas).
+                </p>
             </section>
 
-            <section className="mt-6 rounded-card border border-subtle bg-surface-card p-5">
-                <h2 className="font-display text-lg font-bold tracking-tight text-strong">Cancelar suscripción</h2>
-                {coach?.current_period_end ? (
-                    <p className="mt-2 text-sm text-muted-foreground">
-                        Al cancelar,{' '}
-                        <strong className="text-foreground">conservarás acceso hasta el{' '}
-                        {new Date(coach.current_period_end).toLocaleDateString('es-CL', {
-                            day: 'numeric',
-                            month: 'long',
-                            year: 'numeric',
-                        })}</strong>
-                        . Después de esa fecha tu cuenta quedará suspendida.
-                    </p>
-                ) : (
-                    <p className="mt-2 text-sm text-muted-foreground">
-                        Cuéntanos el motivo para ayudarnos a mejorar.
-                    </p>
-                )}
-                <textarea
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    className="mt-3 w-full rounded-control border border-default bg-surface-sunken p-3 text-sm text-strong outline-none focus:border-[var(--brand)]"
-                    rows={4}
-                    placeholder="Ejemplo: no usaré la app este mes..."
-                />
+            {/* Cancelar suscripción — ghost danger al pie que revela el motivo (diseño) */}
+            {!showCancelPanel ? (
                 <button
                     type="button"
-                    onClick={handleCancel}
-                    disabled={saving}
-                    className="mt-3 inline-flex h-11 items-center justify-center rounded-control border border-default px-4 text-sm font-semibold text-muted hover:text-strong disabled:opacity-60"
+                    onClick={() => setShowCancelPanel(true)}
+                    className="h-11 w-full rounded-control text-sm font-semibold text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
                 >
-                    Enviar solicitud de cancelación
+                    Cancelar suscripción
                 </button>
-            </section>
-
-            {error ? (
-                <p ref={feedbackBannerRef} role="alert" aria-live="assertive" className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
-                    {error}
-                </p>
-            ) : null}
-            {successMessage ? (
-                <p ref={feedbackBannerRef} aria-live="polite" className="mt-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-300">
-                    {successMessage}
-                </p>
-            ) : null}
+            ) : (
+                <section className="rounded-card border border-subtle bg-surface-card p-5">
+                    <h2 className="font-display text-base font-bold tracking-tight text-strong">Cancelar suscripción</h2>
+                    {coach?.current_period_end ? (
+                        <p className="mt-2 text-sm text-muted">
+                            Conservás acceso hasta el{' '}
+                            <strong className="text-strong">
+                                {new Date(coach.current_period_end).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}
+                            </strong>
+                            . Después tu cuenta pasa a plan gratuito.
+                        </p>
+                    ) : (
+                        <p className="mt-2 text-sm text-muted">Cuéntanos el motivo para ayudarnos a mejorar.</p>
+                    )}
+                    <p className="mt-3 text-[13px] font-semibold text-strong">¿Por qué te vas? (nos ayuda a mejorar)</p>
+                    <textarea
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        className="mt-1.5 w-full rounded-control border border-default bg-surface-sunken p-3 text-sm text-strong outline-none focus:border-[var(--brand)]"
+                        rows={3}
+                        placeholder="Contanos el motivo…"
+                    />
+                    <div className="mt-3 flex flex-col gap-2">
+                        <button
+                            type="button"
+                            onClick={handleCancel}
+                            disabled={saving || !reason.trim()}
+                            className="h-11 w-full rounded-control border border-red-500/30 text-sm font-semibold text-red-600 hover:bg-red-500/10 disabled:opacity-60 disabled:hover:bg-transparent dark:text-red-400"
+                        >
+                            {saving ? 'Procesando…' : 'Cancelar mi suscripción'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setShowCancelPanel(false)}
+                            className="h-11 w-full rounded-control text-sm font-semibold text-muted hover:text-strong"
+                        >
+                            Mejor sigo
+                        </button>
+                    </div>
+                </section>
+            )}
         </main>
     )
 }

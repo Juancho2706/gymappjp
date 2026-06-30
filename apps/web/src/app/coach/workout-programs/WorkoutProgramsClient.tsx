@@ -2,23 +2,19 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import {
+    ArrowUpDown,
     Check,
     ChevronsUpDown,
-    Copy,
-    Eye,
-    GitMerge,
+    LayoutGrid,
+    List,
     Loader2,
-    Pencil,
     Plus,
     Search,
-    Trash2,
-    Users,
     X,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
     Dialog,
     DialogContent,
@@ -50,14 +46,9 @@ import {
 } from '../builder/[clientId]/_actions/builder.actions'
 import { motion, useReducedMotion } from 'framer-motion'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
-import { LibraryHeader } from './components/LibraryHeader'
-import { LibraryHeroBackdrop } from './components/LibraryHeroBackdrop'
-import { LibraryToolbar } from './components/LibraryToolbar'
-import { ProgramRow } from './components/ProgramRow'
-import { ProgramPreviewBody, ProgramPreviewPanel } from './components/ProgramPreviewPanel'
+import { ProgramCard, ProgramRow } from './components/ProgramRow'
+import { ProgramPreviewPanel } from './components/ProgramPreviewPanel'
 import {
-    formatShortActivityDate,
-    getProgramStats,
     type LibraryFilters,
     type ProgramListModel,
     matchesProgramFilters,
@@ -146,149 +137,6 @@ function LibraryEmptyState({
     )
 }
 
-function DesktopEmptyPanel() {
-    return (
-        <div className="rounded-card border border-subtle bg-surface-card p-8 text-center text-strong shadow-sm">
-            <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-surface-sunken text-muted">
-                <Eye className="size-5 opacity-60" />
-            </div>
-            <p className="text-sm font-medium text-strong">Vista de detalles</p>
-            <p className="mt-1 text-xs text-muted">
-                Selecciona un programa de la lista para ver su contenido aquí.
-            </p>
-        </div>
-    )
-}
-
-interface DesktopDetailPanelProps {
-    program: ProgramListModel
-    areas: WorkoutArea[]
-    onClose: () => void
-    isPending: boolean
-    isActionPending: boolean
-    onAssign: () => void
-    onDuplicate: () => void
-    onSync?: () => void
-    onDelete: () => void
-    onEdit: () => void
-}
-
-function DesktopDetailPanel({
-    program,
-    areas,
-    onClose,
-    isPending,
-    isActionPending,
-    onAssign,
-    onDuplicate,
-    onSync,
-    onDelete,
-    onEdit,
-}: DesktopDetailPanelProps) {
-    const stats = getProgramStats(program)
-    const isTemplate = !program.client_id
-
-    const meta = [
-        `${stats.daysWithWork} días`,
-        `${stats.blockCount} bloques`,
-        stats.cycleLabel,
-        stats.weeksLabel,
-        `Act. ${formatShortActivityDate(stats.lastActivityIso)}`,
-    ]
-        .filter(Boolean)
-        .join(' · ')
-
-    return (
-        <div className="rounded-card border border-subtle bg-surface-card text-strong shadow-sm">
-            {/* Header */}
-            <div className="flex items-start justify-between gap-2 border-b border-subtle bg-surface-sunken/40 px-4 py-3.5">
-                <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="min-w-0 truncate font-display font-bold text-strong">{program.name}</span>
-                        {isTemplate ? (
-                            <Badge tone="sport" variant="soft" size="sm" className="shrink-0">
-                                Plantilla
-                            </Badge>
-                        ) : program.is_active ? (
-                            <Badge tone="success" variant="soft" size="sm" dot className="shrink-0">
-                                {stats.templateLabel}
-                            </Badge>
-                        ) : (
-                            <Badge tone="neutral" variant="soft" size="sm" className="shrink-0">
-                                {stats.templateLabel}
-                            </Badge>
-                        )}
-                    </div>
-                    {!isTemplate && program.client?.full_name && (
-                        <p className="mt-0.5 text-xs text-muted">{program.client.full_name}</p>
-                    )}
-                    <p className="mt-0.5 text-xs text-muted">{meta}</p>
-                </div>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="-mr-1 -mt-1 size-8 shrink-0 text-muted"
-                    onClick={onClose}
-                >
-                    <X className="size-4" />
-                </Button>
-            </div>
-
-            {/* Body */}
-            <ProgramPreviewBody program={program} areas={areas} />
-
-            {/* Footer actions */}
-            <div className="flex flex-wrap gap-2 border-t border-subtle bg-surface-sunken/30 px-4 py-3">
-                <Button type="button" size="sm" variant="sport" onClick={onEdit} className="gap-1.5">
-                    <Pencil className="size-3.5" />
-                    Editar
-                </Button>
-                {isTemplate && (
-                    <Button type="button" size="sm" variant="secondary" onClick={onAssign} className="gap-1.5">
-                        <Users className="size-3.5" />
-                        Asignar
-                    </Button>
-                )}
-                <Button
-                    type="button"
-                    size="sm"
-                    variant="secondary"
-                    onClick={onDuplicate}
-                    disabled={isPending && isActionPending}
-                    className="gap-1.5"
-                >
-                    <Copy className="size-3.5" />
-                    Duplicar
-                </Button>
-                {onSync && (
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        onClick={onSync}
-                        disabled={isPending && isActionPending}
-                        className="gap-1.5"
-                    >
-                        <GitMerge className="size-3.5" />
-                        Sincronizar
-                    </Button>
-                )}
-                <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={onDelete}
-                    className="gap-1.5 text-[var(--danger-600)] hover:bg-[var(--danger-100)] hover:text-[var(--danger-600)]"
-                >
-                    <Trash2 className="size-3.5" />
-                    Eliminar
-                </Button>
-            </div>
-        </div>
-    )
-}
-
 export function WorkoutProgramsClient({
     initialPrograms,
     availableClients,
@@ -297,11 +145,9 @@ export function WorkoutProgramsClient({
     const router = useRouter()
     const reduceMotion = useReducedMotion()
     const [search, setSearch] = useState('')
-    const [viewMode, setViewMode] = useState<'comfortable' | 'compact'>('comfortable')
     const [filterType, setFilterType] = useState<LibraryFilters['filterType']>('all')
-    const [filterStatus, setFilterStatus] = useState<LibraryFilters['filterStatus']>('all')
-    const [filterStructure, setFilterStructure] = useState<LibraryFilters['filterStructure']>('all')
-    const [filterHasPhases, setFilterHasPhases] = useState<LibraryFilters['filterHasPhases']>('all')
+    const [sort, setSort] = useState<'Recientes' | 'Nombre'>('Recientes')
+    const [sortOpen, setSortOpen] = useState(false)
     const [programs, setPrograms] = useState<ProgramListModel[]>(initialPrograms)
     useEffect(() => {
         setPrograms(initialPrograms)
@@ -330,39 +176,85 @@ export function WorkoutProgramsClient({
     const duplicateNameInputRef = useRef<HTMLInputElement>(null)
     const [actionProgramId, setActionProgramId] = useState<string | null>(null)
 
-    // Desktop detail panel state
-    const [selectedPanelProgram, setSelectedPanelProgram] = useState<ProgramListModel | null>(null)
-
-    // Keep panel in sync when programs list refreshes
+    // Mantiene la vista previa en sync cuando la lista se refresca.
     useEffect(() => {
-        setSelectedPanelProgram((prev) =>
-            prev ? (programs.find((p) => p.id === prev.id) ?? null) : null
-        )
+        setProgramToPreview((prev) => (prev ? (programs.find((p) => p.id === prev.id) ?? null) : null))
     }, [programs])
 
-    const filterState = useMemo(
+    const filterState = useMemo<LibraryFilters>(
         () => ({
             search,
             filterType,
-            filterStatus,
-            filterStructure,
-            filterHasPhases,
+            filterStatus: 'all',
+            filterStructure: 'all',
+            filterHasPhases: 'all',
         }),
-        [search, filterType, filterStatus, filterStructure, filterHasPhases]
+        [search, filterType]
     )
 
-    const filtered = useMemo(
-        () => programs.filter((p) => matchesProgramFilters(p, filterState)),
-        [programs, filterState]
-    )
+    const filtered = useMemo(() => {
+        const rows = programs.filter((p) => matchesProgramFilters(p, filterState))
+        if (sort === 'Nombre') {
+            return rows.slice().sort((a, b) => a.name.localeCompare(b.name))
+        }
+        return rows.slice().sort((a, b) => {
+            const da = new Date(a.updated_at || a.created_at).getTime()
+            const db = new Date(b.updated_at || b.created_at).getTime()
+            return db - da
+        })
+    }, [programs, filterState, sort])
 
     const templateCount = useMemo(() => programs.filter((p) => !p.client_id).length, [programs])
     const activeAssignedCount = useMemo(
         () => programs.filter((p) => !!p.client_id && p.is_active).length,
         [programs]
     )
+    const tabCounts: Record<LibraryFilters['filterType'], number> = {
+        all: programs.length,
+        templates: templateCount,
+        assigned: activeAssignedCount,
+    }
+    const filtering = search.trim().length > 0
 
-    const listMotionKey = `${search}|${filterType}|${filterStatus}|${filterStructure}|${filterHasPhases}`
+    const listMotionKey = `${search}|${filterType}|${sort}`
+
+    const openPreview = (program: ProgramListModel) => {
+        setProgramToPreview(program)
+        setIsPreviewOpen(true)
+    }
+    const previewAssign = () => {
+        if (!programToPreview) return
+        setSelectedProgram(programToPreview)
+        setIsPreviewOpen(false)
+        setIsAssignOpen(true)
+    }
+    const previewEdit = () => {
+        if (!programToPreview) return
+        const isTemplate = !programToPreview.client_id
+        const href = isTemplate
+            ? `/coach/workout-programs/builder?programId=${programToPreview.id}`
+            : `/coach/builder/${programToPreview.client_id}?programId=${programToPreview.id}`
+        setIsPreviewOpen(false)
+        router.push(href)
+    }
+    const previewDuplicate = () => {
+        if (!programToPreview) return
+        const p = programToPreview
+        setIsPreviewOpen(false)
+        openDuplicateDialog(p)
+    }
+    const previewSync = () => {
+        if (!programToPreview) return
+        setProgramToSync(programToPreview)
+        setIsPreviewOpen(false)
+        setShowSyncDialog(true)
+    }
+    const previewDelete = () => {
+        if (!programToPreview) return
+        const p = programToPreview
+        setIsPreviewOpen(false)
+        setProgramToDelete(p)
+    }
 
     const assignDaysMismatch = useMemo(() => {
         if (!selectedProgram || assignmentDays.length === 0) return false
@@ -514,7 +406,7 @@ export function WorkoutProgramsClient({
             } else {
                 toast.success('Programa eliminado')
                 setPrograms((prev) => prev.filter((p) => p.id !== program.id))
-                setSelectedPanelProgram((prev) => (prev?.id === program.id ? null : prev))
+                setProgramToPreview((prev) => (prev?.id === program.id ? null : prev))
                 router.refresh()
             }
             setProgramToDelete(null)
@@ -589,137 +481,261 @@ export function WorkoutProgramsClient({
                 </AlertDialogContent>
             </AlertDialog>
 
-            {/* Hero: backdrop + header + toolbar */}
-            <div className="w-full min-w-0 max-w-full overflow-hidden rounded-[28px] border border-subtle bg-surface-card/90 shadow-[0_8px_28px_-14px_rgba(13,18,28,0.10)] backdrop-blur-md dark:border-default dark:bg-surface-card/85 dark:shadow-[0_8px_32px_-16px_rgba(0,0,0,0.5)]">
-                <LibraryHeroBackdrop />
-                <div className="relative z-10 space-y-4 px-3 pb-4 pt-3 sm:px-5">
-                    <LibraryHeader
-                        templateCount={templateCount}
-                        activeAssignedCount={activeAssignedCount}
-                        totalCount={programs.length}
+            {/* ===== Móvil (eva-app · ProgramasHome) ===== */}
+            <div className="md:hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between gap-3 pb-3">
+                    <div className="min-w-0">
+                        <h1 className="font-display text-2xl font-extrabold leading-tight tracking-[-0.02em] text-strong">
+                            Programas
+                        </h1>
+                        <p className="text-sm text-muted">Biblioteca</p>
+                    </div>
+                    <Button
+                        type="button"
+                        variant="sport"
+                        size="sm"
+                        className="shrink-0 gap-1.5"
+                        onClick={() => router.push('/coach/workout-programs/builder')}
+                    >
+                        <Plus className="size-4" />
+                        Nueva
+                    </Button>
+                </div>
+
+                {/* Navegación a catálogo / áreas */}
+                <div className="mb-3 flex gap-2">
+                    <button
+                        type="button"
+                        onClick={() => router.push('/coach/exercises')}
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-control border-[1.5px] border-subtle bg-surface-card px-3 py-2.5 text-[13px] font-bold text-strong"
+                    >
+                        <List className="size-4" /> Ejercicios
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => router.push('/coach/settings/areas')}
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-control border-[1.5px] border-subtle bg-surface-card px-3 py-2.5 text-[13px] font-bold text-strong"
+                    >
+                        <LayoutGrid className="size-4" /> Áreas
+                    </button>
+                </div>
+
+                {/* Búsqueda + orden */}
+                <div className="mb-3 flex gap-2">
+                    <div className="relative flex flex-1 items-center">
+                        <Search className="pointer-events-none absolute left-3 size-4 text-subtle" />
+                        <input
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            placeholder="Buscar programa o alumno…"
+                            className="h-[42px] w-full rounded-control border-[1.5px] border-default bg-surface-card px-9 text-sm text-strong outline-none placeholder:text-muted"
+                        />
+                        {search && (
+                            <button
+                                type="button"
+                                onClick={() => setSearch('')}
+                                aria-label="Limpiar búsqueda"
+                                className="absolute right-2 flex size-6 items-center justify-center rounded-full bg-surface-sunken text-muted"
+                            >
+                                <X className="size-3" />
+                            </button>
+                        )}
+                    </div>
+                    <Popover open={sortOpen} onOpenChange={setSortOpen}>
+                        <PopoverTrigger
+                            aria-label="Ordenar"
+                            className={cn(
+                                'flex size-[42px] shrink-0 items-center justify-center rounded-control border-[1.5px]',
+                                sort !== 'Recientes'
+                                    ? 'border-[var(--sport-300)] bg-[var(--sport-100)] text-[var(--sport-600)]'
+                                    : 'border-default bg-surface-card text-strong'
+                            )}
+                        >
+                            <ArrowUpDown className="size-4" />
+                        </PopoverTrigger>
+                        <PopoverContent align="end" className="w-44 p-1.5">
+                            <p className="px-2.5 pb-1.5 pt-1 text-[10.5px] font-extrabold uppercase tracking-wider text-subtle">
+                                Ordenar por
+                            </p>
+                            {(['Recientes', 'Nombre'] as const).map((o) => (
+                                <button
+                                    key={o}
+                                    type="button"
+                                    onClick={() => {
+                                        setSort(o)
+                                        setSortOpen(false)
+                                    }}
+                                    className={cn(
+                                        'flex w-full items-center gap-2 rounded-[10px] px-2.5 py-2 text-left text-[13.5px] font-semibold',
+                                        sort === o ? 'bg-[var(--sport-100)] text-strong' : 'text-body'
+                                    )}
+                                >
+                                    <span className="flex w-4 text-[var(--sport-600)]">
+                                        {sort === o && <Check className="size-4" />}
+                                    </span>
+                                    {o}
+                                </button>
+                            ))}
+                        </PopoverContent>
+                    </Popover>
+                </div>
+
+                {/* Tabs-stats accionables */}
+                <div className="mb-3 flex gap-1 rounded-control bg-surface-sunken p-[3px]">
+                    {(['all', 'templates', 'assigned'] as const).map((t) => {
+                        const label = t === 'all' ? 'Todos' : t === 'templates' ? 'Plantillas' : 'En curso'
+                        const on = filterType === t
+                        return (
+                            <button
+                                key={t}
+                                type="button"
+                                onClick={() => setFilterType(t)}
+                                className={cn(
+                                    'flex h-11 flex-1 flex-col items-center justify-center rounded-[calc(var(--radius-control)-3px)]',
+                                    on ? 'bg-surface-card shadow-sm' : ''
+                                )}
+                            >
+                                <span
+                                    className={cn(
+                                        'font-mono text-[17px] font-bold leading-none',
+                                        on ? 'text-strong' : 'text-muted'
+                                    )}
+                                >
+                                    {tabCounts[t]}
+                                </span>
+                                <span className={cn('text-[11px]', on ? 'font-bold text-strong' : 'font-semibold text-muted')}>
+                                    {label}
+                                </span>
+                            </button>
+                        )
+                    })}
+                </div>
+
+                {/* Contador de resultados al filtrar */}
+                {filtering && filtered.length > 0 && (
+                    <div className="mb-2.5 flex items-center justify-between">
+                        <span className="text-[12.5px] text-muted">
+                            {filtered.length} {filtered.length === 1 ? 'resultado' : 'resultados'}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setSearch('')}
+                            className="inline-flex items-center gap-1 text-[12.5px] font-bold text-[var(--sport-600)]"
+                        >
+                            <X className="size-3" /> Limpiar
+                        </button>
+                    </div>
+                )}
+
+                {/* Lista */}
+                {filtered.length === 0 ? (
+                    <LibraryEmptyState
+                        hasPrograms={programs.length > 0}
+                        filterType={filterType}
+                        search={search}
                         onNewTemplate={() => router.push('/coach/workout-programs/builder')}
                     />
-                    <LibraryToolbar
-                        search={search}
-                        onSearchChange={setSearch}
-                        filterType={filterType}
-                        onFilterTypeChange={setFilterType}
-                        filterStatus={filterStatus}
-                        onFilterStatusChange={setFilterStatus}
-                        filterStructure={filterStructure}
-                        onFilterStructureChange={setFilterStructure}
-                        filterHasPhases={filterHasPhases}
-                        onFilterHasPhasesChange={setFilterHasPhases}
-                        viewMode={viewMode}
-                        onViewModeChange={setViewMode}
-                    />
-                </div>
+                ) : (
+                    <motion.div
+                        key={`m-${listMotionKey}`}
+                        className="flex flex-col gap-2.5"
+                        initial={reduceMotion ? false : { opacity: 0.6 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: reduceMotion ? 0 : 0.2 }}
+                    >
+                        {filtered.map((program) => (
+                            <ProgramRow key={program.id} program={program} onOpen={() => openPreview(program)} />
+                        ))}
+                    </motion.div>
+                )}
             </div>
 
-            {/* Two-column layout on desktop */}
-            <div className="mt-4 lg:flex lg:items-start lg:gap-6">
-                {/* Left: program list — same max width as hero on mobile/tablet */}
-                <div className="min-w-0 w-full max-w-full flex-1 space-y-4">
-                    {filtered.length === 0 ? (
-                        <LibraryEmptyState
-                            hasPrograms={programs.length > 0}
-                            filterType={filterType}
-                            search={search}
-                            onNewTemplate={() => router.push('/coach/workout-programs/builder')}
-                        />
-                    ) : (
-                        <motion.div
-                            key={listMotionKey}
-                            className="flex flex-col gap-3"
-                            initial={reduceMotion ? false : { opacity: 0.6 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: reduceMotion ? 0 : 0.2 }}
+            {/* ===== Desktop (eva-desktop · DesktopPrograms card-grid) ===== */}
+            <div className="hidden md:block">
+                {/* Header */}
+                <div className="flex items-start justify-between gap-4 pb-5">
+                    <div>
+                        <p className="text-sm font-medium text-muted">Biblioteca</p>
+                        <h1 className="font-display text-[28px] font-extrabold leading-tight tracking-[-0.02em] text-strong">
+                            Programas
+                        </h1>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            className="gap-1.5"
+                            onClick={() => router.push('/coach/exercises')}
                         >
-                            {filtered.map((program, index) => (
-                                <motion.div
-                                    key={program.id}
-                                    className="min-w-0"
-                                    initial={reduceMotion ? false : { opacity: 0, y: 4 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{
-                                        duration: reduceMotion ? 0 : 0.18,
-                                        delay: reduceMotion ? 0 : Math.min(index * 0.025, 0.35),
-                                    }}
-                                >
-                                    <ProgramRow
-                                        program={program}
-                                        compact={viewMode === 'compact'}
-                                        isPending={isPending}
-                                        isActionPending={actionProgramId === program.id}
-                                        isSelected={selectedPanelProgram?.id === program.id}
-                                        onRowClick={() =>
-                                            setSelectedPanelProgram((prev) =>
-                                                prev?.id === program.id ? null : program
-                                            )
-                                        }
-                                        onAssign={() => {
-                                            setSelectedProgram(program)
-                                            setIsAssignOpen(true)
-                                        }}
-                                        onPreview={() => {
-                                            setProgramToPreview(program)
-                                            setIsPreviewOpen(true)
-                                        }}
-                                        onDuplicate={() => openDuplicateDialog(program)}
-                                        onSync={
-                                            program.source_template_id
-                                                ? () => {
-                                                      setProgramToSync(program)
-                                                      setShowSyncDialog(true)
-                                                  }
-                                                : undefined
-                                        }
-                                        onDelete={() => setProgramToDelete(program)}
-                                    />
-                                </motion.div>
-                            ))}
-                        </motion.div>
-                    )}
+                            <List className="size-4" /> Ejercicios
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            className="gap-1.5"
+                            onClick={() => router.push('/coach/settings/areas')}
+                        >
+                            <LayoutGrid className="size-4" /> Áreas
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="sport"
+                            className="gap-1.5"
+                            onClick={() => router.push('/coach/workout-programs/builder')}
+                        >
+                            <Plus className="size-4" /> Nueva plantilla
+                        </Button>
+                    </div>
                 </div>
 
-                {/* Right: desktop detail panel */}
-                <aside className="hidden lg:block w-[360px] xl:w-[400px] shrink-0">
-                    {selectedPanelProgram ? (
-                        <DesktopDetailPanel
-                            program={selectedPanelProgram}
-                            areas={areas}
-                            onClose={() => setSelectedPanelProgram(null)}
-                            isPending={isPending}
-                            isActionPending={actionProgramId === selectedPanelProgram.id}
-                            onAssign={() => {
-                                setSelectedProgram(selectedPanelProgram)
-                                setIsAssignOpen(true)
-                            }}
-                            onDuplicate={() => openDuplicateDialog(selectedPanelProgram)}
-                            onSync={
-                                selectedPanelProgram.source_template_id
-                                    ? () => {
-                                          setProgramToSync(selectedPanelProgram)
-                                          setShowSyncDialog(true)
-                                      }
-                                    : undefined
-                            }
-                            onDelete={() => {
-                                setSelectedPanelProgram(null)
-                                setProgramToDelete(selectedPanelProgram)
-                            }}
-                            onEdit={() => {
-                                const isTemplate = !selectedPanelProgram.client_id
-                                const editHref = isTemplate
-                                    ? `/coach/workout-programs/builder?programId=${selectedPanelProgram.id}`
-                                    : `/coach/builder/${selectedPanelProgram.client_id}?programId=${selectedPanelProgram.id}`
-                                router.push(editHref)
-                            }}
-                        />
-                    ) : (
-                        <DesktopEmptyPanel />
-                    )}
-                </aside>
+                {/* Chips por vista (Todos / Plantillas / En curso) */}
+                <div className="mb-5 flex flex-wrap gap-2">
+                    {(['all', 'templates', 'assigned'] as const).map((t) => {
+                        const label = t === 'all' ? 'Todos' : t === 'templates' ? 'Plantillas' : 'En curso'
+                        const on = filterType === t
+                        return (
+                            <button
+                                key={t}
+                                type="button"
+                                onClick={() => setFilterType(t)}
+                                className={cn(
+                                    'inline-flex items-center gap-2 rounded-pill border-[1.5px] px-3.5 py-2 text-sm font-bold',
+                                    on
+                                        ? 'border-transparent bg-[var(--sport-500)] text-white'
+                                        : 'border-default bg-surface-card text-body'
+                                )}
+                            >
+                                {label}
+                                <span className={cn('text-xs font-bold', on ? 'text-white/85' : 'text-subtle')}>
+                                    {tabCounts[t]}
+                                </span>
+                            </button>
+                        )
+                    })}
+                </div>
+
+                {/* Grid de tarjetas */}
+                {filtered.length === 0 ? (
+                    <LibraryEmptyState
+                        hasPrograms={programs.length > 0}
+                        filterType={filterType}
+                        search={search}
+                        onNewTemplate={() => router.push('/coach/workout-programs/builder')}
+                    />
+                ) : (
+                    <motion.div
+                        key={`d-${listMotionKey}`}
+                        className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4"
+                        initial={reduceMotion ? false : { opacity: 0.6 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: reduceMotion ? 0 : 0.2 }}
+                    >
+                        {filtered.map((program) => (
+                            <ProgramCard key={program.id} program={program} onOpen={() => openPreview(program)} />
+                        ))}
+                    </motion.div>
+                )}
             </div>
 
             <Dialog
@@ -1041,7 +1057,17 @@ export function WorkoutProgramsClient({
                 </AlertDialogContent>
             </AlertDialog>
 
-            <ProgramPreviewPanel program={programToPreview} open={isPreviewOpen} onOpenChange={setIsPreviewOpen} areas={areas} />
+            <ProgramPreviewPanel
+                program={programToPreview}
+                open={isPreviewOpen}
+                onOpenChange={setIsPreviewOpen}
+                areas={areas}
+                onEdit={previewEdit}
+                onAssign={previewAssign}
+                onDuplicate={previewDuplicate}
+                onSync={programToPreview?.source_template_id ? previewSync : undefined}
+                onDelete={previewDelete}
+            />
         </div>
     )
 }

@@ -32,7 +32,7 @@ function SubmitButton() {
                     Guardando...
                 </span>
             ) : (
-                'Establecer nueva contraseña'
+                'Guardar contraseña'
             )}
         </button>
     )
@@ -59,10 +59,10 @@ function ResetPasswordForm() {
                 <h1
                     className="text-2xl font-black tracking-[-0.02em] text-text-strong font-display"
                 >
-                    Nueva contraseña
+                    Creá una nueva contraseña
                 </h1>
                 <p className="mt-2 text-text-muted text-sm">
-                    Elige una contraseña segura para tu cuenta
+                    Elegí una contraseña segura de al menos 8 caracteres
                 </p>
             </div>
 
@@ -133,7 +133,7 @@ export default function ResetPasswordPage() {
             <Suspense fallback={
                 <div className="flex flex-col items-center justify-center gap-6 p-12 text-center">
                     <h1 className="text-2xl font-black tracking-[-0.02em] text-text-strong font-display">
-                        Nueva contraseña
+                        Creá una nueva contraseña
                     </h1>
                     <EvaRouteLoader subtitle="Cargando formulario…" size="md" />
                 </div>

@@ -109,38 +109,55 @@ export function ProfileOverviewB3({
 
     const nutColor = nutAvg >= 70 ? emeraldHex : nutAvg >= 50 ? amberHex : redHex
 
-    const kpiItems = [
+    const kpiItems: {
+        icon: typeof Star
+        label: string
+        value: string
+        hint: string
+        tone: 'ember' | 'sport' | 'success'
+    }[] = [
         {
-            icon: Star,
+            icon: Flame,
             label: 'Mejor racha',
             value: `${longestStreak} día${longestStreak === 1 ? '' : 's'}`,
             hint: 'histórico',
+            tone: 'ember',
         },
         {
             icon: Dumbbell,
             label: 'Sesiones',
             value: `${sessions30d}`,
             hint: 'últimos 30 días',
+            tone: 'sport',
         },
         {
             icon: PieChart,
             label: 'Adherencia entreno',
             value: `${workoutPct}%`,
             hint: workoutDelta >= 0 ? `+${workoutDelta}% vs sem. ant.` : `${workoutDelta}% vs sem. ant.`,
+            tone: 'sport',
         },
         {
             icon: Scale,
             label: 'Δ Peso (30d)',
             value: weightDelta30d == null ? '—' : `${weightDelta30d > 0 ? '+' : ''}${weightDelta30d} kg`,
             hint: 'check-ins',
+            tone: weightDelta30d != null && weightDelta30d > 0 ? 'ember' : 'success',
         },
         {
             icon: CalendarRange,
             label: 'Sem. programa',
             value: `${planCur} / ${planTot}`,
             hint: 'ciclo activo',
+            tone: 'sport',
         },
     ]
+
+    const kpiToneClass: Record<'ember' | 'sport' | 'success', string> = {
+        ember: 'bg-[var(--ember-100)] text-[var(--ember-700)]',
+        sport: 'bg-sport-100 text-sport-600',
+        success: 'bg-[var(--success-100)] text-[var(--success-600)]',
+    }
 
     return (
         <div className="space-y-6">
@@ -184,7 +201,7 @@ export function ProfileOverviewB3({
                         transition={{ delay: i * 0.05, duration: 0.25 }}
                     >
                         <Card padding="md" className="h-full flex-row items-center gap-3">
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-sport-100 text-sport-600">
+                            <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', kpiToneClass[item.tone])}>
                                 <item.icon className="h-[18px] w-[18px]" />
                             </div>
                             <div className="min-w-0">

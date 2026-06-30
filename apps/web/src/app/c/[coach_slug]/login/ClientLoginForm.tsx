@@ -4,7 +4,7 @@ import { useActionState, useEffect } from 'react'
 import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Mail, Lock, Loader2 } from 'lucide-react'
+import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react'
 import { clientLoginAction, type ClientLoginState } from './_actions/login.actions'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,22 +19,25 @@ interface Props {
     logoUrl: string | null
 }
 
-function SubmitButton({ primaryColor }: { primaryColor: string }) {
+function SubmitButton({ primaryColor, brandName }: { primaryColor: string; brandName: string }) {
     const { pending } = useFormStatus()
     return (
         <button
             type="submit"
             disabled={pending}
-            className="w-full h-12 rounded-control text-base font-bold tracking-[-0.01em] disabled:opacity-60 disabled:cursor-not-allowed transition-all hover:opacity-90 active:scale-[0.98]"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-control text-base font-bold tracking-[-0.01em] transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             style={{ backgroundColor: primaryColor, color: 'var(--primary-foreground, #ffffff)' }}
         >
             {pending ? (
-                <span className="flex items-center justify-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     Ingresando...
-                </span>
+                </>
             ) : (
-                'Ingresar'
+                <>
+                    Entrar a {brandName}
+                    <ArrowRight className="h-4 w-4" />
+                </>
             )}
         </button>
     )
@@ -61,15 +64,7 @@ export default function ClientLoginForm({ coachSlug, primaryColor, brandName, lo
     }, [state, coachSlug, brandName, logoUrl, router])
 
     return (
-        <div className="bg-surface-card border border-border-subtle rounded-card p-8 shadow-[var(--shadow-lg)]">
-            <div className="mb-6">
-                <h2 className="font-display text-xl font-extrabold tracking-[-0.01em] text-text-strong">Accede a tu entrenamiento</h2>
-                <p className="text-text-muted text-sm mt-1">
-                    Tu coach te envió las credenciales por email
-                </p>
-            </div>
-
-            <form action={formAction} className="space-y-5">
+        <form action={formAction} className="space-y-[13px]">
                 <input type="hidden" name="coach_slug" value={coachSlug} />
 
                 <div className="space-y-2">
@@ -130,9 +125,8 @@ export default function ClientLoginForm({ coachSlug, primaryColor, brandName, lo
                 )}
 
                 <div className="pt-2">
-                    <SubmitButton primaryColor={primaryColor} />
+                    <SubmitButton primaryColor={primaryColor} brandName={brandName} />
                 </div>
-            </form>
-        </div>
+        </form>
     )
 }

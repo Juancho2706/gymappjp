@@ -1,8 +1,5 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { ArrowLeft, ShieldAlert } from 'lucide-react'
 import type { Metadata } from 'next'
-import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { CheckInForm } from './CheckInForm'
 import { getCheckInPageData } from './_data/check-in.queries'
 import { getClientBasePath } from '@/lib/client/base-path'
@@ -21,42 +18,14 @@ export default async function ClientCheckInPage({ params }: Props) {
     if (!coachPrimaryColor) redirect(`${base}/dashboard`)
 
     return (
-        <div className="min-h-dvh bg-surface-app pb-20">
-            <header className="sticky top-0 z-40 border-b border-subtle px-4 py-4 pt-safe backdrop-blur-xl bg-[color-mix(in_srgb,var(--surface-app)_95%,transparent)]">
-                <Link
-                    href={`${base}/dashboard`}
-                    className="mb-4 inline-flex items-center gap-1.5 text-sm font-semibold transition-opacity hover:opacity-80"
-                    style={{ color: coachPrimaryColor }}
-                >
-                    <ArrowLeft className="h-4 w-4" />
-                    Volver
-                </Link>
-                <div className="flex items-start justify-between gap-2">
-                    <div>
-                        <h1 className="font-display text-2xl font-extrabold tracking-tight text-strong">
-                            Check-in Mensual
-                        </h1>
-                        <p className="mt-1 text-sm text-muted">
-                            Registra tu progreso para que tu coach pueda ajustar tu plan.
-                        </p>
-                    </div>
-                    <InfoTooltip content="Registro mensual de tu progreso: peso corporal, fotos front y back, y notas opcionales. Tu coach lo verá en tu perfil para hacer seguimiento de tu evolución." />
-                </div>
-                <div className="mt-3 flex items-center gap-2 rounded-control border border-[var(--warning-500)] bg-[var(--warning-100)] px-3 py-2 text-[var(--warning-600)]">
-                    <ShieldAlert className="h-4 w-4 shrink-0" />
-                    <p className="text-xs leading-snug">
-                        EVA no es un dispositivo medico ni sustituye el consejo de profesionales de la salud.
-                    </p>
-                </div>
-            </header>
-
-            <main className="px-4 py-6 max-w-lg mx-auto">
+        <div className="min-h-dvh bg-surface-app pb-24 pt-safe">
+            <div className="mx-auto max-w-lg">
                 <CheckInForm
                     coachSlug={coach_slug}
                     coachPrimaryColor={coachPrimaryColor}
                     lastCheckIn={lastCheckIn}
                 />
-            </main>
+            </div>
         </div>
     )
 }

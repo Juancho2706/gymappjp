@@ -278,7 +278,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(260px,300px)]">
                 {/* ── Controles ─────────────────────────────────────── */}
-                <div className="min-w-0 space-y-4">
+                <div className="order-2 min-w-0 space-y-4 lg:order-1">
                     <Section icon={Type} title="Identidad">
                         <div className="space-y-4">
                             <div className="space-y-1.5">
@@ -444,7 +444,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                 </div>
 
                 {/* ── Live preview ──────────────────────────────────── */}
-                <div className="lg:sticky lg:top-4 lg:self-start">
+                <div className="order-1 lg:order-2 lg:sticky lg:top-4 lg:self-start">
                     <div className="rounded-card border border-subtle bg-surface-card p-4">
                         <div className="mb-3 flex items-center justify-between">
                             <p className="text-xs font-semibold uppercase tracking-wide text-muted">Vista del alumno</p>

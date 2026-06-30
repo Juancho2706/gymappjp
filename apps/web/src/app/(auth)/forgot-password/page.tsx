@@ -32,7 +32,7 @@ function SubmitButton() {
                     Enviando...
                 </span>
             ) : (
-                'Enviar link de recuperación'
+                'Enviar enlace de recuperación'
             )}
         </button>
     )
@@ -54,10 +54,10 @@ function ForgotPasswordForm() {
         <div className="animate-slide-up">
             <div className="text-center mb-8 flex flex-col items-center">
                 <h1 className="text-2xl font-black tracking-[-0.02em] text-text-strong font-display">
-                    Recuperar contraseña
+                    ¿Olvidaste tu contraseña?
                 </h1>
                 <p className="mt-2 text-text-muted text-sm">
-                    Te enviaremos un link para resetear tu acceso
+                    Ingresá tu email y te enviamos un enlace para crear una nueva
                 </p>
             </div>
 
@@ -67,9 +67,9 @@ function ForgotPasswordForm() {
                         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[var(--success-100)] text-[var(--success-700)] mb-4">
                             <CheckCircle className="w-8 h-8" />
                         </div>
-                        <h2 className="font-display text-lg font-extrabold text-text-strong mb-2">¡Email enviado!</h2>
+                        <h2 className="font-display text-lg font-extrabold text-text-strong mb-2">Revisá tu correo</h2>
                         <p className="text-text-muted text-sm">
-                            Revisa tu bandeja de entrada. El link expira en 1 hora.
+                            Si existe una cuenta asociada a ese email, te enviamos un enlace para restablecer tu contraseña. El enlace expira en 1 hora.
                         </p>
                     </div>
                 ) : (

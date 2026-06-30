@@ -1,9 +1,10 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
-import { Check, Palette, Package, ChevronRight, Users, CreditCard, SlidersHorizontal, Sparkles, ArrowRight, Image as ImageIcon, Type, MessageSquare, type LucideIcon } from 'lucide-react'
+import { getTierCapabilities, ADDON_MODULE_KEYS, type SubscriptionTier } from '@/lib/constants'
+import { Check, Palette, Package, ChevronRight, Users, CreditCard, SlidersHorizontal, LayoutGrid, Sparkles, ArrowRight, Image as ImageIcon, Type, MessageSquare, type LucideIcon } from 'lucide-react'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 import { DangerZone } from './_components/DangerZone'
+import { ThemeToggleCard } from './_components/ThemeToggleCard'
 import { getCoachSettingsForUser } from './_data/settings.queries'
 import type { Metadata } from 'next'
 
@@ -30,6 +31,22 @@ function Eyebrow({ children, tone = 'subtle' }: { children: React.ReactNode; ton
     )
 }
 
+/** Badge soft del hub — espejo del Badge variant="soft" del DS. */
+function HubBadge({ label, tone = 'neutral' }: { label: string; tone?: 'sport' | 'neutral' }) {
+    return (
+        <span
+            className="inline-flex items-center rounded-pill px-2 py-0.5 text-[11px] font-bold"
+            style={
+                tone === 'sport'
+                    ? { background: 'var(--sport-100)', color: 'var(--sport-700)' }
+                    : { background: 'var(--surface-sunken)', color: 'var(--text-muted)' }
+            }
+        >
+            {label}
+        </span>
+    )
+}
+
 /** Card del hub "Opciones" — patrón único (tile de icono + título + descripción + chevron). */
 function HubCard({
     href,
@@ -37,12 +54,14 @@ function HubCard({
     title,
     desc,
     tone = 'neutral',
+    badge,
 }: {
     href: string
     icon: LucideIcon
     title: string
     desc: string
     tone?: 'sport' | 'neutral'
+    badge?: { label: string; tone?: 'sport' | 'neutral' }
 }) {
     return (
         <Link
@@ -60,11 +79,24 @@ function HubCard({
                 <Icon className="h-[22px] w-[22px]" />
             </span>
             <div className="min-w-0 flex-1">
-                <h3 className="text-[15px] font-bold text-strong">{title}</h3>
+                <div className="flex items-center gap-2">
+                    <h3 className="text-[15px] font-bold text-strong">{title}</h3>
+                    {badge && <HubBadge label={badge.label} tone={badge.tone} />}
+                </div>
                 <p className="mt-0.5 text-[12.5px] leading-snug text-muted">{desc}</p>
             </div>
             <ChevronRight className="h-[18px] w-[18px] shrink-0 transition-transform group-hover:translate-x-0.5" style={{ color: 'var(--ink-300)' }} />
         </Link>
+    )
+}
+
+/** Pie del hub — wordmark EVA + versión, espejo del footer del UI kit. */
+function SettingsFooter() {
+    return (
+        <div className="flex flex-col items-center gap-2 pt-6 opacity-60">
+            <span className="font-display text-2xl font-black tracking-tight text-strong">EVA</span>
+            <span className="text-xs font-semibold text-subtle">EVA · Ejercicio Virtual Avanzado · v2.4</span>
+        </div>
     )
 }
 
@@ -88,12 +120,17 @@ function IdentityHero({ name, subtitle, badge }: { name: string; subtitle: strin
 }
 
 export default async function CoachSettingsPage() {
-    const { user, coach } = await getCoachSettingsForUser()
+    const { user, coach, clientCount } = await getCoachSettingsForUser()
     if (!user) redirect('/login')
     if (!coach) redirect('/login')
     if (coach.subscription_status === 'org_managed') redirect('/coach/dashboard')
 
     const displayName = coach.brand_name || coach.full_name || 'Coach'
+    const clientLabel = `${clientCount} ${clientCount === 1 ? 'alumno' : 'alumnos'}`
+    const enabledModules = (coach.enabled_modules && typeof coach.enabled_modules === 'object'
+        ? (coach.enabled_modules as Record<string, unknown>)
+        : {})
+    const activeModuleCount = ADDON_MODULE_KEYS.filter((k) => enabledModules[k] === true).length
 
     // C (Settings hub): en contexto team la marca es DEL EQUIPO (Brand Studio en /coach/team)
     // y la facturación la maneja EVA — acá queda lo del coach como persona: módulos y cuenta.
@@ -107,7 +144,12 @@ export default async function CoachSettingsPage() {
                     </p>
                 </div>
 
-                <IdentityHero name={displayName} subtitle="Pool de coaches · gestión del equipo" badge="Equipo" />
+                <IdentityHero name={displayName} subtitle="Pool de coaches · gestión del equipo" badge="Co-gestor" />
+
+                <div className="space-y-3">
+                    <Eyebrow>Apariencia</Eyebrow>
+                    <ThemeToggleCard />
+                </div>
 
                 <div className="space-y-3">
                     <Eyebrow>Tu equipo</Eyebrow>
@@ -115,7 +157,7 @@ export default async function CoachSettingsPage() {
                         href="/coach/team"
                         icon={Users}
                         title="Mi Equipo"
-                        desc="Marca del equipo, miembros, accesos de alumnos y código de invitación"
+                        desc="Marca del pool, miembros, accesos y código de invitación"
                         tone="sport"
                     />
                 </div>
@@ -127,7 +169,8 @@ export default async function CoachSettingsPage() {
                         href="/coach/settings/modules"
                         icon={Package}
                         title="Módulos del equipo"
-                        desc="Cardio, evaluación de movimiento, composición corporal, intercambios"
+                        desc="Catálogo de módulos del pool"
+                        badge={{ label: `${activeModuleCount} activos`, tone: 'sport' }}
                     />
                 </div>
                 <div className="space-y-3">
@@ -136,13 +179,19 @@ export default async function CoachSettingsPage() {
                         href="/coach/settings/funciones"
                         icon={SlidersHorizontal}
                         title="Funciones del equipo"
-                        desc="Qué tan a fondo trabaja el equipo la nutrición y qué secciones ven los alumnos"
+                        desc="Visibilidad de nutrición del equipo"
+                    />
+                    <HubCard
+                        href="/coach/settings/areas"
+                        icon={LayoutGrid}
+                        title="Áreas del builder"
+                        desc="Organizá los días del planificador"
                     />
                 </div>
 
-                {/* Áreas del builder se gestionan ahora desde el builder de entrenamiento. */}
-
                 <DangerZone />
+
+                <SettingsFooter />
             </div>
         )
     }
@@ -278,7 +327,12 @@ export default async function CoachSettingsPage() {
                 </p>
             </div>
 
-            <IdentityHero name={displayName} subtitle="Tu cuenta standalone" badge={`Plan ${TIER_LABEL[tier] ?? 'Starter'}`} />
+            <IdentityHero name={displayName} subtitle={`Coach · ${clientLabel}`} badge={`Plan ${TIER_LABEL[tier] ?? 'Starter'}`} />
+
+            <div className="space-y-3">
+                <Eyebrow>Apariencia</Eyebrow>
+                <ThemeToggleCard />
+            </div>
 
             <div className="space-y-3">
                 <Eyebrow>Personalización</Eyebrow>
@@ -286,14 +340,14 @@ export default async function CoachSettingsPage() {
                     href="/coach/settings/brand"
                     icon={Palette}
                     title="Mi Marca"
-                    desc="Logo, colores, nombre y mensajes de la app de tus alumnos"
+                    desc="Logo, colores, nombre y mensajes de la app del alumno"
                     tone="sport"
                 />
             </div>
 
-            {/* Lo que pagas: suscripción base + módulos de pago, juntos. */}
+            {/* Plan: suscripción base + módulos de pago, juntos. */}
             <div className="space-y-3">
-                <Eyebrow>Lo que pagas</Eyebrow>
+                <Eyebrow>Plan</Eyebrow>
                 <HubCard
                     href="/coach/subscription"
                     icon={CreditCard}
@@ -304,7 +358,8 @@ export default async function CoachSettingsPage() {
                     href="/coach/settings/modules"
                     icon={Package}
                     title="Módulos"
-                    desc="Cardio, evaluación de movimiento, composición corporal, nutrición por intercambios"
+                    desc="Catálogo de módulos disponibles"
+                    badge={{ label: `${ADDON_MODULE_KEYS.length} módulos`, tone: 'sport' }}
                 />
             </div>
 
@@ -313,13 +368,21 @@ export default async function CoachSettingsPage() {
                 <HubCard
                     href="/coach/settings/funciones"
                     icon={SlidersHorizontal}
-                    title="Funciones"
-                    desc="Qué tan a fondo trabajas la nutrición y qué secciones ven tus alumnos"
+                    title="Funciones de nutrición"
+                    desc="Qué tan a fondo trabajás la nutrición y qué ven los alumnos"
+                />
+                <HubCard
+                    href="/coach/settings/areas"
+                    icon={LayoutGrid}
+                    title="Áreas del builder"
+                    desc="Organizá los días del planificador"
                 />
             </div>
 
             {/* Danger zone — account deletion (siempre alcanzable) */}
             <DangerZone />
+
+            <SettingsFooter />
         </div>
     )
 }

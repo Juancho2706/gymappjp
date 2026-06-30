@@ -9,7 +9,7 @@ import {
     useSensor, useSensors, type DragEndEvent, type DragOverEvent, DragStartEvent, DragOverlay,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
-import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight, CircleHelp, Maximize2, Sparkles } from 'lucide-react'
+import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight, CircleHelp, Maximize2, Sparkles, Pencil, Moon } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -360,6 +360,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     const [isMobile, setIsMobile] = useState<boolean>(false)
     const [mounted, setMounted] = useState(false)
     const [showConfig, setShowConfig] = useState(false)
+    const [mobileNameEdit, setMobileNameEdit] = useState(false)
     const [showBuilderHint, setShowBuilderHint] = useState(false)
     const [tourOpen, setTourOpen] = useState(false)
     const [tourMode, setTourMode] = useState<'short' | 'full'>('short')
@@ -1062,36 +1063,58 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 <ArrowLeft className="w-5 h-5 text-muted-foreground" />
                             </Button>
                         </Link>
-                        <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                                <h1 className="max-w-[140px] truncate text-sm font-display uppercase tracking-[0.2em] text-foreground md:max-w-[26rem]">
-                                    {programName || 'NUEVO PROGRAMA'}
-                                </h1>
-                                {hasUnsavedChanges && (
-                                    <span className="hidden md:flex items-center gap-1 text-[9px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-pill border border-amber-500/20 shrink-0">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                                        CAMBIOS SIN GUARDAR
-                                    </span>
-                                )}
-                                {lastEditor && (
-                                    <span className="hidden md:inline-flex shrink-0">
-                                        <EditedByBadge name={lastEditor.name} at={lastEditor.at} />
-                                    </span>
-                                )}
+                        <div className="min-w-0 flex-1">
+                            {/* Desktop title */}
+                            <div className="hidden md:block">
+                                <div className="flex items-center gap-2">
+                                    <h1 className="max-w-[140px] truncate text-sm font-display uppercase tracking-[0.2em] text-foreground md:max-w-[26rem]">
+                                        {programName || 'NUEVO PROGRAMA'}
+                                    </h1>
+                                    {hasUnsavedChanges && (
+                                        <span className="hidden md:flex items-center gap-1 text-[9px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-pill border border-amber-500/20 shrink-0">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                            CAMBIOS SIN GUARDAR
+                                        </span>
+                                    )}
+                                    {lastEditor && (
+                                        <span className="hidden md:inline-flex shrink-0">
+                                            <EditedByBadge name={lastEditor.name} at={lastEditor.at} />
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">
+                                    {client ? `Cliente: ${client.full_name}` : 'Plantilla Global'}
+                                </p>
                             </div>
-                            {hasUnsavedChanges ? (
-                                <p className="md:hidden text-[9px] font-bold uppercase tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse inline-block shrink-0"></span>
-                                    Sin guardar
+                            {/* Mobile title — tap to edit (design 1:1) */}
+                            <div className="md:hidden min-w-0">
+                                {mobileNameEdit ? (
+                                    <input
+                                        autoFocus
+                                        value={programName}
+                                        onChange={(e) => setProgramName(e.target.value)}
+                                        onBlur={() => setMobileNameEdit(false)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') setMobileNameEdit(false) }}
+                                        placeholder="Nombre del programa"
+                                        className="w-full border-none bg-transparent font-display text-[17px] font-extrabold text-foreground outline-none placeholder:text-muted-foreground/50"
+                                    />
+                                ) : (
+                                    <button type="button" onClick={() => setMobileNameEdit(true)} className="block w-full min-w-0 text-left">
+                                        <span className={`flex items-center gap-1.5 truncate font-display text-[17px] font-extrabold ${programName ? 'text-foreground' : 'text-muted-foreground/50'}`}>
+                                            <span className="truncate">{programName || 'Nombre del programa'}</span>
+                                            <Pencil className="w-3 h-3 shrink-0 text-muted-foreground/40" />
+                                        </span>
+                                    </button>
+                                )}
+                                <p className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-muted-foreground/70 truncate">
+                                    <span className="truncate">{client ? client.full_name : 'Plantilla'}</span>
+                                    {hasUnsavedChanges && (
+                                        <span className="flex shrink-0 items-center gap-1 font-bold text-amber-600 dark:text-amber-400">
+                                            · <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" /> Sin guardar
+                                        </span>
+                                    )}
                                 </p>
-                            ) : (
-                                <p className="md:hidden text-[9px] font-bold uppercase tracking-widest text-muted-foreground/60 truncate">
-                                    {client ? client.full_name : 'Plantilla Global'}
-                                </p>
-                            )}
-                            <p className="hidden md:block text-xs font-bold uppercase tracking-widest text-muted-foreground/60">
-                                {client ? `Cliente: ${client.full_name}` : 'Plantilla Global'}
-                            </p>
+                            </div>
                         </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1 pr-2 md:gap-2 md:pr-0">
@@ -1460,32 +1483,26 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                         </div>
                                     </div>
                                 )}
-                                {/* Mobile tab bar with exercise counts */}
-                                <div className="flex bg-muted/50 p-1 h-11 rounded-control gap-0.5 mx-2 mt-1 mb-1 flex-shrink-0">
+                                {/* Mobile day selector — scroll chips (design 1:1) */}
+                                <div className="flex gap-2 overflow-x-auto px-4 pt-3.5 pb-1 mb-1 flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
                                     {days.map((d, idx) => {
                                         const isActive = activeMobileDayIndex === idx
-                                        const count = d.blocks.length
+                                        const has = d.blocks.length > 0
                                         return (
                                             <button
                                                 key={d.id}
                                                 onClick={() => setActiveMobileDayIndex(idx)}
-                                                className={`flex-1 flex flex-col items-center justify-center rounded-lg relative transition-all ${
-                                                    isActive
-                                                        ? 'bg-background text-foreground shadow-sm'
-                                                        : 'text-muted-foreground'
+                                                className={`flex-none flex flex-col items-center justify-center gap-1 min-w-[52px] h-[60px] px-2.5 rounded-xl transition-all ${
+                                                    isActive ? 'bg-foreground' : 'bg-card shadow-sm'
                                                 }`}
                                             >
-                                                <span className="text-[9px] font-bold uppercase tracking-widest leading-none">
+                                                <span className={`font-display text-[13px] font-extrabold ${isActive ? 'text-background' : 'text-foreground'}`}>
                                                     {d.name.slice(0, 3)}
                                                 </span>
                                                 {d.is_rest ? (
-                                                    <span className="text-[8px] text-indigo-400 font-bold mt-0.5">ZZZ</span>
-                                                ) : count > 0 ? (
-                                                    <span className={`text-[8px] font-black mt-0.5 ${isActive ? 'text-primary' : 'text-muted-foreground/60'}`}>
-                                                        {count}
-                                                    </span>
+                                                    <Moon className={`w-3 h-3 ${isActive ? 'text-muted-foreground' : 'text-muted-foreground/40'}`} />
                                                 ) : (
-                                                    <span className="text-[8px] text-muted-foreground/30 mt-0.5">·</span>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${has ? (isActive ? 'bg-emerald-400' : 'bg-emerald-500') : (isActive ? 'bg-muted-foreground/50' : 'bg-muted-foreground/20')}`} />
                                                 )}
                                             </button>
                                         )

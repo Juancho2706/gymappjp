@@ -1,28 +1,38 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Info, Dumbbell, Timer, X, Settings, CheckCircle2, WifiOff } from 'lucide-react'
-import { InfoTooltip } from '@/components/ui/info-tooltip'
-import { useTranslation } from '@/lib/i18n/LanguageContext'
+import {
+    ChevronLeft,
+    ChevronRight,
+    Info,
+    Dumbbell,
+    HeartPulse,
+    Move,
+    GitCommitHorizontal,
+    Timer,
+    Play,
+    Flag,
+    History,
+    Quote,
+    X,
+    Settings,
+    CheckCircle2,
+    WifiOff,
+} from 'lucide-react'
 import { LogSetForm } from './LogSetForm'
 import { WorkoutTimerProvider, useWorkoutTimer } from './WorkoutTimerProvider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import Image from 'next/image'
-import { ThemeToggle } from '@/components/ThemeToggle'
 import { WorkoutSummaryOverlay } from './WorkoutSummaryOverlay'
 import { WorkoutTimerSettingsPanel } from './WorkoutTimerSettingsPanel'
 import { cn } from '@/lib/utils'
 import { formatRelativeDate } from '@/lib/date-utils'
 import { springs } from '@/lib/animation-presets'
 import { useBasePath } from '@/components/client/BasePathProvider'
-import {
-    groupContiguousSupersetRuns,
-    type WorkoutSectionKey,
-} from '@/lib/workout-block-grouping'
 import { executionAreaGroupsFor } from '@/lib/workout-areas'
 import type { IntervalConfig, WorkoutArea, ExerciseType as WorkoutKind } from '@/domain/workout/types'
 import { effectiveExerciseType, compactDistance, compactDuration } from '@/lib/workout-exercise-type'
@@ -121,17 +131,12 @@ interface Props {
     cardio?: ClientCardioView
 }
 
-function ManualTimerButton({ defaultTime }: { defaultTime: string | null }) {
-    const { startRest } = useWorkoutTimer()
-    return (
-        <button
-            onClick={() => startRest(defaultTime || '90')}
-            className="flex items-center gap-1.5 rounded-control bg-white/[0.08] px-3 py-1.5 text-xs font-bold text-on-dark transition-all hover:bg-white/[0.14] active:scale-95"
-        >
-            <Timer className="w-3.5 h-3.5" />
-            Descanso ({defaultTime || '90s'})
-        </button>
-    )
+/** Metadatos de tipo efectivo del bloque (icono + color de acento). */
+const TYPE_META: Record<WorkoutKind, { label: string; Icon: typeof Dumbbell; color: string }> = {
+    strength: { label: 'Fuerza', Icon: Dumbbell, color: 'var(--sport-500)' },
+    cardio: { label: 'Cardio', Icon: HeartPulse, color: 'var(--ember-500)' },
+    mobility: { label: 'Movilidad', Icon: Move, color: 'var(--aqua-500, #14B8A6)' },
+    roller: { label: 'Roller', Icon: GitCommitHorizontal, color: '#C77DFF' },
 }
 
 const SIDE_LABEL: Record<string, string> = {
@@ -139,25 +144,38 @@ const SIDE_LABEL: Record<string, string> = {
     alternating: 'Alternado',
 }
 
-/** Card de objetivo (label + valor) sobre la superficie inmersiva oscura. */
+/** Chip de objetivo (label + valor) sobre la superficie inmersiva oscura. */
 function TargetChip({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-    if (highlight) {
-        return (
-            <div className="rounded-sm border border-[var(--ember-500)]/30 bg-[var(--ember-500)]/[0.14] p-2 text-center">
-                <p className="text-[10px] uppercase tracking-wide text-[var(--ember-300)]">{label}</p>
-                <p className="font-mono font-semibold tabular-nums text-[var(--ember-200)]">{value}</p>
-            </div>
-        )
-    }
     return (
-        <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] p-2 text-center">
-            <p className="text-[10px] uppercase tracking-wide text-on-dark-muted">{label}</p>
-            <p className="font-mono font-semibold tabular-nums text-on-dark">{value}</p>
+        <div
+            className={cn(
+                'flex-1 min-w-[64px] rounded-sm border px-2.5 py-2',
+                highlight
+                    ? 'border-[var(--ember-500)]/30 bg-[var(--ember-500)]/[0.14]'
+                    : 'border-[var(--border-inverse)] bg-white/[0.05]'
+            )}
+        >
+            <div
+                className={cn(
+                    'text-[9.5px] font-bold uppercase tracking-wide',
+                    highlight ? 'text-[var(--ember-300)]' : 'text-on-dark-muted'
+                )}
+            >
+                {label}
+            </div>
+            <div
+                className={cn(
+                    'font-mono text-[15px] font-bold tabular-nums mt-0.5',
+                    highlight ? 'text-[var(--ember-200)]' : 'text-on-dark'
+                )}
+            >
+                {value}
+            </div>
         </div>
     )
 }
 
-/** Cards de objetivo por tipo (cardio/movilidad/roller) — los strength quedan intactos (AC3). */
+/** Grid de objetivos por tipo (cardio/movilidad/roller) — strength tiene su propio set de chips. */
 function TypedTargetGrid({ block, kind, cardio }: { block: BlockType; kind: WorkoutKind; cardio?: ClientCardioView }) {
     const cards: { label: string; value: string; highlight?: boolean }[] = []
 
@@ -176,7 +194,7 @@ function TypedTargetGrid({ block, kind, cardio }: { block: BlockType; kind: Work
         }
         if ((block.duration_sec ?? 0) > 0) cards.push({ label: 'Duración', value: compactDuration(block.duration_sec as number) })
         if ((block.distance_value ?? 0) > 0) cards.push({ label: 'Distancia', value: compactDistance(block.distance_value as number, block.distance_unit) })
-        if (block.target_pace_sec_per_km != null) cards.push({ label: 'Pace objetivo', value: `${formatPace(block.target_pace_sec_per_km)} /km` })
+        if (block.target_pace_sec_per_km != null) cards.push({ label: 'Pace obj.', value: `${formatPace(block.target_pace_sec_per_km)} /km` })
         if (block.hr_zone != null) {
             const range = cardio?.enabled ? cardio.zones?.find((z) => z.zone === block.hr_zone) ?? null : null
             cards.push({
@@ -215,7 +233,7 @@ function TypedTargetGrid({ block, kind, cardio }: { block: BlockType; kind: Work
     }
 
     return (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        <div className="flex flex-wrap gap-2">
             {cards.map((card) => (
                 <TargetChip key={card.label} label={card.label} value={card.value} highlight={card.highlight} />
             ))}
@@ -223,51 +241,47 @@ function TypedTargetGrid({ block, kind, cardio }: { block: BlockType; kind: Work
     )
 }
 
-/** Botón de timer según el tipo del bloque: intervalos / hold / cronómetro (AC5). */
-function TypedBlockTimerButton({ block, kind }: { block: BlockType; kind: WorkoutKind }) {
-    const { startHold, startInterval, startStopwatch } = useWorkoutTimer()
+/** Barra de timer del bloque: descanso (fuerza) / intervalos / hold / cronómetro (AC5). */
+function BlockTimerBar({ block, kind }: { block: BlockType; kind: WorkoutKind }) {
+    const { startRest, startHold, startInterval, startStopwatch } = useWorkoutTimer()
 
+    let label: string
+    let onClick: () => void
     if (kind === 'cardio') {
         if (block.interval_config && isTimeableInterval(block.interval_config)) {
             const config = block.interval_config
-            return (
-                <button
-                    onClick={() => startInterval(config, block.sets || 1)}
-                    className="flex min-h-[44px] items-center gap-1.5 rounded-control border border-primary/40 bg-primary/15 px-3 py-1.5 text-xs font-bold text-primary transition-all hover:bg-primary/25 active:scale-95"
-                >
-                    <Timer className="w-3.5 h-3.5" />
-                    Iniciar intervalos
-                </button>
-            )
+            const rec = config.recovery?.duration_sec
+            const work = config.work.duration_sec != null ? `${config.work.duration_sec}s` : ''
+            label = `Iniciar intervalos · ${config.repeats}×${work ? ` ${work}` : ''}${rec ? `/${rec}s` : ''}`
+            onClick = () => startInterval(config, block.sets || 1)
+        } else {
+            label = 'Cronómetro'
+            onClick = () => startStopwatch()
         }
-        return (
-            <button
-                onClick={() => startStopwatch()}
-                className="flex min-h-[44px] items-center gap-1.5 rounded-control border border-primary/40 bg-primary/15 px-3 py-1.5 text-xs font-bold text-primary transition-all hover:bg-primary/25 active:scale-95"
-            >
-                <Timer className="w-3.5 h-3.5" />
-                Cronómetro
-            </button>
-        )
-    }
-
-    if ((kind === 'mobility' || kind === 'roller') && (block.duration_sec ?? 0) > 0) {
+    } else if (kind === 'mobility' && (block.duration_sec ?? 0) > 0) {
         const seconds = block.duration_sec as number
-        const label = kind === 'mobility'
-            ? `Timer de hold (${seconds}s)`
-            : `Timer (${seconds}s)`
-        return (
-            <button
-                onClick={() => startHold(seconds, kind === 'mobility' ? 'Hold' : 'Roller')}
-                className="flex min-h-[44px] items-center gap-1.5 rounded-control border border-primary/40 bg-primary/15 px-3 py-1.5 text-xs font-bold text-primary transition-all hover:bg-primary/25 active:scale-95"
-            >
-                <Timer className="w-3.5 h-3.5" />
-                {label}
-            </button>
-        )
+        label = `Timer de hold · ${seconds}s`
+        onClick = () => startHold(seconds, 'Hold')
+    } else if (kind === 'roller' && (block.duration_sec ?? 0) > 0) {
+        const seconds = block.duration_sec as number
+        label = `Cronómetro · ${seconds}s`
+        onClick = () => startStopwatch()
+    } else {
+        const rest = block.rest_time || '90s'
+        label = `Descanso · ${rest}`
+        onClick = () => startRest(block.rest_time || '90')
     }
 
-    return null
+    return (
+        <button
+            onClick={onClick}
+            className="mt-1 flex w-full items-center gap-2.5 rounded-control bg-primary/[0.12] p-3 text-left transition-colors hover:bg-primary/20 active:scale-[0.99]"
+        >
+            <Timer className="w-[19px] h-[19px] shrink-0 text-[var(--sport-300)]" />
+            <span className="text-[13.5px] font-semibold text-on-dark">{label}</span>
+            <Play className="w-4 h-4 shrink-0 ml-auto text-on-dark-muted" />
+        </button>
+    )
 }
 
 /** Encabezados de la tabla de registro por tipo (la de strength queda intacta). */
@@ -293,16 +307,27 @@ function TypedLogHeader({ kind }: { kind: WorkoutKind }) {
             </div>
         )
     }
+    if (kind === 'mobility') {
+        return (
+            <div className="grid grid-cols-[auto_5rem_auto] md:grid-cols-[auto_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10">
+                <div className="w-4 text-center">Set</div>
+                <div className="text-center">Seg de hold</div>
+                <div className="w-8"></div>
+            </div>
+        )
+    }
+    // strength
     return (
-        <div className="grid grid-cols-[auto_5rem_auto] md:grid-cols-[auto_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10">
+        <div className="grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10">
             <div className="w-4 text-center">Set</div>
-            <div className="text-center">Seg de hold</div>
+            <div className="text-center">Kg</div>
+            <div className="text-center">Reps</div>
             <div className="w-8"></div>
         </div>
     )
 }
 
-function isBlockComplete(
+function loggedSetsInBlock(
     block: BlockType,
     logs: Array<{ block_id: string; set_number: number }>
 ) {
@@ -310,7 +335,7 @@ function isBlockComplete(
     for (let i = 1; i <= block.sets; i += 1) {
         if (logs.some((log) => log.block_id === block.id && log.set_number === i)) done += 1
     }
-    return done >= block.sets
+    return done
 }
 
 /** Counts unique (block_id, set_number) within each block's planned set range (handles duplicate rows). */
@@ -329,26 +354,11 @@ function countUniqueLoggedSets(
     return seen.size
 }
 
-const WORKOUT_SECTION_TITLE: Record<WorkoutSectionKey, string> = {
+const WORKOUT_SECTION_TITLE: Record<'warmup' | 'main' | 'cooldown' | 'other', string> = {
     warmup: 'Calentamiento',
-    main: 'Bloque Principal',
-    cooldown: 'Enfriamiento',
+    main: 'Principal',
+    cooldown: 'Vuelta a la calma',
     other: 'Otros bloques',
-}
-
-const WORKOUT_SECTION_SUBTITLE: Record<WorkoutSectionKey, string> = {
-    warmup: 'Movilidad y activación suave antes del trabajo intenso.',
-    main: 'Bloque de mayor esfuerzo: respeta series, reps y descansos.',
-    cooldown: 'Baja la intensidad y cierra la sesión con control.',
-    other: 'Ejercicios sin sección definida. Si no estás seguro, consulta a tu coach.',
-}
-
-/** Subtitulos de las areas system no clasicas (por slug); areas custom van sin subtitulo. */
-const SYSTEM_AREA_SUBTITLE: Record<string, string> = {
-    mobility: 'Trabajo de movilidad y rango articular, controlado y sin prisa.',
-    core_activation: 'Activa la zona media antes del trabajo principal.',
-    power: 'Movimientos explosivos: calidad antes que cantidad, descansos completos.',
-    conditioning: 'Acondicionamiento metabólico: mantén el ritmo que te indique tu coach.',
 }
 
 export function WorkoutExecutionClient({
@@ -364,10 +374,9 @@ export function WorkoutExecutionClient({
 }: Props) {
     const router = useRouter()
     const base = useBasePath(`/c/${coachSlug}`)
-    const { t } = useTranslation()
     const reducedMotion = useReducedMotion()
-    const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map())
     const blocks = useMemo(() => [...plan.workout_blocks].sort((a, b) => a.order_index - b.order_index), [plan.workout_blocks])
+    const [idx, setIdx] = useState(0)
     const [showTechnique, setShowTechnique] = useState(false)
     const [autoTimerEnabled, setAutoTimerEnabled] = useState(true)
     const [showTimerSettings, setShowTimerSettings] = useState(false)
@@ -375,12 +384,20 @@ export function WorkoutExecutionClient({
     const [selectedExercise, setSelectedExercise] = useState<ExerciseType | null>(null)
     const [sessionLogs, setSessionLogs] = useState(logs)
     const [isOffline, setIsOffline] = useState(false)
+    const [elapsed, setElapsed] = useState(0)
+
+    // Cronómetro de sesión (mm:ss) — arranca al montar la ejecución.
+    useEffect(() => {
+        const t = setInterval(() => setElapsed((e) => e + 1), 1000)
+        return () => clearInterval(t)
+    }, [])
 
     useEffect(() => {
         const onOnline = () => setIsOffline(false)
         const onOffline = () => setIsOffline(true)
         window.addEventListener('online', onOnline)
         window.addEventListener('offline', onOffline)
+        if (typeof navigator !== 'undefined' && !navigator.onLine) setIsOffline(true)
         return () => {
             window.removeEventListener('online', onOnline)
             window.removeEventListener('offline', onOffline)
@@ -389,21 +406,25 @@ export function WorkoutExecutionClient({
 
     const getExercise = (block: BlockType) => (Array.isArray(block.exercises) ? block.exercises[0] : block.exercises) || null
 
-    // F5: agrupacion por AREA con fallback legacy (AC3: plan viejo — solo section o
-    // clasicos — produce exactamente los grupos/titulos/subtitulos de siempre).
-    const sectioned = useMemo(() => {
-        return executionAreaGroupsFor(blocks, areas)
-            .map((areaGroup) => ({
-                sectionKey: areaGroup.key,
-                title: areaGroup.name ?? WORKOUT_SECTION_TITLE[areaGroup.legacySection ?? 'main'],
-                subtitle: areaGroup.legacySection
-                    ? WORKOUT_SECTION_SUBTITLE[areaGroup.legacySection]
-                    : (areaGroup.slug && SYSTEM_AREA_SUBTITLE[areaGroup.slug]) || null,
-                muted: areaGroup.legacySection === 'warmup' || areaGroup.legacySection === 'cooldown',
-                groups: groupContiguousSupersetRuns(areaGroup.blocks),
-            }))
-            .filter((section) => section.groups.length > 0)
+    // Título de área por bloque (Calentamiento / Principal / Vuelta a la calma / área custom),
+    // resuelto server-side con fallback legacy.
+    const areaTitleByBlock = useMemo(() => {
+        const map = new Map<string, string>()
+        for (const areaGroup of executionAreaGroupsFor(blocks, areas)) {
+            const title = areaGroup.name ?? WORKOUT_SECTION_TITLE[areaGroup.legacySection ?? 'main']
+            for (const b of areaGroup.blocks) map.set(b.id, title)
+        }
+        return map
     }, [blocks, areas])
+
+    // Conteo de ejercicios por superserie (chip "Superserie A · N ejercicios").
+    const supersetCounts = useMemo(() => {
+        const counts = new Map<string, number>()
+        for (const b of blocks) {
+            if (b.superset_group) counts.set(b.superset_group, (counts.get(b.superset_group) ?? 0) + 1)
+        }
+        return counts
+    }, [blocks])
 
     if (!blocks.length) {
         return (
@@ -423,9 +444,30 @@ export function WorkoutExecutionClient({
     const requiredSets = blocks.reduce((acc, b) => acc + b.sets, 0)
     const completedSetCount = countUniqueLoggedSets(blocks, sessionLogs)
     const completionPct = requiredSets === 0 ? 0 : Math.min(100, Math.round((completedSetCount / requiredSets) * 100))
+    const elapsedLabel = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`
 
-    const isSetLogged = (blockId: string, setNumber: number) => sessionLogs.some((log) => log.block_id === blockId && log.set_number === setNumber)
-    const isBlockCompleted = (block: BlockType) => isBlockComplete(block, sessionLogs)
+    const safeIdx = Math.min(idx, blocks.length - 1)
+    const block = blocks[safeIdx]
+    const exercise = getExercise(block)
+    const effType: WorkoutKind = exercise ? effectiveExerciseType(block, exercise) : 'strength'
+    const meta = TYPE_META[effType]
+    const areaTitle = areaTitleByBlock.get(block.id) ?? 'Principal'
+    const groupLabel = block.superset_group ? `Superserie ${block.superset_group}` : `Ejercicio ${safeIdx + 1}`
+    const blockLogs = sessionLogs.filter((log) => log.block_id === block.id)
+    const doneCount = loggedSetsInBlock(block, sessionLogs)
+    const nSets = block.sets
+    const prevHistory = exercise ? previousHistory[exercise.id] : undefined
+    const prevSummary = prevHistory && prevHistory.length > 0
+        ? prevHistory.map((l, i) => `S${i + 1}: ${l.weight_kg ? `${l.weight_kg}kg` : '-'}×${l.reps_done || '-'}`).join('  ')
+        : null
+
+    const subtitle = [
+        plan.title,
+        activeWeekVariant != null ? `Semana ${activeWeekVariant}` : null,
+        program?.program_structure_type === 'cycle'
+            ? `Día ${plan.day_of_week || 1} de ${program.cycle_length || '?'}`
+            : program?.name || null,
+    ].filter(Boolean).join(' · ')
 
     const toggleAutoTimer = () => {
         const newValue = !autoTimerEnabled
@@ -439,7 +481,6 @@ export function WorkoutExecutionClient({
     }
     const handleLogged = (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null }) => {
         setSessionLogs((prev) => {
-            const wasComplete = blocks.some((b) => b.id === payload.blockId && isBlockComplete(b, prev))
             const next = prev.filter((log) => !(log.block_id === payload.blockId && log.set_number === payload.setNumber))
             next.push({
                 block_id: payload.blockId,
@@ -449,17 +490,6 @@ export function WorkoutExecutionClient({
                 rpe: payload.rpe,
                 rir: payload.rir,
             })
-            const nowComplete = blocks.some((b) => b.id === payload.blockId && isBlockComplete(b, next))
-            if (!wasComplete && nowComplete) {
-                setTimeout(() => {
-                    const nextIncomplete = blocks.find((b) => !isBlockComplete(b, next))
-                    if (nextIncomplete) {
-                        blockRefs.current
-                            .get(nextIncomplete.id)
-                            ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    }
-                }, 350)
-            }
             return next
         })
     }
@@ -467,305 +497,226 @@ export function WorkoutExecutionClient({
         setShowCompleted(true)
     }
 
+    const goPrev = () => setIdx((i) => Math.max(0, i - 1))
+    const goNext = () => setIdx((i) => Math.min(blocks.length - 1, i + 1))
+
     return (
         <WorkoutTimerProvider>
-            <div className="is-workout-page min-h-dvh bg-[var(--ink-950)] text-on-dark">
-                <motion.div
-                    initial={{ y: -20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ duration: 0.25 }}
-                    className="sticky top-0 z-20 bg-[var(--ink-950)]/95 pt-safe backdrop-blur border-b border-[var(--border-inverse)]"
-                >
-                    <div className="px-4 py-3 md:px-8 max-w-5xl mx-auto w-full">
-                        <div className="flex items-center justify-between mb-3 gap-2">
-                            <Link href={`${base}/dashboard`} className="flex h-10 w-10 -ml-1 shrink-0 items-center justify-center rounded-control bg-white/[0.08] text-on-dark transition-colors hover:bg-white/[0.14]">
-                                <ArrowLeft className="w-5 h-5" />
-                            </Link>
-                            <div className="min-w-0 px-2 text-center flex-1">
-                                <div className="flex items-center justify-center gap-2 flex-wrap">
-                                    <h1 className="font-display text-lg md:text-xl font-bold text-on-dark truncate">
-                                        {plan.title}
-                                    </h1>
-                                    {activeWeekVariant != null && (
-                                        <span
-                                            className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border shrink-0"
-                                            style={{
-                                                borderColor: 'color-mix(in srgb, var(--theme-primary) 45%, transparent)',
-                                                color: 'var(--theme-primary)',
-                                            }}
-                                        >
-                                            Semana {activeWeekVariant}
-                                        </span>
-                                    )}
-                                </div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-on-dark-muted">
-                                    {program?.program_structure_type === 'cycle'
-                                        ? `Día ${plan.day_of_week || 1} de ${program.cycle_length || '?'}`
-                                        : 'Programa semanal'}
-                                </p>
+            <div className="is-workout-page relative flex min-h-dvh flex-col bg-[var(--ink-950)] text-on-dark">
+                <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col">
+                    {/* header */}
+                    <div className="flex items-center gap-2.5 px-5 pt-safe pb-3">
+                        <Link
+                            href={`${base}/dashboard`}
+                            aria-label="Salir"
+                            className="-ml-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-white/[0.08] text-on-dark transition-colors hover:bg-white/[0.14]"
+                        >
+                            <ChevronLeft className="w-5 h-5" />
+                        </Link>
+                        <div className="min-w-0 flex-1">
+                            <div className="truncate text-[11.5px] font-bold uppercase tracking-[0.06em] text-on-dark-muted">
+                                {subtitle}
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                                <InfoTooltip content={t('section.workoutExecution')} />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowTimerSettings(true)}
-                                    className="p-2 rounded-control text-on-dark-muted hover:bg-white/10 hover:text-on-dark transition-colors"
-                                    title="Descanso y alarma"
-                                >
-                                    <Settings className="w-5 h-5" />
-                                </button>
-                                <ThemeToggle />
+                            <div className="font-display text-base font-extrabold text-on-dark">
+                                {areaTitle} · {groupLabel}
                             </div>
                         </div>
+                        {isOffline && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--warning-500)]/[0.16] px-2.5 py-1.5 text-[11px] font-bold text-[var(--warning-500)]">
+                                <WifiOff className="w-3.5 h-3.5" /> Sin conexión
+                            </span>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => setShowTimerSettings(true)}
+                            aria-label="Descanso y alarma"
+                            title="Descanso y alarma"
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-white/[0.08] text-on-dark transition-colors hover:bg-white/[0.14]"
+                        >
+                            <Settings className="w-[18px] h-[18px]" />
+                        </button>
+                    </div>
 
-                        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                    {/* progress */}
+                    <div className="px-5 mb-3.5">
+                        <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
                             <motion.div
                                 className="h-full rounded-full"
-                                style={{ backgroundColor: 'var(--theme-primary)' }}
+                                style={{ backgroundColor: 'var(--sport-500)' }}
                                 initial={{ width: 0 }}
                                 animate={{ width: `${completionPct}%` }}
                                 transition={reducedMotion ? { duration: 0 } : springs.smooth}
                             />
                         </div>
-                        <div className="flex justify-between mt-1.5 text-xs text-on-dark-muted font-mono tabular-nums">
-                            <span>
-                                <strong className="text-on-dark">{completedSetCount}</strong>/{requiredSets} series
+                        <div className="mt-1.5 flex justify-between font-mono text-[11px] tabular-nums">
+                            <span className="text-on-dark-muted">
+                                {completedSetCount}/{requiredSets} series · bloque {safeIdx + 1}/{blocks.length}
                             </span>
-                            <span style={{ color: 'var(--sport-400)' }} className="font-bold">
-                                {completionPct}%
+                            <span className="font-bold" style={{ color: 'var(--sport-400)' }}>
+                                {completionPct}% · {elapsedLabel}
                             </span>
                         </div>
                     </div>
-                </motion.div>
 
-                {isOffline && (
-                    <div className="sticky top-[var(--workout-header-h,80px)] z-10 flex items-center gap-2.5 bg-amber-500/90 backdrop-blur-sm px-4 py-2.5 text-amber-950 dark:bg-amber-600/90 dark:text-amber-50">
-                        <WifiOff className="w-4 h-4 shrink-0" />
-                        <p className="text-xs font-semibold">Sin conexión — los datos se guardarán al reconectar.</p>
-                    </div>
-                )}
-
-                <div className="px-4 py-6 md:px-8 max-w-5xl mx-auto pb-32">
-                    <div className="space-y-6">
-                        {sectioned.map((section) => (
-                            <section key={section.sectionKey} className="space-y-3">
-                                <div className="space-y-1.5">
-                                    <div className="flex items-center gap-3">
-                                        <div
-                                            className="w-1 self-stretch min-h-[1.25rem] rounded-full shrink-0"
-                                            style={{
-                                                backgroundColor: 'var(--theme-primary)',
-                                                opacity: section.muted ? 0.4 : 1,
-                                            }}
-                                        />
-                                        <h2 className="text-sm font-bold uppercase tracking-wider text-on-dark-muted shrink-0">
-                                            {section.title}
-                                        </h2>
-                                        <hr className="flex-1 h-px bg-white/10 border-0 min-w-[2rem]" />
-                                        <span className="text-xs text-on-dark-muted whitespace-nowrap">
-                                            {section.groups.length} bloque(s)
+                    {/* block card (carousel) */}
+                    <div className="flex-1 px-5 pb-5">
+                        <AnimatePresence mode="wait" initial={false}>
+                            <motion.div
+                                key={block.id}
+                                initial={reducedMotion ? false : { opacity: 0, x: 16 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={reducedMotion ? undefined : { opacity: 0, x: -16 }}
+                                transition={reducedMotion ? { duration: 0 } : { duration: 0.2 }}
+                                className="space-y-3.5 rounded-card border border-[var(--border-inverse)] bg-[var(--ink-900)] p-5"
+                            >
+                                {/* type + superset row */}
+                                <div className="flex items-center gap-2">
+                                    <span
+                                        className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-bold"
+                                        style={{ color: meta.color }}
+                                    >
+                                        <meta.Icon className="w-3.5 h-3.5" /> {meta.label}
+                                    </span>
+                                    {block.superset_group && (
+                                        <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-bold text-on-dark-muted">
+                                            Superserie {block.superset_group} · {supersetCounts.get(block.superset_group) ?? 1} ejercicios
                                         </span>
-                                    </div>
-                                    {section.subtitle && (
-                                        <p className="text-xs leading-relaxed text-on-dark-muted pl-4 border-l-2 border-white/10">
-                                            {section.subtitle}
-                                        </p>
                                     )}
                                 </div>
-                                <div className="space-y-3">
-                                    {section.groups.map((group, groupIndex) => (
-                                        <div key={group.key} className={cn("rounded-card border border-[var(--border-inverse)] bg-[var(--ink-900)] p-4", group.type === 'superset' && "border-primary/40 bg-primary/[0.07]")}>
-                                            <div className="mb-3 space-y-2">
-                                                <p className="text-sm font-semibold text-on-dark">
-                                                    {group.type === 'superset'
-                                                        ? `Superserie (grupo ${group.supersetLetter ?? group.key})`
-                                                        : `Ejercicio ${groupIndex + 1}`}
-                                                </p>
-                                                {group.type === 'superset' && (
-                                                    <div className="rounded-control border border-primary/30 bg-primary/[0.08] p-3 text-xs leading-relaxed text-on-dark/90 space-y-2.5">
-                                                        <p className="font-semibold text-primary">Cómo hacerla</p>
-                                                        <ol className="list-decimal space-y-1.5 pl-4 marker:font-semibold">
-                                                            <li>
-                                                                Completa <strong>una serie</strong> del primer ejercicio y regístrala abajo.
-                                                            </li>
-                                                            <li>
-                                                                Completa <strong>una serie</strong> del siguiente ejercicio y regístrala.
-                                                            </li>
-                                                            <li>
-                                                                Respeta los descansos que indique cada ejercicio; <strong>repite</strong> hasta
-                                                                terminar todas las series de <strong>cada</strong> ejercicio.
-                                                            </li>
-                                                        </ol>
-                                                        <p className="border-t border-white/10 pt-2 text-on-dark-muted">
-                                                            Cada ejercicio tiene sus propias series: el contador superior suma todas las
-                                                            series de la rutina.
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="space-y-4">
-                                                {group.blocks.sort((a, b) => a.order_index - b.order_index).map((block, blockIndex) => {
-                                                    const exercise = getExercise(block)
-                                                    if (!exercise) return null
-                                                    const blockLogs = sessionLogs.filter((log) => log.block_id === block.id)
-                                                    const complete = isBlockCompleted(block)
-                                                    // Tipo efectivo (specs/movida-entrenamiento): strength ⇒ render
-                                                    // EXACTAMENTE el de siempre; cardio/movilidad/roller ⇒ variantes.
-                                                    const effType = effectiveExerciseType(block, exercise)
-                                                    return (
-                                                        <Fragment key={block.id}>
-                                                            {blockIndex > 0 && group.type === 'superset' && (
-                                                                <div className="flex items-center justify-center gap-2 py-1 text-[10px] font-bold uppercase tracking-widest text-on-dark-muted">
-                                                                    <span className="h-px max-w-[72px] flex-1 bg-white/10" />
-                                                                    <span>Luego</span>
-                                                                    <span className="h-px max-w-[72px] flex-1 bg-white/10" />
-                                                                </div>
-                                                            )}
-                                                        <motion.div
-                                                            layout
-                                                            ref={(el) => {
-                                                                if (el) blockRefs.current.set(block.id, el)
-                                                                else blockRefs.current.delete(block.id)
-                                                            }}
-                                                            animate={{ opacity: complete ? 0.6 : 1 }}
-                                                            transition={reducedMotion ? { duration: 0 } : springs.smooth}
-                                                            className={cn(
-                                                                'rounded-control border bg-white/[0.03] p-3 space-y-3 relative',
-                                                                complete
-                                                                    ? 'border-emerald-500/30'
-                                                                    : 'border-[var(--border-inverse)]'
-                                                            )}
-                                                        >
-                                                            {complete && (
-                                                                <motion.div
-                                                                    initial={reducedMotion ? false : { scale: 0 }}
-                                                                    animate={{ scale: 1 }}
-                                                                    transition={reducedMotion ? { duration: 0 } : springs.elastic}
-                                                                    className="absolute top-2 right-2 text-emerald-400"
-                                                                >
-                                                                    <CheckCircle2 className="w-6 h-6" />
-                                                                </motion.div>
-                                                            )}
-                                                            <div className="flex items-start justify-between gap-3">
-                                                                <div>
-                                                                    <p className="text-[10px] uppercase tracking-widest text-on-dark-muted">
-                                                                        {group.type === 'superset'
-                                                                            ? `${group.supersetLetter ?? 'SS'}-${blockIndex + 1}`
-                                                                            : exercise.muscle_group}
-                                                                    </p>
-                                                                    <h3 className="font-display text-lg font-bold text-on-dark">{exercise.name}</h3>
-                                                                </div>
-                                                                <div className="flex items-center gap-2">
-                                                                    {(exercise.gif_url || exercise.video_url) && (
-                                                                        <button onClick={() => openTechnique(exercise)} aria-label="Ver técnica del ejercicio" className="h-9 w-9 rounded-control border border-[var(--border-inverse)] flex items-center justify-center text-on-dark-muted hover:text-on-dark">
-                                                                            <Info className="w-4 h-4" />
-                                                                        </button>
-                                                                    )}
-                                                                    <span className={cn("text-xs px-2 py-1 rounded-full border", complete ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400" : "bg-white/[0.06] border-[var(--border-inverse)] text-on-dark-muted")}>
-                                                                        {complete ? 'Completado' : 'Pendiente'}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                            {effType === 'strength' ? (
-                                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                                                                <TargetChip label="Series x reps" value={`${block.sets} x ${block.reps}`} />
-                                                                {block.target_weight_kg != null && <TargetChip label="Peso" value={`${block.target_weight_kg}kg`} />}
-                                                                {block.rest_time && <TargetChip label="Descanso" value={block.rest_time} />}
-                                                                {block.tempo && <TargetChip label="Tempo" value={block.tempo} />}
-                                                                {block.rir && <TargetChip label="RIR" value={block.rir} />}
-                                                            </div>
-                                                            ) : (
-                                                                <>
-                                                                    <TypedTargetGrid block={block} kind={effType} cardio={cardio} />
-                                                                    <div className="flex justify-end">
-                                                                        <TypedBlockTimerButton block={block} kind={effType} />
-                                                                    </div>
-                                                                </>
-                                                            )}
-                                                            {effType !== 'strength' && block.instructions && (
-                                                                <div className="rounded-control border border-primary/30 bg-primary/[0.08] p-2 text-sm">
-                                                                    <p className="font-semibold text-primary">Instrucciones</p>
-                                                                    <p className="text-on-dark/85">{block.instructions}</p>
-                                                                </div>
-                                                            )}
-                                                            {block.notes && (
-                                                                <div className="rounded-control border border-amber-500/30 bg-amber-500/[0.12] p-2 text-sm">
-                                                                    <p className="font-semibold text-amber-300">Nota del coach</p>
-                                                                    <p className="text-amber-200/90">{block.notes}</p>
-                                                                </div>
-                                                            )}
-                                                            {effType === 'strength' && previousHistory[exercise.id] && previousHistory[exercise.id].length > 0 && (
-                                                                <div className="rounded-control border border-[var(--border-inverse)] bg-white/[0.04] p-2">
-                                                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-on-dark-muted mb-1">
-                                                                        Sesión anterior ·{' '}
-                                                                        {formatRelativeDate(previousHistory[exercise.id][0].date)}
-                                                                    </p>
-                                                                    <div className="flex flex-wrap gap-1.5">
-                                                                        {previousHistory[exercise.id].map((log, idx) => (
-                                                                            <span key={idx} className="text-xs px-2 py-1 rounded-sm bg-white/[0.06] border border-[var(--border-inverse)] font-mono tabular-nums text-on-dark">
-                                                                                S{idx + 1}: {log.weight_kg ? `${log.weight_kg}kg` : '-'} x {log.reps_done || '-'}
-                                                                            </span>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                            <div className="rounded-control border border-[var(--border-inverse)] p-2">
-                                                                {effType === 'strength' ? (
-                                                                <div className="grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10">
-                                                                    <div className="w-4 text-center">Set</div>
-                                                                    <div className="text-center">Kg</div>
-                                                                    <div className="text-center">Reps</div>
-                                                                    <div className="w-8"></div>
-                                                                </div>
-                                                                ) : (
-                                                                    <TypedLogHeader kind={effType} />
-                                                                )}
-                                                                <div className="space-y-1 pt-2">
-                                                                    {Array.from({ length: block.sets }).map((_, i) => {
-                                                                        const setNumber = i + 1
-                                                                        const log = blockLogs.find((entry) => entry.set_number === setNumber)
-                                                                        return (
-                                                                            <LogSetForm
-                                                                                key={`${block.id}-${setNumber}`}
-                                                                                blockId={block.id}
-                                                                                setNumber={setNumber}
-                                                                                restTimeStr={block.rest_time}
-                                                                                existingLog={log}
-                                                                                autoTimerEnabled={autoTimerEnabled}
-                                                                                mode={effType}
-                                                                                onLogged={handleLogged}
-                                                                            />
-                                                                        )
-                                                                    })}
-                                                                </div>
-                                                            </div>
-                                                        </motion.div>
-                                                        </Fragment>
-                                                    )
-                                                })}
-                                            </div>
+
+                                {/* exercise header */}
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <h2 className="font-display text-[23px] font-black leading-[1.1] tracking-[-0.02em] text-on-dark">
+                                            {exercise?.name ?? 'Ejercicio'}
+                                        </h2>
+                                        <div className="mt-1.5 flex items-center gap-1.5">
+                                            {exercise?.muscle_group && (
+                                                <span className="inline-flex items-center rounded-full bg-[var(--sport-500)]/15 px-2 py-0.5 text-[11px] font-bold text-[var(--sport-300)]">
+                                                    {exercise.muscle_group}
+                                                </span>
+                                            )}
+                                            {(exercise?.gif_url || exercise?.video_url || (exercise?.instructions?.length ?? 0) > 0) && (
+                                                <button
+                                                    onClick={() => openTechnique(exercise)}
+                                                    className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-on-dark-muted transition-colors hover:text-on-dark"
+                                                >
+                                                    <Info className="w-3.5 h-3.5" /> Ver técnica
+                                                </button>
+                                            )}
                                         </div>
-                                    ))}
+                                    </div>
+                                    <button
+                                        onClick={() => openTechnique(exercise)}
+                                        aria-label="Ver video"
+                                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control text-white transition-transform active:scale-95"
+                                        style={{ background: meta.color }}
+                                    >
+                                        <Play className="w-[22px] h-[22px]" />
+                                    </button>
                                 </div>
-                            </section>
-                        ))}
-                    </div>
-                </div>
 
-                <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[var(--border-inverse)] bg-[var(--ink-950)]/95 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl">
-                    <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
-                        <ManualTimerButton defaultTime={'90'} />
+                                {/* target grid (typed) */}
+                                {effType === 'strength' ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        <TargetChip label="Series×reps" value={`${block.sets}×${block.reps}`} />
+                                        <TargetChip label="Peso" value={`${block.target_weight_kg ?? '—'} kg`} />
+                                        {block.rest_time && <TargetChip label="Descanso" value={block.rest_time} />}
+                                        {block.tempo && <TargetChip label="Tempo" value={block.tempo} />}
+                                        {block.rir && <TargetChip label="RIR" value={block.rir} />}
+                                    </div>
+                                ) : (
+                                    <TypedTargetGrid block={block} kind={effType} cardio={cardio} />
+                                )}
+
+                                {/* previous session — strength only */}
+                                {effType === 'strength' && prevSummary && prevHistory && (
+                                    <div className="flex flex-wrap items-center gap-2 rounded-sm bg-white/[0.04] px-3 py-2">
+                                        <History className="w-3.5 h-3.5 shrink-0 text-on-dark-muted" />
+                                        <span className="text-xs text-on-dark-muted">
+                                            Sesión anterior · {formatRelativeDate(prevHistory[0].date)}:
+                                        </span>
+                                        <span className="font-mono text-xs font-semibold text-on-dark">{prevSummary}</span>
+                                    </div>
+                                )}
+
+                                {/* typed instructions (datos reales — no se descartan) */}
+                                {effType !== 'strength' && block.instructions && (
+                                    <div className="flex gap-2 rounded-sm border border-primary/20 bg-primary/[0.10] px-3 py-2.5">
+                                        <Info className="w-3.5 h-3.5 shrink-0 text-[var(--sport-300)] mt-0.5" />
+                                        <span className="text-[12.5px] leading-relaxed text-on-dark/90">{block.instructions}</span>
+                                    </div>
+                                )}
+
+                                {/* block notes */}
+                                {block.notes && (
+                                    <div className="flex gap-2 rounded-sm border border-primary/20 bg-primary/[0.10] px-3 py-2.5">
+                                        <Quote className="w-3.5 h-3.5 shrink-0 text-[var(--sport-300)] mt-0.5" />
+                                        <span className="text-[12.5px] leading-relaxed text-on-dark/90">{block.notes}</span>
+                                    </div>
+                                )}
+
+                                {/* log header (typed) */}
+                                <div className="pt-1">
+                                    <TypedLogHeader kind={effType} />
+                                    {/* log rows (typed, editable — server actions reales) */}
+                                    <div className="space-y-1 pt-2">
+                                        {Array.from({ length: block.sets }).map((_, i) => {
+                                            const setNumber = i + 1
+                                            const log = blockLogs.find((entry) => entry.set_number === setNumber)
+                                            return (
+                                                <LogSetForm
+                                                    key={`${block.id}-${setNumber}`}
+                                                    blockId={block.id}
+                                                    setNumber={setNumber}
+                                                    restTimeStr={block.rest_time}
+                                                    existingLog={log}
+                                                    autoTimerEnabled={autoTimerEnabled}
+                                                    mode={effType}
+                                                    onLogged={handleLogged}
+                                                />
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+
+                                {/* timer bar */}
+                                <BlockTimerBar block={block} kind={effType} />
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
+
+                    {/* footer nav */}
+                    <div className="flex gap-2.5 px-5 pb-[calc(1.75rem+env(safe-area-inset-bottom,0px))]">
                         <button
-                            onClick={handleFinish}
-                            className="h-12 px-5 flex items-center gap-2 rounded-control bg-primary text-primary-foreground font-bold"
+                            onClick={goPrev}
+                            disabled={safeIdx === 0}
+                            aria-label="Anterior"
+                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-control bg-white/[0.08] text-on-dark transition-colors hover:bg-white/[0.14] disabled:opacity-40"
                         >
-                            <CheckCircle2 className="w-4 h-4" />
-                            Finalizar entrenamiento
+                            <ChevronLeft className="w-5 h-5" />
                         </button>
+                        {safeIdx < blocks.length - 1 ? (
+                            <button
+                                onClick={goNext}
+                                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-control bg-primary font-bold text-primary-foreground transition-transform active:scale-[0.99]"
+                            >
+                                {doneCount === nSets ? 'Siguiente bloque' : `Completar (${doneCount}/${nSets})`}
+                                <ChevronRight className="w-5 h-5" />
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleFinish}
+                                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-control bg-primary font-bold text-primary-foreground transition-transform active:scale-[0.99]"
+                            >
+                                <Flag className="w-5 h-5" />
+                                Finalizar entrenamiento
+                            </button>
+                        )}
                     </div>
                 </div>
 
-                {/* Descanso, alarma y auto-timer (tuerca header / footer) */}
+                {/* Descanso, alarma y auto-timer (tuerca header) */}
                 <Dialog open={showTimerSettings} onOpenChange={setShowTimerSettings}>
                     <DialogContent className="max-w-sm rounded-sheet p-6 bg-card border-border max-h-[min(90dvh,32rem)] overflow-y-auto">
                         <DialogHeader>

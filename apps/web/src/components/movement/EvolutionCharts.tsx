@@ -1,102 +1,107 @@
 'use client'
 
-import { useReducedMotion } from 'framer-motion'
-import {
-    Line,
-    LineChart,
-    PolarAngleAxis,
-    PolarGrid,
-    PolarRadiusAxis,
-    Radar,
-    RadarChart,
-    ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis,
-    Legend,
-} from 'recharts'
+import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
 import { MOVEMENT_PATTERNS_V1 } from '@eva/calc'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { Reveal } from '@/components/motion/Reveal'
+import { Card } from '@/components/ui/card'
 import type { MovementAssessmentWithItems } from '@/domain/assessment/types'
 
+/** Color de la banda de prioridad segun el compuesto (mismos cortes que el reporte). */
+function bandColor(composite: number | null): string {
+    if (composite == null) return 'var(--text-subtle)'
+    if (composite >= 17) return 'var(--success-500)'
+    if (composite >= 14) return 'var(--warning-500)'
+    return 'var(--danger-500)'
+}
+
+function patternFinal(a: MovementAssessmentWithItems, slug: string): number {
+    return a.items.find((i) => i.pattern === slug)?.final_score ?? 0
+}
+
 /**
- * Evolucion temporal (AC4, con >= 2 finales): linea del compuesto + radar de los 7
- * patrones (primera vs ultima evaluacion). El padre decide cuando renderizar.
+ * Evolucion temporal (AC4, con >= 2 finales): barras del compuesto a lo largo del
+ * tiempo + comparativa por patron (primera vs ultima evaluacion con flechas). El
+ * padre decide cuando renderizar.
  */
 export function EvolutionCharts({ finals }: { finals: MovementAssessmentWithItems[] }) {
     const { t, language } = useTranslation()
-    const reduce = useReducedMotion()
     if (finals.length < 2) return null
 
     const locale = language === 'es' ? 'es-CL' : 'en-US'
-    const linePoints = finals.map((a) => ({
-        date: new Date(a.assessed_at).toLocaleDateString(locale, { day: '2-digit', month: 'short' }),
-        composite: a.composite_score ?? 0,
-    }))
+    const fmtDate = (iso: string) =>
+        new Date(iso).toLocaleDateString(locale, { day: '2-digit', month: 'short' })
 
     const first = finals[0]
     const last = finals[finals.length - 1]
-    const radarData = MOVEMENT_PATTERNS_V1.map((def) => ({
-        pattern: t(`assessment.pattern.${def.slug}`),
-        first: first.items.find((i) => i.pattern === def.slug)?.final_score ?? 0,
-        last: last.items.find((i) => i.pattern === def.slug)?.final_score ?? 0,
-    }))
 
     return (
-        <Reveal as="section" className="rounded-card border border-subtle bg-surface-card p-4 shadow-sm sm:p-6">
-            <h2 className="text-sm font-bold uppercase tracking-[0.06em] text-muted">
+        <Reveal as="section">
+            <h2 className="mb-2.5 font-display text-[17px] font-extrabold tracking-[-0.02em] text-strong">
                 {t('assessment.evolution.title')}
             </h2>
+            <Card padding="md">
+                {/* Barras del compuesto por evaluacion */}
+                <p className="sr-only">{t('assessment.evolution.composite')}</p>
+                <div className="mb-3.5 flex items-end gap-2">
+                    {finals.map((f, i) => {
+                        const composite = f.composite_score ?? 0
+                        const h = Math.round((composite / 21) * 64) + 8
+                        const isLast = i === finals.length - 1
+                        return (
+                            <div key={f.id} className="flex flex-1 flex-col items-center gap-1.5">
+                                <span className="font-mono text-xs font-bold tabular-nums text-strong">
+                                    {composite}
+                                </span>
+                                <div
+                                    className="w-full max-w-[54px] rounded-[8px]"
+                                    style={{
+                                        height: h,
+                                        background: bandColor(f.composite_score),
+                                        opacity: isLast ? 1 : 0.4,
+                                    }}
+                                    aria-hidden
+                                />
+                                <span className="text-[10.5px] text-muted">{fmtDate(f.assessed_at)}</span>
+                            </div>
+                        )
+                    })}
+                    <div className="flex-[2]" aria-hidden />
+                </div>
 
-            <div className="mt-4 h-56 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={linePoints} margin={{ top: 8, right: 12, bottom: 0, left: -18 }}>
-                        <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="currentColor" opacity={0.5} />
-                        <YAxis domain={[0, 21]} tick={{ fontSize: 11 }} stroke="currentColor" opacity={0.5} />
-                        <Tooltip
-                            formatter={(value) => [String(value), t('assessment.evolution.composite')]}
-                            contentStyle={{ borderRadius: 12, fontSize: 12 }}
-                        />
-                        <Line
-                            type="monotone"
-                            dataKey="composite"
-                            name={t('assessment.evolution.composite')}
-                            stroke="#1FB877"
-                            strokeWidth={2.5}
-                            dot={{ r: 4 }}
-                            isAnimationActive={!reduce}
-                        />
-                    </LineChart>
-                </ResponsiveContainer>
-            </div>
-
-            <div className="mt-6 h-72 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart data={radarData} outerRadius="70%">
-                        <PolarGrid stroke="currentColor" opacity={0.2} />
-                        <PolarAngleAxis dataKey="pattern" tick={{ fontSize: 10 }} />
-                        <PolarRadiusAxis domain={[0, 3]} tickCount={4} tick={{ fontSize: 10 }} />
-                        <Radar
-                            name={t('assessment.evolution.first')}
-                            dataKey="first"
-                            stroke="#818C9A"
-                            fill="#818C9A"
-                            fillOpacity={0.25}
-                            isAnimationActive={!reduce}
-                        />
-                        <Radar
-                            name={t('assessment.evolution.last')}
-                            dataKey="last"
-                            stroke="#1FB877"
-                            fill="#1FB877"
-                            fillOpacity={0.35}
-                            isAnimationActive={!reduce}
-                        />
-                        <Legend wrapperStyle={{ fontSize: 12 }} />
-                    </RadarChart>
-                </ResponsiveContainer>
-            </div>
+                {/* Comparativa por patron: primera vs ultima */}
+                <p className="sr-only">
+                    {t('assessment.evolution.first')} → {t('assessment.evolution.last')}
+                </p>
+                <div className="flex flex-col gap-[7px] border-t border-subtle pt-3">
+                    {MOVEMENT_PATTERNS_V1.map((def) => {
+                        const a = patternFinal(first, def.slug)
+                        const b = patternFinal(last, def.slug)
+                        const up = b > a
+                        const down = b < a
+                        const Arrow = up ? ArrowUpRight : down ? ArrowDownRight : Minus
+                        const arrowColor = up
+                            ? 'text-[color:var(--success-600)]'
+                            : down
+                              ? 'text-[color:var(--danger-600)]'
+                              : 'text-subtle'
+                        return (
+                            <div key={def.slug} className="flex items-center gap-2.5">
+                                <span className="flex-1 text-xs text-body">
+                                    {t(`assessment.pattern.${def.slug}`)}
+                                </span>
+                                <span className="flex items-center gap-1.5">
+                                    <span className="font-mono text-xs tabular-nums text-subtle">{a}</span>
+                                    <Arrow className={`size-3.5 ${arrowColor}`} aria-hidden />
+                                    <span className="font-mono text-[13px] font-bold tabular-nums text-strong">
+                                        {b}
+                                    </span>
+                                </span>
+                            </div>
+                        )
+                    })}
+                </div>
+            </Card>
         </Reveal>
     )
 }

@@ -8,6 +8,8 @@ import { ClientCardV2 } from '@/components/coach/ClientCardV2'
 import { DirectoryActionBar } from './DirectoryActionBar'
 import { ClientsDirectoryTable } from './ClientsDirectoryTable'
 import { ClientsDirectoryEmpty } from './ClientsDirectoryEmpty'
+import { DirRowCard } from './DirRowCard'
+import { EditClientDataModal } from './EditClientDataModal'
 import type {
     DirectoryRiskFilter,
     DirectorySortKey,
@@ -126,6 +128,7 @@ export function ClientsDirectoryClient({
     const [statusFilter, setStatusFilter] = useState<StatusDirectoryFilter>('any')
     const [programFilter, setProgramFilter] = useState<ProgramDirectoryFilter>('any')
     const [gridVisibleCount, setGridVisibleCount] = useState(48)
+    const [editingClient, setEditingClient] = useState<{ id: string; name: string } | null>(null)
 
     useEffect(() => {
         setGridVisibleCount(48)
@@ -184,6 +187,23 @@ export function ClientsDirectoryClient({
         return <ClientsDirectoryEmpty />
     }
 
+    const loginUrl = coach && appUrl ? `${appUrl}/c/${publicIdentifier}/login` : ''
+
+    const loadMoreButton =
+        sortedClients.length > gridVisibleCount ? (
+            <div className="flex justify-center px-4 pb-8 lg:px-0">
+                <button
+                    type="button"
+                    onClick={() =>
+                        setGridVisibleCount((n) => Math.min(n + 48, sortedClients.length))
+                    }
+                    className="rounded-pill border border-default bg-surface-sunken px-6 py-2 text-sm font-semibold text-strong transition-colors hover:bg-surface-card"
+                >
+                    Cargar más ({sortedClients.length - gridVisibleCount} restantes)
+                </button>
+            </div>
+        ) : null
+
     return (
         <div className="min-w-0 max-w-full space-y-6 md:space-y-8">
             <DirectoryActionBar
@@ -220,15 +240,36 @@ export function ClientsDirectoryClient({
                     </p>
                 </Card>
             : view === 'table' ?
-                <ClientsDirectoryTable
-                    clients={sortedClients}
-                    pulseByClientId={pulseByClientId}
-                    sortKey={sortKey}
-                    sortDir={sortDir}
-                    onSortChange={handleSortFromTable}
-                    coachSlug={publicIdentifier}
-                    appUrl={appUrl}
-                />
+                <>
+                    {/* MÓVIL (<md): row-cards · diseño coach-directory.jsx */}
+                    <div className="space-y-2 px-0 md:hidden">
+                        {gridClients.map((client) => (
+                            <DirRowCard
+                                key={client.id}
+                                client={client}
+                                pulse={pulseByClientId[client.id]}
+                                loginUrl={loginUrl}
+                                onEdit={() =>
+                                    setEditingClient({ id: client.id, name: client.full_name })
+                                }
+                            />
+                        ))}
+                        {loadMoreButton}
+                    </div>
+
+                    {/* DESKTOP (md+): tabla limpia · diseño desktop-coach.jsx */}
+                    <div className="hidden md:block">
+                        <ClientsDirectoryTable
+                            clients={sortedClients}
+                            pulseByClientId={pulseByClientId}
+                            sortKey={sortKey}
+                            sortDir={sortDir}
+                            onSortChange={handleSortFromTable}
+                            coachSlug={publicIdentifier}
+                            appUrl={appUrl}
+                        />
+                    </div>
+                </>
             :   <div className="space-y-4">
                     <motion.div
                     className="grid grid-cols-1 gap-4 px-4 sm:grid-cols-2 lg:grid-cols-2 lg:px-0 xl:grid-cols-3 xl:gap-8"
@@ -249,8 +290,6 @@ export function ClientsDirectoryClient({
                             subscriptionDaysRemaining = diff
                         }
 
-                        const loginUrl =
-                            coach && appUrl ? `${appUrl}/c/${publicIdentifier}/login` : ''
                         const whatsappLink =
                             client.phone ?
                                 `https://wa.me/${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${client.full_name}, aquí tienes tu link de acceso a la app: ${loginUrl}`)}`
@@ -275,23 +314,18 @@ export function ClientsDirectoryClient({
                         )
                     })}
                 </motion.div>
-                {sortedClients.length > gridVisibleCount ? (
-                    <div className="flex justify-center px-4 pb-8 lg:px-0">
-                        <button
-                            type="button"
-                            onClick={() =>
-                                setGridVisibleCount((n) =>
-                                    Math.min(n + 48, sortedClients.length)
-                                )
-                            }
-                            className="rounded-pill border border-default bg-surface-sunken px-6 py-2 text-sm font-semibold text-strong transition-colors hover:bg-surface-card"
-                        >
-                            Cargar más ({sortedClients.length - gridVisibleCount} restantes)
-                        </button>
-                    </div>
-                ) : null}
+                {loadMoreButton}
                 </div>
             }
+
+            {editingClient && (
+                <EditClientDataModal
+                    clientId={editingClient.id}
+                    clientName={editingClient.name}
+                    open={!!editingClient}
+                    onClose={() => setEditingClient(null)}
+                />
+            )}
         </div>
     )
 }

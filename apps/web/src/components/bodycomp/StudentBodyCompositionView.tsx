@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Gauge, Info } from 'lucide-react'
+import { ChevronLeft, Gauge, Info } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { cn } from '@/lib/utils'
@@ -45,24 +45,24 @@ export function StudentBodyCompositionView({
     return (
         <div className="min-h-dvh bg-surface-app pb-20">
             <header className="sticky top-0 z-40 border-b border-subtle bg-surface-app/95 px-4 py-4 pt-safe backdrop-blur-xl">
-                <Link
-                    href={`${basePath}/dashboard`}
-                    className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-strong"
-                >
-                    <ArrowLeft className="h-4 w-4" aria-hidden />
-                    {t('bodycomp.student.back')}
-                </Link>
-                <div className="mt-2 flex items-start gap-3">
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-[var(--success-100)] text-[var(--success-700)]">
-                        <Gauge className="h-[22px] w-[22px]" aria-hidden />
-                    </span>
-                    <div className="min-w-0">
-                        <h1 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-strong">
+                <div className="flex items-center gap-3">
+                    <Link
+                        href={`${basePath}/dashboard`}
+                        aria-label={t('bodycomp.student.back')}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-surface-sunken text-strong transition-colors hover:bg-surface-card"
+                    >
+                        <ChevronLeft className="h-5 w-5" aria-hidden />
+                    </Link>
+                    <div className="min-w-0 flex-1">
+                        <h1 className="font-display text-[26px] font-black leading-[1.1] tracking-[-0.03em] text-strong">
                             {t('bodycomp.student.title')}
                         </h1>
-                        <p className="mt-0.5 text-sm text-muted">{t('bodycomp.student.intro')}</p>
                     </div>
+                    <span className="shrink-0 rounded-full bg-[var(--success-100)] px-2.5 py-1 text-[11px] font-bold text-[var(--success-700)]">
+                        Módulo
+                    </span>
                 </div>
+                <p className="mt-2 text-sm text-muted">{t('bodycomp.student.intro')}</p>
             </header>
 
             <main className="mx-auto w-full max-w-2xl space-y-5 px-4 py-6">

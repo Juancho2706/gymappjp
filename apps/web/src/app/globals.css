@@ -1186,3 +1186,35 @@ body > * {
     }
   }
 }
+
+/* EVA design-kit utilities (transcripción 1:1 desde ui_kits/index.html) */
+@layer utilities {
+  .eva-press {
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      transform 0.13s cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 0.13s ease,
+      filter 0.13s ease;
+  }
+  .eva-press:active {
+    transform: scale(0.97);
+  }
+  .eva-metric {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .eva-mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .eva-press {
+      transition: none;
+    }
+    .eva-press:active {
+      transform: none;
+    }
+  }
+}

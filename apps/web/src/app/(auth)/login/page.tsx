@@ -93,12 +93,12 @@ export default async function CoachLoginPage({ searchParams }: CoachLoginPagePro
                 </div>
 
                 <div className="w-full max-w-sm mx-auto">
-                    <div className="mb-8">
-                        <h2 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-text-strong">
-                            Bienvenido de vuelta
+                    <div className="mb-8 text-center lg:text-left">
+                        <h2 className="font-display text-2xl font-black tracking-[-0.02em] text-text-strong">
+                            Panel del coach
                         </h2>
                         <p className="mt-2 text-sm text-text-muted">
-                            Ingresa tus credenciales para acceder al panel
+                            Entrá para gestionar tu marca y tus alumnos
                         </p>
                     </div>
 

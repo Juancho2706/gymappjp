@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Dumbbell, Search, X, Info, Loader2, ChevronDown } from "lucide-react";
+import { Dumbbell, Search, X, Play, Loader2, ChevronDown } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
 import { filterExercises } from "@/lib/utils";
 import { extractYoutubeVideoId } from "@/lib/youtube";
@@ -71,7 +71,11 @@ function ExerciseCard({ ex, onSelect }: { ex: Exercise; onSelect: () => void }) 
       return <FadeImage src={url} alt={ex.name} />;
     }
 
-    return <Dumbbell className="h-7 w-7 text-white/30" />;
+    return (
+      <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-white/10 text-white">
+        <Play className="h-[17px] w-[17px]" />
+      </span>
+    );
   };
 
   return (
@@ -152,7 +156,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
       <div className="space-y-3">
         <Input
           iconLeft={<Search className="h-5 w-5" />}
-          placeholder="Buscar por nombre de ejercicio..."
+          placeholder="Buscar ejercicio…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -164,7 +168,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
               <button
                 key={m}
                 onClick={() => setSelectedMuscle(m)}
-                className={`h-9 flex-none snap-start whitespace-nowrap rounded-pill px-[15px] text-[13px] font-bold transition-all ${
+                className={`h-[34px] flex-none snap-start whitespace-nowrap rounded-pill px-[15px] text-[13px] font-bold transition-all ${
                   on
                     ? "text-on-sport"
                     : "border-[1.5px] border-default bg-surface-card text-body hover:bg-surface-sunken"
@@ -219,90 +223,112 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
       >
         <DialogContent
           showCloseButton={false}
-          className="custom-scrollbar w-[90vw] max-w-md overflow-y-auto rounded-[28px] border-subtle bg-surface-card p-0 max-h-[85dvh] focus:outline-none"
+          className="custom-scrollbar bottom-0 left-0 top-auto w-full max-w-full translate-x-0 translate-y-0 flex flex-col overflow-y-auto rounded-t-[28px] rounded-b-none border-subtle bg-surface-card p-0 max-h-[85dvh] focus:outline-none md:bottom-auto md:left-1/2 md:top-1/2 md:w-[90vw] md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[28px]"
         >
           {selectedExercise && (
             <>
-              {(() => {
-                if (selectedExercise.gif_url) {
-                  return (
-                    <div className="sticky top-0 z-10 flex h-48 w-full shrink-0 items-center justify-center border-b border-subtle bg-white md:h-64">
-                      <Image
-                        src={selectedExercise.gif_url}
-                        alt={selectedExercise.name}
-                        fill
-                        sizes="(max-width: 768px) 100vw, 50vh"
-                        className="object-contain"
-                        unoptimized
-                      />
-                    </div>
-                  );
-                }
-
-                const url = selectedExercise.video_url;
-                const isYouTube = url?.includes('youtube.com') || url?.includes('youtu.be');
-                if (isYouTube) {
-                  const ytId = extractYoutubeVideoId(url!);
-                  const ex = selectedExercise as any
-                  return ytId ? (
-                    <div className="sticky top-0 z-10 flex h-48 w-full shrink-0 items-center justify-center border-b border-subtle bg-gradient-to-br from-[#1B2129] to-[#0B0E13] md:h-64">
-                      <ExerciseVideo
-                        videoId={ytId}
-                        start={ex.video_start_time}
-                        end={ex.video_end_time}
-                        className="w-full h-full"
-                        title={selectedExercise.name}
-                      />
-                    </div>
-                  ) : null;
-                }
-
-                if (selectedExercise.video_url) {
-                  const urlLower = selectedExercise.video_url.toLowerCase();
-                  const isMp4 = urlLower.includes('.mp4') || urlLower.includes('.mov') || urlLower.includes('.webm') || (urlLower.includes('supabase.co/storage') && !urlLower.includes('.gif') && !urlLower.includes('.jpg') && !urlLower.includes('.png'));
-
-                  if (isMp4) {
+              {/* Media banner */}
+              <div className="relative h-[180px] w-full shrink-0 md:h-64">
+                {(() => {
+                  if (selectedExercise.gif_url) {
                     return (
-                      <div className="sticky top-0 z-10 flex h-48 w-full shrink-0 items-center justify-center border-b border-subtle bg-white md:h-64">
-                        <video
-                          src={selectedExercise.video_url}
-                          autoPlay
-                          loop
-                          muted
-                          playsInline
-                          className="w-full h-full object-contain"
+                      <div className="flex h-full w-full items-center justify-center border-b border-subtle bg-white">
+                        <Image
+                          src={selectedExercise.gif_url}
+                          alt={selectedExercise.name}
+                          fill
+                          sizes="(max-width: 768px) 100vw, 50vh"
+                          className="object-contain"
+                          unoptimized
                         />
                       </div>
                     );
                   }
 
+                  const url = selectedExercise.video_url;
+                  const isYouTube =
+                    url?.includes("youtube.com") || url?.includes("youtu.be");
+                  if (isYouTube) {
+                    const ytId = extractYoutubeVideoId(url!);
+                    const ex = selectedExercise as any;
+                    if (ytId) {
+                      return (
+                        <div className="flex h-full w-full items-center justify-center border-b border-subtle bg-gradient-to-br from-[#1B2129] to-[#0B0E13]">
+                          <ExerciseVideo
+                            videoId={ytId}
+                            start={ex.video_start_time}
+                            end={ex.video_end_time}
+                            className="h-full w-full"
+                            title={selectedExercise.name}
+                          />
+                        </div>
+                      );
+                    }
+                  }
+
+                  if (selectedExercise.video_url) {
+                    const urlLower = selectedExercise.video_url.toLowerCase();
+                    const isMp4 =
+                      urlLower.includes(".mp4") ||
+                      urlLower.includes(".mov") ||
+                      urlLower.includes(".webm") ||
+                      (urlLower.includes("supabase.co/storage") &&
+                        !urlLower.includes(".gif") &&
+                        !urlLower.includes(".jpg") &&
+                        !urlLower.includes(".png"));
+
+                    if (isMp4) {
+                      return (
+                        <div className="flex h-full w-full items-center justify-center border-b border-subtle bg-white">
+                          <video
+                            src={selectedExercise.video_url}
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            className="h-full w-full object-contain"
+                          />
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="flex h-full w-full items-center justify-center border-b border-subtle bg-white">
+                        <Image
+                          src={selectedExercise.video_url}
+                          alt={selectedExercise.name}
+                          fill
+                          sizes="(max-width: 768px) 100vw, 50vh"
+                          className="object-contain"
+                          unoptimized
+                        />
+                      </div>
+                    );
+                  }
+
+                  // Sin media: banner de fallback con ícono play (diseño)
                   return (
-                    <div className="sticky top-0 z-10 flex h-48 w-full shrink-0 items-center justify-center border-b border-subtle bg-white md:h-64">
-                      <Image
-                        src={selectedExercise.video_url}
-                        alt={selectedExercise.name}
-                        fill
-                        sizes="(max-width: 768px) 100vw, 50vh"
-                        className="object-contain"
-                        unoptimized
-                      />
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#1B2129] to-[#0B0E13]">
+                      <span className="flex h-[58px] w-[58px] items-center justify-center rounded-full bg-white/[0.12] text-white">
+                        <Play className="h-6 w-6" />
+                      </span>
                     </div>
                   );
-                }
+                })()}
+                <DialogClose
+                  aria-label="Cerrar"
+                  className="absolute right-3 top-3 z-20 flex h-[34px] w-[34px] items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/55"
+                >
+                  <X className="h-[18px] w-[18px]" />
+                </DialogClose>
+              </div>
 
-                return null;
-              })()}
-              <div className="flex-1 p-6">
-                <DialogHeader className="mb-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <DialogTitle className="font-display text-xl font-extrabold tracking-tight text-strong">
-                      {selectedExercise.name}
-                    </DialogTitle>
-                    <DialogClose className="-mr-2 -mt-2 shrink-0 rounded-full p-2 text-muted transition-colors hover:bg-surface-sunken">
-                      <X className="h-5 w-5" />
-                    </DialogClose>
-                  </div>
-                  <p className="mt-1 text-[11px] font-extrabold uppercase tracking-[0.08em] text-sport-600">
+              <div className="flex-1 px-5 pb-6 pt-[18px]">
+                <DialogHeader className="mb-0 gap-0">
+                  <DialogTitle className="font-display text-[22px] font-black tracking-[-0.02em] text-strong">
+                    {selectedExercise.name}
+                  </DialogTitle>
+                  <p className="mt-[5px] text-[11px] font-extrabold uppercase tracking-[0.08em] text-sport-600">
                     {selectedExercise.muscle_group}
                     {selectedExercise.equipment
                       ? ` · ${selectedExercise.equipment}`
@@ -310,43 +336,42 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                   </p>
                 </DialogHeader>
 
-                {loadingDetail ? (
-                  <div className="flex items-center gap-2 py-4 text-sm text-muted">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Cargando instrucciones…
-                  </div>
-                ) : instructions && instructions.length > 0 ? (
-                  <div className="space-y-4 pr-2">
-                    <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted">
-                      <Info className="h-4 w-4" /> Instrucciones paso a paso
-                    </h4>
+                <div className="mt-[18px]">
+                  {loadingDetail ? (
+                    <div className="flex items-center gap-2.5 py-2 text-sm text-muted">
+                      <Loader2 className="h-[18px] w-[18px] animate-spin text-sport-500" />
+                      Cargando instrucciones…
+                    </div>
+                  ) : instructions && instructions.length > 0 ? (
                     <ol className="space-y-3">
                       {instructions.map((step, i) => (
-                        <li key={i} className="flex gap-3 text-sm text-body">
-                          <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-sport-100 text-xs font-extrabold text-sport-600">
+                        <li
+                          key={i}
+                          className="flex items-start gap-3 text-[14.5px] text-body"
+                        >
+                          <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-sport-100 font-display text-[13px] font-extrabold text-sport-600">
                             {i + 1}
                           </span>
-                          <span className="leading-relaxed">
+                          <span className="pt-px leading-[1.45]">
                             {step.replace(/^Step:\d+\s*/i, "")}
                           </span>
                         </li>
                       ))}
                     </ol>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted">
-                    El entrenador aún no ha añadido instrucciones específicas
-                    para este ejercicio.
-                  </p>
-                )}
+                  ) : (
+                    <p className="text-sm leading-relaxed text-muted">
+                      El entrenador aún no ha añadido instrucciones específicas
+                      para este ejercicio.
+                    </p>
+                  )}
+                </div>
 
                 <Button
                   variant="sport"
                   size="lg"
                   onClick={() => setSelectedExercise(null)}
-                  className="mt-8 w-full"
+                  className="mt-[22px] w-full"
                 >
-                  <X className="h-5 w-5" />
                   Cerrar
                 </Button>
               </div>

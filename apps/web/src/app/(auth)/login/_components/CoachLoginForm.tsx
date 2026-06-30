@@ -86,7 +86,7 @@ export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: Coac
 
             <div className="pt-1">
                 <AuthSubmitButton
-                    label="Ingresar al Panel"
+                    label="Entrar como coach"
                     pendingLabel="Iniciando sesión..."
                     variant="coach"
                     leadingIcon={<ArrowRight className="h-4 w-4" />}
@@ -95,7 +95,7 @@ export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: Coac
 
             <div className="mt-6 flex items-center gap-3">
                 <div className="flex-1 h-px bg-border-subtle" />
-                <span className="text-xs text-text-muted">o ingresá con</span>
+                <span className="text-xs font-semibold text-text-subtle">o</span>
                 <div className="flex-1 h-px bg-border-subtle" />
             </div>
 
@@ -118,19 +118,13 @@ export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: Coac
                 Continuar con Google
             </button>
 
-            <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-border-subtle" />
-                <span className="text-xs text-text-muted">¿Nuevo en EVA?</span>
-                <div className="flex-1 h-px bg-border-subtle" />
-            </div>
-
-            <div className="text-center">
+            <div className="pt-4 text-center text-sm text-text-muted">
+                ¿No tenés cuenta?{' '}
                 <Link
                     href="/register"
-                    className="inline-flex items-center gap-1.5 text-sm text-sport-600 hover:opacity-80 transition-opacity font-semibold"
+                    className="font-bold text-sport-600 hover:opacity-80 transition-opacity"
                 >
-                    Crear cuenta
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    Registrate
                 </Link>
             </div>
         </form>

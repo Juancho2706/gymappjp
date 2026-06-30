@@ -13,22 +13,20 @@ import type { WorkoutLogDaySummary } from '@/app/c/[coach_slug]/dashboard/_data/
  */
 export function WorkoutHistoryList({ items }: { items: WorkoutLogDaySummary[] }) {
     return (
-        <RevealStagger className="divide-y divide-border/30" stagger={0.04}>
-            {items.map((item) => (
+        <RevealStagger stagger={0.04}>
+            {items.map((item, i) => (
                 <RevealItem key={item.dayKey} variant="fadeUp">
-                    <div className="flex items-center gap-3 px-4 py-3">
-                        <div
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control"
-                            style={{ backgroundColor: 'color-mix(in srgb, var(--theme-primary) 10%, transparent)' }}
-                        >
-                            <Dumbbell className="h-4 w-4" style={{ color: 'var(--theme-primary)' }} />
-                        </div>
+                    {i > 0 && <div className="mx-3.5 h-px bg-[var(--border-subtle)]" />}
+                    <div className="flex items-center gap-3 px-3.5 py-[13px]">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-surface-sunken">
+                            <Dumbbell className="h-[17px] w-[17px]" style={{ color: 'var(--theme-primary)' }} />
+                        </span>
                         <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-foreground">{item.dateLabel}</p>
-                            <p className="text-[10px] text-muted-foreground">{item.subtitle}</p>
+                            <p className="text-[14.5px] font-bold capitalize text-strong">{item.dateLabel}</p>
+                            <p className="text-[12.5px] text-muted">{item.subtitle}</p>
                         </div>
-                        <span className="shrink-0 whitespace-nowrap text-xs font-bold tabular-nums text-muted-foreground">
-                            {item.sets} {item.sets === 1 ? 'serie' : 'series'}
+                        <span className="shrink-0 whitespace-nowrap rounded-pill bg-surface-sunken px-2.5 py-1 font-mono text-[12.5px] font-bold text-strong">
+                            {item.sets === 1 ? '1 serie' : `${item.sets} series`}
                         </span>
                     </div>
                 </RevealItem>

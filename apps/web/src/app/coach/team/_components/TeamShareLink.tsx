@@ -1,60 +1,78 @@
 'use client'
 
-import { useState } from 'react'
-import { Copy, Check, ExternalLink, Ticket } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { Copy, Check, ExternalLink, Link2, Ticket } from 'lucide-react'
 
-function CopyButton({ value, title }: { value: string; title: string }) {
+/**
+ * Accesos de alumnos del team dentro del hero: fila de login (/t/[slug]/login, con copiar + abrir)
+ * y fila de código de invitación (A.bis2 — registro self-service vía /join/[code], entra directo al pool).
+ * Filas full-width apiladas sobre el fondo oscuro del hero (diseño 1:1 eva-app).
+ */
+function AccessRow({ icon, label, value, copyValue, openHref }: {
+    icon: ReactNode
+    label: string
+    value: string
+    copyValue: string
+    openHref?: string
+}) {
     const [copied, setCopied] = useState(false)
     return (
-        <button
-            type="button"
-            onClick={() => {
-                navigator.clipboard?.writeText(value).then(() => {
-                    setCopied(true)
-                    setTimeout(() => setCopied(false), 1600)
-                })
-            }}
-            className="flex h-7 w-7 items-center justify-center rounded-pill text-on-dark/80 transition-colors hover:bg-white/10 hover:text-on-dark"
-            title={title}
-            aria-label={title}
-        >
-            {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-        </button>
+        <div className="flex items-center gap-2.5 rounded-control border border-[var(--border-inverse)] bg-white/[0.06] px-3 py-2.5">
+            <span className="shrink-0 text-sport-300">{icon}</span>
+            <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-bold uppercase tracking-[0.04em] text-on-dark-muted">{label}</div>
+                <div className="truncate font-mono text-[12.5px] font-semibold text-on-dark">{value}</div>
+            </div>
+            <button
+                type="button"
+                onClick={() => {
+                    navigator.clipboard?.writeText(copyValue).then(() => {
+                        setCopied(true)
+                        setTimeout(() => setCopied(false), 1400)
+                    })
+                }}
+                aria-label="Copiar"
+                className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[10px] bg-white/[0.08] ${copied ? 'text-sport-300' : 'text-on-dark'}`}
+            >
+                {copied ? <Check className="h-[15px] w-[15px]" /> : <Copy className="h-[15px] w-[15px]" />}
+            </button>
+            {openHref && (
+                <a
+                    href={openHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Abrir"
+                    className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[10px] bg-white/[0.08] text-on-dark"
+                >
+                    <ExternalLink className="h-[15px] w-[15px]" />
+                </a>
+            )}
+        </div>
     )
 }
 
-/**
- * Accesos de alumnos del team: link de login (/t/[slug]/login) + código de invitación
- * (A.bis2 — registro self-service vía /join/[code], entra directo al pool).
- */
 export function TeamShareLink({ teamSlug, inviteCode }: { teamSlug: string; inviteCode?: string | null }) {
     const path = `/t/${teamSlug}/login`
-    const origin = typeof window !== 'undefined' ? window.location.origin : ''
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://eva-app.cl'
     const fullLogin = `${origin}${path}`
     const fullJoin = inviteCode ? `${origin}/join/${inviteCode}` : null
 
     return (
-        <div className="flex flex-wrap items-center gap-2">
-            <div className="flex min-w-0 items-center gap-1.5 rounded-pill border border-[var(--border-inverse)] bg-white/10 py-1 pl-3 pr-1">
-                <span className="truncate font-mono text-[11px] text-on-dark-muted">/t/{teamSlug}</span>
-                <CopyButton value={fullLogin} title="Copiar link de alumnos" />
-                <a
-                    href={path}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex h-7 w-7 items-center justify-center rounded-pill text-on-dark/80 transition-colors hover:bg-white/10 hover:text-on-dark"
-                    title="Abrir login de alumnos"
-                    aria-label="Abrir login de alumnos"
-                >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-            </div>
+        <div className="flex flex-col gap-2">
+            <AccessRow
+                icon={<Link2 className="h-4 w-4" />}
+                label="Login de alumnos"
+                value={path}
+                copyValue={fullLogin}
+                openHref={path}
+            />
             {inviteCode && fullJoin && (
-                <div className="flex min-w-0 items-center gap-1.5 rounded-pill border border-[var(--border-inverse)] bg-white/10 py-1 pl-3 pr-1">
-                    <Ticket className="h-3.5 w-3.5 shrink-0 text-on-dark-muted" aria-hidden />
-                    <span className="font-mono text-[11px] font-semibold tracking-[0.18em] text-on-dark">{inviteCode}</span>
-                    <CopyButton value={fullJoin} title="Copiar link de invitación al pool" />
-                </div>
+                <AccessRow
+                    icon={<Ticket className="h-4 w-4" />}
+                    label="Código de invitación"
+                    value={inviteCode}
+                    copyValue={fullJoin}
+                />
             )}
         </div>
     )
