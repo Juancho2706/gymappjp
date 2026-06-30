@@ -99,9 +99,11 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 return {
                     ...d,
                     title: plan?.title || '',
-                    blocks: (plan?.workout_blocks ?? []).map((b: any) =>
-                        mapDbBlockToBuilderBlock(b, exerciseById, `block-${b.id || Math.random().toString()}`, d.id),
-                    ),
+                    blocks: [...(plan?.workout_blocks ?? [])]
+                        .sort((a: any, b: any) => (a.order_index ?? 0) - (b.order_index ?? 0))
+                        .map((b: any) =>
+                            mapDbBlockToBuilderBlock(b, exerciseById, `block-${b.id || Math.random().toString()}`, d.id),
+                        ),
                 }
             })
         }
@@ -211,6 +213,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     const [showPrint, setShowPrint] = useState(false)
     const [isCatalogSidebarOpen, setIsCatalogSidebarOpen] = useState(false)
     const [isDragPending, setIsDragPending] = useState(false)
+    // Marca si el drag en curso ya empujó un snapshot de historia (al primer cross-day TRANSFER).
+    // Permite que un drag entre días (transfer + reorder/area final) sea UN solo undo.
+    const dragHistoryPushedRef = useRef(false)
 
     const [editingBlock, setEditingBlock] = useState<BuilderBlock | null>(null)
     const [activeId, setActiveId] = useState<string | null>(null)
@@ -231,6 +236,13 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     const [activeTourStepId, setActiveTourStepId] = useState<string | null>(null)
     const [activeMobileDayIndex, setActiveMobileDayIndex] = useState(0)
     const [isSimpleMode, setIsSimpleMode] = useState(false)
+    // Clamp del día activo en mobile cuando se achican los días (cycle→weekly o ciclo más corto):
+    // sin esto activeMobileDayIndex apunta a un día inexistente → days[idx] undefined → rompe tap-to-add.
+    useEffect(() => {
+        if (activeMobileDayIndex > days.length - 1) {
+            setActiveMobileDayIndex(Math.max(0, days.length - 1))
+        }
+    }, [days.length, activeMobileDayIndex])
     const [showSwipeHint, setShowSwipeHint] = useState(false)
     const [modeTransitionLabel, setModeTransitionLabel] = useState<string | null>(null)
     const preTourSimpleModeRef = useRef(false)
@@ -337,12 +349,13 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
             try {
                 localStorage.setItem(`builder_draft_${initialProgram?.id || 'new'}`, JSON.stringify({
                     programName, weeksToRepeat, durationType, durationDays, startDateFlexible, startDate, programNotes,
-                    isABMode, days, daysB: builderB.days, programPhases, sourceTemplateId,
+                    isABMode, days: builderA.days, daysB: builderB.days, programPhases, sourceTemplateId,
+                    programStructureType, cycleLength,
                 }))
             } catch (e) {}
         }, 3000)
         return () => clearTimeout(timer)
-    }, [days, builderB.days, programName, weeksToRepeat, durationType, durationDays, startDateFlexible, startDate, programNotes, isABMode, programPhases, sourceTemplateId, hasUnsavedChanges, initialProgram])
+    }, [days, builderB.days, programName, weeksToRepeat, durationType, durationDays, startDateFlexible, startDate, programNotes, isABMode, programPhases, sourceTemplateId, programStructureType, cycleLength, hasUnsavedChanges, initialProgram])
 
 
     // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Shift+Z / Ctrl+Y redo
@@ -410,6 +423,14 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 if (draft.startDate) setStartDate(draft.startDate)
                 if (draft.programNotes) setProgramNotes(draft.programNotes)
                 if (draft.isABMode !== undefined) setIsABMode(draft.isABMode)
+                // Restaurar estructura/ciclo con los setters RAW (no los wrappers que reshapean):
+                // draft.days ya viene con la forma correcta, no hay que volver a remodelarlo.
+                if (draft.programStructureType === 'weekly' || draft.programStructureType === 'cycle') {
+                    setProgramStructureTypeState(draft.programStructureType)
+                }
+                if (typeof draft.cycleLength === 'number' && draft.cycleLength > 0) {
+                    setCycleLengthState(draft.cycleLength)
+                }
                 if (draft.days) builderA.dispatchWithHistory({ type: 'SET_DAYS', payload: draft.days })
                 if (draft.daysB) builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: draft.daysB })
                 if (draft.programPhases) setProgramPhases(draft.programPhases)
@@ -436,6 +457,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     function handleDragStart(event: DragStartEvent) {
         setActiveId(event.active.id as string)
         setActiveData(event.active.data.current)
+        dragHistoryPushedRef.current = false
         setIsDragPending(true)
         // Clear pending after transition window (slightly longer than TouchSensor delay)
         setTimeout(() => setIsDragPending(false), 400)
@@ -451,7 +473,14 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         let overDayId = overData?.dayId || (overData?.type === 'day' ? overData.dayId : null)
         if (!overDayId || activeDayId === overDayId) return
 
-        dispatch({ type: 'TRANSFER_BLOCK', payload: { activeId: active.id as string, activeDayId, overDayId } })
+        // El primer cross-day de este drag toma el snapshot de historia (estado PRE-drag);
+        // los siguientes transfers van sin historia para que TODO el drag sea un único undo.
+        if (dragHistoryPushedRef.current) {
+            dispatch({ type: 'TRANSFER_BLOCK', payload: { activeId: active.id as string, activeDayId, overDayId } })
+        } else {
+            dragHistoryPushedRef.current = true
+            dispatchWithHistory({ type: 'TRANSFER_BLOCK', payload: { activeId: active.id as string, activeDayId, overDayId } })
+        }
     }
 
     function handleDragEnd(event: DragEndEvent) {
@@ -460,10 +489,13 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         const overData = over?.data?.current
 
         if (over && activeData?.type === 'block' && overData?.type === 'area' && activeData.dayId === overData.dayId) {
-            dispatchWithHistory({
-                type: 'SET_BLOCK_AREA',
-                payload: { dayId: overData.dayId, uid: active.id as string, areaId: overData.areaId },
-            })
+            // Si el drag ya transfirió entre días, el snapshot pre-drag ya existe → raw dispatch
+            // para que la operación completa siga siendo un único undo.
+            if (dragHistoryPushedRef.current) {
+                dispatch({ type: 'SET_BLOCK_AREA', payload: { dayId: overData.dayId, uid: active.id as string, areaId: overData.areaId } })
+            } else {
+                dispatchWithHistory({ type: 'SET_BLOCK_AREA', payload: { dayId: overData.dayId, uid: active.id as string, areaId: overData.areaId } })
+            }
             setActiveId(null)
             setActiveData(null)
             setHasUnsavedChanges(true)
@@ -483,8 +515,20 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 const d = days.find(x => x.id === dayId)
                 if (d) {
                     const oldIndex = d.blocks.findIndex(b => b.uid === active.id)
-                    const newIndex = d.blocks.findIndex(b => b.uid === over.id)
-                    dispatchWithHistory({ type: 'MOVE_BLOCK', payload: { dayId, oldIndex, newIndex } })
+                    let newIndex = d.blocks.findIndex(b => b.uid === over.id)
+                    // Drop sobre la zona vacía del día (contenedor/área, no sobre un bloque):
+                    // over.id no es uid de bloque → findIndex = -1. Reubicar al FINAL en vez de
+                    // pasar -1 (arrayMove con índice negativo deja el bloque mal ubicado).
+                    if (newIndex === -1) newIndex = d.blocks.length - 1
+                    if (oldIndex !== -1) {
+                        // Si hubo transfer cross-day en este drag, el snapshot pre-drag ya existe →
+                        // raw dispatch para que el drag entre días sea UN solo undo reversible.
+                        if (dragHistoryPushedRef.current) {
+                            dispatch({ type: 'MOVE_BLOCK', payload: { dayId, oldIndex, newIndex } })
+                        } else {
+                            dispatchWithHistory({ type: 'MOVE_BLOCK', payload: { dayId, oldIndex, newIndex } })
+                        }
+                    }
                 }
             }
         }
@@ -531,8 +575,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         setHasUnsavedChanges(true)
     }, [toggleRestDay])
 
-    const handleToggleSuperset = useCallback((dayId: number, uid: string) => {
-        toggleSuperset(dayId, uid)
+    const handleToggleSuperset = useCallback((dayId: number, uid: string, intent?: 'link' | 'unlink') => {
+        toggleSuperset(dayId, uid, intent)
         setHasUnsavedChanges(true)
     }, [toggleSuperset])
 
@@ -790,6 +834,37 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
             return Number.isFinite(n) ? n : null
         }
 
+        // Validación de rangos client-side CON contexto (día/ejercicio) antes de mandar al
+        // server: un negativo o fuera de rango en pesos/cargas/distancias/duraciones reventaba
+        // TODO el guardado con un Zod error genérico sin pista de qué bloque falló. Los rangos
+        // espejan el schema (@eva/schemas) para no rechazar nada que el server sí acepte.
+        const numericIssue = (b: BuilderBlock): string | null => {
+            const checks: Array<{ label: string; value: number | null; min: number; max: number }> = [
+                { label: 'peso objetivo (kg)', value: parseOptionalKg(b.target_weight_kg), min: 0, max: Number.POSITIVE_INFINITY },
+                { label: 'carga', value: parseOptionalKg(b.load_value), min: 0, max: 10000 },
+                { label: 'distancia', value: parseOptionalKg(b.distance_value), min: 0, max: 1000000 },
+            ]
+            if (b.reps_value != null) checks.push({ label: 'repeticiones', value: b.reps_value, min: 0, max: 10000 })
+            if (b.duration_sec != null) checks.push({ label: 'duración', value: b.duration_sec, min: 0, max: 86400 })
+            if (b.progression_value != null && Number.isFinite(b.progression_value)) {
+                checks.push({ label: 'progresión', value: b.progression_value, min: 0, max: 1000 })
+            }
+            for (const c of checks) {
+                if (c.value == null) continue
+                if (!Number.isFinite(c.value) || c.value < c.min || c.value > c.max) return c.label
+            }
+            return null
+        }
+        for (const d of allDaysToCheck) {
+            for (const b of d.blocks) {
+                const issue = numericIssue(b)
+                if (issue) {
+                    toast.error(`Revisa "${b.exercise_name}" en ${d.name}: ${issue} fuera de rango (no puede ser negativo).`)
+                    return
+                }
+            }
+        }
+
         const mapDays = (dayList: DayState[], variant: 'A' | 'B') =>
             dayList.filter(d => d.blocks.length > 0).map(d => ({
                 day_of_week: d.id,
@@ -822,6 +897,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             b.progression_value != null && Number.isFinite(b.progression_value)
                                 ? b.progression_value
                                 : null,
+                        progression_mode: b.progression_mode ?? null,
                         section: (b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main') as 'warmup' | 'main' | 'cooldown',
                         section_template_id: b.section_template_id ?? null,
                         is_override: b.is_override ?? false,
@@ -1717,12 +1793,28 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 hasExistingData={days.some(d => d.blocks.length > 0)}
                 onApply={(newDays, name, meta) => {
                     const byId = new Map(exercises.map(e => [e.id, e]))
-                    dispatchWithHistory({ type: 'SET_DAYS', payload: enrichDaysWithExerciseMedia(newDays, byId) })
+                    // Variante A → builderA; variante B → builderB (antes la B se descartaba en silencio,
+                    // degradando una plantilla A/B a semana simple).
+                    builderA.dispatchWithHistory({ type: 'SET_DAYS', payload: enrichDaysWithExerciseMedia(newDays, byId) })
+                    // Reflejar el estado A/B de la plantilla: si es A/B, cargar builderB; si NO, apagar
+                    // A/B y limpiar builderB — sin esto, una semana B vieja quedaba persistida al guardar
+                    // una plantilla simple (handleSave guarda builderB cuando isABMode sigue en true).
+                    if (meta.ab_mode || meta.daysB) {
+                        setIsABMode(true)
+                        builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: enrichDaysWithExerciseMedia(meta.daysB ?? [], byId) })
+                    } else {
+                        setIsABMode(false)
+                        builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: DAYS_OF_WEEK.map(d => ({ ...d, title: '', blocks: [] as BuilderBlock[] })) })
+                    }
+                    setActiveVariant('A')
                     setProgramName((prev: string) => prev || name)
                     setWeeksToRepeat(meta.weeks_to_repeat)
                     setDurationType(meta.duration_type as any)
                     setDurationDays(meta.duration_days)
                     setProgramNotes(meta.program_notes)
+                    if (meta.start_date_flexible != null) setStartDateFlexible(meta.start_date_flexible)
+                    if (meta.program_structure_type) setProgramStructureTypeState(meta.program_structure_type)
+                    if (meta.cycle_length) setCycleLengthState(meta.cycle_length)
                     if (meta.program_phases?.length) setProgramPhases(meta.program_phases)
                     if (client?.id) setSourceTemplateId(meta.appliedTemplateId)
                     else setSourceTemplateId(null)

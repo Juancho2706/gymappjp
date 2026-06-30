@@ -38,6 +38,7 @@ export interface BuilderBlock {
     superset_group?: string | null
     progression_type?: 'weight' | 'reps' | null
     progression_value?: number | null
+    progression_mode?: 'weekly_linear' | 'double' | 'session_linear' | 'adaptive' | null
     section?: BuilderSection
     /** Area (workout_section_templates.id) — preferente sobre section legacy (expand-contract) */
     section_template_id?: string | null

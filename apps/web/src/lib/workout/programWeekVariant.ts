@@ -12,8 +12,11 @@ export function programWeekIndex1Based(
     const today = now
     const start = new Date(program.start_date)
     const totalWeeks = Math.max(1, Number(program.weeks_to_repeat) || 1)
-    const diffTime = Math.abs(today.getTime() - start.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    const diffMs = today.getTime() - start.getTime()
+    // Programa aún no empieza (start futuro): semana 1, sin progresión. Antes Math.abs contaba los
+    // días HASTA el inicio como semanas transcurridas → inflaba el peso objetivo antes de arrancar.
+    if (diffMs < 0) return 1
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
     let currentWeek = Math.min(totalWeeks, Math.ceil(diffDays / 7))
     if (currentWeek < 1) currentWeek = 1
     return currentWeek

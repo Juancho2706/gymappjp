@@ -751,10 +751,10 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                                         />
                                         <button
                                             type="button"
-                                            onClick={() => onChange({ ...block, distance_unit: block.distance_unit === 'm' ? 'km' : 'm' })}
+                                            onClick={() => onChange({ ...block, distance_unit: block.distance_unit === 'km' ? 'm' : 'km' })}
                                             className="h-12 min-w-[52px] rounded-lg border border-border bg-secondary text-[10px] font-bold uppercase text-muted-foreground hover:bg-muted dark:border-white/10 dark:bg-white/5"
                                         >
-                                            {block.distance_unit ?? 'km'}
+                                            {block.distance_unit ?? 'm'}
                                         </button>
                                     </div>
                                     <p className="text-[10px] text-muted-foreground/50 text-center">duración O distancia</p>
@@ -953,7 +953,7 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                             </button>
                         </div>
 
-                        {block.progression_type && (
+                        {block.progression_type && (<>
                             <div className="mt-2 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
                                 <div className="grid min-w-0 grid-cols-2 overflow-hidden rounded-lg border border-border text-[10px] font-bold uppercase tracking-widest dark:border-white/10">
                                     <button
@@ -980,7 +980,36 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                                     </span>
                                 </div>
                             </div>
-                        )}
+                            {/* Modo de progresión POR-EJERCICIO (solo peso). Motor: lib/workout/progression.ts */}
+                            {block.progression_type === 'weight' && (
+                                <div className="mt-3 space-y-1.5 rounded-lg border border-border/60 p-2.5 dark:border-white/10">
+                                    <label className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">¿Cómo sube el peso?</label>
+                                    <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-border dark:border-white/10">
+                                        <button
+                                            type="button"
+                                            onClick={() => onChange({ ...block, progression_mode: 'weekly_linear' })}
+                                            className={`p-2.5 text-left transition-colors ${(block.progression_mode ?? 'weekly_linear') === 'weekly_linear' ? 'bg-primary/10 ring-1 ring-inset ring-primary' : 'hover:bg-muted'}`}
+                                        >
+                                            <span className="block text-[11px] font-bold text-foreground">Cada semana</span>
+                                            <span className="mt-0.5 block text-[9px] leading-tight text-muted-foreground">+{block.progression_value ?? '?'} kg automático por semana</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => onChange({ ...block, progression_mode: 'double' })}
+                                            className={`border-l border-border p-2.5 text-left transition-colors dark:border-white/10 ${block.progression_mode === 'double' ? 'bg-primary/10 ring-1 ring-inset ring-primary' : 'hover:bg-muted'}`}
+                                        >
+                                            <span className="block text-[11px] font-bold text-foreground">Al completar las reps</span>
+                                            <span className="mt-0.5 block text-[9px] leading-tight text-muted-foreground">Sube cuando llena el rango (doble progresión)</span>
+                                        </button>
+                                    </div>
+                                    {block.progression_mode === 'double' && (
+                                        <p className="text-[9px] leading-snug text-muted-foreground/70">
+                                            Necesita un rango de reps (ej. 8-12). El alumno mantiene el peso hasta completar el tope en todas las series; ahí sube +{block.progression_value ?? '?'} kg.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </>)}
                         {!block.progression_type && (
                             <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest">
                                 Activa para incrementar peso o reps automáticamente cada semana

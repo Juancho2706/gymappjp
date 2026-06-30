@@ -42,6 +42,17 @@ interface TemplatePickerDialogProps {
         program_notes: string
         program_phases: ProgramPhase[]
         appliedTemplateId: string
+        // Variante B de una plantilla A/B (semana A/B). Solo presente si la plantilla tiene
+        // planes con week_variant === 'B'. Sin esto la variante B se descartaba en silencio
+        // (la plantilla A/B se degradaba a semana simple). El handler debe cargarla en builderB.
+        daysB?: DayState[]
+        // Metadata de estructura del programa — para no degradar plantillas de ciclo/AB a weekly.
+        // `ab_mode` se infiere de la presencia de planes B; el resto viaja tal cual venga de la
+        // plantilla (forward-compatible: hoy el SELECT del action no trae structure_type/cycle_length).
+        ab_mode?: boolean
+        program_structure_type?: 'weekly' | 'cycle'
+        cycle_length?: number
+        start_date_flexible?: boolean
     }) => void
 }
 
@@ -73,9 +84,10 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
         }
 
         const template = result.data
-        const days: DayState[] = DAYS_OF_WEEK.map(d => {
+        // Construye los días de una variante (semana A o B) desde los planes de la plantilla.
+        const buildVariantDays = (variant: 'A' | 'B'): DayState[] => DAYS_OF_WEEK.map(d => {
             const plan = template.workout_plans?.find(
-                (p: any) => p.day_of_week === d.id && String(p.week_variant || 'A') === 'A'
+                (p: any) => p.day_of_week === d.id && String(p.week_variant || 'A') === variant
             )
             return {
                 ...d,
@@ -100,12 +112,39 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
                         superset_group: b.superset_group || null,
                         progression_type: b.progression_type || null,
                         progression_value: b.progression_value ?? null,
+                        progression_mode: b.progression_mode ?? null,
                         section: b.section === 'warmup' || b.section === 'cooldown' ? b.section : 'main',
                         section_template_id: b.section_template_id ?? null,
                         is_override: false,
+                        // Prescripción polimórfica (cardio/movilidad/roller/unilateral/carga): el query de
+                        // plantilla la trae; sin copiarla acá, saveWorkoutProgram la pisaba con null al
+                        // guardar (data-loss silencioso de toda la prescripción tipada). Espejo de
+                        // mapDbBlockToBuilderBlock (round-trip canónico).
+                        exercise_type: b.exercises?.exercise_type ?? null,
+                        exercise_type_override: b.exercise_type_override ?? null,
+                        side_mode: b.side_mode ?? null,
+                        reps_value: b.reps_value ?? null,
+                        reps_unit: b.reps_unit ?? null,
+                        load_type: b.load_type ?? null,
+                        load_value: b.load_value != null ? String(b.load_value) : '',
+                        load_unit: b.load_unit ?? null,
+                        distance_value: b.distance_value != null ? String(b.distance_value) : '',
+                        distance_unit: b.distance_unit ?? null,
+                        duration_sec: b.duration_sec ?? null,
+                        target_pace_sec_per_km: b.target_pace_sec_per_km ?? null,
+                        hr_zone: b.hr_zone ?? null,
+                        instructions: b.instructions || '',
+                        interval_config: b.interval_config ?? null,
                     })),
             }
         })
+
+        const days = buildVariantDays('A')
+        // La plantilla es A/B si tiene al menos un plan con week_variant === 'B'.
+        const hasBPlans = (template.workout_plans || []).some(
+            (p: any) => String(p.week_variant || 'A') === 'B'
+        )
+        const daysB = hasBPlans ? buildVariantDays('B') : undefined
 
         onApply(days, template.name, {
             weeks_to_repeat: template.weeks_to_repeat,
@@ -114,6 +153,15 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
             program_notes: template.program_notes || '',
             program_phases: parseTemplatePhases(template.program_phases),
             appliedTemplateId: templateId,
+            daysB,
+            ab_mode: hasBPlans || !!template.ab_mode,
+            // `program_structure_type`/`cycle_length` hoy NO los trae el SELECT del action
+            // (loadTemplateForBuilderAction) → llegan undefined. Se pasan tal cual para ser
+            // forward-compatible cuando el SELECT se extienda (ver deferred). `?? undefined`
+            // mantiene el contrato (no fuerza weekly/7 si la plantilla los define).
+            program_structure_type: template.program_structure_type ?? undefined,
+            cycle_length: template.cycle_length ?? undefined,
+            start_date_flexible: template.start_date_flexible ?? undefined,
         })
         setApplying(null)
         setConfirmId(null)
