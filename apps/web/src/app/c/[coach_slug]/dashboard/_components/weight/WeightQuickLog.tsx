@@ -1,17 +1,19 @@
 'use client'
 
-import { useActionState, useEffect } from 'react'
+import { useActionState, useEffect, useRef } from 'react'
 import { quickLogWeightAction, type QuickWeightState } from '../../_actions/dashboard.actions'
 
 const initial: QuickWeightState = {}
 
 export function WeightQuickLog({ coachSlug }: { coachSlug: string }) {
     const [state, formAction, pending] = useActionState(quickLogWeightAction, initial)
+    // Ref en vez de getElementById: el widget se monta 2× (árbol móvil + árbol desktop), un id
+    // estático colisionaría y limpiaría el input equivocado. El ref es local a cada instancia.
+    const inputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
         if (!state.success) return
-        const el = document.getElementById('dash-quick-weight') as HTMLInputElement | null
-        if (el) el.value = ''
+        if (inputRef.current) inputRef.current.value = ''
     }, [state.success])
 
     return (
@@ -20,7 +22,7 @@ export function WeightQuickLog({ coachSlug }: { coachSlug: string }) {
             <label className="flex min-w-0 flex-1 flex-col gap-1">
                 <span className="text-[10px] font-semibold text-muted">Peso rápido (kg)</span>
                 <input
-                    id="dash-quick-weight"
+                    ref={inputRef}
                     name="weight"
                     type="number"
                     step="0.1"

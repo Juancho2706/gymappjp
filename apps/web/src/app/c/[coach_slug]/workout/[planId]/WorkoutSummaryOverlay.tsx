@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Trophy, Zap, Share2, Check } from 'lucide-react'
+import { Trophy, Share2, Check } from 'lucide-react'
 import { epleyOneRM } from '@/app/coach/clients/[clientId]/profileTrainingAnalytics'
 import { springs, fadeSlideUp, staggerContainer } from '@/lib/animation-presets'
 
@@ -176,7 +176,7 @@ export function WorkoutSummaryOverlay({
     const motionOpts = reducedMotion ? { duration: 0 } : undefined
 
     return (
-        <div className="fixed inset-0 z-[9999] bg-background/95 backdrop-blur-sm overflow-y-auto pt-safe pb-8">
+        <div className="fixed inset-0 z-[9999] bg-[var(--ink-950)]/95 backdrop-blur-sm overflow-y-auto pt-safe pb-8 text-on-dark">
             <div className="min-h-full flex flex-col items-stretch px-4 py-6 max-w-lg mx-auto w-full">
                 <motion.header
                     initial={reducedMotion ? false : { opacity: 0, y: 12 }}
@@ -184,16 +184,16 @@ export function WorkoutSummaryOverlay({
                     transition={motionOpts ?? { duration: 0.35 }}
                     className="text-center mb-6"
                 >
-                    <div className="flex justify-center gap-2 mb-3">
-                        <div className="w-14 h-14 rounded-full flex items-center justify-center bg-amber-500/15 border border-amber-500/30">
-                            <Trophy className="w-7 h-7 text-amber-600 dark:text-amber-400" />
-                        </div>
-                        <div className="w-14 h-14 rounded-full flex items-center justify-center bg-primary/10 border border-primary/25">
-                            <Zap className="w-7 h-7 text-primary" />
+                    <div className="flex justify-center mb-4">
+                        <div
+                            className="flex h-[76px] w-[76px] items-center justify-center rounded-full text-white"
+                            style={{ background: 'var(--sport-500)', boxShadow: 'var(--glow-sport)' }}
+                        >
+                            <Check className="h-9 w-9" />
                         </div>
                     </div>
-                    <h2 className="font-display text-2xl font-black tracking-tight text-foreground">¡Sesión completada!</h2>
-                    <p className="text-sm text-muted-foreground mt-1">{planTitle}</p>
+                    <h2 className="font-display text-[28px] font-black tracking-[-0.02em] text-on-dark">¡Sesión completada!</h2>
+                    <p className="text-sm text-on-dark-muted mt-1.5">{planTitle}</p>
                 </motion.header>
 
                 <motion.div
@@ -202,17 +202,17 @@ export function WorkoutSummaryOverlay({
                     transition={motionOpts ?? { delay: 0.05, duration: 0.3 }}
                     className="grid grid-cols-3 gap-2 mb-6"
                 >
-                    <div className="rounded-card border border-border bg-card/50 p-3 text-center">
-                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Sets</p>
-                        <p className="font-display text-lg font-bold tabular-nums">{completedSets}</p>
+                    <div className="rounded-control border border-[var(--border-inverse)] bg-[var(--ink-900)] p-4 text-center">
+                        <p className="font-display text-2xl font-bold tabular-nums text-[var(--sport-500)]">{completedSets}</p>
+                        <p className="text-[11px] font-semibold text-on-dark-muted mt-0.5">Series</p>
                     </div>
-                    <div className="rounded-card border border-border bg-card/50 p-3 text-center">
-                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Reps</p>
-                        <p className="font-display text-lg font-bold tabular-nums">{totalReps}</p>
+                    <div className="rounded-control border border-[var(--border-inverse)] bg-[var(--ink-900)] p-4 text-center">
+                        <p className="font-display text-2xl font-bold tabular-nums text-[var(--sport-500)]">{totalReps}</p>
+                        <p className="text-[11px] font-semibold text-on-dark-muted mt-0.5">Reps</p>
                     </div>
-                    <div className="rounded-card border border-border bg-card/50 p-3 text-center">
-                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Volumen</p>
-                        <p className="font-display text-lg font-bold tabular-nums">{Math.round(totalVolume)} kg</p>
+                    <div className="rounded-control border border-[var(--border-inverse)] bg-[var(--ink-900)] p-4 text-center">
+                        <p className="font-display text-2xl font-bold tabular-nums text-[var(--sport-500)]">{Math.round(totalVolume)}</p>
+                        <p className="text-[11px] font-semibold text-on-dark-muted mt-0.5">Volumen kg</p>
                     </div>
                 </motion.div>
 
@@ -222,9 +222,10 @@ export function WorkoutSummaryOverlay({
                         animate={{ opacity: 1 }}
                         className="mb-6"
                     >
-                        <div className="rounded-card border border-yellow-400/40 bg-gradient-to-br from-amber-500/15 to-yellow-500/10 p-4 mb-3">
-                            <p className="text-sm font-black text-amber-800 dark:text-amber-200 mb-3">
-                                🏆 {detectedPRs.length}{' '}
+                        <div className="rounded-card border border-amber-400/40 bg-gradient-to-br from-amber-500/20 to-yellow-500/10 p-4 mb-3">
+                            <p className="mb-3 flex items-center gap-2 text-sm font-black text-amber-200">
+                                <Trophy className="h-4 w-4 shrink-0" />
+                                {detectedPRs.length}{' '}
                                 {detectedPRs.length === 1 ? 'récord personal' : 'récords personales'}
                             </p>
                             <div className="space-y-2">
@@ -238,15 +239,15 @@ export function WorkoutSummaryOverlay({
                                                 ? { duration: 0 }
                                                 : { delay: 0.1 * i, duration: 0.28 }
                                         }
-                                        className="rounded-lg border border-yellow-400/30 bg-background/60 px-3 py-2 text-sm"
+                                        className="rounded-lg border border-amber-400/25 bg-white/[0.06] px-3 py-2 text-sm"
                                     >
-                                        <p className="font-bold text-foreground">{pr.exerciseName}</p>
-                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                        <p className="font-bold text-on-dark">{pr.exerciseName}</p>
+                                        <p className="text-xs text-on-dark-muted mt-0.5">
                                             {pr.prevWeightKg} kg → {pr.newWeightKg} kg
                                             {pr.pct > 0 ? ` (+${pr.pct}%)` : ''}
                                         </p>
-                                        <p className="text-[10px] text-muted-foreground mt-1">
-                                            1RM estimado: <span className="font-semibold text-foreground">{pr.estimated1RM} kg</span>
+                                        <p className="text-[10px] text-on-dark-muted mt-1">
+                                            1RM estimado: <span className="font-semibold text-on-dark">{pr.estimated1RM} kg</span>
                                         </p>
                                     </motion.div>
                                 ))}
@@ -261,22 +262,22 @@ export function WorkoutSummaryOverlay({
                     animate="show"
                     className="mb-6 space-y-2"
                 >
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-on-dark-muted mb-2">
                         Por ejercicio
                     </h3>
                     {exerciseBreakdown.map((ex, i) => (
                         <motion.div
                             key={`${ex.exerciseId}-${i}`}
                             variants={reducedMotion ? undefined : fadeSlideUp}
-                            className="rounded-card border border-border bg-card/40 px-3 py-2.5 flex flex-wrap items-baseline justify-between gap-2"
+                            className="rounded-card border border-[var(--border-inverse)] bg-white/[0.04] px-3 py-2.5 flex flex-wrap items-baseline justify-between gap-2"
                         >
                             <div>
-                                <p className="font-semibold text-sm">{ex.name}</p>
-                                <p className="text-[10px] text-muted-foreground">{ex.muscleGroup}</p>
+                                <p className="font-semibold text-sm text-on-dark">{ex.name}</p>
+                                <p className="text-[10px] text-on-dark-muted">{ex.muscleGroup}</p>
                             </div>
-                            <div className="text-right text-xs text-muted-foreground tabular-nums">
-                                <span className="font-bold text-foreground">{ex.sets.length}</span> series ·{' '}
-                                <span className="font-bold text-foreground">{Math.round(ex.totalVolume)}</span> kg vol.
+                            <div className="text-right text-xs text-on-dark-muted tabular-nums">
+                                <span className="font-bold text-on-dark">{ex.sets.length}</span> series ·{' '}
+                                <span className="font-bold text-on-dark">{Math.round(ex.totalVolume)}</span> kg vol.
                             </div>
                         </motion.div>
                     ))}
@@ -284,17 +285,17 @@ export function WorkoutSummaryOverlay({
 
                 {muscleGroupVolume.length > 0 && (
                     <section className="mb-8">
-                        <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-on-dark-muted mb-3">
                             Volumen por grupo
                         </h3>
                         <div className="space-y-2">
                             {muscleGroupVolume.map(({ group, pct, vol }) => (
                                 <div key={group} className="space-y-1">
                                     <div className="flex justify-between text-xs">
-                                        <span className="font-medium">{group}</span>
-                                        <span className="text-muted-foreground">{Math.round(vol)} kg</span>
+                                        <span className="font-medium text-on-dark">{group}</span>
+                                        <span className="text-on-dark-muted">{Math.round(vol)} kg</span>
                                     </div>
-                                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                                    <div className="h-2 rounded-full bg-white/10 overflow-hidden">
                                         <motion.div
                                             className="h-full rounded-full"
                                             style={{ backgroundColor: 'var(--theme-primary)' }}
@@ -313,7 +314,7 @@ export function WorkoutSummaryOverlay({
                     <button
                         type="button"
                         onClick={handleShare}
-                        className="w-full h-10 rounded-control font-semibold text-sm border border-border bg-card/60 hover:bg-accent transition-colors flex items-center justify-center gap-2"
+                        className="w-full h-10 rounded-control font-semibold text-sm border border-[var(--border-inverse)] bg-white/[0.08] text-on-dark hover:bg-white/[0.14] transition-colors flex items-center justify-center gap-2"
                     >
                         {shared ? (
                             <><Check className="w-4 h-4 text-emerald-500" /> Copiado</>

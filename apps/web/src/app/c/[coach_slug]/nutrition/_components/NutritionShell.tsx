@@ -840,6 +840,52 @@ export function NutritionShell({
     })
   }, [exchange, pdfBrand, brandLogoUrl, plan.name, plan.instructions, goals, mealsSorted, selectedDate])
 
+  // ─── Tarjetas "de un vistazo" (rail desktop · stack mobile) ──────────────────
+  // En <760 viven en la columna única ENCIMA de las comidas (orden del kit móvil);
+  // en >=760 forman el rail derecho sticky del layout 2-col (DesktopPlan). Son
+  // presentacionales (reciben props, sin fetch propio), por eso se montan en ambos
+  // contenedores sin coste de red — solo el set visible según el breakpoint pinta.
+  const streakCard =
+    adherenceEffective.length > 0 && totalMeals > 0 ? (
+      <NutritionStreakBanner adherenceData={adherenceEffective} planMeals={planMealsForAdherence} />
+    ) : null
+
+  const macroCard = (
+    <MacroRingSummary
+      calories={{ consumed: consumed.calories, target: goals.calories }}
+      protein={{ consumed: consumed.protein, target: goals.protein }}
+      carbs={{ consumed: consumed.carbs, target: goals.carbs }}
+      fats={{ consumed: consumed.fats, target: goals.fats }}
+      isReadOnly={!isToday}
+    />
+  )
+
+  const microsCard =
+    sectionFlags.micros_base || sectionFlags.micros_advanced ? (
+      <MicrosPanel
+        sodiumMg={dayMicros?.sodiumMg ?? null}
+        fiberG={dayMicros?.fiberG ?? null}
+        sugarG={dayMicros?.sugarG ?? null}
+        saturatedFatG={dayMicros?.saturatedFatG ?? null}
+        unsaturatedFatG={dayMicros?.unsaturatedFatG ?? null}
+        sodiumTarget={microTargets?.sodium}
+        fiberTarget={microTargets?.fiber}
+        sugarTarget={microTargets?.sugar}
+        saturatedFatTarget={microTargets?.saturatedFat}
+        unsaturatedFatTarget={microTargets?.unsaturatedFat}
+        proEnabled={nutritionProEnabled && sectionFlags.micros_advanced}
+      />
+    ) : null
+
+  const plateCard = sectionFlags.plate && plateProportion ? <PlatePanel proportion={plateProportion} /> : null
+
+  const adherenceCard =
+    adherenceEffective.length > 0 && (plan.nutrition_meals?.length ?? 0) > 0 ? (
+      <div className="bg-card border border-border rounded-2xl p-4">
+        <AdherenceStrip data={adherenceEffective} planMeals={planMealsForAdherence} />
+      </div>
+    ) : null
+
   return (
     <div className="space-y-5">
       {!isOnline && (
@@ -851,6 +897,11 @@ export function NutritionShell({
           la barra de adherencia. Las marcas de comidas pueden quedar en cola y se sincronizan al volver la red.
         </div>
       )}
+      {/* Layout: columna única <760 (orden del kit móvil) · 2-col desktop-native >=760
+          (comidas izq + rail de stats sticky der, per DesktopPlan en desktop-coach.jsx). */}
+      <div className="md:grid md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] md:items-start md:gap-5">
+        {/* Columna principal / izquierda — instancia ÚNICA de todo lo interactivo. */}
+        <div className="min-w-0 space-y-5">
       <WorkoutContextBanner hasTodayWorkout={hasTodayWorkout} />
       <DayNavigator
         selectedDate={selectedDate}
@@ -872,36 +923,15 @@ export function NutritionShell({
         </p>
       )}
 
-      {adherenceEffective.length > 0 && totalMeals > 0 && (
-        <NutritionStreakBanner adherenceData={adherenceEffective} planMeals={planMealsForAdherence} />
-      )}
-
-      <MacroRingSummary
-        calories={{ consumed: consumed.calories, target: goals.calories }}
-        protein={{ consumed: consumed.protein, target: goals.protein }}
-        carbs={{ consumed: consumed.carbs, target: goals.carbs }}
-        fats={{ consumed: consumed.fats, target: goals.fats }}
-        isReadOnly={!isToday}
-      />
-
-      {/* Zona de progreso ampliada: micros (colapsable) + proporción del plato. */}
-      {(sectionFlags.micros_base || sectionFlags.micros_advanced) && (
-        <MicrosPanel
-          sodiumMg={dayMicros?.sodiumMg ?? null}
-          fiberG={dayMicros?.fiberG ?? null}
-          sugarG={dayMicros?.sugarG ?? null}
-          saturatedFatG={dayMicros?.saturatedFatG ?? null}
-          unsaturatedFatG={dayMicros?.unsaturatedFatG ?? null}
-          sodiumTarget={microTargets?.sodium}
-          fiberTarget={microTargets?.fiber}
-          sugarTarget={microTargets?.sugar}
-          saturatedFatTarget={microTargets?.saturatedFat}
-          unsaturatedFatTarget={microTargets?.unsaturatedFat}
-          proEnabled={nutritionProEnabled && sectionFlags.micros_advanced}
-        />
-      )}
-
-      {sectionFlags.plate && plateProportion && <PlatePanel proportion={plateProportion} />}
+      {/* Stats "de un vistazo" — SOLO mobile aquí (encima de las comidas, orden del kit
+          móvil alumno-nutricion.jsx: racha → anillos → micros → plato). En >=760 estas
+          mismas tarjetas se pintan en el rail derecho (md:hidden las oculta acá). */}
+      <div className="space-y-5 md:hidden">
+        {streakCard}
+        {macroCard}
+        {microsCard}
+        {plateCard}
+      </div>
 
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
@@ -1092,11 +1122,20 @@ export function NutritionShell({
         </details>
       )}
 
-      {adherenceEffective.length > 0 && (plan.nutrition_meals?.length ?? 0) > 0 && (
-        <div className="bg-card border border-border rounded-2xl p-4">
-          <AdherenceStrip data={adherenceEffective} planMeals={planMealsForAdherence} />
+      {/* Adherencia 30d — cierra el stack del kit móvil (solo <760). */}
+      <div className="md:hidden">{adherenceCard}</div>
         </div>
-      )}
+
+        {/* Rail derecho sticky — SOLO desktop (>=760): racha · anillos · micros · plato ·
+            adherencia, en el orden del rail de DesktopPlan (desktop-coach.jsx). */}
+        <aside className="hidden md:flex md:flex-col md:gap-5 md:sticky md:top-20">
+          {streakCard}
+          {macroCard}
+          {microsCard}
+          {plateCard}
+          {adherenceCard}
+        </aside>
+      </div>
     </div>
   )
 }

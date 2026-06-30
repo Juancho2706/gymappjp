@@ -17,6 +17,7 @@ import {
     Play,
     Flag,
     History,
+    TrendingUp,
     Quote,
     X,
     Settings,
@@ -145,7 +146,7 @@ const SIDE_LABEL: Record<string, string> = {
 }
 
 /** Chip de objetivo (label + valor) sobre la superficie inmersiva oscura. */
-function TargetChip({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+function TargetChip({ label, value, highlight, accent }: { label: string; value: string; highlight?: boolean; accent?: boolean }) {
     return (
         <div
             className={cn(
@@ -166,7 +167,7 @@ function TargetChip({ label, value, highlight }: { label: string; value: string;
             <div
                 className={cn(
                     'font-mono text-[15px] font-bold tabular-nums mt-0.5',
-                    highlight ? 'text-[var(--ember-200)]' : 'text-on-dark'
+                    highlight ? 'text-[var(--ember-200)]' : accent ? 'text-[var(--sport-300)]' : 'text-on-dark'
                 )}
             >
                 {value}
@@ -623,10 +624,25 @@ export function WorkoutExecutionClient({
                                         <TargetChip label="Peso" value={`${block.target_weight_kg ?? '—'} kg`} />
                                         {block.rest_time && <TargetChip label="Descanso" value={block.rest_time} />}
                                         {block.tempo && <TargetChip label="Tempo" value={block.tempo} />}
-                                        {block.rir && <TargetChip label="RIR" value={block.rir} />}
+                                        {block.rir && <TargetChip label="RIR" value={block.rir} accent />}
                                     </div>
                                 ) : (
                                     <TypedTargetGrid block={block} kind={effType} cardio={cardio} />
+                                )}
+
+                                {/* sobrecarga progresiva — instrucción del coach (paridad con app móvil). Solo se
+                                    setea en bloques de fuerza; el null-check basta, sin gate por tipo. */}
+                                {block.progression_type && block.progression_value != null && (
+                                    <div className="flex items-center gap-2 rounded-sm border border-emerald-500/25 bg-emerald-500/[0.12] px-3 py-2.5">
+                                        <TrendingUp className="w-3.5 h-3.5 shrink-0 text-emerald-300" />
+                                        <span className="text-[12.5px] leading-relaxed text-emerald-100/95">
+                                            Sobrecarga progresiva: sube{' '}
+                                            <span className="font-bold text-emerald-200">
+                                                +{block.progression_value} {block.progression_type === 'weight' ? 'kg' : 'rep'}
+                                            </span>{' '}
+                                            {block.progression_type === 'weight' ? 'cada semana' : 'cada sesión'}
+                                        </span>
+                                    </div>
                                 )}
 
                                 {/* previous session — strength only */}

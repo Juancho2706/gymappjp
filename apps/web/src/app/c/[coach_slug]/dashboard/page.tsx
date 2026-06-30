@@ -18,6 +18,7 @@ import { RecentWorkoutsSection } from './_components/history/RecentWorkoutsSecti
 import { HabitsTrackerWidget } from './_components/habits/HabitsTrackerWidget'
 import { NutritionDailySummary } from './_components/nutrition/NutritionDailySummary'
 import { SectionTitle } from './_components/shared/SectionTitle'
+import { DashboardDesktop } from './_components/desktop/DashboardDesktop'
 import { WelcomeModal } from './_components/WelcomeModal'
 import { getClientDashboardUser, getClientProfile, getActiveOrgAnnouncements } from './_data/dashboard.queries'
 import { OrgAnnouncementBanner } from './_components/OrgAnnouncementBanner'
@@ -77,88 +78,103 @@ export default async function ClientDashboardPage({ params }: Props) {
             <DashboardShell>
                 {announcements.length > 0 && <OrgAnnouncementBanner announcements={announcements} />}
 
-                <Suspense fallback={<DashboardHeaderSkeleton />}>
-                    <DashboardHeader
-                        userId={user.id}
-                        coachSlug={coach_slug}
-                        initialUseBrandColors={initialUseBrandColors}
-                        brandName={greetingBrandName}
-                        welcomeMessage={greetingWelcomeMessage}
-                    />
-                </Suspense>
-
-                {/* Racha ribbon — protagonista de retención */}
-                <Suspense fallback={null}>
-                    <StreakRibbonSection userId={user.id} />
-                </Suspense>
-
-                {/* Check-in banner (variant-aware) */}
-                <Suspense fallback={<CheckInSkeleton />}>
-                    <CheckInBanner userId={user.id} coachSlug={coach_slug} />
-                </Suspense>
-
-                {/* HERO — qué hago hoy (workout) o descanso */}
-                <Suspense fallback={<HeroAndComplianceSkeleton />}>
-                    <HeroAndComplianceGroup userId={user.id} coachSlug={coach_slug} />
-                </Suspense>
-
-                {/* Coach presence */}
-                <Suspense fallback={null}>
-                    <CoachPresenceCard
-                        userId={user.id}
-                        coachSlug={coach_slug}
-                        brandName={greetingBrandName}
-                        note={greetingWelcomeMessage}
-                    />
-                </Suspense>
-
-                {/* Momentum — semana + cumplimiento fusionados */}
-                <Suspense fallback={<ComplianceRingsSkeleton />}>
-                    <MomentumCard userId={user.id} coachSlug={coach_slug} />
-                </Suspense>
-
-                {/* Programa activo + barra de fases */}
-                <div>
-                    <SectionTitle>Tu programa</SectionTitle>
-                    <Suspense fallback={<ProgramSkeleton />}>
-                        <ActiveProgramSection userId={user.id} coachSlug={coach_slug} />
+                {/* ───────── Móvil (<760): alumno-dashboard.jsx verbatim · columna única ───────── */}
+                <div className="flex flex-col gap-3.5 md:hidden">
+                    <Suspense fallback={<DashboardHeaderSkeleton />}>
+                        <DashboardHeader
+                            userId={user.id}
+                            coachSlug={coach_slug}
+                            initialUseBrandColors={initialUseBrandColors}
+                            brandName={greetingBrandName}
+                            welcomeMessage={greetingWelcomeMessage}
+                        />
                     </Suspense>
-                </div>
 
-                {/* Peso + records */}
-                <div>
-                    <SectionTitle accent="var(--sport-500)">Peso y records</SectionTitle>
-                    <div className="flex flex-col gap-3">
-                        <Suspense fallback={<WeightSkeleton />}>
-                            <WeightWidget userId={user.id} coachSlug={coach_slug} />
+                    {/* Racha ribbon — protagonista de retención */}
+                    <Suspense fallback={null}>
+                        <StreakRibbonSection userId={user.id} />
+                    </Suspense>
+
+                    {/* Check-in banner (variant-aware) */}
+                    <Suspense fallback={<CheckInSkeleton />}>
+                        <CheckInBanner userId={user.id} coachSlug={coach_slug} />
+                    </Suspense>
+
+                    {/* HERO — qué hago hoy (workout) o descanso */}
+                    <Suspense fallback={<HeroAndComplianceSkeleton />}>
+                        <HeroAndComplianceGroup userId={user.id} coachSlug={coach_slug} />
+                    </Suspense>
+
+                    {/* Coach presence */}
+                    <Suspense fallback={null}>
+                        <CoachPresenceCard
+                            userId={user.id}
+                            coachSlug={coach_slug}
+                            brandName={greetingBrandName}
+                            note={greetingWelcomeMessage}
+                        />
+                    </Suspense>
+
+                    {/* Momentum — semana + cumplimiento fusionados */}
+                    <Suspense fallback={<ComplianceRingsSkeleton />}>
+                        <MomentumCard userId={user.id} coachSlug={coach_slug} />
+                    </Suspense>
+
+                    {/* Programa activo + barra de fases */}
+                    <div>
+                        <SectionTitle>Tu programa</SectionTitle>
+                        <Suspense fallback={<ProgramSkeleton />}>
+                            <ActiveProgramSection userId={user.id} coachSlug={coach_slug} />
                         </Suspense>
-                        <Suspense fallback={<PersonalRecordsSkeleton />}>
-                            <PersonalRecordsCard userId={user.id} />
+                    </div>
+
+                    {/* Peso + records */}
+                    <div>
+                        <SectionTitle accent="var(--sport-500)">Peso y records</SectionTitle>
+                        <div className="flex flex-col gap-3">
+                            <Suspense fallback={<WeightSkeleton />}>
+                                <WeightWidget userId={user.id} coachSlug={coach_slug} />
+                            </Suspense>
+                            <Suspense fallback={<PersonalRecordsSkeleton />}>
+                                <PersonalRecordsCard userId={user.id} />
+                            </Suspense>
+                        </div>
+                    </div>
+
+                    {/* Actividad reciente */}
+                    <Suspense fallback={<HistorySkeleton />}>
+                        <RecentWorkoutsSection userId={user.id} coachSlug={coach_slug} />
+                    </Suspense>
+
+                    {/* Hábitos de hoy */}
+                    <div>
+                        <SectionTitle accent="var(--aqua-700, #0A6E8D)">Hábitos de hoy</SectionTitle>
+                        <Suspense fallback={<HabitsSkeleton />}>
+                            <HabitsTrackerWidget userId={user.id} coachSlug={coach_slug} />
+                        </Suspense>
+                    </div>
+
+                    {/* Nutrición de hoy */}
+                    <div>
+                        <SectionTitle accent="var(--ember-500)" action="Ver dieta" actionHref={`${base}/nutrition`}>
+                            Nutrición de hoy
+                        </SectionTitle>
+                        <Suspense fallback={<NutritionSkeleton />}>
+                            <NutritionDailySummary userId={user.id} coachSlug={coach_slug} />
                         </Suspense>
                     </div>
                 </div>
 
-                {/* Actividad reciente */}
-                <Suspense fallback={<HistorySkeleton />}>
-                    <RecentWorkoutsSection userId={user.id} coachSlug={coach_slug} />
-                </Suspense>
-
-                {/* Hábitos de hoy */}
-                <div>
-                    <SectionTitle accent="var(--aqua-700, #0A6E8D)">Hábitos de hoy</SectionTitle>
-                    <Suspense fallback={<HabitsSkeleton />}>
-                        <HabitsTrackerWidget userId={user.id} coachSlug={coach_slug} />
-                    </Suspense>
-                </div>
-
-                {/* Nutrición de hoy */}
-                <div>
-                    <SectionTitle accent="var(--ember-500)" action="Ver dieta" actionHref={`${base}/nutrition`}>
-                        Nutrición de hoy
-                    </SectionTitle>
-                    <Suspense fallback={<NutritionSkeleton />}>
-                        <NutritionDailySummary userId={user.id} coachSlug={coach_slug} />
-                    </Suspense>
+                {/* ───────── Desktop (>=760): bento 2-col de DesktopAlumnoDashboard ───────── */}
+                <div className="hidden md:block">
+                    <DashboardDesktop
+                        userId={user.id}
+                        coachSlug={coach_slug}
+                        base={base}
+                        initialUseBrandColors={initialUseBrandColors}
+                        brandName={greetingBrandName}
+                        welcomeMessage={greetingWelcomeMessage}
+                    />
                 </div>
             </DashboardShell>
             <WelcomeModal
