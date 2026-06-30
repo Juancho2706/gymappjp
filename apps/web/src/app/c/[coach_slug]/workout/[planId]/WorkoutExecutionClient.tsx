@@ -5,15 +5,12 @@ import { createPortal } from 'react-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Zap, Info, Dumbbell, Timer, TrendingUp, X, Settings, CheckCircle2, WifiOff } from 'lucide-react'
+import { ArrowLeft, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
-import { InfoTooltip } from '@/components/ui/info-tooltip'
-import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { LogSetForm } from './LogSetForm'
 import { WorkoutTimerProvider, useWorkoutTimer } from './WorkoutTimerProvider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import Image from 'next/image'
-import { ThemeToggle } from '@/components/ThemeToggle'
 import { WorkoutSummaryOverlay } from './WorkoutSummaryOverlay'
 import { WorkoutTimerSettingsPanel } from './WorkoutTimerSettingsPanel'
 import { cn } from '@/lib/utils'
@@ -134,7 +131,7 @@ function ManualTimerButton({ defaultTime }: { defaultTime: string | null }) {
     return (
         <button
             onClick={() => startRest(defaultTime || '90')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-bold transition-all hover:bg-secondary/80 active:scale-95"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-control bg-white/[0.08] text-on-dark text-xs font-bold transition-all hover:bg-white/[0.14] active:scale-95"
         >
             <Timer className="w-3.5 h-3.5" />
             Descanso ({defaultTime || '90s'})
@@ -205,14 +202,19 @@ function TypedTargetGrid({ block, kind, cardio }: { block: BlockType; kind: Work
     }
 
     return (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        <div className="flex flex-wrap gap-2">
             {cards.map((card) => (
                 <div
                     key={card.label}
-                    className={cn('rounded-lg border p-2 text-center', card.highlight && 'border-primary/40 bg-primary/5')}
+                    className={cn(
+                        'flex-1 min-w-[64px] rounded-sm border px-2.5 py-2',
+                        card.highlight
+                            ? 'border-[var(--ember-500)]/30 bg-[var(--ember-500)]/[0.14]'
+                            : 'border-[var(--border-inverse)] bg-white/[0.05]'
+                    )}
                 >
-                    <p className="text-[10px] uppercase text-muted-foreground">{card.label}</p>
-                    <p className={cn('font-semibold', card.highlight && 'text-primary')}>{card.value}</p>
+                    <p className={cn('text-[9.5px] font-bold uppercase tracking-wide', card.highlight ? 'text-[var(--ember-300)]' : 'text-on-dark-muted')}>{card.label}</p>
+                    <p className={cn('font-mono text-[15px] font-bold tabular-nums mt-0.5', card.highlight ? 'text-[var(--ember-200)]' : 'text-on-dark')}>{card.value}</p>
                 </div>
             ))}
         </div>
@@ -229,7 +231,7 @@ function TypedBlockTimerButton({ block, kind }: { block: BlockType; kind: Workou
             return (
                 <button
                     onClick={() => startInterval(config, block.sets || 1)}
-                    className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/30 text-xs font-bold transition-all hover:bg-primary/20 active:scale-95"
+                    className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-control bg-primary/[0.12] text-on-dark border border-[var(--border-inverse)] text-xs font-bold transition-all hover:bg-primary/20 active:scale-95"
                 >
                     <Timer className="w-3.5 h-3.5" />
                     Iniciar intervalos
@@ -239,7 +241,7 @@ function TypedBlockTimerButton({ block, kind }: { block: BlockType; kind: Workou
         return (
             <button
                 onClick={() => startStopwatch()}
-                className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/30 text-xs font-bold transition-all hover:bg-primary/20 active:scale-95"
+                className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-control bg-primary/[0.12] text-on-dark border border-[var(--border-inverse)] text-xs font-bold transition-all hover:bg-primary/20 active:scale-95"
             >
                 <Timer className="w-3.5 h-3.5" />
                 Cronómetro
@@ -255,7 +257,7 @@ function TypedBlockTimerButton({ block, kind }: { block: BlockType; kind: Workou
         return (
             <button
                 onClick={() => startHold(seconds, kind === 'mobility' ? 'Hold' : 'Roller')}
-                className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/30 text-xs font-bold transition-all hover:bg-primary/20 active:scale-95"
+                className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-control bg-primary/[0.12] text-on-dark border border-[var(--border-inverse)] text-xs font-bold transition-all hover:bg-primary/20 active:scale-95"
             >
                 <Timer className="w-3.5 h-3.5" />
                 {label}
@@ -270,7 +272,7 @@ function TypedBlockTimerButton({ block, kind }: { block: BlockType; kind: Workou
 function TypedLogHeader({ kind }: { kind: WorkoutKind }) {
     if (kind === 'cardio') {
         return (
-            <div className="grid grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50">
+            <div className="grid grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10">
                 <div className="w-4 text-center">Set</div>
                 <div className="text-center">Min</div>
                 <div className="text-center">Metros</div>
@@ -281,7 +283,7 @@ function TypedLogHeader({ kind }: { kind: WorkoutKind }) {
     }
     if (kind === 'roller') {
         return (
-            <div className="grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50">
+            <div className="grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10">
                 <div className="w-4 text-center">Set</div>
                 <div className="text-center">Seg</div>
                 <div className="text-center">Pasadas</div>
@@ -290,7 +292,7 @@ function TypedLogHeader({ kind }: { kind: WorkoutKind }) {
         )
     }
     return (
-        <div className="grid grid-cols-[auto_5rem_auto] md:grid-cols-[auto_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50">
+        <div className="grid grid-cols-[auto_5rem_auto] md:grid-cols-[auto_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10">
             <div className="w-4 text-center">Set</div>
             <div className="text-center">Seg de hold</div>
             <div className="w-8"></div>
@@ -362,7 +364,6 @@ export function WorkoutExecutionClient({
 }: Props) {
     const router = useRouter()
     const base = useBasePath(`/c/${coachSlug}`)
-    const { t } = useTranslation()
     const reducedMotion = useReducedMotion()
     const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map())
     const blocks = useMemo(() => [...plan.workout_blocks].sort((a, b) => a.order_index - b.order_index), [plan.workout_blocks])
@@ -405,13 +406,13 @@ export function WorkoutExecutionClient({
 
     if (!blocks.length) {
         return (
-            <div className="min-h-dvh bg-background flex flex-col items-center justify-center p-6 text-center">
-                <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mb-4 text-muted-foreground">
+            <div className="is-workout-page min-h-dvh bg-[var(--ink-950)] text-on-dark flex flex-col items-center justify-center p-6 text-center">
+                <div className="w-16 h-16 bg-white/[0.06] rounded-full flex items-center justify-center mb-4 text-on-dark-muted">
                     <Dumbbell className="w-8 h-8" />
                 </div>
-                <h1 className="text-xl font-bold text-foreground mb-2">Rutina sin ejercicios</h1>
-                <p className="text-sm text-muted-foreground mb-6">Esta rutina ya no tiene ejercicios asociados. Tu coach probablemente esté actualizando tu plan.</p>
-                <Link href={`${base}/dashboard`} className="px-6 py-2 bg-primary text-primary-foreground rounded-xl font-bold shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5">
+                <h1 className="font-display text-xl font-bold text-on-dark mb-2">Rutina sin ejercicios</h1>
+                <p className="text-sm text-on-dark-muted mb-6">Esta rutina ya no tiene ejercicios asociados. Tu coach probablemente esté actualizando tu plan.</p>
+                <Link href={`${base}/dashboard`} className="px-6 py-2 bg-primary text-primary-foreground rounded-control font-bold shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5">
                     Volver al Dashboard
                 </Link>
             </div>
@@ -467,21 +468,21 @@ export function WorkoutExecutionClient({
 
     return (
         <WorkoutTimerProvider>
-            <div className="min-h-dvh bg-background">
-                <motion.div 
+            <div className="is-workout-page min-h-dvh bg-[var(--ink-950)] text-on-dark">
+                <motion.div
                     initial={{ y: -20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     transition={{ duration: 0.25 }}
-                    className="sticky top-0 z-20 bg-background/95 pt-safe backdrop-blur border-b border-border/60"
+                    className="sticky top-0 z-20 bg-[var(--ink-950)]/95 pt-safe backdrop-blur border-b border-white/10"
                 >
                     <div className="px-4 py-3 md:px-8 max-w-5xl mx-auto w-full">
                         <div className="flex items-center justify-between mb-3 gap-2">
-                            <Link href={`${base}/dashboard`} className="p-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                            <Link href={`${base}/dashboard`} className="p-2 -ml-2 text-on-dark-muted hover:text-on-dark transition-colors shrink-0">
                                 <ArrowLeft className="w-6 h-6" />
                             </Link>
                             <div className="min-w-0 px-2 text-center flex-1">
                                 <div className="flex items-center justify-center gap-2 flex-wrap">
-                                    <h1 className="text-lg md:text-xl font-bold text-foreground truncate">
+                                    <h1 className="font-display text-lg md:text-xl font-bold text-on-dark truncate">
                                         {plan.title}
                                     </h1>
                                     {activeWeekVariant != null && (
@@ -496,40 +497,38 @@ export function WorkoutExecutionClient({
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-on-dark-muted">
                                     {program?.program_structure_type === 'cycle'
                                         ? `Día ${plan.day_of_week || 1} de ${program.cycle_length || '?'}`
                                         : 'Programa semanal'}
                                 </p>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
-                                <InfoTooltip content={t('section.workoutExecution')} />
                                 <button
                                     type="button"
                                     onClick={() => setShowTimerSettings(true)}
-                                    className="p-2 rounded-xl text-muted-foreground hover:bg-muted transition-colors"
+                                    className="flex h-10 w-10 items-center justify-center rounded-control text-on-dark hover:bg-white/[0.08] transition-colors"
                                     title="Descanso y alarma"
                                 >
                                     <Settings className="w-5 h-5" />
                                 </button>
-                                <ThemeToggle />
                             </div>
                         </div>
 
-                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
                             <motion.div
                                 className="h-full rounded-full"
-                                style={{ backgroundColor: 'var(--theme-primary)' }}
+                                style={{ backgroundColor: 'var(--sport-500)' }}
                                 initial={{ width: 0 }}
                                 animate={{ width: `${completionPct}%` }}
                                 transition={reducedMotion ? { duration: 0 } : springs.smooth}
                             />
                         </div>
-                        <div className="flex justify-between mt-1.5 text-xs text-muted-foreground">
+                        <div className="flex justify-between mt-1.5 font-mono text-[11px] tabular-nums text-on-dark-muted">
                             <span>
-                                <strong className="text-foreground">{completedSetCount}</strong>/{requiredSets} series
+                                <strong className="text-on-dark">{completedSetCount}</strong>/{requiredSets} series
                             </span>
-                            <span style={{ color: 'var(--theme-primary)' }} className="font-bold">
+                            <span style={{ color: 'var(--sport-400)' }} className="font-bold">
                                 {completionPct}%
                             </span>
                         </div>
@@ -552,36 +551,36 @@ export function WorkoutExecutionClient({
                                         <div
                                             className="w-1 self-stretch min-h-[1.25rem] rounded-full shrink-0"
                                             style={{
-                                                backgroundColor: 'var(--theme-primary)',
+                                                backgroundColor: 'var(--sport-500)',
                                                 opacity: section.muted ? 0.4 : 1,
                                             }}
                                         />
-                                        <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground shrink-0">
+                                        <h2 className="text-sm font-bold uppercase tracking-wider text-on-dark-muted shrink-0">
                                             {section.title}
                                         </h2>
-                                        <hr className="flex-1 h-px bg-border/50 border-0 min-w-[2rem]" />
-                                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                        <hr className="flex-1 h-px bg-white/10 border-0 min-w-[2rem]" />
+                                        <span className="text-xs text-on-dark-muted whitespace-nowrap">
                                             {section.groups.length} bloque(s)
                                         </span>
                                     </div>
                                     {section.subtitle && (
-                                        <p className="text-xs leading-relaxed text-muted-foreground pl-4 border-l-2 border-border/60">
+                                        <p className="text-xs leading-relaxed text-on-dark-muted pl-4 border-l-2 border-white/10">
                                             {section.subtitle}
                                         </p>
                                     )}
                                 </div>
                                 <div className="space-y-3">
                                     {section.groups.map((group, groupIndex) => (
-                                        <div key={group.key} className={cn("rounded-2xl border bg-card p-4", group.type === 'superset' && "border-primary/30 bg-primary/5")}>
+                                        <div key={group.key} className={cn("rounded-card border border-[var(--border-inverse)] bg-[var(--ink-900)] p-4", group.type === 'superset' && "border-primary/30 bg-primary/[0.08]")}>
                                             <div className="mb-3 space-y-2">
-                                                <p className="text-sm font-semibold">
+                                                <p className="font-display text-sm font-bold text-on-dark">
                                                     {group.type === 'superset'
                                                         ? `Superserie (grupo ${group.supersetLetter ?? group.key})`
                                                         : `Ejercicio ${groupIndex + 1}`}
                                                 </p>
                                                 {group.type === 'superset' && (
-                                                    <div className="rounded-lg border border-primary/25 bg-primary/[0.06] p-3 text-xs leading-relaxed text-foreground/90 space-y-2.5">
-                                                        <p className="font-semibold text-primary">Cómo hacerla</p>
+                                                    <div className="rounded-sm border border-primary/20 bg-primary/[0.10] p-3 text-xs leading-relaxed text-on-dark/90 space-y-2.5">
+                                                        <p className="font-semibold text-[var(--sport-300)]">Cómo hacerla</p>
                                                         <ol className="list-decimal space-y-1.5 pl-4 marker:font-semibold">
                                                             <li>
                                                                 Completa <strong>una serie</strong> del primer ejercicio y regístrala abajo.
@@ -594,7 +593,7 @@ export function WorkoutExecutionClient({
                                                                 terminar todas las series de <strong>cada</strong> ejercicio.
                                                             </li>
                                                         </ol>
-                                                        <p className="border-t border-border/50 pt-2 text-muted-foreground">
+                                                        <p className="border-t border-white/10 pt-2 text-on-dark-muted">
                                                             Cada ejercicio tiene sus propias series: el contador superior suma todas las
                                                             series de la rutina.
                                                         </p>
@@ -628,10 +627,10 @@ export function WorkoutExecutionClient({
                                                     return (
                                                         <Fragment key={block.id}>
                                                             {blockIndex > 0 && group.type === 'superset' && (
-                                                                <div className="flex items-center justify-center gap-2 py-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                                                                    <span className="h-px max-w-[72px] flex-1 bg-border" />
+                                                                <div className="flex items-center justify-center gap-2 py-1 text-[10px] font-bold uppercase tracking-widest text-on-dark-muted">
+                                                                    <span className="h-px max-w-[72px] flex-1 bg-white/10" />
                                                                     <span>Luego</span>
-                                                                    <span className="h-px max-w-[72px] flex-1 bg-border" />
+                                                                    <span className="h-px max-w-[72px] flex-1 bg-white/10" />
                                                                 </div>
                                                             )}
                                                         <motion.div
@@ -643,10 +642,10 @@ export function WorkoutExecutionClient({
                                                             animate={{ opacity: complete ? 0.6 : 1 }}
                                                             transition={reducedMotion ? { duration: 0 } : springs.smooth}
                                                             className={cn(
-                                                                'rounded-xl border bg-background/60 p-3 space-y-3 relative',
+                                                                'rounded-card border bg-white/[0.03] p-3 space-y-3 relative',
                                                                 complete
-                                                                    ? 'border-emerald-500/30'
-                                                                    : 'border-border/70'
+                                                                    ? 'border-[var(--sport-500)]/30'
+                                                                    : 'border-[var(--border-inverse)]'
                                                             )}
                                                         >
                                                             {complete && (
@@ -654,54 +653,54 @@ export function WorkoutExecutionClient({
                                                                     initial={reducedMotion ? false : { scale: 0 }}
                                                                     animate={{ scale: 1 }}
                                                                     transition={reducedMotion ? { duration: 0 } : springs.elastic}
-                                                                    className="absolute top-2 right-2 text-emerald-500"
+                                                                    className="absolute top-2 right-2 text-[var(--sport-400)]"
                                                                 >
                                                                     <CheckCircle2 className="w-6 h-6" />
                                                                 </motion.div>
                                                             )}
                                                             <div className="flex items-start justify-between gap-3">
-                                                                <div>
-                                                                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                                                                        {group.type === 'superset'
-                                                                            ? `${group.supersetLetter ?? 'SS'}-${blockIndex + 1}`
-                                                                            : exercise.muscle_group}
-                                                                    </p>
-                                                                    <h3 className="text-lg font-bold">{exercise.name}</h3>
+                                                                <div className="min-w-0 flex-1">
+                                                                    <h3 className="font-display text-[19px] font-black leading-[1.15] tracking-[-0.02em] text-on-dark">{exercise.name}</h3>
+                                                                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                                                        <span className="inline-flex items-center rounded-full bg-[var(--sport-500)]/15 px-2 py-0.5 text-[11px] font-bold text-[var(--sport-300)]">
+                                                                            {group.type === 'superset'
+                                                                                ? `${group.supersetLetter ?? 'SS'}-${blockIndex + 1} · ${exercise.muscle_group}`
+                                                                                : exercise.muscle_group}
+                                                                        </span>
+                                                                        {(exercise.gif_url || exercise.video_url) && (
+                                                                            <button onClick={() => openTechnique(exercise)} className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-on-dark-muted transition-colors hover:text-on-dark">
+                                                                                <Info className="w-3.5 h-3.5" /> Ver técnica
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
-                                                                <div className="flex items-center gap-2">
-                                                                    {(exercise.gif_url || exercise.video_url) && (
-                                                                        <button onClick={() => openTechnique(exercise)} aria-label="Ver técnica del ejercicio" className="h-9 w-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:text-foreground">
-                                                                            <Info className="w-4 h-4" />
-                                                                        </button>
-                                                                    )}
-                                                                    <span className={cn("text-xs px-2 py-1 rounded-full border", complete ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-600" : "bg-muted border-border text-muted-foreground")}>
-                                                                        {complete ? 'Completado' : 'Pendiente'}
-                                                                    </span>
-                                                                </div>
+                                                                <span className={cn("shrink-0 text-xs px-2 py-1 rounded-full border", complete ? "bg-[var(--sport-500)]/15 border-[var(--sport-500)]/30 text-[var(--sport-300)]" : "bg-white/[0.06] border-[var(--border-inverse)] text-on-dark-muted")}>
+                                                                    {complete ? 'Completado' : 'Pendiente'}
+                                                                </span>
                                                             </div>
                                                             {effType === 'strength' ? (
-                                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                                                                <div className="rounded-lg border p-2 text-center">
-                                                                    <p className="text-[10px] uppercase text-muted-foreground">Series x reps</p>
-                                                                    <p className="font-semibold">{block.sets} x {block.reps}</p>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                <div className="flex-1 min-w-[64px] rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2">
+                                                                    <p className="text-[9.5px] font-bold uppercase tracking-wide text-on-dark-muted">Series x reps</p>
+                                                                    <p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.sets} x {block.reps}</p>
                                                                 </div>
                                                                 {block.target_weight_kg != null && (() => {
                                                                     const highlight = eff != null && eff.status !== 'flat'
                                                                     const showBase = eff != null && eff.weightKg != null && eff.baseWeightKg != null && eff.weightKg !== eff.baseWeightKg
                                                                     const label = eff?.status === 'holding' ? 'Peso a mantener' : eff?.status === 'progressed' ? 'Peso hoy' : 'Peso'
                                                                     return (
-                                                                        <div className={cn('rounded-lg border p-2 text-center', highlight && 'border-emerald-500/40 bg-emerald-500/5')}>
-                                                                            <p className="text-[10px] uppercase text-muted-foreground">{label}</p>
-                                                                            <p className={cn('font-semibold', highlight && 'text-emerald-600 dark:text-emerald-400')}>
+                                                                        <div className={cn('flex-1 min-w-[64px] rounded-sm border px-2.5 py-2', highlight ? 'border-emerald-500/40 bg-emerald-500/[0.12]' : 'border-[var(--border-inverse)] bg-white/[0.05]')}>
+                                                                            <p className={cn('text-[9.5px] font-bold uppercase tracking-wide', highlight ? 'text-emerald-300' : 'text-on-dark-muted')}>{label}</p>
+                                                                            <p className={cn('font-mono text-[15px] font-bold tabular-nums mt-0.5', highlight ? 'text-emerald-300' : 'text-on-dark')}>
                                                                                 {(eff?.weightKg ?? block.target_weight_kg)}kg
                                                                             </p>
-                                                                            {showBase && <p className="text-[9px] leading-none text-muted-foreground">base {eff!.baseWeightKg}kg</p>}
+                                                                            {showBase && <p className="text-[9px] leading-none text-on-dark-muted mt-0.5">base {eff!.baseWeightKg}kg</p>}
                                                                         </div>
                                                                     )
                                                                 })()}
-                                                                {block.rest_time && <div className="rounded-lg border p-2 text-center"><p className="text-[10px] uppercase text-muted-foreground">Descanso</p><p className="font-semibold">{block.rest_time}</p></div>}
-                                                                {block.tempo && <div className="rounded-lg border p-2 text-center"><p className="text-[10px] uppercase text-muted-foreground">Tempo</p><p className="font-semibold">{block.tempo}</p></div>}
-                                                                {block.rir && <div className="rounded-lg border p-2 text-center"><p className="text-[10px] uppercase text-muted-foreground">RIR</p><p className="font-semibold">{block.rir}</p></div>}
+                                                                {block.rest_time && <div className="flex-1 min-w-[64px] rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-wide text-on-dark-muted">Descanso</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.rest_time}</p></div>}
+                                                                {block.tempo && <div className="flex-1 min-w-[64px] rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-wide text-on-dark-muted">Tempo</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.tempo}</p></div>}
+                                                                {block.rir && <div className="flex-1 min-w-[64px] rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-wide text-on-dark-muted">RIR</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-[var(--sport-300)]">{block.rir}</p></div>}
                                                             </div>
                                                             ) : (
                                                                 <>
@@ -714,13 +713,13 @@ export function WorkoutExecutionClient({
                                                             {/* Sobrecarga progresiva. Para PESO con motor (weekly_linear) muestra el objetivo
                                                                 calculado de la semana; si no, cae al cartel-instrucción (reps, o sin semana). */}
                                                             {effType === 'strength' && block.progression_type && block.progression_value != null && (block.progression_type !== 'weight' || block.target_weight_kg != null) && (
-                                                                <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-sm">
-                                                                    <TrendingUp className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                                                                    <p className="text-emerald-900/85 dark:text-emerald-200/90">
+                                                                <div className="flex items-center gap-2 rounded-sm border border-emerald-500/25 bg-emerald-500/[0.12] px-3 py-2.5 text-sm">
+                                                                    <TrendingUp className="w-4 h-4 shrink-0 text-emerald-300" />
+                                                                    <p className="text-emerald-100/95">
                                                                         {(() => {
                                                                             const v = block.progression_value
                                                                             const S = ({ children }: { children: React.ReactNode }) => (
-                                                                                <span className="font-semibold text-emerald-700 dark:text-emerald-300">{children}</span>
+                                                                                <span className="font-semibold text-emerald-200">{children}</span>
                                                                             )
                                                                             // reps, o modo sin motor → cartel-instrucción simple.
                                                                             if (block.progression_type !== 'weight' || !eff?.modeImplemented) {
@@ -732,52 +731,59 @@ export function WorkoutExecutionClient({
                                                                                 }
                                                                                 if (eff.status === 'progressed') {
                                                                                     return eff.isProgressed ? (
-                                                                                        <><S>Doble progresión · ¡subiste!</S> objetivo <span className="font-bold">{eff.weightKg} kg</span> <span className="text-emerald-700/70 dark:text-emerald-300/70">(base {eff.baseWeightKg})</span></>
+                                                                                        <><S>Doble progresión · ¡subiste!</S> objetivo <span className="font-bold">{eff.weightKg} kg</span> <span className="text-emerald-300/70">(base {eff.baseWeightKg})</span></>
                                                                                     ) : (
-                                                                                        <><S>Doble progresión:</S> objetivo <span className="font-bold">{eff.weightKg} kg</span> <span className="text-emerald-700/70 dark:text-emerald-300/70">(aún por debajo de la base {eff.baseWeightKg})</span></>
+                                                                                        <><S>Doble progresión:</S> objetivo <span className="font-bold">{eff.weightKg} kg</span> <span className="text-emerald-300/70">(aún por debajo de la base {eff.baseWeightKg})</span></>
                                                                                     )
                                                                                 }
                                                                                 return (<><S>Doble progresión:</S> subí <span className="font-bold">+{v} kg</span> cuando completes <span className="font-bold">{eff.repsTopToUnlock} reps</span> en todas las series</>)
                                                                             }
                                                                             // weekly_linear
                                                                             if (eff.isProgressed && currentWeek != null) {
-                                                                                return (<><S>Sobrecarga progresiva · Semana {currentWeek}:</S> objetivo <span className="font-bold">{eff.weightKg} kg</span> <span className="text-emerald-700/70 dark:text-emerald-300/70">(base {eff.baseWeightKg} +{eff.addedKg})</span></>)
+                                                                                return (<><S>Sobrecarga progresiva · Semana {currentWeek}:</S> objetivo <span className="font-bold">{eff.weightKg} kg</span> <span className="text-emerald-300/70">(base {eff.baseWeightKg} +{eff.addedKg})</span></>)
                                                                             }
-                                                                            return (<><S>Sobrecarga progresiva:</S> sube <span className="font-bold">+{v} kg cada semana</span> <span className="text-emerald-700/70 dark:text-emerald-300/70">(esta semana arrancás en la base)</span></>)
+                                                                            return (<><S>Sobrecarga progresiva:</S> sube <span className="font-bold">+{v} kg cada semana</span> <span className="text-emerald-300/70">(esta semana arrancás en la base)</span></>)
                                                                         })()}
                                                                     </p>
                                                                 </div>
                                                             )}
                                                             {effType !== 'strength' && block.instructions && (
-                                                                <div className="rounded-lg border border-primary/25 bg-primary/[0.06] p-2 text-sm">
-                                                                    <p className="font-semibold text-primary">Instrucciones</p>
-                                                                    <p className="text-foreground/85">{block.instructions}</p>
+                                                                <div className="flex gap-2 rounded-sm border border-primary/20 bg-primary/[0.10] px-3 py-2.5 text-sm">
+                                                                    <Info className="w-3.5 h-3.5 shrink-0 text-[var(--sport-300)] mt-0.5" />
+                                                                    <div>
+                                                                        <p className="font-semibold text-[var(--sport-300)]">Instrucciones</p>
+                                                                        <p className="text-on-dark/90">{block.instructions}</p>
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                             {block.notes && (
-                                                                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-sm">
-                                                                    <p className="font-semibold text-amber-700 dark:text-amber-300">Nota del coach</p>
-                                                                    <p className="text-amber-900/80 dark:text-amber-200/90">{block.notes}</p>
+                                                                <div className="flex gap-2 rounded-sm border border-amber-400/30 bg-amber-400/10 px-3 py-2.5 text-sm">
+                                                                    <Quote className="w-3.5 h-3.5 shrink-0 text-amber-300 mt-0.5" />
+                                                                    <div>
+                                                                        <p className="font-semibold text-amber-300">Nota del coach</p>
+                                                                        <p className="text-amber-100/90">{block.notes}</p>
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                             {effType === 'strength' && previousHistory[exercise.id] && previousHistory[exercise.id].length > 0 && (
-                                                                <div className="rounded-lg border border-primary/30 bg-primary/5 p-2">
-                                                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-primary mb-1">
+                                                                <div className="rounded-sm bg-white/[0.04] px-3 py-2.5">
+                                                                    <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-on-dark-muted">
+                                                                        <History className="w-3 h-3 shrink-0" />
                                                                         Sesión anterior ·{' '}
                                                                         {formatRelativeDate(previousHistory[exercise.id][0].date)}
                                                                     </p>
                                                                     <div className="flex flex-wrap gap-1.5">
                                                                         {previousHistory[exercise.id].map((log, idx) => (
-                                                                            <span key={idx} className="text-xs px-2 py-1 rounded bg-background border border-border">
+                                                                            <span key={idx} className="font-mono text-xs px-2 py-1 rounded bg-white/[0.06] border border-[var(--border-inverse)] text-on-dark">
                                                                                 S{idx + 1}: {log.weight_kg ? `${log.weight_kg}kg` : '-'} x {log.reps_done || '-'}
                                                                             </span>
                                                                         ))}
                                                                     </div>
                                                                 </div>
                                                             )}
-                                                            <div className="rounded-xl border border-border p-2">
+                                                            <div className="rounded-card border border-[var(--border-inverse)] bg-white/[0.02] p-2">
                                                                 {effType === 'strength' ? (
-                                                                <div className="grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50">
+                                                                <div className="grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10">
                                                                     <div className="w-4 text-center">Set</div>
                                                                     <div className="text-center">Kg</div>
                                                                     <div className="text-center">Reps</div>
@@ -819,12 +825,12 @@ export function WorkoutExecutionClient({
                     </div>
                 </div>
 
-                <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border/20 bg-background/90 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl">
+                <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[var(--ink-950)]/90 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl">
                     <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
                         <ManualTimerButton defaultTime={'90'} />
                         <button
                             onClick={handleFinish}
-                            className="h-12 px-5 flex items-center gap-2 rounded-xl bg-primary text-primary-foreground font-bold"
+                            className="h-12 px-5 flex items-center gap-2 rounded-control bg-primary text-primary-foreground font-bold transition-transform active:scale-[0.99]"
                         >
                             <CheckCircle2 className="w-4 h-4" />
                             Finalizar entrenamiento
@@ -834,9 +840,9 @@ export function WorkoutExecutionClient({
 
                 {/* Descanso, alarma y auto-timer (tuerca header / footer) */}
                 <Dialog open={showTimerSettings} onOpenChange={setShowTimerSettings}>
-                    <DialogContent className="max-w-sm rounded-3xl p-6 bg-card border-border max-h-[min(90dvh,32rem)] overflow-y-auto">
+                    <DialogContent className="max-w-sm rounded-sheet p-6 bg-card border-border max-h-[min(90dvh,32rem)] overflow-y-auto">
                         <DialogHeader>
-                            <DialogTitle className="text-xl font-bold">Descanso y alarma</DialogTitle>
+                            <DialogTitle className="font-display text-xl font-bold">Descanso y alarma</DialogTitle>
                         </DialogHeader>
                         <WorkoutTimerSettingsPanel
                             autoTimerEnabled={autoTimerEnabled}
@@ -845,7 +851,7 @@ export function WorkoutExecutionClient({
                         <button
                             type="button"
                             onClick={() => setShowTimerSettings(false)}
-                            className="w-full mt-6 py-3 rounded-xl bg-secondary text-secondary-foreground font-bold"
+                            className="w-full mt-6 py-3 rounded-control bg-secondary text-secondary-foreground font-bold"
                         >
                             Cerrar
                         </button>
@@ -868,7 +874,7 @@ export function WorkoutExecutionClient({
                 <Dialog open={showTechnique} onOpenChange={setShowTechnique}>
                     <DialogContent 
                         showCloseButton={false}
-                        className="bg-card border-border rounded-3xl overflow-hidden p-0 max-w-md w-[90vw] max-h-[85dvh] flex flex-col focus:outline-none"
+                        className="bg-card border-border rounded-sheet overflow-hidden p-0 max-w-md w-[90vw] max-h-[85dvh] flex flex-col focus:outline-none"
                     >
                         {(() => {
                             const exercise = selectedExercise
@@ -942,7 +948,7 @@ export function WorkoutExecutionClient({
                         <div className="p-6 pt-6 flex-1 overflow-y-auto custom-scrollbar">
                             <DialogHeader className="mb-4">
                                 <div className="flex items-start justify-between gap-4">
-                                    <DialogTitle className="text-xl font-extrabold text-foreground">{selectedExercise?.name}</DialogTitle>
+                                    <DialogTitle className="font-display text-xl font-extrabold text-foreground">{selectedExercise?.name}</DialogTitle>
                                     <DialogClose className="p-2 -mr-2 -mt-2 rounded-full hover:bg-muted transition-colors shrink-0">
                                         <X className="w-5 h-5 text-muted-foreground" />
                                     </DialogClose>
@@ -968,9 +974,9 @@ export function WorkoutExecutionClient({
                                     ) : (
                                 <p className="text-muted-foreground text-sm">No hay instrucciones detalladas disponibles para este ejercicio.</p>
                             )}
-                            <button 
+                            <button
                                 onClick={() => setShowTechnique(false)}
-                                className="w-full mt-6 py-3 rounded-xl bg-secondary text-secondary-foreground font-bold shrink-0"
+                                className="w-full mt-6 py-3 rounded-control bg-secondary text-secondary-foreground font-bold shrink-0"
                             >
                                 Entendido
                             </button>
