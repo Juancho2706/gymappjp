@@ -1,32 +1,27 @@
-import { ThemeToggle } from '@/components/ThemeToggle'
-import { LandingBrandMark } from '@/components/landing/LandingBrandMark'
+import { AuthBrandPanel } from '@/components/auth/AuthBrandPanel'
 
-/** Metadata por ruta: cada segmento bajo `(auth)` exporta `metadata` en su `layout.tsx`. */
-
+/**
+ * Shell del flujo de acceso (login / registro / recuperación) — transcripción 1:1
+ * de `DesktopAuthShell` (`.dt-auth2`): panel de marca (izq, solo desktop) + columna
+ * del formulario (der). A móvil (< md = 760px) el panel se oculta y queda una sola
+ * columna a pantalla completa — paridad exacta con la app móvil.
+ *
+ * Metadata por ruta: cada segmento bajo `(auth)` exporta `metadata` en su `layout.tsx`.
+ */
 export default function AuthLayout({
     children,
 }: {
     children: React.ReactNode
 }) {
     return (
-        <div className="min-h-dvh bg-background flex flex-col pt-safe">
-            {/* Ambient gradient */}
-            <div
-                className="fixed inset-0 pointer-events-none z-0"
-                aria-hidden="true"
-                style={{
-                    background: 'radial-gradient(ellipse 80% 50% at 50% 0%, rgba(0,122,255,0.08), transparent)',
-                }}
-            />
+        <div className="fixed inset-0 z-50 flex bg-surface-app">
+            <AuthBrandPanel />
 
-            {/*
-              Content — no max-width constraint here; each child sets its own.
-              Coach login uses a full-width split layout; other pages use max-w-md.
-            */}
-            <div className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6">
+            {/* Columna del formulario — a móvil ocupa todo el ancho; en desktop es la
+               banda fija de 480px del diseño. Scrollea internamente. */}
+            <div className="relative flex w-full flex-col items-center overflow-y-auto px-6 pb-12 pt-14 md:w-[480px] md:flex-none md:px-10">
                 {children}
             </div>
         </div>
     )
 }
-

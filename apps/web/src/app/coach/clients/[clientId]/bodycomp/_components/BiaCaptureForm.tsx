@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { BodyCompositionCreateSchema } from '@eva/schemas/bodycomp'
 import { saveBodyCompositionAction } from '../_actions/body-composition.actions'
 
@@ -131,7 +132,16 @@ export function BiaCaptureForm({
     }
 
     return (
-        <Card className="p-4 md:p-5">
+        <Card padding="md">
+            {/* Header del form — espejo del BiaCapture del kit (título + rol) */}
+            <div className="mb-4 flex items-center justify-between gap-2">
+                <span className="font-display text-base font-extrabold text-strong">
+                    Nueva medición · BIA
+                </span>
+                <Badge tone="neutral" variant="soft" size="sm">
+                    Entrenador
+                </Badge>
+            </div>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div>
@@ -158,7 +168,7 @@ export function BiaCaptureForm({
                             <Label htmlFor={`bia-${f.name}`}>{f.label}</Label>
                             <Input id={`bia-${f.name}`} inputMode="decimal" {...register(f.name)} />
                             {errors[f.name] && (
-                                <p className="mt-1 text-[11px] text-rose-500">Valor inválido</p>
+                                <p className="mt-1 text-[11px] text-[var(--danger-600)]">Valor inválido</p>
                             )}
                         </div>
                     ))}
@@ -169,7 +179,9 @@ export function BiaCaptureForm({
                     <Input id="bia-notes" {...register('notes')} />
                 </div>
 
-                {serverError && <p className="text-xs font-semibold text-rose-500">{serverError}</p>}
+                {serverError && (
+                    <p className="text-xs font-semibold text-[var(--danger-600)]">{serverError}</p>
+                )}
 
                 <Button type="submit" disabled={pending} className="min-h-11 w-full sm:w-auto">
                     {pending ? 'Guardando…' : 'Guardar medición BIA'}

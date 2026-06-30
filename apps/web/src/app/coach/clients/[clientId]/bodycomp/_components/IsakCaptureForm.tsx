@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { computeIsak } from '@/domain/bodycomp'
 import {
@@ -155,7 +156,7 @@ export function IsakCaptureForm({
             {fields.map((f) => (
                 <div key={f.name}>
                     <Label htmlFor={`isak-${f.name}`} className="text-xs">
-                        {f.label} <span className="text-muted-foreground">({unit})</span>
+                        {f.label} <span className="text-muted">({unit})</span>
                     </Label>
                     <Input id={`isak-${f.name}`} inputMode="decimal" {...register(f.name)} />
                 </div>
@@ -164,7 +165,17 @@ export function IsakCaptureForm({
     )
 
     return (
-        <Card className="p-4 md:p-5">
+        <Card padding="md">
+            {/* Header del form — espejo del IsakCapture del kit (título de paso + rol) */}
+            <div className="mb-4 flex items-center justify-between gap-2">
+                <span className="font-display text-base font-extrabold text-strong">
+                    Nueva ISAK · {STEPS[step]}
+                </span>
+                <Badge tone="success" variant="soft" size="sm">
+                    Nutri
+                </Badge>
+            </div>
+
             {/* Stepper */}
             <div className="mb-4 flex flex-wrap gap-1.5">
                 {STEPS.map((label, i) => (
@@ -173,10 +184,10 @@ export function IsakCaptureForm({
                         type="button"
                         onClick={() => goStep(i)}
                         className={cn(
-                            'min-h-11 rounded-xl px-3 py-2 text-[11px] font-bold transition-colors',
+                            'min-h-9 rounded-pill px-3.5 text-[11px] font-bold transition-colors',
                             i === step
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-secondary/40 text-muted-foreground hover:bg-secondary/60'
+                                ? 'bg-[var(--ink-950)] text-white'
+                                : 'bg-surface-sunken text-muted hover:text-strong'
                         )}
                     >
                         {i + 1}. {label}
@@ -194,7 +205,7 @@ export function IsakCaptureForm({
                                     id="isak-sex"
                                     value={sex}
                                     onChange={(e) => setSex(e.target.value as 'male' | 'female')}
-                                    className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground"
+                                    className="h-10 w-full rounded-control border-[1.5px] border-default bg-surface-card px-3 text-sm text-strong"
                                 >
                                     <option value="male">Masculino</option>
                                     <option value="female">Femenino</option>
@@ -217,7 +228,7 @@ export function IsakCaptureForm({
                                 <Input id="isak-sittingHeightCm" inputMode="decimal" {...register('sittingHeightCm')} />
                             </div>
                         </div>
-                        <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.06em] text-muted">
                             Pliegues (mm)
                         </p>
                         {fieldGrid(SKINFOLDS, 'mm')}
@@ -235,7 +246,7 @@ export function IsakCaptureForm({
                                 id="isak-equation"
                                 value={equation}
                                 onChange={(e) => setEquation(e.target.value as BodyFatEquationDto)}
-                                className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground sm:w-72"
+                                className="h-10 w-full rounded-control border-[1.5px] border-default bg-surface-card px-3 text-sm text-strong sm:w-72"
                             >
                                 <option value="durnin_womersley">Durnin-Womersley (general)</option>
                                 <option value="yuhasz">Yuhasz (atletas)</option>
@@ -246,14 +257,16 @@ export function IsakCaptureForm({
                         {previewView ? (
                             <IsakResultCard view={previewView} isValidated={false} title="Vista previa" />
                         ) : (
-                            <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-700 dark:text-amber-300">
+                            <p className="rounded-control bg-[var(--warning-100)] px-3 py-2.5 text-xs text-[var(--warning-700)]">
                                 Completa todas las medidas para ver el cálculo. Faltan datos o hay valores fuera de rango.
                             </p>
                         )}
                     </div>
                 )}
 
-                {serverError && <p className="text-xs font-semibold text-rose-500">{serverError}</p>}
+                {serverError && (
+                    <p className="text-xs font-semibold text-[var(--danger-600)]">{serverError}</p>
+                )}
 
                 <div className="flex items-center justify-between gap-2">
                     <Button

@@ -492,6 +492,7 @@
     "assessment.evolution.last": "Última",
     "assessment.evolution.needTwo": "Con dos o más evaluaciones finales verás aquí la evolución.",
     "assessment.hub.subtitle": "Evaluación de ingreso de 7 patrones con semáforo de prioridad y evolución.",
+    "assessment.hub.hint": "Toca un alumno para ver su reporte o iniciar una evaluación.",
     "assessment.hub.evaluate": "Evaluar",
     "assessment.hub.resume": "Retomar",
     "assessment.hub.viewReport": "Ver reporte",

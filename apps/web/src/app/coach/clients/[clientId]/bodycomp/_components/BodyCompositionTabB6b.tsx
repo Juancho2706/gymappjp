@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Plus, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
 import { BiaCaptureForm } from './BiaCaptureForm'
 import { IsakCaptureForm } from './IsakCaptureForm'
@@ -34,61 +35,61 @@ export function BodyCompositionTabB6b({
 
     return (
         <div className="mx-auto w-full max-w-3xl space-y-4">
+            {/* Header — espejo del TopBar del kit (back · título+subtítulo · badge Módulo) */}
             <div className="flex items-center gap-3">
                 <Link
                     href={`/coach/clients/${clientId}`}
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-border/40 text-muted-foreground hover:text-foreground dark:border-white/10"
+                    className="inline-flex size-10 shrink-0 items-center justify-center rounded-control border-[1.5px] border-default bg-surface-card text-muted transition-colors hover:text-strong"
                     aria-label="Volver a la ficha"
                 >
-                    <ArrowLeft className="h-5 w-5" />
+                    <ArrowLeft className="size-5" />
                 </Link>
-                <h1 className="text-lg font-black tracking-tight text-foreground">Composición corporal</h1>
+                <div className="min-w-0 flex-1">
+                    <h1 className="font-display text-xl font-extrabold tracking-[-0.02em] text-strong">
+                        Composición corporal
+                    </h1>
+                    <p className="text-[12.5px] text-muted">Módulo · captura</p>
+                </div>
+                <Badge tone="sport" variant="soft" size="sm">
+                    Módulo
+                </Badge>
             </div>
 
-            {/* Sub-pestanas por metodo (segmented). Cambiar de metodo cierra el form de captura. */}
-            <div className="flex gap-1.5 rounded-2xl bg-secondary/30 p-1.5">
-                {([
-                    { key: 'bia', label: 'Bioimpedancia', sub: 'Entrenador' },
-                    { key: 'isak', label: 'Antropometría', sub: 'Nutri' },
-                ] as const).map((t) => (
-                    <button
-                        key={t.key}
-                        type="button"
-                        onClick={() => {
-                            setMethod(t.key)
-                            setCapturing(false)
-                        }}
-                        className={cn(
-                            'flex min-h-12 flex-1 flex-col items-center justify-center rounded-xl px-3 py-2 text-sm font-bold transition-colors',
-                            method === t.key
-                                ? 'bg-background text-foreground shadow-sm'
-                                : 'text-muted-foreground hover:text-foreground'
-                        )}
-                    >
-                        <span>{t.label}</span>
-                        <span className="text-[10px] font-semibold text-muted-foreground">{t.sub}</span>
-                    </button>
-                ))}
-            </div>
+            {/* Método (segmented DS). Cambiar de método cierra el form de captura. La distinción
+                entrenador/nutri vive en el header de cada form de captura (espejo del kit). */}
+            <SegmentedControl
+                options={[
+                    { value: 'bia', label: 'Bioimpedancia' },
+                    { value: 'isak', label: 'Antropometría' },
+                ]}
+                value={method}
+                onChange={(v) => {
+                    setMethod(v as Method)
+                    setCapturing(false)
+                }}
+            />
 
-            <div className="flex justify-end">
-                <Button
-                    type="button"
-                    variant={capturing ? 'ghost' : 'default'}
-                    className="min-h-11"
-                    onClick={() => setCapturing((v) => !v)}
-                >
-                    {capturing ? (
-                        <>
-                            <X className="mr-1.5 h-4 w-4" /> Cancelar
-                        </>
-                    ) : (
-                        <>
-                            <Plus className="mr-1.5 h-4 w-4" /> Nueva medición
-                        </>
-                    )}
-                </Button>
-            </div>
+            {/* Toggle de captura — sport (abrir) / secondary (cancelar), fullWidth (kit) */}
+            <button
+                type="button"
+                onClick={() => setCapturing((v) => !v)}
+                className={cn(
+                    'flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control text-sm font-bold transition-colors',
+                    capturing
+                        ? 'border-[1.5px] border-default bg-surface-card text-strong hover:bg-surface-sunken'
+                        : 'bg-[var(--cta-fill)] text-[color:var(--text-on-sport)] hover:opacity-90'
+                )}
+            >
+                {capturing ? (
+                    <>
+                        <X className="size-4" /> Cancelar
+                    </>
+                ) : (
+                    <>
+                        <Plus className="size-4" /> Nueva medición
+                    </>
+                )}
+            </button>
 
             {capturing &&
                 (method === 'bia' ? (

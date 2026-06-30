@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ChevronRight, ClipboardList } from 'lucide-react'
+import { ChevronRight, ClipboardCheck, ClipboardList } from 'lucide-react'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import type { MovementHubData } from '@/services/assessment/movement-assessment.service'
 import { Card } from '@/components/ui/card'
@@ -33,6 +33,14 @@ export function MovementHubList({ data }: { data: MovementHubData }) {
                     {t('assessment.hub.empty')}
                 </Card>
             ) : (
+                <>
+                {/* Pista de uso — espejo del info strip del kit (MovementHub) */}
+                <div className="mb-3.5 flex items-center gap-2.5 rounded-control bg-surface-sunken px-3.5 py-2.5">
+                    <ClipboardCheck className="size-[15px] shrink-0 text-subtle" aria-hidden />
+                    <span className="flex-1 text-xs leading-snug text-muted">
+                        {t('assessment.hub.hint')}
+                    </span>
+                </div>
                 <Card padding="none">
                     {data.clients.map((c, i) => (
                         <div
@@ -87,6 +95,7 @@ export function MovementHubList({ data }: { data: MovementHubData }) {
                         </div>
                     ))}
                 </Card>
+                </>
             )}
 
             <MovementDisclaimer className="mt-5" />

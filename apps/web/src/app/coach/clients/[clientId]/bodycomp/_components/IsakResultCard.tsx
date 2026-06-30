@@ -1,6 +1,7 @@
 'use client'
 
 import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { IsakMetricsView } from '@/lib/bodycomp/view-helpers'
 import { formatKg, formatPct } from '@/lib/bodycomp/view-helpers'
@@ -30,15 +31,15 @@ export function IsakResultCard({
     const { fractionation: f, somatotype: s, bodyFat } = view
 
     return (
-        <Card className="p-4 md:p-5">
+        <Card padding="md">
             <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground">
+                <h3 className="text-[11px] font-bold uppercase tracking-[0.06em] text-muted">
                     {title}
                 </h3>
                 {!isValidated && (
-                    <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    <Badge tone="warning" variant="soft" size="sm">
                         Preliminar
-                    </span>
+                    </Badge>
                 )}
             </div>
 
@@ -47,30 +48,28 @@ export function IsakResultCard({
                 {COMPONENT_LABELS.map(({ key, label }) => {
                     const comp = f[key] as { kg: number; pct: number }
                     return (
-                        <div
-                            key={key}
-                            className="rounded-xl border border-border/40 bg-secondary/20 px-3 py-2.5"
-                        >
-                            <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                        <div key={key} className="rounded-control bg-surface-sunken px-3 py-2.5">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.06em] text-muted">
                                 {label}
                             </p>
-                            <p className="mt-0.5 text-base font-black tabular-nums text-foreground">
+                            <p className="mt-0.5 font-display text-base font-black tabular-nums text-strong">
                                 {formatKg(comp.kg)}
                             </p>
-                            <p className="text-[10px] font-semibold text-muted-foreground">
-                                {formatPct(comp.pct)}
-                            </p>
+                            <p className="text-[10px] font-semibold text-muted">{formatPct(comp.pct)}</p>
                         </div>
                     )
                 })}
             </div>
 
             {/* Validez interna del fraccionamiento (Σ masas vs peso medido) */}
-            <p className="mt-2 text-[10px] text-muted-foreground">
+            <p className="mt-2 text-[10px] text-muted">
                 Σ masas {formatKg(f.predictedMassKg)} · peso {formatKg(f.measuredWeightKg)} · Δ{' '}
                 <span
                     className={cn(
-                        Math.abs(f.massDifferenceKg) <= 3 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'
+                        'font-bold',
+                        Math.abs(f.massDifferenceKg) <= 3
+                            ? 'text-[var(--success-600)]'
+                            : 'text-[var(--warning-700)]'
                     )}
                 >
                     {f.massDifferenceKg > 0 ? '+' : ''}
@@ -80,23 +79,23 @@ export function IsakResultCard({
 
             {/* Somatotipo + % grasa */}
             <div className="mt-3 grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-border/40 bg-secondary/20 px-3 py-2.5">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                <div className="rounded-control bg-surface-sunken px-3 py-2.5">
+                    <p className="text-[9px] font-bold uppercase tracking-[0.06em] text-muted">
                         Somatotipo
                     </p>
-                    <p className="mt-0.5 text-sm font-black tabular-nums text-foreground">
+                    <p className="mt-0.5 font-display text-sm font-black tabular-nums text-strong">
                         {s.endomorphy.toFixed(1)} – {s.mesomorphy.toFixed(1)} – {s.ectomorphy.toFixed(1)}
                     </p>
-                    <p className="text-[9px] font-semibold text-muted-foreground">Endo – Meso – Ecto</p>
+                    <p className="text-[9px] font-semibold text-muted">Endo – Meso – Ecto</p>
                 </div>
-                <div className="rounded-xl border border-border/40 bg-secondary/20 px-3 py-2.5">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                <div className="rounded-control bg-surface-sunken px-3 py-2.5">
+                    <p className="text-[9px] font-bold uppercase tracking-[0.06em] text-muted">
                         % Grasa {!isValidated && '(prelim.)'}
                     </p>
-                    <p className="mt-0.5 text-lg font-black tabular-nums text-foreground">
+                    <p className="mt-0.5 font-display text-lg font-black tabular-nums text-strong">
                         {formatPct(bodyFat.percent)}
                     </p>
-                    <p className="text-[9px] font-semibold text-muted-foreground">{bodyFat.equation}</p>
+                    <p className="text-[9px] font-semibold text-muted">{bodyFat.equation}</p>
                 </div>
             </div>
         </Card>

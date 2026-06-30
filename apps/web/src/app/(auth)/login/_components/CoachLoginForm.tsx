@@ -46,54 +46,61 @@ export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: Coac
     const displayError = state?.error || urlError
 
     return (
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
-            <AuthFormField
-                id="email"
-                label="Email"
-                type="email"
-                placeholder="coach@ejemplo.com"
-                autoComplete="email"
-                error={errors.email?.message}
-                variant="coach"
-                leadingIcon={<Mail className="h-4 w-4" />}
-                {...register('email')}
-            />
+        <form onSubmit={handleSubmit(onSubmit)} noValidate>
+            <div className="flex flex-col gap-[14px]">
+                <AuthFormField
+                    id="email"
+                    label="Email"
+                    type="email"
+                    placeholder="coach@eva.app"
+                    autoComplete="email"
+                    error={errors.email?.message}
+                    variant="coach"
+                    leadingIcon={<Mail className="h-4 w-4" />}
+                    {...register('email')}
+                />
 
-            <PasswordInput
-                id="password"
-                label="Contraseña"
-                labelEnd={
+                <PasswordInput
+                    id="password"
+                    label="Contraseña"
+                    placeholder="Tu contraseña"
+                    error={errors.password?.message}
+                    variant="coach"
+                    {...register('password')}
+                />
+
+                <div className="text-right">
                     <Link
                         href="/forgot-password"
-                        className="text-xs font-semibold text-sport-600 hover:opacity-80 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] rounded"
+                        className="rounded text-[13px] font-bold text-sport-600 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
                     >
                         ¿Olvidaste tu contraseña?
                     </Link>
-                }
-                placeholder="••••••••"
-                error={errors.password?.message}
-                variant="coach"
-                {...register('password')}
-            />
+                </div>
+            </div>
 
             {showCaptcha && (
-                <CaptchaSlot siteKey={turnstileSiteKey} theme="light" />
+                <div className="mt-4">
+                    <CaptchaSlot siteKey={turnstileSiteKey} theme="light" />
+                </div>
             )}
 
             {displayError && (
-                <AuthErrorAlert message={displayError} variant="coach" />
+                <div className="mt-4">
+                    <AuthErrorAlert message={displayError} variant="coach" />
+                </div>
             )}
 
-            <div className="pt-1">
+            <div className="mt-[22px]">
                 <AuthSubmitButton
                     label="Entrar como coach"
                     pendingLabel="Iniciando sesión..."
                     variant="coach"
-                    leadingIcon={<ArrowRight className="h-4 w-4" />}
+                    trailingIcon={<ArrowRight className="h-4 w-4" />}
                 />
             </div>
 
-            <div className="mt-6 flex items-center gap-3">
+            <div className="my-6 flex items-center gap-3">
                 <div className="flex-1 h-px bg-border-subtle" />
                 <span className="text-xs font-semibold text-text-subtle">o</span>
                 <div className="flex-1 h-px bg-border-subtle" />
@@ -118,7 +125,7 @@ export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: Coac
                 Continuar con Google
             </button>
 
-            <div className="pt-4 text-center text-sm text-text-muted">
+            <div className="pt-6 text-center text-sm text-text-muted">
                 ¿No tenés cuenta?{' '}
                 <Link
                     href="/register"

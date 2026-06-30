@@ -72,7 +72,7 @@ function ExerciseCard({ ex, onSelect }: { ex: Exercise; onSelect: () => void }) 
     }
 
     return (
-      <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-white/10 text-white">
+      <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-white/10 text-white transition-colors group-hover/card:bg-sport-500 md:h-[42px] md:w-[42px]">
         <Play className="h-[17px] w-[17px]" />
       </span>
     );
@@ -83,18 +83,18 @@ function ExerciseCard({ ex, onSelect }: { ex: Exercise; onSelect: () => void }) 
       onClick={onSelect}
       className="group/card cursor-pointer overflow-hidden rounded-card border border-subtle bg-surface-card shadow-sm transition-[transform,box-shadow] duration-150 ease-[cubic-bezier(.22,1,.36,1)] hover:-translate-y-px hover:shadow-md active:scale-[0.98]"
     >
-      <div className="relative flex h-24 items-center justify-center overflow-hidden bg-gradient-to-br from-[#1B2129] to-[#0B0E13]">
+      <div className="relative flex h-24 items-center justify-center overflow-hidden bg-gradient-to-br from-[#1B2129] to-[#0B0E13] md:h-[116px]">
         {renderThumb()}
-        <span className="absolute bottom-1.5 left-1.5 rounded-[5px] bg-black/40 px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.05em] text-sport-300">
+        <span className="absolute bottom-1.5 left-1.5 rounded-[5px] bg-black/40 px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.05em] text-sport-300 md:bottom-2 md:left-2">
           {ex.muscle_group}
         </span>
       </div>
       <div className="p-3">
-        <h3 className="line-clamp-2 text-[13.5px] font-bold leading-tight text-strong">
+        <h3 className="line-clamp-2 text-[13.5px] font-bold leading-tight text-strong md:text-sm">
           {ex.name}
         </h3>
         {ex.equipment && (
-          <p className="mt-0.5 text-[11.5px] text-muted">{ex.equipment}</p>
+          <p className="mt-0.5 text-[11.5px] text-muted md:text-xs">{ex.equipment}</p>
         )}
       </div>
     </div>
@@ -152,16 +152,18 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
 
   return (
     <div className="space-y-5">
-      {/* Filters */}
-      <div className="space-y-3">
-        <Input
-          iconLeft={<Search className="h-5 w-5" />}
-          placeholder="Buscar ejercicio…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Filters — móvil: search + chips apilados; desktop: barra inline (.dt-aprender-bar) */}
+      <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:gap-4">
+        <div className="md:max-w-[360px] md:flex-1">
+          <Input
+            iconLeft={<Search className="h-5 w-5" />}
+            placeholder="Buscar ejercicio…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
 
-        <div className="hide-scrollbar flex snap-x gap-2 overflow-x-auto pb-1">
+        <div className="hide-scrollbar flex snap-x gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
           {muscleGroups.map((m) => {
             const on = selectedMuscle === m;
             return (
@@ -191,7 +193,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 md:gap-4 md:[grid-template-columns:repeat(auto-fill,minmax(200px,1fr))]">
           {displayed.map((ex) => (
             <ExerciseCard
               key={ex.id}
@@ -223,7 +225,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
       >
         <DialogContent
           showCloseButton={false}
-          className="custom-scrollbar bottom-0 left-0 top-auto w-full max-w-full translate-x-0 translate-y-0 flex flex-col overflow-y-auto rounded-t-[28px] rounded-b-none border-subtle bg-surface-card p-0 max-h-[85dvh] focus:outline-none md:bottom-auto md:left-1/2 md:top-1/2 md:w-[90vw] md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[28px]"
+          className="custom-scrollbar bottom-0 left-0 top-auto w-full max-w-full translate-x-0 translate-y-0 flex flex-col overflow-y-auto rounded-t-[28px] rounded-b-none border-subtle bg-surface-card p-0 max-h-[85dvh] focus:outline-none md:bottom-auto md:left-1/2 md:top-1/2 md:w-[90vw] md:max-w-[600px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[28px]"
         >
           {selectedExercise && (
             <>

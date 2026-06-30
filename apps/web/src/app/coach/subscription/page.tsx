@@ -599,7 +599,7 @@ export default function CoachSubscriptionPage() {
 
             {/* Plan actual — tarjeta inversa (diseño Suscripcion.jsx) */}
             {coach ? (
-                <section style={{ background: 'var(--surface-inverse)' }} className="mb-3.5 rounded-card p-5">
+                <section style={{ background: 'var(--surface-inverse)' }} className="mb-3.5 rounded-card border border-[var(--border-inverse)] p-5 shadow-md">
                     {(() => {
                         // Un tier desconocido (ni venta ni legacy) NO colapsa a 'starter' (mentiría con su label).
                         const isKnownTier = coach.subscription_tier in TIER_CONFIG
@@ -640,7 +640,7 @@ export default function CoachSubscriptionPage() {
 
                                 {/* Desglose (base + módulos + cupón) — la UI NUNCA calcula precios, viene del endpoint */}
                                 {coach.subscription_status === 'active' && billing && (
-                                    <div className="mt-3.5 flex flex-col gap-1.5 border-t border-white/10 pt-3.5">
+                                    <div className="mt-3.5 flex flex-col gap-1.5 border-t border-[var(--border-inverse)] pt-3.5">
                                         <div className="flex justify-between text-[13px]">
                                             <span className="text-on-dark-muted">Plan {tierLabel}</span>
                                             <span className="eva-mono font-semibold text-on-dark">${billing.baseClp.toLocaleString('es-CL')}</span>

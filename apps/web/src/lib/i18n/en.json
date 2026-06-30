@@ -492,6 +492,7 @@
     "assessment.evolution.last": "Latest",
     "assessment.evolution.needTwo": "With two or more final assessments you will see the evolution here.",
     "assessment.hub.subtitle": "7-pattern intake assessment with priority traffic light and evolution.",
+    "assessment.hub.hint": "Tap a client to view their report or start an assessment.",
     "assessment.hub.evaluate": "Assess",
     "assessment.hub.resume": "Resume",
     "assessment.hub.viewReport": "View report",

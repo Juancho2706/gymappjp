@@ -32,8 +32,9 @@ export default async function ClientExercisesPage({ params }: Props) {
   }, {} as Record<string, any[]>);
 
   return (
-    <div className="min-h-dvh bg-surface-app pb-32">
-      <header className="sticky top-0 z-40 flex items-center gap-[11px] border-b border-subtle px-4 py-4 pt-safe backdrop-blur-xl md:px-8 bg-[color-mix(in_srgb,var(--surface-app)_80%,transparent)]">
+    <div className="min-h-dvh bg-surface-app pb-32 md:pb-0">
+      {/* Móvil (<760): header sticky branded — pantalla alumno verbatim */}
+      <header className="sticky top-0 z-40 flex items-center gap-[11px] border-b border-subtle px-4 py-4 pt-safe backdrop-blur-xl md:hidden bg-[color-mix(in_srgb,var(--surface-app)_80%,transparent)]">
         <div className="flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center rounded-control bg-sport-100 text-sport-600">
           <Dumbbell className="h-5 w-5" />
         </div>
@@ -47,7 +48,17 @@ export default async function ClientExercisesPage({ params }: Props) {
         </div>
       </header>
 
-      <main className="px-4 py-6 md:px-8 max-w-5xl mx-auto relative z-0">
+      <main className="relative z-0 mx-auto w-full max-w-[1240px] px-4 py-6 md:px-8 md:pt-7 md:pb-11">
+        {/* Desktop (>=760): cabecera DesktopAprender — eyebrow + título grande */}
+        <div className="mb-[22px] hidden md:block">
+          <div className="text-[12px] font-bold tracking-[0.03em] text-muted">
+            Biblioteca de técnica
+          </div>
+          <h1 className="mt-[3px] font-display text-[30px] font-black tracking-[-0.03em] text-strong">
+            Aprender
+          </h1>
+        </div>
+
         <ClientExerciseCatalog
           byMuscle={byMuscle}
           primaryColor={coachBranding?.primary_color || "var(--theme-primary)"}

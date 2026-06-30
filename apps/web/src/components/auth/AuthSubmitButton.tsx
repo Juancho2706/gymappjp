@@ -12,6 +12,7 @@ interface AuthSubmitButtonProps
     pendingLabel?: string
     variant?: AuthVariant
     leadingIcon?: React.ReactNode
+    trailingIcon?: React.ReactNode
 }
 
 export function AuthSubmitButton({
@@ -19,6 +20,7 @@ export function AuthSubmitButton({
     pendingLabel,
     variant = 'coach',
     leadingIcon,
+    trailingIcon,
     className,
     ...props
 }: AuthSubmitButtonProps) {
@@ -58,6 +60,7 @@ export function AuthSubmitButton({
                 <>
                     {leadingIcon}
                     {label}
+                    {trailingIcon}
                 </>
             )}
         </button>
