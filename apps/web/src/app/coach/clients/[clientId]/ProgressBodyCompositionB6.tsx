@@ -1,20 +1,8 @@
 'use client'
 
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import Image from 'next/image'
 import { format, subDays } from 'date-fns'
-import {
-    Area,
-    AreaChart,
-    CartesianGrid,
-    ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis,
-    RadialBarChart,
-    RadialBar,
-    PolarAngleAxis,
-} from 'recharts'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -24,15 +12,13 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { PhotoComparisonSlider } from '@/components/coach/PhotoComparisonSlider'
-import { cn } from '@/lib/utils'
 import {
     avgEnergySince,
     bmiCategory,
     bmiFromMetric,
-    energyColor,
     linearRegressionKgPerDay,
 } from './profileBodyCompositionUtils'
-import { Scale, TrendingDown, TrendingUp, Minus, Camera, ArrowRightLeft } from 'lucide-react'
+import { Scale, Star, Images } from 'lucide-react'
 
 export type BodyCompCheckInRow = {
     id: string
@@ -46,6 +32,11 @@ export type BodyCompCheckInRow = {
 type ProgressBodyCompositionB6Props = {
     checkIns: BodyCompCheckInRow[]
     heightCm: number | null | undefined
+    /** Peso objetivo del alumno (clients.goal_weight_kg). Dibuja la línea punteada
+     *  + leyenda en la curva de peso. El editor vive en el dashboard padre. */
+    goalWeight?: number | null
+    // Props de color heredados (recharts) — la curva ahora es SVG nativo del diseño
+    // nuevo, pero se conservan en el contrato para no romper el call site del padre.
     chartGridColor: string
     chartAxisColor: string
     tooltipBgColor: string
@@ -53,65 +44,85 @@ type ProgressBodyCompositionB6Props = {
     tooltipTextColor: string
 }
 
-function EnergyStars({ level }: { level: number | null | undefined }) {
-    const stars = Math.min(5, Math.max(0, Math.round((level ?? 0) / 2)))
+/* ---- Section heading (diseño nuevo: font-display 800 · 17px · -0.02em) ---- */
+function SectionTitle({ children, style }: { children: ReactNode; style?: CSSProperties }) {
     return (
-        <span className="inline-flex gap-0.5" aria-label={`Energía ${level ?? 0} de 10`}>
-            {[1, 2, 3, 4, 5].map((i) => (
-                <span
-                    key={i}
-                    className={cn(
-                        'text-xs leading-none',
-                        i <= stars ? 'text-amber-400' : 'text-muted-foreground/25'
-                    )}
-                >
-                    ★
-                </span>
-            ))}
+        <h3
+            className="font-display font-extrabold tracking-[-0.02em] text-strong"
+            style={{ fontSize: 17, margin: '4px 0 10px', ...style }}
+        >
+            {children}
+        </h3>
+    )
+}
+
+/* ---- Estrellas de energía (ember rellenas / ink-200 vacías) ---- */
+function EnergyStars({ level }: { level: number | null | undefined }) {
+    const filled = Math.min(5, Math.max(0, Math.round((level ?? 0) / 2)))
+    return (
+        <span className="inline-flex items-center gap-0.5" aria-label={`Energía ${level ?? 0} de 10`}>
+            {[1, 2, 3, 4, 5].map((k) => {
+                const on = k <= filled
+                return (
+                    <Star
+                        key={k}
+                        className="h-[13px] w-[13px]"
+                        style={{
+                            color: on ? 'var(--ember-500)' : 'var(--ink-200)',
+                            fill: on ? 'var(--ember-500)' : 'transparent',
+                        }}
+                    />
+                )
+            })}
         </span>
     )
 }
 
-function StatBlock({
-    label,
-    value,
-    sub,
-    trend,
-}: {
-    label: string
-    value: string
-    sub?: string
-    trend?: 'up' | 'down' | 'flat'
-}) {
+/* ---- Gauge semicircular (transcrito verbatim del diseño) ---- */
+function Gauge({ pct, color }: { pct: number; color: string }) {
+    const r = 34
+    const c = Math.PI * r
+    const off = c * (1 - pct / 100)
     return (
-        <div className="rounded-xl border border-border/40 bg-secondary/20 px-3 py-3">
-            <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
-                {label}
-            </p>
-            <div className="mt-1 flex items-center gap-1.5">
-                {trend === 'up' && <TrendingUp className="h-4 w-4 text-emerald-500" />}
-                {trend === 'down' && <TrendingDown className="h-4 w-4 text-rose-500" />}
-                {trend === 'flat' && <Minus className="h-4 w-4 text-muted-foreground" />}
-                <span className="text-lg font-black tabular-nums text-foreground">{value}</span>
-            </div>
-            {sub ? (
-                <p className="mt-0.5 text-[9px] font-semibold text-muted-foreground">{sub}</p>
-            ) : null}
-        </div>
+        <svg viewBox="0 0 80 46" style={{ width: 100, height: 58 }}>
+            <path
+                d="M 6 40 A 34 34 0 0 1 74 40"
+                fill="none"
+                stroke="var(--surface-sunken)"
+                strokeWidth="8"
+                strokeLinecap="round"
+            />
+            <path
+                d="M 6 40 A 34 34 0 0 1 74 40"
+                fill="none"
+                stroke={color}
+                strokeWidth="8"
+                strokeLinecap="round"
+                strokeDasharray={c}
+                strokeDashoffset={off}
+            />
+        </svg>
     )
+}
+
+const pgSel: CSSProperties = {
+    width: '100%',
+    height: 38,
+    padding: '0 10px',
+    borderRadius: 'var(--radius-sm)',
+    border: '1.5px solid var(--border-default)',
+    background: 'var(--surface-card)',
+    fontSize: 13,
+    color: 'var(--text-strong)',
+    fontFamily: 'var(--font-ui)',
 }
 
 export function ProgressBodyCompositionB6({
     checkIns,
     heightCm,
-    chartGridColor,
-    chartAxisColor,
-    tooltipBgColor,
-    tooltipBorderColor,
-    tooltipTextColor,
+    goalWeight,
 }: ProgressBodyCompositionB6Props) {
-    const gradId = useId().replace(/:/g, '')
-    const [dotDetail, setDotDetail] = useState<Record<string, unknown> | null>(null)
+    const [dotDetail, setDotDetail] = useState<BodyCompCheckInRow | null>(null)
     const [compareOpen, setCompareOpen] = useState(false)
     const [baseId, setBaseId] = useState<string>('')
     const [compareToId, setCompareToId] = useState<string>('')
@@ -131,20 +142,22 @@ export function ProgressBodyCompositionB6({
         [sortedAsc]
     )
 
-    const chartData = useMemo(
+    // ---- Geometría SVG de la curva de peso (normalización 0–100 del diseño) ----
+    const weights = useMemo(() => withWeight.map((c) => Number(c.weight)), [withWeight])
+    const n = weights.length
+    const mn = n ? Math.min(...weights) : 0
+    const mx = n ? Math.max(...weights) : 0
+    const span = mx - mn || 1
+    const coords = useMemo(
         () =>
-            withWeight.map((c) => ({
-                id: c.id,
-                date: format(new Date(c.created_at), 'd MMM'),
-                dateIso: format(new Date(c.created_at), 'yyyy-MM-dd'),
-                weight: Number(c.weight),
-                energia: c.energy_level ?? null,
-                notes: c.notes ?? '',
-                photo: c.front_photo_url ?? null,
-                created_at: c.created_at,
+            withWeight.map((c, i) => ({
+                x: n > 1 ? (i / (n - 1)) * 100 : 50,
+                y: 100 - ((Number(c.weight) - mn) / span) * 82 - 9,
+                ci: c,
             })),
-        [withWeight]
+        [withWeight, n, mn, span]
     )
+    const pts = coords.map((p) => `${p.x},${p.y}`).join(' ')
 
     const firstW = withWeight[0]
     const lastW = withWeight[withWeight.length - 1]
@@ -153,21 +166,52 @@ export function ProgressBodyCompositionB6({
     const totalDelta =
         firstWeight != null && lastWeight != null ? lastWeight - firstWeight : null
 
+    // Variación de los últimos ~7 días (peso actual vs check-in de hace ≥7 días).
+    const delta7d = useMemo(() => {
+        if (withWeight.length < 2 || lastW?.weight == null) return null
+        const lastT = new Date(lastW.created_at).getTime()
+        const sevenAgo = lastT - 7 * 86_400_000
+        let baseline: BodyCompCheckInRow | undefined
+        for (let i = withWeight.length - 1; i >= 0; i--) {
+            if (new Date(withWeight[i]!.created_at).getTime() <= sevenAgo) {
+                baseline = withWeight[i]
+                break
+            }
+        }
+        if (!baseline) baseline = withWeight[0]
+        if (!baseline || baseline.id === lastW.id || baseline.weight == null) return null
+        return Number((Number(lastW.weight) - Number(baseline.weight)).toFixed(1))
+    }, [withWeight, lastW])
+
     const slopeKgPerDay = useMemo(() => linearRegressionKgPerDay(checkIns), [checkIns])
     const monthlyRate = slopeKgPerDay * 30
-    const projected4w =
-        lastWeight != null ? lastWeight + slopeKgPerDay * 28 : null
+    const projected4w = lastWeight != null ? lastWeight + slopeKgPerDay * 28 : null
 
-    const lastForBmi = lastW
-    const bmi =
-        lastForBmi?.weight != null && heightCm
-            ? bmiFromMetric(Number(lastForBmi.weight), heightCm)
+    const goalY =
+        goalWeight != null && n > 0
+            ? Math.max(4, Math.min(96, 100 - ((goalWeight - mn) / span) * 82 - 9))
             : null
+
+    const bmi =
+        lastW?.weight != null && heightCm ? bmiFromMetric(Number(lastW.weight), heightCm) : null
+    const bmiCat = bmi != null ? bmiCategory(bmi) : null
+    const bmiPct =
+        bmi != null ? Math.max(0, Math.min(100, ((bmi - 16) / (36 - 16)) * 100)) : 50
+    // Altura mostrada: cm normalizado (algunos perfiles guardan metros).
+    const heightDisplay =
+        heightCm != null && heightCm > 0 ? (heightCm < 3 ? Math.round(heightCm * 100) : heightCm) : null
 
     const avgEnergy7 = useMemo(
         () => avgEnergySince(checkIns, subDays(new Date(), 7)),
         [checkIns]
     )
+    const energyPct = avgEnergy7 != null ? Math.max(0, Math.min(100, avgEnergy7 * 10)) : 0
+    const energyColor =
+        energyPct >= 70
+            ? 'var(--success-500)'
+            : energyPct >= 40
+              ? 'var(--warning-500)'
+              : 'var(--danger-500)'
 
     const photoCheckIns = useMemo(
         () => sortedAsc.filter((c) => c.front_photo_url),
@@ -190,28 +234,19 @@ export function ProgressBodyCompositionB6({
 
     const baseCi = photoCheckIns.find((c) => c.id === baseId)
     const compareCi = photoCheckIns.find((c) => c.id === compareToId)
-
-    const energyGaugePct =
-        avgEnergy7 != null ? Math.min(100, Math.max(0, Math.round(avgEnergy7 * 10))) : 0
-    const gaugeFill =
-        energyGaugePct >= 70 ? 'var(--success-500)' : energyGaugePct >= 40 ? '#f59e0b' : '#ef4444'
-
-    const bmiMarkerPct =
-        bmi != null ? Math.min(100, Math.max(0, ((bmi - 16) / (36 - 16)) * 100)) : 50
-
-    const deltaTrend =
-        totalDelta == null
-            ? undefined
-            : totalDelta > 0.05
-              ? 'up'
-              : totalDelta < -0.05
-                ? 'down'
-                : 'flat'
+    const dW =
+        baseCi?.weight != null && compareCi?.weight != null
+            ? Number((Number(compareCi.weight) - Number(baseCi.weight)).toFixed(1))
+            : null
+    const dE =
+        baseCi?.energy_level != null && compareCi?.energy_level != null
+            ? Number(compareCi.energy_level) - Number(baseCi.energy_level)
+            : null
 
     if (!checkIns?.length) {
         return (
-            <Card className="p-8">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Card padding="lg">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted">
                     <Scale className="h-4 w-4 shrink-0" />
                     Sin check-ins todavía. La composición y tendencias aparecerán cuando el alumno
                     registre peso y fotos.
@@ -221,294 +256,293 @@ export function ProgressBodyCompositionB6({
     }
 
     return (
-        <div className="space-y-6">
-            <Card className="relative overflow-hidden p-6 md:p-8">
-                <div className="pointer-events-none absolute top-0 right-0 -mr-20 -mt-20 h-72 w-72 rounded-full bg-primary/5 blur-3xl" />
-                <div className="relative z-10">
-                    <h3 className="mb-6 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
-                        <Scale className="h-4 w-4" /> Peso y tendencia
-                    </h3>
-
-                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-                        <div className="xl:col-span-2">
-                            {chartData.length > 1 ? (
-                                <div className="h-[280px] w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart
-                                            data={chartData}
-                                            margin={{ top: 8, right: 8, left: -8, bottom: 0 }}
-                                        >
-                                            <defs>
-                                                <linearGradient
-                                                    id={`wgrad-${gradId}`}
-                                                    x1="0"
-                                                    y1="0"
-                                                    x2="0"
-                                                    y2="1"
-                                                >
-                                                    <stop
-                                                        offset="0%"
-                                                        stopColor="var(--sport-500)"
-                                                        stopOpacity={0.35}
-                                                    />
-                                                    <stop
-                                                        offset="100%"
-                                                        stopColor="var(--sport-500)"
-                                                        stopOpacity={0.02}
-                                                    />
-                                                </linearGradient>
-                                            </defs>
-                                            <CartesianGrid
-                                                strokeDasharray="3 3"
-                                                stroke={chartGridColor}
-                                                vertical={false}
-                                            />
-                                            <XAxis
-                                                dataKey="date"
-                                                tick={{ fill: chartAxisColor, fontSize: 9 }}
-                                                axisLine={false}
-                                                tickLine={false}
-                                            />
-                                            <YAxis
-                                                tick={{ fill: chartAxisColor, fontSize: 9 }}
-                                                axisLine={false}
-                                                tickLine={false}
-                                                domain={['dataMin - 1', 'dataMax + 1']}
-                                                width={40}
-                                            />
-                                            <Tooltip
-                                                content={({ active, payload }) => {
-                                                    if (!active || !payload?.length) return null
-                                                    const p = payload[0]?.payload as (typeof chartData)[0]
-                                                    return (
-                                                        <div
-                                                            className="max-w-[240px] rounded-lg border px-3 py-2 text-[11px] font-semibold shadow-lg"
-                                                            style={{
-                                                                backgroundColor: tooltipBgColor,
-                                                                borderColor: tooltipBorderColor,
-                                                                color: tooltipTextColor,
-                                                            }}
-                                                        >
-                                                            <p className="font-black">{p.dateIso}</p>
-                                                            <p className="tabular-nums">{p.weight} kg</p>
-                                                            <p className="mt-1 flex items-center gap-2">
-                                                                Energía:{' '}
-                                                                <EnergyStars level={p.energia} />
-                                                                <span className="opacity-80">
-                                                                    {p.energia ?? '—'}/10
-                                                                </span>
-                                                            </p>
-                                                            {p.photo ? (
-                                                                <div className="relative mt-2 h-16 w-16 overflow-hidden rounded-md border border-border/50">
-                                                                    <Image
-                                                                        src={p.photo}
-                                                                        alt=""
-                                                                        fill
-                                                                        className="object-cover"
-                                                                        sizes="64px"
-                                                                        unoptimized
-                                                                    />
-                                                                </div>
-                                                            ) : null}
-                                                            {p.notes ? (
-                                                                <p className="mt-2 text-[10px] font-medium leading-snug opacity-90 normal-case">
-                                                                    {p.notes}
-                                                                </p>
-                                                            ) : null}
-                                                            <p className="mt-2 text-[9px] font-bold uppercase tracking-widest opacity-60">
-                                                                Clic en un punto para ampliar
-                                                            </p>
-                                                        </div>
-                                                    )
-                                                }}
-                                            />
-                                            <Area
-                                                type="monotone"
-                                                dataKey="weight"
-                                                name="Peso (kg)"
-                                                stroke="var(--sport-500)"
-                                                strokeWidth={2}
-                                                fill={`url(#wgrad-${gradId})`}
-                                                dot={(props: {
-                                                    cx?: number
-                                                    cy?: number
-                                                    payload?: (typeof chartData)[0]
-                                                }) => {
-                                                    const { cx, cy, payload } = props
-                                                    if (cx == null || cy == null || !payload) return null
-                                                    return (
-                                                        <circle
-                                                            cx={cx}
-                                                            cy={cy}
-                                                            r={5}
-                                                            fill="var(--sport-500)"
-                                                            stroke="hsl(var(--background))"
-                                                            strokeWidth={2}
-                                                            className="cursor-pointer"
-                                                            onClick={() =>
-                                                                setDotDetail({
-                                                                    weight: payload.weight,
-                                                                    energia: payload.energia,
-                                                                    photo: payload.photo,
-                                                                    notes: payload.notes,
-                                                                })
-                                                            }
-                                                        />
-                                                    )
-                                                }}
-                                                activeDot={{ r: 7 }}
-                                            />
-                                        </AreaChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            ) : (
-                                <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
-                                    Hace falta al menos dos pesos para la curva.
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 xl:grid-cols-1 xl:gap-3">
-                            <StatBlock
-                                label="Peso inicial"
-                                value={firstWeight != null ? `${firstWeight.toFixed(1)} kg` : '—'}
-                            />
-                            <StatBlock
-                                label="Peso actual"
-                                value={lastWeight != null ? `${lastWeight.toFixed(1)} kg` : '—'}
-                            />
-                            <StatBlock
-                                label="Cambio total"
-                                value={
-                                    totalDelta != null
-                                        ? `${totalDelta > 0 ? '+' : ''}${totalDelta.toFixed(1)} kg`
-                                        : '—'
-                                }
-                                trend={deltaTrend}
-                            />
-                            <StatBlock
-                                label="Ritmo (30d)"
-                                value={`${monthlyRate >= 0 ? '+' : ''}${monthlyRate.toFixed(2)} kg/mes`}
-                                sub="Regresión sobre ventana reciente"
-                            />
-                            <StatBlock
-                                label="Proyección 4 sem"
-                                value={
-                                    projected4w != null && withWeight.length >= 2
-                                        ? `${projected4w.toFixed(1)} kg`
-                                        : '—'
-                                }
-                                sub="Si continúa la tendencia actual"
-                            />
-                        </div>
+        <div className="space-y-3.5">
+            {/* ── Peso · tendencia + statboxes ───────────────────────────── */}
+            <Card padding="md">
+                <div className="flex items-end justify-between" style={{ marginBottom: 6 }}>
+                    <SectionTitle style={{ margin: 0 }}>Peso · tendencia</SectionTitle>
+                    <div className="text-right">
+                        <span
+                            className="font-display font-black tracking-tight tabular-nums text-strong"
+                            style={{ fontSize: 22 }}
+                        >
+                            {lastWeight != null ? lastWeight.toFixed(1) : '—'}
+                            <span style={{ fontSize: 12 }}>kg</span>
+                        </span>
+                        {delta7d != null && (
+                            <span
+                                className="ml-2 font-bold"
+                                style={{
+                                    fontSize: 13,
+                                    color: delta7d <= 0 ? 'var(--success-600)' : 'var(--ember-700)',
+                                }}
+                            >
+                                {delta7d >= 0 ? '+' : ''}
+                                {delta7d} kg
+                            </span>
+                        )}
                     </div>
+                </div>
+
+                {n > 1 ? (
+                    <>
+                        <div style={{ position: 'relative', width: '100%', height: 90 }}>
+                            <svg
+                                viewBox="0 0 100 100"
+                                preserveAspectRatio="none"
+                                style={{ width: '100%', height: 90, display: 'block' }}
+                            >
+                                {goalY != null && (
+                                    <line
+                                        x1="0"
+                                        y1={goalY}
+                                        x2="100"
+                                        y2={goalY}
+                                        stroke="var(--success-500)"
+                                        strokeWidth="1"
+                                        strokeDasharray="3 3"
+                                        vectorEffect="non-scaling-stroke"
+                                    />
+                                )}
+                                <polyline
+                                    points={pts}
+                                    fill="none"
+                                    stroke="var(--sport-500)"
+                                    strokeWidth="2.5"
+                                    vectorEffect="non-scaling-stroke"
+                                    strokeLinejoin="round"
+                                    strokeLinecap="round"
+                                />
+                            </svg>
+                            {coords.map((p, i) => (
+                                <button
+                                    key={p.ci.id}
+                                    aria-label={`Peso ${p.ci.weight} kg`}
+                                    onClick={() => setDotDetail(p.ci)}
+                                    style={{
+                                        position: 'absolute',
+                                        left: `calc(${p.x}% - 7px)`,
+                                        top: `calc(${p.y}% - 7px)`,
+                                        width: 14,
+                                        height: 14,
+                                        borderRadius: '50%',
+                                        border: '2px solid var(--sport-500)',
+                                        background: 'var(--surface-card)',
+                                        padding: 0,
+                                        cursor: 'pointer',
+                                        boxShadow: 'var(--shadow-xs)',
+                                    }}
+                                />
+                            ))}
+                        </div>
+                        {goalWeight != null && (
+                            <div
+                                className="flex items-center text-muted"
+                                style={{ gap: 6, margin: '6px 0 12px', fontSize: 11.5 }}
+                            >
+                                <span
+                                    style={{
+                                        width: 14,
+                                        height: 0,
+                                        borderTop: '1.5px dashed var(--success-500)',
+                                    }}
+                                />
+                                Objetivo · {goalWeight} kg
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <div
+                        className="flex items-center justify-center text-sm text-muted"
+                        style={{ height: 90, marginBottom: 12 }}
+                    >
+                        Hace falta al menos dos pesos para la curva.
+                    </div>
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                    {([
+                        { l: 'Inicial', v: firstWeight != null ? `${firstWeight.toFixed(1)} kg` : '—' },
+                        {
+                            l: 'Cambio total',
+                            v:
+                                totalDelta != null
+                                    ? `${totalDelta > 0 ? '+' : ''}${totalDelta.toFixed(1)} kg`
+                                    : '—',
+                            c:
+                                totalDelta != null
+                                    ? totalDelta <= 0
+                                        ? 'var(--success-600)'
+                                        : 'var(--ember-700)'
+                                    : undefined,
+                        },
+                        {
+                            l: 'Ritmo 30d',
+                            sub: 'regresión',
+                            v: `${monthlyRate >= 0 ? '+' : ''}${monthlyRate.toFixed(1)} kg`,
+                        },
+                        {
+                            l: 'Proyección 4 sem',
+                            sub: 'si sigue',
+                            v:
+                                projected4w != null && withWeight.length >= 2
+                                    ? `${projected4w.toFixed(1)} kg`
+                                    : '—',
+                        },
+                        {
+                            l: 'Energía media',
+                            sub: '7 días',
+                            v: avgEnergy7 != null ? `${avgEnergy7.toFixed(1)}/10` : '—',
+                        },
+                    ] as { l: string; v: string; c?: string; sub?: string }[]).map((b) => (
+                        <div
+                            key={b.l}
+                            style={{
+                                background: 'var(--surface-sunken)',
+                                borderRadius: 'var(--radius-sm)',
+                                padding: '8px 10px',
+                            }}
+                        >
+                            <div
+                                className="font-display font-black tracking-tight tabular-nums"
+                                style={{ fontSize: 15, color: b.c || 'var(--text-strong)', lineHeight: 1.1 }}
+                            >
+                                {b.v}
+                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                                {b.l}
+                                {b.sub ? ' · ' + b.sub : ''}
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </Card>
 
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <Card className="p-6">
-                    <h3 className="mb-4 text-xs font-black uppercase tracking-widest text-primary">
-                        IMC
-                    </h3>
-                    {!heightCm || bmi == null ? (
-                        <p className="text-sm text-muted-foreground">
+            {/* ── IMC + Energía media (gauge) ────────────────────────────── */}
+            <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
+                <Card padding="md">
+                    <div
+                        className="flex items-baseline justify-between"
+                        style={{ marginBottom: 10 }}
+                    >
+                        <SectionTitle style={{ margin: 0 }}>IMC</SectionTitle>
+                        {bmi != null && (
+                            <div>
+                                <span
+                                    className="font-display font-black tracking-tight tabular-nums text-strong"
+                                    style={{ fontSize: 22 }}
+                                >
+                                    {bmi.toFixed(1)}
+                                </span>
+                                <span
+                                    className="ml-2 font-bold"
+                                    style={{
+                                        fontSize: 13,
+                                        color:
+                                            bmiCat === 'Normal'
+                                                ? 'var(--success-600)'
+                                                : 'var(--ember-700)',
+                                    }}
+                                >
+                                    {bmiCat}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                    {bmi == null ? (
+                        <p className="text-sm text-muted">
                             Añade altura en la ficha del alumno (intake) para ver IMC y la escala.
                         </p>
                     ) : (
                         <>
-                            <p className="text-3xl font-black tabular-nums text-foreground">
-                                {bmi.toFixed(1)}
-                            </p>
-                            <p className="mt-1 text-xs font-bold text-muted-foreground">
-                                {bmiCategory(bmi)}
-                            </p>
-                            <div className="relative mt-6">
-                                <div className="flex h-3 overflow-hidden rounded-full bg-muted/40 text-[0]">
-                                    <div
-                                        className="h-full w-[18%] bg-sky-400/80"
-                                        title="Bajo peso"
-                                    />
-                                    <div
-                                        className="h-full w-[34%] bg-emerald-500/80"
-                                        title="Normal"
-                                    />
-                                    <div
-                                        className="h-full w-[20%] bg-amber-500/80"
-                                        title="Sobrepeso"
-                                    />
-                                    <div className="h-full flex-1 bg-rose-500/75" title="Obesidad" />
-                                </div>
+                            <div
+                                style={{
+                                    position: 'relative',
+                                    height: 8,
+                                    borderRadius: 999,
+                                    marginBottom: 6,
+                                    background:
+                                        'linear-gradient(90deg, var(--sport-300) 0%, var(--success-500) 30%, var(--warning-500) 65%, var(--danger-500) 100%)',
+                                }}
+                            >
                                 <div
-                                    className="absolute top-1/2 h-4 w-1 -translate-x-1/2 -translate-y-1/2 rounded-sm bg-foreground shadow-md"
-                                    style={{ left: `${bmiMarkerPct}%` }}
+                                    style={{
+                                        position: 'absolute',
+                                        top: -3,
+                                        left: `calc(${bmiPct}% - 7px)`,
+                                        width: 14,
+                                        height: 14,
+                                        borderRadius: '50%',
+                                        background: '#fff',
+                                        border: '2px solid var(--text-strong)',
+                                        boxShadow: 'var(--shadow-sm)',
+                                    }}
                                 />
-                                <div className="mt-2 flex justify-between text-[8px] font-black uppercase tracking-widest text-muted-foreground">
-                                    <span>16</span>
-                                    <span>18.5</span>
-                                    <span>25</span>
-                                    <span>30</span>
-                                    <span>36</span>
-                                </div>
                             </div>
+                            <div
+                                className="flex justify-between"
+                                style={{
+                                    fontSize: 10,
+                                    color: 'var(--text-subtle)',
+                                    fontFamily: 'var(--font-mono)',
+                                }}
+                            >
+                                <span>16</span>
+                                <span>18.5</span>
+                                <span>25</span>
+                                <span>30</span>
+                                <span>36</span>
+                            </div>
+                            {heightDisplay != null && (
+                                <div
+                                    style={{ fontSize: 11, color: 'var(--text-subtle)', marginTop: 6 }}
+                                >
+                                    Altura {heightDisplay} cm · de la ficha intake
+                                </div>
+                            )}
                         </>
                     )}
                 </Card>
 
-                <Card className="p-6">
-                    <h3 className="mb-2 text-xs font-black uppercase tracking-widest text-primary">
-                        Energía media (7 días)
-                    </h3>
+                <Card padding="md">
+                    <SectionTitle>Energía media · 7 días</SectionTitle>
                     {avgEnergy7 == null ? (
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-muted">
                             Sin niveles de energía en la última semana.
                         </p>
                     ) : (
-                        <div className="flex flex-col items-center">
-                            <div className="h-[160px] w-full max-w-[220px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <RadialBarChart
-                                        cx="50%"
-                                        cy="75%"
-                                        innerRadius="55%"
-                                        outerRadius="100%"
-                                        data={[{ name: 'e', value: energyGaugePct, fill: gaugeFill }]}
-                                        startAngle={180}
-                                        endAngle={0}
-                                        barSize={14}
-                                    >
-                                        <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-                                        <RadialBar
-                                            background={{ fill: 'rgba(128,128,128,0.12)' }}
-                                            dataKey="value"
-                                            cornerRadius={6}
-                                        />
-                                    </RadialBarChart>
-                                </ResponsiveContainer>
+                        <div className="flex items-center justify-center" style={{ gap: 18 }}>
+                            <Gauge pct={energyPct} color={energyColor} />
+                            <div>
+                                <div
+                                    className="font-display font-black tracking-tight tabular-nums text-strong"
+                                    style={{ fontSize: 26 }}
+                                >
+                                    {avgEnergy7.toFixed(1)}
+                                    <span style={{ fontSize: 13 }}>/10</span>
+                                </div>
+                                <div className="flex" style={{ gap: 2, marginTop: 2 }}>
+                                    <EnergyStars level={avgEnergy7} />
+                                </div>
                             </div>
-                            <p className="-mt-2 text-center text-2xl font-black tabular-nums text-foreground">
-                                {avgEnergy7.toFixed(1)}
-                                <span className="text-sm font-bold text-muted-foreground">/10</span>
-                            </p>
-                            <EnergyStars level={avgEnergy7} />
                         </div>
                     )}
                 </Card>
             </div>
 
-            {photoCheckIns.length >= 2 && baseCi?.front_photo_url && compareCi?.front_photo_url && (
-                <Card className="p-6">
-                    <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
-                        <Camera className="h-4 w-4" /> Comparativa fotos
-                    </h3>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <label className="space-y-1.5">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
-                                Check-in base
-                            </span>
+            {/* ── Comparativa de fotos ───────────────────────────────────── */}
+            {photoCheckIns.length >= 2 && (
+                <Card padding="md">
+                    <SectionTitle>Comparativa de fotos</SectionTitle>
+                    <div className="flex" style={{ gap: 10, marginBottom: 10 }}>
+                        <label style={{ flex: 1 }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                                Base
+                            </div>
                             <select
-                                className="h-10 w-full rounded-lg border border-border/60 bg-background px-3 text-sm font-semibold dark:border-white/15"
                                 value={baseId}
                                 onChange={(e) => setBaseId(e.target.value)}
+                                style={pgSel}
                             >
                                 {photoCheckIns.map((c) => (
                                     <option key={c.id} value={c.id}>
@@ -518,14 +552,14 @@ export function ProgressBodyCompositionB6({
                                 ))}
                             </select>
                         </label>
-                        <label className="space-y-1.5">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
-                                Comparar con
-                            </span>
+                        <label style={{ flex: 1 }}>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                                Comparar
+                            </div>
                             <select
-                                className="h-10 w-full rounded-lg border border-border/60 bg-background px-3 text-sm font-semibold dark:border-white/15"
                                 value={compareToId}
                                 onChange={(e) => setCompareToId(e.target.value)}
+                                style={pgSel}
                             >
                                 {photoCheckIns.map((c) => (
                                     <option key={c.id} value={c.id}>
@@ -536,30 +570,46 @@ export function ProgressBodyCompositionB6({
                             </select>
                         </label>
                     </div>
-                    {baseCi && compareCi && baseCi.id !== compareCi.id && (
-                        <div className="mt-4 rounded-xl border border-border/40 bg-secondary/15 p-4 text-sm">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                                Deltas entre selección
-                            </p>
-                            <div className="mt-2 grid grid-cols-2 gap-3 font-bold tabular-nums">
-                                <div>
-                                    <span className="text-muted-foreground">Δ Peso: </span>
-                                    {compareCi.weight != null && baseCi.weight != null
-                                        ? `${(Number(compareCi.weight) - Number(baseCi.weight) >= 0 ? '+' : '')}${(Number(compareCi.weight) - Number(baseCi.weight)).toFixed(1)} kg`
-                                        : '—'}
-                                </div>
-                                <div>
-                                    <span className="text-muted-foreground">Δ Energía: </span>
-                                    {compareCi.energy_level != null && baseCi.energy_level != null
-                                        ? `${Number(compareCi.energy_level) - Number(baseCi.energy_level)}`
-                                        : '—'}
-                                </div>
-                            </div>
+                    <div className="flex" style={{ gap: 18, marginBottom: 10 }}>
+                        <div>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Δ Peso </span>
+                            <span
+                                className="font-bold"
+                                style={{
+                                    fontSize: 13,
+                                    color:
+                                        dW == null
+                                            ? 'var(--text-muted)'
+                                            : dW <= 0
+                                              ? 'var(--success-600)'
+                                              : 'var(--ember-700)',
+                                }}
+                            >
+                                {dW == null ? '—' : `${dW >= 0 ? '+' : ''}${dW} kg`}
+                            </span>
                         </div>
-                    )}
+                        <div>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Δ Energía </span>
+                            <span
+                                className="font-bold"
+                                style={{
+                                    fontSize: 13,
+                                    color:
+                                        dE == null
+                                            ? 'var(--text-muted)'
+                                            : dE >= 0
+                                              ? 'var(--success-600)'
+                                              : 'var(--ember-700)',
+                                }}
+                            >
+                                {dE == null ? '—' : `${dE >= 0 ? '+' : ''}${dE}`}
+                            </span>
+                        </div>
+                    </div>
                     <Button
-                        type="button"
-                        className="mt-4 w-full sm:w-auto"
+                        variant="secondary"
+                        size="md"
+                        className="w-full"
                         disabled={
                             !baseCi?.front_photo_url ||
                             !compareCi?.front_photo_url ||
@@ -567,7 +617,7 @@ export function ProgressBodyCompositionB6({
                         }
                         onClick={() => setCompareOpen(true)}
                     >
-                        <ArrowRightLeft className="mr-2 h-4 w-4" />
+                        <Images className="mr-2 h-4 w-4" />
                         Abrir comparativa
                     </Button>
                     <PhotoComparisonSlider
@@ -581,102 +631,103 @@ export function ProgressBodyCompositionB6({
                 </Card>
             )}
 
-            <Card className="p-6">
-                <h3 className="mb-6 text-xs font-black uppercase tracking-widest text-primary">
-                    Línea de tiempo de check-ins
-                </h3>
-                <div className="relative">
-                    <div className="absolute top-2 bottom-2 left-[11px] w-px bg-border/60 dark:bg-white/15" />
-                    <ul className="space-y-0">
-                        {sortedDesc.map((ci) => (
-                            <li key={ci.id} className="relative flex gap-4 pb-8 last:pb-0">
-                                <div
-                                    className={cn(
-                                        'relative z-10 mt-1.5 h-3 w-3 shrink-0 rounded-full border-2 border-background',
-                                        energyColor(ci.energy_level)
-                                    )}
-                                />
-                                <div className="min-w-0 flex-1 space-y-2">
-                                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                                        <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-primary">
-                                            {format(new Date(ci.created_at), "d MMM yyyy · HH:mm")}
+            {/* ── Historial de check-ins (timeline en cards) ─────────────── */}
+            <SectionTitle>Historial de check-ins</SectionTitle>
+            <div className="space-y-2.5">
+                {sortedDesc.map((ci) => (
+                    <Card key={ci.id} padding="md">
+                        <div
+                            className="flex items-center justify-between"
+                            style={{ marginBottom: 8 }}
+                        >
+                            <div
+                                className="font-extrabold text-strong"
+                                style={{ fontSize: 14 }}
+                            >
+                                {format(new Date(ci.created_at), 'd MMM yyyy · HH:mm')}
+                            </div>
+                        </div>
+                        <div className="flex" style={{ gap: 12 }}>
+                            {ci.front_photo_url ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setDotDetail(ci)}
+                                    className="relative shrink-0 overflow-hidden"
+                                    style={{
+                                        width: 60,
+                                        height: 60,
+                                        borderRadius: 'var(--radius-sm)',
+                                        border: '1px solid var(--border-default)',
+                                        cursor: 'pointer',
+                                        padding: 0,
+                                    }}
+                                >
+                                    <Image
+                                        src={ci.front_photo_url}
+                                        alt=""
+                                        fill
+                                        className="object-cover"
+                                        sizes="60px"
+                                        unoptimized
+                                    />
+                                </button>
+                            ) : null}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div className="flex" style={{ gap: 18, marginBottom: 4 }}>
+                                    <div>
+                                        <span
+                                            className="font-display font-black tracking-tight tabular-nums text-strong"
+                                            style={{ fontSize: 17 }}
+                                        >
+                                            {ci.weight != null ? ci.weight : '—'}
                                         </span>
-                                        {ci.weight != null ? (
-                                            <span className="text-sm font-black tabular-nums text-foreground">
-                                                {ci.weight} kg
-                                            </span>
-                                        ) : null}
+                                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                            {' '}
+                                            kg
+                                        </span>
                                     </div>
-                                    <div className="flex items-center gap-2 text-xs">
-                                        <span className="text-muted-foreground">Energía:</span>
+                                    <div className="flex items-center" style={{ gap: 2 }}>
                                         <EnergyStars level={ci.energy_level} />
                                     </div>
-                                    {ci.front_photo_url ? (
-                                        <button
-                                            type="button"
-                                            className="relative block h-36 w-full max-w-xs overflow-hidden rounded-lg border border-border/50 text-left transition-opacity hover:opacity-95"
-                                            onClick={() =>
-                                                setDotDetail({
-                                                    weight: ci.weight,
-                                                    energia: ci.energy_level,
-                                                    photo: ci.front_photo_url,
-                                                    notes: ci.notes,
-                                                })
-                                            }
-                                        >
-                                            <Image
-                                                src={ci.front_photo_url}
-                                                alt=""
-                                                fill
-                                                className="object-cover"
-                                                sizes="320px"
-                                                unoptimized
-                                            />
-                                        </button>
-                                    ) : null}
-                                    {ci.notes ? (
-                                        <p className="text-sm font-medium leading-relaxed text-muted-foreground">
-                                            {ci.notes}
-                                        </p>
-                                    ) : (
-                                        <p className="text-xs italic text-muted-foreground/70">
-                                            Sin notas
-                                        </p>
-                                    )}
                                 </div>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            </Card>
+                                {ci.notes ? (
+                                    <div style={{ fontSize: 13, color: 'var(--text-body)' }}>
+                                        {ci.notes}
+                                    </div>
+                                ) : (
+                                    <div
+                                        className="italic"
+                                        style={{ fontSize: 12, color: 'var(--text-subtle)' }}
+                                    >
+                                        Sin notas
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </Card>
+                ))}
+            </div>
 
+            {/* ── Modal de detalle de check-in ───────────────────────────── */}
             <Dialog open={!!dotDetail} onOpenChange={(o) => !o && setDotDetail(null)}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle className="text-xs font-black uppercase tracking-widest">
+                        <DialogTitle
+                            className="font-extrabold text-strong"
+                            style={{ fontSize: 18 }}
+                        >
                             Check-in
+                            {dotDetail
+                                ? ` · ${format(new Date(dotDetail.created_at), 'd MMM yyyy')}`
+                                : ''}
                         </DialogTitle>
                     </DialogHeader>
                     {dotDetail && (
                         <div className="space-y-3">
-                            {dotDetail.weight != null ? (
-                                <p className="text-lg font-black tabular-nums">
-                                    {String(dotDetail.weight)} kg
-                                </p>
-                            ) : null}
-                            <div className="flex items-center gap-2">
-                                <EnergyStars
-                                    level={
-                                        typeof dotDetail.energia === 'number'
-                                            ? dotDetail.energia
-                                            : undefined
-                                    }
-                                />
-                            </div>
-                            {dotDetail.photo ? (
-                                <div className="relative mx-auto aspect-[3/4] w-full max-w-xs overflow-hidden rounded-lg border">
+                            {dotDetail.front_photo_url ? (
+                                <div className="relative mx-auto aspect-[3/4] w-full max-w-xs overflow-hidden rounded-[var(--radius-md)] border border-default">
                                     <Image
-                                        src={String(dotDetail.photo)}
+                                        src={dotDetail.front_photo_url}
                                         alt=""
                                         fill
                                         className="object-cover"
@@ -685,10 +736,35 @@ export function ProgressBodyCompositionB6({
                                     />
                                 </div>
                             ) : null}
+                            <div className="flex items-center" style={{ gap: 20 }}>
+                                <div>
+                                    <span
+                                        className="font-display font-black tracking-tight tabular-nums text-strong"
+                                        style={{ fontSize: 20 }}
+                                    >
+                                        {dotDetail.weight != null ? dotDetail.weight : '—'}
+                                    </span>
+                                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}> kg</span>
+                                </div>
+                                {dotDetail.energy_level != null && (
+                                    <div className="flex items-center" style={{ gap: 2 }}>
+                                        <EnergyStars level={dotDetail.energy_level} />
+                                        <span
+                                            style={{
+                                                fontSize: 11.5,
+                                                color: 'var(--text-muted)',
+                                                marginLeft: 4,
+                                            }}
+                                        >
+                                            {dotDetail.energy_level}/10
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
                             {dotDetail.notes ? (
-                                <p className="text-sm text-muted-foreground">
-                                    {String(dotDetail.notes)}
-                                </p>
+                                <div style={{ fontSize: 13.5, color: 'var(--text-body)' }}>
+                                    {dotDetail.notes}
+                                </div>
                             ) : null}
                         </div>
                     )}

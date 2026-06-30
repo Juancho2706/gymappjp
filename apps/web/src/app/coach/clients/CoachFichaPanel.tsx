@@ -15,8 +15,15 @@ import type { ClientFichaPanelBundle } from './[clientId]/_data/ficha-panel.data
 export function CoachFichaPanel({ bundle }: { bundle: ClientFichaPanelBundle }) {
     const { hero, moduleFlags } = bundle
 
+    // Ficha DARK-only (rediseño): fuerza tokens dark en TODO el subárbol vía `.dark`
+    // (cards default/inverse, glass de la tab-nav, texto on-dark) sin tocar el tema de
+    // la página. `-m-5 lg:-m-6` sangra el padding del panel del master-detail para que
+    // el fondo negro (var(--ink-950)) llene la región de scroll de borde a borde; el
+    // `p-5 lg:p-6` reintroduce el padding del contenido. min-h llena el alto del panel.
     return (
-        <div className="space-y-8">
+        <div
+            className="dark -m-5 min-h-[calc(100dvh-60px)] space-y-8 bg-[var(--ink-950)] p-5 [color-scheme:dark] lg:-m-6 lg:p-6"
+        >
             <ClientProfileHero
                 clientId={bundle.clientId}
                 client={hero.client}
@@ -32,6 +39,8 @@ export function CoachFichaPanel({ bundle }: { bundle: ClientFichaPanelBundle }) 
             />
 
             <ClientProfileDashboard
+                forceDark
+                moduleFlags={moduleFlags}
                 data={bundle.data}
                 coachNutrientTargets={bundle.coachNutrientTargets}
                 coachPrivateNotes={bundle.coachPrivateNotes}

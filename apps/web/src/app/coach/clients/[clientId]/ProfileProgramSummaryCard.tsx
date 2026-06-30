@@ -1,8 +1,10 @@
 'use client'
 
-import { Calendar, Clock, Dumbbell, ListChecks } from 'lucide-react'
+import Link from 'next/link'
+import { CalendarCheck, Plus } from 'lucide-react'
 import { Card } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
+import { Badge } from '@/components/ui/badge'
+import { buttonVariants } from '@/components/ui/button'
 import { ProgramPhasesBar } from '@/components/shared/ProgramPhasesBar'
 import { cn } from '@/lib/utils'
 import {
@@ -21,21 +23,29 @@ type ProfileProgramSummaryCardProps = {
     activeProgram: any | null | undefined
     compliance: ComplianceSlice
     isNutritionAtRisk?: boolean
+    /** Para el deep-link de "Asignar programa" cuando no hay ciclo activo. */
+    clientId: string
     /** Deep-link a la Zona A (Progreso) del hogar único de nutrición. La señal de
      *  nutrición vive ahora FUERA de la tarjeta de entrenamiento. */
     onViewNutrition?: () => void
+    /** Click en toda la tarjeta → abre la pestaña Programa (1:1 con el diseño nuevo). */
+    onOpenProgram?: () => void
 }
 
 export function ProfileProgramSummaryCard({
     activeProgram,
     compliance,
     isNutritionAtRisk = false,
+    clientId,
     onViewNutrition,
+    onOpenProgram,
 }: ProfileProgramSummaryCardProps) {
     const phases = parseProgramPhases(activeProgram?.program_phases)
     const planCur = compliance.planCurrentWeek ?? 1
     const planTot = Math.max(1, compliance.planTotalWeeks ?? 4)
     const daysLeft = Math.max(0, compliance.planDaysRemaining ?? 0)
+    const pct = Math.min(100, Math.round((planCur / planTot) * 100))
+    const vencido = (compliance.planDaysRemaining ?? 0) <= 0
 
     const next: NextProgramWorkoutInfo | null = resolveNextProgramWorkout(
         activeProgram,
@@ -47,124 +57,102 @@ export function ProfileProgramSummaryCard({
 
     if (!activeProgram) {
         return (
-            <Card padding="md">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted">
-                    <ListChecks className="h-4 w-4 shrink-0" />
+            <Card padding="md" className="items-stretch text-center">
+                <p className="text-[13.5px] font-medium text-muted">
                     Sin programa activo asignado.
-                </div>
+                </p>
+                <Link
+                    href={`/coach/builder/${clientId}`}
+                    className={cn(buttonVariants({ variant: 'sport', size: 'md' }), 'w-full')}
+                >
+                    <Plus className="h-[18px] w-[18px]" />
+                    Asignar programa
+                </Link>
             </Card>
         )
     }
 
     return (
-        <Card padding="md" className="flex flex-col gap-5">
-            <div className="space-y-1">
-                <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
-                    <ListChecks className="h-4 w-4" />
+        <Card
+            padding="md"
+            interactive={!!onOpenProgram}
+            onClick={onOpenProgram}
+            className="gap-0"
+        >
+            {/* Nombre + badge En track / Ciclo vencido */}
+            <div className="mb-2.5 flex items-start justify-between gap-3">
+                <h4 className="font-display text-[15px] font-black leading-tight text-strong">
                     {activeProgram.name}
-                </h3>
-                {phases.length > 0 && (
-                    <div className="pt-2">
-                        <ProgramPhasesBar phases={phases} compact />
-                    </div>
-                )}
+                </h4>
+                <Badge tone={vencido ? 'warning' : 'success'} size="sm">
+                    {vencido ? 'Ciclo vencido' : 'En track'}
+                </Badge>
             </div>
 
-            <div className="space-y-3">
-                <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-muted">
-                    <span>Semana ciclo</span>
-                    <span className="font-black text-strong">
-                        {planCur} / {planTot}
-                    </span>
+            {/* Barra de fases */}
+            {phases.length > 0 && (
+                <div className="mb-1">
+                    <ProgramPhasesBar phases={phases} compact />
                 </div>
-                <Progress
-                    value={Math.min(100, (planCur / planTot) * 100)}
-                    className="h-2 bg-surface-sunken"
+            )}
+
+            {/* Semana X de Y · N días restantes */}
+            <div className="mb-1.5 mt-2 flex items-center justify-between text-xs text-muted">
+                <span>
+                    Semana {planCur} de {planTot}
+                </span>
+                <span>{daysLeft} d restantes</span>
+            </div>
+
+            {/* Progreso del ciclo */}
+            <div className="mb-3 h-[7px] overflow-hidden rounded-pill bg-surface-sunken">
+                <div
+                    className="h-full rounded-pill bg-sport-500"
+                    style={{ width: `${pct}%` }}
                 />
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                    <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-muted">
-                        <Clock className="h-3.5 w-3.5 text-sport-600" />
-                        <span>
-                            <span className="tabular-nums text-strong">{daysLeft}</span> días
-                            restantes
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div
-                            className={cn(
-                                'h-2 w-2 rounded-full',
-                                daysLeft > 0 ? 'bg-[var(--success-500)]' : 'bg-[var(--warning-500)]'
-                            )}
-                        />
-                        <span
-                            className={cn(
-                                'text-[10px] font-bold uppercase tracking-widest',
-                                daysLeft > 0 ? 'text-[var(--success-600)]' : 'text-[var(--warning-600)]'
-                            )}
-                        >
-                            {daysLeft > 0 ? 'En track' : 'Ciclo vencido'}
-                        </span>
-                    </div>
-                </div>
             </div>
 
             {/* Señal de nutrición — SEPARADA del entreno. Deep-link a Zona A; no
                 recomputa adherencia, solo navega al hogar de nutrición. */}
             <button
                 type="button"
-                onClick={onViewNutrition}
+                onClick={(e) => {
+                    e.stopPropagation()
+                    onViewNutrition?.()
+                }}
                 disabled={!onViewNutrition}
                 className={cn(
-                    'flex items-center justify-between gap-2 rounded-control px-3 py-2.5 text-left transition-colors',
+                    'mb-2.5 flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[12.5px] font-bold transition-[filter]',
                     isNutritionAtRisk
-                        ? 'bg-[var(--danger-100)] hover:brightness-95'
-                        : 'bg-[var(--success-100)] hover:brightness-95',
-                    onViewNutrition && 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]',
-                    !onViewNutrition && 'cursor-default'
+                        ? 'bg-[var(--danger-100)] text-[var(--danger-700)]'
+                        : 'bg-[var(--success-100)] text-[var(--success-700)]',
+                    onViewNutrition ? 'hover:brightness-95' : 'cursor-default'
                 )}
             >
-                <span className="flex items-center gap-2">
-                    <span
-                        className={cn(
-                            'h-2 w-2 rounded-full',
-                            isNutritionAtRisk ? 'animate-pulse bg-[var(--danger-500)]' : 'bg-[var(--success-500)]'
-                        )}
-                    />
-                    <span
-                        className={cn(
-                            'text-[10px] font-bold uppercase tracking-widest',
-                            isNutritionAtRisk ? 'text-[var(--danger-700)]' : 'text-[var(--success-700)]'
-                        )}
-                    >
-                        {isNutritionAtRisk ? 'Nutrición en riesgo' : 'Nutrición en track'}
-                    </span>
-                </span>
-                {onViewNutrition ? (
-                    <span className="text-[10px] font-bold text-sport-600">Ver nutrición →</span>
-                ) : null}
+                <span
+                    className={cn(
+                        'h-2 w-2 shrink-0 rounded-full',
+                        isNutritionAtRisk
+                            ? 'animate-pulse bg-[var(--danger-500)]'
+                            : 'bg-[var(--success-500)]'
+                    )}
+                />
+                {isNutritionAtRisk ? 'Nutrición en riesgo' : 'Nutrición en track'}
             </button>
 
+            {/* Próximo entreno */}
             {next && (
-                <div className="space-y-2 rounded-control bg-sport-100 p-4">
-                    <p className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-sport-700">
-                        <Dumbbell className="h-3.5 w-3.5" />
-                        Próximo entrenamiento
-                    </p>
-                    <p className="text-sm font-black leading-tight text-strong">{next.title}</p>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-semibold text-muted">
-                        <span className="inline-flex items-center gap-1">
-                            <Calendar className="h-3.5 w-3.5" />
-                            {next.dayName}
-                            {next.isToday && (
-                                <span className="text-[9px] font-black uppercase tracking-wider text-sport-700">
-                                    · Hoy
-                                </span>
-                            )}
-                        </span>
-                        <span className="text-subtle">
-                            {next.exerciseCount} ejercicio
+                <div className="flex items-center gap-2.5 rounded-md bg-sport-100 px-3 py-2.5">
+                    <CalendarCheck className="h-[18px] w-[18px] shrink-0 text-sport-600" />
+                    <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--sport-700)]">
+                            Próximo entreno · {next.dayName}
+                            {next.isToday ? ' · Hoy' : ''}
+                        </p>
+                        <p className="truncate text-sm font-bold text-strong">
+                            {next.title} · {next.exerciseCount} ejercicio
                             {next.exerciseCount === 1 ? '' : 's'}
-                        </span>
+                        </p>
                     </div>
                 </div>
             )}

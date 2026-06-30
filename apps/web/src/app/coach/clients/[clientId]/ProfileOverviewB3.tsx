@@ -1,6 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
+import Link from 'next/link'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 import {
     Flame,
@@ -9,15 +11,37 @@ import {
     PieChart,
     Scale,
     CalendarRange,
+    Activity,
+    ArrowUpRight,
+    ArrowDownRight,
+    Minus,
+    Pencil,
+    Camera,
+    HeartPulse,
+    PersonStanding,
+    PencilLine,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { ProgressRing } from '@/components/ui/progress-ring'
+import { AppOnlyBadge } from '@/components/AppOnlyBadge'
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import {
     buildProfileActivityCalendarData,
     longestActivityStreakFromCalendar,
     countWorkoutDaysInRange,
 } from './profileOverviewUtils'
+import { ProfileProgramSummaryCard } from './ProfileProgramSummaryCard'
+import { ProfileCheckInSnapshot } from './ProfileCheckInSnapshot'
 import { subDays } from 'date-fns'
 
 type ComplianceShape = {
@@ -31,25 +55,85 @@ type ComplianceShape = {
     currentStreak?: number
     planCurrentWeek?: number
     planTotalWeeks?: number
+    planDaysRemaining?: number
     nutritionCompliancePercent?: number
+}
+
+type CheckInRow = {
+    id?: string
+    created_at: string
+    weight?: number | null
+    energy_level?: number | null
+    notes?: string | null
+    reviewed_at?: string | null
+    front_photo_url?: string | null
+    side_photo_url?: string | null
+    back_photo_url?: string | null
 }
 
 type ProfileOverviewB3Props = {
     workoutHistory: any[]
-    checkIns: { created_at: string; weight?: number | null }[]
+    checkIns: CheckInRow[]
     compliance: ComplianceShape
+    clientId: string
+    /** Programa activo del alumno — alimenta la card "Programa". */
+    activeProgram: any | null | undefined
+    isNutritionAtRisk?: boolean
+    /** Último check-in (ya ordenado en el dashboard) para la card de snapshot. */
+    lastCheckIn?: CheckInRow | null
+    /** Check-ins con fotos (máx. 3) para "Evolución visual". */
+    checkInsWithPhotos?: CheckInRow[]
+    /** Peso actual + variación semanal (calculados en el dashboard). */
+    currentWeight?: number
+    weeklyWeightVariation?: number
+    /** Biometría inicial (intake) — precarga el editor cosmético. */
+    initialHeightCm?: number | null
+    initialWeightKg?: number | null
+    /** Entitlements de módulos de pago (espejo del gate server-side). */
+    moduleFlags?: { cardio: boolean; movement: boolean; bodycomp: boolean }
     /** Deep-link a la Zona A (Progreso) del hogar único de nutrición. No recomputa
      *  el % — solo navega; el valor mostrado es el mismo de `compliance`. */
     onViewNutrition?: () => void
+    /** Navega a la pestaña Progreso (historial de check-ins). */
+    onViewProgress?: () => void
+    /** Navega a la pestaña Programa (card de programa clickeable). */
+    onOpenProgram?: () => void
 }
 
-const ringSize = 108
+const ringSize = 84
+
+function SectionTitle({
+    children,
+    icon: Icon,
+}: {
+    children: React.ReactNode
+    icon?: typeof Activity
+}) {
+    return (
+        <h3 className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
+            {Icon ? <Icon className="h-4 w-4" /> : null}
+            {children}
+        </h3>
+    )
+}
 
 export function ProfileOverviewB3({
     workoutHistory,
     checkIns,
     compliance,
+    clientId,
+    activeProgram,
+    isNutritionAtRisk = false,
+    lastCheckIn,
+    checkInsWithPhotos = [],
+    currentWeight = 0,
+    weeklyWeightVariation = 0,
+    initialHeightCm,
+    initialWeightKg,
+    moduleFlags,
     onViewNutrition,
+    onViewProgress,
+    onOpenProgram,
 }: ProfileOverviewB3Props) {
     const calendarData = useMemo(
         () => buildProfileActivityCalendarData(workoutHistory, checkIns, 371),
@@ -80,7 +164,6 @@ export function ProfileOverviewB3({
     const checkDelta =
         compliance.checkInCompliancePercentWeekAgo != null ? checkPct - checkPctWeekAgo : null
 
-    const streak = compliance.currentStreak ?? 0
     const planCur = compliance.planCurrentWeek ?? 1
     const planTot = Math.max(1, compliance.planTotalWeeks ?? 4)
 
@@ -168,32 +251,43 @@ export function ProfileOverviewB3({
         success: 'bg-[var(--success-100)] text-[var(--success-600)]',
     }
 
+    // Módulos de pago — gateados por entitlement (espejo del gate server-side).
+    const moduleCards = [
+        moduleFlags?.cardio
+            ? { key: 'cardio', label: 'Cardio', href: `/coach/cardio/${clientId}`, Icon: HeartPulse }
+            : null,
+        moduleFlags?.movement
+            ? { key: 'movement', label: 'Movimiento', href: `/coach/movement/${clientId}`, Icon: PersonStanding }
+            : null,
+        moduleFlags?.bodycomp
+            ? { key: 'bodycomp', label: 'Composición', href: `/coach/clients/${clientId}/bodycomp`, Icon: Scale }
+            : null,
+    ].filter(
+        (m): m is { key: string; label: string; href: string; Icon: typeof HeartPulse } =>
+            m !== null
+    )
+
     return (
         <div className="space-y-6">
+            {/* ===== Cumplimiento semanal ===== */}
             <Card padding="md">
-                <h3 className="text-xs font-black uppercase tracking-widest text-sport-600">
-                    Cumplimiento semanal
-                </h3>
-                <div className="grid grid-cols-1 justify-items-center gap-8 sm:grid-cols-3">
+                <SectionTitle>Cumplimiento semanal</SectionTitle>
+                <div className="grid grid-cols-3 gap-2">
                     <ComplianceRing
-                        label="Entrenamientos"
-                        valueText={`${wThis}/${target}`}
+                        label="Entreno"
                         percentage={workoutPct}
                         delta={workoutDelta}
                         pathColor={primaryHex}
                     />
                     <ComplianceRing
-                        label="Nutrición (7d)"
-                        valueText={`${nutAvg}%`}
+                        label="Nutrición"
                         percentage={Math.min(100, nutAvg)}
                         delta={nutDelta}
                         pathColor={nutColor}
                         onClick={onViewNutrition}
-                        linkLabel="Ver nutrición →"
                     />
                     <ComplianceRing
                         label="Check-in"
-                        valueText={`${checkPct}%`}
                         percentage={checkPct}
                         delta={checkDelta}
                         pathColor={checkPct >= 70 ? emeraldHex : checkPct >= 40 ? amberHex : redHex}
@@ -201,7 +295,8 @@ export function ProfileOverviewB3({
                 </div>
             </Card>
 
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+            {/* ===== 5 KPIs ===== */}
+            <div className="grid grid-cols-2 gap-3">
                 {kpiItems.map((item, i) => (
                     <motion.div
                         key={item.label}
@@ -210,7 +305,12 @@ export function ProfileOverviewB3({
                         transition={{ delay: i * 0.05, duration: 0.25 }}
                     >
                         <Card padding="md" className="h-full flex-row items-center gap-3">
-                            <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', kpiToneClass[item.tone])}>
+                            <div
+                                className={cn(
+                                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-md',
+                                    kpiToneClass[item.tone]
+                                )}
+                            >
                                 <item.icon className="h-[18px] w-[18px]" />
                             </div>
                             <div className="min-w-0">
@@ -225,27 +325,223 @@ export function ProfileOverviewB3({
                     </motion.div>
                 ))}
             </div>
+
+            {/* ===== Programa ===== */}
+            <div>
+                <SectionTitle>Programa</SectionTitle>
+                <ProfileProgramSummaryCard
+                    activeProgram={activeProgram}
+                    compliance={compliance}
+                    isNutritionAtRisk={isNutritionAtRisk}
+                    clientId={clientId}
+                    onViewNutrition={onViewNutrition}
+                    onOpenProgram={onOpenProgram}
+                />
+            </div>
+
+            {/* ===== Métricas clave ===== */}
+            <div>
+                <SectionTitle icon={Activity}>Métricas clave</SectionTitle>
+                <Card padding="md">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="flex gap-6">
+                            <div>
+                                <p className="font-display text-[22px] font-black leading-none text-strong">
+                                    {currentWeight}
+                                    <span className="text-xs font-bold text-muted"> kg</span>
+                                </p>
+                                <p className="mt-1.5 text-[11px] text-muted">Peso actual</p>
+                            </div>
+                            <div>
+                                <p
+                                    className={cn(
+                                        'flex items-center gap-1 font-display text-[22px] font-black leading-none',
+                                        weeklyWeightVariation <= 0
+                                            ? 'text-[var(--success-600)]'
+                                            : 'text-[var(--ember-700)]'
+                                    )}
+                                >
+                                    {weeklyWeightVariation > 0 ? '+' : ''}
+                                    {weeklyWeightVariation.toFixed(1)}
+                                    <span className="text-xs font-bold"> kg</span>
+                                    {weeklyWeightVariation > 0 ? (
+                                        <ArrowUpRight className="h-4 w-4 text-[var(--ember-600)]" />
+                                    ) : weeklyWeightVariation < 0 ? (
+                                        <ArrowDownRight className="h-4 w-4 text-[var(--success-500)]" />
+                                    ) : (
+                                        <Minus className="h-4 w-4 text-muted" />
+                                    )}
+                                </p>
+                                <p className="mt-1.5 text-[11px] text-muted">Variación semanal</p>
+                            </div>
+                        </div>
+                        <Dialog>
+                            <DialogTrigger
+                                render={
+                                    <Button
+                                        variant="secondary"
+                                        size="icon-sm"
+                                        aria-label="Editar biometría inicial"
+                                    >
+                                        <Pencil className="h-4 w-4" />
+                                    </Button>
+                                }
+                            />
+                            <DialogContent className="sm:max-w-[425px]">
+                                <DialogHeader>
+                                    <DialogTitle className="font-display text-xl font-black uppercase tracking-tighter">
+                                        Editar biometría inicial
+                                    </DialogTitle>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label
+                                            htmlFor="height"
+                                            className="text-right text-xs font-bold uppercase tracking-widest"
+                                        >
+                                            Altura
+                                        </Label>
+                                        <Input
+                                            id="height"
+                                            defaultValue={initialHeightCm ?? undefined}
+                                            className="col-span-3"
+                                            placeholder="cm"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label
+                                            htmlFor="weight"
+                                            className="text-right text-xs font-bold uppercase tracking-widest"
+                                        >
+                                            Peso inicial
+                                        </Label>
+                                        <Input
+                                            id="weight"
+                                            defaultValue={initialWeightKg ?? undefined}
+                                            className="col-span-3"
+                                            placeholder="kg"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex justify-end gap-3">
+                                    <Button
+                                        variant="secondary"
+                                        className="text-[10px] font-black uppercase tracking-widest"
+                                    >
+                                        Cancelar
+                                    </Button>
+                                    <Button
+                                        variant="sport"
+                                        className="text-[10px] font-black uppercase tracking-widest"
+                                    >
+                                        Guardar
+                                    </Button>
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                    </div>
+                </Card>
+            </div>
+
+            {/* ===== Último check-in ===== */}
+            <ProfileCheckInSnapshot
+                checkIn={lastCheckIn}
+                clientId={clientId}
+                onViewHistory={onViewProgress ?? (() => {})}
+            />
+
+            {/* ===== Evolución visual ===== */}
+            <Card padding="md">
+                <SectionTitle icon={Camera}>Evolución visual</SectionTitle>
+                <div className="mb-4">
+                    <AppOnlyBadge>
+                        Mirá las fotos con zoom y deslizá entre ellas en la app de EVA
+                    </AppOnlyBadge>
+                </div>
+                {checkInsWithPhotos.length > 0 ? (
+                    <div className="grid grid-cols-3 gap-2">
+                        {checkInsWithPhotos.map((c, i) => {
+                            const photo = c.front_photo_url || c.side_photo_url || c.back_photo_url
+                            if (!photo) return null
+                            return (
+                                <div
+                                    key={c.id ?? i}
+                                    className="group relative aspect-[3/4] overflow-hidden rounded-sm bg-surface-sunken"
+                                >
+                                    <Image
+                                        src={photo}
+                                        alt="Progreso"
+                                        fill
+                                        sizes="(max-width: 768px) 33vw, 200px"
+                                        unoptimized
+                                        className="object-cover transition-transform duration-500 group-hover:scale-110"
+                                    />
+                                    <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/80 via-transparent to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-white">
+                                            {new Date(c.created_at).toLocaleDateString('es-ES', {
+                                                day: '2-digit',
+                                                month: 'short',
+                                            })}
+                                        </span>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                ) : (
+                    <div className="rounded-sm bg-surface-sunken py-8 text-center">
+                        <Camera className="mx-auto mb-2 h-8 w-8 text-[var(--ink-300)]" />
+                        <p className="text-sm font-medium text-muted">
+                            Sin fotos recientes de check-in.
+                        </p>
+                    </div>
+                )}
+            </Card>
+
+            {/* ===== Módulos (deep-links de pago · gateados por entitlement) ===== */}
+            {moduleCards.length > 0 && (
+                <div>
+                    <SectionTitle>Módulos</SectionTitle>
+                    <div className="flex gap-2">
+                        {moduleCards.map((m) => (
+                            <Link
+                                key={m.key}
+                                href={m.href}
+                                className="flex flex-1 flex-col items-center gap-1.5 rounded-md border border-subtle bg-surface-card px-1 py-3 transition-colors hover:bg-surface-sunken"
+                            >
+                                <m.Icon className="h-5 w-5 text-sport-600" />
+                                <span className="text-[11.5px] font-bold text-body">{m.label}</span>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* ===== Editar plan ===== */}
+            <Link
+                href={`/coach/builder/${clientId}`}
+                className={cn(buttonVariants({ variant: 'sport', size: 'lg' }), 'w-full')}
+            >
+                <PencilLine className="h-5 w-5" />
+                Editar plan
+            </Link>
         </div>
     )
 }
 
 function ComplianceRing({
     label,
-    valueText,
     percentage,
     delta,
     pathColor,
     onClick,
-    linkLabel,
 }: {
     label: string
-    valueText: string
     percentage: number
     /** Delta en pts vs período anterior; `null` ⇒ sin dato previo (se omite el label). */
     delta: number | null
     pathColor: string
     onClick?: () => void
-    linkLabel?: string
 }) {
     const Wrapper = onClick ? 'button' : 'div'
     return (
@@ -253,21 +549,18 @@ function ComplianceRing({
             type={onClick ? 'button' : undefined}
             onClick={onClick}
             className={cn(
-                'flex w-full max-w-[200px] flex-col items-center gap-3',
+                'flex w-full flex-col items-center gap-1.5',
                 onClick &&
                     'rounded-card p-1 transition-colors hover:bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]'
             )}
         >
             <ProgressRing value={percentage} size={ringSize} stroke={8} color={pathColor} />
-            <div className="space-y-1 text-center">
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted">
-                    {label}
-                </p>
-                <p className="font-display text-lg font-black text-strong">{valueText}</p>
+            <div className="space-y-0.5 text-center">
+                <p className="text-[12.5px] font-bold text-strong">{label}</p>
                 {delta != null ? (
                     <p
                         className={cn(
-                            'text-[10px] font-bold',
+                            'text-[10.5px] font-bold',
                             delta > 0
                                 ? 'text-[var(--success-600)]'
                                 : delta < 0
@@ -279,9 +572,6 @@ function ComplianceRing({
                             ? '— vs sem. ant.'
                             : `${delta > 0 ? '↑' : '↓'} ${Math.abs(delta)} pts`}
                     </p>
-                ) : null}
-                {onClick && linkLabel ? (
-                    <p className="text-[10px] font-bold text-sport-600">{linkLabel}</p>
                 ) : null}
             </div>
         </Wrapper>

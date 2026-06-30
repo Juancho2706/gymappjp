@@ -3,44 +3,39 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import confetti from 'canvas-confetti'
 import { useReducedMotion } from 'framer-motion'
-import {
-    ResponsiveContainer,
-    RadarChart,
-    PolarGrid,
-    PolarAngleAxis,
-    PolarRadiusAxis,
-    Radar,
-    ComposedChart,
-    Bar,
-    Line,
-    XAxis,
-    YAxis,
-    Tooltip,
-    CartesianGrid,
-} from 'recharts'
 import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { Trophy, AlertTriangle, BarChart3, Target, Calendar, Clock, Dumbbell } from 'lucide-react'
+import {
+    Trophy,
+    AlertTriangle,
+    BarChart3,
+    Target,
+    CalendarSearch,
+    Clock,
+    Dumbbell,
+    Moon,
+} from 'lucide-react'
 import type { MuscleVolumeRow } from './profileDataHelpers'
-import { DayNavigator } from '@/app/c/[coach_slug]/nutrition/_components/DayNavigator'
 import { getClientWorkoutForDate, getClientWorkoutActivityDates } from './_actions/client-detail.actions'
-import { getTodayInSantiago } from '@/lib/date-utils'
 import {
     findWeeklyWeightPRs,
     buildDailyTonnageSeries,
     detectVolumeImbalances,
     selectStrengthCardExercises,
     buildExerciseStrengthSeriesMap,
+    strengthTrendDeltaKg,
     type WeeklyWeightPR,
     type ExerciseStrengthSeries,
 } from './profileTrainingAnalytics'
-import { TrainingStrengthCards } from './TrainingStrengthCards'
 
 type TrainingTabB4PanelsProps = {
     clientId: string
     santiagoTodayIso: string
     workoutHistory: any[]
     muscleVolumeByGroup: MuscleVolumeRow[]
+    // Chart-color props del padre (recharts en otras pestañas). La ficha es dark-only,
+    // los charts de esta pestaña se transcriben con SVG/CSS inline → no se usan aquí.
     chartGridColor: string
     chartAxisColor: string
     tooltipBgColor: string
@@ -48,6 +43,17 @@ type TrainingTabB4PanelsProps = {
     tooltipTextColor: string
 }
 
+// ── Título de sección (dark) ─────────────────────────────────────────────────
+function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+    return (
+        <h3 className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
+            {icon}
+            {children}
+        </h3>
+    )
+}
+
+// ── Banner PR de la semana (gradient claro · acento celebratorio) ─────────────
 function WeeklyPRBanner({ prs }: { prs: WeeklyWeightPR[] }) {
     const reduceMotion = useReducedMotion()
     const fired = useRef(false)
@@ -79,35 +85,153 @@ function WeeklyPRBanner({ prs }: { prs: WeeklyWeightPR[] }) {
             className="gap-0 border-[var(--ember-200)]"
             style={{ background: 'linear-gradient(135deg, var(--ember-100), var(--sport-100))' }}
         >
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4">
-                <div className="flex items-center gap-2 text-[var(--ember-700)]">
-                    <Trophy className="h-6 w-6 shrink-0" />
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">Esta semana</span>
-                </div>
-                <div className="min-w-0 flex-1">
-                    <p className="text-sm font-black leading-snug text-strong">
-                        ¡Nuevo récord 1RM! — {top.exerciseName}:{' '}
-                        <span className="tabular-nums text-sport-600">{top.newWeightKg} kg ×{top.newReps}</span>
-                        <span className="ml-2 rounded-[10px] bg-sport-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-sport-700">
-                            1RM {top.newOneRm} kg
-                        </span>
-                    </p>
-                    <p className="mt-0.5 text-[11px] font-semibold text-muted">
-                        Antes: {top.prevWeightKg} kg ×{top.prevReps} · 1RM {top.prevOneRm} kg
-                        {top.pctChange != null && (
-                            <span className="ml-2 text-[var(--success-600)]">
-                                (+{top.pctChange}% 1RM)
-                            </span>
-                        )}
-                        {more > 0 && (
-                            <span className="ml-2 text-body">
-                                +{more} ejercicio{more === 1 ? '' : 's'} más
-                            </span>
-                        )}
-                    </p>
-                </div>
+            <div className="mb-2 flex items-center gap-2.5 text-[var(--ember-700)]">
+                <Trophy className="h-5 w-5 shrink-0" />
+                <span className="text-[13px] font-black uppercase tracking-[0.02em]">
+                    Récord de la semana
+                </span>
+            </div>
+            <div className="flex flex-wrap items-baseline gap-2.5">
+                <span className="text-base font-black text-strong">{top.exerciseName}</span>
+                <span className="font-display text-xl font-black tabular-nums text-strong">
+                    {top.newWeightKg} kg × {top.newReps}
+                </span>
+                {top.pctChange != null && (
+                    <Badge tone="success" size="sm">
+                        +{top.pctChange}% 1RM
+                    </Badge>
+                )}
+            </div>
+            <p className="mt-1 text-xs font-semibold text-muted">
+                Antes: {top.prevWeightKg} kg × {top.prevReps} · e1RM {top.prevOneRm} → {top.newOneRm} kg
+                {more > 0 && ` · +${more} ejercicio${more === 1 ? '' : 's'} más`}
+            </p>
+        </Card>
+    )
+}
+
+// ── Tarjeta 1RM por ejercicio (área Epley SVG, dark) ──────────────────────────
+function StrengthSparkCard({ ex }: { ex: ExerciseStrengthSeries }) {
+    const pts = ex.series.map((p) => p.oneRm)
+    const n = pts.length
+    const mn = Math.min(...pts)
+    const mx = Math.max(...pts)
+    const span = mx - mn || 1
+    const maxIdx = pts.indexOf(mx)
+    const xy = pts.map(
+        (v, i) => [n > 1 ? (i / (n - 1)) * 100 : 50, 100 - ((v - mn) / span) * 76 - 8] as [number, number]
+    )
+    const line = xy.map((p) => p.join(',')).join(' ')
+    const area = `0,100 ${line} 100,100`
+    const delta = strengthTrendDeltaKg(ex.series)
+    const latest = ex.series[n - 1]!
+    const peak = xy[maxIdx]!
+
+    return (
+        <Card variant="inverse" padding="md" className="gap-0">
+            <div className="truncate text-[13px] font-bold leading-tight text-on-dark">{ex.exerciseName}</div>
+            <div className="mb-1.5 text-[11px] text-on-dark-muted">{ex.muscleGroup}</div>
+            <div className="flex items-baseline gap-1.5">
+                <span className="font-display text-xl font-black tabular-nums text-on-dark">{latest.oneRm}</span>
+                <span className="text-[10.5px] text-on-dark-muted">kg 1RM</span>
+            </div>
+            <div
+                className="mb-1.5 text-[11px] font-bold"
+                style={{ color: delta == null ? 'var(--text-on-dark-muted)' : delta >= 0 ? 'var(--success-600)' : 'var(--danger-600)' }}
+            >
+                {delta == null
+                    ? 'Sin cambio en el periodo'
+                    : `${delta >= 0 ? '+' : ''}${delta} kg período`}
+            </div>
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="block h-[46px] w-full">
+                <polygon points={area} fill="var(--sport-500)" opacity={0.16} />
+                {n > 1 && (
+                    <polyline
+                        points={line}
+                        fill="none"
+                        stroke="var(--sport-500)"
+                        strokeWidth={2}
+                        vectorEffect="non-scaling-stroke"
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                    />
+                )}
+                <circle cx={peak[0]} cy={peak[1]} r={2.6} fill="var(--ember-500)" vectorEffect="non-scaling-stroke" />
+            </svg>
+            <div className="mt-1 text-[10px] text-on-dark-muted">
+                Última: {latest.weightKg} kg × {latest.reps}
             </div>
         </Card>
+    )
+}
+
+// ── Radar de balance muscular (SVG, dark) ─────────────────────────────────────
+function DarkRadar({ data }: { data: { label: string; v: number }[] }) {
+    const n = data.length
+    const cx = 50
+    const cy = 50
+    const R = 38
+    const pt = (i: number, r: number): [number, number] => {
+        const ang = (Math.PI * 2 * i) / n - Math.PI / 2
+        return [cx + Math.cos(ang) * r, cy + Math.sin(ang) * r]
+    }
+    const rings = [0.25, 0.5, 0.75, 1]
+    const poly = data.map((d, i) => pt(i, (R * d.v) / 100).join(',')).join(' ')
+
+    return (
+        <svg viewBox="0 0 100 100" className="mx-auto block h-auto w-full max-w-[280px] overflow-visible">
+            {rings.map((r, ri) => (
+                <polygon
+                    key={ri}
+                    points={data.map((_, i) => pt(i, R * r).join(',')).join(' ')}
+                    fill="none"
+                    stroke="var(--border-inverse)"
+                    strokeWidth={0.5}
+                    vectorEffect="non-scaling-stroke"
+                />
+            ))}
+            {data.map((_, i) => {
+                const [x, y] = pt(i, R)
+                return (
+                    <line
+                        key={i}
+                        x1={cx}
+                        y1={cy}
+                        x2={x}
+                        y2={y}
+                        stroke="var(--border-inverse)"
+                        strokeWidth={0.5}
+                        vectorEffect="non-scaling-stroke"
+                    />
+                )
+            })}
+            <polygon points={poly} fill="var(--sport-500)" opacity={0.2} />
+            <polygon
+                points={poly}
+                fill="none"
+                stroke="var(--sport-500)"
+                strokeWidth={1.5}
+                vectorEffect="non-scaling-stroke"
+                strokeLinejoin="round"
+            />
+            {data.map((d, i) => {
+                const [x, y] = pt(i, R + 7)
+                return (
+                    <text
+                        key={i}
+                        x={x}
+                        y={y}
+                        fontSize={4.4}
+                        fill="var(--text-on-dark-muted)"
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        style={{ fontWeight: 700 }}
+                    >
+                        {d.label}
+                    </text>
+                )
+            })}
+        </svg>
     )
 }
 
@@ -116,11 +240,6 @@ export function TrainingTabB4Panels({
     santiagoTodayIso,
     workoutHistory,
     muscleVolumeByGroup,
-    chartGridColor,
-    chartAxisColor,
-    tooltipBgColor,
-    tooltipBorderColor,
-    tooltipTextColor,
 }: TrainingTabB4PanelsProps) {
     const [isPending, startTransition] = useTransition()
     const [historyDate, setHistoryDate] = useState(santiagoTodayIso)
@@ -135,7 +254,7 @@ export function TrainingTabB4Panels({
 
     const handleHistoryDateChange = (date: string) => {
         setHistoryDate(date)
-        if (date === santiagoTodayIso) {
+        if (!date || date === santiagoTodayIso) {
             setHistoryData([])
             setHistoryLoaded(false)
             return
@@ -146,6 +265,7 @@ export function TrainingTabB4Panels({
             setHistoryLoaded(true)
         })
     }
+
     const weeklyPRs = useMemo(
         () => findWeeklyWeightPRs(workoutHistory || [], new Date()),
         [workoutHistory]
@@ -168,12 +288,8 @@ export function TrainingTabB4Panels({
             .slice(0, 8)
         const maxV = Math.max(...rows.map((r) => r.volume), 1)
         return rows.map((r) => ({
-            subject:
-                r.muscleGroup.length > 10
-                    ? `${r.muscleGroup.slice(0, 9)}…`
-                    : r.muscleGroup,
-            fullName: r.muscleGroup,
-            pct: Math.round((r.volume / maxV) * 100),
+            label: r.muscleGroup.length > 10 ? `${r.muscleGroup.slice(0, 9)}…` : r.muscleGroup,
+            v: Math.round((r.volume / maxV) * 100),
         }))
     }, [muscleVolumeByGroup])
 
@@ -188,6 +304,11 @@ export function TrainingTabB4Panels({
     const allExerciseSeries = useMemo(
         () => buildExerciseStrengthSeriesMap(workoutHistory || []),
         [workoutHistory]
+    )
+
+    const totalStrengthExercises = useMemo(
+        () => [...allExerciseSeries.values()].filter((s) => s.series.length > 0).length,
+        [allExerciseSeries]
     )
 
     const muscleGroupOptions = useMemo(() => {
@@ -217,36 +338,44 @@ export function TrainingTabB4Panels({
 
     const hasStrength = allExerciseSeries.size > 0
 
+    // ── Tonelaje: últimas 7 sesiones (Σ peso×reps por día) ────────────────────
+    const tonnageBars = useMemo(() => tonnageSeries.slice(-7), [tonnageSeries])
+    const tonnageMax = useMemo(() => Math.max(...tonnageBars.map((p) => p.tonnage), 1), [tonnageBars])
+    const tonnageAvg = useMemo(() => {
+        if (tonnageBars.length === 0) return 0
+        return Math.round(tonnageBars.reduce((s, p) => s + p.tonnage, 0) / tonnageBars.length)
+    }, [tonnageBars])
+    const DOW_INITIALS = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
+
     if (!hasRadar && !hasBars && weeklyPRs.length === 0 && !hasStrength) {
         return null
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-5">
+            {/* ── Banner PR de la semana ── */}
             <WeeklyPRBanner prs={weeklyPRs} />
 
+            {/* ── Fuerza — 1RM estimado (Epley) ── */}
             {hasStrength && (
-                <div className="space-y-4">
-                    <div className="flex items-center gap-2">
-                        <Dumbbell className="h-4 w-4 text-sport-600" />
-                        <h3 className="text-xs font-black uppercase tracking-widest text-sport-600">
-                            Fuerza — 1RM estimado (Epley)
-                        </h3>
-                    </div>
+                <div>
+                    <SectionTitle icon={<Dumbbell className="h-4 w-4" />}>
+                        Fuerza — 1RM estimado (Epley)
+                    </SectionTitle>
 
                     {muscleGroupOptions.length > 1 && (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="mb-3 flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none]">
                             <button
                                 type="button"
                                 onClick={() => setSelectedMuscle(null)}
                                 className={cn(
-                                    'rounded-pill border-[1.5px] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all',
+                                    'h-8 shrink-0 rounded-pill border-[1.5px] px-3 text-[12.5px] font-bold transition-colors',
                                     !selectedMuscle
-                                        ? 'border-sport-500 bg-sport-500 text-[var(--text-on-sport)]'
-                                        : 'border-default bg-surface-card text-muted hover:text-strong'
+                                        ? 'border-sport-500 bg-sport-500 text-white'
+                                        : 'border-[var(--border-inverse)] bg-white/[0.05] text-on-dark-muted hover:text-on-dark'
                                 )}
                             >
-                                Todos
+                                Todos · {totalStrengthExercises}
                             </button>
                             {muscleGroupOptions.map(({ group, count }) => {
                                 const isActive = selectedMuscle === group
@@ -256,209 +385,143 @@ export function TrainingTabB4Panels({
                                         type="button"
                                         onClick={() => setSelectedMuscle(isActive ? null : group)}
                                         className={cn(
-                                            'rounded-pill border-[1.5px] px-3 py-1.5 text-[10px] font-black uppercase tracking-widest transition-all',
+                                            'h-8 shrink-0 rounded-pill border-[1.5px] px-3 text-[12.5px] font-bold transition-colors',
                                             isActive
-                                                ? 'border-sport-500 bg-sport-500 text-[var(--text-on-sport)]'
-                                                : 'border-default bg-surface-card text-muted hover:text-strong'
+                                                ? 'border-sport-500 bg-sport-500 text-white'
+                                                : 'border-[var(--border-inverse)] bg-white/[0.05] text-on-dark-muted hover:text-on-dark'
                                         )}
                                     >
-                                        {group}
-                                        <span className="ml-1 opacity-60">({count})</span>
+                                        {group} · {count}
                                     </button>
                                 )
                             })}
                         </div>
                     )}
 
-                    <TrainingStrengthCards
-                        workoutHistory={workoutHistory || []}
-                        exercises={filteredStrengthExercises}
-                        chartGridColor={chartGridColor}
-                        chartAxisColor={chartAxisColor}
-                        tooltipBgColor={tooltipBgColor}
-                        tooltipBorderColor={tooltipBorderColor}
-                        tooltipTextColor={tooltipTextColor}
-                        maxCards={selectedMuscle ? 20 : 4}
-                    />
+                    {filteredStrengthExercises.length > 0 ? (
+                        <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 lg:grid-cols-4">
+                            {filteredStrengthExercises.map((ex) => (
+                                <StrengthSparkCard key={ex.exerciseId} ex={ex} />
+                            ))}
+                        </div>
+                    ) : (
+                        <Card variant="inverse" padding="md">
+                            <p className="text-center text-[13px] text-on-dark-muted">
+                                Sin series de fuerza para este grupo.
+                            </p>
+                        </Card>
+                    )}
                 </div>
             )}
 
+            {/* ── Balance muscular + Tonelaje ── */}
             {(hasRadar || hasBars) && (
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
                     {hasRadar && (
-                        <Card padding="md">
-                            <h3 className="mb-1 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
-                                <Target className="h-4 w-4" /> Balance muscular (30d)
-                            </h3>
-                            <p className="mb-4 text-[10px] font-medium text-muted">
-                                Volumen relativo por grupo (normalizado al máximo del periodo).
-                            </p>
-                            <div className="h-[280px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-                                        <PolarGrid stroke={chartGridColor} />
-                                        <PolarAngleAxis
-                                            dataKey="subject"
-                                            tick={{ fill: chartAxisColor, fontSize: 9 }}
-                                        />
-                                        <PolarRadiusAxis
-                                            angle={30}
-                                            domain={[0, 100]}
-                                            tick={{ fill: chartAxisColor, fontSize: 9 }}
-                                        />
-                                        <Radar
-                                            name="Volumen"
-                                            dataKey="pct"
-                                            stroke="var(--sport-500)"
-                                            fill="var(--sport-500)"
-                                            fillOpacity={0.35}
-                                        />
-                                        <Tooltip
-                                            content={({ active, payload }) => {
-                                                if (!active || !payload?.length) return null
-                                                const row = payload[0]?.payload as {
-                                                    fullName?: string
-                                                    pct?: number
-                                                }
-                                                return (
-                                                    <div
-                                                        className="rounded-lg border px-3 py-2 text-[11px] font-semibold shadow-md"
-                                                        style={{
-                                                            backgroundColor: tooltipBgColor,
-                                                            borderColor: tooltipBorderColor,
-                                                            color: tooltipTextColor,
-                                                        }}
-                                                    >
-                                                        <p className="font-black">{row.fullName}</p>
-                                                        <p className="opacity-90 tabular-nums">
-                                                            {row.pct}% del máximo del periodo
-                                                        </p>
-                                                    </div>
-                                                )
-                                            }}
-                                        />
-                                    </RadarChart>
-                                </ResponsiveContainer>
-                            </div>
+                        <Card variant="inverse" padding="md">
+                            <SectionTitle icon={<Target className="h-4 w-4" />}>
+                                Balance muscular · 30 días
+                            </SectionTitle>
+                            <DarkRadar data={radarData} />
                             {imbalances.length > 0 && (
-                                <div className="mt-3 space-y-2 rounded-control bg-[var(--warning-100)] px-3 py-2.5">
-                                    {imbalances.slice(0, 2).map((im, i) => (
-                                        <div
-                                            key={`${im.weaker}-${i}`}
-                                            className="flex gap-2 text-[11px] font-semibold text-[var(--warning-700)]"
-                                        >
-                                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warning-600)]" />
-                                            <span>
-                                                Posible desequilibrio: <strong>{im.stronger}</strong> ~
-                                                {im.ratio}× más volumen que <strong>{im.weaker}</strong>.
-                                            </span>
-                                        </div>
-                                    ))}
+                                <div
+                                    className="mt-2.5 flex items-center gap-2"
+                                    style={{
+                                        padding: '9px 11px',
+                                        borderRadius: 'var(--radius-md)',
+                                        background: 'var(--warning-100)',
+                                    }}
+                                >
+                                    <AlertTriangle className="h-4 w-4 shrink-0 text-[var(--warning-600)]" />
+                                    <span className="text-xs font-semibold text-[var(--warning-700)]">
+                                        Posible desequilibrio: {imbalances[0]!.stronger} ~{imbalances[0]!.ratio}× más
+                                        volumen que {imbalances[0]!.weaker}
+                                    </span>
                                 </div>
                             )}
                         </Card>
                     )}
 
                     {hasBars && (
-                        <Card padding="md">
-                            <h3 className="mb-1 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
-                                <BarChart3 className="h-4 w-4" /> Tonelaje por día
-                            </h3>
-                            <p className="mb-4 text-[10px] font-medium text-muted">
-                                Σ (peso × reps) agrupado por fecha de registro.
-                            </p>
-                            <div className="h-[280px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <ComposedChart data={tonnageSeries} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
-                                        <XAxis
-                                            dataKey="label"
-                                            tick={{ fill: chartAxisColor, fontSize: 9 }}
-                                            axisLine={false}
-                                            tickLine={false}
-                                        />
-                                        <YAxis
-                                            tick={{ fill: chartAxisColor, fontSize: 9 }}
-                                            axisLine={false}
-                                            tickLine={false}
-                                            tickFormatter={(v) => `${Math.round(v / 1000)}k`}
-                                        />
-                                        <Tooltip
-                                            content={({ active, payload }) => {
-                                                if (!active || !payload?.length) return null
-                                                const pt = payload[0]?.payload
-                                                const v = Number(pt?.tonnage ?? 0)
-                                                const avg = Number(pt?.movingAvg ?? 0)
-                                                const label = String(pt?.label ?? '')
-                                                return (
-                                                    <div
-                                                        className="rounded-lg border px-3 py-2 text-[11px] font-semibold shadow-md"
-                                                        style={{
-                                                            backgroundColor: tooltipBgColor,
-                                                            borderColor: tooltipBorderColor,
-                                                            color: tooltipTextColor,
-                                                        }}
-                                                    >
-                                                        <p className="font-black mb-1">{label}</p>
-                                                        <p className="tabular-nums opacity-90">
-                                                            Tonelaje: {v.toLocaleString('es-ES')} kg·rep
-                                                        </p>
-                                                        <p className="tabular-nums opacity-70 text-[10px]">
-                                                            Media 7 ses.: {avg.toLocaleString('es-ES')} kg·rep
-                                                        </p>
-                                                    </div>
-                                                )
-                                            }}
-                                        />
-                                        <Bar
-                                            dataKey="tonnage"
-                                            fill="var(--sport-500)"
-                                            radius={[4, 4, 0, 0]}
-                                            opacity={0.7}
-                                        />
-                                        <Line
-                                            type="monotone"
-                                            dataKey="movingAvg"
-                                            stroke="var(--sport-500)"
-                                            strokeWidth={2}
-                                            dot={false}
-                                            strokeDasharray="4 3"
-                                        />
-                                    </ComposedChart>
-                                </ResponsiveContainer>
+                        <Card variant="inverse" padding="md">
+                            <SectionTitle icon={<BarChart3 className="h-4 w-4" />}>
+                                Tonelaje por sesión · 7 días
+                            </SectionTitle>
+                            <div className="relative h-[90px]">
+                                <div
+                                    className="absolute left-0 right-0 z-[1] h-0"
+                                    style={{
+                                        top: `${100 - (tonnageAvg / tonnageMax) * 100}%`,
+                                        borderTop: '1.5px dashed var(--text-on-dark-muted)',
+                                    }}
+                                />
+                                <div className="flex h-full items-end gap-2">
+                                    {tonnageBars.map((p, i) => {
+                                        const dt = new Date(p.dateKey + 'T12:00:00')
+                                        const isLast = i === tonnageBars.length - 1
+                                        return (
+                                            <div
+                                                key={p.dateKey}
+                                                className="flex h-full flex-1 flex-col items-center justify-end gap-1.5"
+                                                title={`${p.label} · ${p.tonnage.toLocaleString('es-ES')} kg·rep`}
+                                            >
+                                                <div
+                                                    className="w-full"
+                                                    style={{
+                                                        height: `${Math.max(2, (p.tonnage / tonnageMax) * 100)}%`,
+                                                        background: isLast
+                                                            ? 'var(--sport-500)'
+                                                            : 'rgba(255,255,255,0.14)',
+                                                        borderRadius: 'var(--radius-xs)',
+                                                    }}
+                                                />
+                                                <span className="text-[10px] font-bold text-on-dark-muted">
+                                                    {DOW_INITIALS[dt.getDay()]}
+                                                </span>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-on-dark-muted">
+                                <span className="w-3.5" style={{ borderTop: '1.5px dashed var(--text-on-dark-muted)' }} />
+                                Media móvil 7 ses.
                             </div>
                         </Card>
                     )}
                 </div>
             )}
 
-            {/* ── Historial de entrenamientos ── */}
-            <Card padding="md" className="space-y-5">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-sport-100">
-                            <Clock className="h-4 w-4 text-sport-600" />
-                        </div>
-                        <div>
-                            <h3 className="text-xs font-black uppercase tracking-widest text-sport-600">
-                                Historial de entrenamientos
-                            </h3>
-                            <p className="mt-0.5 text-[9px] font-bold uppercase tracking-widest text-subtle">
-                                {recentWorkoutDates.length > 0
-                                    ? `Últimas ${recentWorkoutDates.length} sesiones registradas`
-                                    : 'Sin sesiones aún'}
-                            </p>
-                        </div>
-                    </div>
+            {/* ── Historial de sesiones + navegador ── */}
+            <div>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                    <SectionTitle icon={<Clock className="h-4 w-4" />}>Historial de sesiones</SectionTitle>
+                    <label className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 text-on-dark-muted">
+                        <CalendarSearch className="h-[15px] w-[15px]" />
+                        <input
+                            type="date"
+                            value={historyDate !== santiagoTodayIso ? historyDate : ''}
+                            onChange={(e) => handleHistoryDateChange(e.target.value || santiagoTodayIso)}
+                            style={{
+                                height: 32,
+                                padding: '0 8px',
+                                borderRadius: 'var(--radius-md)',
+                                border: '1px solid var(--border-inverse)',
+                                background: 'var(--ink-950)',
+                                color: 'var(--text-on-dark)',
+                                colorScheme: 'dark',
+                                fontSize: 12,
+                                outline: 'none',
+                            }}
+                        />
+                    </label>
                 </div>
 
-                {/* Session tiles */}
+                {/* Pills de sesiones recientes */}
                 {recentWorkoutDates.length > 0 ? (
-                    <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
+                    <div className="mb-3 flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none]">
                         {recentWorkoutDates.map((date) => {
                             const dt = new Date(date + 'T12:00:00')
-                            const dayName = dt.toLocaleDateString('es-ES', { weekday: 'short' })
                             const dayNum = dt.toLocaleDateString('es-ES', { day: '2-digit' })
                             const month = dt.toLocaleDateString('es-ES', { month: 'short' })
                             const isSelected = historyDate === date
@@ -468,68 +531,66 @@ export function TrainingTabB4Panels({
                                     type="button"
                                     onClick={() => handleHistoryDateChange(date)}
                                     className={cn(
-                                        'flex flex-col items-center gap-0.5 rounded-control border-[1.5px] px-1 py-2.5 transition-all duration-200 active:scale-95',
+                                        'flex w-[58px] shrink-0 flex-col items-center gap-0.5 rounded-[var(--radius-md)] border-[1.5px] py-2 transition-colors',
                                         isSelected
-                                            ? 'scale-105 border-sport-500 bg-sport-100'
-                                            : 'border-subtle bg-surface-sunken hover:border-sport-400'
+                                            ? 'border-sport-500 bg-sport-100'
+                                            : 'border-[var(--border-inverse)] bg-white/[0.05] hover:border-sport-400'
                                     )}
                                 >
-                                    <span className={cn('text-[8px] font-black uppercase capitalize leading-none tracking-widest', isSelected ? 'text-sport-700' : 'text-subtle')}>
-                                        {dayName}
-                                    </span>
-                                    <span className={cn('font-display text-base font-black leading-tight tabular-nums', isSelected ? 'text-sport-700' : 'text-strong')}>
+                                    <span
+                                        className={cn(
+                                            'font-display text-base font-black leading-none tabular-nums',
+                                            isSelected ? 'text-sport-700' : 'text-on-dark'
+                                        )}
+                                    >
                                         {dayNum}
                                     </span>
-                                    <span className={cn('text-[8px] font-bold uppercase leading-none', isSelected ? 'text-sport-700' : 'text-subtle')}>
+                                    <span
+                                        className={cn(
+                                            'text-[9.5px] uppercase leading-none',
+                                            isSelected ? 'text-sport-700' : 'text-on-dark-muted'
+                                        )}
+                                    >
                                         {month}
                                     </span>
+                                    <span className="h-1.5 w-1.5 rounded-full bg-[var(--success-500)]" />
                                 </button>
                             )
                         })}
                     </div>
                 ) : (
-                    <p className="py-6 text-center text-sm text-muted">
-                        Sin sesiones registradas.
-                    </p>
+                    <Card variant="inverse" padding="md" className="mb-3">
+                        <p className="text-center text-[13px] text-on-dark-muted">Sin sesiones registradas aún.</p>
+                    </Card>
                 )}
 
-                {/* Date picker (búsqueda) */}
-                <div className="space-y-2 border-t border-subtle pt-4">
-                    <p className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-subtle">
-                        <Calendar className="h-3 w-3" /> Buscar sesión por fecha
-                    </p>
-                    <DayNavigator
-                        selectedDate={historyDate}
-                        onDateChange={handleHistoryDateChange}
-                        adherenceDates={activityDates}
-                        isLoading={isPending}
-                    />
-                </div>
-
-                {/* Session detail */}
+                {/* Detalle de sesión / empty-state */}
                 {historyDate !== santiagoTodayIso && (
-                    <div className="border-t border-subtle pt-4">
+                    <>
                         {isPending && (
-                            <p className="animate-pulse py-6 text-center text-sm text-muted">
-                                Cargando sesión…
-                            </p>
+                            <Card variant="inverse" padding="lg">
+                                <p className="animate-pulse text-center text-[13px] text-on-dark-muted">
+                                    Cargando sesión…
+                                </p>
+                            </Card>
                         )}
                         {!isPending && historyLoaded && historyData.length === 0 && (
-                            <p className="py-6 text-center text-sm text-muted">
-                                Sin entrenamiento registrado para este día.
-                            </p>
+                            <Card variant="inverse" padding="lg" className="items-center text-center">
+                                <Moon className="mb-1.5 h-6 w-6 text-on-dark-muted opacity-70" />
+                                <p className="text-[13.5px] text-on-dark-muted">
+                                    Sin entrenamiento registrado para este día
+                                </p>
+                            </Card>
                         )}
-                        {!isPending && historyData.length > 0 && (
-                            <WorkoutDayReadOnly logs={historyData} />
-                        )}
-                    </div>
+                        {!isPending && historyData.length > 0 && <WorkoutDayReadOnly logs={historyData} />}
+                    </>
                 )}
-            </Card>
+            </div>
         </div>
     )
 }
 
-// ── Sub-componente: vista de sesión de entrenamiento (solo lectura) ──────────
+// ── Sub-componente: vista de sesión de entrenamiento (solo lectura, dark) ─────
 type WorkoutLog = Awaited<ReturnType<typeof getClientWorkoutForDate>>[number]
 
 function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
@@ -552,79 +613,42 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
     const planTitle = (logs[0] as any)?.workout_blocks?.workout_plans?.title
     const exercises = [...byExercise.values()]
     const totalSets = logs.length
-    const totalVolume = logs.reduce((s, l) => s + ((l.weight_kg ?? 0) * (l.reps_done ?? 0)), 0)
 
     return (
-        <div className="space-y-3">
-            {/* Session meta bar */}
-            <div className="flex flex-wrap items-center gap-3">
-                {planTitle && (
-                    <span className="rounded-control bg-surface-sunken px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-muted">
-                        {planTitle}
-                    </span>
-                )}
-                <span className="rounded-control bg-surface-sunken px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-muted">
-                    {exercises.length} ejercicio{exercises.length !== 1 ? 's' : ''}
-                </span>
-                <span className="rounded-control bg-surface-sunken px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-muted">
-                    {totalSets} sets
-                </span>
-                {totalVolume > 0 && (
-                    <span className="rounded-control bg-sport-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-sport-700">
-                        {Math.round(totalVolume).toLocaleString('es-ES')} kg·rep
-                    </span>
-                )}
+        <Card variant="inverse" padding="md" className="gap-0">
+            <div className="mb-2.5 flex items-baseline justify-between gap-3">
+                <div className="text-[14.5px] font-black text-on-dark">{planTitle || 'Sesión'}</div>
+                <div className="shrink-0 text-[11.5px] text-on-dark-muted">
+                    {exercises.length} ej. · {totalSets} sets
+                </div>
             </div>
 
-            {/* Exercise list */}
-            <div className="space-y-2">
-                {exercises.map(({ name, muscle, sets }, exIdx) => {
+            <div className="space-y-3">
+                {exercises.map(({ name, muscle, sets }) => {
                     const sortedSets = [...sets].sort((a, b) => (a.set_number ?? 0) - (b.set_number ?? 0))
                     return (
-                        <div
-                            key={name}
-                            className="overflow-hidden rounded-control border border-subtle bg-surface-sunken"
-                        >
-                            <div className="flex items-center justify-between gap-3 border-b border-subtle px-3 py-2.5">
-                                <div className="flex min-w-0 items-center gap-2">
-                                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[10px] bg-sport-500 text-[9px] font-black text-[var(--text-on-sport)]">
-                                        {exIdx + 1}
-                                    </div>
-                                    <p className="truncate text-xs font-black uppercase tracking-tight text-strong">{name}</p>
-                                </div>
-                                {muscle && (
-                                    <span className="shrink-0 text-[9px] font-bold uppercase tracking-widest text-subtle">
-                                        {muscle}
-                                    </span>
-                                )}
+                        <div key={name}>
+                            <div className="mb-1.5 flex items-center gap-2">
+                                <span className="text-[13px] font-bold text-on-dark">{name}</span>
+                                {muscle && <span className="text-[11px] text-on-dark-muted">{muscle}</span>}
                             </div>
-                            <div className="space-y-1 px-3 py-2">
-                                {sortedSets.map((s, i) => (
-                                    <div key={i} className="flex items-center gap-3 text-[11px]">
-                                        <span className="w-6 shrink-0 text-[10px] font-black tabular-nums text-subtle">
-                                            #{s.set_number ?? i + 1}
-                                        </span>
-                                        <span className="font-black tabular-nums text-strong">
-                                            {s.weight_kg ?? '—'}
-                                            <span className="font-bold text-muted"> kg</span>
-                                        </span>
-                                        <span className="font-bold text-muted">×</span>
-                                        <span className="font-black tabular-nums text-strong">
-                                            {s.reps_done ?? '—'}
-                                            <span className="font-bold text-muted"> reps</span>
-                                        </span>
-                                        {s.rpe != null && (
-                                            <span className="ml-auto rounded-[10px] bg-[var(--ember-100)] px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-[var(--ember-700)]">
-                                                RPE {s.rpe}
-                                            </span>
-                                        )}
-                                    </div>
+                            <div className="flex flex-wrap gap-1.5">
+                                {sortedSets.map((s, si) => (
+                                    <span
+                                        key={si}
+                                        className="rounded-[var(--radius-xs)] bg-white/[0.06] px-1.5 py-[3px] text-[11.5px] text-on-dark"
+                                        style={{ fontFamily: 'var(--font-mono)' }}
+                                    >
+                                        {(s.set_number ?? si + 1)}: {s.weight_kg ? `${s.weight_kg}kg` : 'PC'} ×{' '}
+                                        {s.reps_done ?? '—'}
+                                        {s.rpe != null ? ` · RPE ${s.rpe}` : ''}
+                                    </span>
                                 ))}
                             </div>
                         </div>
                     )
                 })}
             </div>
-        </div>
+        </Card>
     )
 }

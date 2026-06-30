@@ -3,24 +3,18 @@
 import type { ReactNode } from 'react'
 import { useRef, useState, useEffect, useCallback } from 'react'
 import { motion, useReducedMotion, AnimatePresence } from 'framer-motion'
-import {
-    LayoutDashboard,
-    TrendingUp,
-    BarChart2,
-    LayoutGrid,
-    Apple,
-    CreditCard,
-    ChevronRight,
-} from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+// 5 pestañas (sin Facturación). Etiquetas 1:1 con el diseño nuevo: Resumen ·
+// Progreso · Entreno · Programa · Nutrición. Pills label-only (sin íconos),
+// como en coach-ficha.jsx.
 const TABS = [
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    { id: 'progress', label: 'Progreso', icon: TrendingUp },
-    { id: 'workout', label: 'Análisis', icon: BarChart2 },
-    { id: 'program', label: 'Plan', icon: LayoutGrid },
-    { id: 'nutrition', label: 'Nutrición', icon: Apple },
-    { id: 'billing', label: 'Facturación', icon: CreditCard },
+    { id: 'overview', label: 'Resumen' },
+    { id: 'progress', label: 'Progreso' },
+    { id: 'workout', label: 'Entreno' },
+    { id: 'program', label: 'Programa' },
+    { id: 'nutrition', label: 'Nutrición' },
 ] as const
 
 export type ProfileMainTabId = (typeof TABS)[number]['id']
@@ -78,7 +72,6 @@ export function ProfileTabNav({ activeTab, onChange, badges }: ProfileTabNavProp
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
                 >
                     {TABS.map((tab) => {
-                        const Icon = tab.icon
                         const active = activeTab === tab.id
                         const badge = badges?.[tab.id]
                         const isAlert = badge === '!'
@@ -94,7 +87,6 @@ export function ProfileTabNav({ activeTab, onChange, badges }: ProfileTabNavProp
                                         : 'border-default bg-surface-card text-muted hover:text-strong'
                                 )}
                             >
-                                <Icon className="h-3.5 w-3.5 shrink-0 opacity-90" />
                                 <span className="whitespace-nowrap">{tab.label}</span>
                                 {badge != null && badge !== '' && (
                                     <span

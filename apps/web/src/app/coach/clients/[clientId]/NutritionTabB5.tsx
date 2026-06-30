@@ -19,8 +19,6 @@ import {
   Legend,
   ReferenceArea,
 } from 'recharts'
-import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
-import 'react-circular-progressbar/dist/styles.css'
 import { Card } from '@/components/ui/card'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -29,24 +27,27 @@ import {
   Utensils,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Apple,
-  Flame,
   Calendar,
   CheckCircle2,
   Clock,
   Pencil,
   ExternalLink,
+  Copy,
+  AlertTriangle,
   TrendingUp,
   TrendingDown,
   Minus,
   Heart,
   Droplets,
-  MessageCircle,
+  Footprints,
+  Moon,
+  Timer,
+  MessageSquare,
 } from 'lucide-react'
-import { AdherenceStrip, type DayAdherence } from '@/app/c/[coach_slug]/nutrition/_components/AdherenceStrip'
-import { MacroRingSummary } from '@/app/c/[coach_slug]/nutrition/_components/MacroRingSummary'
+import { type DayAdherence } from '@/app/c/[coach_slug]/nutrition/_components/AdherenceStrip'
 import { DayNavigator } from '@/app/c/[coach_slug]/nutrition/_components/DayNavigator'
-import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
@@ -61,7 +62,6 @@ import {
   type NutritionCycleRow,
   type NutritionHistoryEntryLite,
 } from './NutritionCycleHistorySection'
-import { ConsumedVsTarget, NutritionProgressZone } from '@/components/nutrition'
 import { NotesThread, type NotesThreadComment } from '@/components/nutrition/NotesThread'
 import { CoachNutrientTargetsEditor } from './CoachNutrientTargetsEditor'
 import { CoachPrivateNotesPanel } from './CoachPrivateNotesPanel'
@@ -160,83 +160,53 @@ const MACRO_COLORS = {
   fat: 'var(--color-macro-fats)',
 }
 
-function MacroShareRing({
-  label,
-  grams,
-  kcalSharePct,
-  color,
-  unit = 'g',
-}: {
-  label: string
-  grams: number
-  kcalSharePct: number
-  color: string
-  unit?: string
-}) {
-  const pct = Math.min(100, Math.max(0, Math.round(kcalSharePct)))
+// ── Presentational helpers (EVA DS dark — transcripción del kit ficha-nutrition) ──
+
+/** Separador de zona (kit `SectionTitle`): título fuerte en mayúsculas. */
+function SectionTitle({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="h-[72px] w-[72px]">
-        <CircularProgressbar
-          value={pct}
-          text={`${grams}${unit === 'g' ? 'g' : ''}`}
-          strokeWidth={10}
-          styles={buildStyles({
-            pathColor: color,
-            trailColor: 'rgba(128,128,128,0.12)',
-            textColor: 'var(--foreground)',
-            textSize: '22px',
-          })}
-        />
-      </div>
-      <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground text-center leading-tight">
-        {label}
-      </span>
-      <span className="text-[10px] font-bold tabular-nums text-muted-foreground">{pct}% kcal</span>
-    </div>
+    <h2 className={cn('text-sm font-black uppercase tracking-widest text-strong', className)}>
+      {children}
+    </h2>
   )
 }
 
-function HeatmapCell({
-  day,
-  reduceMotion,
-}: {
-  day: {
-    dateKey: string
-    label: string
-    compliancePct: number | null
-    mealsDone: number
-    mealsTotal: number
-    hasLog: boolean
-  }
-  reduceMotion: boolean | null
-}) {
-  const bg = !day.hasLog
-    ? 'bg-muted/60 border-border/40'
-    : day.compliancePct == null
-      ? 'bg-muted/60 border-border/40'
-      : day.compliancePct >= 80
-        ? 'bg-emerald-500/35 border-emerald-500/50'
-        : day.compliancePct >= 60
-          ? 'bg-amber-500/35 border-amber-500/45'
-          : 'bg-rose-500/30 border-rose-500/45'
-
-  const title = day.hasLog
-    ? `${day.dateKey}: ${day.mealsDone}/${day.mealsTotal} comidas · ${day.compliancePct ?? 0}%`
-    : `${day.dateKey}: sin registro`
-
+/** Título de card (acento sport, como las hermanas redesign de la ficha). */
+function CardHeading({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <motion.div
-      role="gridcell"
-      aria-label={title}
-      className={cn(
-        'aspect-square rounded-md border text-[0] min-h-[26px]',
-        bg,
-        'cursor-default'
-      )}
-      whileHover={reduceMotion ? undefined : { scale: 1.08 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 22 }}
-    />
+    <h3 className={cn('flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600', className)}>
+      {children}
+    </h3>
+  )
+}
+
+/** Barra lineal de macro (kit `ProgressBar`): label + meta + track + fill por color de macro. */
+function MacroBar({
+  label,
+  value,
+  target,
+  unit,
+  color,
+}: {
+  label: string
+  value: number
+  target: number
+  unit: string
+  color: string
+}) {
+  const pct = target > 0 ? Math.min(100, Math.round((value / target) * 100)) : 0
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-xs font-bold text-body">{label}</span>
+        <span className="text-[11px] font-bold tabular-nums text-muted">
+          {Math.round(value)} / {Math.round(target)} {unit}
+        </span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-pill bg-surface-sunken">
+        <div className="h-full rounded-pill" style={{ width: `${pct}%`, background: color }} />
+      </div>
+    </div>
   )
 }
 
@@ -251,18 +221,28 @@ function ZoneHeader({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-black text-primary">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control bg-sport-100 text-xs font-black text-sport-600">
         {letter}
       </span>
       <div className="min-w-0">
-        <h2 className="text-sm font-black uppercase tracking-widest text-foreground">{title}</h2>
+        <SectionTitle>{title}</SectionTitle>
         {subtitle ? (
-          <p className="text-[11px] font-medium text-muted-foreground">{subtitle}</p>
+          <p className="text-[11px] font-medium text-muted">{subtitle}</p>
         ) : null}
       </div>
     </div>
   )
 }
+
+/** Color de celda del heatmap por % de comidas del día (3 niveles + sin-registro). */
+function heatmapCellColor(day: { hasLog: boolean; compliancePct: number | null }): string {
+  if (!day.hasLog || day.compliancePct == null) return 'var(--ink-200)'
+  if (day.compliancePct >= 80) return 'var(--success-500)'
+  if (day.compliancePct >= 60) return 'var(--warning-500)'
+  return 'var(--danger-500)'
+}
+
+const DAY_LETTERS = ['D', 'L', 'M', 'X', 'J', 'V', 'S']
 
 /** Collapsible "Detalle" accordion — collapsed by default. Reuses the file's
  *  framer-motion expand pattern so heavy charts stay out of the default view. */
@@ -279,20 +259,18 @@ function DetailAccordion({
 }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <Card className="overflow-hidden ">
+    <Card padding="none" className="overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-primary/5"
+        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-sport-100"
         aria-expanded={open}
       >
-        <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-          {title}
-        </span>
+        <span className="text-xs font-black uppercase tracking-widest text-muted">{title}</span>
         {open ? (
-          <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <ChevronUp className="h-4 w-4 shrink-0 text-muted" />
         ) : (
-          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted" />
         )}
       </button>
       <AnimatePresence initial={false}>
@@ -302,7 +280,7 @@ function DetailAccordion({
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.22 }}
-            className="overflow-hidden border-t border-border/30"
+            className="overflow-hidden border-t border-subtle"
           >
             <div className="space-y-6 p-5">{children}</div>
           </motion.div>
@@ -320,7 +298,6 @@ export function NutritionTabB5({
   activeNutritionPlan,
   nutritionTimeline,
   mealDetails,
-  adherence30d,
   todayMacros,
   hasTodayNutritionLog = false,
   nutritionMonthlyAvgPct,
@@ -466,6 +443,11 @@ export function NutritionTabB5({
     { name: 'Grasas', value: consF, color: MACRO_COLORS.fat },
   ].filter((d) => d.value > 0)
 
+  // Adherencia headline (% canónico del motor) — el mensual manda; cae al semanal.
+  const headlineAdherencePct =
+    nutritionMonthlyAvgPct != null ? nutritionMonthlyAvgPct : nutritionWeeklyAvgPct
+  const atRisk = !!plan && kcal > 0 && headlineAdherencePct < 60
+
   const heatmapDays = useMemo(() => {
     const end = santiagoTodayIso
       ? parseISO(`${santiagoTodayIso}T12:00:00`)
@@ -488,6 +470,15 @@ export function NutritionTabB5({
       }
     })
   }, [nutritionTimeline, santiagoTodayIso])
+
+  // Comidas hechas HOY (para el header de la card "Hoy"): fila del timeline de hoy.
+  const todayRow = useMemo(
+    () => (nutritionTimeline || []).find((r) => r.log_date === santiagoTodayIso),
+    [nutritionTimeline, santiagoTodayIso]
+  )
+  const mealsDoneToday = todayRow?.mealsDone ?? 0
+  const mealsTotalToday = todayRow?.mealsTotal ?? 0
+  const kcalPct = kcal > 0 ? Math.min(100, Math.round((tm.calories / kcal) * 100)) : 0
 
   const chartRows = useMemo(() => {
     return [...(nutritionTimeline || [])]
@@ -513,11 +504,18 @@ export function NutritionTabB5({
       return {
         log_date: key,
         shortDate: format(d, 'd MMM'),
+        letter: DAY_LETTERS[new Date(`${key}T12:00:00`).getDay()] ?? '',
         consumed: row?.consumed_calories ?? 0,
         target: row?.target_calories || kcal || 0,
       }
     })
   }, [nutritionTimeline, santiagoTodayIso, kcal])
+
+  // Escala del mini bar-chart 7d (meta + máximo consumido, con headroom).
+  const chart7dScale = useMemo(() => {
+    const max = Math.max(kcal || 0, ...chart7d.map((d) => d.consumed), 1)
+    return max * 1.12
+  }, [chart7d, kcal])
 
   const logRowsDesc = useMemo(() => {
     return [...(nutritionTimeline || [])].sort(
@@ -525,365 +523,592 @@ export function NutritionTabB5({
     )
   }, [nutritionTimeline])
 
-  const planMealsForStrip = (plan?.nutrition_meals as { id: string; day_of_week?: number | null }[] | undefined) ?? []
-  const useAdherenceStrip =
-    Array.isArray(adherence30d) && adherence30d.length > 0 && planMealsForStrip.length > 0
-
   const weekDelta = nutritionWeeklyAvgPct - nutritionPrevWeeklyAvgPct
   const WeekIcon = weekDelta > 1 ? TrendingUp : weekDelta < -1 ? TrendingDown : Minus
 
-  // ── ZONE A · Progreso ──────────────────────────────────────────────────────
+  // Barras de macro de HOY (consumido vs meta del plan) para la card "Hoy".
+  const todayMacroBars = [
+    { label: 'Proteína', value: tm.protein, target: prot, unit: 'g', color: MACRO_COLORS.prot },
+    { label: 'Carbohidratos', value: tm.carbs, target: carb, unit: 'g', color: MACRO_COLORS.carb },
+    { label: 'Grasas', value: tm.fats, target: fat, unit: 'g', color: MACRO_COLORS.fat },
+  ]
+
+  // Tiles de macro del plan (gramos + share de kcal) para la card del plan activo.
+  const macroShare = [
+    { name: 'Proteína', g: Math.round(prot), kcal: pCal },
+    { name: 'Carbos', g: Math.round(carb), kcal: cCal },
+    { name: 'Grasas', g: Math.round(fat), kcal: fCal },
+  ]
+
+  // ── ZONA A · Progreso ──────────────────────────────────────────────────────
   const zoneAProgreso = (
-    <NutritionProgressZone
-      title="Zona A · Progreso"
-      subtitle="Hoy (Santiago) · adherencia 30 días"
-      className="scroll-mt-24"
-    >
-      <div id="nutrition-zone-a-progreso" />
+    <section id="nutrition-zone-a-progreso" aria-label="Zona A · Progreso" className="scroll-mt-24 space-y-4">
+      {/* Banner de riesgo (adherencia < 60%) */}
+      {atRisk && (
+        <Card
+          padding="md"
+          className="flex items-center gap-3 border-l-[3px] border-l-[var(--danger-500)] bg-[var(--danger-100)]"
+        >
+          <AlertTriangle className="h-5 w-5 shrink-0 text-[var(--danger-600)]" />
+          <p className="text-sm font-bold text-[var(--danger-700)]">
+            Adherencia nutricional en riesgo ({Math.round(headlineAdherencePct)}%)
+          </p>
+        </Card>
+      )}
+
       {plan && kcal > 0 ? (
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-          <div className="space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-primary">Hoy (Santiago)</h3>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          {/* Hoy (Santiago) */}
+          <Card padding="md">
+            <div className="mb-2 flex items-baseline justify-between">
+              <CardHeading>Hoy (Santiago)</CardHeading>
+              <span className="text-xs text-muted">
+                {mealsDoneToday}/{mealsTotalToday} comidas
+              </span>
+            </div>
             {!hasTodayNutritionLog ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
+              <p className="py-6 text-center text-sm text-muted">
                 No ha registrado comidas hoy (sin log diario).
               </p>
             ) : (
               <>
-                <ConsumedVsTarget
-                  label="Energía diaria"
-                  consumed={tm.calories}
-                  target={kcal}
-                  unit="kcal"
-                />
-                <MacroRingSummary
-                  isReadOnly
-                  calories={{ consumed: tm.calories, target: kcal }}
-                  protein={{ consumed: tm.protein, target: prot }}
-                  carbs={{ consumed: tm.carbs, target: carb }}
-                  fats={{ consumed: tm.fats, target: fat }}
-                />
-              </>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
-              <Utensils className="h-4 w-4" /> Adherencia · 30 días
-              <InfoTooltip content="Cada cuadrado es un día. Verde = el alumno completó al menos una comida ese día. Gris = sin registro. No indica el 100% de las comidas, solo que logueó." />
-            </h3>
-            {useAdherenceStrip ? (
-              <div className="space-y-4">
-                <AdherenceStrip
-                  data={adherence30d!}
-                  planMeals={planMealsForStrip.map((m) => ({
-                    id: m.id,
-                    day_of_week: m.day_of_week ?? null,
-                  }))}
-                />
-                <div className="flex flex-wrap gap-4 text-sm">
-                  {nutritionMonthlyAvgPct != null && (
-                    <div>
-                      <div className="flex items-center gap-1">
-                        <p className="text-[9px] font-black uppercase text-muted-foreground">Promedio mensual</p>
-                        <InfoTooltip content="Promedio de comidas completadas vs totales del plan en los últimos 30 días. Considera solo los días con registro." iconClassName="w-3 h-3" />
-                      </div>
-                      <p className="text-2xl font-black tabular-nums">{nutritionMonthlyAvgPct}%</p>
-                    </div>
-                  )}
-                  <div>
-                    <div className="flex items-center gap-1">
-                      <p className="text-[9px] font-black uppercase text-muted-foreground">Racha (≥80%)</p>
-                      <InfoTooltip content="Días consecutivos hacia atrás donde el alumno completó ≥80% de las comidas del día." iconClassName="w-3 h-3" />
-                    </div>
-                    <p className="text-2xl font-black tabular-nums">{nutritionStreakDays} días</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <WeekIcon className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <div className="flex items-center gap-1">
-                        <p className="text-[9px] font-black uppercase text-muted-foreground">Semana vs anterior</p>
-                        <InfoTooltip content="Adherencia promedio de esta semana comparada con la semana anterior. Flecha arriba = mejora." iconClassName="w-3 h-3" />
-                      </div>
-                      <p className="font-bold tabular-nums">
-                        {nutritionWeeklyAvgPct}% vs {nutritionPrevWeeklyAvgPct}%
-                      </p>
-                    </div>
-                  </div>
+                <div className="mb-2 flex items-baseline gap-2">
+                  <span className="font-display text-2xl font-black tabular-nums text-strong">
+                    {Math.round(tm.calories).toLocaleString('es-CL')}
+                  </span>
+                  <span className="text-sm text-muted">/ {kcal.toLocaleString('es-CL')} kcal</span>
                 </div>
-              </div>
-            ) : (
-              <>
-                <p className="text-[10px] font-medium text-muted-foreground">
-                  Color según % de comidas del plan completadas ese día.
-                </p>
-                <div
-                  className="grid grid-cols-6 gap-1.5 sm:grid-cols-10"
-                  role="grid"
-                  aria-label="Mapa de adherencia nutricional de los últimos 30 días; cada celda es un día"
-                >
-                  {heatmapDays.map((day) => (
-                    <HeatmapCell key={day.dateKey} day={day} reduceMotion={reduceMotion} />
+                <div className="mb-3 h-2 overflow-hidden rounded-pill bg-surface-sunken">
+                  <div
+                    className="h-full rounded-pill bg-[var(--success-500)]"
+                    style={{ width: `${kcalPct}%` }}
+                  />
+                </div>
+                <div className="flex flex-col gap-2.5">
+                  {todayMacroBars.map((m) => (
+                    <MacroBar key={m.label} {...m} />
                   ))}
                 </div>
-                <div className="mt-2 flex flex-wrap gap-3 text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-muted/60 border border-border/40" /> Sin datos
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-rose-500/30 border border-rose-500/45" /> &lt;60%
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-amber-500/35 border border-amber-500/45" /> 60–80%
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500/35 border border-emerald-500/50" /> &gt;80%
-                  </span>
-                </div>
               </>
             )}
-          </div>
+          </Card>
+
+          {/* Adherencia · 30 días */}
+          <Card padding="md">
+            <div className="mb-3 flex items-center justify-between">
+              <CardHeading>
+                <Utensils className="h-4 w-4" /> Adherencia · 30 días
+              </CardHeading>
+              <span
+                className="font-display text-xl font-black tabular-nums"
+                style={{ color: atRisk ? 'var(--danger-600)' : 'var(--success-600)' }}
+              >
+                {Math.round(headlineAdherencePct)}%
+              </span>
+            </div>
+            <p className="mb-2 text-[10px] font-medium text-muted">
+              Color según % de comidas del plan completadas ese día.
+            </p>
+            <div
+              className="mb-3 grid gap-1 grid-cols-[repeat(15,minmax(0,1fr))]"
+              role="grid"
+              aria-label="Mapa de adherencia nutricional de los últimos 30 días; cada celda es un día"
+            >
+              {heatmapDays.map((d) => (
+                <motion.div
+                  key={d.dateKey}
+                  role="gridcell"
+                  aria-label={
+                    d.hasLog
+                      ? `${d.dateKey}: ${d.mealsDone}/${d.mealsTotal} comidas · ${d.compliancePct ?? 0}%`
+                      : `${d.dateKey}: sin registro`
+                  }
+                  title={
+                    d.hasLog
+                      ? `${d.dateKey}: ${d.mealsDone}/${d.mealsTotal} comidas · ${d.compliancePct ?? 0}%`
+                      : `${d.dateKey}: sin registro`
+                  }
+                  className="aspect-square rounded-[3px]"
+                  style={{ background: heatmapCellColor(d) }}
+                  whileHover={reduceMotion ? undefined : { scale: 1.12 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 22 }}
+                />
+              ))}
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-control bg-surface-sunken px-2.5 py-2">
+                <div className="font-display text-base font-black tabular-nums text-strong">
+                  {nutritionMonthlyAvgPct != null ? `${nutritionMonthlyAvgPct}%` : '—'}
+                </div>
+                <div className="mt-0.5 text-[10px] text-muted">Prom. mensual</div>
+              </div>
+              <div className="rounded-control bg-surface-sunken px-2.5 py-2">
+                <div className="font-display text-base font-black tabular-nums text-strong">
+                  {nutritionStreakDays} d
+                </div>
+                <div className="mt-0.5 text-[10px] text-muted">Racha ≥80%</div>
+              </div>
+              <div className="rounded-control bg-surface-sunken px-2.5 py-2">
+                <div
+                  className="flex items-center gap-1 font-display text-base font-black tabular-nums"
+                  style={{ color: weekDelta >= 0 ? 'var(--success-600)' : 'var(--danger-600)' }}
+                >
+                  <WeekIcon className="h-3.5 w-3.5" />
+                  {weekDelta >= 0 ? '+' : ''}
+                  {Math.round(weekDelta)}%
+                </div>
+                <div className="mt-0.5 text-[10px] text-muted">Sem vs ant.</div>
+              </div>
+            </div>
+          </Card>
         </div>
       ) : (
-        <p className="py-6 text-center text-sm text-muted-foreground">
-          Asigna un plan de nutrición con meta calórica para ver el progreso del alumno.
-        </p>
+        <Card padding="md">
+          <p className="py-6 text-center text-sm text-muted">
+            Asigna un plan de nutrición con meta calórica para ver el progreso del alumno.
+          </p>
+        </Card>
       )}
 
+      {/* Últimos 7 días · kcal vs meta */}
       {plan && (
-        <div className="space-y-2 border-t border-border/40 pt-5">
-          <h3 className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-primary">
-            Últimos 7 días · kcal consumidas vs meta del log
-            <InfoTooltip content="Barras azules = calorías consumidas (suma de comidas completadas × porción). Línea naranja = meta calórica diaria del plan." />
-          </h3>
-          <p className="text-[10px] font-medium text-muted-foreground">
+        <Card padding="md">
+          <CardHeading className="mb-1">Últimos 7 días · kcal vs meta</CardHeading>
+          <p className="mb-3 text-[10px] font-medium text-muted">
             Consumo estimado según comidas del plan marcadas como hechas.
           </p>
-          <div className="h-[260px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chart7d} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
-                <XAxis
-                  dataKey="shortDate"
-                  tick={{ fill: chartAxisColor, fontSize: 9 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fill: chartAxisColor, fontSize: 9 }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={36}
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null
-                    const row = payload[0]?.payload as (typeof chart7d)[0]
-                    return (
-                      <div
-                        className="rounded-lg border px-3 py-2 text-[11px] font-semibold shadow-md"
-                        style={{
-                          backgroundColor: tooltipBgColor,
-                          borderColor: tooltipBorderColor,
-                          color: tooltipTextColor,
-                        }}
-                      >
-                        <p className="font-black">{row.log_date}</p>
-                        <p>Consumidas: {row.consumed} kcal</p>
-                        <p>Meta log: {row.target || '—'} kcal</p>
-                      </div>
-                    )
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700 }} />
-                <Bar dataKey="consumed" name="Consumidas" fill="rgba(16, 185, 129, 0.45)" radius={[3, 3, 0, 0]} maxBarSize={32} />
-                <Line
-                  type="monotone"
-                  dataKey="target"
-                  name="Meta log"
-                  stroke={MACRO_COLORS.cal}
-                  strokeWidth={2}
-                  dot={{ r: 2 }}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
+          <div className="relative h-[110px]">
+            {kcal > 0 && (
+              <div
+                className="absolute right-0 left-0 border-t-[1.5px] border-dashed border-[var(--ink-400)]"
+                style={{ top: `${Math.max(0, 100 - (kcal / chart7dScale) * 100)}%` }}
+              />
+            )}
+            <div className="flex h-full items-end gap-2">
+              {chart7d.map((d) => (
+                <div
+                  key={d.log_date}
+                  className="flex h-full flex-1 flex-col items-center justify-end gap-1"
+                  title={`${d.shortDate}: ${Math.round(d.consumed)} kcal`}
+                >
+                  <div
+                    className="w-full rounded-t-[4px] bg-[var(--sport-500)]"
+                    style={{ height: `${(d.consumed / chart7dScale) * 100}%` }}
+                  />
+                  <span className="text-[9px] text-subtle">{d.letter}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+          {kcal > 0 && (
+            <div className="mt-2 flex items-center gap-2 text-[11px] text-subtle">
+              <span className="inline-block w-3.5 border-t-[1.5px] border-dashed border-[var(--ink-400)]" />
+              Meta {kcal.toLocaleString('es-CL')} kcal
+            </div>
+          )}
+        </Card>
       )}
-    </NutritionProgressZone>
+    </section>
   )
 
-  // ── ZONE B · Plan y comidas ────────────────────────────────────────────────
+  // ── ZONA B · Plan y comidas ────────────────────────────────────────────────
   const zoneBPlan = (
-    <section aria-label="Zona B · Plan y comidas" className="space-y-6">
-      <ZoneHeader
-        letter="B"
-        title="Plan y comidas"
-        subtitle="Plan activo, edición y lista de comidas"
-      />
+    <section aria-label="Zona B · Plan y comidas" className="space-y-4">
+      <ZoneHeader letter="B" title="Plan y comidas" subtitle="Plan activo, edición y lista de comidas" />
+
+      {/* Alimentos favoritos del alumno (persistidos desde su app) */}
       {clientFavoriteFoods.length > 0 && (
-        <Card className="border-border/40 p-4">
+        <Card padding="md">
           <div className="mb-2 flex items-center gap-2">
-            <Heart className="h-4 w-4 shrink-0 fill-rose-400 text-rose-400" />
-            <h3 className="text-xs font-black uppercase tracking-widest text-foreground/90">
+            <Heart className="h-4 w-4 shrink-0 fill-[var(--ember-500)] text-[var(--ember-500)]" />
+            <span className="text-[11px] font-black uppercase tracking-widest text-subtle">
               Alimentos favoritos del alumno
-            </h3>
+            </span>
           </div>
-          <p className="mb-3 text-[11px] text-muted-foreground">
+          <p className="mb-3 text-[11px] text-muted">
             Marcados desde la app del alumno; se aplican a todos sus planes con esos alimentos del catálogo.
           </p>
           <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">
             {clientFavoriteFoods.map((f) => (
-              <Badge key={f.id} variant="secondary" className="max-w-full truncate font-medium">
+              <Badge key={f.id} tone="neutral" size="sm" className="max-w-full truncate">
                 {f.name}
               </Badge>
             ))}
           </div>
         </Card>
       )}
+
+      {/* Card del plan activo */}
       {plan && (
-        <Card className="relative overflow-hidden p-6">
-          <div className="absolute top-0 right-0 h-72 w-72 rounded-full bg-primary/5 blur-3xl pointer-events-none" />
-          <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0 flex-1 space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <Apple className="h-4 w-4 text-primary shrink-0" />
-                <h3 className="text-xs font-black uppercase tracking-widest text-primary truncate">
-                  Plan activo · {String(plan.name ?? '')}
-                </h3>
-                <div className="flex items-center gap-1">
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      'text-[8px] font-black uppercase',
-                      isCustom
-                        ? 'bg-amber-500/10 text-amber-600 border-amber-500/25'
-                        : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/25'
-                    )}
-                  >
-                    {isCustom ? 'CUSTOM' : 'SYNCED'}
-                  </Badge>
-                  <InfoTooltip
-                    content={
-                      isCustom
-                        ? 'Este plan fue editado directamente para este alumno. Los cambios en las plantillas no lo afectan.'
-                        : 'Este plan está vinculado a una plantilla. Si editas la plantilla y propagas, este plan se actualiza automáticamente. El historial de adherencia se conserva.'
-                    }
-                  />
+        <Card padding="md">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <Apple className="h-4 w-4 shrink-0 text-sport-600" />
+                <p className="truncate text-[15px] font-black text-strong">
+                  Plan · {String(plan.name ?? '')}
+                </p>
+              </div>
+              {kcal > 0 && (
+                <p className="mt-0.5 text-xs text-muted">{kcal.toLocaleString('es-CL')} kcal / día</p>
+              )}
+            </div>
+            <Badge tone={isCustom ? 'warning' : 'sport'} variant="soft" size="sm">
+              {isCustom ? 'CUSTOM' : 'SYNCED'}
+            </Badge>
+          </div>
+
+          {(plan.instructions as string)?.trim() && (
+            <p className="mb-3 text-xs font-medium leading-relaxed whitespace-pre-wrap text-muted">
+              {plan.instructions as string}
+            </p>
+          )}
+
+          <div className="mb-3 flex gap-2">
+            {macroShare.map((m) => (
+              <div key={m.name} className="flex-1 rounded-control bg-surface-sunken p-2 text-center">
+                <div className="font-display text-[15px] font-black tabular-nums text-strong">
+                  {m.g}
+                  <span className="text-[10px]">g</span>
+                </div>
+                <div className="text-[10px] text-muted">
+                  {m.name} · {Math.round((m.kcal / macroKcalTotal) * 100)}%
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  href={`/coach/nutrition-plans/client/${clientId}`}
-                  className={buttonVariants({ size: 'sm', className: 'h-9 text-[10px] font-black uppercase gap-1' })}
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/coach/nutrition-plans/client/${clientId}`}
+              className={buttonVariants({ variant: 'sport', size: 'sm', className: 'gap-1.5' })}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Editar plan
+            </Link>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="gap-1.5"
+              onClick={handleOpenDuplicate}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copiar
+            </Button>
+            {coachSlug ? (
+              <a
+                href={`/c/${coachSlug}/nutrition`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-auto inline-flex items-center gap-1.5 text-xs font-bold text-sport-600 hover:underline"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                Ver como alumno
+              </a>
+            ) : null}
+          </div>
+
+          {/* Duplicate plan dialog */}
+          <Dialog open={dupOpen} onOpenChange={setDupOpen}>
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="text-base font-black uppercase">Copiar plan a otro alumno</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 pt-2">
+                <p className="text-sm text-muted">
+                  El plan se copiará como <span className="font-bold">CUSTOM</span> al alumno destino.
+                  El historial de este alumno y el plan origen no se modifican.
+                </p>
+                <Select value={dupTargetId} onValueChange={(v) => setDupTargetId(v ?? '')}>
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Seleccionar alumno…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {dupClients.length === 0 && (
+                      <SelectItem value="__none__" disabled>Cargando alumnos…</SelectItem>
+                    )}
+                    {dupClients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  className="h-10 w-full font-bold"
+                  disabled={!dupTargetId || dupLoading}
+                  onClick={handleDuplicate}
                 >
-                  <Pencil className="w-3.5 h-3.5" />
-                  Editar plan
-                </Link>
-                {coachSlug ? (
-                  <a
-                    href={`/c/${coachSlug}/nutrition`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={buttonVariants({
-                      variant: 'outline',
-                      size: 'sm',
-                      className: 'h-9 text-[10px] font-black uppercase gap-1',
-                    })}
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    Ver como alumno
-                  </a>
-                ) : null}
-                {activeNutritionPlan && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9 text-[10px] font-black uppercase gap-1"
-                    onClick={handleOpenDuplicate}
-                  >
-                    Copiar a otro alumno
-                  </Button>
+                  {dupLoading ? 'Copiando…' : 'Confirmar copia'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </Card>
+      )}
+    </section>
+  )
+
+  // Lista de comidas del plan (Zona B) — card colapsable por comida.
+  const mealsList = mealDetails && mealDetails.length > 0 && (
+    <Card padding="none" className="overflow-hidden">
+      {(mealDetails as Record<string, unknown>[]).map((meal, idx) => {
+        const id = String(meal.id)
+        const open = openMealId === id
+        const items = (meal.food_items as unknown[]) || []
+        let p = 0,
+          c = 0,
+          f = 0,
+          mealKcal = 0
+        for (const fi of items) {
+          const row = fi as { foods?: Record<string, number>; quantity?: number }
+          const food = row.foods
+          if (!food) continue
+          const q = Number(row.quantity) || 1
+          p += (food.protein_g ?? 0) * q
+          c += (food.carbs_g ?? 0) * q
+          f += (food.fats_g ?? 0) * q
+          mealKcal += (food.calories ?? 0) * q
+        }
+        const hasMacros = p + c + f > 0
+        return (
+          <div key={id}>
+            {idx > 0 && <div className="mx-3.5 h-px bg-[var(--border-subtle)]" />}
+            <button
+              type="button"
+              onClick={() => setOpenMealId(open ? null : id)}
+              className="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-sport-100"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-strong">{String(meal.name)}</p>
+                {hasMacros && (
+                  <p className="mt-0.5 text-[10px] font-bold text-muted">
+                    P {Math.round(p)}g · C {Math.round(c)}g · G {Math.round(f)}g
+                  </p>
                 )}
               </div>
+              {mealKcal > 0 && (
+                <span className="font-mono text-xs text-subtle">{Math.round(mealKcal)} kcal</span>
+              )}
+              <ChevronRight
+                className={cn(
+                  'h-4 w-4 shrink-0 text-[var(--ink-300)] transition-transform',
+                  open && 'rotate-90'
+                )}
+              />
+            </button>
+            <AnimatePresence initial={false}>
+              {open && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: reduceMotion ? 0 : 0.22 }}
+                  className="overflow-hidden"
+                >
+                  <ul className="space-y-2 px-3.5 pb-3">
+                    {String(meal.description ?? '').trim() ? (
+                      <li className="text-[11px] text-muted">{String(meal.description)}</li>
+                    ) : null}
+                    {items.length === 0 ? (
+                      <li className="text-[10px] italic text-muted">Sin alimentos enlazados</li>
+                    ) : (
+                      items.map((fi: unknown) => {
+                        const row = fi as {
+                          id?: string
+                          foods?: { name?: string; calories?: number }
+                          quantity?: number
+                          unit?: string
+                        }
+                        const fd = row.foods
+                        const label = fd?.name ?? 'Alimento'
+                        return (
+                          <li
+                            key={row.id ?? label}
+                            className="flex flex-wrap justify-between gap-2 border-b border-subtle pb-2 text-[10px] last:border-0"
+                          >
+                            <span className="font-bold text-body">{label}</span>
+                            <span className="font-medium text-muted">
+                              {row.quantity != null
+                                ? `${row.quantity}${row.unit ? ` ${row.unit}` : ''}`
+                                : ''}
+                              {fd?.calories != null ? ` · ${Math.round(fd.calories)} kcal` : ''}
+                            </span>
+                          </li>
+                        )
+                      })
+                    )}
+                  </ul>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )
+      })}
+    </Card>
+  )
 
-              {/* Duplicate plan dialog */}
-              <Dialog open={dupOpen} onOpenChange={setDupOpen}>
-                <DialogContent className="sm:max-w-sm">
-                  <DialogHeader>
-                    <DialogTitle className="text-base font-black uppercase">Copiar plan a otro alumno</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4 pt-2">
-                    <p className="text-sm text-muted-foreground">
-                      El plan se copiará como <span className="font-bold">CUSTOM</span> al alumno destino.
-                      El historial de este alumno y el plan origen no se modifican.
-                    </p>
-                    <Select value={dupTargetId} onValueChange={(v) => setDupTargetId(v ?? '')}>
-                      <SelectTrigger className="h-10">
-                        <SelectValue placeholder="Seleccionar alumno…" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {dupClients.length === 0 && (
-                          <SelectItem value="__none__" disabled>Cargando alumnos…</SelectItem>
-                        )}
-                        {dupClients.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      type="button"
-                      className="w-full h-10 font-bold"
-                      disabled={!dupTargetId || dupLoading}
-                      onClick={handleDuplicate}
-                    >
-                      {dupLoading ? 'Copiando…' : 'Confirmar copia'}
-                    </Button>
+  // ── Hilo bidireccional de comentarios (coach ⇄ alumno) ─────────────────────
+  const notesThreadComments = useMemo<NotesThreadComment[]>(
+    () =>
+      coachMealComments.map((cm) => ({
+        id: cm.id,
+        author_role: cm.author_role === 'coach' ? 'coach' : 'client',
+        body: cm.body,
+        created_at: cm.created_at,
+      })),
+    [coachMealComments]
+  )
+
+  const handleCoachReply = async (body: string) => {
+    const res = await addCoachMealComment({
+      clientId,
+      logDate: santiagoTodayIso,
+      body,
+    })
+    if (!res.ok) {
+      toast.error(res.error)
+    }
+  }
+
+  // ── ZONA C · Alertas y contexto (coach-only) ───────────────────────────────
+  const zoneCContexto = (
+    <section aria-label="Zona C · Alertas y contexto" className="space-y-4">
+      <ZoneHeader
+        letter="C"
+        title="Alertas y contexto"
+        subtitle="Señales del coach, check-ins y ciclos del plan"
+      />
+      {/* Override por-alumno de la zona "Funciones": el coach fuerza mostrar/ocultar
+          secciones de Nutrición SOLO para este alumno, encima del default coach/team. */}
+      {nutritionOverrideContext && (
+        <ClientFeaturePrefsPanel
+          clientId={clientId}
+          domain="nutrition"
+          baseEffective={nutritionOverrideContext.baseEffective}
+          override={nutritionOverrideContext.override}
+          entitledByModule={nutritionOverrideContext.entitledByModule}
+          domainEnabledBase={nutritionOverrideContext.domainEnabledBase}
+          useTeamBase={nutritionOverrideContext.useTeamBase}
+        />
+      )}
+      <NutritionCoachAlertsPanel alerts={nutritionAlerts} />
+      <NutritionCheckinContextCard
+        recentCheckIns={recentCheckIns}
+        nutritionWeeklyAvgPct={nutritionWeeklyAvgPct}
+      />
+
+      {/* Restricciones dietarias (A2/A3). Oculto cuando la nutrición está desactivada
+          para el alumno por el early-return de dominio más arriba. */}
+      <ClientFoodRestrictionsCard clientId={clientId} coachId={coachId} />
+
+      {/* Hilo bidireccional: el coach responde los comentarios del alumno. */}
+      {showSection('notes') && (
+        <Card padding="md">
+          <CardHeading className="mb-3">
+            <MessageSquare className="h-3.5 w-3.5" /> Conversación de nutrición · hoy
+          </CardHeading>
+          <NotesThread
+            comments={notesThreadComments}
+            currentRole="coach"
+            onSubmit={handleCoachReply}
+            emptyHint="Sin comentarios del alumno hoy. Puedes escribirle una nota."
+          />
+        </Card>
+      )}
+
+      {/* Umbrales de micros (base + avanzados con Nutrición Pro). */}
+      {showMicros && (
+        <CoachNutrientTargetsEditor
+          clientId={clientId}
+          initial={coachNutrientTargets}
+          proEnabled={nutritionProEnabled}
+        />
+      )}
+
+      {/* Nota privada del coach — el alumno nunca la ve. */}
+      <CoachPrivateNotesPanel clientId={clientId} notes={coachPrivateNotes} />
+
+      <NutritionCycleHistorySection
+        coachId={coachId}
+        clientId={clientId}
+        planId={typeof activeNutritionPlan?.id === 'string' ? activeNutritionPlan.id : undefined}
+        santiagoTodayIso={santiagoTodayIso}
+        activeCycle={nutritionPlanCycles.find((c) => c.is_active) ?? null}
+        templates={nutritionTemplatesLite}
+        historyEntries={nutritionPlanHistoryEntries}
+      />
+
+      {/* Hábitos del día (agua/pasos/sueño/ayuno/suplementos del alumno). */}
+      {showSection('habits') && habitsForDate && (habitsForDate.water_ml != null || habitsForDate.steps != null || habitsForDate.sleep_hours != null || habitsForDate.fasting_hours != null || (habitsForDate.supplements?.length ?? 0) > 0) && (
+        <Card padding="md">
+          <CardHeading className="mb-3">
+            <Droplets className="h-3.5 w-3.5" /> Hábitos del día
+          </CardHeading>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {habitsForDate.water_ml != null && (
+              <div className="flex items-center gap-2.5">
+                <Droplets className="h-4 w-4 shrink-0 text-sport-600" />
+                <div>
+                  <div className="font-display text-base font-black tabular-nums text-strong">
+                    {habitsForDate.water_ml >= 1000
+                      ? `${(habitsForDate.water_ml / 1000).toFixed(1).replace('.0', '')} L`
+                      : `${habitsForDate.water_ml} ml`}
                   </div>
-                </DialogContent>
-              </Dialog>
-              {kcal > 0 && (
-                <p className="text-2xl font-black tabular-nums text-foreground">
-                  {kcal} <span className="text-sm font-bold text-muted-foreground">kcal / día</span>
-                </p>
-              )}
-              {(plan.instructions as string)?.trim() && (
-                <p className="text-sm font-medium leading-relaxed text-muted-foreground whitespace-pre-wrap">
-                  {plan.instructions as string}
-                </p>
-              )}
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <MacroShareRing
-                  label="Proteína"
-                  grams={Math.round(prot)}
-                  kcalSharePct={(pCal / macroKcalTotal) * 100}
-                  color={MACRO_COLORS.prot}
-                />
-                <MacroShareRing
-                  label="Carbos"
-                  grams={Math.round(carb)}
-                  kcalSharePct={(cCal / macroKcalTotal) * 100}
-                  color={MACRO_COLORS.carb}
-                />
-                <MacroShareRing
-                  label="Grasas"
-                  grams={Math.round(fat)}
-                  kcalSharePct={(fCal / macroKcalTotal) * 100}
-                  color={MACRO_COLORS.fat}
-                />
-                <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-border/40 bg-secondary/20 px-2 py-3">
-                  <Flame className="h-5 w-5 text-primary opacity-80" />
-                  <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground text-center">
-                    Distribución
-                  </span>
-                  <span className="text-[10px] font-bold text-center text-muted-foreground leading-tight">
-                    Meta (kcal macros)
-                  </span>
+                  <div className="text-[10px] text-muted">Agua</div>
                 </div>
               </div>
-            </div>
+            )}
+            {habitsForDate.steps != null && (
+              <div className="flex items-center gap-2.5">
+                <Footprints className="h-4 w-4 shrink-0 text-sport-600" />
+                <div>
+                  <div className="font-display text-base font-black tabular-nums text-strong">
+                    {habitsForDate.steps.toLocaleString('es-CL')}
+                  </div>
+                  <div className="text-[10px] text-muted">Pasos</div>
+                </div>
+              </div>
+            )}
+            {habitsForDate.sleep_hours != null && (
+              <div className="flex items-center gap-2.5">
+                <Moon className="h-4 w-4 shrink-0 text-sport-600" />
+                <div>
+                  <div className="font-display text-base font-black tabular-nums text-strong">
+                    {habitsForDate.sleep_hours} h
+                  </div>
+                  <div className="text-[10px] text-muted">Sueño</div>
+                </div>
+              </div>
+            )}
+            {habitsForDate.fasting_hours != null && (
+              <div className="flex items-center gap-2.5">
+                <Timer className="h-4 w-4 shrink-0 text-sport-600" />
+                <div>
+                  <div className="font-display text-base font-black tabular-nums text-strong">
+                    {habitsForDate.fasting_hours} h
+                  </div>
+                  <div className="text-[10px] text-muted">Ayuno</div>
+                </div>
+              </div>
+            )}
           </div>
+          {(habitsForDate.supplements?.length ?? 0) > 0 && (
+            <div className="mt-3 text-xs text-muted">
+              Suplementos:{' '}
+              <span className="font-semibold text-body">
+                {habitsForDate.supplements!.join(' · ')}
+              </span>
+            </div>
+          )}
+          {habitsForDate.notes?.trim() && (
+            <div className="mt-2 flex gap-2 rounded-control bg-surface-sunken px-3 py-2 text-xs text-body">
+              <MessageSquare className="h-3.5 w-3.5 shrink-0 text-subtle" />
+              <span>
+                <span className="font-bold">Nota del alumno:</span> {habitsForDate.notes}
+              </span>
+            </div>
+          )}
         </Card>
       )}
     </section>
@@ -891,12 +1116,9 @@ export function NutritionTabB5({
 
   const macroMetaPieDetail = pieData.length > 0 && (
     <div className="mx-auto w-full max-w-[260px]">
-      <div className="mb-2 flex items-center justify-center gap-1">
-        <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
-          Macros meta (kcal)
-        </p>
-        <InfoTooltip content="Distribución porcentual de las calorías del plan. Referencia: 30% proteína / 40% carbos / 30% grasas para hipertrofia." iconClassName="w-3 h-3" />
-      </div>
+      <p className="mb-2 text-center text-[9px] font-black uppercase tracking-widest text-muted">
+        Macros meta (kcal)
+      </p>
       <div className="h-[220px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -959,452 +1181,166 @@ export function NutritionTabB5({
     </div>
   )
 
-  // ── Hilo bidireccional de comentarios (coach ⇄ alumno) ─────────────────────
-  // Mapea las filas del día de hoy a la forma que consume NotesThread. El coach
-  // responde vía la server action coach-scoped (author_role='coach', anclada al
-  // día de hoy en Santiago).
-  const notesThreadComments = useMemo<NotesThreadComment[]>(
-    () =>
-      coachMealComments.map((c) => ({
-        id: c.id,
-        author_role: c.author_role === 'coach' ? 'coach' : 'client',
-        body: c.body,
-        created_at: c.created_at,
-      })),
-    [coachMealComments]
-  )
-
-  const handleCoachReply = async (body: string) => {
-    const res = await addCoachMealComment({
-      clientId,
-      logDate: santiagoTodayIso,
-      body,
-    })
-    if (!res.ok) {
-      toast.error(res.error)
-    }
-  }
-
-  // ── ZONE C · Alertas y contexto ────────────────────────────────────────────
-  const zoneCContexto = (
-    <section aria-label="Zona C · Alertas y contexto" className="space-y-4">
-      <ZoneHeader
-        letter="C"
-        title="Alertas y contexto"
-        subtitle="Señales del coach, check-ins y ciclos del plan"
-      />
-      {/* Override por-alumno de la zona "Funciones": el coach fuerza mostrar/ocultar
-          secciones de Nutrición SOLO para este alumno, encima del default coach/team.
-          Escribe client_feature_prefs.sections (RLS coach-owner/manager). Gating = render. */}
-      {nutritionOverrideContext && (
-        <ClientFeaturePrefsPanel
-          clientId={clientId}
-          domain="nutrition"
-          baseEffective={nutritionOverrideContext.baseEffective}
-          override={nutritionOverrideContext.override}
-          entitledByModule={nutritionOverrideContext.entitledByModule}
-          domainEnabledBase={nutritionOverrideContext.domainEnabledBase}          useTeamBase={nutritionOverrideContext.useTeamBase}
-        />
-      )}
-      <NutritionCoachAlertsPanel alerts={nutritionAlerts} />
-      <NutritionCheckinContextCard
-        recentCheckIns={recentCheckIns}
-        nutritionWeeklyAvgPct={nutritionWeeklyAvgPct}
-      />
-
-      {/* Restricciones dietarias (A2/A3): el coach marca alergias/intolerancias que el builder
-          respeta (advierte dislike, bloquea alergia con override). Ya queda oculto cuando la
-          nutricion esta desactivada para el alumno por el early-return de dominio mas arriba
-          (no usa showSection); NO mover la card sobre ese early-return. */}
-      <ClientFoodRestrictionsCard clientId={clientId} coachId={coachId} />
-
-      {/* Hilo bidireccional: el coach responde los comentarios del alumno. Gateado por
-          `notes` (la superficie de notas/comentarios del alumno). */}
-      {showSection('notes') && (
-        <Card className="p-5">
-          <div className="mb-3 flex items-center gap-1.5">
-            <MessageCircle className="h-3.5 w-3.5 shrink-0 text-primary" />
-            <h3 className="text-xs font-black uppercase tracking-widest text-primary">
-              Conversación de nutrición · hoy
-            </h3>
-            <InfoTooltip content="Hilo visible para el alumno: responde sus comentarios del día. Para notas que el alumno no ve, usa la nota privada más abajo." iconClassName="w-3 h-3" />
-          </div>
-          <NotesThread
-            comments={notesThreadComments}
-            currentRole="coach"
-            onSubmit={handleCoachReply}
-            emptyHint="Sin comentarios del alumno hoy. Puedes escribirle una nota."
-          />
-        </Card>
-      )}
-
-      {/* Umbrales de micros para este alumno (base + avanzados con Nutrición Pro).
-          Gateado por micros_base/micros_advanced (espejo de lo que ve el alumno). */}
-      {showMicros && (
-        <CoachNutrientTargetsEditor
-          clientId={clientId}
-          initial={coachNutrientTargets}
-          proEnabled={nutritionProEnabled}
-        />
-      )}
-
-      {/* Nota privada del coach — el alumno nunca la ve (feature E). */}
-      <CoachPrivateNotesPanel clientId={clientId} notes={coachPrivateNotes} />
-      <NutritionCycleHistorySection
-        coachId={coachId}
-        clientId={clientId}
-        planId={typeof activeNutritionPlan?.id === 'string' ? activeNutritionPlan.id : undefined}
-        santiagoTodayIso={santiagoTodayIso}
-        activeCycle={nutritionPlanCycles.find((c) => c.is_active) ?? null}
-        templates={nutritionTemplatesLite}
-        historyEntries={nutritionPlanHistoryEntries}
-      />
-      {showSection('habits') && habitsForDate && (habitsForDate.water_ml != null || habitsForDate.steps != null || habitsForDate.sleep_hours != null || habitsForDate.fasting_hours != null || (habitsForDate.supplements?.length ?? 0) > 0) && (
-        <Card className="bg-[var(--info-100)] p-4">
-          <h3 className="mb-3 flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-[var(--info-600)]">
-            <Droplets className="h-3.5 w-3.5" />
-            Hábitos del día
-            <InfoTooltip content="Agua, pasos, sueño, ayuno y suplementos registrados por el alumno desde su app." iconClassName="w-3 h-3" />
-          </h3>
-          <div className="flex flex-wrap gap-4 text-sm">
-            {habitsForDate.water_ml != null && (
-              <div>
-                <p className="text-[9px] font-black uppercase text-muted-foreground">Agua</p>
-                <p className="font-black tabular-nums text-[var(--info-600)]">
-                  {habitsForDate.water_ml >= 1000
-                    ? `${(habitsForDate.water_ml / 1000).toFixed(1).replace('.0', '')} L`
-                    : `${habitsForDate.water_ml} ml`}
-                </p>
-              </div>
-            )}
-            {habitsForDate.steps != null && (
-              <div>
-                <p className="text-[9px] font-black uppercase text-muted-foreground">Pasos</p>
-                <p className={cn(
-                  'font-black tabular-nums',
-                  habitsForDate.steps >= 8000 ? 'text-emerald-500' : habitsForDate.steps >= 5000 ? 'text-amber-500' : 'text-muted-foreground'
-                )}>
-                  {habitsForDate.steps.toLocaleString('es-CL')}
-                </p>
-              </div>
-            )}
-            {habitsForDate.sleep_hours != null && (
-              <div>
-                <p className="text-[9px] font-black uppercase text-muted-foreground">Sueño</p>
-                <p className={cn(
-                  'font-black tabular-nums',
-                  habitsForDate.sleep_hours >= 7 ? 'text-emerald-500' : habitsForDate.sleep_hours >= 6 ? 'text-amber-500' : 'text-rose-500'
-                )}>
-                  {habitsForDate.sleep_hours}h
-                </p>
-              </div>
-            )}
-            {habitsForDate.fasting_hours != null && (
-              <div>
-                <p className="text-[9px] font-black uppercase text-muted-foreground">Ayuno</p>
-                <p className="font-black tabular-nums text-orange-600 dark:text-orange-400">
-                  {habitsForDate.fasting_hours}h
-                </p>
-              </div>
-            )}
-            {(habitsForDate.supplements?.length ?? 0) > 0 && (
-              <div className="w-full">
-                <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Suplementos</p>
-                <div className="flex flex-wrap gap-1">
-                  {habitsForDate.supplements!.map((s) => (
-                    <span key={s} className="rounded-md bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-600 dark:text-rose-400">
-                      {s}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {habitsForDate.notes?.trim() && (
-              <div className="w-full">
-                <p className="text-[9px] font-black uppercase text-muted-foreground">Nota del alumno</p>
-                <p className="text-xs text-muted-foreground mt-0.5 italic">{habitsForDate.notes}</p>
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
-    </section>
-  )
-
-  // ── DETALLE (collapsed by default) ─────────────────────────────────────────
+  // ── DETALLE · gráficos densos (collapsed) ──────────────────────────────────
   const detailCharts = (
-    <>
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-        {macroMetaPieDetail ? (
-          <Card className="p-5">
-            {macroMetaPieDetail}
-          </Card>
-        ) : null}
-        <Card className="p-5">
-          <h3 className="mb-1 text-xs font-black uppercase tracking-widest text-primary">
-            Objetivo kcal vs adherencia
-          </h3>
-          <p className="mb-4 text-[10px] font-medium text-muted-foreground">
-            Barras: objetivo calórico del día en el log. Línea: % de comidas marcadas.
-          </p>
-          {chartRows.length === 0 ? (
-            <p className="py-12 text-center text-sm text-muted-foreground">Sin logs recientes.</p>
-          ) : (
-            <div className="h-[280px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={chartRows} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
-                  <XAxis
-                    dataKey="shortDate"
-                    tick={{ fill: chartAxisColor, fontSize: 9 }}
-                    axisLine={false}
-                    tickLine={false}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis
-                    yAxisId="left"
-                    tick={{ fill: chartAxisColor, fontSize: 9 }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={40}
-                  />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    domain={[0, 100]}
-                    tick={{ fill: chartAxisColor, fontSize: 9 }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={32}
-                  />
-                  <ReferenceArea yAxisId="right" y1={80} y2={100} fill="var(--success-500)" fillOpacity={0.08} />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null
-                      const row = payload[0]?.payload as NutritionTimelineRow & { shortDate: string }
-                      return (
-                        <div
-                          className="rounded-lg border px-3 py-2 text-[11px] font-semibold shadow-md"
-                          style={{
-                            backgroundColor: tooltipBgColor,
-                            borderColor: tooltipBorderColor,
-                            color: tooltipTextColor,
-                          }}
-                        >
-                          <p className="font-black">{row.log_date}</p>
-                          <p>Objetivo: {row.target_calories || '—'} kcal</p>
-                          <p>
-                            Adherencia: {row.compliancePct}% ({row.mealsDone}/{row.mealsTotal})
-                          </p>
-                          {row.consumed_calories != null && row.consumed_calories > 0 && (
-                            <p>Consumidas (estim.): {row.consumed_calories} kcal</p>
-                          )}
-                          {row.plan_name && (
-                            <p className="opacity-80 truncate max-w-[200px]">{row.plan_name}</p>
-                          )}
-                        </div>
-                      )
-                    }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700 }} />
-                  <Bar
-                    yAxisId="left"
-                    dataKey="target_calories"
-                    name="Objetivo kcal"
-                    fill="rgba(0, 122, 255, 0.28)"
-                    radius={[3, 3, 0, 0]}
-                    maxBarSize={28}
-                  />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="compliancePct"
-                    name="% comidas"
-                    stroke="var(--success-500)"
-                    strokeWidth={2}
-                    dot={{ r: 2, fill: 'var(--success-500)' }}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </Card>
-
-        {hasTodayNutritionLog && pieConsumed.length > 0 && (
-          <Card className="p-5">
-            <h3 className="mb-2 text-xs font-black uppercase tracking-widest text-primary">
-              Consumido hoy (kcal por macro)
-            </h3>
-            <div className="h-[240px] w-full max-w-[300px] mx-auto">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieConsumed}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="46%"
-                    innerRadius={38}
-                    outerRadius={62}
-                    paddingAngle={2}
-                    label={({ cx, cy, midAngle, outerRadius, name, value }) => {
-                      if (midAngle === undefined) return null
-                      const RADIAN = Math.PI / 180
-                      const radius = outerRadius + 20
-                      const x = cx + radius * Math.cos(-midAngle * RADIAN)
-                      const y = cy + radius * Math.sin(-midAngle * RADIAN)
-                      return (
-                        <text
-                          x={x}
-                          y={y}
-                          textAnchor={x > cx ? 'start' : 'end'}
-                          dominantBaseline="central"
-                          fontSize={9}
-                          fontWeight={700}
-                          fill="currentColor"
-                        >
-                          {`${(name ?? '').slice(0, 4)}: ${Math.round(value ?? 0)}kcal`}
-                        </text>
-                      )
-                    }}
-                    labelLine={false}
-                  >
-                    {pieConsumed.map((entry, i) => (
-                      <Cell key={i} fill={entry.color} stroke="transparent" />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null
-                      const p = payload[0]!.payload as (typeof pieConsumed)[0]
-                      return (
-                        <div
-                          className="rounded-lg border px-2 py-1.5 text-[10px] font-semibold shadow-md"
-                          style={{
-                            backgroundColor: tooltipBgColor,
-                            borderColor: tooltipBorderColor,
-                            color: tooltipTextColor,
-                          }}
-                        >
-                          {p.name}: {Math.round(p.value)} kcal
-                        </div>
-                      )
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-        )}
-      </div>
-    </>
-  )
-
-  // Lista de comidas del plan (Zona B)
-  const mealsList = mealDetails && mealDetails.length > 0 && (
-        <Card className="p-6">
-          <h3 className="mb-4 text-xs font-black uppercase tracking-widest text-primary">
-            Plan completo · comidas
-          </h3>
-          <div className="space-y-2">
-            {(mealDetails as Record<string, unknown>[]).map((meal) => {
-              const id = String(meal.id)
-              const open = openMealId === id
-              const items = (meal.food_items as unknown[]) || []
-              let p = 0,
-                c = 0,
-                f = 0
-              for (const fi of items) {
-                const row = fi as { foods?: Record<string, number>; quantity?: number }
-                const food = row.foods
-                if (!food) continue
-                const q = Number(row.quantity) || 1
-                p += (food.protein_g ?? 0) * q
-                c += (food.carbs_g ?? 0) * q
-                f += (food.fats_g ?? 0) * q
-              }
-              const hasMacros = p + c + f > 0
-              return (
-                <div
-                  key={id}
-                  className="overflow-hidden rounded-xl border border-border/40 bg-secondary/15"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setOpenMealId(open ? null : id)}
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-primary/5"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-xs font-black uppercase tracking-tight text-foreground">
-                        {String(meal.name)}
-                      </p>
-                      {String(meal.description ?? '').trim() ? (
-                        <p className="mt-1 text-[10px] text-muted-foreground line-clamp-2">
-                          {String(meal.description)}
-                        </p>
-                      ) : null}
-                      {hasMacros && (
-                        <p className="mt-1 text-[10px] font-bold text-muted-foreground">
-                          P {Math.round(p)}g · C {Math.round(c)}g · G {Math.round(f)}g
-                        </p>
-                      )}
-                    </div>
-                    {open ? (
-                      <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    )}
-                  </button>
-                  <AnimatePresence initial={false}>
-                    {open && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: reduceMotion ? 0 : 0.22 }}
-                        className="overflow-hidden border-t border-border/30"
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+      {macroMetaPieDetail ? <Card padding="lg">{macroMetaPieDetail}</Card> : null}
+      <Card padding="lg">
+        <CardHeading className="mb-1">Objetivo kcal vs adherencia</CardHeading>
+        <p className="mb-4 text-[10px] font-medium text-muted">
+          Barras: objetivo calórico del día en el log. Línea: % de comidas marcadas.
+        </p>
+        {chartRows.length === 0 ? (
+          <p className="py-12 text-center text-sm text-muted">Sin logs recientes.</p>
+        ) : (
+          <div className="h-[280px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={chartRows} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
+                <XAxis
+                  dataKey="shortDate"
+                  tick={{ fill: chartAxisColor, fontSize: 9 }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval="preserveStartEnd"
+                />
+                <YAxis
+                  yAxisId="left"
+                  tick={{ fill: chartAxisColor, fontSize: 9 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={40}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  domain={[0, 100]}
+                  tick={{ fill: chartAxisColor, fontSize: 9 }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={32}
+                />
+                <ReferenceArea yAxisId="right" y1={80} y2={100} fill="var(--success-500)" fillOpacity={0.08} />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null
+                    const row = payload[0]?.payload as NutritionTimelineRow & { shortDate: string }
+                    return (
+                      <div
+                        className="rounded-lg border px-3 py-2 text-[11px] font-semibold shadow-md"
+                        style={{
+                          backgroundColor: tooltipBgColor,
+                          borderColor: tooltipBorderColor,
+                          color: tooltipTextColor,
+                        }}
                       >
-                        <ul className="space-y-2 px-4 py-3">
-                          {items.length === 0 ? (
-                            <li className="text-[10px] italic text-muted-foreground">Sin alimentos enlazados</li>
-                          ) : (
-                            items.map((fi: unknown) => {
-                              const row = fi as {
-                                id?: string
-                                foods?: { name?: string; calories?: number }
-                                quantity?: number
-                                unit?: string
-                              }
-                              const f = row.foods
-                              const label = f?.name ?? 'Alimento'
-                              return (
-                                <li
-                                  key={row.id ?? label}
-                                  className="flex flex-wrap justify-between gap-2 border-b border-border/20 pb-2 text-[10px] last:border-0 dark:border-white/5"
-                                >
-                                  <span className="font-bold text-foreground">{label}</span>
-                                  <span className="font-medium text-muted-foreground">
-                                    {row.quantity != null
-                                      ? `${row.quantity}${row.unit ? ` ${row.unit}` : ''}`
-                                      : ''}
-                                    {f?.calories != null ? ` · ${Math.round(f.calories)} kcal` : ''}
-                                  </span>
-                                </li>
-                              )
-                            })
-                          )}
-                        </ul>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              )
-            })}
+                        <p className="font-black">{row.log_date}</p>
+                        <p>Objetivo: {row.target_calories || '—'} kcal</p>
+                        <p>
+                          Adherencia: {row.compliancePct}% ({row.mealsDone}/{row.mealsTotal})
+                        </p>
+                        {row.consumed_calories != null && row.consumed_calories > 0 && (
+                          <p>Consumidas (estim.): {row.consumed_calories} kcal</p>
+                        )}
+                        {row.plan_name && (
+                          <p className="max-w-[200px] truncate opacity-80">{row.plan_name}</p>
+                        )}
+                      </div>
+                    )
+                  }}
+                />
+                <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 700 }} />
+                <Bar
+                  yAxisId="left"
+                  dataKey="target_calories"
+                  name="Objetivo kcal"
+                  fill="rgba(38, 128, 255, 0.32)"
+                  radius={[3, 3, 0, 0]}
+                  maxBarSize={28}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="compliancePct"
+                  name="% comidas"
+                  stroke="var(--success-500)"
+                  strokeWidth={2}
+                  dot={{ r: 2, fill: 'var(--success-500)' }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </Card>
+
+      {hasTodayNutritionLog && pieConsumed.length > 0 && (
+        <Card padding="lg">
+          <CardHeading className="mb-2">Consumido hoy (kcal por macro)</CardHeading>
+          <div className="mx-auto h-[240px] w-full max-w-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={pieConsumed}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="46%"
+                  innerRadius={38}
+                  outerRadius={62}
+                  paddingAngle={2}
+                  label={({ cx, cy, midAngle, outerRadius, name, value }) => {
+                    if (midAngle === undefined) return null
+                    const RADIAN = Math.PI / 180
+                    const radius = outerRadius + 20
+                    const x = cx + radius * Math.cos(-midAngle * RADIAN)
+                    const y = cy + radius * Math.sin(-midAngle * RADIAN)
+                    return (
+                      <text
+                        x={x}
+                        y={y}
+                        textAnchor={x > cx ? 'start' : 'end'}
+                        dominantBaseline="central"
+                        fontSize={9}
+                        fontWeight={700}
+                        fill="currentColor"
+                      >
+                        {`${(name ?? '').slice(0, 4)}: ${Math.round(value ?? 0)}kcal`}
+                      </text>
+                    )
+                  }}
+                  labelLine={false}
+                >
+                  {pieConsumed.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} stroke="transparent" />
+                  ))}
+                </Pie>
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null
+                    const p = payload[0]!.payload as (typeof pieConsumed)[0]
+                    return (
+                      <div
+                        className="rounded-lg border px-2 py-1.5 text-[10px] font-semibold shadow-md"
+                        style={{
+                          backgroundColor: tooltipBgColor,
+                          borderColor: tooltipBorderColor,
+                          color: tooltipTextColor,
+                        }}
+                      >
+                        {p.name}: {Math.round(p.value)} kcal
+                      </div>
+                    )
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
           </div>
         </Card>
-      )
+      )}
+    </div>
+  )
 
-  // Historial detallado (Detalle): último día, tabla de logs, día específico
+  // ── DETALLE · historial de logs (collapsed) ────────────────────────────────
   const detailHistory = (
     <>
       {(() => {
@@ -1413,18 +1349,18 @@ export function NutritionTabB5({
         )[0]
         if (!latest) return null
         return (
-          <Card className="p-6">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-primary">
+          <Card padding="lg">
+            <CardHeading className="mb-4">
               <Calendar className="h-4 w-4" /> Último día registrado
-            </h3>
-            <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            </CardHeading>
+            <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-muted">
               {latest.log_date} · {latest.compliancePct}% · {latest.mealsDone}/{latest.mealsTotal} comidas
               {latest.consumed_calories != null && latest.consumed_calories > 0 && (
                 <> · {latest.consumed_calories} kcal consumidas (estim.)</>
               )}
             </p>
             {latest.mealLogs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sin comidas en el log.</p>
+              <p className="text-sm text-muted">Sin comidas en el log.</p>
             ) : (
               <div className="space-y-2">
                 {[...latest.mealLogs]
@@ -1439,19 +1375,19 @@ export function NutritionTabB5({
                       <div
                         key={i}
                         className={cn(
-                          'flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm',
+                          'flex items-center justify-between rounded-control border px-3 py-2.5 text-sm',
                           row.is_completed
-                            ? 'border-emerald-500/20 bg-emerald-500/10'
-                            : 'border-border/50 bg-secondary/50 dark:bg-white/5'
+                            ? 'border-[var(--success-500)]/30 bg-[var(--success-100)]'
+                            : 'border-subtle bg-surface-sunken'
                         )}
                       >
-                        <span className="truncate font-bold">
+                        <span className="truncate font-bold text-body">
                           {row.nutrition_meals?.name || `Comida ${i + 1}`}
                         </span>
                         {row.is_completed ? (
-                          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                          <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--success-500)]" />
                         ) : (
-                          <Clock className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <Clock className="h-4 w-4 shrink-0 text-muted" />
                         )}
                       </div>
                     )
@@ -1462,20 +1398,20 @@ export function NutritionTabB5({
         )
       })()}
 
-      <Card className="p-6">
-        <h3 className="mb-4 text-xs font-black uppercase tracking-widest text-primary">Historial de logs (30)</h3>
+      <Card padding="lg">
+        <CardHeading className="mb-4">Historial de logs (30)</CardHeading>
         {logRowsDesc.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">Sin registros.</p>
+          <p className="py-8 text-center text-sm text-muted">Sin registros.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[10px] font-bold uppercase tracking-widest">
               <thead>
-                <tr className="border-b border-border/50 text-muted-foreground">
-                  <th className="pb-2 pr-3">Fecha</th>
-                  <th className="pb-2 pr-3">Plan</th>
-                  <th className="pb-2 pr-3">Obj. kcal</th>
-                  <th className="pb-2 pr-3">Cons. kcal</th>
-                  <th className="pb-2 pr-3">Adher.</th>
+                <tr className="border-b border-subtle text-muted">
+                  <th className="pr-3 pb-2">Fecha</th>
+                  <th className="pr-3 pb-2">Plan</th>
+                  <th className="pr-3 pb-2">Obj. kcal</th>
+                  <th className="pr-3 pb-2">Cons. kcal</th>
+                  <th className="pr-3 pb-2">Adher.</th>
                   <th className="pb-2">Comidas</th>
                 </tr>
               </thead>
@@ -1484,30 +1420,33 @@ export function NutritionTabB5({
                   <tr
                     key={`${row.log_date}-${row.plan_name ?? 'p'}-${i}`}
                     className={cn(
-                      'border-b border-border/30 dark:border-white/5',
-                      row.compliancePct < 60 && 'border-l-2 border-l-rose-500 bg-rose-500/5'
+                      'border-b border-subtle',
+                      row.compliancePct < 60 && 'border-l-2 border-l-[var(--danger-500)] bg-[var(--danger-100)]'
                     )}
                   >
-                    <td className="py-2.5 pr-3 font-mono text-foreground normal-case">{row.log_date}</td>
-                    <td className="max-w-[140px] truncate py-2.5 pr-3 normal-case font-semibold text-muted-foreground">
+                    <td className="py-2.5 pr-3 font-mono text-strong normal-case">{row.log_date}</td>
+                    <td className="max-w-[140px] truncate py-2.5 pr-3 font-semibold normal-case text-muted">
                       {row.plan_name || '—'}
                     </td>
-                    <td className="py-2.5 pr-3 tabular-nums">{row.target_calories || '—'}</td>
-                    <td className="py-2.5 pr-3 tabular-nums normal-case">
+                    <td className="py-2.5 pr-3 tabular-nums text-body">{row.target_calories || '—'}</td>
+                    <td className="py-2.5 pr-3 tabular-nums normal-case text-body">
                       {row.consumed_calories != null && row.consumed_calories > 0 ? row.consumed_calories : '—'}
                     </td>
                     <td className="py-2.5 pr-3">
                       <span
-                        className={cn(
-                          row.compliancePct >= 80 && 'text-emerald-500',
-                          row.compliancePct >= 60 && row.compliancePct < 80 && 'text-amber-500',
-                          row.compliancePct < 60 && 'text-rose-500'
-                        )}
+                        style={{
+                          color:
+                            row.compliancePct >= 80
+                              ? 'var(--success-600)'
+                              : row.compliancePct >= 60
+                                ? 'var(--warning-700)'
+                                : 'var(--danger-600)',
+                        }}
                       >
                         {row.compliancePct}%
                       </span>
                     </td>
-                    <td className="py-2.5 tabular-nums normal-case">
+                    <td className="py-2.5 tabular-nums normal-case text-body">
                       {row.mealsDone}/{row.mealsTotal}
                     </td>
                   </tr>
@@ -1519,10 +1458,10 @@ export function NutritionTabB5({
       </Card>
 
       {/* ── Historial por fecha ── */}
-      <Card className="p-4 space-y-4">
-        <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-          <Calendar className="w-3.5 h-3.5" /> Ver día específico
-        </h3>
+      <Card padding="md" className="space-y-4">
+        <CardHeading className="text-muted">
+          <Calendar className="h-3.5 w-3.5" /> Ver día específico
+        </CardHeading>
         <DayNavigator
           selectedDate={historyDate}
           onDateChange={handleHistoryDateChange}
@@ -1532,16 +1471,14 @@ export function NutritionTabB5({
         {historyDate !== santiagoTodayIso && (
           <div className="pt-1">
             {isPending && (
-              <p className="text-sm text-muted-foreground text-center py-6 animate-pulse">Cargando…</p>
+              <p className="animate-pulse py-6 text-center text-sm text-muted">Cargando…</p>
             )}
             {!isPending && historyLoaded && !historyData && (
-              <p className="text-sm text-muted-foreground text-center py-6">
+              <p className="py-6 text-center text-sm text-muted">
                 Sin registros de nutrición para este día.
               </p>
             )}
-            {!isPending && historyData && (
-              <NutritionDayReadOnly log={historyData} />
-            )}
+            {!isPending && historyData && <NutritionDayReadOnly log={historyData} />}
           </div>
         )}
       </Card>
@@ -1549,23 +1486,21 @@ export function NutritionTabB5({
   )
 
   // Dominio Nutrición apagado para ESTE alumno: el coach apagó la nutrición en sus
-  // preferencias. Mostrar una nota compacta en vez de la tab completa. Gating = render:
-  // el plan, el historial y la adherencia siguen en la DB intactos.
+  // preferencias. Mostrar una nota compacta en vez de la tab completa. Gating = render.
   if (!nutritionDomainEnabled) {
     return (
       <div className="space-y-4">
-        <Card className="p-8 text-center">
-          <Utensils className="mx-auto mb-3 h-6 w-6 text-muted-foreground" />
-          <h3 className="text-sm font-black uppercase tracking-widest text-foreground">
+        <Card padding="lg" className="text-center">
+          <Utensils className="mx-auto mb-3 h-6 w-6 text-muted" />
+          <h3 className="text-sm font-black uppercase tracking-widest text-strong">
             Nutrición desactivada para este alumno
           </h3>
-          <p className="mx-auto mt-2 max-w-md text-xs font-medium text-muted-foreground">
+          <p className="mx-auto mt-2 max-w-md text-xs font-medium text-muted">
             Apagaste el módulo de nutrición para este alumno en tus preferencias. Sus datos se
             conservan; vuelve a activarlo para ver plan, macros y adherencia.
           </p>
         </Card>
-        {/* Escape hatch: el panel de override permite re-activar la nutrición desde la
-            misma ficha aunque el dominio esté apagado (su master switch tri-state). */}
+        {/* Escape hatch: re-activar la nutrición desde la misma ficha. */}
         {nutritionOverrideContext && (
           <ClientFeaturePrefsPanel
             clientId={clientId}
@@ -1600,6 +1535,15 @@ export function NutritionTabB5({
       <DetailAccordion title="Detalle · historial de logs" reduceMotion={reduceMotion}>
         {detailHistory}
       </DetailAccordion>
+
+      {/* CTA final — abrir el editor del plan nutricional */}
+      <Link
+        href={`/coach/nutrition-plans/client/${clientId}`}
+        className={buttonVariants({ variant: 'sport', size: 'lg', className: 'w-full gap-2' })}
+      >
+        <Utensils className="h-5 w-5" />
+        Abrir plan nutricional
+      </Link>
     </div>
   )
 }
@@ -1657,16 +1601,18 @@ function NutritionDayReadOnly({ log }: { log: NutritionDayLog }) {
   return (
     <div className="space-y-4">
       {/* Resumen macros del día */}
-      <div className="grid grid-cols-4 gap-2 text-center rounded-xl bg-muted/30 p-3">
+      <div className="grid grid-cols-4 gap-2 rounded-control bg-surface-sunken p-3 text-center">
         {[
-          { label: 'Kcal', value: Math.round(totalCal), color: 'text-primary' },
-          { label: 'P', value: `${Math.round(totalP)}g`, color: 'text-blue-500' },
-          { label: 'C', value: `${Math.round(totalC)}g`, color: 'text-amber-500' },
-          { label: 'G', value: `${Math.round(totalF)}g`, color: 'text-rose-400' },
+          { label: 'Kcal', value: Math.round(totalCal), color: 'var(--sport-600)' },
+          { label: 'P', value: `${Math.round(totalP)}g`, color: 'var(--color-macro-protein)' },
+          { label: 'C', value: `${Math.round(totalC)}g`, color: 'var(--color-macro-carbs)' },
+          { label: 'G', value: `${Math.round(totalF)}g`, color: 'var(--color-macro-fats)' },
         ].map((m) => (
           <div key={m.label}>
-            <p className={cn('text-base font-black', m.color)}>{m.value}</p>
-            <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{m.label}</p>
+            <p className="font-display text-base font-black tabular-nums" style={{ color: m.color }}>
+              {m.value}
+            </p>
+            <p className="text-[9px] font-bold uppercase tracking-widest text-muted">{m.label}</p>
           </div>
         ))}
       </div>
@@ -1680,29 +1626,32 @@ function NutritionDayReadOnly({ log }: { log: NutritionDayLog }) {
             <div
               key={ml.id}
               className={cn(
-                'rounded-xl border p-3 space-y-1.5',
+                'space-y-1.5 rounded-control border p-3',
                 ml.is_completed
-                  ? 'border-emerald-500/30 bg-emerald-500/5'
-                  : 'border-border/40 bg-muted/10 opacity-60'
+                  ? 'border-[var(--success-500)]/30 bg-[var(--success-100)]'
+                  : 'border-subtle bg-surface-sunken opacity-70'
               )}
             >
               <div className="flex items-center justify-between">
-                <p className="text-xs font-black uppercase tracking-widest">{meal.name}</p>
-                <span className={cn('text-[10px] font-bold', ml.is_completed ? 'text-emerald-500' : 'text-muted-foreground')}>
+                <p className="text-xs font-black uppercase tracking-widest text-strong">{meal.name}</p>
+                <span
+                  className="text-[10px] font-bold"
+                  style={{ color: ml.is_completed ? 'var(--success-600)' : 'var(--text-muted)' }}
+                >
                   {ml.is_completed ? 'Completada' : 'No completada'}
                 </span>
               </div>
               {(meal.food_items ?? []).length > 0 && (
                 <ul className="space-y-0.5">
                   {(meal.food_items as any[]).map((fi: any) => (
-                    <li key={fi.id} className="text-[11px] text-muted-foreground">
+                    <li key={fi.id} className="text-[11px] text-muted">
                       {fi.foods?.name ?? '—'} — {fi.quantity} {fi.unit}
                     </li>
                   ))}
                 </ul>
               )}
               {mealSwaps.length > 0 && (
-                <div className="rounded-lg bg-[var(--info-100)] px-2.5 py-2 space-y-1">
+                <div className="space-y-1 rounded-control bg-[var(--info-100)] px-2.5 py-2">
                   <p className="text-[9px] font-black uppercase tracking-widest text-[var(--info-600)]">Swaps aplicados</p>
                   {mealSwaps.map((s) => (
                     <p key={s.id ?? `${s.meal_id}-${s.original_food_id}-${s.swapped_food_id}`} className="text-[10px] text-[var(--info-600)]">

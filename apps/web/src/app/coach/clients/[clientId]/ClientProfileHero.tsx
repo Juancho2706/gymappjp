@@ -270,42 +270,9 @@ export function ClientProfileHero({
                 </div>
             </Card>
 
-            {/* Acciones: WhatsApp + accesos a módulos como botones-ícono (junto al WhatsApp) */}
-            {(waHref || moduleButtons.length > 0) && (
-                <div className="flex flex-wrap items-center gap-2 print:hidden">
-                    {waHref ? (
-                        <a
-                            href={waHref}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label="Contactar por WhatsApp"
-                            className="flex h-11 items-center gap-2 rounded-control bg-[#25D366] px-4 text-sm font-bold text-white shadow-[var(--shadow-md)] transition-[filter] hover:brightness-105"
-                        >
-                            <WhatsAppIcon className="h-[18px] w-[18px]" />
-                            WhatsApp
-                        </a>
-                    ) : (
-                        <div
-                            aria-label="Sin número de teléfono"
-                            className="pointer-events-none flex h-11 cursor-not-allowed items-center gap-2 rounded-control border border-subtle bg-surface-sunken px-4 text-sm font-bold text-muted opacity-40 grayscale"
-                        >
-                            <WhatsAppIcon className="h-[18px] w-[18px]" />
-                            WhatsApp
-                        </div>
-                    )}
-                    {moduleButtons.map(({ href, label, Icon }) => (
-                        <Link
-                            key={href}
-                            href={href}
-                            aria-label={label}
-                            title={label}
-                            className="flex h-11 w-12 items-center justify-center rounded-control border border-default bg-surface-card text-sport-600 shadow-[var(--shadow-sm)] transition-colors hover:bg-surface-sunken"
-                        >
-                            <Icon className="h-5 w-5" />
-                        </Link>
-                    ))}
-                </div>
-            )}
+            {/* WhatsApp + accesos a módulos: MOVIDOS (rediseño CD nuevo) — WhatsApp + check-in +
+                builder viven en la barra de acciones FLOTANTE (ProfileFloatingActions) y los módulos
+                en la sección "Módulos" al final del Resumen. El hero ya no los duplica. */}
         </div>
     )
 }

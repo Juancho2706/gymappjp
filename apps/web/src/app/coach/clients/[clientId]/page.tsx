@@ -178,6 +178,11 @@ async function ProfileContent({ clientId }: { clientId: string }) {
                 nutritionDomainEnabled={nutritionDomainEnabled}
                 nutritionSectionFlags={nutritionSectionFlags}
                 nutritionOverrideContext={nutritionOverrideContext}
+                moduleFlags={{
+                    cardio: cardioModule,
+                    movement: movementModule,
+                    bodycomp: bodycompModule,
+                }}
             />
         </div>
     )

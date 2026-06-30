@@ -4,49 +4,66 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import {
-    LayoutGrid,
-    ChevronDown,
-    ChevronUp,
-    Pencil,
+    ChevronRight,
     Dumbbell,
     Timer,
+    Gauge,
+    Clock,
+    PlayCircle,
     Target,
+    Weight,
+    ClipboardX,
+    Plus,
+    PencilLine,
 } from 'lucide-react'
-import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
 import {
     Sheet,
     SheetContent,
-    SheetHeader,
     SheetTitle,
     SheetDescription,
 } from '@/components/ui/sheet'
-import { ProgramPhasesBar } from '@/components/shared/ProgramPhasesBar'
 import { mondayBasedDayOfWeek, parseProgramPhases } from './profileProgramUtils'
 import {
-    collectLogsForExercise,
     filterPlansForStructureView,
     uniqueMuscleGroupsFromBlocks,
 } from './profileProgramStructureUtils'
 import { resolveEffectiveWeekVariant } from '@/lib/workout/programWeekVariant'
 import { cn } from '@/lib/utils'
 
-const WEEKDAY_LONG = [
-    'Lunes',
-    'Martes',
-    'Miércoles',
-    'Jueves',
-    'Viernes',
-    'Sábado',
-    'Domingo',
+// L–D microciclo (1 = Lunes … 7 = Domingo).
+const DAY_LABELS = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+
+// Dark-only ficha tokens (transcripción inline del diseño nuevo · eva-app screens).
+const CANVAS = 'var(--ink-950)'
+const CARD = 'var(--ink-900)'
+const CARD_BORDER = 'var(--border-inverse)'
+const SUNKEN = 'rgba(255,255,255,0.045)'
+const TXT = 'var(--text-on-dark)'
+const TXT_MUTED = 'var(--text-on-dark-muted)'
+
+// Paleta de fase (fallback cuando program_phases no trae color) + dot muscular.
+const PHASE_PALETTE = [
+    'var(--sport-500)',
+    'var(--ember-500)',
+    'var(--aqua-500)',
+    'var(--success-500)',
+    'var(--warning-500)',
 ]
+
+function muscleDotColor(group: string | null | undefined): string {
+    if (!group) return 'var(--sport-500)'
+    let h = 0
+    for (let i = 0; i < group.length; i++) h = (h * 31 + group.charCodeAt(i)) >>> 0
+    return PHASE_PALETTE[h % PHASE_PALETTE.length]!
+}
 
 type ProgramTabB7Props = {
     clientId: string
     activeProgram: any | null | undefined
-    workoutHistory: any[]
+    // Cargado por el padre; el sheet del diseño nuevo no muestra historial → no se consume aquí.
+    workoutHistory?: any[]
     planCurrentWeek: number
     planTotalWeeks: number
     planDaysRemaining: number
@@ -64,10 +81,47 @@ function useSheetSide(): 'bottom' | 'right' {
     return side
 }
 
+function SectionTitle({ children }: { children: React.ReactNode }) {
+    return (
+        <div
+            className="font-display"
+            style={{
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: '0.09em',
+                textTransform: 'uppercase',
+                color: TXT_MUTED,
+                margin: '0 0 10px',
+            }}
+        >
+            {children}
+        </div>
+    )
+}
+
+function DarkChip({ children }: { children: React.ReactNode }) {
+    return (
+        <span
+            style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                height: 20,
+                padding: '0 8px',
+                borderRadius: 999,
+                border: `1px solid ${CARD_BORDER}`,
+                fontSize: 11,
+                fontWeight: 700,
+                color: TXT_MUTED,
+            }}
+        >
+            {children}
+        </span>
+    )
+}
+
 export function ProgramTabB7({
     clientId,
     activeProgram,
-    workoutHistory,
     planCurrentWeek,
     planTotalWeeks,
     planDaysRemaining,
@@ -75,14 +129,15 @@ export function ProgramTabB7({
     const sheetSide = useSheetSide()
     const [sheetOpen, setSheetOpen] = useState(false)
     const [sheetBlock, setSheetBlock] = useState<any | null>(null)
-    const [planOpen, setPlanOpen] = useState<Record<string, boolean>>({})
+
+    const todayDow = mondayBasedDayOfWeek(new Date())
+    const [openDow, setOpenDow] = useState<number | null>(todayDow)
 
     const structure = (activeProgram?.program_structure_type as 'weekly' | 'cycle' | null) || 'weekly'
     const isWeekly = structure === 'weekly'
 
     const abMode = !!activeProgram?.ab_mode
-    // Variante EFECTIVA (cae a la que tenga planes si la del ciclo está vacía) — el badge y los días
-    // mostrados coinciden, y un A/B mal armado de una sola semana no muestra "sin días".
+    // Variante EFECTIVA (cae a la que tenga planes si la del ciclo está vacía).
     const activeVariant = useMemo(
         () =>
             resolveEffectiveWeekVariant(
@@ -112,8 +167,6 @@ export function ProgramTabB7({
         return m
     }, [plansView])
 
-    const todayDow = mondayBasedDayOfWeek(new Date())
-
     const phases = useMemo(
         () => parseProgramPhases(activeProgram?.program_phases),
         [activeProgram?.program_phases]
@@ -126,217 +179,407 @@ export function ProgramTabB7({
             ? Math.min(100, Math.round((planCurrentWeek / planTotalWeeks) * 100))
             : 0
 
-    const exerciseIdForSheet = sheetBlock?.exercise_id ?? sheetBlock?.exercises?.id
-    const historySessions = useMemo(
-        () => collectLogsForExercise(workoutHistory, String(exerciseIdForSheet || '')),
-        [workoutHistory, exerciseIdForSheet]
-    )
+    // Semanas a graficar en "Estructura del ciclo": el total programado; si no hay fechas, cae a las
+    // semanas del ciclo (weeks_to_repeat). Solo se renderiza si hay más de 1.
+    const structureWeeks = planTotalWeeks > 1 ? planTotalWeeks : weeksRepeat > 1 ? weeksRepeat : 0
+    const totalPhaseWeeks = phases.reduce((a, p) => a + Math.max(1, p.weeks), 0)
+
+    const phaseForWeek = (wk: number) => {
+        if (!phases.length) return { name: '', color: 'var(--sport-500)' as string }
+        let acc = 0
+        for (let i = 0; i < phases.length; i++) {
+            acc += Math.max(1, phases[i]!.weeks)
+            if (wk <= acc) return { name: phases[i]!.name, color: phases[i]!.color || PHASE_PALETTE[i % PHASE_PALETTE.length]! }
+        }
+        const last = phases.length - 1
+        return { name: phases[last]!.name, color: phases[last]!.color || PHASE_PALETTE[last % PHASE_PALETTE.length]! }
+    }
 
     const openBlock = (block: any) => {
         setSheetBlock(block)
         setSheetOpen(true)
     }
 
-    const togglePlanList = (key: string) => {
-        setPlanOpen((prev) => ({ ...prev, [key]: !(prev[key] ?? false) }))
-    }
-
+    // ---------- Empty state ----------
     if (!activeProgram) {
         return (
-            <Card padding="lg" className="items-center text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-surface-sunken text-subtle">
-                    <LayoutGrid className="h-6 w-6" />
-                </div>
-                <p className="text-base font-extrabold text-strong">Sin programa asignado</p>
-                <p className="text-sm font-medium text-muted">
-                    No hay un programa de entrenamiento activo para este alumno.
-                </p>
-                <Link
-                    href={`/coach/builder/${clientId}`}
-                    className={cn(buttonVariants({ variant: 'sport', size: 'md' }), 'mt-2')}
+            <div style={{ background: CANVAS, borderRadius: 'var(--radius-card)' }} className="p-4 md:p-6">
+                <div
+                    style={{ background: CARD, border: `1px solid ${CARD_BORDER}`, borderRadius: 'var(--radius-card)' }}
+                    className="flex flex-col items-center px-6 py-10 text-center"
                 >
-                    Crear o asignar programa
-                </Link>
-            </Card>
+                    <div
+                        style={{ background: SUNKEN, color: TXT_MUTED }}
+                        className="mb-3 flex h-14 w-14 items-center justify-center rounded-full"
+                    >
+                        <ClipboardX className="h-6 w-6" />
+                    </div>
+                    <p className="font-display text-base font-extrabold" style={{ color: TXT }}>
+                        Sin programa asignado
+                    </p>
+                    <p className="mt-1 text-sm font-medium" style={{ color: TXT_MUTED }}>
+                        Este alumno no tiene un plan de entrenamiento activo.
+                    </p>
+                    <Link
+                        href={`/coach/builder/${clientId}`}
+                        className={cn(buttonVariants({ variant: 'sport', size: 'lg' }), 'mt-4 w-full')}
+                    >
+                        <Plus className="h-5 w-5" />
+                        Crear o asignar programa
+                    </Link>
+                </div>
+            </div>
         )
     }
 
+    // ---------- Day card (microciclo) ----------
     const renderDayCard = (plan: any | undefined, opts: { dow: number; label: string }) => {
         const { dow, label } = opts
-        const key = plan?.id ?? `rest-${dow}`
         const blocks = [...(plan?.workout_blocks || [])].sort(
             (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
         )
         const groups = uniqueMuscleGroupsFromBlocks(blocks)
         const isToday = isWeekly && dow >= 1 && dow <= 7 && dow === todayDow
-        const listOpen = planOpen[key] ?? false
+        const isOpen = openDow === dow
+        const hasWork = !!plan && blocks.length > 0
+
+        if (!hasWork) {
+            return (
+                <div
+                    key={`rest-${dow}`}
+                    style={{
+                        background: CARD,
+                        border: `1px solid ${isToday ? 'var(--sport-400)' : CARD_BORDER}`,
+                        borderRadius: 'var(--radius-md)',
+                        opacity: 0.72,
+                    }}
+                    className="flex items-center gap-3 p-3.5"
+                >
+                    <div
+                        style={{ background: SUNKEN, color: TXT_MUTED, borderRadius: 'var(--radius-sm)' }}
+                        className="flex h-[34px] w-[34px] shrink-0 items-center justify-center text-xs font-extrabold"
+                    >
+                        {label}
+                    </div>
+                    <span className="text-sm" style={{ color: TXT_MUTED }}>
+                        Descanso
+                    </span>
+                    {isToday && (
+                        <Badge tone="sport" variant="solid" size="sm" className="ml-auto">
+                            Hoy
+                        </Badge>
+                    )}
+                </div>
+            )
+        }
 
         return (
             <div
-                key={key}
-                className={cn(
-                    'flex flex-col rounded-control border p-3 transition-colors',
-                    plan && blocks.length > 0
-                        ? 'border-subtle bg-surface-sunken'
-                        : 'border-subtle bg-surface-sunken/50',
-                    isToday && 'ring-2 ring-sport-400'
-                )}
+                key={plan.id ?? `day-${dow}`}
+                style={{
+                    background: CARD,
+                    border: `1px solid ${isToday ? 'var(--sport-400)' : CARD_BORDER}`,
+                    borderRadius: 'var(--radius-md)',
+                    overflow: 'hidden',
+                    boxShadow: isToday ? '0 0 0 1px var(--sport-400)' : 'none',
+                }}
             >
-                <div className="mb-2 flex items-center justify-between gap-2">
-                    <span
-                        className={cn(
-                            'text-[10px] font-black uppercase tracking-widest',
-                            isToday ? 'text-sport-600' : 'text-muted'
-                        )}
+                <button
+                    type="button"
+                    onClick={() => setOpenDow(isOpen ? null : dow)}
+                    className="flex w-full items-center gap-3 px-3.5 py-3 text-left"
+                >
+                    <div
+                        style={{ background: 'var(--sport-100)', color: 'var(--sport-700)', borderRadius: 'var(--radius-sm)' }}
+                        className="flex h-[34px] w-[34px] shrink-0 items-center justify-center text-xs font-extrabold"
                     >
                         {label}
-                        {isToday ? ' · Hoy' : ''}
-                    </span>
-                </div>
-                {!plan || blocks.length === 0 ? (
-                    <p className="mt-auto text-xs font-bold text-muted">Descanso</p>
-                ) : (
-                    <>
-                        <p className="line-clamp-2 text-xs font-black uppercase tracking-tight text-strong">
-                            {plan.title || 'Entrenamiento'}
-                        </p>
-                        <p className="mt-1 text-[10px] font-bold text-muted">
-                            {blocks.length} ej. · {groups.slice(0, 3).join(', ')}
-                            {groups.length > 3 ? '…' : ''}
-                        </p>
-                        <button
-                            type="button"
-                            onClick={() => togglePlanList(key)}
-                            className="mt-2 flex w-full items-center justify-between rounded-control border border-subtle bg-surface-card px-2 py-1.5 text-[10px] font-black uppercase tracking-widest hover:bg-sport-100"
-                        >
-                            Ejercicios
-                            {listOpen ? (
-                                <ChevronUp className="h-3.5 w-3.5" />
-                            ) : (
-                                <ChevronDown className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                            <span className="truncate text-sm font-bold" style={{ color: TXT }}>
+                                {plan.title || 'Entrenamiento'}
+                            </span>
+                            {isToday && (
+                                <Badge tone="sport" variant="solid" size="sm">
+                                    Hoy
+                                </Badge>
                             )}
-                        </button>
-                        {listOpen && (
-                            <ul className="mt-2 space-y-1 border-t border-subtle pt-2">
-                                {blocks.map((block: any) => {
-                                    const name = block.exercises?.name || 'Ejercicio'
-                                    return (
-                                        <li key={block.id}>
-                                            <button
-                                                type="button"
-                                                onClick={() => openBlock(block)}
-                                                className="w-full rounded-[10px] px-2 py-1.5 text-left text-[11px] font-bold text-strong hover:bg-sport-100"
-                                            >
-                                                {name}
-                                            </button>
-                                        </li>
-                                    )
-                                })}
-                            </ul>
-                        )}
-                    </>
+                        </div>
+                        <div className="truncate text-xs" style={{ color: TXT_MUTED }}>
+                            {blocks.length} ej.
+                            {groups.length > 0 ? ` · ${groups.slice(0, 3).join(', ')}${groups.length > 3 ? '…' : ''}` : ''}
+                        </div>
+                    </div>
+                    <ChevronRight
+                        className="h-[18px] w-[18px] shrink-0 transition-transform duration-150"
+                        style={{ color: 'var(--ink-300)', transform: isOpen ? 'rotate(90deg)' : 'none' }}
+                    />
+                </button>
+                {isOpen && (
+                    <div style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
+                        {blocks.map((block: any, i: number) => {
+                            const name = block.exercises?.name || 'Ejercicio'
+                            const setsReps =
+                                block.sets != null || block.reps != null
+                                    ? `${block.sets ?? '—'}${block.reps != null ? '×' + block.reps : ''}`
+                                    : ''
+                            return (
+                                <button
+                                    key={block.id ?? i}
+                                    type="button"
+                                    onClick={() => openBlock(block)}
+                                    className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left"
+                                    style={{ borderTop: i > 0 ? `1px solid ${CARD_BORDER}` : 'none' }}
+                                >
+                                    <span
+                                        className="h-2 w-2 shrink-0 rounded-full"
+                                        style={{ background: muscleDotColor(block.exercises?.muscle_group) }}
+                                    />
+                                    <span className="min-w-0 flex-1 truncate text-sm" style={{ color: TXT }}>
+                                        {name}
+                                    </span>
+                                    {setsReps && (
+                                        <span className="font-mono text-xs tabular-nums" style={{ color: TXT_MUTED }}>
+                                            {setsReps}
+                                        </span>
+                                    )}
+                                    <ChevronRight className="h-[15px] w-[15px] shrink-0" style={{ color: 'var(--ink-300)' }} />
+                                </button>
+                            )
+                        })}
+                    </div>
                 )}
             </div>
         )
     }
 
     const ex = sheetBlock?.exercises
+    type PrescriptionRow = { lbl: string; val: string; icon: React.ReactNode }
+    const prescriptionRows: PrescriptionRow[] = sheetBlock
+        ? ([
+              sheetBlock.sets != null || sheetBlock.reps != null
+                  ? {
+                        lbl: 'Series × reps',
+                        val: `${sheetBlock.sets ?? '—'} × ${sheetBlock.reps ?? '—'}`,
+                        icon: <Dumbbell className="h-[17px] w-[17px]" />,
+                    }
+                  : null,
+              sheetBlock.target_weight_kg != null
+                  ? { lbl: 'Obj. peso', val: `${sheetBlock.target_weight_kg} kg`, icon: <Weight className="h-[17px] w-[17px]" /> }
+                  : null,
+              sheetBlock.rest_time
+                  ? { lbl: 'Descanso', val: String(sheetBlock.rest_time), icon: <Timer className="h-[17px] w-[17px]" /> }
+                  : null,
+              sheetBlock.rir != null && sheetBlock.rir !== ''
+                  ? { lbl: 'RIR', val: String(sheetBlock.rir), icon: <Gauge className="h-[17px] w-[17px]" /> }
+                  : null,
+              sheetBlock.tempo
+                  ? { lbl: 'Tempo', val: String(sheetBlock.tempo), icon: <Clock className="h-[17px] w-[17px]" /> }
+                  : null,
+          ] as (PrescriptionRow | null)[]).filter((r): r is PrescriptionRow => r !== null)
+        : []
 
     return (
-        <div className="space-y-6">
-            <Card variant="inverse" padding="lg">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 space-y-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="text-lg font-black uppercase tracking-tight text-on-dark md:text-xl">
-                                {activeProgram.name}
-                            </h2>
-                            <Badge tone="sport" variant="solid" size="sm">
-                                {isWeekly ? 'Semanal' : 'Cíclico'}
-                            </Badge>
-                            {abMode && (
-                                <Badge tone="sport" size="sm" title="Semanas impares del programa → A, pares → B">
-                                    Variante {activeVariant} · esta semana
-                                </Badge>
-                            )}
-                            <span className="rounded-[10px] border border-[var(--border-inverse)] px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-on-dark-muted">
-                                {weeksRepeat} sem. ciclo
-                            </span>
-                            {activeProgram.cycle_length ? (
-                                <span className="rounded-[10px] border border-[var(--border-inverse)] px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-on-dark-muted">
-                                    {activeProgram.cycle_length} días / ciclo
-                                </span>
-                            ) : null}
+        <div style={{ background: CANVAS, borderRadius: 'var(--radius-card)' }} className="space-y-3.5 p-4 md:p-6">
+            {/* ============ HEADER (inverse) ============ */}
+            <div
+                style={{ background: CARD, border: `1px solid ${CARD_BORDER}`, borderRadius: 'var(--radius-card)' }}
+                className="p-5"
+            >
+                <div className="mb-2.5 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <div className="text-xs" style={{ color: TXT_MUTED }}>
+                            PROGRAMA ACTIVO
                         </div>
-                        {phases.length > 0 && (
-                            <div className="max-w-xl">
-                                <ProgramPhasesBar phases={phases} compact />
-                            </div>
-                        )}
-                        {hasSchedule ? (
-                            <div className="max-w-md space-y-2">
-                                <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-on-dark-muted">
-                                    <span>
-                                        Semana {planCurrentWeek} / {planTotalWeeks}
-                                    </span>
-                                    {planDaysRemaining > 0 ? (
-                                        <span>{planDaysRemaining} d restantes</span>
-                                    ) : (
-                                        <span>En curso</span>
-                                    )}
-                                </div>
-                                <Progress value={weekProgressPct} className="h-1.5 bg-[var(--border-inverse)]" />
-                            </div>
-                        ) : (
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-on-dark-muted">
-                                Sin fechas inicio/fin en el programa · progreso por semanas no disponible
-                            </p>
-                        )}
+                        <div className="font-display text-lg font-extrabold" style={{ color: TXT }}>
+                            {activeProgram.name}
+                        </div>
                     </div>
-                    <Link
-                        href={`/coach/builder/${clientId}`}
-                        className="inline-flex h-9 shrink-0 items-center gap-2 rounded-control border-[1.5px] border-[var(--border-inverse)] bg-white/[0.07] px-3.5 text-sm font-bold text-on-dark transition-colors hover:bg-white/[0.12]"
-                    >
-                        <Pencil className="h-3.5 w-3.5" />
-                        Editar en builder
-                    </Link>
+                    {hasSchedule ? (
+                        <Badge tone={planDaysRemaining <= 3 ? 'warning' : 'sport'} variant="solid" size="sm" className="shrink-0">
+                            {planDaysRemaining <= 0 ? 'Vencido' : `${planDaysRemaining} días`}
+                        </Badge>
+                    ) : (
+                        <span className="shrink-0">
+                            <DarkChip>En curso</DarkChip>
+                        </span>
+                    )}
                 </div>
-            </Card>
 
-            <Card padding="md">
-                <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
-                    <LayoutGrid className="h-4 w-4" />
-                    {isWeekly ? 'Microciclo (L–D)' : 'Días del programa'}
-                </h3>
+                <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                    <DarkChip>{isWeekly ? 'Semanal' : 'Cíclico'}</DarkChip>
+                    {abMode && (
+                        <Badge tone="sport" variant="solid" size="sm" title="Semanas impares → A, pares → B">
+                            Variante {activeVariant} · esta semana
+                        </Badge>
+                    )}
+                    <DarkChip>{weeksRepeat} sem. ciclo</DarkChip>
+                    {activeProgram.cycle_length ? <DarkChip>{activeProgram.cycle_length} días / ciclo</DarkChip> : null}
+                </div>
+
+                {/* barra de fases */}
+                {phases.length > 0 && (
+                    <>
+                        <div style={{ display: 'flex', height: 8, borderRadius: 999, overflow: 'hidden', marginBottom: 6 }}>
+                            {phases.map((p, i) => (
+                                <div
+                                    key={`${p.name}-${i}`}
+                                    title={`${p.name} · ${p.weeks} sem.`}
+                                    style={{
+                                        flex: Math.max(1, p.weeks),
+                                        background: p.color || PHASE_PALETTE[i % PHASE_PALETTE.length],
+                                        borderRight: i < phases.length - 1 ? `2px solid ${CANVAS}` : 'none',
+                                    }}
+                                />
+                            ))}
+                        </div>
+                        <div className="mb-3 flex flex-wrap gap-3">
+                            {phases.map((p, i) => (
+                                <span
+                                    key={`lg-${p.name}-${i}`}
+                                    className="inline-flex items-center gap-1.5 text-[11px]"
+                                    style={{ color: TXT_MUTED }}
+                                >
+                                    <span
+                                        className="h-2 w-2 rounded-sm"
+                                        style={{ background: p.color || PHASE_PALETTE[i % PHASE_PALETTE.length] }}
+                                    />
+                                    {p.name} · {p.weeks}s
+                                </span>
+                            ))}
+                        </div>
+                    </>
+                )}
+
+                {/* progreso */}
+                {hasSchedule ? (
+                    <>
+                        <div className="mb-1.5 flex items-center justify-between text-xs" style={{ color: TXT_MUTED }}>
+                            <span>
+                                Semana {planCurrentWeek} de {planTotalWeeks}
+                            </span>
+                            <span className="font-mono tabular-nums">{weekProgressPct}%</span>
+                        </div>
+                        <div style={{ height: 8, borderRadius: 999, background: CARD_BORDER, overflow: 'hidden' }}>
+                            <div style={{ width: `${weekProgressPct}%`, height: '100%', background: 'var(--sport-500)', borderRadius: 999 }} />
+                        </div>
+                    </>
+                ) : (
+                    <p className="text-[11px] font-medium" style={{ color: TXT_MUTED }}>
+                        Sin fechas inicio/fin en el programa · progreso por semanas no disponible
+                    </p>
+                )}
+            </div>
+
+            {/* ============ ESTRUCTURA DEL CICLO ============ */}
+            {structureWeeks > 1 && (
+                <div>
+                    <SectionTitle>Estructura del ciclo · {structureWeeks} semanas</SectionTitle>
+                    <div
+                        style={{ background: CARD, border: `1px solid ${CARD_BORDER}`, borderRadius: 'var(--radius-card)' }}
+                        className="p-4"
+                    >
+                        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${structureWeeks}, 1fr)`, gap: 4 }}>
+                            {Array.from({ length: structureWeeks }, (_, i) => {
+                                const wk = i + 1
+                                const ph = phaseForWeek(wk)
+                                const vr = wk % 2 === 1 ? 'A' : 'B'
+                                const cur = hasSchedule && wk === planCurrentWeek
+                                return (
+                                    <div key={wk} className="flex flex-col items-center gap-1">
+                                        <div
+                                            style={{
+                                                width: '100%',
+                                                height: 26,
+                                                borderRadius: 'var(--radius-xs)',
+                                                background: ph.color,
+                                                opacity: cur ? 1 : 0.42,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontSize: 10,
+                                                fontWeight: 800,
+                                                color: '#fff',
+                                                border: cur ? `2px solid ${TXT}` : 'none',
+                                                boxSizing: 'border-box',
+                                            }}
+                                            title={ph.name ? `${ph.name}${abMode ? ` · ${vr}` : ''}` : undefined}
+                                        >
+                                            {abMode ? vr : ''}
+                                        </div>
+                                        <span
+                                            className="font-mono text-[9px] tabular-nums"
+                                            style={{ color: cur ? TXT : TXT_MUTED, fontWeight: cur ? 800 : 400 }}
+                                        >
+                                            {wk}
+                                        </span>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                        <div className="mt-2.5 flex flex-wrap items-center gap-3">
+                            {phases.map((p, i) => (
+                                <span
+                                    key={`sl-${p.name}-${i}`}
+                                    className="inline-flex items-center gap-1.5 text-[10.5px]"
+                                    style={{ color: TXT_MUTED }}
+                                >
+                                    <span
+                                        className="h-2.5 w-2.5 rounded-sm"
+                                        style={{ background: p.color || PHASE_PALETTE[i % PHASE_PALETTE.length] }}
+                                    />
+                                    {p.name}
+                                </span>
+                            ))}
+                            {abMode && (
+                                <span className="ml-auto text-[10.5px]" style={{ color: TXT_MUTED }}>
+                                    A/B = variante semanal alternada
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ============ MICROCICLO (L–D) ============ */}
+            <div>
+                <SectionTitle>{isWeekly ? 'Microciclo (L–D)' : 'Días del programa'}</SectionTitle>
                 {isWeekly ? (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
-                        {Array.from({ length: 7 }, (_, i) => {
-                            const dow = i + 1
-                            const plan = planByDow.get(dow)
-                            return renderDayCard(plan, {
-                                dow,
-                                label: WEEKDAY_LONG[dow - 1] ?? `Día ${dow}`,
-                            })
-                        })}
+                    <div className="flex flex-col gap-2">
+                        {[1, 2, 3, 4, 5, 6, 7].map((dow) =>
+                            renderDayCard(planByDow.get(dow), { dow, label: DAY_LABELS[dow] ?? `D${dow}` })
+                        )}
                     </div>
                 ) : plansView.length === 0 ? (
-                    <p className="text-sm text-muted">
-                        No hay días con ejercicios en este programa (revisa variantes de semana en el
-                        builder).
-                    </p>
+                    <div
+                        style={{ background: CARD, border: `1px solid ${CARD_BORDER}`, borderRadius: 'var(--radius-md)' }}
+                        className="p-4 text-sm"
+                    >
+                        <span style={{ color: TXT_MUTED }}>
+                            No hay días con ejercicios en este programa (revisá variantes de semana en el builder).
+                        </span>
+                    </div>
                 ) : (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    <div className="flex flex-col gap-2">
                         {plansView.map((plan: any) => {
                             const dow = Number(plan.day_of_week)
-                            return renderDayCard(plan, {
-                                dow,
-                                label: `Día ${dow}`,
-                            })
+                            return renderDayCard(plan, { dow, label: dow >= 1 && dow <= 7 ? (DAY_LABELS[dow] ?? `D${dow}`) : String(dow) })
                         })}
                     </div>
                 )}
-            </Card>
+            </div>
 
+            {/* ============ EDITAR EN BUILDER ============ */}
+            <Link
+                href={`/coach/builder/${clientId}`}
+                className={cn(buttonVariants({ variant: 'sport', size: 'lg' }), 'w-full')}
+            >
+                <PencilLine className="h-5 w-5" />
+                Editar en builder
+            </Link>
+
+            {/* ============ EXERCISE DETAIL SHEET ============ */}
             <Sheet
                 open={sheetOpen}
                 onOpenChange={(o) => {
@@ -346,74 +589,111 @@ export function ProgramTabB7({
             >
                 <SheetContent
                     side={sheetSide}
+                    showCloseButton={false}
                     className={cn(
-                        sheetSide === 'bottom' ? 'max-h-[92vh]' : 'sm:max-w-md',
-                        'w-full overflow-y-auto border-subtle bg-surface-card text-body'
+                        sheetSide === 'bottom' ? 'max-h-[88vh] rounded-t-[20px]' : 'sm:max-w-md',
+                        'w-full overflow-y-auto p-0'
                     )}
+                    style={{ background: CARD, color: TXT, borderColor: CARD_BORDER }}
                 >
-                    <SheetHeader>
-                        <SheetTitle className="pr-10 normal-case text-strong">
-                            {ex?.name || 'Ejercicio'}
+                    <div className="flex flex-col px-5 pb-6 pt-2">
+                        {sheetSide === 'bottom' && (
+                            <div className="mx-auto mb-4 mt-1.5 h-1 w-9 rounded-full" style={{ background: 'var(--ink-300)' }} />
+                        )}
+
+                        <SheetTitle className="mb-2 normal-case tracking-normal" style={{ color: TXT }}>
+                            <span className="font-display text-xl font-extrabold">{ex?.name || 'Ejercicio'}</span>
                         </SheetTitle>
-                        <SheetDescription className="text-left normal-case">
+
+                        <SheetDescription className="mb-3.5 flex flex-wrap gap-1.5" style={{ color: TXT_MUTED }}>
                             {ex?.muscle_group ? (
-                                <span className="inline-flex items-center gap-1 rounded-[10px] border border-subtle bg-surface-sunken px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-muted">
+                                <span
+                                    className="inline-flex items-center gap-1"
+                                    style={{
+                                        height: 20,
+                                        padding: '0 8px',
+                                        borderRadius: 999,
+                                        border: `1px solid ${CARD_BORDER}`,
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        color: TXT_MUTED,
+                                    }}
+                                >
                                     <Target className="h-3 w-3" />
                                     {ex.muscle_group}
                                 </span>
-                            ) : null}
+                            ) : (
+                                <span className="text-xs">Ejercicio del programa</span>
+                            )}
                         </SheetDescription>
-                    </SheetHeader>
 
-                    <div className="space-y-4 px-6 pb-8">
+                        {/* GIF demostración (real si existe) */}
                         {ex?.gif_url ? (
-                            <div className="relative aspect-square w-full max-w-xs overflow-hidden rounded-control border border-subtle bg-surface-sunken">
-                                <Image
-                                    src={ex.gif_url}
-                                    alt=""
-                                    fill
-                                    className="object-contain"
-                                    unoptimized
-                                />
+                            <div
+                                className="relative mb-3.5 w-full overflow-hidden"
+                                style={{ height: 150, borderRadius: 'var(--radius-md)', background: SUNKEN, border: `1px solid ${CARD_BORDER}` }}
+                            >
+                                <Image src={ex.gif_url} alt="" fill className="object-contain" unoptimized />
+                            </div>
+                        ) : (
+                            <div
+                                className="mb-3.5 flex flex-col items-center justify-center gap-1.5"
+                                style={{
+                                    height: 150,
+                                    borderRadius: 'var(--radius-md)',
+                                    background: SUNKEN,
+                                    border: `1px dashed ${CARD_BORDER}`,
+                                    color: TXT_MUTED,
+                                }}
+                            >
+                                <PlayCircle className="h-[30px] w-[30px]" />
+                                <span className="text-xs">GIF demostración</span>
+                            </div>
+                        )}
+
+                        {/* tabla de prescripción */}
+                        {prescriptionRows.length > 0 && (
+                            <div
+                                className="mb-3.5 flex flex-col"
+                                style={{ borderRadius: 'var(--radius-md)', overflow: 'hidden', border: `1px solid ${CARD_BORDER}` }}
+                            >
+                                {prescriptionRows.map((r, i) => (
+                                    <div
+                                        key={r.lbl}
+                                        className="flex items-center gap-2.5 px-3.5"
+                                        style={{ padding: '11px 14px', borderTop: i > 0 ? `1px solid ${CARD_BORDER}` : 'none' }}
+                                    >
+                                        <span style={{ color: 'var(--sport-500)' }}>{r.icon}</span>
+                                        <span className="flex-1 text-sm" style={{ color: TXT_MUTED }}>
+                                            {r.lbl}
+                                        </span>
+                                        <span className="font-mono text-[15px] tabular-nums" style={{ color: TXT }}>
+                                            {r.val}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* notas del coach (solo si hay nota real) */}
+                        {sheetBlock?.notes ? (
+                            <div style={{ background: SUNKEN, borderRadius: 'var(--radius-md)', padding: '12px 14px' }}>
+                                <div
+                                    className="font-display"
+                                    style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.04em', color: TXT_MUTED, marginBottom: 4 }}
+                                >
+                                    NOTAS DEL COACH
+                                </div>
+                                <div className="text-sm leading-relaxed" style={{ color: 'var(--ink-200)' }}>
+                                    {sheetBlock.notes}
+                                </div>
                             </div>
                         ) : null}
-
-                        <div className="rounded-control border border-subtle bg-surface-sunken p-4 text-sm">
-                            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-subtle">
-                                Prescripción
-                            </p>
-                            <ul className="space-y-1.5 text-xs font-semibold text-body">
-                                <li className="flex items-center gap-2">
-                                    <Dumbbell className="h-3.5 w-3.5 text-sport-600" />
-                                    {sheetBlock?.sets ?? '—'} × {sheetBlock?.reps ?? '—'}
-                                </li>
-                                {sheetBlock?.tempo ? (
-                                    <li className="flex items-center gap-2">
-                                        <Timer className="h-3.5 w-3.5 text-[var(--ember-500)]" />
-                                        Tempo {sheetBlock.tempo}
-                                    </li>
-                                ) : null}
-                                {sheetBlock?.rir ? (
-                                    <li>RIR {sheetBlock.rir}</li>
-                                ) : null}
-                                {sheetBlock?.rest_time ? (
-                                    <li>Descanso {sheetBlock.rest_time}</li>
-                                ) : null}
-                                {sheetBlock?.target_weight_kg != null ? (
-                                    <li>Obj. peso {sheetBlock.target_weight_kg} kg</li>
-                                ) : null}
-                            </ul>
-                            {sheetBlock?.notes ? (
-                                <p className="mt-3 border-t border-subtle pt-3 text-xs font-medium leading-relaxed text-muted">
-                                    {sheetBlock.notes}
-                                </p>
-                            ) : null}
-                        </div>
 
                         <Button
                             type="button"
                             variant="secondary"
-                            className="w-full"
+                            className="mt-4 w-full"
                             onClick={() => setSheetOpen(false)}
                         >
                             Cerrar

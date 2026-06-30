@@ -3,29 +3,23 @@
 import { useState, useCallback, useTransition } from 'react'
 import { useTheme } from 'next-themes'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { Activity, Dumbbell, User, Edit2, Plus, PieChart as PieChartIcon, Flame, TrendingUp, Camera, ArrowUpRight, ArrowDownRight, Minus, Trophy, Layers } from 'lucide-react'
+import { Activity, Dumbbell, User, Plus, PieChart as PieChartIcon, Flame, Trophy, Layers } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { AppOnlyBadge } from '@/components/AppOnlyBadge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart, Bar, Legend, Cell, BarChart, ReferenceLine } from 'recharts'
-import Image from 'next/image'
-import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
 import { getProfileTopAlert } from './getProfileTopAlert'
 import { ProfileTopAlertBanner } from './ProfileTopAlertBanner'
 import { ProfileTabNav, type ProfileMainTabId, type ProfileTabBadges } from './ProfileTabNav'
 import { ProfileOverviewB3 } from './ProfileOverviewB3'
-import { ProfileProgramSummaryCard } from './ProfileProgramSummaryCard'
-import { ProfileCheckInSnapshot } from './ProfileCheckInSnapshot'
 import { TrainingTabB4Panels } from './TrainingTabB4Panels'
 import { NutritionTabB5 } from './NutritionTabB5'
 import { ProgressBodyCompositionB6 } from './ProgressBodyCompositionB6'
 import { ProgramTabB7 } from './ProgramTabB7'
-import { BillingTabB8 } from './BillingTabB8'
+// BillingTabB8 desconectado del chrome de la ficha (rediseño dark-only: 5 pestañas
+// sin Facturación). El archivo se conserva; solo se quita del switch de pestañas.
 import { ProfileFloatingActions } from './ProfileFloatingActions'
 import {
     resolveEffectiveWeekVariant,
@@ -52,6 +46,11 @@ interface ClientProfileDashboardProps {
     nutritionSectionFlags?: Record<NutritionSectionKey, boolean>
     /** Contexto del override por-alumno (panel "Funciones para este alumno", Zona C). */
     nutritionOverrideContext?: ClientFeaturePrefsOverrideContext
+    /** Entitlements de módulos de pago (espejo del gate server-side, resueltos en page.tsx). */
+    moduleFlags?: { cardio: boolean; movement: boolean; bodycomp: boolean }
+    /** Fuerza tema oscuro para los charts (la ficha del master-detail es dark-only vía isla CSS;
+        next-themes resolvedTheme no la conoce → sin esto los ejes saldrían claros sobre negro). */
+    forceDark?: boolean
 }
 
 export function ClientProfileDashboard({
@@ -63,6 +62,8 @@ export function ClientProfileDashboard({
     nutritionDomainEnabled = true,
     nutritionSectionFlags,
     nutritionOverrideContext,
+    moduleFlags,
+    forceDark = false,
 }: ClientProfileDashboardProps) {
     const reduceMotion = useReducedMotion()
     const [activeTab, setActiveTab] = useState<ProfileMainTabId>('overview')
@@ -76,7 +77,7 @@ export function ClientProfileDashboard({
     const [activeChart, setActiveChart] = useState('peso_composicion')
 
     const { resolvedTheme } = useTheme()
-    const { client, checkIns, payments } = data
+    const { client, checkIns } = data
     const [goalWeight, setGoalWeight] = useState<number | null>(
         typeof client?.goal_weight_kg === 'number' ? client.goal_weight_kg : null
     )
@@ -91,7 +92,7 @@ export function ClientProfileDashboard({
               : client.coaches.slug
 
 
-    const isDark = resolvedTheme === 'dark'
+    const isDark = forceDark || resolvedTheme === 'dark'
     const chartGridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
     const chartAxisColor = isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)'
     const tooltipBgColor = isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)'
@@ -288,9 +289,6 @@ export function ClientProfileDashboard({
     const prCount = Array.isArray(data.personalRecords) ? data.personalRecords.length : 0
     const checkInTotal = (checkIns || []).length
     const mealDetailCount = Array.isArray(data.mealDetails) ? data.mealDetails.length : 0
-    const pendingPayments = (payments || []).filter(
-        (p: { status?: string }) => String(p.status || '').toLowerCase() === 'pending'
-    ).length
 
     const abModeProgram = !!data.activeProgram?.ab_mode
     // Variante EFECTIVA: el contador de días del tab "Programa" refleja lo que el alumno ve (cae a la
@@ -320,7 +318,6 @@ export function ClientProfileDashboard({
                   : undefined,
         program: programTrainingDayCount > 0 ? programTrainingDayCount : undefined,
         nutrition: isNutritionAtRisk ? '!' : mealDetailCount > 0 ? mealDetailCount : undefined,
-        billing: pendingPayments > 0 ? pendingPayments : undefined,
     }
 
     const goToProgressHistory = () => {
@@ -383,132 +380,31 @@ export function ClientProfileDashboard({
                     <motion.div
                         key="overview"
                         {...tabMotion}
-                        className="relative z-10 grid min-w-0 grid-cols-1 gap-6 md:grid-cols-12"
+                        className="relative z-10 mx-auto w-full min-w-0 max-w-3xl space-y-6"
                     >
-                        {/* Task 2: Rediseño de Overview */}
-                        <div className="min-w-0 space-y-6 md:col-span-8">
-                            <ProfileTopAlertBanner alert={topAlert} />
+                        {/* Resumen 1:1 con el diseño nuevo (coach-ficha.jsx · OverviewTab):
+                            top-alert + rings + KPIs + Programa + Métricas + Check-in +
+                            Evolución visual + Módulos + Editar plan, en una columna. */}
+                        <ProfileTopAlertBanner alert={topAlert} />
 
-                            <ProfileOverviewB3
-                                workoutHistory={data.workoutHistory || []}
-                                checkIns={checkIns || []}
-                                compliance={compliance}
-                                onViewNutrition={goToNutritionProgress}
-                            />
-
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                <ProfileProgramSummaryCard
-                                    activeProgram={data.activeProgram}
-                                    compliance={compliance}
-                                    isNutritionAtRisk={isNutritionAtRisk}
-                                    onViewNutrition={goToNutritionProgress}
-                                />
-                                <ProfileCheckInSnapshot
-                                    checkIn={lastCheckIn}
-                                    clientId={client.id}
-                                    onViewHistory={goToProgressHistory}
-                                />
-                            </div>
-
-                            {/* Miniaturas de Check-in */}
-                            <Card padding="md">
-                                <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
-                                    <Camera className="h-4 w-4" /> Evolución Visual (Último Mes)
-                                </h3>
-                                <div className="mb-4">
-                                    <AppOnlyBadge>Mira las fotos con zoom y desliza entre ellas en la app de EVA</AppOnlyBadge>
-                                </div>
-                                {checkInsWithPhotos.length > 0 ? (
-                                    <div className="grid grid-cols-3 gap-4">
-                                        {checkInsWithPhotos.map((c: any, i: number) => (
-                                            <div key={i} className="group relative aspect-[3/4] overflow-hidden rounded-control bg-surface-sunken">
-                                                <Image
-                                                    src={c.front_photo_url || c.side_photo_url || c.back_photo_url}
-                                                    alt="Progreso"
-                                                    fill
-                                                    sizes="(max-width: 768px) 33vw, 200px"
-                                                    unoptimized
-                                                    className="object-cover transition-transform duration-500 group-hover:scale-110"
-                                                />
-                                                <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/80 via-transparent to-transparent p-3 opacity-0 transition-opacity group-hover:opacity-100">
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-white">
-                                                        {new Date(c.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="rounded-control bg-surface-sunken py-8 text-center">
-                                        <Camera className="mx-auto mb-2 h-8 w-8 text-[var(--ink-300)]" />
-                                        <p className="text-sm font-medium text-muted">Sin fotos recientes de check-in.</p>
-                                    </div>
-                                )}
-                            </Card>
-                        </div>
-                        <div className="min-w-0 space-y-6 md:col-span-4">
-                            {/* Task 2: Dynamic Metrics Card */}
-                            <Card padding="md" className="h-full gap-0">
-                                <div className="mb-6 flex items-center justify-between">
-                                    <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
-                                        <Activity className="h-4 w-4" /> Métricas Clave
-                                    </h3>
-                                    <Dialog>
-                                        <DialogTrigger render={
-                                            <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-sport-100 hover:text-sport-600">
-                                                <Edit2 className="h-3 w-3" />
-                                            </Button>
-                                        } />
-                                        <DialogContent className="sm:max-w-[425px]">
-                                            <DialogHeader>
-                                                <DialogTitle className="font-display text-xl font-black tracking-tighter uppercase">Editar Biometría Inicial</DialogTitle>
-                                            </DialogHeader>
-                                            <div className="grid gap-4 py-4">
-                                                <div className="grid grid-cols-4 items-center gap-4">
-                                                    <Label htmlFor="height" className="text-right text-xs font-bold uppercase tracking-widest">Altura</Label>
-                                                    <Input id="height" defaultValue={client.client_intake?.height_cm} className="col-span-3" placeholder="cm" />
-                                                </div>
-                                                <div className="grid grid-cols-4 items-center gap-4">
-                                                    <Label htmlFor="weight" className="text-right text-xs font-bold uppercase tracking-widest">Peso Inicial</Label>
-                                                    <Input id="weight" defaultValue={client.client_intake?.weight_kg} className="col-span-3" placeholder="kg" />
-                                                </div>
-                                            </div>
-                                            <div className="flex justify-end gap-3">
-                                                <Button variant="secondary" className="text-[10px] font-black uppercase tracking-widest">Cancelar</Button>
-                                                <Button variant="sport" className="text-[10px] font-black uppercase tracking-widest">Guardar Cambios</Button>
-                                            </div>
-                                        </DialogContent>
-                                    </Dialog>
-                                </div>
-                                <div className="flex flex-1 flex-col justify-center space-y-6">
-                                    {/* Peso Actual */}
-                                    <div className="flex items-center justify-between rounded-control bg-surface-sunken p-3">
-                                        <div className="flex flex-col">
-                                            <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted"><Activity className="h-3 w-3"/> Peso Actual</span>
-                                            <span className="font-display text-2xl font-black text-strong">{currentWeight} <span className="text-sm font-medium text-muted">kg</span></span>
-                                        </div>
-                                    </div>
-
-                                    {/* Variación Semanal */}
-                                    <div className="flex items-center justify-between rounded-control bg-surface-sunken p-3">
-                                        <div className="flex flex-col">
-                                            <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted"><TrendingUp className="h-3 w-3"/> Var. Semanal</span>
-                                            <span className="flex items-center gap-1 font-display text-lg font-black text-strong">
-                                                {Math.abs(weeklyWeightVariation).toFixed(1)} kg
-                                                {weeklyWeightVariation > 0 ? (
-                                                    <ArrowUpRight className="h-4 w-4 text-[var(--ember-600)]" />
-                                                ) : weeklyWeightVariation < 0 ? (
-                                                    <ArrowDownRight className="h-4 w-4 text-[var(--success-500)]" />
-                                                ) : (
-                                                    <Minus className="h-4 w-4 text-muted" />
-                                                )}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                </div>
-                            </Card>
-                        </div>
+                        <ProfileOverviewB3
+                            workoutHistory={data.workoutHistory || []}
+                            checkIns={checkIns || []}
+                            compliance={compliance}
+                            clientId={client.id}
+                            activeProgram={data.activeProgram}
+                            isNutritionAtRisk={isNutritionAtRisk}
+                            lastCheckIn={lastCheckIn}
+                            checkInsWithPhotos={checkInsWithPhotos}
+                            currentWeight={currentWeight}
+                            weeklyWeightVariation={weeklyWeightVariation}
+                            initialHeightCm={client.client_intake?.height_cm ?? null}
+                            initialWeightKg={client.client_intake?.weight_kg ?? null}
+                            moduleFlags={moduleFlags}
+                            onViewNutrition={goToNutritionProgress}
+                            onViewProgress={goToProgressHistory}
+                            onOpenProgram={() => handleTabChange('program')}
+                        />
                     </motion.div>
                 )}
 
@@ -522,6 +418,7 @@ export function ClientProfileDashboard({
                         <ProgressBodyCompositionB6
                             checkIns={checkIns || []}
                             heightCm={client?.client_intake?.height_cm}
+                            goalWeight={goalWeight}
                             chartGridColor={chartGridColor}
                             chartAxisColor={chartAxisColor}
                             tooltipBgColor={tooltipBgColor}
@@ -939,17 +836,6 @@ export function ClientProfileDashboard({
                     </motion.div>
                 )}
 
-                {activeTab === 'billing' && !isPending && (
-                    <motion.div
-                        key="billing"
-                        {...tabMotion}
-                        className="relative z-10 grid min-w-0 grid-cols-1 gap-6 md:grid-cols-12"
-                    >
-                        <div className="animate-in fade-in min-w-0 duration-500 md:col-span-12">
-                            <BillingTabB8 payments={payments || []} clientId={client.id} />
-                        </div>
-                    </motion.div>
-                )}
             </AnimatePresence>
 
             <ProfileFloatingActions
