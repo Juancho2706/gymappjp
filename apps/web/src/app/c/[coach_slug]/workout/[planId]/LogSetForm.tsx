@@ -21,6 +21,8 @@ interface Props {
     blockId: string
     setNumber: number
     restTimeStr: string | null
+    /** Peso objetivo sugerido (sobrecarga progresiva): pre-llena el input si no hay log aún. */
+    suggestedWeightKg?: number | null
     existingLog?: {
         weight_kg: number | null
         reps_done: number | null
@@ -57,6 +59,7 @@ function StrengthLogSetForm({
     blockId,
     setNumber,
     restTimeStr,
+    suggestedWeightKg,
     existingLog,
     autoTimerEnabled = true,
     onLogged,
@@ -184,7 +187,7 @@ function StrengthLogSetForm({
                     step="0.5"
                     min="0"
                     inputMode="decimal"
-                    defaultValue={existingLog?.weight_kg ?? ''}
+                    defaultValue={existingLog?.weight_kg ?? suggestedWeightKg ?? ''}
                     placeholder="-"
                     className={`h-11 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold rounded-lg bg-background border transition-colors focus:outline-none focus:ring-1
                 ${isLogged ? 'text-emerald-400 border-emerald-500/30 focus:border-emerald-500 focus:ring-emerald-500' : 'text-foreground border-border focus:border-violet-500 focus:ring-violet-500'}`}

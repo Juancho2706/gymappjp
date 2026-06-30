@@ -6,6 +6,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Zap, Info, Dumbbell, Timer, TrendingUp, X, Settings, CheckCircle2, WifiOff } from 'lucide-react'
+import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { LogSetForm } from './LogSetForm'
@@ -94,6 +95,8 @@ interface ProgramType {
     program_structure_type: 'weekly' | 'cycle' | null
     cycle_length: number | null
     ab_mode: boolean | null
+    start_date: string | null
+    weeks_to_repeat: number
 }
 
 interface Props {
@@ -115,6 +118,8 @@ interface Props {
     coachSlug: string
     exerciseMaxes?: Record<string, number>
     activeWeekVariant?: 'A' | 'B' | null
+    /** Semana 1-based del programa (sobrecarga progresiva). null si falta start_date. */
+    currentWeek?: number | null
     /** Areas (no clasicas) referenciadas por el plan, resueltas server-side; vacio en planes viejos */
     areas?: WorkoutArea[]
     /** Módulo cardio: zonas personalizadas del alumno (chips "Z4 · 150–168 bpm"); OFF ⇒ solo "Z4" */
@@ -347,6 +352,7 @@ export function WorkoutExecutionClient({
     coachSlug,
     exerciseMaxes = {},
     activeWeekVariant = null,
+    currentWeek = null,
     areas = [],
     cardio,
 }: Props) {
@@ -600,6 +606,11 @@ export function WorkoutExecutionClient({
                                                     // Tipo efectivo (specs/movida-entrenamiento): strength ⇒ render
                                                     // EXACTAMENTE el de siempre; cardio/movilidad/roller ⇒ variantes.
                                                     const effType = effectiveExerciseType(block, exercise)
+                                                    // Sobrecarga progresiva: peso objetivo EFECTIVO de hoy (base + progresión por semana).
+                                                    const eff = effType === 'strength'
+                                                        ? computeEffectiveTarget(block, { currentWeek, weeksToRepeat: program?.weeks_to_repeat })
+                                                        : null
+                                                    const suggestedWeightKg = eff?.weightKg ?? block.target_weight_kg
                                                     return (
                                                         <Fragment key={block.id}>
                                                             {blockIndex > 0 && group.type === 'superset' && (
@@ -660,7 +671,20 @@ export function WorkoutExecutionClient({
                                                                     <p className="text-[10px] uppercase text-muted-foreground">Series x reps</p>
                                                                     <p className="font-semibold">{block.sets} x {block.reps}</p>
                                                                 </div>
-                                                                {block.target_weight_kg != null && <div className="rounded-lg border p-2 text-center"><p className="text-[10px] uppercase text-muted-foreground">Peso</p><p className="font-semibold">{block.target_weight_kg}kg</p></div>}
+                                                                {block.target_weight_kg != null && (
+                                                                    <div className={cn(
+                                                                        'rounded-lg border p-2 text-center',
+                                                                        eff?.isProgressed && 'border-emerald-500/40 bg-emerald-500/5'
+                                                                    )}>
+                                                                        <p className="text-[10px] uppercase text-muted-foreground">Peso{eff?.isProgressed ? ' hoy' : ''}</p>
+                                                                        <p className={cn('font-semibold', eff?.isProgressed && 'text-emerald-600 dark:text-emerald-400')}>
+                                                                            {(eff?.weightKg ?? block.target_weight_kg)}kg
+                                                                        </p>
+                                                                        {eff?.isProgressed && (
+                                                                            <p className="text-[9px] leading-none text-muted-foreground">base {eff.baseWeightKg}kg</p>
+                                                                        )}
+                                                                    </div>
+                                                                )}
                                                                 {block.rest_time && <div className="rounded-lg border p-2 text-center"><p className="text-[10px] uppercase text-muted-foreground">Descanso</p><p className="font-semibold">{block.rest_time}</p></div>}
                                                                 {block.tempo && <div className="rounded-lg border p-2 text-center"><p className="text-[10px] uppercase text-muted-foreground">Tempo</p><p className="font-semibold">{block.tempo}</p></div>}
                                                                 {block.rir && <div className="rounded-lg border p-2 text-center"><p className="text-[10px] uppercase text-muted-foreground">RIR</p><p className="font-semibold">{block.rir}</p></div>}
@@ -673,16 +697,33 @@ export function WorkoutExecutionClient({
                                                                     </div>
                                                                 </>
                                                             )}
-                                                            {/* Sobrecarga progresiva — instrucción del coach (paridad con app móvil). Solo
-                                                                se setea en bloques de fuerza; el null-check basta, sin gate por tipo. */}
+                                                            {/* Sobrecarga progresiva. Para PESO con motor (weekly_linear) muestra el objetivo
+                                                                calculado de la semana; si no, cae al cartel-instrucción (reps, o sin semana). */}
                                                             {block.progression_type && block.progression_value != null && (
                                                                 <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-sm">
                                                                     <TrendingUp className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                                                                     <p className="text-emerald-900/85 dark:text-emerald-200/90">
-                                                                        <span className="font-semibold text-emerald-700 dark:text-emerald-300">Sobrecarga progresiva:</span>{' '}
-                                                                        sube{' '}
-                                                                        <span className="font-bold">+{block.progression_value} {block.progression_type === 'weight' ? 'kg' : 'rep'}</span>{' '}
-                                                                        {block.progression_type === 'weight' ? 'cada semana' : 'cada sesión'}
+                                                                        {block.progression_type === 'weight' && eff?.modeImplemented && currentWeek != null ? (
+                                                                            eff.isProgressed ? (
+                                                                                <>
+                                                                                    <span className="font-semibold text-emerald-700 dark:text-emerald-300">Sobrecarga progresiva · Semana {currentWeek}:</span>{' '}
+                                                                                    objetivo <span className="font-bold">{eff.weightKg} kg</span>{' '}
+                                                                                    <span className="text-emerald-700/70 dark:text-emerald-300/70">(base {eff.baseWeightKg} +{eff.addedKg})</span>
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <span className="font-semibold text-emerald-700 dark:text-emerald-300">Sobrecarga progresiva:</span>{' '}
+                                                                                    sube <span className="font-bold">+{block.progression_value} kg cada semana</span>{' '}
+                                                                                    <span className="text-emerald-700/70 dark:text-emerald-300/70">(esta semana arrancás en la base)</span>
+                                                                                </>
+                                                                            )
+                                                                        ) : (
+                                                                            <>
+                                                                                <span className="font-semibold text-emerald-700 dark:text-emerald-300">Sobrecarga progresiva:</span>{' '}
+                                                                                sube{' '}
+                                                                                <span className="font-bold">+{block.progression_value} {block.progression_type === 'weight' ? 'kg cada semana' : 'rep cada sesión'}</span>
+                                                                            </>
+                                                                        )}
                                                                     </p>
                                                                 </div>
                                                             )}
@@ -735,6 +776,7 @@ export function WorkoutExecutionClient({
                                                                                 setNumber={setNumber}
                                                                                 restTimeStr={block.rest_time}
                                                                                 existingLog={log}
+                                                                                suggestedWeightKg={suggestedWeightKg}
                                                                                 autoTimerEnabled={autoTimerEnabled}
                                                                                 mode={effType}
                                                                                 onLogged={handleLogged}

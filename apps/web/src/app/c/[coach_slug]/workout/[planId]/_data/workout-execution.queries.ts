@@ -2,7 +2,7 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '@/lib/date-utils'
-import { resolveActiveWeekVariantForDisplay } from '@/lib/workout/programWeekVariant'
+import { resolveActiveWeekVariantForDisplay, programWeekIndex1Based } from '@/lib/workout/programWeekVariant'
 import { classicSlugForAreaId } from '@/lib/workout-areas'
 import type { IntervalConfig, WorkoutArea } from '@/domain/workout/types'
 import type { HrZoneRange } from '@/domain/cardio/types'
@@ -133,6 +133,10 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
     const activeWeekVariant = program?.ab_mode
         ? resolveActiveWeekVariantForDisplay(program)
         : null
+
+    // Semana 1-based del programa (misma fórmula que compliance/variante A/B). Alimenta el motor
+    // de sobrecarga progresiva (peso objetivo efectivo del día). null si falta start_date.
+    const currentWeek = programWeekIndex1Based(program)
 
     const blockIds = plan.workout_blocks.map(b => b.id)
     let logs: Array<{
@@ -270,5 +274,5 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
         }
     }
 
-    return { user, plan, program, logs, previousHistory, exerciseMaxes, activeWeekVariant, areas, cardio }
+    return { user, plan, program, logs, previousHistory, exerciseMaxes, activeWeekVariant, currentWeek, areas, cardio }
 })
