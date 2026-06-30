@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Zap, Info, Dumbbell, Timer, X, Settings, CheckCircle2, WifiOff } from 'lucide-react'
+import { ArrowLeft, Zap, Info, Dumbbell, Timer, TrendingUp, X, Settings, CheckCircle2, WifiOff } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { LogSetForm } from './LogSetForm'
@@ -672,6 +672,19 @@ export function WorkoutExecutionClient({
                                                                         <TypedBlockTimerButton block={block} kind={effType} />
                                                                     </div>
                                                                 </>
+                                                            )}
+                                                            {/* Sobrecarga progresiva — instrucción del coach (paridad con app móvil). Solo
+                                                                se setea en bloques de fuerza; el null-check basta, sin gate por tipo. */}
+                                                            {block.progression_type && block.progression_value != null && (
+                                                                <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-sm">
+                                                                    <TrendingUp className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                                                    <p className="text-emerald-900/85 dark:text-emerald-200/90">
+                                                                        <span className="font-semibold text-emerald-700 dark:text-emerald-300">Sobrecarga progresiva:</span>{' '}
+                                                                        sube{' '}
+                                                                        <span className="font-bold">+{block.progression_value} {block.progression_type === 'weight' ? 'kg' : 'rep'}</span>{' '}
+                                                                        {block.progression_type === 'weight' ? 'cada semana' : 'cada sesión'}
+                                                                    </p>
+                                                                </div>
                                                             )}
                                                             {effType !== 'strength' && block.instructions && (
                                                                 <div className="rounded-lg border border-primary/25 bg-primary/[0.06] p-2 text-sm">
