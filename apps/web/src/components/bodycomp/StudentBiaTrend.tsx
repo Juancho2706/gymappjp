@@ -75,7 +75,7 @@ export function StudentBiaTrend({ rows }: { rows: BodyCompositionRow[] }) {
                             'min-h-11 rounded-control px-3 py-2 text-xs font-bold transition-colors',
                             active === s.key
                                 ? 'text-primary-foreground shadow-sm'
-                                : 'bg-surface-sunken text-muted hover:text-strong'
+                                : 'bg-surface-sunken text-[var(--text-muted)] hover:text-strong'
                         )}
                         style={active === s.key ? { backgroundColor: 'var(--theme-primary)' } : undefined}
                     >

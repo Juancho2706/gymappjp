@@ -25,7 +25,7 @@ export function StudentMovementView({
             <header className="sticky top-0 z-40 border-b border-subtle bg-surface-app/95 px-4 py-4 pt-safe backdrop-blur-xl">
                 <Link
                     href={`${basePath}/dashboard`}
-                    className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-strong"
+                    className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-[var(--text-muted)] transition-colors hover:text-strong"
                 >
                     <ArrowLeft className="h-4 w-4" aria-hidden />
                     {t('assessment.student.back')}

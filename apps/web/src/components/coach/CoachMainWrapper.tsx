@@ -15,6 +15,9 @@ export function CoachMainWrapper({ children }: { children: React.ReactNode }) {
     const isBuilder = pathname.startsWith('/coach/builder') || pathname.startsWith('/coach/workout-programs/builder')
     const isNutritionHub =
         pathname === '/coach/nutrition-plans' || pathname.startsWith('/coach/nutrition-plans/')
+    // Alumnos (directorio): en DESKTOP el master-detail / tabla es FULL-BLEED (.dt-md / .dt-tbl-root
+    // del diseño = position:absolute; inset:0). En MÓVIL conserva la columna con padding (war-room + cards).
+    const isClients = pathname === '/coach/clients'
 
     if (isBuilder) {
         return (
@@ -39,13 +42,20 @@ export function CoachMainWrapper({ children }: { children: React.ReactNode }) {
         >
             <div
                 className={cn(
-                    // Shell reading column (eva-desktop): page-x = --dt-page-x (32px) en desktop,
-                    // 16px en móvil; ancho de lectura por defecto = --dt-read-wide (1240, dashboards/grids).
-                    // Las anchuras más estrechas (ficha --dt-read-mid 980 · settings --dt-read-narrow 720)
-                    // las aplican las pantallas en sus olas; aquí solo el default wide del shell.
-                    'mx-auto w-full min-w-0 max-w-full px-4 py-6 animate-fade-in md:px-[var(--dt-page-x)] md:py-10',
-                    // Nutrición = tablero master-detail (no columna de lectura): conserva su ancho amplio.
-                    isNutritionHub ? 'md:max-w-[2000px]' : 'md:max-w-[var(--dt-read-wide)]'
+                    'mx-auto w-full min-w-0 max-w-full animate-fade-in',
+                    isClients
+                        ? // Alumnos desktop = FULL-BLEED: sin cap de ancho ni padding → el master-detail/tabla
+                          // llena toda la región (flush contra sidebar y bajo el topbar). Móvil conserva px-4 py-6.
+                          'px-4 py-6 md:max-w-none md:p-0'
+                        : // Shell reading column (eva-desktop): page-x = --dt-page-x (32px) en desktop, 16px en
+                          // móvil; ancho de lectura por defecto = --dt-read-wide (1240, dashboards/grids). Las
+                          // anchuras más estrechas (ficha --dt-read-mid 980 · settings --dt-read-narrow 720) las
+                          // aplican las pantallas en sus olas; aquí solo el default wide del shell. Nutrición =
+                          // tablero master-detail (no columna de lectura): conserva su ancho amplio.
+                          cn(
+                              'px-4 py-6 md:px-[var(--dt-page-x)] md:py-10',
+                              isNutritionHub ? 'md:max-w-[2000px]' : 'md:max-w-[var(--dt-read-wide)]'
+                          )
                 )}
             >
                 {children}

@@ -83,7 +83,7 @@ export function StudentBodyCompositionView({
                                             'min-h-12 flex-1 rounded-[10px] px-3 py-2 text-sm font-bold transition-colors',
                                             active === m.key
                                                 ? 'bg-surface-card text-strong shadow-sm'
-                                                : 'text-muted hover:text-strong'
+                                                : 'text-[var(--text-muted)] hover:text-strong'
                                         )}
                                         style={active === m.key ? { color: 'var(--theme-primary)' } : undefined}
                                     >

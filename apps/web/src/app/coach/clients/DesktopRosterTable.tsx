@@ -275,8 +275,11 @@ export function DesktopRosterTable({
         URL.revokeObjectURL(url)
     }
 
+    // Full-bleed (.dt-tbl-root = position:absolute; inset:0): sin borde/rounding, llena la
+    // región entre sidebar y topbar. Alto = viewport menos el topbar de 60px. (Solo desktop —
+    // wrapper hidden md:block.)
     return (
-        <div className="flex h-[calc(100dvh-8rem)] min-h-[600px] flex-col overflow-hidden rounded-card border border-subtle bg-surface-app">
+        <div className="flex h-[calc(100dvh-60px)] min-h-[600px] flex-col overflow-hidden bg-surface-app">
             {/* ── dt-tbl-bar: búsqueda + conteo ───────────────────────────── */}
             <div className="flex shrink-0 items-center gap-[14px] border-b border-subtle px-6 py-[14px]">
                 <div className="relative flex flex-1 items-center" style={{ maxWidth: 340 }}>

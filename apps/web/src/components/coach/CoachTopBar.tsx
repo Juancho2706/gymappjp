@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Search, ChevronRight, ArrowLeft, X } from 'lucide-react'
+import { Search, ChevronRight, ArrowLeft, X, Table2, PanelLeft } from 'lucide-react'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
+import { useRosterView } from '@/components/coach/RosterViewContext'
+import { cn } from '@/lib/utils'
 
 /**
  * CoachTopBar — barra superior de escritorio del panel /coach (.dt-topbar del diseño Claude).
@@ -64,10 +66,56 @@ function resolveCrumb(pathname: string): { sectionLabel: string; sectionHref: st
     }
 }
 
+/**
+ * Toggle segmentado Tabla / Ficha — transcripción del `.dt-viewtoggle` del diseño (slot
+ * `viewToggle` del DesktopTopBar). Vive en el topbar, ENTRE la búsqueda centrada y las
+ * acciones (campana + avatar). Solo desktop (el topbar ya es `hidden md:flex`).
+ */
+function RosterViewToggle({
+    value,
+    onChange,
+}: {
+    value: 'ficha' | 'tabla'
+    onChange: (m: 'ficha' | 'tabla') => void
+}) {
+    return (
+        <div className="flex flex-shrink-0 gap-0.5 rounded-control bg-surface-sunken p-[3px]">
+            <button
+                type="button"
+                onClick={() => onChange('tabla')}
+                className={cn(
+                    'inline-flex h-[30px] items-center gap-1.5 rounded-[calc(var(--radius-control)-3px)] px-3 text-[13px] font-bold transition-colors',
+                    value === 'tabla'
+                        ? 'bg-surface-card text-sport-600 shadow-[var(--shadow-xs)]'
+                        : 'text-muted hover:text-strong'
+                )}
+            >
+                <Table2 className="h-[15px] w-[15px]" />
+                Tabla
+            </button>
+            <button
+                type="button"
+                onClick={() => onChange('ficha')}
+                className={cn(
+                    'inline-flex h-[30px] items-center gap-1.5 rounded-[calc(var(--radius-control)-3px)] px-3 text-[13px] font-bold transition-colors',
+                    value === 'ficha'
+                        ? 'bg-surface-card text-sport-600 shadow-[var(--shadow-xs)]'
+                        : 'text-muted hover:text-strong'
+                )}
+            >
+                <PanelLeft className="h-[15px] w-[15px]" />
+                Ficha
+            </button>
+        </div>
+    )
+}
+
 export function CoachTopBar({ coachName, coachBrand }: CoachTopBarProps) {
     const pathname = usePathname()
     const inputRef = useRef<HTMLInputElement>(null)
     const [query, setQuery] = useState('')
+    // Toggle Tabla/Ficha: solo se muestra mientras /coach/clients está montado (active).
+    const { active: rosterActive, mode: rosterMode, setMode: setRosterMode } = useRosterView()
 
     // Atajo de teclado desktop (.dt-tb-input): "/" enfoca la búsqueda global, salvo si el foco
     // ya está en un campo editable. Verbatim del DesktopTopBar del diseño.
@@ -165,6 +213,12 @@ export function CoachTopBar({ coachName, coachBrand }: CoachTopBarProps) {
                     </button>
                 )}
             </div>
+
+            {/* .dt-viewtoggle — toggle Tabla/Ficha, solo en /coach/clients. Entre la
+                búsqueda centrada y las acciones (igual que el slot viewToggle del diseño). */}
+            {rosterActive && (
+                <RosterViewToggle value={rosterMode} onChange={setRosterMode} />
+            )}
 
             {/* .dt-tb-actions — campana (reusada) + cuenta */}
             <div className="ml-auto flex flex-shrink-0 items-center gap-1.5">

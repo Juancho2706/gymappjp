@@ -152,8 +152,11 @@ export function CoachRosterMasterDetail({
     const isLoadingSelected = !!selectedId && loadingId === selectedId && !selectedBundle
     const isErrorSelected = !!selectedId && errorId === selectedId
 
+    // Full-bleed (.dt-md = position:absolute; inset:0): sin borde/rounding, llena la región
+    // entre sidebar y topbar. Alto = viewport menos el topbar de 60px. El rail conserva su
+    // border-right como divisor. (Solo se renderiza en desktop — wrapper hidden md:block.)
     return (
-        <div className="flex h-[calc(100dvh-8rem)] min-h-[600px] overflow-hidden rounded-card border border-subtle bg-surface-card">
+        <div className="flex h-[calc(100dvh-60px)] min-h-[600px] overflow-hidden bg-surface-card">
             {/* ── Rail izquierdo (dt-md-list) ─────────────────────────────── */}
             <aside className="flex w-[240px] shrink-0 flex-col border-r border-subtle bg-surface-card min-[860px]:w-[280px] min-[1000px]:w-[340px]">
                 <div className="shrink-0 border-b border-subtle px-4 pb-3 pt-4">

@@ -152,6 +152,15 @@
 @utility border-default { border-color: var(--border-default); }
 @utility border-strong { border-color: var(--border-strong); }
 
+/* COLISIÓN shadcn → texto ilegible en claro (auditoría 2026-06-30). `@theme --color-muted`
+   (shadcn, = var(--muted) ≈ #F4F6F8 gris casi-blanco) auto-genera `.text-muted` que PISA el
+   shorthand semántico del diseño (--text-muted #5A6573). Resultado: TODO `text-muted` bare
+   renderiza casi-blanco sobre claro = invisible (adherencias %, metas, subtítulos…). Re-forzamos
+   `.text-muted` al token semántico DENTRO de la capa utilities → misma especificidad pero source
+   posterior gana sobre la de shadcn; los variantes hover:/focus: (mayor especificidad) siguen
+   ganando, así que los estados hover NO se rompen. Flipea en .dark vía la var. */
+.text-muted { color: var(--text-muted) !important; }
+
 /* TabBar press feedback (DS TabBar.jsx injectTabBarCss verbatim): press scale +
    active-glyph fill. The mobile floating capsule (CoachSidebar / client TabBar)
    tags its buttons `.eva-tabbar-press`. */

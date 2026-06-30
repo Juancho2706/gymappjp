@@ -29,8 +29,10 @@ export default async function CoachClientsPage() {
     const protocol = host.includes('localhost') ? 'http' : 'https'
     const appUrl = `${protocol}://${host}`
 
+    // Desktop = full-bleed (sin cap de ancho ni space-y: el master-detail/tabla llena la región).
+    // Móvil conserva el cap + el espaciado war-room/directorio + margen inferior para la cápsula.
     return (
-        <div className="mx-auto max-w-[1600px] w-full min-w-0 animate-fade-in space-y-12 mb-24 md:mb-0">
+        <div className="mx-auto w-full min-w-0 animate-fade-in max-w-[1600px] space-y-12 mb-24 md:mb-0 md:max-w-none md:space-y-0">
             <CoachClientsShell clients={clients} coach={coach} appUrl={appUrl} pulse={pulse} />
         </div>
     )

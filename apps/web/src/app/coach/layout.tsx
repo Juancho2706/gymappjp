@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { CoachSidebar } from '@/components/coach/CoachSidebar'
 import { CoachTopBar } from '@/components/coach/CoachTopBar'
 import { CoachMainWrapper } from '@/components/coach/CoachMainWrapper'
+import { RosterViewProvider } from '@/components/coach/RosterViewContext'
 import { CoachSuccessAnimationLazy } from '@/components/coach/CoachSuccessAnimationLazy'
 import { NewsFeedProvider } from '@/components/coach/NewsFeedProvider'
 import { getCoach } from '@/lib/coach/get-coach'
@@ -226,24 +227,28 @@ export default async function CoachLayout({
                     enabledModules={enabledModules}
                     disabledDomains={disabledDomains}
                 />
-                <div className="flex min-w-0 flex-1 flex-col">
-                    <CoachTopBar
-                        coachName={coach.full_name}
-                        coachBrand={enterpriseContext?.orgName ?? teamContext?.teamName ?? coach.brand_name ?? ''}
-                        primaryColor={primaryColor}
-                    />
-                    <CoachMainWrapper>
-                        {/* Background ambient glow */}
-                        <div
-                            className="fixed top-0 right-0 w-[500px] h-[500px] blur-[120px] rounded-full -z-10 pointer-events-none opacity-20 dark:opacity-10"
-                            style={{ backgroundColor: 'var(--theme-primary)' }}
+                <div className="flex min-w-0 flex-1 flex-col has-[.coach-builder-shell]:min-h-0">
+                    {/* RosterViewProvider: puente topbar ↔ pantalla /coach/clients para el
+                        toggle Tabla/Ficha (vive en el topbar, estado en la pantalla). */}
+                    <RosterViewProvider>
+                        <CoachTopBar
+                            coachName={coach.full_name}
+                            coachBrand={enterpriseContext?.orgName ?? teamContext?.teamName ?? coach.brand_name ?? ''}
+                            primaryColor={primaryColor}
                         />
-                        <div
-                            className="fixed bottom-0 left-0 w-[300px] h-[300px] blur-[100px] rounded-full -z-10 pointer-events-none opacity-10 dark:opacity-5"
-                            style={{ backgroundColor: 'var(--theme-primary)' }}
-                        />
-                        {children}
-                    </CoachMainWrapper>
+                        <CoachMainWrapper>
+                            {/* Background ambient glow */}
+                            <div
+                                className="fixed top-0 right-0 w-[500px] h-[500px] blur-[120px] rounded-full -z-10 pointer-events-none opacity-20 dark:opacity-10"
+                                style={{ backgroundColor: 'var(--theme-primary)' }}
+                            />
+                            <div
+                                className="fixed bottom-0 left-0 w-[300px] h-[300px] blur-[100px] rounded-full -z-10 pointer-events-none opacity-10 dark:opacity-5"
+                                style={{ backgroundColor: 'var(--theme-primary)' }}
+                            />
+                            {children}
+                        </CoachMainWrapper>
+                    </RosterViewProvider>
                 </div>
                 <CoachSuccessAnimationLazy />
                 {shouldConfirmPublicCode && <PublicCodeRequiredModal inviteCode={publicCode.inviteCode} />}

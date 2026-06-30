@@ -1,10 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CoachWarRoom, type DirectoryRiskFilter } from './CoachWarRoom'
 import { ClientsDirectoryClient } from './ClientsDirectoryClient'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import { getCoachPublicIdentifier, type CoachPublicIdentifierSource } from '@/lib/coach/public-identifier'
+import { useRosterView } from '@/components/coach/RosterViewContext'
 
 interface CoachClientsShellProps {
     clients: any[]
@@ -15,8 +16,15 @@ interface CoachClientsShellProps {
 
 export function CoachClientsShell({ clients, coach, appUrl, pulse }: CoachClientsShellProps) {
     const [riskFilter, setRiskFilter] = useState<DirectoryRiskFilter>('all')
-    // Vista de nivel superior (solo desktop). Default = ficha (master-detail), como el diseño.
-    const [rosterMode, setRosterMode] = useState<'ficha' | 'tabla'>('ficha')
+    // Vista de nivel superior (solo desktop): ficha (master-detail) | tabla. El estado vive en
+    // el RosterViewProvider del layout para que el toggle del topbar lo controle. Encendemos
+    // `active` mientras esta pantalla está montada (apagado al desmontar) → el toggle solo
+    // aparece en el topbar dentro de /coach/clients.
+    const { mode: rosterMode, setMode: setRosterMode, setActive } = useRosterView()
+    useEffect(() => {
+        setActive(true)
+        return () => setActive(false)
+    }, [setActive])
     const publicIdentifier = getCoachPublicIdentifier(coach)
 
     const pulseByClientId = useMemo(() => {
