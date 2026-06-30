@@ -36,6 +36,7 @@ export interface BlockType {
     superset_group: string | null
     progression_type: 'weight' | 'reps' | null
     progression_value: number | null
+    progression_mode: 'weekly_linear' | 'double' | 'session_linear' | 'adaptive' | null
     is_override: boolean
     // ── Prescripción polimórfica (M2) — null en planes legacy ──
     exercise_type_override?: string | null
@@ -94,7 +95,7 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
         .select(`
             id, title, assigned_date, day_of_week, week_variant, program_id, coach_id,
             workout_blocks (
-                id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, notes, section, section_template_id, superset_group, progression_type, progression_value, is_override,
+                id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, notes, section, section_template_id, superset_group, progression_type, progression_value, progression_mode, is_override,
                 exercise_type_override, side_mode, reps_value, reps_unit, load_value, load_unit,
                 distance_value, distance_unit, duration_sec, target_pace_sec_per_km, hr_zone,
                 instructions, interval_config,
@@ -201,6 +202,37 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
         })
     }
 
+    // Doble progresión (mode='double'): última sesión registrada por bloque (peso + reps por serie),
+    // de días PREVIOS a hoy. Solo se consulta si algún bloque usa ese modo (la mayoría no lo usa).
+    const lastSessionByBlock: Record<string, { date: string; sets: Array<{ weight_kg: number | null; reps_done: number | null }> }> = {}
+    const needsLastSession = plan.workout_blocks.some((b) => b.progression_mode === 'double')
+    if (needsLastSession && blockIds.length > 0) {
+        const { iso: lsToday } = getTodayInSantiago()
+        const { startIso: lsTodayStartUtc } = getSantiagoUtcBoundsForDay(lsToday)
+        const { data: priorLogs } = await supabase
+            .from('workout_logs')
+            .select('block_id, set_number, weight_kg, reps_done, logged_at')
+            .in('block_id', blockIds)
+            .lt('logged_at', lsTodayStartUtc)
+            .order('logged_at', { ascending: false })
+            .limit(800)
+        // priorLogs viene desc por fecha → la 1ª aparición de cada bloque marca su día más reciente.
+        const grouped: Record<string, { day: string; rows: Array<{ set_number: number; weight_kg: number | null; reps_done: number | null }> }> = {}
+        priorLogs?.forEach((log: { block_id: string; set_number: number; weight_kg: number | null; reps_done: number | null; logged_at: string }) => {
+            const day = String(log.logged_at).split('T')[0]
+            if (!grouped[log.block_id]) grouped[log.block_id] = { day, rows: [] }
+            if (grouped[log.block_id].day === day) {
+                grouped[log.block_id].rows.push({ set_number: log.set_number, weight_kg: log.weight_kg, reps_done: log.reps_done })
+            }
+        })
+        for (const [bid, g] of Object.entries(grouped)) {
+            const sets = [...g.rows]
+                .sort((a, b) => a.set_number - b.set_number)
+                .map((r) => ({ weight_kg: r.weight_kg, reps_done: r.reps_done }))
+            lastSessionByBlock[bid] = { date: g.day, sets }
+        }
+    }
+
     // F5: nombres de las areas que ESTE plan referencia. RLS wst_select no deja al alumno
     // ver areas custom del coach/team, asi que se resuelven con el SERVICE ROLE client puro
     // (createServiceRoleClient, sin cookies: createRawAdminClient hereda la sesion del request
@@ -274,5 +306,5 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
         }
     }
 
-    return { user, plan, program, logs, previousHistory, exerciseMaxes, activeWeekVariant, currentWeek, areas, cardio }
+    return { user, plan, program, logs, previousHistory, exerciseMaxes, activeWeekVariant, currentWeek, lastSessionByBlock, areas, cardio }
 })

@@ -4311,6 +4311,7 @@ export type Database = {
           notes: string | null
           order_index: number
           plan_id: string
+          progression_mode: string
           progression_type: string | null
           progression_value: number | null
           reps: string
@@ -4347,6 +4348,7 @@ export type Database = {
           notes?: string | null
           order_index?: number
           plan_id: string
+          progression_mode?: string
           progression_type?: string | null
           progression_value?: number | null
           reps?: string
@@ -4383,6 +4385,7 @@ export type Database = {
           notes?: string | null
           order_index?: number
           plan_id?: string
+          progression_mode?: string
           progression_type?: string | null
           progression_value?: number | null
           reps?: string

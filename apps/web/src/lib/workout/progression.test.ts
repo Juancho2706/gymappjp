@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
     computeEffectiveTarget,
     normalizeProgressionMode,
+    parseRepsTop,
     DEFAULT_PROGRESSION_MODE,
     type ProgressionBlockInput,
 } from './progression'
@@ -97,8 +98,8 @@ describe('computeEffectiveTarget — no-op seguro', () => {
         expect(computeEffectiveTarget(weightBlock({ progression_value: -2 }), { currentWeek: 3 }).weightKg).toBe(50)
     })
 
-    it('modo sin motor (double) → muestra base aunque haya progresión', () => {
-        const r = computeEffectiveTarget(weightBlock({ progression_mode: 'double' }), {
+    it('modo sin motor (session_linear, reservado) → muestra base aunque haya progresión', () => {
+        const r = computeEffectiveTarget(weightBlock({ progression_mode: 'session_linear' }), {
             currentWeek: 3,
             weeksToRepeat: 8,
         })
@@ -113,6 +114,78 @@ describe('computeEffectiveTarget — no-op seguro', () => {
             weeksToRepeat: 8,
         })
         expect(r.weightKg).toBe(55)
+        expect(r.mode).toBe('weekly_linear')
+    })
+})
+
+describe('parseRepsTop', () => {
+    it('rango "8-12" → 12', () => expect(parseRepsTop('8-12')).toBe(12))
+    it('entero "10" → 10', () => expect(parseRepsTop('10')).toBe(10))
+    it('con sufijo "10-12 por lado" → 12', () => expect(parseRepsTop('10-12 por lado')).toBe(12))
+    it('AMRAP → null', () => expect(parseRepsTop('AMRAP')).toBeNull())
+    it('vacío/null → null', () => {
+        expect(parseRepsTop('')).toBeNull()
+        expect(parseRepsTop(null)).toBeNull()
+    })
+})
+
+describe('computeEffectiveTarget — double (doble progresión)', () => {
+    const dbl = (over: Partial<ProgressionBlockInput> = {}): ProgressionBlockInput =>
+        weightBlock({ progression_mode: 'double', reps: '8-12', sets: 3, ...over })
+
+    it('primera vez (sin última sesión) → base, holding=false', () => {
+        const r = computeEffectiveTarget(dbl(), { currentWeek: 1, lastSession: null })
+        expect(r.weightKg).toBe(50)
+        expect(r.status).toBe('flat')
+        expect(r.repsTopToUnlock).toBe(12)
+    })
+
+    it('completó el tope en TODAS las series → sube desde el peso usado', () => {
+        const r = computeEffectiveTarget(dbl(), {
+            currentWeek: 4,
+            lastSession: { weightKg: 50, repsDone: [12, 12, 12] },
+        })
+        expect(r.weightKg).toBe(52.5) // 50 + 2.5
+        expect(r.status).toBe('progressed')
+        expect(r.isProgressed).toBe(true)
+    })
+
+    it('NO completó (una serie corta) → mantiene el peso de la última sesión', () => {
+        const r = computeEffectiveTarget(dbl(), {
+            currentWeek: 4,
+            lastSession: { weightKg: 52.5, repsDone: [12, 12, 9] },
+        })
+        expect(r.weightKg).toBe(52.5)
+        expect(r.status).toBe('holding')
+        expect(r.holding).toBe(true)
+    })
+
+    it('faltan series registradas (hizo 2 de 3) → mantiene (no sube)', () => {
+        const r = computeEffectiveTarget(dbl(), {
+            currentWeek: 4,
+            lastSession: { weightKg: 50, repsDone: [12, 12] },
+        })
+        expect(r.weightKg).toBe(50)
+        expect(r.status).toBe('holding')
+    })
+
+    it('ancla en lo REAL: subió de más → progresa desde ahí', () => {
+        const r = computeEffectiveTarget(dbl(), {
+            currentWeek: 4,
+            lastSession: { weightKg: 60, repsDone: [12, 12, 12] },
+        })
+        expect(r.weightKg).toBe(62.5)
+        expect(r.baseWeightKg).toBe(50)
+        expect(r.addedKg).toBe(12.5)
+    })
+
+    it('sin rango de reps (AMRAP) → cae a weekly_linear', () => {
+        const r = computeEffectiveTarget(dbl({ reps: 'AMRAP' }), {
+            currentWeek: 3,
+            weeksToRepeat: 8,
+            lastSession: { weightKg: 50, repsDone: [99, 99, 99] },
+        })
+        expect(r.weightKg).toBe(55) // 50 + 2*2.5 (semana, no sesión)
         expect(r.mode).toBe('weekly_linear')
     })
 })
