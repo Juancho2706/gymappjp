@@ -10,6 +10,7 @@ import {
     IntervalConfigSchema,
     WorkoutBlockSchema,
     WorkoutLogSetSchema,
+    isCardioBlockComplete,
 } from './workout'
 
 const baseBlock = {
@@ -169,6 +170,27 @@ describe('WorkoutBlockSchema — prescripción polimórfica', () => {
     it('hr_zone fuera de 1-5 y side_mode inválido se rechazan', () => {
         expect(WorkoutBlockSchema.safeParse({ ...baseBlock, hr_zone: 6 }).success).toBe(false)
         expect(WorkoutBlockSchema.safeParse({ ...baseBlock, side_mode: 'left' }).success).toBe(false)
+    })
+})
+
+describe('isCardioBlockComplete (fuente de verdad compartida)', () => {
+    it('es true con duración, distancia o intervalos', () => {
+        expect(isCardioBlockComplete({ duration_sec: 1200 })).toBe(true)
+        expect(isCardioBlockComplete({ distance_value: 5000 })).toBe(true)
+        expect(isCardioBlockComplete({ interval_config: { repeats: 4 } })).toBe(true)
+    })
+
+    it('es false sin ninguna prescripción de carga aeróbica', () => {
+        expect(isCardioBlockComplete({})).toBe(false)
+        expect(isCardioBlockComplete({ duration_sec: 0, distance_value: 0, interval_config: null })).toBe(false)
+        expect(isCardioBlockComplete({ duration_sec: null, distance_value: null })).toBe(false)
+    })
+
+    it('coincide con el veredicto del superRefine para cardio explícito', () => {
+        // Mismo bloque incompleto: el schema lo rechaza y el helper lo marca incompleto.
+        const incomplete = { ...baseBlock, exercise_type_override: 'cardio' as const }
+        expect(WorkoutBlockSchema.safeParse(incomplete).success).toBe(false)
+        expect(isCardioBlockComplete(incomplete)).toBe(false)
     })
 })
 

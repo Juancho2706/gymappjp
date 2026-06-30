@@ -286,3 +286,137 @@ describe('builderReducer — SET_BLOCK_AREA (areas)', () => {
         expect(next[0].blocks[1].superset_group).toBe('A')
     })
 })
+
+// ─── Fixes: superset extend / COPY_DAY isolation / split middle ──────────────
+
+describe('builderReducer — TOGGLE_SUPERSET extender (bug 1)', () => {
+    it('toggle sobre el ÚLTIMO miembro de un grupo amplía el tramo (no lo destruye)', () => {
+        const state = [mkDay(1, [
+            mkBlock({ uid: 'm1', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm2', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm3', section: 'main', superset_group: null }),
+        ])]
+        const next = builderReducer(state, {
+            type: 'TOGGLE_SUPERSET',
+            payload: { dayId: 1, uid: 'm2' },
+        })
+        const byUid = Object.fromEntries(next[0].blocks.map(b => [b.uid, b]))
+        expect(byUid['m1'].superset_group).toBe('A')
+        expect(byUid['m2'].superset_group).toBe('A')
+        expect(byUid['m3'].superset_group).toBe('A')
+    })
+
+    it('no extiende si el siguiente es de otra sección/área (queda como quitar)', () => {
+        const state = [mkDay(1, [
+            mkBlock({ uid: 'm1', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm2', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'c1', section: 'cooldown', superset_group: null }),
+        ])]
+        const next = builderReducer(state, {
+            type: 'TOGGLE_SUPERSET',
+            payload: { dayId: 1, uid: 'm2' },
+        })
+        const byUid = Object.fromEntries(next[0].blocks.map(b => [b.uid, b]))
+        // m2 (último, no extensible) se quita; m1 queda singleton → limpio
+        expect(byUid['m2'].superset_group).toBeNull()
+        expect(byUid['m1'].superset_group).toBeNull()
+        expect(byUid['c1'].superset_group).toBeNull()
+    })
+})
+
+describe('builderReducer — TOGGLE_SUPERSET quitar del medio (bug 3)', () => {
+    it('quitar el miembro del MEDIO de un grupo de 5 no deja letras no contiguas', () => {
+        const state = [mkDay(1, [
+            mkBlock({ uid: 'm1', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm2', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm3', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm4', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm5', section: 'main', superset_group: 'A' }),
+        ])]
+        const next = builderReducer(state, {
+            type: 'TOGGLE_SUPERSET',
+            payload: { dayId: 1, uid: 'm3' },
+        })
+        const groups = next[0].blocks.map(b => b.superset_group)
+        // m3 vacío; los dos tramos sobrevivientes con letras DISTINTAS
+        expect(groups[2]).toBeNull()
+        expect(groups[0]).toBe('A')
+        expect(groups[1]).toBe('A')
+        expect(groups[3]).not.toBeNull()
+        expect(groups[3]).not.toBe('A')
+        expect(groups[4]).toBe(groups[3])
+        // Ningún par de bloques no contiguos comparte letra
+        const seen = new Map<string, number>()
+        next[0].blocks.forEach((b, i) => {
+            if (!b.superset_group) return
+            if (seen.has(b.superset_group)) {
+                expect(i - (seen.get(b.superset_group) as number)).toBe(1)
+            }
+            seen.set(b.superset_group, i)
+        })
+    })
+
+    it('quitar el medio de un grupo de 3 limpia los dos extremos (singletons)', () => {
+        const state = [mkDay(1, [
+            mkBlock({ uid: 'm1', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm2', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm3', section: 'main', superset_group: 'A' }),
+        ])]
+        const next = builderReducer(state, {
+            type: 'TOGGLE_SUPERSET',
+            payload: { dayId: 1, uid: 'm2' },
+        })
+        expect(next[0].blocks.every(b => !b.superset_group)).toBe(true)
+    })
+})
+
+describe('builderReducer — COPY_DAY aísla superseries (bug 2)', () => {
+    it('re-letra los grupos copiados para no fusionar con uno ajeno en la costura', () => {
+        const state = [
+            mkDay(1, [
+                mkBlock({ uid: 's1', section: 'main', superset_group: 'A' }),
+                mkBlock({ uid: 's2', section: 'main', superset_group: 'A' }),
+            ]),
+            mkDay(2, [
+                mkBlock({ uid: 'd1', section: 'main', superset_group: 'A' }),
+                mkBlock({ uid: 'd2', section: 'main', superset_group: 'A' }),
+            ]),
+        ]
+        const next = builderReducer(state, {
+            type: 'COPY_DAY',
+            payload: { sourceId: 1, targetIds: [2] },
+        })
+        const day2 = next.find(d => d.id === 2)!
+        expect(day2.blocks).toHaveLength(4)
+        // Los 2 originales del destino conservan 'A'
+        expect(day2.blocks[0].superset_group).toBe('A')
+        expect(day2.blocks[1].superset_group).toBe('A')
+        // Los 2 copiados comparten una letra NUEVA (no 'A') → no se fusionan en la costura
+        const copyGroup = day2.blocks[2].superset_group
+        expect(copyGroup).not.toBeNull()
+        expect(copyGroup).not.toBe('A')
+        expect(day2.blocks[3].superset_group).toBe(copyGroup)
+    })
+
+    it('preserva múltiples grupos copiados distintos mapeándolos consistentemente', () => {
+        const state = [
+            mkDay(1, [
+                mkBlock({ uid: 's1', section: 'main', superset_group: 'A' }),
+                mkBlock({ uid: 's2', section: 'main', superset_group: 'A' }),
+                mkBlock({ uid: 's3', section: 'main', superset_group: 'B' }),
+                mkBlock({ uid: 's4', section: 'main', superset_group: 'B' }),
+            ]),
+            mkDay(3, []),
+        ]
+        const next = builderReducer(state, {
+            type: 'COPY_DAY',
+            payload: { sourceId: 1, targetIds: [3] },
+        })
+        const day3 = next.find(d => d.id === 3)!
+        expect(day3.blocks).toHaveLength(4)
+        // destino vacío: las letras pueden volver a A/B pero los pares se mantienen
+        expect(day3.blocks[0].superset_group).toBe(day3.blocks[1].superset_group)
+        expect(day3.blocks[2].superset_group).toBe(day3.blocks[3].superset_group)
+        expect(day3.blocks[0].superset_group).not.toBe(day3.blocks[2].superset_group)
+    })
+})

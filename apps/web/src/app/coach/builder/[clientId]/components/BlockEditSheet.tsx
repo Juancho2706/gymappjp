@@ -751,10 +751,10 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                                         />
                                         <button
                                             type="button"
-                                            onClick={() => onChange({ ...block, distance_unit: block.distance_unit === 'm' ? 'km' : 'm' })}
+                                            onClick={() => onChange({ ...block, distance_unit: block.distance_unit === 'km' ? 'm' : 'km' })}
                                             className="h-12 min-w-[52px] rounded-lg border border-border bg-secondary text-[10px] font-bold uppercase text-muted-foreground hover:bg-muted dark:border-white/10 dark:bg-white/5"
                                         >
-                                            {block.distance_unit ?? 'km'}
+                                            {block.distance_unit ?? 'm'}
                                         </button>
                                     </div>
                                     <p className="text-[10px] text-muted-foreground/50 text-center">duración O distancia</p>

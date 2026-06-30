@@ -86,6 +86,25 @@ export const IntervalConfigSchema = z.object({
 
 export type IntervalConfigInput = z.infer<typeof IntervalConfigSchema>
 
+/**
+ * Completitud de un bloque cardio: necesita al menos una prescripción de carga aeróbica
+ * (duración, distancia o intervalos). Fuente de verdad ÚNICA — la usa el superRefine del
+ * schema (cuando el bloque declara `exercise_type_override === 'cardio'`) y debe usarla el
+ * server action que resuelve el tipo EFECTIVO desde el catálogo (`effectiveExerciseType`),
+ * porque el schema NO conoce `exercise.exercise_type` (no viaja en el payload del bloque).
+ * Pura, sin imports de Next/Supabase — segura para web y mobile.
+ */
+export function isCardioBlockComplete(block: {
+    duration_sec?: number | null
+    distance_value?: number | null
+    interval_config?: unknown
+}): boolean {
+    const hasDuration = block.duration_sec != null && block.duration_sec > 0
+    const hasDistance = block.distance_value != null && block.distance_value > 0
+    const hasInterval = block.interval_config != null
+    return hasDuration || hasDistance || hasInterval
+}
+
 const optionalNonNegativeInt = (max: number) =>
     z.union([z.number().int().min(0).max(max), z.null()]).optional()
 const optionalNonNegativeNumber = (max: number) =>
@@ -136,10 +155,7 @@ export const WorkoutBlockSchema = z.object({
     // Solo aplica cuando el bloque declara explícitamente cardio (override):
     // un bloque legacy (sin override) jamás entra acá — cero regresión (AC3).
     if (block.exercise_type_override === 'cardio') {
-        const hasDuration = block.duration_sec != null && block.duration_sec > 0
-        const hasDistance = block.distance_value != null && block.distance_value > 0
-        const hasInterval = block.interval_config != null
-        if (!hasDuration && !hasDistance && !hasInterval) {
+        if (!isCardioBlockComplete(block)) {
             ctx.addIssue({
                 code: 'custom',
                 message: 'Un bloque cardio necesita duración, distancia o intervalos',
