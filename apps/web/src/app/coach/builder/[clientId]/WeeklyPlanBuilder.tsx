@@ -99,9 +99,11 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 return {
                     ...d,
                     title: plan?.title || '',
-                    blocks: (plan?.workout_blocks ?? []).map((b: any) =>
-                        mapDbBlockToBuilderBlock(b, exerciseById, `block-${b.id || Math.random().toString()}`, d.id),
-                    ),
+                    blocks: [...(plan?.workout_blocks ?? [])]
+                        .sort((a: any, b: any) => (a.order_index ?? 0) - (b.order_index ?? 0))
+                        .map((b: any) =>
+                            mapDbBlockToBuilderBlock(b, exerciseById, `block-${b.id || Math.random().toString()}`, d.id),
+                        ),
                 }
             })
         }
@@ -231,6 +233,13 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     const [activeTourStepId, setActiveTourStepId] = useState<string | null>(null)
     const [activeMobileDayIndex, setActiveMobileDayIndex] = useState(0)
     const [isSimpleMode, setIsSimpleMode] = useState(false)
+    // Clamp del día activo en mobile cuando se achican los días (cycle→weekly o ciclo más corto):
+    // sin esto activeMobileDayIndex apunta a un día inexistente → days[idx] undefined → rompe tap-to-add.
+    useEffect(() => {
+        if (activeMobileDayIndex > days.length - 1) {
+            setActiveMobileDayIndex(Math.max(0, days.length - 1))
+        }
+    }, [days.length, activeMobileDayIndex])
     const [showSwipeHint, setShowSwipeHint] = useState(false)
     const [modeTransitionLabel, setModeTransitionLabel] = useState<string | null>(null)
     const preTourSimpleModeRef = useRef(false)
@@ -337,7 +346,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
             try {
                 localStorage.setItem(`builder_draft_${initialProgram?.id || 'new'}`, JSON.stringify({
                     programName, weeksToRepeat, durationType, durationDays, startDateFlexible, startDate, programNotes,
-                    isABMode, days, daysB: builderB.days, programPhases, sourceTemplateId,
+                    isABMode, days: builderA.days, daysB: builderB.days, programPhases, sourceTemplateId,
                 }))
             } catch (e) {}
         }, 3000)
