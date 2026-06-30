@@ -44,14 +44,15 @@ function DraggableExerciseItem({ exercise, onSelect, onPreview, onTapAdd }: Drag
             {...attributes}
             onClick={() => onSelect?.(exercise)}
             className={cn(
-                "max-w-full overflow-hidden p-3 rounded-control border bg-card hover:border-primary/50 transition-all cursor-grab active:cursor-grabbing group relative",
-                isDragging && "opacity-50 ring-2 ring-primary border-primary",
-                onSelect && "cursor-pointer active:scale-95 transition-transform"
+                // .dt-catitem: borderless row with surface-sunken hover fill (transparent on bg-card panel)
+                "max-w-full overflow-hidden p-3 rounded-control border border-transparent bg-transparent hover:bg-muted transition-all cursor-grab active:cursor-grabbing group relative",
+                isDragging && "opacity-50 ring-2 ring-primary !border-primary bg-muted",
+                onSelect && "cursor-pointer active:scale-95"
             )}
         >
             <div className="flex min-w-0 items-center gap-3">
                 <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center border border-border overflow-hidden shrink-0 group-hover:shadow-md transition-all relative"
+                    className="w-10 h-10 rounded-[10px] flex items-center justify-center overflow-hidden shrink-0 group-hover:shadow-sm transition-all relative"
                     style={{ backgroundColor: `color-mix(in srgb, ${getMuscleColor(exercise.muscle_group)} 15%, transparent)` }}
                 >
                     {(() => {
@@ -69,7 +70,7 @@ function DraggableExerciseItem({ exercise, onSelect, onPreview, onTapAdd }: Drag
                     })()}
                 </div>
                 <div className="flex-1 min-w-0 pr-8">
-                    <p className="text-sm font-semibold leading-tight group-hover:text-primary transition-colors truncate">{exercise.name}</p>
+                    <p className="text-[13px] font-bold leading-tight text-foreground group-hover:text-primary transition-colors truncate">{exercise.name}</p>
                     <div className="flex items-center gap-2 mt-1">
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getMuscleColor(exercise.muscle_group) }} />
                         <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider truncate">{exercise.muscle_group}</p>
@@ -195,8 +196,7 @@ export function DraggableExerciseCatalog({
             {/* Header / Filters */}
             <div className="p-3 md:p-4 border-b border-border space-y-3 md:space-y-4 bg-muted/20 rounded-t-card shrink-0">
                 <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-bold flex items-center gap-2 text-foreground">
-                        <Activity className="w-4 h-4 text-primary" style={{ color: 'var(--theme-primary)' }} />
+                    <h2 className="font-display text-sm font-extrabold tracking-tight text-foreground">
                         Catálogo de Ejercicios
                     </h2>
                 </div>
