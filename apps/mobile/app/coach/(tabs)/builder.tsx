@@ -65,6 +65,7 @@ type ProgramBlock = {
   target_weight_kg?: number | null
   progression_type?: string | null
   progression_value?: number | null
+  progression_mode?: string | null
   is_override?: boolean | null
   exercise?: { name: string | null } | null
 }
@@ -151,7 +152,7 @@ export default function BuilderScreen() {
             id, day_of_week, title, group_name, week_variant, assigned_date,
             workout_blocks (
               id, exercise_id, order_index, sets, reps, target_weight_kg, section, tempo, rir, rest_time, notes,
-              superset_group, progression_type, progression_value, is_override,
+              superset_group, progression_type, progression_value, progression_mode, is_override,
               exercise:exercises(name)
             )
           )`
@@ -987,6 +988,7 @@ function blockInsertFromSource(block: ProgramBlock, planId: string) {
     superset_group: block.superset_group ?? null,
     progression_type: block.progression_type ?? null,
     progression_value: block.progression_value ?? null,
+    progression_mode: block.progression_mode ?? 'weekly_linear',
     section: ['warmup', 'main', 'cooldown'].includes(String(block.section)) ? block.section : 'main',
     is_override: false,
   }
@@ -1020,7 +1022,7 @@ async function syncProgramFromTemplate(program: ProgramItem): Promise<{ ok: bool
   if (!program.client_id) return { ok: false, error: 'Solo los programas de alumno se sincronizan.' }
   if (!program.source_template_id) return { ok: false, error: 'Este programa no tiene plantilla base vinculada.' }
 
-  const tplSelect = `id, workout_plans ( id, day_of_week, title, group_name, week_variant, workout_blocks ( id, exercise_id, order_index, sets, reps, target_weight_kg, section, tempo, rir, rest_time, notes, superset_group, progression_type, progression_value, is_override ) )`
+  const tplSelect = `id, workout_plans ( id, day_of_week, title, group_name, week_variant, workout_blocks ( id, exercise_id, order_index, sets, reps, target_weight_kg, section, tempo, rir, rest_time, notes, superset_group, progression_type, progression_value, progression_mode, is_override ) )`
   const { data: tpl, error: tErr } = await supabase
     .from('workout_programs')
     .select(tplSelect)

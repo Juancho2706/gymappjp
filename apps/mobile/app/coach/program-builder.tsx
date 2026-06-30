@@ -90,6 +90,7 @@ function mapDbBlock(b: any): BuilderBlock {
     superset_group: b.superset_group ?? null,
     progression_type: b.progression_type ?? null,
     progression_value: b.progression_value ?? null,
+    progression_mode: (b.progression_mode as BuilderBlock['progression_mode']) ?? null,
     section: (b.section as BuilderBlock['section']) ?? 'main',
     is_override: b.is_override ?? false,
   }
@@ -97,7 +98,7 @@ function mapDbBlock(b: any): BuilderBlock {
 
 // Columnas base (las que la prod standalone seguro tiene).
 const PROGRAM_SELECT =
-  'id, name, program_structure_type, duration_type, weeks_to_repeat, cycle_length, ab_mode, workout_plans ( id, title, day_of_week, week_variant, workout_blocks ( id, exercise_id, order_index, sets, reps, rir, rest_time, notes, target_weight_kg, tempo, superset_group, progression_type, progression_value, section, is_override, exercises ( name, muscle_group, gif_url, video_url ) ) )'
+  'id, name, program_structure_type, duration_type, weeks_to_repeat, cycle_length, ab_mode, workout_plans ( id, title, day_of_week, week_variant, workout_blocks ( id, exercise_id, order_index, sets, reps, rir, rest_time, notes, target_weight_kg, tempo, superset_group, progression_type, progression_value, progression_mode, section, is_override, exercises ( name, muscle_group, gif_url, video_url ) ) )'
 // Rico = base + meta extra (notas/fecha/phases). Si la columna falta, selectWithFallback usa el base.
 const PROGRAM_SELECT_RICH = PROGRAM_SELECT.replace(
   'ab_mode,',
@@ -136,6 +137,7 @@ function blockInsert(b: BuilderBlock, i: number, planId: string) {
     superset_group: b.superset_group || null,
     progression_type: b.progression_type || null,
     progression_value: b.progression_value ?? null,
+    progression_mode: b.progression_mode ?? 'weekly_linear',
     section: b.section ?? 'main',
     is_override: b.is_override ?? false,
   }

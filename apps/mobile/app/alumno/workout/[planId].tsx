@@ -30,6 +30,8 @@ import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { RestTimer } from '../../../components/workout/RestTimer'
 import { WorkoutSummaryModal } from '../../../components/workout/WorkoutSummaryModal'
+import { programWeekIndex1Based } from '../../../lib/program-week-variant'
+import { computeEffectiveTarget, type EffectiveTarget } from '../../../lib/workout/progression'
 
 /** Redondea y acota un input numérico a [min,max]; '' / NaN → null. Para RPE/RIR (columnas integer con CHECK). */
 function clampIntInRange(v: string, min: number, max: number): number | null {
@@ -61,6 +63,7 @@ interface Block {
   superset_group: string | null
   progression_type: 'weight' | 'reps' | null
   progression_value: number | null
+  progression_mode: 'weekly_linear' | 'double' | 'session_linear' | 'adaptive' | null
   is_override: boolean | null
   notes: string | null
   exercises: Exercise | null
@@ -103,6 +106,8 @@ export default function WorkoutExecutionScreen() {
   const [blocks, setBlocks] = useState<Block[]>([])
   const [planTitle, setPlanTitle] = useState('')
   const [activeWeekVariant, setActiveWeekVariant] = useState<string | null>(null)
+  const [currentWeek, setCurrentWeek] = useState<number | null>(null)
+  const [weeksToRepeat, setWeeksToRepeat] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [clientId, setClientId] = useState<string | null>(null)
   const [logs, setLogs] = useState<Record<string, LogEntry[]>>({})
@@ -141,9 +146,9 @@ export default function WorkoutExecutionScreen() {
     const { data } = await supabase
       .from('workout_plans')
       .select(`
-        id, title, week_variant,
+        id, title, week_variant, program_id,
         workout_blocks (
-          id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, section, superset_group, progression_type, progression_value, is_override, notes,
+          id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, section, superset_group, progression_type, progression_value, progression_mode, is_override, notes,
           exercises ( id, name, muscle_group, video_url, gif_url, instructions )
         )
       `)
@@ -160,6 +165,20 @@ export default function WorkoutExecutionScreen() {
     setBlocks(sorted)
     setActiveWeekVariant((data as any).week_variant ?? null)
     await cachePlan(planId, { title: data.title, blocks: sorted, activeWeekVariant: (data as any).week_variant ?? null })
+
+    // Sobrecarga progresiva (weekly_linear): la semana sale de start_date del programa.
+    const programId = (data as any).program_id
+    if (programId) {
+      const { data: prog } = await supabase
+        .from('workout_programs')
+        .select('start_date, weeks_to_repeat')
+        .eq('id', programId)
+        .maybeSingle()
+      if (prog) {
+        setWeeksToRepeat((prog as any).weeks_to_repeat ?? null)
+        setCurrentWeek(programWeekIndex1Based(prog as any))
+      }
+    }
 
     const blockIds = sorted.map((b: Block) => b.id)
     if (client && blockIds.length > 0) {
@@ -391,6 +410,7 @@ export default function WorkoutExecutionScreen() {
               >
                 <BlockCard
                   block={block}
+                  effective={computeEffectiveTarget(block, { currentWeek, weeksToRepeat })}
                   logged={logs[block.id] ?? []}
                   previous={block.exercises?.id ? previousHistory[block.exercises.id] ?? [] : []}
                   onLogSet={logSet}
@@ -506,6 +526,24 @@ export default function WorkoutExecutionScreen() {
   )
 }
 
+/** Texto del cartel de sobrecarga progresiva según el estado calculado (paridad con web). */
+function progressionLabel(
+  block: { progression_type: 'weight' | 'reps' | null; progression_value: number | null },
+  eff: EffectiveTarget,
+): string {
+  const v = block.progression_value
+  if (block.progression_type !== 'weight' || !eff.modeImplemented) {
+    return `Progresion: +${v} ${block.progression_type === 'weight' ? 'kg cada semana' : 'rep cada sesion'}`
+  }
+  if (eff.mode === 'double') {
+    if (eff.status === 'holding') return `Doble progresion: mante ${eff.weightKg}kg y completa ${eff.repsTopToUnlock} reps en todas las series para subir`
+    if (eff.status === 'progressed') return `Doble progresion: subiste! objetivo ${eff.weightKg}kg (base ${eff.baseWeightKg})`
+    return `Doble progresion: subi +${v}kg cuando completes ${eff.repsTopToUnlock} reps en todas las series`
+  }
+  if (eff.isProgressed) return `Semana ${eff.weeksApplied + 1}: objetivo ${eff.weightKg}kg (base ${eff.baseWeightKg} +${eff.addedKg})`
+  return `Sobrecarga progresiva: sube +${v}kg cada semana`
+}
+
 function groupBySection(blocks: Block[]): Record<string, Block[]> {
   const order = ['warmup', 'main', 'cooldown']
   const groups: Record<string, Block[]> = {}
@@ -535,12 +573,14 @@ function groupSupersets(blocks: Block[]): Array<{ key: string; superset: boolean
 
 function BlockCard({
   block,
+  effective,
   logged,
   previous,
   onLogSet,
   onOpenTechnique,
 }: {
   block: Block
+  effective: EffectiveTarget
   logged: LogEntry[]
   previous: PreviousHistory[]
   onLogSet: (block: Block, setNumber: number, weight: string, reps: string, rpe: string, rir: string) => Promise<void>
@@ -548,7 +588,8 @@ function BlockCard({
 }) {
   const { theme } = useTheme()
   const nextSet = logged.length + 1
-  const [weight, setWeight] = useState('')
+  // Pre-llena el peso con el objetivo sugerido (sobrecarga progresiva); el alumno solo confirma.
+  const [weight, setWeight] = useState(effective.weightKg != null ? String(effective.weightKg) : '')
   const [reps, setReps] = useState('')
   const [rpe, setRpe] = useState('')
   const [rir, setRir] = useState('')
@@ -606,7 +647,7 @@ function BlockCard({
 
       <View style={styles.metricGrid}>
         <Metric label="Series x reps" value={`${block.sets} x ${block.reps}`} />
-        {block.target_weight_kg != null ? <Metric label="Peso" value={`${block.target_weight_kg}kg`} /> : null}
+        {block.target_weight_kg != null ? <Metric label={effective.status === 'holding' ? 'Peso a mantener' : effective.status === 'progressed' ? 'Peso hoy' : 'Peso'} value={`${effective.weightKg ?? block.target_weight_kg}kg`} /> : null}
         {block.rest_time ? <Metric label="Descanso" value={block.rest_time} /> : null}
         {block.tempo ? <Metric label="Tempo" value={block.tempo} /> : null}
         {block.rir ? <Metric label="RIR" value={block.rir} /> : null}
@@ -614,7 +655,7 @@ function BlockCard({
 
       {block.progression_type && block.progression_value != null ? (
         <Text style={[styles.progression, { color: theme.primary, fontFamily: 'Montserrat_700Bold' }]}>
-          Progresion: +{block.progression_value} {block.progression_type === 'weight' ? 'kg' : 'reps'}
+          {progressionLabel(block, effective)}
         </Text>
       ) : null}
 
