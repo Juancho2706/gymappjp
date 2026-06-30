@@ -555,6 +555,14 @@
   /* Ring for focus / selection */
   --ring-focus: 0 0 0 3px var(--focus-ring);
   --ring-brand: 0 0 0 2px var(--sport-500);
+
+  /* ============ Desktop reading widths — eva-desktop shell (verbatim de
+     docs/design-source/ui_kits/eva-desktop/index.html .eva-desktop) ============ */
+  --dt-read-wide:   1240px;  /* dashboards / grids */
+  --dt-read-mid:    980px;   /* ficha */
+  --dt-read-narrow: 720px;   /* settings / forms */
+  --dt-read-text:   680px;   /* notificaciones / lectura */
+  --dt-page-x:      32px;    /* padding horizontal de página */
 }
 
 /* ============================================================

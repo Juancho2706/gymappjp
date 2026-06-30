@@ -39,8 +39,13 @@ export function CoachMainWrapper({ children }: { children: React.ReactNode }) {
         >
             <div
                 className={cn(
-                    'mx-auto w-full min-w-0 max-w-full px-4 py-6 animate-fade-in md:px-8 md:py-10',
-                    isNutritionHub ? 'max-w-[2000px]' : 'max-w-[1600px]'
+                    // Shell reading column (eva-desktop): page-x = --dt-page-x (32px) en desktop,
+                    // 16px en móvil; ancho de lectura por defecto = --dt-read-wide (1240, dashboards/grids).
+                    // Las anchuras más estrechas (ficha --dt-read-mid 980 · settings --dt-read-narrow 720)
+                    // las aplican las pantallas en sus olas; aquí solo el default wide del shell.
+                    'mx-auto w-full min-w-0 max-w-full px-4 py-6 animate-fade-in md:px-[var(--dt-page-x)] md:py-10',
+                    // Nutrición = tablero master-detail (no columna de lectura): conserva su ancho amplio.
+                    isNutritionHub ? 'md:max-w-[2000px]' : 'md:max-w-[var(--dt-read-wide)]'
                 )}
             >
                 {children}

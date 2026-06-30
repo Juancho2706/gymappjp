@@ -1,8 +1,9 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Search, ChevronRight, ArrowLeft } from 'lucide-react'
+import { Search, ChevronRight, ArrowLeft, X } from 'lucide-react'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
 
 /**
@@ -65,6 +66,23 @@ function resolveCrumb(pathname: string): { sectionLabel: string; sectionHref: st
 
 export function CoachTopBar({ coachName, coachBrand }: CoachTopBarProps) {
     const pathname = usePathname()
+    const inputRef = useRef<HTMLInputElement>(null)
+    const [query, setQuery] = useState('')
+
+    // Atajo de teclado desktop (.dt-tb-input): "/" enfoca la búsqueda global, salvo si el foco
+    // ya está en un campo editable. Verbatim del DesktopTopBar del diseño.
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            const t = e.target as HTMLElement | null
+            const tag = t?.tagName ?? ''
+            if (e.key === '/' && !/^(input|textarea|select)$/i.test(tag) && !t?.isContentEditable) {
+                e.preventDefault()
+                inputRef.current?.focus()
+            }
+        }
+        document.addEventListener('keydown', onKey)
+        return () => document.removeEventListener('keydown', onKey)
+    }, [])
 
     // Builder = full-screen sin chrome global (espejo de `isBuilder` en CoachSidebar).
     if (pathname.startsWith('/coach/builder') || pathname.startsWith('/coach/workout-programs/builder')) {
@@ -73,10 +91,11 @@ export function CoachTopBar({ coachName, coachBrand }: CoachTopBarProps) {
 
     const { sectionLabel, sectionHref, detailLabel } = resolveCrumb(pathname)
     const inStack = detailLabel != null
-    const initial = (coachBrand?.trim() || coachName?.trim() || 'C').charAt(0).toUpperCase()
+    // Avatar de cuenta = el coach (no la marca): el panel es la cara de EVA.
+    const initial = (coachName?.trim() || coachBrand?.trim() || 'C').charAt(0).toUpperCase()
 
     return (
-        <header className="hidden h-[60px] flex-shrink-0 items-center gap-4 border-b border-[var(--border-subtle)] bg-[var(--surface-card)] px-[22px] font-ui md:flex">
+        <header className="z-[4] hidden h-[60px] flex-shrink-0 items-center gap-4 border-b border-[var(--border-subtle)] bg-[var(--surface-card)] px-[22px] font-ui md:flex">
             {/* .dt-tb-left — back + breadcrumb (solo en drill-down) */}
             <div className="flex min-w-0 flex-shrink-0 items-center gap-2.5">
                 {inStack && (
@@ -109,19 +128,42 @@ export function CoachTopBar({ coachName, coachBrand }: CoachTopBarProps) {
                 )}
             </div>
 
-            {/* .dt-tb-search — búsqueda global centrada (placeholder NO funcional) */}
+            {/* .dt-tb-search — búsqueda global centrada. Chrome 1:1: input enfocable con "/",
+                Escape limpia/desenfoca, botón × para limpiar y anillo de foco sport (.dt-tb-input:focus).
+                DIFERIDO a la ola de datos: el dropdown de resultados agrupados
+                (Alumnos/Programas/Ejercicios/Recetas) requiere endpoints reales de búsqueda. */}
             <div className="relative mx-auto flex max-w-[460px] flex-1 items-center">
                 <span className="pointer-events-none absolute left-3 inline-flex text-[var(--text-subtle)]">
                     <Search size={17} />
                 </span>
                 <input
-                    type="text"
-                    readOnly
-                    tabIndex={-1}
+                    ref={inputRef}
+                    type="search"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                            setQuery('')
+                            e.currentTarget.blur()
+                        }
+                    }}
                     placeholder="Buscar alumno o programa…  (/)"
-                    aria-hidden="true"
-                    className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] pl-[38px] pr-[34px] text-sm text-[var(--text-strong)] outline-none placeholder:text-[var(--text-subtle)]"
+                    aria-label="Buscar alumno o programa"
+                    className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] pl-[38px] pr-[34px] text-sm text-[var(--text-strong)] outline-none transition-[border-color,background,box-shadow] duration-150 placeholder:text-[var(--text-subtle)] focus:border-[var(--sport-500)] focus:bg-[var(--surface-card)] focus:shadow-[var(--ring-focus)] [&::-webkit-search-cancel-button]:appearance-none"
                 />
+                {query && (
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setQuery('')
+                            inputRef.current?.focus()
+                        }}
+                        aria-label="Limpiar"
+                        className="absolute right-2 flex h-[22px] w-[22px] items-center justify-center rounded-[6px] text-[var(--text-subtle)] transition-colors hover:bg-[var(--surface-sunken)] hover:text-[var(--text-strong)]"
+                    >
+                        <X size={14} />
+                    </button>
+                )}
             </div>
 
             {/* .dt-tb-actions — campana (reusada) + cuenta */}

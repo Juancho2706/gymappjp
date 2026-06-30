@@ -170,7 +170,7 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                 <span
                     aria-hidden="true"
                     className={cn(
-                        'pointer-events-none absolute top-1/2 w-[3px] -translate-y-1/2 rounded-r-[3px] bg-[var(--sport-500)] transition-[height] duration-200',
+                        'pointer-events-none absolute top-1/2 w-[3px] -translate-y-1/2 rounded-r-[3px] bg-[var(--sport-500)] transition-[height] duration-[180ms] ease-[cubic-bezier(.22,1,.36,1)]',
                         isCollapsed ? 'left-[-12px]' : 'left-[-14px]',
                         isActive ? 'h-[22px]' : 'h-0'
                     )}
@@ -185,14 +185,15 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
         )
     }
 
-    const initial = (coachBrand?.trim() || coachName?.trim() || 'C').charAt(0).toUpperCase()
+    // Avatar del pie = el coach (no la marca): el panel /coach es la cara de EVA.
+    const initial = (coachName?.trim() || coachBrand?.trim() || 'C').charAt(0).toUpperCase()
 
     return (
         <>
             {/* ===================== DESKTOP SIDEBAR (.dt-side) ===================== */}
             <aside
                 className={cn(
-                    'hidden transition-all duration-200 ease-out md:sticky md:top-0 md:flex md:flex-col md:border-r md:border-[var(--border-subtle)] md:bg-[var(--surface-card)]',
+                    'hidden transition-[width,padding] duration-[240ms] ease-[cubic-bezier(.22,1,.36,1)] md:sticky md:top-0 md:z-[6] md:flex md:flex-col md:border-r md:border-[var(--border-subtle)] md:bg-[var(--surface-card)]',
                     isBuilder
                         ? 'md:h-full md:max-h-full md:min-h-0'
                         : 'md:h-dvh supports-[height:100dvh]:md:h-[100dvh]',
@@ -206,11 +207,14 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                         isCollapsed ? 'justify-center pl-0' : 'pl-2'
                     )}
                 >
-                    <EvaBrandIcon className={cn('h-9 w-9 flex-shrink-0', isCollapsed && 'h-9 w-9')} />
+                    {/* Identidad EVA (no la marca del coach): el panel /coach es la cara de EVA —
+                        la marca blanca del coach solo aparece en la app del alumno (/c). El diseño
+                        eva-desktop muestra el logo EVA en el sidebar del coach. */}
+                    <EvaBrandIcon className={cn('flex-shrink-0', isCollapsed ? 'h-10 w-10' : 'h-9 w-9')} />
                     {!isCollapsed && (
                         <div className="ml-2.5 min-w-0">
                             <p className="truncate font-display text-[15px] font-black uppercase leading-none tracking-tight text-[var(--text-strong)]">
-                                {coachBrand || coachName || 'EVA'}
+                                EVA
                             </p>
                             {enterpriseContext && (
                                 <p className="mt-1 truncate text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
