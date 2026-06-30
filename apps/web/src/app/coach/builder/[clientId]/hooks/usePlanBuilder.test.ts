@@ -322,6 +322,22 @@ describe('builderReducer — TOGGLE_SUPERSET extender (bug 1)', () => {
         expect(byUid['m1'].superset_group).toBeNull()
         expect(byUid['c1'].superset_group).toBeNull()
     })
+
+    it('intent "unlink" (badge Quitar) NO extiende — quita aunque el siguiente sea enlazable', () => {
+        const state = [mkDay(1, [
+            mkBlock({ uid: 'm1', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm2', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm3', section: 'main', superset_group: null }),
+        ])]
+        const next = builderReducer(state, {
+            type: 'TOGGLE_SUPERSET',
+            payload: { dayId: 1, uid: 'm2', intent: 'unlink' },
+        })
+        const byUid = Object.fromEntries(next[0].blocks.map(b => [b.uid, b]))
+        expect(byUid['m2'].superset_group).toBeNull() // se quita (no extiende a m3)
+        expect(byUid['m1'].superset_group).toBeNull() // m1 queda singleton → limpio
+        expect(byUid['m3'].superset_group).toBeNull() // m3 NO se sumó al grupo
+    })
 })
 
 describe('builderReducer — TOGGLE_SUPERSET quitar del medio (bug 3)', () => {

@@ -65,7 +65,7 @@ interface DayColumnProps {
     onUpdateTitle: (dayId: number, title: string) => void
     onCopyDay: (sourceId: number, targets: number[]) => void
     onToggleRest: (dayId: number) => void
-    onToggleSuperset: (dayId: number, uid: string) => void
+    onToggleSuperset: (dayId: number, uid: string, intent?: 'link' | 'unlink') => void
     onSetBlockArea?: (dayId: number, uid: string, areaId: string) => void
     onToggleBlockOverride?: (uid: string) => void
     templateLinked?: boolean
@@ -348,7 +348,7 @@ function DayColumnInner({
                                         onUpdate={onUpdateBlock}
                                         onToggleSuperset={
                                             block.superset_group
-                                                ? () => onToggleSuperset(dayId, block.uid)
+                                                ? () => onToggleSuperset(dayId, block.uid, 'unlink')
                                                 : undefined
                                         }
                                         onSetArea={
@@ -379,7 +379,7 @@ function DayColumnInner({
                                                 </div>
                                                 <button
                                                     type="button"
-                                                    onClick={() => onToggleSuperset(dayId, block.uid)}
+                                                    onClick={() => onToggleSuperset(dayId, block.uid, 'unlink')}
                                                     title="Desagrupar superserie"
                                                     aria-label="Desagrupar superserie"
                                                     className="max-md:opacity-100 opacity-0 group-hover/ss:opacity-100 transition-opacity p-2 max-md:p-2 md:p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 min-h-[40px] min-w-[40px] md:min-h-0 md:min-w-0 flex items-center justify-center shrink-0"
@@ -393,7 +393,7 @@ function DayColumnInner({
                                                     type="button"
                                                     disabled={!canLinkSuperset}
                                                     onClick={() => {
-                                                        if (canLinkSuperset) onToggleSuperset(dayId, block.uid)
+                                                        if (canLinkSuperset) onToggleSuperset(dayId, block.uid, 'link')
                                                     }}
                                                     title={
                                                         canLinkSuperset

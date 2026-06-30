@@ -575,8 +575,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         setHasUnsavedChanges(true)
     }, [toggleRestDay])
 
-    const handleToggleSuperset = useCallback((dayId: number, uid: string) => {
-        toggleSuperset(dayId, uid)
+    const handleToggleSuperset = useCallback((dayId: number, uid: string, intent?: 'link' | 'unlink') => {
+        toggleSuperset(dayId, uid, intent)
         setHasUnsavedChanges(true)
     }, [toggleSuperset])
 
@@ -1796,10 +1796,16 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                     // Variante A → builderA; variante B → builderB (antes la B se descartaba en silencio,
                     // degradando una plantilla A/B a semana simple).
                     builderA.dispatchWithHistory({ type: 'SET_DAYS', payload: enrichDaysWithExerciseMedia(newDays, byId) })
-                    if (meta.daysB) {
-                        builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: enrichDaysWithExerciseMedia(meta.daysB, byId) })
+                    // Reflejar el estado A/B de la plantilla: si es A/B, cargar builderB; si NO, apagar
+                    // A/B y limpiar builderB — sin esto, una semana B vieja quedaba persistida al guardar
+                    // una plantilla simple (handleSave guarda builderB cuando isABMode sigue en true).
+                    if (meta.ab_mode || meta.daysB) {
+                        setIsABMode(true)
+                        builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: enrichDaysWithExerciseMedia(meta.daysB ?? [], byId) })
+                    } else {
+                        setIsABMode(false)
+                        builderB.dispatchWithHistory({ type: 'SET_DAYS', payload: DAYS_OF_WEEK.map(d => ({ ...d, title: '', blocks: [] as BuilderBlock[] })) })
                     }
-                    if (meta.ab_mode) setIsABMode(true)
                     setActiveVariant('A')
                     setProgramName((prev: string) => prev || name)
                     setWeeksToRepeat(meta.weeks_to_repeat)

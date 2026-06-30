@@ -134,6 +134,10 @@ export async function findWorkoutLogsByClient(
         .from('workout_logs')
         .select('id, client_id, block_id, set_number, weight_kg, reps_done, rpe, rir, logged_at, exercise_name_at_log, plan_name_at_log, target_reps_at_log, target_weight_at_log')
         .eq('client_id', clientId)
+        // block_id es nullable desde el FK ON DELETE SET NULL (migración 20260630190000): los logs
+        // huérfanos sobreviven con block_id NULL. WorkoutLogRow lo tipa como string, así que se
+        // excluyen acá para no devolver un null disfrazado de string a futuros consumidores.
+        .not('block_id', 'is', null)
         .order('logged_at', { ascending: false })
         .limit(limit)
 

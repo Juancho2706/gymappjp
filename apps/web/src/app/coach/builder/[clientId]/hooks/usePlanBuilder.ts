@@ -32,7 +32,7 @@ type BuilderAction =
     | { type: 'UPDATE_DAY_TITLE'; payload: { dayId: number; title: string } }
     | { type: 'COPY_DAY'; payload: { sourceId: number; targetIds: number[] } }
     | { type: 'TOGGLE_REST_DAY'; payload: { dayId: number } }
-    | { type: 'TOGGLE_SUPERSET'; payload: { dayId: number; uid: string } }
+    | { type: 'TOGGLE_SUPERSET'; payload: { dayId: number; uid: string; intent?: 'link' | 'unlink' } }
     | { type: 'SET_BLOCK_SECTION'; payload: { dayId: number; uid: string; section: BuilderSection } }
     | { type: 'SET_BLOCK_AREA'; payload: { dayId: number; uid: string; areaId: string } }
     | { type: 'TOGGLE_OVERRIDE'; payload: { uid: string } }
@@ -231,7 +231,7 @@ export function builderReducer(
         }
 
         case 'TOGGLE_SUPERSET': {
-            const { dayId, uid } = action.payload
+            const { dayId, uid, intent } = action.payload
             return state.map(d => {
                 if (d.id !== dayId) return d
                 const idx = d.blocks.findIndex(b => b.uid === uid)
@@ -247,6 +247,9 @@ export function builderReducer(
                 // siguiente está libre y en la misma área efectiva → ampliamos el tramo
                 // contiguo con la misma letra en vez de romper el grupo.
                 if (
+                    // El badge "Quitar de la superserie" (intent 'unlink') NUNCA extiende: solo el
+                    // conector "Agrupar/Superserie" (intent 'link' o sin intent) amplía el tramo.
+                    intent !== 'unlink' &&
                     group &&
                     !linkedToNext &&
                     nextBlock &&
@@ -401,8 +404,8 @@ export function usePlanBuilder(initialDays: DayState[], areas: readonly WorkoutA
         dispatchWithHistory({ type: 'TOGGLE_REST_DAY', payload: { dayId } })
     }, [dispatchWithHistory])
 
-    const toggleSuperset = useCallback((dayId: number, uid: string) => {
-        dispatchWithHistory({ type: 'TOGGLE_SUPERSET', payload: { dayId, uid } })
+    const toggleSuperset = useCallback((dayId: number, uid: string, intent?: 'link' | 'unlink') => {
+        dispatchWithHistory({ type: 'TOGGLE_SUPERSET', payload: { dayId, uid, intent } })
     }, [dispatchWithHistory])
 
     const setBlockSection = useCallback((dayId: number, uid: string, section: BuilderSection) => {
