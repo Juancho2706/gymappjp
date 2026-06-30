@@ -425,8 +425,9 @@ export function WorkoutProgramsClient({
             className={cn(
                 'min-w-0 max-w-full rounded-t-2xl pb-8',
                 /* Móvil: sin -mx; padding simétrico + safe area (iPhone/Android) */
-                'max-md:pl-[max(1rem,env(safe-area-inset-left,0px))] max-md:pr-[max(1rem,env(safe-area-inset-right,0px))]',
-                'md:-mx-8 md:px-8'
+                'max-md:pl-[max(1rem,env(safe-area-inset-left,0px))] max-md:pr-[max(1rem,env(safe-area-inset-right,0px))]'
+                /* Desktop: sin full-bleed propio — el shell (CoachMainWrapper) ya da la
+                   columna centrada --dt-read-wide (1240) + --dt-page-x (32) = .dt-dash-inner. */
             )}
         >
             <AlertDialog open={showConfirmOverwrite} onOpenChange={setShowConfirmOverwrite}>
@@ -653,44 +654,43 @@ export function WorkoutProgramsClient({
 
             {/* ===== Desktop (eva-desktop · DesktopPrograms card-grid) ===== */}
             <div className="hidden md:block">
-                {/* Header */}
-                <div className="flex items-start justify-between gap-4 pb-5">
+                {/* Header — .dt-dash-head / .dt-dash-date / .dt-dash-h1 / .dt-dash-actions */}
+                <div className="mb-[22px] flex flex-wrap items-end justify-between gap-4">
                     <div>
-                        <p className="text-sm font-medium text-muted">Biblioteca</p>
-                        <h1 className="font-display text-[28px] font-extrabold leading-tight tracking-[-0.02em] text-strong">
+                        <div className="text-xs font-bold capitalize tracking-[0.03em] text-muted">
+                            Biblioteca
+                        </div>
+                        <h1 className="mt-[3px] font-display text-[30px] font-black tracking-[-0.03em] text-strong">
                             Programas
                         </h1>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2.5">
                         <Button
                             type="button"
                             variant="secondary"
-                            className="gap-1.5"
                             onClick={() => router.push('/coach/exercises')}
                         >
-                            <List className="size-4" /> Ejercicios
+                            <List className="size-[17px]" /> Ejercicios
                         </Button>
                         <Button
                             type="button"
                             variant="secondary"
-                            className="gap-1.5"
                             onClick={() => router.push('/coach/settings/areas')}
                         >
-                            <LayoutGrid className="size-4" /> Áreas
+                            <LayoutGrid className="size-[17px]" /> Áreas
                         </Button>
                         <Button
                             type="button"
                             variant="sport"
-                            className="gap-1.5"
                             onClick={() => router.push('/coach/workout-programs/builder')}
                         >
-                            <Plus className="size-4" /> Nueva plantilla
+                            <Plus className="size-[17px]" /> Nueva plantilla
                         </Button>
                     </div>
                 </div>
 
-                {/* Chips por vista (Todos / Plantillas / En curso) */}
-                <div className="mb-5 flex flex-wrap gap-2">
+                {/* Chips por vista (Todos / Plantillas / En curso) — .dt-chips / .dt-chip / .dt-chip-n */}
+                <div className="mb-[18px] flex flex-wrap gap-2">
                     {(['all', 'templates', 'assigned'] as const).map((t) => {
                         const label = t === 'all' ? 'Todos' : t === 'templates' ? 'Plantillas' : 'En curso'
                         const on = filterType === t
@@ -700,22 +700,22 @@ export function WorkoutProgramsClient({
                                 type="button"
                                 onClick={() => setFilterType(t)}
                                 className={cn(
-                                    'inline-flex items-center gap-2 rounded-pill border-[1.5px] px-3.5 py-2 text-sm font-bold',
+                                    'eva-press inline-flex h-[34px] items-center gap-1.5 rounded-pill border px-3.5 font-ui text-[13px] font-bold transition-colors',
                                     on
-                                        ? 'border-transparent bg-[var(--sport-500)] text-white'
-                                        : 'border-default bg-surface-card text-body'
+                                        ? 'border-transparent bg-[var(--sport-500)] text-[var(--text-on-sport)]'
+                                        : 'border-default bg-surface-card text-body hover:bg-surface-sunken'
                                 )}
                             >
                                 {label}
-                                <span className={cn('text-xs font-bold', on ? 'text-white/85' : 'text-subtle')}>
-                                    {tabCounts[t]}
-                                </span>
+                                {t !== 'all' && (
+                                    <span className="text-[11.5px] font-bold opacity-70">{tabCounts[t]}</span>
+                                )}
                             </button>
                         )
                     })}
                 </div>
 
-                {/* Grid de tarjetas */}
+                {/* Grid de tarjetas — .dt-prog-grid (auto-fill minmax 240px) */}
                 {filtered.length === 0 ? (
                     <LibraryEmptyState
                         hasPrograms={programs.length > 0}
@@ -726,7 +726,7 @@ export function WorkoutProgramsClient({
                 ) : (
                     <motion.div
                         key={`d-${listMotionKey}`}
-                        className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4"
+                        className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4"
                         initial={reduceMotion ? false : { opacity: 0.6 }}
                         animate={{ opacity: 1 }}
                         transition={{ duration: reduceMotion ? 0 : 0.2 }}

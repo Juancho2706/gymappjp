@@ -7,6 +7,7 @@ import { Plus } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TemplateLibrary, type TemplateLibraryItem } from './TemplateLibrary'
 import { ActivePlansBoard } from './ActivePlansBoard'
+import { NutritionRosterMasterDetail } from './NutritionRosterMasterDetail'
 import type { ActivePlanBoardRow } from '../_data/nutrition-coach.queries'
 import { FoodLibrary } from './FoodLibrary'
 import type { AssignModalClient } from './AssignModal'
@@ -134,11 +135,22 @@ export function NutritionHub({
         </TabsContent>
 
         <TabsContent value="clients" className="mt-0 focus-visible:outline-none">
-          <ActivePlansBoard
-            coachId={coachId}
-            activePlans={activePlans}
-            clientsWithoutPlan={clientsWithoutPlan}
-          />
+          {/* Móvil: board vertical (1:1 diseño móvil, sin tocar). Desktop (md+): master-detail
+              espacioso — rail de alumnos (riesgo-first) + ficha de nutrición embebida. */}
+          <div className="md:hidden">
+            <ActivePlansBoard
+              coachId={coachId}
+              activePlans={activePlans}
+              clientsWithoutPlan={clientsWithoutPlan}
+            />
+          </div>
+          <div className="hidden md:block">
+            <NutritionRosterMasterDetail
+              coachId={coachId}
+              activePlans={activePlans}
+              clientsWithoutPlan={clientsWithoutPlan}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="foods" className="mt-0 focus-visible:outline-none">

@@ -115,40 +115,65 @@ export function ProgramRow({ program, onOpen, isSelected }: ProgramRowProps) {
     )
 }
 
-/** Tarjeta vertical — diseño desktop (eva-desktop DesktopPrograms card-grid). */
+/**
+ * Badge de la tarjeta desktop — .dt-progcard-badge (pill 10px/800 uppercase, sport).
+ * El diseño muestra siempre "Plantilla"; aquí varía el tono por estado real del programa.
+ */
+function CardBadge({ program }: { program: ProgramListModel }) {
+    const base =
+        'rounded-pill px-2 py-[3px] text-[10px] font-extrabold uppercase tracking-[0.04em]'
+    if (!program.client_id) {
+        return <span className={cn(base, 'bg-[var(--sport-100)] text-[var(--sport-700)]')}>Plantilla</span>
+    }
+    return program.is_active ? (
+        <span className={cn(base, 'bg-[var(--success-100)] text-[var(--success-700)]')}>Activo</span>
+    ) : (
+        <span className={cn(base, 'bg-surface-sunken text-muted')}>Inactivo</span>
+    )
+}
+
+/** Tarjeta vertical — diseño desktop (eva-desktop DesktopPrograms · .dt-progcard). */
 export function ProgramCard({ program, onOpen, isSelected }: ProgramRowProps) {
     const stats = getProgramStats(program)
     const isTemplate = !program.client_id
-    const subtitle = program.client?.full_name ?? (isTemplate ? 'Plantilla reutilizable' : 'Programa')
+    // El diseño usa p.focus (taxonomía de objetivo); la data real no la expone →
+    // mostramos el alumno (asignado) o un descriptor de plantilla en la misma línea.
+    const focusLine = program.client?.full_name ?? (isTemplate ? 'Plantilla reutilizable' : 'Programa')
 
     return (
         <button
             type="button"
             onClick={onOpen}
             className={cn(
-                'flex flex-col items-start rounded-card border border-subtle bg-surface-card p-4 text-left shadow-sm transition-[box-shadow,border-color]',
-                'hover:border-[var(--sport-300)] hover:shadow-md focus-visible:outline-none',
-                isSelected && 'border-[var(--sport-300)] ring-2 ring-[var(--focus-ring)]'
+                // .dt-progcard
+                'eva-press flex flex-col gap-[7px] rounded-card border border-subtle bg-surface-card p-4 text-left shadow-[var(--shadow-sm)] transition-[transform,box-shadow] duration-[140ms] ease-[var(--ease-out)]',
+                'hover:-translate-y-0.5 hover:shadow-[var(--shadow-md)] focus-visible:outline-none',
+                isSelected && '-translate-y-0.5 shadow-[var(--shadow-md)] ring-2 ring-[var(--focus-ring)]'
             )}
         >
-            <div className="flex w-full items-center justify-between">
-                <span className="flex size-10 items-center justify-center rounded-md bg-[var(--sport-100)] text-[var(--sport-600)]">
+            {/* .dt-progcard-top */}
+            <div className="mb-1 flex items-center justify-between">
+                {/* .dt-progcard-ico (40px · radius-md) */}
+                <span className="flex size-10 items-center justify-center rounded-[var(--radius-md)] bg-[var(--sport-100)] text-[var(--sport-600)]">
                     <Dumbbell className="size-5" />
                 </span>
-                <StatusBadge program={program} />
+                <CardBadge program={program} />
             </div>
-            <div className="mt-3 line-clamp-2 font-display text-base font-bold leading-snug text-strong">
+            {/* .dt-progcard-name */}
+            <div className="font-display text-base font-extrabold leading-[1.2] tracking-[-0.01em] text-strong">
                 {program.name}
             </div>
-            <div className="mt-0.5 truncate text-xs text-muted">{subtitle}</div>
-            <div className="mt-3 flex flex-wrap gap-3 font-mono text-xs text-muted">
-                <span className="inline-flex items-center gap-1">
+            {/* .dt-progcard-focus */}
+            <div className="truncate text-[12.5px] text-muted">{focusLine}</div>
+            {/* .dt-progcard-meta */}
+            <div className="mt-2 flex flex-wrap gap-3 border-t border-subtle pt-3">
+                <span className="inline-flex items-center gap-[5px] text-xs font-semibold text-subtle">
                     <Calendar className="size-3.5" /> {program.weeks_to_repeat} sem
                 </span>
-                <span className="inline-flex items-center gap-1">
+                <span className="inline-flex items-center gap-[5px] text-xs font-semibold text-subtle">
                     <Layers className="size-3.5" /> {stats.daysWithWork} días
                 </span>
-                <span className="inline-flex items-center gap-1">
+                <span className="inline-flex items-center gap-[5px] text-xs font-semibold text-subtle">
                     <Dumbbell className="size-3.5" /> {stats.blockCount}
                 </span>
             </div>

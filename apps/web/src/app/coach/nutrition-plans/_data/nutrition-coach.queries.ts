@@ -194,6 +194,10 @@ export type ActivePlanBoardRow = {
   /** Kcal consumidas hoy (comidas completadas), según `nutrition-utils`. */
   todayCaloriesConsumed: number
   dailyTargetCalories: number | null
+  /** Macros objetivo del plan (g/día) — alimenta la ficha master-detail desktop. */
+  targetProtein: number | null
+  targetCarbs: number | null
+  targetFats: number | null
 }
 
 /**
@@ -318,6 +322,9 @@ export const getActivePlansBoardData = cache(async (coachId: string, scope: Coac
       sparkline7d,
       todayCaloriesConsumed: Math.round(consumed.calories),
       dailyTargetCalories: (plan.daily_calories as number | null) ?? null,
+      targetProtein: (plan.protein_g as number | null) ?? null,
+      targetCarbs: (plan.carbs_g as number | null) ?? null,
+      targetFats: (plan.fats_g as number | null) ?? null,
     }
   })
 })

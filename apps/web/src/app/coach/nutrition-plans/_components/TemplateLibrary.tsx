@@ -155,7 +155,7 @@ export function TemplateLibrary({ templates, coachId, clients }: Props) {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filteredTemplates.map((template) => {
             const kcal = template.daily_calories ?? 0
             const p = template.protein_g ?? 0
