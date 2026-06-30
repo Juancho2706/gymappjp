@@ -9,12 +9,16 @@ import {
     AlertTriangle,
     AlertOctagon,
     RefreshCw,
-    ChevronRight,
     ChevronDown,
+    ArrowRight,
+    KeyRound,
+    Apple,
+    Link as LinkIcon,
 } from 'lucide-react'
 import { motion, useMotionValue, useSpring, useMotionValueEvent } from 'framer-motion'
 import { CreateClientModal } from './CreateClientModal'
 import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/ui/icon-button'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import type { DirectoryRiskFilter } from './directory-types'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
@@ -52,41 +56,52 @@ function AnimatedNumber({ value }: { value: number }) {
     return <span className="tabular-nums">{text}</span>
 }
 
-// ===== DS tones for the conditional alert banners (mobile-only triage) =====
+// ===== DirBanner · señal accionable (transcripción del DirBanner del diseño coach-directory.jsx) =====
+// border 1px tono-500 · fondo tono-100 · icono tono-700 · "Ver →" 12/800.
 const BANNER_TONE = {
-    danger: 'border-[color:var(--danger-500)]/40 bg-[var(--danger-100)] text-[var(--danger-700)]',
-    warning: 'border-[color:var(--warning-500)]/40 bg-[var(--warning-100)] text-[var(--warning-700)]',
-    info: 'border-[color:var(--info-500)]/40 bg-[var(--info-100)] text-[var(--info-600)]',
-    ember: 'border-[color:var(--ember-500)]/40 bg-[var(--ember-100)] text-[var(--ember-700)]',
+    danger: { bd: 'var(--danger-500)', bg: 'var(--danger-100)', fg: 'var(--danger-700)' },
+    warning: { bd: 'var(--warning-500)', bg: 'var(--warning-100)', fg: 'var(--warning-700)' },
+    info: { bd: 'var(--info-400, #60A5FA)', bg: 'var(--info-100, #E6F0FB)', fg: 'var(--info-700, #1D4ED8)' },
+    ember: { bd: 'var(--ember-500)', bg: 'var(--ember-100)', fg: 'var(--ember-700)' },
 } as const
 
-function AlertBanner({
+function DirBanner({
     tone,
+    icon,
     children,
     onView,
 }: {
     tone: keyof typeof BANNER_TONE
+    icon: React.ReactNode
     children: React.ReactNode
     onView: () => void
 }) {
+    const t = BANNER_TONE[tone]
     return (
-        <motion.div
+        <motion.button
+            type="button"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            className={cn(
-                'flex min-w-0 max-w-full flex-wrap items-center justify-between gap-3 rounded-card border px-4 py-3',
-                BANNER_TONE[tone]
-            )}
+            onClick={onView}
+            className="flex w-full items-center gap-2.5 rounded-[var(--radius-md)] border px-[13px] py-2.5 text-left"
+            style={{ borderColor: t.bd, background: t.bg }}
         >
-            <p className="min-w-0 flex-1 break-words text-sm font-bold">{children}</p>
-            <button
-                type="button"
-                onClick={onView}
-                className="flex shrink-0 items-center gap-1 text-[10px] font-black uppercase tracking-widest transition-all hover:gap-2"
+            <span className="inline-flex shrink-0" style={{ color: t.fg }}>
+                {icon}
+            </span>
+            <span
+                className="min-w-0 flex-1 text-[12.5px] font-semibold leading-[1.3]"
+                style={{ color: t.fg }}
             >
-                Ver <ChevronRight className="h-4 w-4" />
-            </button>
-        </motion.div>
+                {children}
+            </span>
+            <span
+                className="inline-flex shrink-0 items-center gap-[3px] text-[12px] font-extrabold"
+                style={{ color: t.fg }}
+            >
+                Ver <ArrowRight className="h-[13px] w-[13px]" />
+            </span>
+        </motion.button>
     )
 }
 
@@ -129,14 +144,14 @@ function DirPulseCard({
             onClick={onClick}
             aria-pressed={selected}
             className={cn(
-                'flex min-w-0 flex-1 cursor-pointer flex-col gap-1.5 rounded-card border-[1.5px] px-3.5 py-3 text-left transition-colors',
+                'eva-press flex min-w-0 flex-1 cursor-pointer flex-col gap-[5px] rounded-card border-[1.5px] px-3.5 py-[13px] text-left transition-colors',
                 selected ? cn(t.solid, t.border) : cn(t.bg, 'border-subtle')
             )}
         >
             <div className="flex items-center justify-between">
                 <span
                     className={cn(
-                        'inline-flex items-center gap-1.5 text-[11.5px] font-black tracking-wide',
+                        'inline-flex items-center gap-1.5 text-[11.5px] font-black tracking-[0.02em]',
                         selected ? 'text-white/95' : t.fg
                     )}
                 >
@@ -144,7 +159,7 @@ function DirPulseCard({
                     {label}
                 </span>
                 {value > 0 && (
-                    <ChevronRight className={cn('h-4 w-4', selected ? 'text-white' : t.fg)} />
+                    <ArrowRight className={cn('h-[15px] w-[15px]', selected ? 'text-white' : t.fg)} />
                 )}
             </div>
             <div
@@ -184,8 +199,8 @@ function DirMetricChip({
             onClick={onClick}
             aria-pressed={selected}
             className={cn(
-                'flex min-w-0 flex-col gap-0.5 rounded-control border-[1.5px] px-2 py-2 text-left',
-                onClick ? 'cursor-pointer' : 'cursor-default',
+                'flex min-w-0 flex-col gap-px rounded-[var(--radius-md)] border-[1.5px] px-[7px] py-2 text-left',
+                onClick ? 'eva-press cursor-pointer' : 'cursor-default',
                 selected ? 'border-strong bg-[var(--text-strong)]' : 'border-subtle bg-surface-card'
             )}
         >
@@ -281,86 +296,52 @@ export function CoachWarRoom({
 
     const allClear = activeFilter === 'all'
 
+    const showCheckinBanner = noCheckin1m > 0 && urgentCount === 0
+    const hasBanners =
+        urgentCount > 0 ||
+        expiredProgramsCount > 0 ||
+        pendingPassword > 0 ||
+        nutritionLowCount > 0 ||
+        showCheckinBanner
+
     return (
         <>
-            <div className="mb-8 min-w-0 max-w-full space-y-6 md:mb-10 md:space-y-6">
-                <div className="relative flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-                    {/* Glow sutil con la rampa sport (white-label) — sin offsets negativos */}
-                    <div
-                        className="pointer-events-none absolute left-1/2 top-0 z-0 h-48 w-[min(90vw,22rem)] -translate-x-1/2 bg-sport-500/10 blur-[56px] md:h-64 md:w-[min(90vw,36rem)] md:blur-[80px]"
-                        aria-hidden
-                    />
-
-                    <div className="relative z-10 min-w-0 max-w-full space-y-3">
-                        <div className="flex flex-wrap items-center gap-3">
-                            <h1 className="font-display max-w-full text-2xl font-black uppercase tracking-tighter text-strong break-words text-balance sm:text-3xl md:text-4xl">
-                                Directorio de Alumnos
-                            </h1>
-                            <InfoTooltip content={t('section.coachClients')} />
+            {/* ===================== MÓVIL (md:hidden) ===================== */}
+            {/* Header limpio estilo TopBar del diseño: subtítulo "seguimiento de hoy" + título
+                "Alumnos", sin el h1 ruidoso ni la línea de "actualizado · sync". Acciones a la
+                derecha (copiar portal + nuevo alumno) como en la barra de acción del diseño. */}
+            <div className="space-y-4 md:hidden">
+                <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                        <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-muted">
+                            Tu seguimiento de hoy
                         </div>
-                        <p className="max-w-lg text-sm font-medium leading-relaxed text-muted">
-                            Tu seguimiento de hoy · gestión centralizada de la cartera
-                        </p>
-                        <p className="text-[10px] font-bold text-subtle uppercase tracking-widest">
-                            Actualizado al cargar la página
-                            <button
-                                type="button"
-                                onClick={handleSync}
-                                disabled={syncing}
-                                className="ml-3 inline-flex items-center gap-1.5 text-sport-600 hover:opacity-80 disabled:opacity-50"
-                            >
-                                <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
-                                sync
-                            </button>
-                        </p>
-
-                        {loginUrl && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="group mt-2 w-full max-w-full min-w-0 cursor-pointer rounded-card border border-subtle bg-surface-card px-3 py-3 transition-all hover:bg-surface-sunken sm:rounded-pill sm:px-4 sm:py-2"
-                                onClick={handleCopy}
-                                role="button"
-                                tabIndex={0}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                        e.preventDefault()
-                                        handleCopy()
-                                    }
-                                }}
-                            >
-                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                                    <span className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-subtle">
-                                        Portal alumnos:
-                                    </span>
-                                    <div className="flex min-w-0 flex-1 items-start gap-2 sm:items-center">
-                                        <span className="break-all text-xs font-bold text-sport-600 [overflow-wrap:anywhere]">
-                                            {loginUrl}
-                                        </span>
-                                        <div className="mt-0.5 shrink-0 rounded-full bg-sport-500/10 p-1 text-sport-600 transition-transform group-hover:scale-110 sm:mt-0">
-                                            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                                        </div>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
+                        <h1 className="font-display text-[26px] font-black leading-[1.1] tracking-[-0.03em] text-strong">
+                            Alumnos
+                        </h1>
                     </div>
-
-                    <div className="relative z-10 min-w-0 w-full md:w-auto">
-                        <Button
+                    <div className="flex shrink-0 items-center gap-1.5">
+                        {loginUrl && (
+                            <IconButton
+                                size="sm"
+                                variant="soft"
+                                aria-label="Copiar portal de alumnos"
+                                icon={copied ? <Check /> : <LinkIcon />}
+                                onClick={handleCopy}
+                            />
+                        )}
+                        <IconButton
+                            size="sm"
                             variant="sport"
-                            size="lg"
+                            aria-label="Nuevo alumno"
+                            icon={<UserPlus />}
                             onClick={() => setOpen(true)}
-                            className="w-full uppercase tracking-widest md:w-auto"
-                        >
-                            <UserPlus className="h-5 w-5" />
-                            Nuevo Alumno
-                        </Button>
+                        />
                     </div>
                 </div>
 
-                {/* ===== Resumen · hoy — pulso colapsable (SOLO móvil; en desktop la tabla limpia manda) ===== */}
-                <div className="relative z-10 md:hidden">
+                {/* ===== Resumen · hoy — pulso colapsable ===== */}
+                <div className="relative z-10">
                     <button
                         type="button"
                         onClick={toggleResumen}
@@ -442,45 +423,146 @@ export function CoachWarRoom({
                     )}
                 </div>
 
-                {/* ===== Señales accionables (banners) — SOLO móvil ===== */}
-                <div className="relative z-10 space-y-3 md:hidden">
-                    {urgentCount > 0 && (
-                        <AlertBanner tone="danger" onView={() => onFilterChange('urgent')}>
-                            {urgentCount} cliente{urgentCount !== 1 ? 's' : ''} con atención urgente
-                            (score ≥ 50)
-                        </AlertBanner>
-                    )}
+                {/* ===== Señales accionables (banners) ===== */}
+                {hasBanners && (
+                    <div className="relative z-10 space-y-2.5">
+                        {urgentCount > 0 && (
+                            <DirBanner
+                                tone="danger"
+                                icon={<AlertOctagon className="h-[17px] w-[17px]" />}
+                                onView={() => onFilterChange('urgent')}
+                            >
+                                {urgentCount} cliente{urgentCount !== 1 ? 's' : ''} con atención urgente
+                                (score ≥ 50)
+                            </DirBanner>
+                        )}
 
-                    {expiredProgramsCount > 0 && (
-                        <AlertBanner tone="warning" onView={() => onFilterChange('expired_program')}>
-                            {expiredProgramsCount} programa
-                            {expiredProgramsCount !== 1 ? 's' : ''} vencido
-                            {expiredProgramsCount !== 1 ? 's' : ''}
-                        </AlertBanner>
-                    )}
+                        {expiredProgramsCount > 0 && (
+                            <DirBanner
+                                tone="warning"
+                                icon={<AlertTriangle className="h-[17px] w-[17px]" />}
+                                onView={() => onFilterChange('expired_program')}
+                            >
+                                {expiredProgramsCount} programa
+                                {expiredProgramsCount !== 1 ? 's' : ''} vencido
+                                {expiredProgramsCount !== 1 ? 's' : ''}
+                            </DirBanner>
+                        )}
 
-                    {pendingPassword > 0 && (
-                        <AlertBanner tone="info" onView={() => onFilterChange('password_reset')}>
-                            {pendingPassword} alumno{pendingPassword !== 1 ? 's' : ''} con cambio de
-                            contraseña pendiente
-                        </AlertBanner>
-                    )}
+                        {pendingPassword > 0 && (
+                            <DirBanner
+                                tone="info"
+                                icon={<KeyRound className="h-[17px] w-[17px]" />}
+                                onView={() => onFilterChange('password_reset')}
+                            >
+                                {pendingPassword} alumno{pendingPassword !== 1 ? 's' : ''} con cambio de
+                                contraseña pendiente
+                            </DirBanner>
+                        )}
 
-                    {nutritionLowCount > 0 && (
-                        <AlertBanner tone="ember" onView={() => onFilterChange('nutrition_low')}>
-                            🥗 {nutritionLowCount} alumno{nutritionLowCount !== 1 ? 's' : ''} con
-                            cumplimiento nutricional bajo ({'<'}60%)
-                        </AlertBanner>
-                    )}
+                        {nutritionLowCount > 0 && (
+                            <DirBanner
+                                tone="ember"
+                                icon={<Apple className="h-[17px] w-[17px]" />}
+                                onView={() => onFilterChange('nutrition_low')}
+                            >
+                                {nutritionLowCount} alumno{nutritionLowCount !== 1 ? 's' : ''} con
+                                cumplimiento nutricional bajo ({'<'}60%)
+                            </DirBanner>
+                        )}
 
-                    {noCheckin1m > 0 && urgentCount === 0 && (
-                        <AlertBanner tone="warning" onView={() => onFilterChange('urgent')}>
-                            ALERTA: {noCheckin1m} cliente{noCheckin1m !== 1 ? 's' : ''} llevan mas de 1
-                            mes sin check-in (desde el ultimo registrado)
-                        </AlertBanner>
+                        {showCheckinBanner && (
+                            <DirBanner
+                                tone="warning"
+                                icon={<AlertTriangle className="h-[17px] w-[17px]" />}
+                                onView={() => onFilterChange('urgent')}
+                            >
+                                ALERTA: {noCheckin1m} cliente{noCheckin1m !== 1 ? 's' : ''} llevan mas de 1
+                                mes sin check-in (desde el ultimo registrado)
+                            </DirBanner>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* ===================== DESKTOP (md+) ===================== */}
+            {/* Header rico — solo aparece en el modo Tabla de escritorio (en Ficha el shell oculta
+                todo el war-room). Se conserva intacto para no regresar la vista desktop. */}
+            <div className="relative hidden flex-col gap-6 md:flex md:flex-row md:items-end md:justify-between">
+                {/* Glow sutil con la rampa sport (white-label) — sin offsets negativos */}
+                <div
+                    className="pointer-events-none absolute left-1/2 top-0 z-0 h-48 w-[min(90vw,22rem)] -translate-x-1/2 bg-sport-500/10 blur-[56px] md:h-64 md:w-[min(90vw,36rem)] md:blur-[80px]"
+                    aria-hidden
+                />
+
+                <div className="relative z-10 min-w-0 max-w-full space-y-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <h1 className="font-display max-w-full text-2xl font-black uppercase tracking-tighter text-strong break-words text-balance sm:text-3xl md:text-4xl">
+                            Directorio de Alumnos
+                        </h1>
+                        <InfoTooltip content={t('section.coachClients')} />
+                    </div>
+                    <p className="max-w-lg text-sm font-medium leading-relaxed text-muted">
+                        Tu seguimiento de hoy · gestión centralizada de la cartera
+                    </p>
+                    <p className="text-[10px] font-bold text-subtle uppercase tracking-widest">
+                        Actualizado al cargar la página
+                        <button
+                            type="button"
+                            onClick={handleSync}
+                            disabled={syncing}
+                            className="ml-3 inline-flex items-center gap-1.5 text-sport-600 hover:opacity-80 disabled:opacity-50"
+                        >
+                            <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
+                            sync
+                        </button>
+                    </p>
+
+                    {loginUrl && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="group mt-2 w-full max-w-full min-w-0 cursor-pointer rounded-card border border-subtle bg-surface-card px-3 py-3 transition-all hover:bg-surface-sunken sm:rounded-pill sm:px-4 sm:py-2"
+                            onClick={handleCopy}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault()
+                                    handleCopy()
+                                }
+                            }}
+                        >
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                                <span className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-subtle">
+                                    Portal alumnos:
+                                </span>
+                                <div className="flex min-w-0 flex-1 items-start gap-2 sm:items-center">
+                                    <span className="break-all text-xs font-bold text-sport-600 [overflow-wrap:anywhere]">
+                                        {loginUrl}
+                                    </span>
+                                    <div className="mt-0.5 shrink-0 rounded-full bg-sport-500/10 p-1 text-sport-600 transition-transform group-hover:scale-110 sm:mt-0">
+                                        {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                    </div>
+                                </div>
+                            </div>
+                        </motion.div>
                     )}
                 </div>
+
+                <div className="relative z-10 min-w-0 w-full md:w-auto">
+                    <Button
+                        variant="sport"
+                        size="lg"
+                        onClick={() => setOpen(true)}
+                        className="w-full uppercase tracking-widest md:w-auto"
+                    >
+                        <UserPlus className="h-5 w-5" />
+                        Nuevo Alumno
+                    </Button>
+                </div>
             </div>
+
             <CreateClientModal open={open} onClose={() => setOpen(false)} />
         </>
     )

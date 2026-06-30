@@ -29,8 +29,11 @@ export function DashboardFab() {
                 type="button"
                 onClick={() => setOpen(true)}
                 aria-label="Acciones rápidas"
-                className="fixed bottom-6 right-5 z-30 flex size-14 items-center justify-center rounded-full bg-sport-500 text-white transition-transform hover:-translate-y-0.5 active:scale-95 md:hidden"
-                style={{ boxShadow: 'var(--glow-sport), 0 6px 16px rgba(0,0,0,0.18)' }}
+                className="fixed right-5 z-40 flex size-14 items-center justify-center rounded-full bg-sport-500 text-white transition-transform hover:-translate-y-0.5 active:scale-95 md:hidden"
+                style={{
+                    bottom: 'calc(env(safe-area-inset-bottom, 0px) + 92px)',
+                    boxShadow: 'var(--glow-sport), 0 6px 16px rgba(0,0,0,0.18)',
+                }}
             >
                 <Plus className="size-7" />
             </button>

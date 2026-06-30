@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from 'react'
 import Link from 'next/link'
-import { Sparkles, Bell } from 'lucide-react'
+import { Sparkles, Bell, ChevronDown } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { BillingBanners } from './banners/BillingBanners'
 import { FreeWelcomeModal } from './FreeWelcomeModal'
@@ -52,7 +52,9 @@ export function DashboardShell({
                 <FreeWelcomeModal />
             </Suspense>
 
-            <div className="relative z-10 mx-auto w-full max-w-[1100px] px-5 pb-10 pt-2 sm:px-6 lg:px-8">
+            {/* Sin px propio: el gutter lateral lo da CoachMainWrapper (px-4/md:px-8) — evita el
+                doble padding (36px) que estrechaba todo en móvil vs el diseño (~20px). */}
+            <div className="relative z-10 mx-auto w-full max-w-[1100px] pb-10 pt-2">
                 {/* Billing / tier banners (functional — not part of the design tree) */}
                 <div className="mb-4">
                     <BillingBanners
@@ -97,12 +99,17 @@ export function DashboardShell({
                                 <Bell className="size-[19px]" />
                                 <span className="absolute right-[9px] top-2 size-2 rounded-full border-2 border-[var(--surface-card)] bg-[var(--danger-500)]" />
                             </button>
+                            {/* Avatar de espacio + flechita de cambio (workspace switch). El glyph
+                                es la afford. del diseño (WorkspaceMenu) — abre Opciones/espacio. */}
                             <Link
                                 href="/coach/settings"
                                 aria-label="Tu espacio"
-                                className="shrink-0"
+                                className="relative shrink-0"
                             >
                                 <Avatar name={coachName} size="md" ring="sport" />
+                                <span className="absolute -bottom-0.5 -right-0.5 flex size-[18px] items-center justify-center rounded-full border-2 border-[var(--surface-app)] bg-surface-card text-[var(--text-muted)] shadow-[var(--shadow-sm)]">
+                                    <ChevronDown className="size-3" />
+                                </span>
                             </Link>
                         </div>
                     </header>

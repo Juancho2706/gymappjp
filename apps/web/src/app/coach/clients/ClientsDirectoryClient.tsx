@@ -306,8 +306,9 @@ export function ClientsDirectoryClient({
                 </Card>
             : view === 'table' ?
                 <>
-                    {/* MÓVIL (<md): row-cards · diseño coach-directory.jsx */}
-                    <div className="space-y-2 px-0 md:hidden">
+                    {/* MÓVIL (<md): row-cards · diseño coach-directory.jsx.
+                        pb extra para que la última tarjeta no quede bajo la cápsula flotante. */}
+                    <div className="space-y-2 px-0 pb-6 md:hidden md:pb-0">
                         {gridClients.map((client) => (
                             <DirRowCard
                                 key={client.id}

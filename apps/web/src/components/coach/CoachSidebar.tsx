@@ -86,11 +86,38 @@ const MOBILE_TAB_KEYS = ['dashboard', 'clients', 'programs', 'nutrition', 'optio
 export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains }: CoachSidebarProps) {
     const pathname = usePathname()
     const [isCollapsed, setIsCollapsed] = useState(false)
+    // Cápsula móvil: hide-on-scroll-down / reveal-on-scroll-up → colapsa a pill icon-only
+    // (TabBar.jsx `minimized`: insets 14→72, labels fade). El scroll vive en <main>
+    // (overflow-y-auto), no en window.
+    const [tabbarMinimized, setTabbarMinimized] = useState(false)
 
     useEffect(() => {
         const saved = localStorage.getItem('sidebar-collapsed')
         if (saved === 'true') setIsCollapsed(true)
     }, [])
+
+    useEffect(() => {
+        // El scroll móvil ocurre en el documento (window), no en <main> (su alto no está
+        // constreñido → el body crece y scrollea). Listener en window.
+        let lastY = window.scrollY
+        let ticking = false
+        const onScroll = () => {
+            if (ticking) return
+            ticking = true
+            requestAnimationFrame(() => {
+                const y = window.scrollY
+                const dy = y - lastY
+                if (Math.abs(dy) > 6) {
+                    // baja + más allá de 80px → minimiza; sube o cerca del top → revela
+                    setTabbarMinimized(dy > 0 && y > 80)
+                    lastY = y
+                }
+                ticking = false
+            })
+        }
+        window.addEventListener('scroll', onScroll, { passive: true })
+        return () => window.removeEventListener('scroll', onScroll)
+    }, [pathname])
 
     const toggleSidebar = () => {
         const newState = !isCollapsed
@@ -280,8 +307,8 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                     className="flex md:hidden"
                     style={{
                         position: 'fixed',
-                        left: 14,
-                        right: 14,
+                        left: tabbarMinimized ? 72 : 14,
+                        right: tabbarMinimized ? 72 : 14,
                         bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)',
                         zIndex: 50,
                         alignItems: 'stretch',
@@ -293,6 +320,8 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                         border: '1px solid color-mix(in srgb, var(--text-strong) 9%, transparent)',
                         boxShadow:
                             '0 1px 0 rgba(255,255,255,0.45) inset, 0 14px 36px rgba(13,18,28,0.24), 0 4px 12px rgba(13,18,28,0.12)',
+                        transition:
+                            'left var(--dur-slow) var(--ease-spring), right var(--dur-slow) var(--ease-spring)',
                     }}
                 >
                     {/* indicador deslizante sport */}
@@ -331,14 +360,15 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                                     display: 'flex',
                                     flexDirection: 'column',
                                     alignItems: 'center',
-                                    gap: 3,
-                                    padding: '6px 0',
+                                    gap: tabbarMinimized ? 0 : 3,
+                                    padding: tabbarMinimized ? '5px 0' : '6px 0',
                                     border: 'none',
                                     background: 'transparent',
                                     color: active ? 'var(--sport-600)' : 'var(--ink-400)',
                                     textDecoration: 'none',
                                     WebkitTapHighlightColor: 'transparent',
-                                    transition: 'color var(--dur-base) var(--ease-out)',
+                                    transition:
+                                        'color var(--dur-base) var(--ease-out), padding var(--dur-base) var(--ease-out)',
                                 }}
                             >
                                 <span
@@ -350,7 +380,18 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                                 >
                                     <Icon size={24} />
                                 </span>
-                                <span style={{ fontSize: 10, fontWeight: active ? 800 : 600, letterSpacing: '0.01em' }}>
+                                <span
+                                    style={{
+                                        fontSize: 10,
+                                        fontWeight: active ? 800 : 600,
+                                        letterSpacing: '0.01em',
+                                        maxHeight: tabbarMinimized ? 0 : 14,
+                                        opacity: tabbarMinimized ? 0 : 1,
+                                        overflow: 'hidden',
+                                        transition:
+                                            'max-height var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out)',
+                                    }}
+                                >
                                     {label}
                                 </span>
                             </Link>
