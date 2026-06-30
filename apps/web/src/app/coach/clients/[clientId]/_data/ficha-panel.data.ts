@@ -129,6 +129,8 @@ export async function assembleClientFichaPanel(clientId: string) {
             weightDeltaKg,
             nutritionPlansLength: nutritionPlans.length,
             nutritionFirstPlanId: firstPlan?.id as string | undefined,
+            activeProgramName:
+                (data.activeProgram as { name?: string | null } | null | undefined)?.name ?? null,
         },
         /** Accesos a módulos movida (espejo visual de ModuleLinksRow). */
         moduleFlags: { cardio, movement, bodycomp },

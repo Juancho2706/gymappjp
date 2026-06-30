@@ -145,6 +145,29 @@
 @utility border-default { border-color: var(--border-default); }
 @utility border-strong { border-color: var(--border-strong); }
 
+/* TabBar press feedback (DS TabBar.jsx injectTabBarCss verbatim): press scale +
+   active-glyph fill. The mobile floating capsule (CoachSidebar / client TabBar)
+   tags its buttons `.eva-tabbar-press`. */
+.eva-tabbar-press {
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.13s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.eva-tabbar-press:active {
+    transform: scale(0.96);
+}
+.eva-tabbar-ico-on svg {
+    fill: currentColor;
+    fill-opacity: 0.18;
+}
+@media (prefers-reduced-motion: reduce) {
+    .eva-tabbar-press {
+        transition: none;
+    }
+    .eva-tabbar-press:active {
+        transform: none;
+    }
+}
+
 /* ============================================================
    LIGHT MODE (Default / Base)
    ============================================================ */

@@ -323,6 +323,7 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                                 href={item.href}
                                 prefetch={false}
                                 aria-label={label}
+                                className="eva-tabbar-press"
                                 style={{
                                     position: 'relative',
                                     zIndex: 1,

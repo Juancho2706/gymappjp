@@ -66,15 +66,19 @@ export function ProfileOverviewB3({
     const wPrev = compliance.workoutsPrevWeek ?? 0
     const workoutPct = Math.min(100, Math.round((wThis / target) * 100))
     const prevWorkoutPct = Math.min(100, Math.round((wPrev / target) * 100))
-    const workoutDelta = workoutPct - prevWorkoutPct
+    // Delta vs período anterior — null si no hay valor previo REAL (no se fabrica).
+    const workoutDelta =
+        compliance.workoutsPrevWeek != null ? workoutPct - prevWorkoutPct : null
 
     const nutAvg = compliance.nutritionWeeklyAvgPct ?? 0
     const nutPrev = compliance.nutritionPrevWeeklyAvgPct ?? 0
-    const nutDelta = nutAvg - nutPrev
+    const nutDelta =
+        compliance.nutritionPrevWeeklyAvgPct != null ? nutAvg - nutPrev : null
 
     const checkPct = compliance.checkInCompliancePercent ?? 0
     const checkPctWeekAgo = compliance.checkInCompliancePercentWeekAgo ?? 0
-    const checkDelta = checkPct - checkPctWeekAgo
+    const checkDelta =
+        compliance.checkInCompliancePercentWeekAgo != null ? checkPct - checkPctWeekAgo : null
 
     const streak = compliance.currentStreak ?? 0
     const planCur = compliance.planCurrentWeek ?? 1
@@ -134,7 +138,12 @@ export function ProfileOverviewB3({
             icon: PieChart,
             label: 'Adherencia entreno',
             value: `${workoutPct}%`,
-            hint: workoutDelta >= 0 ? `+${workoutDelta}% vs sem. ant.` : `${workoutDelta}% vs sem. ant.`,
+            hint:
+                workoutDelta == null
+                    ? 'esta semana'
+                    : workoutDelta >= 0
+                      ? `+${workoutDelta}% vs sem. ant.`
+                      : `${workoutDelta}% vs sem. ant.`,
             tone: 'sport',
         },
         {
@@ -232,7 +241,8 @@ function ComplianceRing({
     label: string
     valueText: string
     percentage: number
-    delta: number
+    /** Delta en pts vs período anterior; `null` ⇒ sin dato previo (se omite el label). */
+    delta: number | null
     pathColor: string
     onClick?: () => void
     linkLabel?: string
@@ -254,15 +264,22 @@ function ComplianceRing({
                     {label}
                 </p>
                 <p className="font-display text-lg font-black text-strong">{valueText}</p>
-                <p
-                    className={cn(
-                        'text-[10px] font-bold',
-                        delta > 0 ? 'text-[var(--success-600)]' : delta < 0 ? 'text-[var(--danger-600)]' : 'text-subtle'
-                    )}
-                >
-                    {delta > 0 ? '↑' : delta < 0 ? '↓' : '—'} vs sem. anterior
-                    {delta !== 0 ? ` (${delta > 0 ? '+' : ''}${delta} pts)` : ''}
-                </p>
+                {delta != null ? (
+                    <p
+                        className={cn(
+                            'text-[10px] font-bold',
+                            delta > 0
+                                ? 'text-[var(--success-600)]'
+                                : delta < 0
+                                  ? 'text-[var(--danger-600)]'
+                                  : 'text-subtle'
+                        )}
+                    >
+                        {delta === 0
+                            ? '— vs sem. ant.'
+                            : `${delta > 0 ? '↑' : '↓'} ${Math.abs(delta)} pts`}
+                    </p>
+                ) : null}
                 {onClick && linkLabel ? (
                     <p className="text-[10px] font-bold text-sport-600">{linkLabel}</p>
                 ) : null}

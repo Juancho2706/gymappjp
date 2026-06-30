@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { getClientProfileData } from './_actions/client-detail.actions'
-import { ArrowLeft, FileDown, HeartPulse, PersonStanding, Scale, ChevronRight } from 'lucide-react'
+import { ArrowLeft, FileDown } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientProfileDashboard } from './ClientProfileDashboard'
@@ -75,6 +75,15 @@ async function ProfileContent({ clientId }: { clientId: string }) {
         clientOrgId: nutritionClient.org_id ?? null,
     }
 
+    // Entitlements de módulos movida por el contexto del RECURSO (team del pool manda; si
+    // no, el coach). Enterprise (org_id) fuera en v1. Espejo del gate server-side; se
+    // pasan al hero como botones-ícono (gateados), reemplazando la fila de links etiquetados.
+    const moduleSupabase = await createClient()
+    const isOrgScoped = !!nutritionClient.org_id
+    const moduleCtx = nutritionClient.team_id
+        ? { teamId: nutritionClient.team_id }
+        : { coachId: nutritionClient.coach_id ?? '' }
+
     const [
         coachNutrientTargets,
         coachPrivateNotes,
@@ -83,6 +92,9 @@ async function ProfileContent({ clientId }: { clientId: string }) {
         nutritionDomainEnabled,
         nutritionSectionFlags,
         nutritionOverrideContext,
+        cardioModule,
+        movementModule,
+        bodycompModule,
     ] = await Promise.all([
         getCoachNutrientTargets(clientId),
         getCoachPrivateNotes(clientId),
@@ -104,6 +116,13 @@ async function ProfileContent({ clientId }: { clientId: string }) {
             ...featurePrefsInput,
             planId: activeNutritionPlanId,
         }),
+        isOrgScoped ? Promise.resolve(false) : hasModule(moduleSupabase, 'cardio', moduleCtx),
+        isOrgScoped
+            ? Promise.resolve(false)
+            : hasModule(moduleSupabase, 'movement_assessment', moduleCtx),
+        isOrgScoped
+            ? Promise.resolve(false)
+            : hasModule(moduleSupabase, 'body_composition', moduleCtx),
     ])
 
     const sortedCheckIns = [...(checkIns || [])].sort(
@@ -140,9 +159,15 @@ async function ProfileContent({ clientId }: { clientId: string }) {
                 weightDeltaKg={weightDeltaKg}
                 nutritionPlansLength={nutritionPlans.length}
                 nutritionFirstPlanId={firstPlan?.id}
+                activeProgramName={
+                    (data.activeProgram as { name?: string | null } | null | undefined)?.name ?? null
+                }
+                moduleFlags={{
+                    cardio: cardioModule,
+                    movement: movementModule,
+                    bodycomp: bodycompModule,
+                }}
             />
-
-            <ModuleLinksRow clientId={clientId} />
 
             <ClientProfileDashboard
                 data={data}
@@ -174,53 +199,6 @@ async function resolveNutritionProEnabled(clientId: string): Promise<boolean> {
     if (!row || row.org_id) return false
     const ctx = row.team_id ? { teamId: row.team_id } : { coachId: row.coach_id }
     return hasModule(supabase, 'nutrition_exchanges', ctx)
-}
-
-/**
- * Accesos a los módulos movida (cardio / screening / composición corporal) gateados
- * server-side por el contexto del RECURSO (team del alumno ⇒ módulos del pool;
- * standalone ⇒ del coach; enterprise fuera en v1). El gate real de cada página es
- * assertModule — esto es espejo visual, igual que el nav.
- */
-async function ModuleLinksRow({ clientId }: { clientId: string }) {
-    const supabase = await createClient()
-    const { data: row } = await supabase
-        .from('clients')
-        .select('team_id, org_id, coach_id')
-        .eq('id', clientId)
-        .maybeSingle()
-    if (!row || row.org_id) return null
-
-    const ctx = row.team_id ? { teamId: row.team_id } : { coachId: row.coach_id }
-    const [cardio, movement, bodycomp] = await Promise.all([
-        hasModule(supabase, 'cardio', ctx),
-        hasModule(supabase, 'movement_assessment', ctx),
-        hasModule(supabase, 'body_composition', ctx),
-    ])
-
-    const links = [
-        cardio ? { href: `/coach/cardio/${clientId}`, label: 'Perfil cardio', Icon: HeartPulse } : null,
-        movement ? { href: `/coach/movement/${clientId}`, label: 'Screening de movimiento', Icon: PersonStanding } : null,
-        bodycomp ? { href: `/coach/clients/${clientId}/bodycomp`, label: 'Composición corporal', Icon: Scale } : null,
-    ].filter((l): l is { href: string; label: string; Icon: typeof HeartPulse } => l !== null)
-
-    if (!links.length) return null
-
-    return (
-        <div className="flex flex-wrap gap-2 print:hidden">
-            {links.map(({ href, label, Icon }) => (
-                <Link
-                    key={href}
-                    href={href}
-                    className="group flex min-h-[44px] items-center gap-2 rounded-control border border-subtle bg-surface-card px-4 text-sm font-semibold text-body shadow-[var(--shadow-sm)] transition-all hover:border-default hover:bg-surface-sunken"
-                >
-                    <Icon className="h-4 w-4 text-sport-600" />
-                    {label}
-                    <ChevronRight className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5" />
-                </Link>
-            ))}
-        </div>
-    )
 }
 
 function ProfileSkeleton() {
