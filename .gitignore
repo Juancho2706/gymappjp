@@ -11,6 +11,8 @@ docs/WHITE-LABEL-ROADMAP.md
 
 # ── Snapshot del Design System (referencia local del rediseño; re-pulleable vía claude_design MCP) ──
 docs/design-source/
+claude-design-export/
+nuevoexportCLAUDESING/
 
 # ── AI tool configs ──
 .claude/

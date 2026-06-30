@@ -199,6 +199,16 @@ export default async function CoachLayout({
                 --primary-foreground: ${brandTheme.dark.accentText};
                 --theme-secondary: ${brandTheme.dark.accent2};
                 --theme-secondary-foreground: ${brandTheme.dark.accent2Text};
+                /* Pasos soft 100-500 FLIPEAN a tintes traslúcidos de marca en dark
+                   (espejo del diseño: globals .dark --sport-100 = rgba(...,0.20)).
+                   Sin esto la rampa LIGHT del :root se filtra al dark y los fills
+                   selected/active (bg-[var(--sport-100..500)]) salen azul claro
+                   sobre superficie oscura = invisibles. */
+                --sport-100: rgba(${palette.primaryRgb}, 0.20);
+                --sport-200: rgba(${palette.primaryRgb}, 0.28);
+                --sport-300: rgba(${palette.primaryRgb}, 0.40);
+                --sport-400: rgba(${palette.primaryRgb}, 0.55);
+                --sport-500: rgba(${palette.primaryRgb}, 0.70);
                 --sport-600: ${sportTokens.dark['600']};
                 --sport-700: ${sportTokens.dark['700']};
                 --cta-fill: ${sportTokens.ctaFill};

@@ -9,7 +9,7 @@ import {
     useSensor, useSensors, type DragEndEvent, type DragOverEvent, DragStartEvent, DragOverlay,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
-import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight, CircleHelp, Maximize2, Sparkles, Pencil, Moon } from 'lucide-react'
+import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight, CircleHelp, Maximize2, Sparkles, Pencil, Moon, SlidersHorizontal, History, X } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -38,9 +38,9 @@ import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { usePlanBuilder, DAYS_OF_WEEK } from './hooks/usePlanBuilder'
 import { DayColumn } from './components/DayColumn'
 import { BlockEditSheet } from './components/BlockEditSheet'
-import { ProgramConfigHeader } from './components/ProgramConfigHeader'
+import { ProgramConfigSheet } from './components/ProgramConfigSheet'
 import { BuilderOnboardingTour, type BuilderTourStep } from './components/BuilderOnboardingTour'
-import { ProgramPhasesBar } from '@/components/shared/ProgramPhasesBar'
+import { ProgramPhasesBar } from './components/ProgramPhasesBar'
 import { ExerciseBlock } from './components/ExerciseBlock'
 import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
 import type { BuilderBlock, BuilderCardioContext, DayState, ProgramPhase } from './types'
@@ -984,12 +984,28 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 Reordena con gestos, arma offline y revisa el progreso con gráficas táctiles en la app de EVA.
             </AppOnlyPopup>
             {showDraftBanner && (
-                <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] z-[72] animate-in slide-in-from-bottom rounded-card border border-primary/25 bg-background/95 p-3 shadow-2xl backdrop-blur-xl md:static md:inset-auto md:bottom-auto md:rounded-none md:border-x-0 md:border-t-0 md:bg-primary/10 md:shadow-none">
-                    <div className="flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center sm:gap-4">
-                        <p className="text-xs font-bold text-foreground">Tienes cambios sin guardar recientes.</p>
+                <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] z-[72] animate-in slide-in-from-bottom rounded-card border border-primary/25 bg-primary/10 p-3 shadow-2xl backdrop-blur-xl md:static md:inset-auto md:bottom-auto md:mx-6 md:mt-2.5 md:rounded-control md:shadow-none">
+                    <div className="flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center sm:gap-3">
+                        <History className="hidden h-4 w-4 shrink-0 text-primary sm:block" />
+                        <p className="flex-1 text-xs font-semibold text-primary">Tenés un borrador sin guardar de esta sesión.</p>
                         <div className="flex items-center justify-end gap-2">
-                            <Button variant="outline" size="sm" onClick={handleRestoreDraft}>Restaurar</Button>
-                            <Button variant="ghost" size="sm" onClick={handleDiscardDraft}>Descartar</Button>
+                            <Button
+                                size="sm"
+                                onClick={handleRestoreDraft}
+                                className="eva-press h-8 rounded-control px-3 text-xs font-bold bg-primary text-primary-foreground hover:opacity-90"
+                                style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
+                            >
+                                Restaurar
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={handleDiscardDraft}
+                                aria-label="Descartar borrador"
+                                className="h-8 w-8 text-primary/70 hover:text-primary hover:bg-primary/10"
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -1083,15 +1099,15 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                         </Button>
 
                         <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             data-tour-id="preview-button"
-                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            className="eva-press hidden md:flex h-10 w-auto gap-2 rounded-pill border-border px-4 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
                             onClick={() => setShowPreview(true)}
                             title="Vista previa"
                         >
-                            <Eye className="w-4 h-4 mr-2" />
-                            Preview
+                            <Eye className="w-4 h-4" />
+                            Vista previa
                         </Button>
 
                         {!client && initialProgram?.id && (
@@ -1108,14 +1124,14 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                         )}
 
                         <Button
-                            variant="ghost"
+                            variant="outline"
                             size="sm"
                             data-tour-id="balance-button"
-                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            className="eva-press hidden md:flex h-10 w-auto gap-2 rounded-pill border-border px-4 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
                             onClick={() => setShowBalance(true)}
                             title="Balance muscular"
                         >
-                            <BarChart3 className="w-4 h-4 mr-2" />
+                            <BarChart3 className="w-4 h-4" />
                             Balance
                         </Button>
 
@@ -1210,17 +1226,17 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             </Button>
                         </div>
 
-                        {/* Config/Settings — always visible */}
+                        {/* Configurar — pill icon+label, always visible */}
                         <div className="relative">
                             {/* Ping permanente — sólo cuando el panel está cerrado */}
                             {!showConfig && (
-                                <span className="absolute inset-0 rounded-lg animate-ping bg-amber-400/20 pointer-events-none" />
+                                <span className="absolute inset-0 rounded-pill animate-ping bg-amber-400/20 pointer-events-none" />
                             )}
                             <Button
                                 variant="outline"
                                 size="sm"
                                 data-tour-id="top-config-button"
-                                className={`relative h-8 w-8 md:h-10 md:w-10 transition-all ${
+                                className={`eva-press relative h-8 w-8 gap-2 rounded-pill px-0 transition-all md:h-10 md:w-auto md:px-4 ${
                                     showConfig
                                         ? 'border-amber-400/60 bg-amber-400/10 text-amber-500 dark:text-amber-400'
                                         : 'border-amber-400/40 text-amber-500 dark:text-amber-400 hover:bg-amber-400/10 hover:border-amber-400/60 shadow-[0_0_10px_rgba(251,191,36,0.25)]'
@@ -1231,7 +1247,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 }}
                                 title="Configurar programa"
                             >
-                                <Settings className="w-4 h-4" />
+                                <SlidersHorizontal className="w-4 h-4" />
+                                <span className="hidden md:inline text-xs font-bold uppercase tracking-widest">Configurar</span>
                             </Button>
                         </div>
 
@@ -1265,7 +1282,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             disabled={isPending || !programName.trim()}
                             data-tour-id="save-button"
                             size="sm"
-                            className="h-10 w-10 min-h-10 min-w-10 shrink-0 text-xs font-bold uppercase tracking-[0.2em] bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] transition-all hover:opacity-90 disabled:opacity-50 md:h-10 md:w-auto md:min-h-10 md:min-w-0 md:px-6"
+                            className="eva-press h-10 w-10 min-h-10 min-w-10 shrink-0 rounded-pill text-xs font-bold uppercase tracking-[0.2em] bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] transition-all hover:opacity-90 disabled:opacity-50 md:h-10 md:w-auto md:min-h-10 md:min-w-0 md:px-6"
                             style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
                         >
                             {isPending ? <Loader2 className="w-4 h-4 animate-spin md:mr-2" /> : <Save className="w-4 h-4 md:mr-2" />}
@@ -1291,22 +1308,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 )}
 
                 {!(isMobile && isSimpleMode) && <ProgramPhasesBar phases={programPhases} />}
-
-                {showConfig && (
-                    <ProgramConfigHeader 
-                        programName={programName} setProgramName={setProgramName}
-                        durationType={durationType} setDurationType={setDurationType}
-                        weeksToRepeat={weeksToRepeat} setWeeksToRepeat={setWeeksToRepeat}
-                        durationDays={durationDays} setDurationDays={setDurationDays}
-                        startDateFlexible={startDateFlexible} setStartDateFlexible={setStartDateFlexible}
-                        startDate={startDate} setStartDate={setStartDate}
-                        programNotes={programNotes} setProgramNotes={setProgramNotes}
-                        programStructureType={programStructureType} setProgramStructureType={setProgramStructureType}
-                        cycleLength={cycleLength} setCycleLength={setCycleLength}
-                        programPhases={programPhases} setProgramPhases={setProgramPhases}
-                        onClose={() => setShowConfig(false)}
-                    />
-                )}
             </header>
 
             <DndContext
@@ -1866,6 +1867,23 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 open={showBalance}
                 onClose={() => setShowBalance(false)}
                 days={days}
+            />
+
+            <ProgramConfigSheet
+                open={showConfig}
+                onClose={() => setShowConfig(false)}
+                isMobile={isMobile}
+                programName={programName} setProgramName={setProgramName}
+                durationType={durationType} setDurationType={setDurationType}
+                weeksToRepeat={weeksToRepeat} setWeeksToRepeat={setWeeksToRepeat}
+                durationDays={durationDays} setDurationDays={setDurationDays}
+                startDateFlexible={startDateFlexible} setStartDateFlexible={setStartDateFlexible}
+                startDate={startDate} setStartDate={setStartDate}
+                programNotes={programNotes} setProgramNotes={setProgramNotes}
+                programStructureType={programStructureType} setProgramStructureType={setProgramStructureType}
+                cycleLength={cycleLength} setCycleLength={setCycleLength}
+                programPhases={programPhases} setProgramPhases={setProgramPhases}
+                isABMode={isABMode} setIsABMode={setIsABMode}
             />
 
             <PrintProgramDialog
