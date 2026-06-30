@@ -713,7 +713,7 @@ export function WorkoutExecutionClient({
                                                             )}
                                                             {/* Sobrecarga progresiva. Para PESO con motor (weekly_linear) muestra el objetivo
                                                                 calculado de la semana; si no, cae al cartel-instrucción (reps, o sin semana). */}
-                                                            {block.progression_type && block.progression_value != null && (
+                                                            {effType === 'strength' && block.progression_type && block.progression_value != null && (block.progression_type !== 'weight' || block.target_weight_kg != null) && (
                                                                 <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2 text-sm">
                                                                     <TrendingUp className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                                                                     <p className="text-emerald-900/85 dark:text-emerald-200/90">
@@ -731,7 +731,11 @@ export function WorkoutExecutionClient({
                                                                                     return (<><S>Doble progresión:</S> mantené <span className="font-bold">{eff.weightKg} kg</span> y completá <span className="font-bold">{eff.repsTopToUnlock} reps</span> en todas las series para subir</>)
                                                                                 }
                                                                                 if (eff.status === 'progressed') {
-                                                                                    return (<><S>Doble progresión · ¡subiste!</S> objetivo <span className="font-bold">{eff.weightKg} kg</span> <span className="text-emerald-700/70 dark:text-emerald-300/70">(base {eff.baseWeightKg})</span></>)
+                                                                                    return eff.isProgressed ? (
+                                                                                        <><S>Doble progresión · ¡subiste!</S> objetivo <span className="font-bold">{eff.weightKg} kg</span> <span className="text-emerald-700/70 dark:text-emerald-300/70">(base {eff.baseWeightKg})</span></>
+                                                                                    ) : (
+                                                                                        <><S>Doble progresión:</S> objetivo <span className="font-bold">{eff.weightKg} kg</span> <span className="text-emerald-700/70 dark:text-emerald-300/70">(aún por debajo de la base {eff.baseWeightKg})</span></>
+                                                                                    )
                                                                                 }
                                                                                 return (<><S>Doble progresión:</S> subí <span className="font-bold">+{v} kg</span> cuando completes <span className="font-bold">{eff.repsTopToUnlock} reps</span> en todas las series</>)
                                                                             }

@@ -1,5 +1,3 @@
-import { programWeekIndex1Based } from './programWeekVariant'
-
 /**
  * Sobrecarga progresiva — motor de target efectivo del alumno.
  *

@@ -1,7 +1,7 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '@/lib/date-utils'
+import { getTodayInSantiago, getSantiagoUtcBoundsForDay, getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { resolveActiveWeekVariantForDisplay, programWeekIndex1Based } from '@/lib/workout/programWeekVariant'
 import { classicSlugForAreaId } from '@/lib/workout-areas'
 import type { IntervalConfig, WorkoutArea } from '@/domain/workout/types'
@@ -189,7 +189,7 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
             const exId = log.workout_blocks?.exercise_id
             if (!exId) return
             if (!previousHistory[exId]) previousHistory[exId] = []
-            const logDate = log.logged_at.split('T')[0]
+            const logDate = getSantiagoIsoYmdForUtcInstant(log.logged_at)
             const existingDates = previousHistory[exId].map(h => h.date)
 
             if (existingDates.length === 0 || existingDates.includes(logDate)) {
@@ -219,7 +219,7 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
         // priorLogs viene desc por fecha → la 1ª aparición de cada bloque marca su día más reciente.
         const grouped: Record<string, { day: string; rows: Array<{ set_number: number; weight_kg: number | null; reps_done: number | null }> }> = {}
         priorLogs?.forEach((log: { block_id: string; set_number: number; weight_kg: number | null; reps_done: number | null; logged_at: string }) => {
-            const day = String(log.logged_at).split('T')[0]
+            const day = getSantiagoIsoYmdForUtcInstant(log.logged_at)
             if (!grouped[log.block_id]) grouped[log.block_id] = { day, rows: [] }
             if (grouped[log.block_id].day === day) {
                 grouped[log.block_id].rows.push({ set_number: log.set_number, weight_kg: log.weight_kg, reps_done: log.reps_done })

@@ -346,8 +346,9 @@ export const getClientProfileData = cache(async (clientId: string) => {
     if (activeProgram?.start_date && activeProgram?.end_date) {
         const start = new Date(activeProgram.start_date);
         const end = new Date(activeProgram.end_date);
-        const diffTime = Math.abs(today.getTime() - start.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const diffTime = today.getTime() - start.getTime();
+        // start futuro → semana 1 (no contar días-hasta-inicio como transcurridos; ver programWeekVariant).
+        const diffDays = diffTime < 0 ? 0 : Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         currentWeek = Math.min(totalWeeks, Math.ceil(diffDays / 7));
         if (currentWeek < 1) currentWeek = 1;
 
