@@ -14,10 +14,20 @@ import {
     updateClientGoalWeight as updateClientGoalWeightService,
     markCheckInReviewed as markCheckInReviewedService,
 } from '@/services/client/client-detail.service'
+import { assembleClientFichaPanel } from '../_data/ficha-panel.data'
 import { revalidatePath } from 'next/cache'
 
 export async function getClientProfileData(clientId: string) {
     return getClientProfileDataService(clientId)
+}
+
+/**
+ * Bundle completo de la ficha (hero + dashboard + zona C nutrición + módulos) para el
+ * panel derecho del master-detail de Alumnos (desktop). Datos REALES, mismo origen que
+ * la ruta `/coach/clients/[clientId]`. Se invoca al seleccionar un alumno en el rail.
+ */
+export async function getClientFichaPanel(clientId: string) {
+    return assembleClientFichaPanel(clientId)
 }
 
 export async function addPayment(data: {

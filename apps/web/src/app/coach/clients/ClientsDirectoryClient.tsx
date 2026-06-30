@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Users } from 'lucide-react'
+import { Users, Table2, PanelLeft } from 'lucide-react'
 import { Card } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import { ClientCardV2 } from '@/components/coach/ClientCardV2'
 import { DirectoryActionBar } from './DirectoryActionBar'
 import { ClientsDirectoryTable } from './ClientsDirectoryTable'
 import { ClientsDirectoryEmpty } from './ClientsDirectoryEmpty'
+import { CoachRosterMasterDetail } from './CoachRosterMasterDetail'
 import { DirRowCard } from './DirRowCard'
 import { EditClientDataModal } from './EditClientDataModal'
 import type {
@@ -28,6 +30,49 @@ interface ClientsDirectoryClientProps {
     riskFilter: DirectoryRiskFilter
     onRiskFilterChange: (f: DirectoryRiskFilter) => void
     pulseByClientId: Record<string, DirectoryPulseRow>
+    /** Vista de nivel superior (solo desktop): ficha (master-detail) | tabla (directorio). */
+    rosterMode: 'ficha' | 'tabla'
+    onRosterModeChange: (m: 'ficha' | 'tabla') => void
+}
+
+/** Toggle segmentado Tabla / Ficha — transcripción del `.dt-viewtoggle` del diseño. */
+function RosterViewToggle({
+    value,
+    onChange,
+}: {
+    value: 'ficha' | 'tabla'
+    onChange: (m: 'ficha' | 'tabla') => void
+}) {
+    return (
+        <div className="flex gap-0.5 rounded-control bg-surface-sunken p-[3px]">
+            <button
+                type="button"
+                onClick={() => onChange('tabla')}
+                className={cn(
+                    'inline-flex h-[30px] items-center gap-1.5 rounded-[calc(var(--radius-control)-3px)] px-3 text-[13px] font-bold transition-colors',
+                    value === 'tabla'
+                        ? 'bg-surface-card text-sport-600 shadow-[var(--shadow-xs)]'
+                        : 'text-muted hover:text-strong'
+                )}
+            >
+                <Table2 className="h-[15px] w-[15px]" />
+                Tabla
+            </button>
+            <button
+                type="button"
+                onClick={() => onChange('ficha')}
+                className={cn(
+                    'inline-flex h-[30px] items-center gap-1.5 rounded-[calc(var(--radius-control)-3px)] px-3 text-[13px] font-bold transition-colors',
+                    value === 'ficha'
+                        ? 'bg-surface-card text-sport-600 shadow-[var(--shadow-xs)]'
+                        : 'text-muted hover:text-strong'
+                )}
+            >
+                <PanelLeft className="h-[15px] w-[15px]" />
+                Ficha
+            </button>
+        </div>
+    )
 }
 
 function matchesRiskFilter(
@@ -115,6 +160,8 @@ export function ClientsDirectoryClient({
     riskFilter,
     onRiskFilterChange,
     pulseByClientId,
+    rosterMode,
+    onRosterModeChange,
 }: ClientsDirectoryClientProps) {
     const reduceMotion = useReducedMotion()
     const gridContainer = useGridVariants(reduceMotion)
@@ -205,7 +252,25 @@ export function ClientsDirectoryClient({
         ) : null
 
     return (
-        <div className="min-w-0 max-w-full space-y-6 md:space-y-8">
+        <div className="min-w-0 max-w-full">
+            {/* Toggle Tabla / Ficha — solo desktop (md+), arriba a la derecha */}
+            <div className="mb-4 hidden md:flex md:justify-end">
+                <RosterViewToggle value={rosterMode} onChange={onRosterModeChange} />
+            </div>
+
+            {/* Master-detail (Ficha) — solo desktop + modo ficha */}
+            {rosterMode === 'ficha' && (
+                <div className="hidden md:block">
+                    <CoachRosterMasterDetail
+                        clients={clients}
+                        pulseByClientId={pulseByClientId}
+                        onShowTable={() => onRosterModeChange('tabla')}
+                    />
+                </div>
+            )}
+
+            {/* Directorio (tabla/grid + tarjetas móvil): móvil siempre · desktop solo en modo tabla */}
+            <div className={cn('space-y-6 md:space-y-8', rosterMode === 'ficha' && 'md:hidden')}>
             <DirectoryActionBar
                 search={search}
                 onSearchChange={setSearch}
@@ -317,6 +382,7 @@ export function ClientsDirectoryClient({
                 {loadMoreButton}
                 </div>
             }
+            </div>
 
             {editingClient && (
                 <EditClientDataModal
