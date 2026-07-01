@@ -8,6 +8,9 @@
 > Perfil de usuario: **coach promedio (personal trainer), NO data-scientist.**
 > Objetivo: máxima señal-coach por mínima carga cognitiva del coach **y** mínima fricción del alumno,
 > **mobile-first**, **accesible**, y **conectado a la monetización** (qué es free y qué empuja un módulo Pro).
+>
+> ⚑ **Decisiones cerradas por el CEO (2026-06-30) en §14 — es la fuente de verdad.** 28 respuestas (7 rondas)
+> más `foto de comida` descartada y `next best action` fuera. Donde el cuerpo contradiga §14, manda §14.
 
 ---
 
@@ -311,7 +314,7 @@ venta. El gate es **server-side** vía `hasModule()` (patrón ya vivo en `page.t
 | A1 | **Write-path "Editar biometría"** (altura + peso inicial + **sexo**) → `client_intake` | form muerto hoy | **Bajo** | **Muy alto** — desbloquea IMC/TDEE | Free (core) |
 | A2 | **Progresión en el sheet** (badge lineal/doble +X kg/sem) + `video_url` | `progression_*` en DB | **Trivial** | **Alto** | Free (core) |
 | A3 | **RIR logueado** en Entreno | `workout_logs.rir` | **Bajo** | **Alto** | Free (core) |
-| A3b | **Actuals de cardio** (FC/dist/min/ritmo) | `workout_logs.actual_*` | **Bajo** | **Alto** | **Módulo Cardio** + teaser si OFF |
+| A3b | **Cardio del alumno**: ejercicios de cardio del plan = **base, se muestran**. **Actuals ricos** (FC/dist/min/ritmo) = **offering del módulo** | `workout_logs.actual_*` | **Bajo** | **Alto** | Cardio base **free**; los actuals ricos = **Módulo Cardio** + teaser si OFF |
 | A4 | **Satisfacción (agregada) + porciones parciales** en Nutrición | `satisfaction_score`/`consumed_quantity` | **Bajo** | Medio-alto | Free (core) |
 | A5 | **RPE medio sesión + prescrito-vs-hecho** | agregación existente | **Bajo** | **Alto** | Free (core) |
 | A6 | **Timeline check-ins con "revisado"** (cola de trabajo) | `check_ins.reviewed_at` | **Bajo** | **Alto** (retención coach) | Free (core) |
@@ -348,11 +351,14 @@ no hay modelo de gasto. Se ofrece **solo el nivel estimado**:
    **Opcional, saltable.** Se **mide su tasa de completado 3-4 semanas.**
 
 ### 10.3 STOP — no agregar hasta medir
-El input #2 (dolor/molestia, hambre/saciedad, foto de comida, gramaje real, alcohol, adherencia percibida,
+El input #2 (dolor/molestia, hambre/saciedad, gramaje real, alcohol, adherencia percibida,
 auto-declarar alergias, textarea) **no entra hasta que A7 supere ~60 % de uso**. Cada uno es "lindo pero
 inútil" para el coach promedio si no cambia una decisión suya. Cuando toque, en orden de valor/fricción:
-foto de comida → gramaje real off-plan → auto-declarar alergia (alumno propone, **coach confirma**) → hábitos
+gramaje real off-plan → auto-declarar alergia (alumno propone, **coach confirma**) → hábitos
 textarea → hambre/saciedad → alcohol. **Todos opcionales.**
+
+> **Foto de comida: DESCARTADA** (decisión CEO 2026-06-30). No se pide foto de comida al alumno en ninguna
+> fase. Nada de Storage RLS `meal-photos/`, nada de columna `photo_url` de comida. Fuera del alcance permanente.
 
 ### 10.4 Lo que NO se toca (contamina el motor)
 - **RPE por serie NO se auto-rellena con default 8.** El default contamina el motor `adaptive` con dato falso
@@ -433,16 +439,14 @@ GRANT SELECT, INSERT, UPDATE ON public.workout_session_feedback TO authenticated
 ### D3 · Nutrición — columnas nullable (diferido tras medir A7)
 
 ```sql
-ALTER TABLE public.nutrition_meal_logs ADD COLUMN IF NOT EXISTS photo_url text NULL;
 ALTER TABLE public.nutrition_meal_logs ADD COLUMN IF NOT EXISTS hunger_before smallint NULL;   -- 1-3
 ALTER TABLE public.nutrition_meal_logs ADD COLUMN IF NOT EXISTS satiety_after smallint NULL;   -- 1-3
 ALTER TABLE public.daily_habits       ADD COLUMN IF NOT EXISTS alcohol_units smallint NULL;
 ALTER TABLE public.daily_habits       ADD COLUMN IF NOT EXISTS perceived_adherence smallint NULL; -- 1-5
 ```
 `nutrition_meal_logs`/`daily_habits` usan **grant de tabla** (`GRANT ALL TO authenticated`) → sin `42501`.
-**`photo_url` NO basta con la columna (arch P2-6):** el bucket `checkins` es **privado**. Foto de comida exige
-**policies de Storage RLS** (alumno escribe su propio path `meal-photos/{client_id}/…`; coach lee las de sus
-clientes) en la MISMA migración. Reusa el pipeline WebP existente.
+**Foto de comida: DESCARTADA** (decisión CEO 2026-06-30) — sin columna `photo_url` de comida, sin Storage RLS
+`meal-photos/`. No se pide foto de comida al alumno.
 
 ### D4 · Auto-declaración de restricciones (diferido) — **con el modelo de confianza enforced**
 
@@ -524,8 +528,8 @@ diff del redesign.
 - **A8** composición corporal en Progreso, **gateada a Body-comp** con teaser.
 
 **Fase 3 — Inputs del alumno #2+ (SOLO si A7 > ~60 %).**
-- En orden: foto de comida (D3 + Storage RLS) → gramaje real off-plan → auto-declarar alergia (D4, coach
-  confirma) → hábitos textarea → hambre/saciedad → alcohol. Paridad mobile (OffPlanLogger/swaps/comentarios).
+- En orden: gramaje real off-plan → auto-declarar alergia (D4, coach confirma) → hábitos textarea →
+  hambre/saciedad → alcohol. Paridad mobile (OffPlanLogger/swaps/comentarios). **Foto de comida: descartada.**
 
 **Fase 4 — Wearables (RN, diferido, rama propia).** Solo si el negocio lo justifica (§12).
 
@@ -534,18 +538,56 @@ idempotente, con `get_advisors` verde. Wearables no se toca.
 
 ---
 
-## 14. Decisiones abiertas para el CEO
+## 14. Decisiones CEO — CERRADAS (2026-06-30)
 
-| # | Decisión | Opciones | Recomendación |
-|---|---|---|---|
-| **D-CEO-1** | `BillingTabB8` (facturación en la ficha) | (a) archivar (b) cablear como 6ª tab | **Archivar** — 5-6 tabs envuelven en móvil; no gastar reunión |
-| **D-CEO-2** | Palabra del 3er estado del badge | "Revisar" (verbo) vs **"Atención"** (homogéneo con Al día/Urgente) | **"Atención"** (gramática consistente) |
-| **D-CEO-3** | Precisión de proyección/balance | número único vs **rango + "estimado"** | **Rango + badge visible** — no sobre-prometer con alumnos |
-| **D-CEO-4** | Actuals de cardio y composición | free vs **detrás del gate del módulo** | **Detrás del gate + teaser** — no regalar lo cobrable |
-| **D-CEO-5** | Balance/TDEE (A9) | free vs **gancho de Nutrición Pro** | **Nutrición Pro** — es palanca de upgrade |
-| **D-CEO-6** | Wearables (3 tablas + OAuth) | construir ahora vs **cortar/diferir** | **Cortar de este scope** — YAGNI con 1 coach pagando |
-| **D-CEO-7** | RPE por serie del alumno | default-fill 8 vs **opt-in real / no tocar** | **No default-fill** — contamina el motor adaptive |
-| **D-CEO-8** | ¿Se valida con coaches antes de Fase 3? | shipear a ciegas vs **gate de demanda + medir A7** | **Gate de demanda** — el plan es engineering-driven hoy |
+> Las 28 decisiones fueron **respondidas por el CEO** (7 rondas). Esta sección es la fuente de verdad;
+> donde el cuerpo del doc contradiga esto, **manda esta tabla**. `foto de comida` quedó **descartada
+> permanentemente**; `next best action` (sugerencias prescriptivas) quedó **fuera** — la ficha muestra estado
+> y data limpia, el coach decide qué hacer.
+
+### 14.1 Alcance y estilo del rework
+
+| Tema | Decisión CERRADA |
+|---|---|
+| Rutina del alumno (ejecución) | **Mini-rework UI/UX: spec + mockup Y SE IMPLEMENTA** en la rama redesign, con screenshot de verificación (claro+oscuro, desktop+móvil). |
+| Dónde aterriza la ficha | **Fase 0-1 en la rama redesign actual** (front + 1 migración chica: `sex`/biometría). **Tablas nuevas** (mood, etc.) → **rama aparte post-redesign** (no inflar el diff). |
+| Estilo visual | **Estilo Claude Design**: minimalista, limpio, tokens del DS. **Tema claro Y oscuro** perfectos. **Responsive/PWA/desktop/móvil** pensado desde el diseño. |
+| Layout desktop | **2 columnas ancho medio** (coherente entre todas las tabs; adiós a la columna angosta del Resumen). |
+| Densidad | **Compacto + progressive disclosure** (pocos números clave arriba, detalle al expandir). |
+| Charts | **Minimalista línea/área suave** (líneas finas, sin grid pesado, colores DS; limpio en claro/oscuro). |
+| Tabs en móvil/PWA | **Chips con scroll horizontal**. Tab por defecto = **Resumen**. Orden: Resumen · Progreso · Entreno · Programa · Nutrición. |
+
+### 14.2 Estructura y contenido de la ficha
+
+| Tema | Decisión CERRADA |
+|---|---|
+| Panel de Progreso Unificado (7 pills) | **ELIMINARLO** — cada chart vuelve a su hogar; mata 5 duplicados + la 2ª fórmula de 1RM. |
+| Badge de estado (unifica los 2 que se contradicen) | **Un solo badge: Al día / Atención / Urgente** + motivos legibles; score crudo escondido. |
+| Composición corporal | **Fusionar en Progreso**, con gate + teaser del módulo Body-comp. |
+| Hábitos (agua/pasos/sueño/ayuno/suplementos) | **Mini-widget en Resumen** ("Hoy: 1.8L · 8.2k pasos · 7h"), detalle 7d al expandir. |
+| RPE + RIR por ejercicio (que pone el alumno) | **Mostrar en el detalle de sesión (Entreno)** — cada serie con su esfuerzo real. |
+| Prescrito vs ejecutado + progresión del bloque | **Mostrar en el detalle de sesión** (objetivo vs real + "+X kg/sem"). Dato ya en DB. |
+| Porciones parciales + satisfacción de comida | **Superficiar, agregado y etiquetado, en Nutrición** ("comió el 50%", satisfacción prom). |
+| Cardio en la ficha | **Mostrar el cardio del alumno** (los ejercicios de cardio son parte del entreno base, NO gateados). **Solo se gatea lo que ofrece el módulo Cardio como tal** (analítica/features del módulo), con teaser. |
+| Cola de check-ins por revisar | **Construir la cola** de pendientes ("marcar revisado" + bandeja). Organiza, no prescribe. |
+| Next best action / sugerencias | **FUERA.** Nada de "hacé X". Se muestra estado + data; el coach decide. |
+| Las dos "rachas" homónimas | **Renombrar cada una** ("Racha de actividad" vs "Racha de nutrición ≥80%"). |
+
+### 14.3 Números, explicabilidad y datos del alumno
+
+| Tema | Decisión CERRADA |
+|---|---|
+| Fuente de números | **View-model tipado server-side** ("una métrica, una definición") — base estructural del rework. |
+| Explicabilidad de la jerga (e1RM/RIR/tempo/tonelaje/regresión/score) | **Micro-leyenda inline permanente** + `?` con tap para el detalle forense (un solo `<MetricInfo/>` + glosario). |
+| Proyección de peso 4 sem | **Rango + badge "estimado"** (no número único que se lea como promesa). |
+| Adherencia nutri 30d | **Contar TODOS los días** (los sin registro = 0%); número honesto, no inflado. |
+| Mejor racha (histórico) | **Dejar el recompute de 371 días** (barato, suficiente). |
+| Write-path "Editar biometría" | **Construir** (bug: hoy no persiste). UPSERT con placeholders (no INSERT), corre como coach autenticado (policy `client_intake_coach`), **sin service-role**. Suma `client_intake.sex` (desbloquea IMC + TDEE). |
+| Único input NUEVO al alumno | **Mood de sesión 1-tap** (1-5 emojis al terminar), opcional, tabla nueva; **medir uso 3-4 sem** antes de sumar otro. |
+| RPE por serie | **No tocar / nunca default-fill** (contamina el motor adaptive). |
+| Foto de comida | **DESCARTADA permanente** (sin columna, sin Storage RLS). |
+| Wearables | **Cortar de este scope**; solo diseñar sin cerrar la puerta (capa "fuente de verdad" futura). |
+| Todo cambio de DB | **Estrictamente ADITIVO** (nullable + tablas nuevas, forward-only, GRANT UPDATE por columna, RLS con `current_user_pool_client_ids()`). Cero riesgo a coaches actuales. |
 
 ---
 
@@ -561,7 +603,6 @@ idempotente, con `get_advisors` verde. Wearables no se toca.
   archivada (§14) · disciplina de rama (§13) · validación de demanda (§13 GATE).
 - **Arquitectura/Security:** RLS team con `current_user_pool_client_ids()` (§11-D2, D5) · tokens wearable
   service-role-only (§12) · UPSERT por NOT NULL en biometría (§11-D1) · `(SELECT auth.uid())` en todas las
-  policies (§11) · confianza "coach confirma" enforced en D4 (§11-D4) · Storage RLS para foto de comida
-  (§11-D3) · data-flow `_data → service → repository`, sin N+1, columnas al SELECT existente (§3, principio de
-  view-model) · gating server-side vía `hasModule()` (§9) · índice liderando `client_id` (§11) · `get_advisors`
-  tras cada migración (§11).
+  policies (§11) · confianza "coach confirma" enforced en D4 (§11-D4) · data-flow `_data → service → repository`,
+  sin N+1, columnas al SELECT existente (§3, principio de view-model) · gating server-side vía `hasModule()`
+  (§9) · índice liderando `client_id` (§11) · `get_advisors` tras cada migración (§11).
