@@ -76,6 +76,16 @@ describe('mapDbBlockToBuilderBlock', () => {
             dayId: 3,
         })
     })
+    it('preserva is_unilateral y extra_targets (cardio/movilidad: antes se perdían al guardar)', () => {
+        const block = mapDbBlockToBuilderBlock(
+            { exercise_id: 'e3', sets: 3, reps: '30s', duration_sec: 30, is_unilateral: true, extra_targets: { glutes: 0.3, core: 0.2 } },
+            new Map(),
+            'uid-3',
+            2,
+        )
+        expect(block.is_unilateral).toBe(true)
+        expect(block.extra_targets).toEqual({ glutes: 0.3, core: 0.2 })
+    })
     it('section desconocida -> main; usa catálogo si no hay FK embebida', () => {
         const cat = ex({ id: 'e2', name: 'Sentadilla', muscle_group: 'Pierna', gif_url: 'g.gif' })
         const block = mapDbBlockToBuilderBlock(

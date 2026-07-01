@@ -1130,9 +1130,10 @@ export async function getExerciseHistoryAction(clientId: string, exerciseId: str
     // Buscar el último logged_at para este cliente + ejercicio
     const { data: lastLog, error: lastLogError } = await supabase
         .from('workout_logs')
-        .select('logged_at, weight_kg, reps_done, set_number, workout_blocks!inner(exercise_id)')
+        // P1-3: por snapshot exercise_id del log (sobrevive al borrado del bloque; equiv. hoy).
+        .select('logged_at, weight_kg, reps_done, set_number, exercise_id')
         .eq('client_id', clientId)
-        .eq('workout_blocks.exercise_id', exerciseId)
+        .eq('exercise_id', exerciseId)
         .order('logged_at', { ascending: false })
         .limit(1)
         .single()
@@ -1144,9 +1145,10 @@ export async function getExerciseHistoryAction(clientId: string, exerciseId: str
 
     const { data: sessionSets, error: sessionError } = await supabase
         .from('workout_logs')
-        .select('logged_at, weight_kg, reps_done, set_number, workout_blocks!inner(exercise_id)')
+        // P1-3: por snapshot exercise_id del log (sobrevive al borrado del bloque; equiv. hoy).
+        .select('logged_at, weight_kg, reps_done, set_number, exercise_id')
         .eq('client_id', clientId)
-        .eq('workout_blocks.exercise_id', exerciseId)
+        .eq('exercise_id', exerciseId)
         .gte('logged_at', `${sessionDate}:00`)
         .lte('logged_at', `${sessionDate}:59`)
         .order('set_number', { ascending: true })

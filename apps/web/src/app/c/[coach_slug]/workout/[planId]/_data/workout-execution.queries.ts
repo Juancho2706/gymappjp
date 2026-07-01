@@ -178,12 +178,12 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
     if (exerciseIds.length > 0) {
         const { data: historyData } = await supabase
             .from('workout_logs')
-            .select(`
-                weight_kg, reps_done, logged_at, set_number,
-                workout_blocks!inner(exercise_id)
-            `)
+            .select('weight_kg, reps_done, logged_at, set_number, exercise_id')
             .eq('client_id', user.id)
-            .in('workout_blocks.exercise_id', exerciseIds)
+            // P1-3: match por el snapshot exercise_id del log (no por el bloque via JOIN). Sobrevive
+            // al hard-delete del bloque (block_id NULL) → la "sesión anterior" no desaparece. El
+            // trigger + backfill garantizan exercise_id en todo log, así que hoy es equivalente.
+            .in('exercise_id', exerciseIds)
             // Sesiones PREVIAS a hoy de estos ejercicios (cualquier bloque, INCLUIDO el propio del
             // plan). Antes excluía los bloques del plan actual (.not block_id in) → en programas
             // semanales reusados la "sesión anterior" NUNCA aparecía (todo su historial vive en
@@ -193,7 +193,7 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
             .limit(500)
 
         historyData?.forEach((log: any) => {
-            const exId = log.workout_blocks?.exercise_id
+            const exId = log.exercise_id
             if (!exId) return
             if (!previousHistory[exId]) previousHistory[exId] = []
             const logDate = getSantiagoIsoYmdForUtcInstant(log.logged_at)
@@ -278,15 +278,17 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
     // programas semanales reusados el máx salía vacío y marcaba "PR" falso casi cada sesión. Cap 5000.
     const { data: maxData } = exerciseIds.length === 0 ? { data: [] } : await supabase
         .from('workout_logs')
-        .select('weight_kg, workout_blocks!inner(exercise_id)')
+        .select('weight_kg, exercise_id')
         .eq('client_id', user.id)
         .not('weight_kg', 'is', null)
-        .in('workout_blocks.exercise_id', exerciseIds)
+        // P1-3: match por el snapshot exercise_id del log → el máx histórico sobrevive al borrado
+        // del bloque (block_id NULL). Equivalente hoy (trigger + backfill pueblan exercise_id).
+        .in('exercise_id', exerciseIds)
         .lt('logged_at', todayStartUtc)
         .limit(5000)
 
-    maxData?.forEach((log: { weight_kg: number | null; workout_blocks: { exercise_id: string } | null }) => {
-        const exId = log.workout_blocks?.exercise_id
+    maxData?.forEach((log: { weight_kg: number | null; exercise_id: string | null }) => {
+        const exId = log.exercise_id
         if (!exId || log.weight_kg == null) return
         if (exerciseMaxes[exId] == null || log.weight_kg > exerciseMaxes[exId]) {
             exerciseMaxes[exId] = log.weight_kg

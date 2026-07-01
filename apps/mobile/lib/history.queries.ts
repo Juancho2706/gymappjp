@@ -26,7 +26,9 @@ export async function getWorkoutHistoryFull(clientId: string) {
   const since = new Date(Date.now() - 180 * 86400000).toISOString()
   return supabase
     .from('workout_logs')
-    .select('id, logged_at, block_id, set_number, weight_kg, reps_done, workout_blocks!inner(plan_id)')
+    // P1-3: sin !inner → los logs huérfanos (bloque borrado, block_id NULL) siguen contando en el
+    // historial. plan_id no se usa en buildDaySummaries (solo logged_at), así que no afecta el conteo.
+    .select('id, logged_at, block_id, set_number, weight_kg, reps_done, workout_blocks(plan_id)')
     .eq('client_id', clientId)
     .gte('logged_at', since)
     .order('logged_at', { ascending: false })
@@ -86,7 +88,7 @@ export async function getPersonalRecords(clientId: string) {
   const [{ data: recentLogs }, { data: allLogs }] = await Promise.all([
     supabase
       .from('workout_logs')
-      .select('weight_kg, block_id, logged_at')
+      .select('weight_kg, block_id, logged_at, exercise_id')
       .eq('client_id', clientId)
       .gte('logged_at', since14)
       .not('weight_kg', 'is', null)
@@ -94,21 +96,23 @@ export async function getPersonalRecords(clientId: string) {
       .limit(120),
     supabase
       .from('workout_logs')
-      .select('weight_kg, block_id')
+      .select('weight_kg, block_id, exercise_id')
       .eq('client_id', clientId)
       .not('weight_kg', 'is', null)
       .limit(3000),
   ])
 
-  const blockIds = [...new Set([...(recentLogs ?? []), ...(allLogs ?? [])].map((l) => l.block_id))]
-  if (blockIds.length === 0) return []
+  // P1-3: resolver el ejercicio por el snapshot exercise_id del log; el bloque queda solo como
+  // fallback para logs viejos sin snapshot (0 hoy tras backfill) → los huérfanos siguen apareciendo.
+  const blockIds = [...new Set([...(recentLogs ?? []), ...(allLogs ?? [])].map((l) => l.block_id).filter(Boolean))]
 
-  const { data: blocks } = await supabase
+  const { data: blocks } = blockIds.length === 0 ? { data: [] } : await supabase
     .from('workout_blocks')
     .select('id, exercise_id')
     .in('id', blockIds)
 
-  const exerciseIds = [...new Set((blocks ?? []).map((b) => b.exercise_id).filter(Boolean))]
+  const logExerciseIds = [...(recentLogs ?? []), ...(allLogs ?? [])].map((l: any) => l.exercise_id).filter(Boolean)
+  const exerciseIds = [...new Set([...(blocks ?? []).map((b) => b.exercise_id).filter(Boolean), ...logExerciseIds])]
   const { data: exercises } = await supabase
     .from('exercises')
     .select('id, name')
@@ -119,7 +123,7 @@ export async function getPersonalRecords(clientId: string) {
 
   const maxByExercise = new Map<string, number>()
   for (const log of allLogs ?? []) {
-    const exId = blockMap.get(log.block_id)
+    const exId = (log as any).exercise_id ?? blockMap.get(log.block_id)
     if (!exId) continue
     maxByExercise.set(exId, Math.max(maxByExercise.get(exId) ?? 0, log.weight_kg ?? 0))
   }
@@ -127,7 +131,7 @@ export async function getPersonalRecords(clientId: string) {
   const prs: { exerciseId: string; exerciseName: string; weightKg: number; achievedAt: string }[] = []
   const seen = new Set<string>()
   for (const log of recentLogs ?? []) {
-    const exId = blockMap.get(log.block_id)
+    const exId = (log as any).exercise_id ?? blockMap.get(log.block_id)
     if (!exId || seen.has(exId)) continue
     const histMax = maxByExercise.get(exId) ?? 0
     if ((log.weight_kg ?? 0) >= histMax) {
