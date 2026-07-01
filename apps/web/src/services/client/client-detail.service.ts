@@ -44,6 +44,13 @@ import { logTeamClientAccess } from '@/services/team/team.service'
 // Guards de scoping 3-vias extraidos a un servicio compartido (T3.0 specs/movida-screening):
 // la logica de scoping coach->alumno vive en UN solo lugar (client-scope.service.ts).
 import { assertCoachClientReadAccess, getCoachClientScope } from '@/services/client/client-scope.service'
+// Cosecha ADITIVA (fase fusión Composición corporal en Progreso): mediciones bodycomp del alumno.
+// Data flow correcto: service → repository → Supabase (RLS = techo). El ENTITLEMENT del módulo NO
+// se resuelve aquí (lo hace page.tsx/ficha-panel vía hasModule → moduleFlags.bodycomp); esto solo
+// trae las filas que el coach YA puede leer por RLS. Se fetch SOLO en contexto standalone (sin team,
+// sin org) para NO disparar el consentimiento de salud + bitácora 'view' (Ley 21.719) que exige el
+// contexto team en cada carga; team/enterprise siguen usando la ruta dedicada /bodycomp.
+import * as bodyCompRepo from '@/infrastructure/db/body-composition.repository'
 
 export const getClientProfileData = cache(async (clientId: string) => {
     const supabase = await createClient()
@@ -683,6 +690,21 @@ export const getClientProfileData = cache(async (clientId: string) => {
     const dailyHabits = (dailyHabitsRows ?? []) as DailyHabitRow[]
     const dailyHabitsSummary = summarizeDailyHabits(dailyHabits, todayIso)
 
+    // Composición corporal (BIA + ISAK) — aditivo, standalone-only. RLS (bcm_select) es el techo:
+    // solo trae filas que el coach dueño puede leer. Ordenadas desc por measured_at (repository),
+    // soft-deleted excluidas. En team/enterprise queda vacío (ver comentario del import): el gate
+    // de consentimiento/bitácora vive en la ruta /bodycomp. El render (fase fusión) muestra estas
+    // series solo cuando moduleFlags.bodycomp === true; sin entitlement, teaser bloqueado.
+    const canFetchBodyComposition = !viaTeam && !orgId
+    let bodyCompBia: bodyCompRepo.BodyCompositionRow[] = []
+    let bodyCompIsak: bodyCompRepo.BodyCompositionRow[] = []
+    if (canFetchBodyComposition) {
+        ;[bodyCompBia, bodyCompIsak] = await Promise.all([
+            bodyCompRepo.listByClientAndMethod(supabase, clientId, 'bia'),
+            bodyCompRepo.listByClientAndMethod(supabase, clientId, 'isak'),
+        ])
+    }
+
     const clientFavoriteFoods = (favoritePrefsRows ?? []).map((row: { food_id: string; foods?: { name?: string | null } | null }) => ({
         id: row.food_id,
         name: row.foods?.name?.trim() || 'Alimento',
@@ -731,6 +753,9 @@ export const getClientProfileData = cache(async (clientId: string) => {
         // Cosecha aditiva (fase render): hábitos 7d para el mini-widget del Resumen.
         dailyHabits,
         dailyHabitsSummary,
+        // Composición corporal (fase fusión Progreso): series BIA/ISAK del alumno (standalone-only).
+        // Vacío en team/enterprise (ruta dedicada /bodycomp). El render gatea por moduleFlags.bodycomp.
+        bodyComposition: { bia: bodyCompBia, isak: bodyCompIsak },
     }
 })
 

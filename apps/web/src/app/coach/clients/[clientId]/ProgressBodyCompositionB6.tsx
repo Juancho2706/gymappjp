@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { format, subDays } from 'date-fns'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { SegmentedControl } from '@/components/ui/segmented-control'
 import {
     Dialog,
     DialogContent,
@@ -20,7 +22,10 @@ import {
     linearRegressionKgPerDay,
     projectedWeightRangeKg,
 } from './profileBodyCompositionUtils'
-import { Scale, Star, Images } from 'lucide-react'
+import { Scale, Star, Images, Ruler } from 'lucide-react'
+import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
+import { BiaTrendPanel } from './bodycomp/_components/BiaTrendPanel'
+import { IsakTrendPanel } from './bodycomp/_components/IsakTrendPanel'
 
 export type BodyCompCheckInRow = {
     id: string
@@ -37,6 +42,15 @@ type ProgressBodyCompositionB6Props = {
     /** Peso objetivo del alumno (clients.goal_weight_kg). Dibuja la línea punteada
      *  + leyenda en la curva de peso. El editor vive en el dashboard padre. */
     goalWeight?: number | null
+    /** ID del alumno — necesario para reusar los TrendPanels (acción de borrar medición). */
+    clientId?: string
+    /** Composición corporal (standalone-only; vacío en team/enterprise por diseño de consentimiento
+     *  Ley 21.719). Series SEPARADAS por método — nunca se mezclan (%grasa BIA vs ISAK no comparables). */
+    bodyComposition?: { bia: BodyCompositionRow[]; isak: BodyCompositionRow[] }
+    /** Entitlement del módulo Composición corporal (espejo del gate server-side hasModule).
+     *  false ⇒ teaser bloqueado; true ⇒ dato real. NO se basa en si hay filas (el fetch trae por
+     *  RLS aunque el coach no pague). */
+    bodycompEnabled?: boolean
     // Props de color heredados (recharts) — la curva ahora es SVG nativo del diseño
     // nuevo, pero se conservan en el contrato para no romper el call site del padre.
     chartGridColor: string
@@ -119,10 +133,172 @@ const pgSel: CSSProperties = {
     fontFamily: 'var(--font-ui)',
 }
 
+/* ---- Teaser bloqueado (módulo Composición corporal OFF) ---------------------
+   Preview difuminado (curva fake, no datos reales) + overlay con CTA. Copy neutro
+   sin precio (anti-hostigamiento, espejo de MODULE_COPY.body_composition). */
+function CompositionTeaser() {
+    return (
+        <Card padding="md">
+            <SectionTitle style={{ margin: 0 }}>Composición corporal</SectionTitle>
+            <div className="relative mt-2 overflow-hidden rounded-[var(--radius-md)]">
+                {/* Preview fake difuminado — nunca datos reales bajo teaser */}
+                <div
+                    className="select-none pointer-events-none blur-sm"
+                    aria-hidden
+                    style={{ opacity: 0.55 }}
+                >
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                        {[
+                            { l: '% Grasa', v: '18.4%' },
+                            { l: 'Masa muscular', v: '34.2 kg' },
+                        ].map((b) => (
+                            <div
+                                key={b.l}
+                                style={{
+                                    background: 'var(--surface-sunken)',
+                                    borderRadius: 'var(--radius-sm)',
+                                    padding: '8px 10px',
+                                }}
+                            >
+                                <div
+                                    className="font-display font-black tracking-tight tabular-nums text-strong"
+                                    style={{ fontSize: 15 }}
+                                >
+                                    {b.v}
+                                </div>
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                                    {b.l}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <svg
+                        viewBox="0 0 100 100"
+                        preserveAspectRatio="none"
+                        style={{ width: '100%', height: 70, display: 'block' }}
+                    >
+                        <polyline
+                            points="0,70 20,52 40,58 60,38 80,44 100,26"
+                            fill="none"
+                            stroke="var(--sport-500)"
+                            strokeWidth="2.5"
+                            vectorEffect="non-scaling-stroke"
+                            strokeLinejoin="round"
+                            strokeLinecap="round"
+                        />
+                    </svg>
+                </div>
+                {/* Overlay CTA */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center">
+                    <div
+                        className="flex items-center justify-center rounded-full"
+                        style={{
+                            width: 42,
+                            height: 42,
+                            background: 'var(--surface-card)',
+                            border: '1px solid var(--border-default)',
+                            color: 'var(--text-muted)',
+                        }}
+                    >
+                        <Ruler className="h-5 w-5" />
+                    </div>
+                    <div className="font-display font-extrabold text-strong" style={{ fontSize: 14 }}>
+                        Composición corporal
+                    </div>
+                    <p className="text-muted" style={{ fontSize: 12, maxWidth: 320, lineHeight: 1.35 }}>
+                        %Grasa, masa muscular y antropometría (protocolo ISAK). Parte del módulo
+                        Composición corporal.
+                    </p>
+                    <Link
+                        href="/coach/settings/modules"
+                        className="mt-1 inline-flex min-h-9 items-center rounded-control bg-[var(--cta-fill)] px-4 text-xs font-bold text-[color:var(--text-on-sport)] transition-opacity hover:opacity-90"
+                    >
+                        Desbloquear
+                    </Link>
+                </div>
+            </div>
+        </Card>
+    )
+}
+
+/* ---- Sección Composición corporal (dato real, entitlement ON) ----------------
+   Reusa BiaTrendPanel/IsakTrendPanel (curvas recharts + delta + lista). SegmentedControl
+   BIA/ISAK; series NUNCA mezcladas. Empty-state si no hay mediciones. */
+function CompositionSection({
+    clientId,
+    bia,
+    isak,
+}: {
+    clientId?: string
+    bia: BodyCompositionRow[]
+    isak: BodyCompositionRow[]
+}) {
+    const hasBia = bia.length > 0
+    const hasIsak = isak.length > 0
+    // Default al método que tenga datos (BIA prioritario).
+    const [method, setMethod] = useState<'bia' | 'isak'>(hasBia ? 'bia' : hasIsak ? 'isak' : 'bia')
+
+    if (!hasBia && !hasIsak) {
+        return (
+            <Card padding="md">
+                <SectionTitle style={{ margin: 0 }}>Composición corporal</SectionTitle>
+                <div className="mt-2 flex items-start gap-2 text-sm text-muted">
+                    <Ruler className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                        Sin mediciones todavía. Captura bioimpedancia o antropometría (ISAK) desde el
+                        {clientId ? (
+                            <>
+                                {' '}
+                                <Link
+                                    href={`/coach/clients/${clientId}/bodycomp`}
+                                    className="font-semibold text-sport-600 underline-offset-2 hover:underline"
+                                >
+                                    módulo Composición corporal
+                                </Link>
+                                .
+                            </>
+                        ) : (
+                            ' módulo Composición corporal.'
+                        )}
+                    </span>
+                </div>
+            </Card>
+        )
+    }
+
+    return (
+        <Card padding="md">
+            <SectionTitle style={{ margin: 0 }}>Composición corporal</SectionTitle>
+            {hasBia && hasIsak && (
+                <div className="mt-2">
+                    <SegmentedControl
+                        options={[
+                            { value: 'bia', label: 'Bioimpedancia' },
+                            { value: 'isak', label: 'Antropometría' },
+                        ]}
+                        value={method}
+                        onChange={(v) => setMethod(v as 'bia' | 'isak')}
+                    />
+                </div>
+            )}
+            <div className="mt-3">
+                {(hasBia && (method === 'bia' || !hasIsak)) ? (
+                    <BiaTrendPanel clientId={clientId ?? ''} rows={bia} />
+                ) : (
+                    <IsakTrendPanel clientId={clientId ?? ''} rows={isak} />
+                )}
+            </div>
+        </Card>
+    )
+}
+
 export function ProgressBodyCompositionB6({
     checkIns,
     heightCm,
     goalWeight,
+    clientId,
+    bodyComposition,
+    bodycompEnabled = false,
 }: ProgressBodyCompositionB6Props) {
     const [dotDetail, setDotDetail] = useState<BodyCompCheckInRow | null>(null)
     const [compareOpen, setCompareOpen] = useState(false)
@@ -595,6 +771,17 @@ export function ProgressBodyCompositionB6({
                     )}
                 </Card>
             </div>
+
+            {/* ── Composición corporal (grasa% · músculo · tendencia) ────── */}
+            {bodycompEnabled ? (
+                <CompositionSection
+                    clientId={clientId}
+                    bia={bodyComposition?.bia ?? []}
+                    isak={bodyComposition?.isak ?? []}
+                />
+            ) : (
+                <CompositionTeaser />
+            )}
 
             {/* ── Comparativa de fotos ───────────────────────────────────── */}
             {photoCheckIns.length >= 2 && (

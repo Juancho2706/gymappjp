@@ -350,6 +350,9 @@ export function ClientProfileDashboard({
                             checkIns={checkIns || []}
                             heightCm={client?.client_intake?.height_cm}
                             goalWeight={goalWeight}
+                            clientId={client?.id}
+                            bodyComposition={data.bodyComposition}
+                            bodycompEnabled={moduleFlags?.bodycomp}
                             chartGridColor={chartGridColor}
                             chartAxisColor={chartAxisColor}
                             tooltipBgColor={tooltipBgColor}
