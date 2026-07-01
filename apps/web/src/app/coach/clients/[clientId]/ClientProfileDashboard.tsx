@@ -239,7 +239,7 @@ export function ClientProfileDashboard({
     }
 
     return (
-        <div className="min-w-0 max-w-full space-y-6">
+        <div className="@container/ficha min-w-0 max-w-full space-y-6">
             <ProfileTabNav activeTab={activeTab} onChange={handleTabChange} badges={tabBadges} />
 
             {isPending && (
@@ -263,7 +263,7 @@ export function ClientProfileDashboard({
                     <motion.div
                         key="overview"
                         {...tabMotion}
-                        className="relative z-10 mx-auto w-full min-w-0 max-w-3xl space-y-6"
+                        className="relative z-10 w-full min-w-0 space-y-6"
                     >
                         {/* Resumen 1:1 con el diseño nuevo (coach-ficha.jsx · OverviewTab):
                             top-alert + rings + KPIs + Programa + Métricas + Check-in +

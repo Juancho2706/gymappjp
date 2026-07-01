@@ -290,6 +290,12 @@ export function ProfileOverviewB3({
 
     return (
         <div className="space-y-6">
+            {/* Desktop-ancho (standalone): 2 columnas por container-query @5xl/ficha (≥1024px
+                del contenedor, NO del viewport). En el panel angosto del master-detail el mismo
+                contenedor mide < 1024px → grid-cols-1 (una sola columna). */}
+            <div className="grid grid-cols-1 gap-6 @5xl/ficha:grid-cols-2 @5xl/ficha:items-start">
+                {/* ===== COL IZQ — actividad / entreno ===== */}
+                <div className="space-y-6">
             {/* ===== Cumplimiento semanal ===== */}
             <Card padding="md">
                 <SectionTitle>Cumplimiento semanal</SectionTitle>
@@ -352,9 +358,6 @@ export function ProfileOverviewB3({
                 ))}
             </div>
 
-            {/* ===== Hábitos diarios (mini-widget · cosecha Fase 0) ===== */}
-            <HabitsMiniWidget summary={dailyHabitsSummary} rows={dailyHabits} />
-
             {/* ===== Programa ===== */}
             <div>
                 <SectionTitle>Programa</SectionTitle>
@@ -413,6 +416,11 @@ export function ProfileOverviewB3({
                     </div>
                 </Card>
             </div>
+                </div>
+                {/* ===== COL DER — seguimiento / media ===== */}
+                <div className="space-y-6">
+            {/* ===== Hábitos diarios (mini-widget · cosecha Fase 0) ===== */}
+            <HabitsMiniWidget summary={dailyHabitsSummary} rows={dailyHabits} />
 
             {/* ===== Último check-in ===== */}
             <ProfileCheckInSnapshot
@@ -487,8 +495,10 @@ export function ProfileOverviewB3({
                     </div>
                 </div>
             )}
+                </div>
+            </div>
 
-            {/* ===== Editar plan ===== */}
+            {/* ===== Editar plan (full-width, fuera del grid de 2 columnas) ===== */}
             <Link
                 href={`/coach/builder/${clientId}`}
                 className={cn(buttonVariants({ variant: 'sport', size: 'lg' }), 'w-full')}

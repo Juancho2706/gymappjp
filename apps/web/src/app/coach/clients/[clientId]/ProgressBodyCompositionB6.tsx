@@ -656,7 +656,7 @@ export function ProgressBodyCompositionB6({
             </Card>
 
             {/* ── IMC + Energía media (gauge) ────────────────────────────── */}
-            <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3.5 @4xl/ficha:grid-cols-2">
                 <Card padding="md">
                     <div
                         className="flex items-baseline justify-between"
