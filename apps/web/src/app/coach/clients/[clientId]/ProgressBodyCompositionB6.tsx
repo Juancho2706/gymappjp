@@ -12,6 +12,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { PhotoComparisonSlider } from '@/components/coach/PhotoComparisonSlider'
+import { MetricInfo, type MetricTerm } from '@/components/ui/metric-info'
 import {
     avgEnergySince,
     bmiCategory,
@@ -383,10 +384,12 @@ export function ProgressBodyCompositionB6({
                         {
                             l: 'Ritmo 30d',
                             sub: 'regresión',
+                            term: 'regresion' as MetricTerm,
                             v: `${monthlyRate >= 0 ? '+' : ''}${monthlyRate.toFixed(1)} kg`,
                         },
                         {
                             l: 'Proyección 4 sem',
+                            term: 'proyeccion' as MetricTerm,
                             v:
                                 projected4wRange != null && withWeight.length >= 2
                                     ? projected4wRange.low === projected4wRange.high
@@ -414,6 +417,7 @@ export function ProgressBodyCompositionB6({
                         sub?: string
                         badge?: string
                         hint?: string
+                        term?: MetricTerm
                     }[]).map((b) => (
                         <div
                             key={b.l}
@@ -450,6 +454,9 @@ export function ProgressBodyCompositionB6({
                                         {b.badge}
                                     </span>
                                 ) : null}
+                                {b.term ? (
+                                    <MetricInfo term={b.term} iconClassName="opacity-60" />
+                                ) : null}
                             </div>
                             <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
                                 {b.l}
@@ -479,7 +486,12 @@ export function ProgressBodyCompositionB6({
                         className="flex items-baseline justify-between"
                         style={{ marginBottom: 10 }}
                     >
-                        <SectionTitle style={{ margin: 0 }}>IMC</SectionTitle>
+                        <SectionTitle style={{ margin: 0 }}>
+                            <span className="inline-flex items-center gap-1">
+                                IMC
+                                <MetricInfo term="imc" iconClassName="opacity-60" />
+                            </span>
+                        </SectionTitle>
                         {bmi != null && (
                             <div>
                                 <span

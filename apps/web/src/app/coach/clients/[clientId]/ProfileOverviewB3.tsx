@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { MetricInfo, type MetricTerm } from '@/components/ui/metric-info'
 import { cn } from '@/lib/utils'
 import { updateClientBiometrics } from './_actions/client-detail.actions'
 import {
@@ -219,6 +220,8 @@ export function ProfileOverviewB3({
         value: string
         hint: string
         tone: 'ember' | 'sport' | 'success'
+        /** Término del glosario para el ícono de explicabilidad (opcional). */
+        infoTerm?: MetricTerm
     }[] = [
         {
             icon: Flame,
@@ -245,6 +248,7 @@ export function ProfileOverviewB3({
                       ? `+${workoutDelta}% vs sem. ant.`
                       : `${workoutDelta}% vs sem. ant.`,
             tone: 'sport',
+            infoTerm: 'adherencia',
         },
         {
             icon: Scale,
@@ -334,8 +338,13 @@ export function ProfileOverviewB3({
                                 <p className="font-display text-lg font-black leading-tight text-strong">
                                     {item.value}
                                 </p>
-                                <p className="mt-0.5 text-[10.5px] font-medium text-muted">
-                                    {item.label} · {item.hint}
+                                <p className="mt-0.5 flex items-center gap-1 text-[10.5px] font-medium text-muted">
+                                    <span>
+                                        {item.label} · {item.hint}
+                                    </span>
+                                    {item.infoTerm ? (
+                                        <MetricInfo term={item.infoTerm} />
+                                    ) : null}
                                 </p>
                             </div>
                         </Card>
@@ -588,8 +597,11 @@ function BiometricsEditDialog({
                     </DialogTitle>
                 </DialogHeader>
 
-                <p className="text-[11px] font-medium leading-relaxed text-muted">
-                    Necesario para calcular IMC y gasto energético (TDEE).
+                <p className="flex flex-wrap items-center gap-1 text-[11px] font-medium leading-relaxed text-muted">
+                    <span>Necesario para calcular IMC</span>
+                    <MetricInfo term="imc" />
+                    <span>y gasto energético (TDEE)</span>
+                    <MetricInfo term="tdee" />
                 </p>
 
                 <div className="grid gap-4 py-2">

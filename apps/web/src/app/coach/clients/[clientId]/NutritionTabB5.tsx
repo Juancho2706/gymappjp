@@ -73,6 +73,7 @@ import type { PrivateNoteRow, MealCommentRow } from '@/services/nutrition-notes.
 import type { NutritionSectionKey } from '@eva/feature-prefs'
 import type { ClientFeaturePrefsOverrideContext } from '@/services/feature-prefs.service'
 import { ClientFeaturePrefsPanel } from '@/components/coach/ClientFeaturePrefsPanel'
+import { MetricInfo } from '@/components/ui/metric-info'
 
 export type NutritionTimelineRow = {
   date: string
@@ -608,6 +609,7 @@ export function NutritionTabB5({
             <div className="mb-3 flex items-center justify-between">
               <CardHeading>
                 <Utensils className="h-4 w-4" /> Adherencia · 30 días
+                <MetricInfo term="adherencia" iconClassName="text-sport-600" />
               </CardHeading>
               <span
                 className="font-display text-xl font-black tabular-nums"

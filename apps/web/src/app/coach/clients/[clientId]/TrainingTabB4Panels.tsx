@@ -16,6 +16,7 @@ import {
     Dumbbell,
     Moon,
 } from 'lucide-react'
+import { MetricInfo } from '@/components/ui/metric-info'
 import type { MuscleVolumeRow } from './profileDataHelpers'
 import { getClientWorkoutForDate, getClientWorkoutActivityDates } from './_actions/client-detail.actions'
 import {
@@ -361,6 +362,7 @@ export function TrainingTabB4Panels({
                 <div>
                     <SectionTitle icon={<Dumbbell className="h-4 w-4" />}>
                         Fuerza — 1RM estimado (Epley)
+                        <MetricInfo term="e1rm" iconClassName="h-3.5 w-3.5" />
                     </SectionTitle>
 
                     {muscleGroupOptions.length > 1 && (
@@ -421,6 +423,7 @@ export function TrainingTabB4Panels({
                         <Card padding="md">
                             <SectionTitle icon={<Target className="h-4 w-4" />}>
                                 Balance muscular · 30 días
+                                <MetricInfo term="volumen" iconClassName="h-3.5 w-3.5" />
                             </SectionTitle>
                             <DarkRadar data={radarData} />
                             {imbalances.length > 0 && (
@@ -446,6 +449,7 @@ export function TrainingTabB4Panels({
                         <Card padding="md">
                             <SectionTitle icon={<BarChart3 className="h-4 w-4" />}>
                                 Tonelaje por sesión · 7 días
+                                <MetricInfo term="tonelaje" iconClassName="h-3.5 w-3.5" />
                             </SectionTitle>
                             <div className="relative h-[90px]">
                                 <div
@@ -727,8 +731,12 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                 <span className="text-strong">Meta</span> = prescrito · color del peso: los que{' '}
                 <span className="text-[var(--success-600)]">superan</span> /{' '}
                 <span className="text-[var(--warning-600)]">no alcanzan</span> la meta.{' '}
-                <span className="text-strong">RPE</span> = esfuerzo percibido 6-10 (10 = al fallo).{' '}
-                <span className="text-strong">RIR</span> = reps en reserva (0 = al fallo).
+                <span className="text-strong">RPE</span>
+                <MetricInfo term="rpe" className="ml-0.5 align-middle" iconClassName="h-3 w-3" /> = esfuerzo
+                percibido 6-10 (10 = al fallo).{' '}
+                <span className="text-strong">RIR</span>
+                <MetricInfo term="rir" className="ml-0.5 align-middle" iconClassName="h-3 w-3" /> = reps en
+                reserva (0 = al fallo).
             </p>
         </Card>
     )

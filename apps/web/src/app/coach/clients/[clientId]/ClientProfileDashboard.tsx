@@ -3,12 +3,9 @@
 import { useState, useCallback, useTransition } from 'react'
 import { useTheme } from 'next-themes'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { Activity, Dumbbell, User, Plus, PieChart as PieChartIcon, Flame, Trophy, Layers } from 'lucide-react'
+import { Trophy, Layers } from 'lucide-react'
 import { Card } from '@/components/ui/card'
-import { AppOnlyBadge } from '@/components/AppOnlyBadge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ComposedChart, Bar, Legend, Cell, BarChart, ReferenceLine } from 'recharts'
-import { cn } from '@/lib/utils'
 import { Progress } from '@/components/ui/progress'
 import { getProfileTopAlert } from './getProfileTopAlert'
 import { ProfileTopAlertBanner } from './ProfileTopAlertBanner'
@@ -74,7 +71,6 @@ export function ClientProfileDashboard({
             setActiveTab(id)
         })
     }, [])
-    const [activeChart, setActiveChart] = useState('peso_composicion')
 
     const { resolvedTheme } = useTheme()
     const { client, checkIns } = data
@@ -99,107 +95,11 @@ export function ClientProfileDashboard({
     const tooltipBorderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
     const tooltipTextColor = isDark ? '#fff' : '#000'
 
-    // Preparar datos para gráfico de peso y métrica secundaria (Energía/Body Comp simulado si no hay)
-    let previousWeight = 0;
-    const weightData = [...(checkIns || [])]
-        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-        .map((c, index) => {
-            const currentWeight = c.weight;
-            const weightChange = index === 0 ? 0 : currentWeight - previousWeight;
-            previousWeight = currentWeight;
-            
-            return {
-                date: new Date(c.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
-                peso: currentWeight,
-                // Usamos energy_level si existe, sino lo simulamos para tener una segunda métrica
-                energia: c.energy_level ?? 0,
-                cambio_peso: Number(weightChange.toFixed(2))
-            };
-        });
-
-    // Módulo de Fuerza y Rendimiento
-    // 1. Gráfico Relative Strength Index (1RM)
-    const calculate1RM = (weight: number, reps: number) => {
-        if (!weight || !reps) return 0;
-        return weight * (1 + reps / 30);
-    }
-    
-    const keyExercises = ['bench press', 'squat', 'deadlift', 'press de banca', 'sentadilla', 'peso muerto'];
-    
-    const strengthDataMap = new Map();
-    const tonnageDataMap = new Map();
-    let totalVolume = 0;
-    let totalWorkouts = 0;
-    
-    (data.workoutHistory || []).forEach((plan: any) => {
-        const dateStr = new Date(plan.assigned_date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
-        
-        let planVolume = 0;
-        let planLoggedSets = false;
-
-        if (plan.workout_blocks) {
-            plan.workout_blocks.forEach((block: any) => {
-                const exName = (block.exercises?.name || '').toLowerCase();
-                const isKeyExercise = keyExercises.some(ke => exName.includes(ke));
-                let exMax1RM = 0;
-                
-                if (block.workout_logs) {
-                    block.workout_logs.forEach((log: any) => {
-                        if (log.weight_kg && log.reps_done) {
-                            planLoggedSets = true;
-                            const volume = log.weight_kg * log.reps_done;
-                            planVolume += volume;
-                            totalVolume += volume;
-
-                            if (isKeyExercise) {
-                                const rep1RM = calculate1RM(log.weight_kg, log.reps_done);
-                                if (rep1RM > exMax1RM) {
-                                    exMax1RM = rep1RM;
-                                }
-                            }
-                        }
-                    });
-                }
-                
-                if (isKeyExercise && exMax1RM > 0) {
-                    if (!strengthDataMap.has(dateStr)) {
-                        strengthDataMap.set(dateStr, { date: dateStr });
-                    }
-                    const exKey = exName.includes('bench') || exName.includes('banca') ? 'bench' :
-                                  exName.includes('squat') || exName.includes('sentadilla') ? 'squat' : 'deadlift';
-                    
-                    const existingData = strengthDataMap.get(dateStr);
-                    if (!existingData[exKey] || exMax1RM > existingData[exKey]) {
-                        existingData[exKey] = Math.round(exMax1RM);
-                    }
-                }
-            });
-        }
-        
-        if (planLoggedSets) {
-            totalWorkouts++;
-            if (!tonnageDataMap.has(dateStr)) {
-                tonnageDataMap.set(dateStr, { date: dateStr, volumen: planVolume });
-            } else {
-                tonnageDataMap.get(dateStr).volumen += planVolume;
-            }
-        }
-    });
-
-    const strengthData = Array.from(strengthDataMap.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const tonnageData = Array.from(tonnageDataMap.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    
-    // Métrica de Densidad (Asumiendo 60 min por entrenamiento para estimar si no hay tiempo explícito)
-    const estimatedTrainingMinutes = totalWorkouts * 60;
-    const trainingDensity = estimatedTrainingMinutes > 0 ? (totalVolume / estimatedTrainingMinutes).toFixed(1) : 0;
-
-    // --- MÓDULO DE NUTRICIÓN E INTELIGENCIA FORENSE ---
+    // Plan de nutrición activo — sólo se usa para el objetivo calórico congelado
+    // en el timeline que consume la pestaña Nutrición (NutritionTabB5).
     const activeNutritionPlan = data.activeNutritionPlanWithMeals ?? data.nutritionPlans?.[0]
     const targetCalories =
         activeNutritionPlan?.daily_calories ?? activeNutritionPlan?.target_calories ?? 0
-    const targetProtein = activeNutritionPlan?.protein_g ?? activeNutritionPlan?.target_protein ?? 0
-    const targetCarbs = activeNutritionPlan?.carbs_g ?? activeNutritionPlan?.target_carbs ?? 0
-    const targetFats = activeNutritionPlan?.fats_g ?? activeNutritionPlan?.target_fats ?? 0
 
     const nutritionLogsSource = data.nutritionLogsEnriched ?? data.nutritionLogs ?? []
 
@@ -233,13 +133,6 @@ export function ClientProfileDashboard({
                 isAdherent: pct >= 80,
             }
         })
-
-    // Calcular Diferencial Acumulado
-    let runningDiff = 0;
-    const accumulatedData = nutritionHistory.map(item => {
-        runningDiff += item.diferencial;
-        return { ...item, acumulado: runningDiff };
-    });
 
     const checkInsWithPhotos = (checkIns || []).filter((c: any) => c.front_photo_url || c.side_photo_url || c.back_photo_url).slice(0, 3);
 
@@ -275,16 +168,6 @@ export function ClientProfileDashboard({
         compliance,
         lastWorkoutDate,
     })
-
-    const chartTabs = [
-        { id: 'peso_composicion', label: '⚖️ Peso & Comp.' },
-        { id: 'tasa_cambio', label: '📊 Tasa Cambio' },
-        { id: 'fuerza', label: '💪 Fuerza (1RM)' },
-        { id: 'volumen', label: '🏋️ Volumen' },
-        { id: 'distribucion_macros', label: '🍽️ Macros' },
-        { id: 'adherencia_calorica', label: '📉 Adherencia' },
-        { id: 'balance_neto', label: '⚖️ Balance Neto' },
-    ]
 
     const prCount = Array.isArray(data.personalRecords) ? data.personalRecords.length : 0
     const checkInTotal = (checkIns || []).length
@@ -417,7 +300,52 @@ export function ClientProfileDashboard({
                         {...tabMotion}
                         className="relative z-10 grid min-w-0 grid-cols-1 gap-6 md:grid-cols-12"
                     >
-                    <div className="min-w-0 space-y-6 md:col-span-12">
+                    <div id="profile-progress-panel" className="min-w-0 space-y-6 md:col-span-12">
+                        {/* Objetivo de peso — controla la línea punteada "Objetivo" de la curva
+                            Peso · tendencia (dentro de ProgressBodyCompositionB6). Único editor. */}
+                        <Card padding="md">
+                            <form
+                                className="flex flex-wrap items-center gap-2"
+                                onSubmit={async (e) => {
+                                    e.preventDefault()
+                                    const val = parseFloat(goalWeightInput)
+                                    const newVal = Number.isFinite(val) && val > 0 ? val : null
+                                    setIsSavingGoal(true)
+                                    await updateClientGoalWeight(client.id, newVal)
+                                    setGoalWeight(newVal)
+                                    setIsSavingGoal(false)
+                                }}
+                            >
+                                <label
+                                    htmlFor="goal-weight-input"
+                                    className="whitespace-nowrap text-[10px] font-bold uppercase tracking-widest text-muted"
+                                >
+                                    Peso objetivo (kg)
+                                </label>
+                                <input
+                                    id="goal-weight-input"
+                                    type="number"
+                                    step="0.1"
+                                    min="30"
+                                    max="300"
+                                    value={goalWeightInput}
+                                    onChange={(e) => setGoalWeightInput(e.target.value)}
+                                    placeholder="—"
+                                    className="w-20 rounded-[10px] border border-default bg-surface-sunken px-2 py-1 text-center text-[12px] font-bold text-strong focus:border-sport-500 focus:outline-none"
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={isSavingGoal}
+                                    className="rounded-[10px] bg-sport-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-sport-700 transition-colors hover:brightness-95 disabled:opacity-50"
+                                >
+                                    {isSavingGoal ? '…' : 'Guardar'}
+                                </button>
+                                <span className="text-[11px] text-muted">
+                                    Dibuja la línea punteada en la curva de peso.
+                                </span>
+                            </form>
+                        </Card>
+
                         <ProgressBodyCompositionB6
                             checkIns={checkIns || []}
                             heightCm={client?.client_intake?.height_cm}
@@ -428,262 +356,6 @@ export function ClientProfileDashboard({
                             tooltipBorderColor={tooltipBorderColor}
                             tooltipTextColor={tooltipTextColor}
                         />
-
-                        {/* Task 3: Panel de Progreso Unificado */}
-                        <Card id="profile-progress-panel" padding="md" className="h-[35rem] gap-0 md:p-8">
-                            <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-                                <div className="flex flex-col gap-2">
-                                    <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
-                                        <Activity className="h-4 w-4" /> Panel de Progreso Unificado
-                                    </h3>
-                                    <AppOnlyBadge className="self-start">Gráficas táctiles: desliza el dedo sobre el gráfico en la app de EVA</AppOnlyBadge>
-                                    {/* Peso objetivo inline */}
-                                    <form
-                                        className="flex items-center gap-1.5"
-                                        onSubmit={async (e) => {
-                                            e.preventDefault()
-                                            const val = parseFloat(goalWeightInput)
-                                            const newVal = Number.isFinite(val) && val > 0 ? val : null
-                                            setIsSavingGoal(true)
-                                            await updateClientGoalWeight(client.id, newVal)
-                                            setGoalWeight(newVal)
-                                            setIsSavingGoal(false)
-                                        }}
-                                    >
-                                        <label className="whitespace-nowrap text-[9px] font-bold uppercase tracking-widest text-muted">
-                                            Objetivo (kg)
-                                        </label>
-                                        <input
-                                            type="number"
-                                            step="0.1"
-                                            min="30"
-                                            max="300"
-                                            value={goalWeightInput}
-                                            onChange={(e) => setGoalWeightInput(e.target.value)}
-                                            placeholder="—"
-                                            className="w-16 rounded-[10px] border border-default bg-surface-sunken px-1.5 py-0.5 text-center text-[11px] font-bold text-strong focus:border-sport-500 focus:outline-none"
-                                        />
-                                        <button
-                                            type="submit"
-                                            disabled={isSavingGoal}
-                                            className="rounded-[10px] bg-sport-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-sport-700 transition-colors hover:brightness-95 disabled:opacity-50"
-                                        >
-                                            {isSavingGoal ? '…' : 'OK'}
-                                        </button>
-                                    </form>
-                                </div>
-                                {/* ToggleBar Superior de píldoras */}
-                                <div className="flex flex-wrap gap-2">
-                                    {chartTabs.map(tab => (
-                                        <button
-                                            key={tab.id}
-                                            onClick={() => setActiveChart(tab.id)}
-                                            className={`rounded-pill border-[1.5px] px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${
-                                                activeChart === tab.id
-                                                    ? 'border-sport-500 bg-sport-500 text-[var(--text-on-sport)]'
-                                                    : 'border-default bg-surface-card text-muted hover:text-strong'
-                                            }`}
-                                        >
-                                            {tab.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="relative z-10 min-h-0 w-full flex-1">
-                                {activeChart === 'peso_composicion' && (
-                                    weightData.length > 1 ? (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <ComposedChart data={weightData}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
-                                                <XAxis dataKey="date" stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} />
-                                                <YAxis yAxisId="left" stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} domain={['dataMin - 2', 'dataMax + 2']} />
-                                                <YAxis yAxisId="right" orientation="right" stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} domain={[0, 10]} />
-                                                <Tooltip 
-                                                    contentStyle={{ backgroundColor: tooltipBgColor, border: `1px solid ${tooltipBorderColor}`, borderRadius: '8px', color: tooltipTextColor }}
-                                                    itemStyle={{ color: 'var(--sport-500)' }}
-                                                />
-                                                <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
-                                                <Line yAxisId="left" type="monotone" dataKey="peso" name="Peso (kg)" stroke="var(--sport-500)" strokeWidth={3} dot={{ fill: 'var(--sport-500)', strokeWidth: 2 }} activeDot={{ r: 6 }} />
-                                                <Line yAxisId="right" type="monotone" dataKey="energia" name="Energía (1-10)" stroke="var(--success-500)" strokeWidth={3} strokeDasharray="5 5" dot={{ fill: 'var(--success-500)', strokeWidth: 2 }} activeDot={{ r: 6 }} />
-                                                {goalWeight != null && (
-                                                    <ReferenceLine yAxisId="left" y={goalWeight} stroke="#f59e0b" strokeDasharray="6 3" strokeWidth={1.5} label={{ value: `Objetivo ${goalWeight}kg`, position: 'insideTopRight', fontSize: 9, fill: '#f59e0b' }} />
-                                                )}
-                                            </ComposedChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                                            No hay suficientes datos de check-in para mostrar el gráfico.
-                                        </div>
-                                    )
-                                )}
-
-                                {activeChart === 'tasa_cambio' && (
-                                    weightData.length > 1 ? (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={weightData.slice(1)}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
-                                                <XAxis dataKey="date" stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} />
-                                                <YAxis stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} />
-                                                <Tooltip 
-                                                    contentStyle={{ backgroundColor: tooltipBgColor, border: `1px solid ${tooltipBorderColor}`, borderRadius: '8px', color: tooltipTextColor }}
-                                                    formatter={(value: any) => [`${value > 0 ? '+' : ''}${value} kg`, 'Cambio']}
-                                                />
-                                                <Bar dataKey="cambio_peso" name="Cambio Neto" radius={[4, 4, 0, 0]}>
-                                                    {weightData.slice(1).map((entry, index) => {
-                                                        const val = entry.cambio_peso;
-                                                        let color = '#f59e0b';
-                                                        if (Math.abs(val) > 0.6) color = '#ef4444';
-                                                        else if (Math.abs(val) >= 0.2 && Math.abs(val) <= 0.6) color = 'var(--success-500)';
-                                                        return <Cell key={`cell-change-${index}`} fill={color} fillOpacity={0.8} />
-                                                    })}
-                                                </Bar>
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                                            No hay suficientes datos para calcular la tasa de cambio.
-                                        </div>
-                                    )
-                                )}
-
-                                {activeChart === 'fuerza' && (
-                                    strengthData.length > 0 ? (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <LineChart data={strengthData}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
-                                                <XAxis dataKey="date" stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} />
-                                                <YAxis stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} />
-                                                <Tooltip 
-                                                    contentStyle={{ backgroundColor: tooltipBgColor, border: `1px solid ${tooltipBorderColor}`, borderRadius: '8px', color: tooltipTextColor }}
-                                                />
-                                                <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
-                                                <Line type="monotone" dataKey="bench" name="Bench Press" stroke="#3b82f6" strokeWidth={3} dot={{ strokeWidth: 2 }} activeDot={{ r: 6 }} connectNulls />
-                                                <Line type="monotone" dataKey="squat" name="Squat" stroke="var(--success-500)" strokeWidth={3} dot={{ strokeWidth: 2 }} activeDot={{ r: 6 }} connectNulls />
-                                                <Line type="monotone" dataKey="deadlift" name="Deadlift" stroke="#f59e0b" strokeWidth={3} dot={{ strokeWidth: 2 }} activeDot={{ r: 6 }} connectNulls />
-                                            </LineChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                                            No hay suficientes datos de entrenamiento para calcular 1RM.
-                                        </div>
-                                    )
-                                )}
-
-                                {activeChart === 'volumen' && (
-                                    tonnageData.length > 0 ? (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <ComposedChart data={tonnageData}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
-                                                <XAxis dataKey="date" stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} />
-                                                <YAxis stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} />
-                                                <Tooltip 
-                                                    contentStyle={{ backgroundColor: tooltipBgColor, border: `1px solid ${tooltipBorderColor}`, borderRadius: '8px', color: tooltipTextColor }}
-                                                    formatter={(value) => [`${value} kg`, 'Volumen']}
-                                                />
-                                                <Bar dataKey="volumen" fill="var(--sport-500)" opacity={0.6} radius={[4, 4, 0, 0]} />
-                                                <Line type="monotone" dataKey="volumen" stroke="var(--sport-500)" strokeWidth={2} dot={false} />
-                                            </ComposedChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                                            No hay suficientes datos de entrenamiento para mostrar el volumen.
-                                        </div>
-                                    )
-                                )}
-
-                                {activeChart === 'distribucion_macros' && (
-                                    nutritionHistory.length > 0 ? (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={nutritionHistory}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
-                                                <XAxis dataKey="date" stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} />
-                                                <YAxis stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} />
-                                                <Tooltip 
-                                                    contentStyle={{ backgroundColor: tooltipBgColor, border: `1px solid ${tooltipBorderColor}`, borderRadius: '8px', color: tooltipTextColor }}
-                                                />
-                                                <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
-                                                <Bar dataKey="consumed_protein" name="Proteína" stackId="a" fill="#ef4444" radius={[0, 0, 0, 0]} />
-                                                <Bar dataKey="consumed_carbs" name="Carbs" stackId="a" fill="#3b82f6" radius={[0, 0, 0, 0]} />
-                                                <Bar dataKey="consumed_fats" name="Grasas" stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                                            Sin registros nutricionales recientes.
-                                        </div>
-                                    )
-                                )}
-
-                                {activeChart === 'adherencia_calorica' && (
-                                    nutritionHistory.length > 0 ? (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={nutritionHistory}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
-                                                <XAxis dataKey="date" stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} />
-                                                <YAxis stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} />
-                                                <Tooltip 
-                                                    contentStyle={{ backgroundColor: tooltipBgColor, border: `1px solid ${tooltipBorderColor}`, borderRadius: '8px', color: tooltipTextColor }}
-                                                    cursor={{fill: 'transparent'}}
-                                                />
-                                                <Bar dataKey="consumed_calories" name="Calorías Reales" radius={[4, 4, 0, 0]}>
-                                                    {nutritionHistory.map((entry, index) => (
-                                                        <Cell 
-                                                            key={`cell-${index}`} 
-                                                            fill={entry.isAdherent ? 'var(--success-500)' : '#ef4444'} 
-                                                            fillOpacity={0.8}
-                                                        />
-                                                    ))}
-                                                </Bar>
-                                                {targetCalories > 0 && (
-                                                    <Line type="monotone" dataKey={() => targetCalories} stroke={isDark ? '#fff' : '#000'} strokeDasharray="5 5" strokeWidth={1} dot={false} name="Objetivo" />
-                                                )}
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                                            Sin registros para medir adherencia.
-                                        </div>
-                                    )
-                                )}
-
-                                {activeChart === 'balance_neto' && (
-                                    accumulatedData.length > 0 ? (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <ComposedChart data={accumulatedData}>
-                                                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
-                                                <XAxis dataKey="date" stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} />
-                                                <YAxis stroke={chartAxisColor} fontSize={10} tickMargin={10} axisLine={false} tickLine={false} />
-                                                <Tooltip 
-                                                    contentStyle={{ backgroundColor: tooltipBgColor, border: `1px solid ${tooltipBorderColor}`, borderRadius: '8px', color: tooltipTextColor }}
-                                                />
-                                                <Bar dataKey="diferencial" name="Neto Diario" radius={[4, 4, 0, 0]}>
-                                                    {accumulatedData.map((entry, index) => (
-                                                        <Cell 
-                                                            key={`cell-diff-${index}`} 
-                                                            fill={entry.diferencial > 0 ? '#ef4444' : '#3b82f6'} 
-                                                            fillOpacity={0.4}
-                                                        />
-                                                    ))}
-                                                </Bar>
-                                                <Line 
-                                                    type="monotone" 
-                                                    dataKey="acumulado" 
-                                                    name="Acumulado" 
-                                                    stroke="var(--sport-500)" 
-                                                    strokeWidth={3} 
-                                                    dot={{ fill: 'var(--sport-500)' }} 
-                                                />
-                                            </ComposedChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                                            Sin datos de balance calórico.
-                                        </div>
-                                    )
-                                )}
-                            </div>
-                        </Card>
                     </div>
                     </motion.div>
                 )}
