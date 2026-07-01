@@ -139,6 +139,11 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
     // de sobrecarga progresiva (peso objetivo efectivo del día). null si falta start_date.
     const currentWeek = programWeekIndex1Based(program)
 
+    // Límites del día de HOY en Santiago — reusados por: logs de hoy, historial previo ("sesión
+    // anterior"), última sesión (doble progresión) y máximos históricos (PRs).
+    const { iso: todayStr } = getTodayInSantiago()
+    const { startIso: todayStartUtc, endIso: todayEndUtc } = getSantiagoUtcBoundsForDay(todayStr)
+
     const blockIds = plan.workout_blocks.map(b => b.id)
     let logs: Array<{
         block_id: string
@@ -154,8 +159,6 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
     }> = []
 
     if (blockIds.length > 0) {
-        const { iso: todayStr } = getTodayInSantiago()
-        const { startIso: todayStartUtc, endIso: todayEndUtc } = getSantiagoUtcBoundsForDay(todayStr)
         const { data: rawLogs } = await supabase
             .from('workout_logs')
             .select('block_id, set_number, weight_kg, reps_done, rpe, rir, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr')
@@ -181,9 +184,13 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
             `)
             .eq('client_id', user.id)
             .in('workout_blocks.exercise_id', exerciseIds)
-            .not('block_id', 'in', `(${blockIds.join(',')})`)
+            // Sesiones PREVIAS a hoy de estos ejercicios (cualquier bloque, INCLUIDO el propio del
+            // plan). Antes excluía los bloques del plan actual (.not block_id in) → en programas
+            // semanales reusados la "sesión anterior" NUNCA aparecía (todo su historial vive en
+            // esos mismos bloques). Ahora se filtra por fecha, no por bloque.
+            .lt('logged_at', todayStartUtc)
             .order('logged_at', { ascending: false })
-            .limit(200)
+            .limit(500)
 
         historyData?.forEach((log: any) => {
             const exId = log.workout_blocks?.exercise_id
@@ -207,13 +214,11 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
     const lastSessionByBlock: Record<string, { date: string; sets: Array<{ weight_kg: number | null; reps_done: number | null }> }> = {}
     const needsLastSession = plan.workout_blocks.some((b) => b.progression_mode === 'double')
     if (needsLastSession && blockIds.length > 0) {
-        const { iso: lsToday } = getTodayInSantiago()
-        const { startIso: lsTodayStartUtc } = getSantiagoUtcBoundsForDay(lsToday)
         const { data: priorLogs } = await supabase
             .from('workout_logs')
             .select('block_id, set_number, weight_kg, reps_done, logged_at')
             .in('block_id', blockIds)
-            .lt('logged_at', lsTodayStartUtc)
+            .lt('logged_at', todayStartUtc)
             .order('logged_at', { ascending: false })
             .limit(800)
         // priorLogs viene desc por fecha → la 1ª aparición de cada bloque marca su día más reciente.
@@ -266,22 +271,21 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
         areas = (areaRows ?? []) as WorkoutArea[]
     }
 
-    const blockIdsSet = new Set(plan.workout_blocks.map((b) => b.id))
     const exerciseMaxes: Record<string, number> = {}
 
-    // Acotar a los ejercicios de ESTE plan (no todo el historial de pesos del alumno) + cap defensivo.
-    // Antes: select sin .in() ni .limit() -> traía TODO el historial y crecía O(n) sin techo. El max
-    // all-time de los ejercicios relevantes se preserva (solo filtra ejercicios que no están en el plan).
+    // Máximo histórico por ejercicio (para detectar PRs): mejor peso de días PREVIOS a hoy, de
+    // CUALQUIER bloque INCLUIDO el propio plan. Antes excluía los bloques del plan actual → en
+    // programas semanales reusados el máx salía vacío y marcaba "PR" falso casi cada sesión. Cap 5000.
     const { data: maxData } = exerciseIds.length === 0 ? { data: [] } : await supabase
         .from('workout_logs')
-        .select('block_id, weight_kg, workout_blocks!inner(exercise_id)')
+        .select('weight_kg, workout_blocks!inner(exercise_id)')
         .eq('client_id', user.id)
         .not('weight_kg', 'is', null)
         .in('workout_blocks.exercise_id', exerciseIds)
+        .lt('logged_at', todayStartUtc)
         .limit(5000)
 
-    maxData?.forEach((log: { block_id: string; weight_kg: number | null; workout_blocks: { exercise_id: string } | null }) => {
-        if (blockIdsSet.has(log.block_id)) return
+    maxData?.forEach((log: { weight_kg: number | null; workout_blocks: { exercise_id: string } | null }) => {
         const exId = log.workout_blocks?.exercise_id
         if (!exId || log.weight_kg == null) return
         if (exerciseMaxes[exId] == null || log.weight_kg > exerciseMaxes[exId]) {
