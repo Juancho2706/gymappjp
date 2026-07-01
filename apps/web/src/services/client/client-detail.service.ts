@@ -1,5 +1,6 @@
 'use server'
 
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { resolveCheckinPhotoUrls } from '@/lib/storage/checkin-photos'
@@ -865,6 +866,80 @@ export async function updateClientGoalWeight(clientId: string, goalWeightKg: num
 
     const scope = await getCoachClientScope(supabase, user.id)
     return updateClientGoalWeightForCoach(supabase, user.id, clientId, goalWeightKg, scope)
+}
+
+/**
+ * UPSERT de biometría (talla/peso/sexo) que el COACH edita en la ficha del alumno.
+ *
+ * El coach escribe la intake de SU alumno como `authenticated` (NO service-role): la policy
+ * `client_intake_coach` (FOR ALL, EXISTS clients WHERE coach_id = auth.uid()) lo autoriza.
+ *
+ * 15 alumnos NO tienen fila en client_intake y weight_kg/height_cm/goals/experience_level/
+ * availability son NOT NULL sin default → la operación es UPSERT manual:
+ *   - fila EXISTE  → UPDATE solo height_cm/weight_kg/sex (NO tocar goals/experience/availability).
+ *   - fila NO existe → INSERT con height_cm/weight_kg/sex + placeholders '' en las NOT NULL
+ *     restantes (goals/experience_level/availability NO tienen CHECK; solo `sex` lo tiene, y
+ *     ya está en el enum validado). Un INSERT crudo sin esos campos revienta 23502.
+ */
+const biometricsSchema = z.object({
+    heightCm: z.number().min(50).max(260).nullable(),
+    weightKg: z.number().min(20).max(400).nullable(),
+    sex: z.enum(['male', 'female', 'other']).nullable(),
+})
+
+export async function upsertClientBiometrics(
+    clientId: string,
+    input: { heightCm: number | null; weightKg: number | null; sex: 'male' | 'female' | 'other' | null }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+    const parsed = biometricsSchema.safeParse(input)
+    if (!parsed.success) {
+        return { ok: false, error: parsed.error.issues[0]?.message ?? 'Datos de biometría inválidos' }
+    }
+    const { heightCm, weightKg, sex } = parsed.data
+
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { ok: false, error: 'Unauthorized' }
+
+    // Guard de scoping coach->alumno (defensa en profundidad sobre la RLS).
+    try {
+        await assertCoachClientReadAccess(supabase, user.id, clientId)
+    } catch {
+        return { ok: false, error: 'Client not found' }
+    }
+
+    // ¿Existe ya la fila? Decide UPDATE (parcial) vs INSERT (con placeholders NOT NULL).
+    const { data: existing, error: readErr } = await supabase
+        .from('client_intake')
+        .select('id')
+        .eq('client_id', clientId)
+        .maybeSingle()
+    if (readErr) return { ok: false, error: readErr.message }
+
+    if (existing) {
+        const { error } = await supabase
+            .from('client_intake')
+            .update({ height_cm: heightCm ?? undefined, weight_kg: weightKg ?? undefined, sex })
+            .eq('client_id', clientId)
+        if (error) return { ok: false, error: error.message }
+        return { ok: true }
+    }
+
+    // INSERT: las NOT NULL sin default que el coach no edita van con placeholder '' (no tienen CHECK).
+    // height_cm/weight_kg son NOT NULL → si vienen null usamos 0 como placeholder seguro (numeric NOT NULL).
+    const { error } = await supabase
+        .from('client_intake')
+        .insert({
+            client_id: clientId,
+            height_cm: heightCm ?? 0,
+            weight_kg: weightKg ?? 0,
+            sex,
+            goals: '',
+            experience_level: '',
+            availability: '',
+        })
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
 }
 
 /** Días (YYYY-MM-DD) con workout_logs para el cliente en los últimos 90 días. */

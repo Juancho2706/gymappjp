@@ -12,6 +12,7 @@ import {
     getDynamicMetrics as getDynamicMetricsService,
     getWeeklyCompliance as getWeeklyComplianceService,
     updateClientGoalWeight as updateClientGoalWeightService,
+    upsertClientBiometrics as upsertClientBiometricsService,
     markCheckInReviewed as markCheckInReviewedService,
 } from '@/services/client/client-detail.service'
 import { assembleClientFichaPanel } from '../_data/ficha-panel.data'
@@ -73,6 +74,15 @@ export async function getClientWorkoutForDate(clientId: string, date: string) {
 
 export async function updateClientGoalWeight(clientId: string, goalWeightKg: number | null) {
     return updateClientGoalWeightService(clientId, goalWeightKg)
+}
+
+export async function updateClientBiometrics(
+    clientId: string,
+    input: { heightCm: number | null; weightKg: number | null; sex: 'male' | 'female' | 'other' | null }
+) {
+    const res = await upsertClientBiometricsService(clientId, input)
+    revalidatePath(`/coach/clients/${clientId}`)
+    return res
 }
 
 export async function getClientWorkoutActivityDates(clientId: string): Promise<string[]> {

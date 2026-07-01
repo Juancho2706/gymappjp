@@ -400,6 +400,7 @@ export function ClientProfileDashboard({
                             weeklyWeightVariation={weeklyWeightVariation}
                             initialHeightCm={client.client_intake?.height_cm ?? null}
                             initialWeightKg={client.client_intake?.weight_kg ?? null}
+                            initialSex={(client.client_intake?.sex as 'male' | 'female' | 'other' | null) ?? null}
                             moduleFlags={moduleFlags}
                             dailyHabitsSummary={data.dailyHabitsSummary}
                             dailyHabits={data.dailyHabits}

@@ -38,9 +38,14 @@ export async function submitIntakeForm(
         return { error: 'Debes confirmar que tienes 14 años o más.' }
     }
 
+    // UPSERT (no INSERT): si el coach ya creó la fila de intake al setear biometría desde la ficha
+    // (write-path "Editar biometría"), las respuestas REALES del onboarding del alumno deben
+    // sobreescribir los placeholders del coach. onConflict=client_id (unique, isOneToOne). Antes un
+    // INSERT ignoraba 23505 → perdía en silencio las respuestas del alumno si la fila ya existía.
+    // `sex` NO va en el objeto → un upsert no lo toca, preservando el valor que puso el coach.
     const { error: intakeError } = await supabase
         .from('client_intake')
-        .insert({
+        .upsert({
             client_id: user.id,
             weight_kg: parseFloat(weight),
             height_cm: parseFloat(height),
@@ -49,12 +54,10 @@ export async function submitIntakeForm(
             injuries: injuries || null,
             medical_conditions: medicalConditions || null,
             availability,
-        })
+        }, { onConflict: 'client_id' })
 
     if (intakeError) {
-        if (intakeError.code !== '23505') {
-            return { error: 'Ocurrió un error al guardar tu información. Inténtalo de nuevo.' }
-        }
+        return { error: 'Ocurrió un error al guardar tu información. Inténtalo de nuevo.' }
     }
 
     const { error: clientError } = await supabase

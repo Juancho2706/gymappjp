@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import {
     Flame,
@@ -31,6 +32,7 @@ import { ProgressRing } from '@/components/ui/progress-ring'
 import { AppOnlyBadge } from '@/components/AppOnlyBadge'
 import {
     Dialog,
+    DialogClose,
     DialogContent,
     DialogHeader,
     DialogTitle,
@@ -39,6 +41,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { updateClientBiometrics } from './_actions/client-detail.actions'
 import {
     buildProfileActivityCalendarData,
     longestActivityStreakFromCalendar,
@@ -91,9 +94,11 @@ type ProfileOverviewB3Props = {
     /** Peso actual + variación semanal (calculados en el dashboard). */
     currentWeight?: number
     weeklyWeightVariation?: number
-    /** Biometría inicial (intake) — precarga el editor cosmético. */
+    /** Biometría inicial (intake) — precarga el editor de biometría. */
     initialHeightCm?: number | null
     initialWeightKg?: number | null
+    /** Sexo del intake — precarga el selector del editor. Default `null`. */
+    initialSex?: 'male' | 'female' | 'other' | null
     /** Entitlements de módulos de pago (espejo del gate server-side). */
     moduleFlags?: { cardio: boolean; movement: boolean; bodycomp: boolean }
     /** Deep-link a la Zona A (Progreso) del hogar único de nutrición. No recomputa
@@ -139,6 +144,7 @@ export function ProfileOverviewB3({
     weeklyWeightVariation = 0,
     initialHeightCm,
     initialWeightKg,
+    initialSex = null,
     moduleFlags,
     onViewNutrition,
     onViewProgress,
@@ -389,70 +395,12 @@ export function ProfileOverviewB3({
                                 <p className="mt-1.5 text-[11px] text-muted">Variación semanal</p>
                             </div>
                         </div>
-                        <Dialog>
-                            <DialogTrigger
-                                render={
-                                    <Button
-                                        variant="secondary"
-                                        size="icon-sm"
-                                        aria-label="Editar biometría inicial"
-                                    >
-                                        <Pencil className="h-4 w-4" />
-                                    </Button>
-                                }
-                            />
-                            <DialogContent className="sm:max-w-[425px]">
-                                <DialogHeader>
-                                    <DialogTitle className="font-display text-xl font-black uppercase tracking-tighter">
-                                        Editar biometría inicial
-                                    </DialogTitle>
-                                </DialogHeader>
-                                <div className="grid gap-4 py-4">
-                                    <div className="grid grid-cols-4 items-center gap-4">
-                                        <Label
-                                            htmlFor="height"
-                                            className="text-right text-xs font-bold uppercase tracking-widest"
-                                        >
-                                            Altura
-                                        </Label>
-                                        <Input
-                                            id="height"
-                                            defaultValue={initialHeightCm ?? undefined}
-                                            className="col-span-3"
-                                            placeholder="cm"
-                                        />
-                                    </div>
-                                    <div className="grid grid-cols-4 items-center gap-4">
-                                        <Label
-                                            htmlFor="weight"
-                                            className="text-right text-xs font-bold uppercase tracking-widest"
-                                        >
-                                            Peso inicial
-                                        </Label>
-                                        <Input
-                                            id="weight"
-                                            defaultValue={initialWeightKg ?? undefined}
-                                            className="col-span-3"
-                                            placeholder="kg"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="flex justify-end gap-3">
-                                    <Button
-                                        variant="secondary"
-                                        className="text-[10px] font-black uppercase tracking-widest"
-                                    >
-                                        Cancelar
-                                    </Button>
-                                    <Button
-                                        variant="sport"
-                                        className="text-[10px] font-black uppercase tracking-widest"
-                                    >
-                                        Guardar
-                                    </Button>
-                                </div>
-                            </DialogContent>
-                        </Dialog>
+                        <BiometricsEditDialog
+                            clientId={clientId}
+                            initialHeightCm={initialHeightCm ?? null}
+                            initialWeightKg={initialWeightKg ?? null}
+                            initialSex={initialSex}
+                        />
                     </div>
                 </Card>
             </div>
@@ -540,6 +488,218 @@ export function ProfileOverviewB3({
                 Editar plan
             </Link>
         </div>
+    )
+}
+
+type SexValue = 'male' | 'female' | 'other' | null
+
+const SEX_OPTIONS: { value: SexValue; label: string }[] = [
+    { value: 'male', label: 'Masculino' },
+    { value: 'female', label: 'Femenino' },
+    { value: 'other', label: 'Otro' },
+    { value: null, label: 'Sin especificar' },
+]
+
+/**
+ * Editor de biometría inicial (altura / peso / sexo) del alumno.
+ * Persiste vía la server action `updateClientBiometrics` (write-path `client_intake`,
+ * corre como coach `authenticated`). Al guardar con éxito: cierra el modal +
+ * `router.refresh()` para que el IMC/TDEE reaparezca con el dato nuevo.
+ * Theme-aware (tokens semánticos), accesible (labels + radiogroup).
+ */
+function BiometricsEditDialog({
+    clientId,
+    initialHeightCm,
+    initialWeightKg,
+    initialSex,
+}: {
+    clientId: string
+    initialHeightCm: number | null
+    initialWeightKg: number | null
+    initialSex: SexValue
+}) {
+    const router = useRouter()
+    const [open, setOpen] = useState(false)
+    const [isPending, startTransition] = useTransition()
+    const [error, setError] = useState<string | null>(null)
+
+    const [height, setHeight] = useState<string>(
+        initialHeightCm != null ? String(initialHeightCm) : ''
+    )
+    const [weight, setWeight] = useState<string>(
+        initialWeightKg != null ? String(initialWeightKg) : ''
+    )
+    const [sex, setSex] = useState<SexValue>(initialSex)
+
+    // Re-sincroniza el form con las props cada vez que se abre (evita quedarse con
+    // valores viejos si el dato del intake cambió por otra vía).
+    function handleOpenChange(next: boolean) {
+        if (next) {
+            setHeight(initialHeightCm != null ? String(initialHeightCm) : '')
+            setWeight(initialWeightKg != null ? String(initialWeightKg) : '')
+            setSex(initialSex)
+            setError(null)
+        }
+        setOpen(next)
+    }
+
+    function parseNum(raw: string): number | null {
+        const trimmed = raw.trim()
+        if (trimmed === '') return null
+        const n = Number(trimmed)
+        return Number.isFinite(n) ? n : null
+    }
+
+    function handleSave() {
+        setError(null)
+        const input = {
+            heightCm: parseNum(height),
+            weightKg: parseNum(weight),
+            sex,
+        }
+        startTransition(async () => {
+            const res = await updateClientBiometrics(clientId, input)
+            if (res.ok) {
+                setOpen(false)
+                router.refresh()
+            } else {
+                setError(res.error || 'No se pudo guardar la biometría.')
+            }
+        })
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={handleOpenChange}>
+            <DialogTrigger
+                render={
+                    <Button
+                        variant="secondary"
+                        size="icon-sm"
+                        aria-label="Editar biometría inicial"
+                    >
+                        <Pencil className="h-4 w-4" />
+                    </Button>
+                }
+            />
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle className="font-display text-xl font-black uppercase tracking-tighter">
+                        Editar biometría inicial
+                    </DialogTitle>
+                </DialogHeader>
+
+                <p className="text-[11px] font-medium leading-relaxed text-muted">
+                    Necesario para calcular IMC y gasto energético (TDEE).
+                </p>
+
+                <div className="grid gap-4 py-2">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label
+                            htmlFor="bio-height"
+                            className="text-right text-xs font-bold uppercase tracking-widest"
+                        >
+                            Altura
+                        </Label>
+                        <Input
+                            id="bio-height"
+                            type="number"
+                            inputMode="numeric"
+                            min={50}
+                            max={260}
+                            value={height}
+                            onChange={(e) => setHeight(e.target.value)}
+                            className="col-span-3"
+                            placeholder="cm"
+                        />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label
+                            htmlFor="bio-weight"
+                            className="text-right text-xs font-bold uppercase tracking-widest"
+                        >
+                            Peso inicial
+                        </Label>
+                        <Input
+                            id="bio-weight"
+                            type="number"
+                            inputMode="decimal"
+                            min={20}
+                            max={400}
+                            step="0.1"
+                            value={weight}
+                            onChange={(e) => setWeight(e.target.value)}
+                            className="col-span-3"
+                            placeholder="kg"
+                        />
+                    </div>
+                    <div className="grid grid-cols-4 items-start gap-4">
+                        <span
+                            id="bio-sex-label"
+                            className="pt-1.5 text-right text-xs font-bold uppercase tracking-widest"
+                        >
+                            Sexo
+                        </span>
+                        <div
+                            role="radiogroup"
+                            aria-labelledby="bio-sex-label"
+                            className="col-span-3 grid grid-cols-2 gap-1.5"
+                        >
+                            {SEX_OPTIONS.map((opt) => {
+                                const selected = sex === opt.value
+                                return (
+                                    <button
+                                        key={opt.label}
+                                        type="button"
+                                        role="radio"
+                                        aria-checked={selected}
+                                        onClick={() => setSex(opt.value)}
+                                        className={cn(
+                                            'rounded-control border px-2 py-1.5 text-[11px] font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]',
+                                            selected
+                                                ? 'border-sport-500 bg-sport-100 text-sport-600'
+                                                : 'border-subtle bg-surface-sunken text-body hover:bg-surface-card'
+                                        )}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                </div>
+
+                {error && (
+                    <p
+                        role="alert"
+                        className="text-[11px] font-bold text-[var(--danger-600)]"
+                    >
+                        {error}
+                    </p>
+                )}
+
+                <div className="flex justify-end gap-3">
+                    <DialogClose
+                        render={
+                            <Button
+                                variant="secondary"
+                                disabled={isPending}
+                                className="text-[10px] font-black uppercase tracking-widest"
+                            >
+                                Cancelar
+                            </Button>
+                        }
+                    />
+                    <Button
+                        variant="sport"
+                        onClick={handleSave}
+                        disabled={isPending}
+                        className="text-[10px] font-black uppercase tracking-widest"
+                    >
+                        {isPending ? 'Guardando…' : 'Guardar'}
+                    </Button>
+                </div>
+            </DialogContent>
+        </Dialog>
     )
 }
 
