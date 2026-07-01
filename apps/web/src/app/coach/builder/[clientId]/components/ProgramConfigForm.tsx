@@ -178,8 +178,8 @@ export function ProgramConfigForm({
                 <p className="text-[10px] text-muted-foreground/50">1–52 semanas</p>
             </div>
 
-            {/* TIPO DE DURACIÓN — solo mobile, solo estructura semanal */}
-            {isMobile && programStructureType === 'weekly' && (
+            {/* TIPO DE DURACIÓN — estructura semanal (desktop + mobile) */}
+            {programStructureType === 'weekly' && (
                 <div className="space-y-2">
                     <label className={SEC}>Tipo de duración</label>
                     <div className="flex flex-col gap-1.5">
@@ -222,8 +222,8 @@ export function ProgramConfigForm({
                 </div>
             )}
 
-            {/* INICIO FLEXIBLE — solo mobile */}
-            {isMobile && (
+            {/* INICIO FLEXIBLE (desktop + mobile) */}
+            {(
                 <div className="space-y-3">
                     <label className="flex items-center gap-2.5 cursor-pointer w-max group">
                         <input

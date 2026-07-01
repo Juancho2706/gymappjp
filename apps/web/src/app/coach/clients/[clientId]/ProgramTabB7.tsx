@@ -35,13 +35,15 @@ import { cn } from '@/lib/utils'
 // L–D microciclo (1 = Lunes … 7 = Domingo).
 const DAY_LABELS = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 
-// Dark-only ficha tokens (transcripción inline del diseño nuevo · eva-app screens).
-const CANVAS = 'var(--ink-950)'
-const CARD = 'var(--ink-900)'
-const CARD_BORDER = 'var(--border-inverse)'
-const SUNKEN = 'rgba(255,255,255,0.045)'
-const TXT = 'var(--text-on-dark)'
-const TXT_MUTED = 'var(--text-on-dark-muted)'
+// Ficha tokens (transcripción inline del diseño). Semánticos → siguen el tema (claro/oscuro).
+// Excepción: el header "PROGRAMA ACTIVO" es la única card intencionalmente inversa (dark en
+// ambos temas), así que usa tokens inverse literales inline en vez de estas consts.
+const CANVAS = 'var(--surface-app)'
+const CARD = 'var(--surface-card)'
+const CARD_BORDER = 'var(--border-subtle)'
+const SUNKEN = 'var(--surface-sunken)'
+const TXT = 'var(--text-strong)'
+const TXT_MUTED = 'var(--text-muted)'
 
 // Paleta de fase (fallback cuando program_phases no trae color) + dot muscular.
 const PHASE_PALETTE = [
@@ -108,10 +110,10 @@ function DarkChip({ children }: { children: React.ReactNode }) {
                 height: 20,
                 padding: '0 8px',
                 borderRadius: 999,
-                border: `1px solid ${CARD_BORDER}`,
+                border: `1px solid var(--border-inverse)`,
                 fontSize: 11,
                 fontWeight: 700,
-                color: TXT_MUTED,
+                color: 'var(--text-on-dark-muted)',
             }}
         >
             {children}
@@ -384,15 +386,15 @@ export function ProgramTabB7({
         <div style={{ background: CANVAS, borderRadius: 'var(--radius-card)' }} className="space-y-3.5 p-4 md:p-6">
             {/* ============ HEADER (inverse) ============ */}
             <div
-                style={{ background: CARD, border: `1px solid ${CARD_BORDER}`, borderRadius: 'var(--radius-card)' }}
+                style={{ background: 'var(--surface-inverse)', border: `1px solid var(--border-inverse)`, borderRadius: 'var(--radius-card)' }}
                 className="p-5"
             >
                 <div className="mb-2.5 flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                        <div className="text-xs" style={{ color: TXT_MUTED }}>
+                        <div className="text-xs" style={{ color: 'var(--text-on-dark-muted)' }}>
                             PROGRAMA ACTIVO
                         </div>
-                        <div className="font-display text-lg font-extrabold" style={{ color: TXT }}>
+                        <div className="font-display text-lg font-extrabold" style={{ color: 'var(--text-on-dark)' }}>
                             {activeProgram.name}
                         </div>
                     </div>
@@ -429,7 +431,7 @@ export function ProgramTabB7({
                                     style={{
                                         flex: Math.max(1, p.weeks),
                                         background: p.color || PHASE_PALETTE[i % PHASE_PALETTE.length],
-                                        borderRight: i < phases.length - 1 ? `2px solid ${CANVAS}` : 'none',
+                                        borderRight: i < phases.length - 1 ? `2px solid var(--surface-inverse)` : 'none',
                                     }}
                                 />
                             ))}
@@ -439,7 +441,7 @@ export function ProgramTabB7({
                                 <span
                                     key={`lg-${p.name}-${i}`}
                                     className="inline-flex items-center gap-1.5 text-[11px]"
-                                    style={{ color: TXT_MUTED }}
+                                    style={{ color: 'var(--text-on-dark-muted)' }}
                                 >
                                     <span
                                         className="h-2 w-2 rounded-sm"
@@ -455,18 +457,18 @@ export function ProgramTabB7({
                 {/* progreso */}
                 {hasSchedule ? (
                     <>
-                        <div className="mb-1.5 flex items-center justify-between text-xs" style={{ color: TXT_MUTED }}>
+                        <div className="mb-1.5 flex items-center justify-between text-xs" style={{ color: 'var(--text-on-dark-muted)' }}>
                             <span>
                                 Semana {planCurrentWeek} de {planTotalWeeks}
                             </span>
                             <span className="font-mono tabular-nums">{weekProgressPct}%</span>
                         </div>
-                        <div style={{ height: 8, borderRadius: 999, background: CARD_BORDER, overflow: 'hidden' }}>
+                        <div style={{ height: 8, borderRadius: 999, background: 'var(--border-inverse)', overflow: 'hidden' }}>
                             <div style={{ width: `${weekProgressPct}%`, height: '100%', background: 'var(--sport-500)', borderRadius: 999 }} />
                         </div>
                     </>
                 ) : (
-                    <p className="text-[11px] font-medium" style={{ color: TXT_MUTED }}>
+                    <p className="text-[11px] font-medium" style={{ color: 'var(--text-on-dark-muted)' }}>
                         Sin fechas inicio/fin en el programa · progreso por semanas no disponible
                     </p>
                 )}
@@ -684,7 +686,7 @@ export function ProgramTabB7({
                                 >
                                     NOTAS DEL COACH
                                 </div>
-                                <div className="text-sm leading-relaxed" style={{ color: 'var(--ink-200)' }}>
+                                <div className="text-sm leading-relaxed" style={{ color: 'var(--text-body)' }}>
                                     {sheetBlock.notes}
                                 </div>
                             </div>

@@ -34,8 +34,8 @@ type TrainingTabB4PanelsProps = {
     santiagoTodayIso: string
     workoutHistory: any[]
     muscleVolumeByGroup: MuscleVolumeRow[]
-    // Chart-color props del padre (recharts en otras pestañas). La ficha es dark-only,
-    // los charts de esta pestaña se transcriben con SVG/CSS inline → no se usan aquí.
+    // Chart-color props del padre (recharts en otras pestañas). Esta pestaña dibuja sus
+    // charts con SVG/CSS inline (tokens semánticos que siguen el tema) → no se usan aquí.
     chartGridColor: string
     chartAxisColor: string
     tooltipBgColor: string
@@ -128,16 +128,16 @@ function StrengthSparkCard({ ex }: { ex: ExerciseStrengthSeries }) {
     const peak = xy[maxIdx]!
 
     return (
-        <Card variant="inverse" padding="md" className="gap-0">
-            <div className="truncate text-[13px] font-bold leading-tight text-on-dark">{ex.exerciseName}</div>
-            <div className="mb-1.5 text-[11px] text-on-dark-muted">{ex.muscleGroup}</div>
+        <Card padding="md" className="gap-0">
+            <div className="truncate text-[13px] font-bold leading-tight text-strong">{ex.exerciseName}</div>
+            <div className="mb-1.5 text-[11px] text-muted">{ex.muscleGroup}</div>
             <div className="flex items-baseline gap-1.5">
-                <span className="font-display text-xl font-black tabular-nums text-on-dark">{latest.oneRm}</span>
-                <span className="text-[10.5px] text-on-dark-muted">kg 1RM</span>
+                <span className="font-display text-xl font-black tabular-nums text-strong">{latest.oneRm}</span>
+                <span className="text-[10.5px] text-muted">kg 1RM</span>
             </div>
             <div
                 className="mb-1.5 text-[11px] font-bold"
-                style={{ color: delta == null ? 'var(--text-on-dark-muted)' : delta >= 0 ? 'var(--success-600)' : 'var(--danger-600)' }}
+                style={{ color: delta == null ? 'var(--text-muted)' : delta >= 0 ? 'var(--success-600)' : 'var(--danger-600)' }}
             >
                 {delta == null
                     ? 'Sin cambio en el periodo'
@@ -158,7 +158,7 @@ function StrengthSparkCard({ ex }: { ex: ExerciseStrengthSeries }) {
                 )}
                 <circle cx={peak[0]} cy={peak[1]} r={2.6} fill="var(--ember-500)" vectorEffect="non-scaling-stroke" />
             </svg>
-            <div className="mt-1 text-[10px] text-on-dark-muted">
+            <div className="mt-1 text-[10px] text-muted">
                 Última: {latest.weightKg} kg × {latest.reps}
             </div>
         </Card>
@@ -185,7 +185,7 @@ function DarkRadar({ data }: { data: { label: string; v: number }[] }) {
                     key={ri}
                     points={data.map((_, i) => pt(i, R * r).join(',')).join(' ')}
                     fill="none"
-                    stroke="var(--border-inverse)"
+                    stroke="var(--border-subtle)"
                     strokeWidth={0.5}
                     vectorEffect="non-scaling-stroke"
                 />
@@ -199,7 +199,7 @@ function DarkRadar({ data }: { data: { label: string; v: number }[] }) {
                         y1={cy}
                         x2={x}
                         y2={y}
-                        stroke="var(--border-inverse)"
+                        stroke="var(--border-subtle)"
                         strokeWidth={0.5}
                         vectorEffect="non-scaling-stroke"
                     />
@@ -222,7 +222,7 @@ function DarkRadar({ data }: { data: { label: string; v: number }[] }) {
                         x={x}
                         y={y}
                         fontSize={4.4}
-                        fill="var(--text-on-dark-muted)"
+                        fill="var(--text-muted)"
                         textAnchor="middle"
                         dominantBaseline="middle"
                         style={{ fontWeight: 700 }}
@@ -372,7 +372,7 @@ export function TrainingTabB4Panels({
                                     'h-8 shrink-0 rounded-pill border-[1.5px] px-3 text-[12.5px] font-bold transition-colors',
                                     !selectedMuscle
                                         ? 'border-sport-500 bg-sport-500 text-white'
-                                        : 'border-[var(--border-inverse)] bg-white/[0.05] text-on-dark-muted hover:text-on-dark'
+                                        : 'border-[var(--border-subtle)] bg-surface-sunken text-muted hover:text-strong'
                                 )}
                             >
                                 Todos · {totalStrengthExercises}
@@ -388,7 +388,7 @@ export function TrainingTabB4Panels({
                                             'h-8 shrink-0 rounded-pill border-[1.5px] px-3 text-[12.5px] font-bold transition-colors',
                                             isActive
                                                 ? 'border-sport-500 bg-sport-500 text-white'
-                                                : 'border-[var(--border-inverse)] bg-white/[0.05] text-on-dark-muted hover:text-on-dark'
+                                                : 'border-[var(--border-subtle)] bg-surface-sunken text-muted hover:text-strong'
                                         )}
                                     >
                                         {group} · {count}
@@ -405,8 +405,8 @@ export function TrainingTabB4Panels({
                             ))}
                         </div>
                     ) : (
-                        <Card variant="inverse" padding="md">
-                            <p className="text-center text-[13px] text-on-dark-muted">
+                        <Card padding="md">
+                            <p className="text-center text-[13px] text-muted">
                                 Sin series de fuerza para este grupo.
                             </p>
                         </Card>
@@ -418,7 +418,7 @@ export function TrainingTabB4Panels({
             {(hasRadar || hasBars) && (
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
                     {hasRadar && (
-                        <Card variant="inverse" padding="md">
+                        <Card padding="md">
                             <SectionTitle icon={<Target className="h-4 w-4" />}>
                                 Balance muscular · 30 días
                             </SectionTitle>
@@ -443,7 +443,7 @@ export function TrainingTabB4Panels({
                     )}
 
                     {hasBars && (
-                        <Card variant="inverse" padding="md">
+                        <Card padding="md">
                             <SectionTitle icon={<BarChart3 className="h-4 w-4" />}>
                                 Tonelaje por sesión · 7 días
                             </SectionTitle>
@@ -452,7 +452,7 @@ export function TrainingTabB4Panels({
                                     className="absolute left-0 right-0 z-[1] h-0"
                                     style={{
                                         top: `${100 - (tonnageAvg / tonnageMax) * 100}%`,
-                                        borderTop: '1.5px dashed var(--text-on-dark-muted)',
+                                        borderTop: '1.5px dashed var(--text-muted)',
                                     }}
                                 />
                                 <div className="flex h-full items-end gap-2">
@@ -471,11 +471,11 @@ export function TrainingTabB4Panels({
                                                         height: `${Math.max(2, (p.tonnage / tonnageMax) * 100)}%`,
                                                         background: isLast
                                                             ? 'var(--sport-500)'
-                                                            : 'rgba(255,255,255,0.14)',
+                                                            : 'var(--border-default)',
                                                         borderRadius: 'var(--radius-xs)',
                                                     }}
                                                 />
-                                                <span className="text-[10px] font-bold text-on-dark-muted">
+                                                <span className="text-[10px] font-bold text-muted">
                                                     {DOW_INITIALS[dt.getDay()]}
                                                 </span>
                                             </div>
@@ -483,8 +483,8 @@ export function TrainingTabB4Panels({
                                     })}
                                 </div>
                             </div>
-                            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-on-dark-muted">
-                                <span className="w-3.5" style={{ borderTop: '1.5px dashed var(--text-on-dark-muted)' }} />
+                            <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted">
+                                <span className="w-3.5" style={{ borderTop: '1.5px dashed var(--text-muted)' }} />
                                 Media móvil 7 ses.
                             </div>
                         </Card>
@@ -496,7 +496,7 @@ export function TrainingTabB4Panels({
             <div>
                 <div className="mb-3 flex items-center justify-between gap-3">
                     <SectionTitle icon={<Clock className="h-4 w-4" />}>Historial de sesiones</SectionTitle>
-                    <label className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 text-on-dark-muted">
+                    <label className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 text-muted">
                         <CalendarSearch className="h-[15px] w-[15px]" />
                         <input
                             type="date"
@@ -506,10 +506,9 @@ export function TrainingTabB4Panels({
                                 height: 32,
                                 padding: '0 8px',
                                 borderRadius: 'var(--radius-md)',
-                                border: '1px solid var(--border-inverse)',
-                                background: 'var(--ink-950)',
-                                color: 'var(--text-on-dark)',
-                                colorScheme: 'dark',
+                                border: '1px solid var(--border-subtle)',
+                                background: 'var(--surface-card)',
+                                color: 'var(--text-strong)',
                                 fontSize: 12,
                                 outline: 'none',
                             }}
@@ -534,13 +533,13 @@ export function TrainingTabB4Panels({
                                         'flex w-[58px] shrink-0 flex-col items-center gap-0.5 rounded-[var(--radius-md)] border-[1.5px] py-2 transition-colors',
                                         isSelected
                                             ? 'border-sport-500 bg-sport-100'
-                                            : 'border-[var(--border-inverse)] bg-white/[0.05] hover:border-sport-400'
+                                            : 'border-[var(--border-subtle)] bg-surface-sunken hover:border-sport-400'
                                     )}
                                 >
                                     <span
                                         className={cn(
                                             'font-display text-base font-black leading-none tabular-nums',
-                                            isSelected ? 'text-sport-700' : 'text-on-dark'
+                                            isSelected ? 'text-sport-700' : 'text-strong'
                                         )}
                                     >
                                         {dayNum}
@@ -548,7 +547,7 @@ export function TrainingTabB4Panels({
                                     <span
                                         className={cn(
                                             'text-[9.5px] uppercase leading-none',
-                                            isSelected ? 'text-sport-700' : 'text-on-dark-muted'
+                                            isSelected ? 'text-sport-700' : 'text-muted'
                                         )}
                                     >
                                         {month}
@@ -559,8 +558,8 @@ export function TrainingTabB4Panels({
                         })}
                     </div>
                 ) : (
-                    <Card variant="inverse" padding="md" className="mb-3">
-                        <p className="text-center text-[13px] text-on-dark-muted">Sin sesiones registradas aún.</p>
+                    <Card padding="md" className="mb-3">
+                        <p className="text-center text-[13px] text-muted">Sin sesiones registradas aún.</p>
                     </Card>
                 )}
 
@@ -568,16 +567,16 @@ export function TrainingTabB4Panels({
                 {historyDate !== santiagoTodayIso && (
                     <>
                         {isPending && (
-                            <Card variant="inverse" padding="lg">
-                                <p className="animate-pulse text-center text-[13px] text-on-dark-muted">
+                            <Card padding="lg">
+                                <p className="animate-pulse text-center text-[13px] text-muted">
                                     Cargando sesión…
                                 </p>
                             </Card>
                         )}
                         {!isPending && historyLoaded && historyData.length === 0 && (
-                            <Card variant="inverse" padding="lg" className="items-center text-center">
-                                <Moon className="mb-1.5 h-6 w-6 text-on-dark-muted opacity-70" />
-                                <p className="text-[13.5px] text-on-dark-muted">
+                            <Card padding="lg" className="items-center text-center">
+                                <Moon className="mb-1.5 h-6 w-6 text-muted opacity-70" />
+                                <p className="text-[13.5px] text-muted">
                                     Sin entrenamiento registrado para este día
                                 </p>
                             </Card>
@@ -615,10 +614,10 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
     const totalSets = logs.length
 
     return (
-        <Card variant="inverse" padding="md" className="gap-0">
+        <Card padding="md" className="gap-0">
             <div className="mb-2.5 flex items-baseline justify-between gap-3">
-                <div className="text-[14.5px] font-black text-on-dark">{planTitle || 'Sesión'}</div>
-                <div className="shrink-0 text-[11.5px] text-on-dark-muted">
+                <div className="text-[14.5px] font-black text-strong">{planTitle || 'Sesión'}</div>
+                <div className="shrink-0 text-[11.5px] text-muted">
                     {exercises.length} ej. · {totalSets} sets
                 </div>
             </div>
@@ -629,14 +628,14 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                     return (
                         <div key={name}>
                             <div className="mb-1.5 flex items-center gap-2">
-                                <span className="text-[13px] font-bold text-on-dark">{name}</span>
-                                {muscle && <span className="text-[11px] text-on-dark-muted">{muscle}</span>}
+                                <span className="text-[13px] font-bold text-strong">{name}</span>
+                                {muscle && <span className="text-[11px] text-muted">{muscle}</span>}
                             </div>
                             <div className="flex flex-wrap gap-1.5">
                                 {sortedSets.map((s, si) => (
                                     <span
                                         key={si}
-                                        className="rounded-[var(--radius-xs)] bg-white/[0.06] px-1.5 py-[3px] text-[11.5px] text-on-dark"
+                                        className="rounded-[var(--radius-xs)] bg-surface-sunken px-1.5 py-[3px] text-[11.5px] text-strong"
                                         style={{ fontFamily: 'var(--font-mono)' }}
                                     >
                                         {(s.set_number ?? si + 1)}: {s.weight_kg ? `${s.weight_kg}kg` : 'PC'} ×{' '}

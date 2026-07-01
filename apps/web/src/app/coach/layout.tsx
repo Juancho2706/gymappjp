@@ -247,15 +247,8 @@ export default async function CoachLayout({
                             primaryColor={primaryColor}
                         />
                         <CoachMainWrapper>
-                            {/* Background ambient glow */}
-                            <div
-                                className="fixed top-0 right-0 w-[500px] h-[500px] blur-[120px] rounded-full -z-10 pointer-events-none opacity-20 dark:opacity-10"
-                                style={{ backgroundColor: 'var(--theme-primary)' }}
-                            />
-                            <div
-                                className="fixed bottom-0 left-0 w-[300px] h-[300px] blur-[100px] rounded-full -z-10 pointer-events-none opacity-10 dark:opacity-5"
-                                style={{ backgroundColor: 'var(--theme-primary)' }}
-                            />
+                            {/* Fondo limpio (surface-app claro/oscuro) — sin glow ambient
+                                brand-tinted; el diseño CD no tiene tonalidad de color en el fondo. */}
                             {children}
                         </CoachMainWrapper>
                     </RosterViewProvider>
