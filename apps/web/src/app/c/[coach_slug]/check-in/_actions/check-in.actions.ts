@@ -76,18 +76,21 @@ export async function submitCheckinAction(
     let photoPath: string | null = null
     let backPhotoPath: string | null = null
 
+    // BEST-EFFORT (🛡️ misma filosofía que compressImageToWebp): si una foto NO se puede subir
+    // (tipo no soportado tras fallback, red), el check-in se guarda IGUAL sin esa foto — perder
+    // todo el reporte del alumno (one-shot) es peor que perder una foto. Se loguea para observar.
     const frontFile = parsed.data.photo as File | null | undefined
     if (frontFile && frontFile.size > 0) {
         const up = await uploadToCheckinsBucket(adminDb, user.id, frontFile, 'front')
-        if (!up.ok) return { error: up.message }
-        photoPath = up.path
+        if (up.ok) photoPath = up.path
+        else console.warn('[checkin] front photo upload fallo, guardando check-in sin ella:', up.message)
     }
 
     const backFile = parsed.data.back_photo as File | null | undefined
     if (backFile && backFile.size > 0) {
         const up = await uploadToCheckinsBucket(adminDb, user.id, backFile, 'back')
-        if (!up.ok) return { error: up.message }
-        backPhotoPath = up.path
+        if (up.ok) backPhotoPath = up.path
+        else console.warn('[checkin] back photo upload fallo, guardando check-in sin ella:', up.message)
     }
 
     const { error: insertError } = await adminDb.from('check_ins').insert({

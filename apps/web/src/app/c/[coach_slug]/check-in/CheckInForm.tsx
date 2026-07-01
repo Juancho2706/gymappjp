@@ -135,22 +135,26 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
             formData.set('weight', weight)
             formData.set('energy_level', String(energyLevel))
             formData.set('notes', notes)
-            if (frontFile) {
-                const compressed = await imageCompression(frontFile, {
-                    maxSizeMB: 2,
-                    maxWidthOrHeight: 1920,
-                    useWebWorker: true,
-                })
-                formData.set('photo', compressed, frontFile.name)
+            // Compresión BEST-EFFORT: normaliza a JPEG (encode universal, incl. iOS viejos) — esto
+            // CONVIERTE las fotos HEIC de iPhone, que el bucket rechaza y hacían fallar el check-in
+            // ENTERO. El server igual las re-comprime a WebP para el storage. NUNCA bloquea: si la
+            // conversión falla, sube el original. useWebWorker=false (hilo principal): el worker podía
+            // fallar y dejaba el check-in bloqueado en silencio (el catch de abajo se lo tragaba).
+            const compressForUpload = async (file: File): Promise<File | Blob> => {
+                try {
+                    return await imageCompression(file, {
+                        maxSizeMB: 2,
+                        maxWidthOrHeight: 1920,
+                        useWebWorker: false,
+                        fileType: 'image/jpeg',
+                    })
+                } catch (err) {
+                    console.warn('[checkin] compresión client falló, subiendo original:', err)
+                    return file
+                }
             }
-            if (backFile) {
-                const compressed = await imageCompression(backFile, {
-                    maxSizeMB: 2,
-                    maxWidthOrHeight: 1920,
-                    useWebWorker: true,
-                })
-                formData.set('back_photo', compressed, backFile.name)
-            }
+            if (frontFile) formData.set('photo', await compressForUpload(frontFile), frontFile.name)
+            if (backFile) formData.set('back_photo', await compressForUpload(backFile), backFile.name)
             startTransition(() => formAction(formData))
         } catch {
             setIsSubmitting(false)
