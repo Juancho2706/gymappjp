@@ -220,18 +220,19 @@ export function PrintProgramDialog({ open, onClose, programName, clientName, coa
     ].filter(Boolean).join(' · ')
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-background border border-border rounded-card shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm p-0 md:items-center md:p-4">
+            <div className="bg-background border border-border rounded-t-sheet md:rounded-card shadow-2xl w-full max-w-3xl max-h-[88dvh] md:max-h-[90vh] flex flex-col overflow-hidden pb-safe md:pb-0">
+                <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-[var(--border-strong)] md:hidden" aria-hidden="true" />
                 {/* Dialog header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
                     <div>
-                        <h2 className="text-sm font-bold uppercase tracking-widest text-foreground">Vista Previa de Impresión</h2>
+                        <h2 className="font-display text-[17px] font-extrabold tracking-[-0.02em] text-foreground">Vista previa de impresión</h2>
                         <p className="text-xs text-muted-foreground mt-0.5">{programName}</p>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={handlePrint}
-                            className="flex items-center gap-2 px-4 py-2 text-white text-xs font-bold uppercase tracking-widest rounded-control hover:opacity-90 transition-opacity"
+                            className="flex items-center gap-2 px-4 py-2 text-white text-[13px] font-bold rounded-control hover:opacity-90 transition-opacity"
                             style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
                         >
                             <Printer className="w-4 h-4" />

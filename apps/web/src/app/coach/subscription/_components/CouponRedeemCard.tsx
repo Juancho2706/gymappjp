@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Ticket } from 'lucide-react'
+import { BadgeCheck, Ticket } from 'lucide-react'
 
 type Preview = {
     baseBeforeDiscountClp: number
@@ -119,13 +119,16 @@ export function CouponRedeemCard() {
     return (
         <div className="rounded-card border border-subtle bg-surface-card p-4">
             <div className="mb-2 flex items-center gap-2 font-display text-sm font-bold tracking-tight text-strong">
-                <Ticket className="h-4 w-4 text-emerald-500" /> Código de descuento
+                <Ticket className="h-4 w-4 text-sport-500" /> Código de descuento
             </div>
 
             {activeCode ? (
-                <p className="text-sm text-emerald-600 dark:text-emerald-400">
-                    Código <span className="font-mono font-semibold">{activeCode}</span> aplicado a tu suscripción.
-                </p>
+                <div className="flex items-center gap-2.5 rounded-control bg-[var(--success-100)] px-3 py-2.5">
+                    <BadgeCheck className="h-[18px] w-[18px] shrink-0 text-[var(--success-700)]" />
+                    <p className="text-[13.5px] font-bold text-strong">
+                        Código <span className="font-mono">{activeCode}</span> aplicado a tu suscripción.
+                    </p>
+                </div>
             ) : (phase === 'preview' || phase === 'applying') && preview ? (
                 <div ref={dialogRef} onKeyDown={onDialogKeyDown} role="dialog" aria-modal="true" aria-label="Confirmar código de descuento" className="space-y-3">
                     <p className="text-sm text-body">{preview.termsText}</p>
@@ -134,7 +137,7 @@ export function CouponRedeemCard() {
                             <span>Precio normal</span>
                             <span className="line-through">{clp(preview.baseBeforeDiscountClp)}</span>
                         </div>
-                        <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                        <div className="flex justify-between text-[var(--success-600)]">
                             <span>Descuento ({preview.durationLabel})</span>
                             <span>−{clp(preview.discountClp)}</span>
                         </div>
@@ -147,7 +150,7 @@ export function CouponRedeemCard() {
                         <button
                             onClick={onConfirmar}
                             disabled={phase === 'applying'}
-                            className="flex-1 rounded-control bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 min-h-[44px]"
+                            className="flex-1 rounded-control bg-sport-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sport-600 disabled:opacity-50 min-h-[44px]"
                         >
                             {phase === 'applying' ? 'Aplicando…' : 'Confirmar y aplicar'}
                         </button>
@@ -163,7 +166,10 @@ export function CouponRedeemCard() {
                     </div>
                 </div>
             ) : phase === 'done' ? (
-                <p className="text-sm text-emerald-600 dark:text-emerald-400">¡Código aplicado! Se reflejará en tu próximo cobro.</p>
+                <div className="flex items-center gap-2.5 rounded-control bg-[var(--success-100)] px-3 py-2.5">
+                    <BadgeCheck className="h-[18px] w-[18px] shrink-0 text-[var(--success-700)]" />
+                    <p className="text-[13.5px] font-bold text-strong">¡Código aplicado! Se reflejará en tu próximo cobro.</p>
+                </div>
             ) : (
                 <div className="flex gap-2">
                     <input
@@ -182,7 +188,7 @@ export function CouponRedeemCard() {
                 </div>
             )}
 
-            {error && <p className="mt-2 text-xs text-red-500 dark:text-red-400">{error}</p>}
+            {error && <p className="mt-2 text-xs text-[var(--danger-600)]">{error}</p>}
         </div>
     )
 }

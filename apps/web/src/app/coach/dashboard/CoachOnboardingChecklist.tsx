@@ -1,26 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CheckCircle2, Circle, ExternalLink, Monitor, Smartphone, Sparkles, X } from 'lucide-react'
+import { Check, ChevronDown, PartyPopper, Rocket, Sparkles, X } from 'lucide-react'
 import { toast } from 'sonner'
 import confetti from 'canvas-confetti'
-import { motion } from 'framer-motion'
-import { GlassCard } from '@/components/ui/glass-card'
-import { Button, buttonVariants } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import type { Json } from '@/lib/database.types'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
-import { COACH_NUTRITION_ONBOARDING_STEPS } from '@/app/coach/nutrition-plans/_components/nutrition-onboarding-shared'
 import { brandTourSeenStorageKey, BRAND_TOUR_SEEN_CHANGED_EVENT } from '@/lib/coach-brand-tour'
 import { persistOnboardingGuideAction } from './_actions/onboarding-guide.actions'
-import { OnboardingCompactLoopStrip } from './_components/onboarding/OnboardingCompactLoopStrip'
-import { OnboardingStepsJumpNav } from './_components/onboarding/OnboardingStepsJumpNav'
-import { OnboardingStepsVignetteCarousel } from './_components/onboarding/OnboardingStepsVignetteCarousel'
 import { postGuideEngagement } from './_lib/onboarding-telemetry.client'
-import { buildCoachStudentPath } from '@/lib/coach/public-identifier'
 
 type StepKey = 'profile_branding' | 'first_client' | 'first_plan' | 'first_checkin'
 
@@ -97,8 +87,6 @@ async function emitOnboardingEvent(
 
 export function CoachOnboardingChecklist({
     coachId,
-    coachSlug,
-    coachInviteCode,
     initialOnboardingGuide,
     totalClients,
     activePlans,
@@ -120,7 +108,9 @@ export function CoachOnboardingChecklist({
     const [dismissed, setDismissed] = useState(false)
     const [manualCompleted, setManualCompleted] = useState<Partial<Record<StepKey, boolean>>>({})
     const [brandTourSeen, setBrandTourSeen] = useState(false)
+    const [guideOpenOverride, setGuideOpenOverride] = useState<boolean | null>(null)
     const isFree = subscriptionTier === 'free'
+    const { canUseNutrition } = getTierCapabilities(subscriptionTier)
     const previousStateRef = useRef<Partial<Record<StepKey, boolean>>>({})
     const ahaRef = useRef(false)
     const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -325,7 +315,7 @@ export function CoachOnboardingChecklist({
     if (!ready) {
         return (
             <div
-                className="min-h-[120px] rounded-2xl border border-dashed border-border/40 bg-muted/10 animate-pulse"
+                className="h-[42px] animate-pulse rounded-control border border-subtle bg-surface-sunken"
                 aria-hidden
             />
         )
@@ -337,453 +327,176 @@ export function CoachOnboardingChecklist({
 
     if (dismissed && !allDone) {
         return (
-            <div className="rounded-2xl border border-[color:var(--theme-primary)]/25 bg-[color:var(--theme-primary)]/5 px-4 py-3 sm:px-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm font-medium text-foreground">
-                        Seguís con pasos pendientes en tu guía de inicio.
-                    </p>
-                    <Button
-                        type="button"
-                        variant="default"
-                        className="h-11 min-h-11 shrink-0 touch-manipulation sm:w-auto w-full text-white"
-                        onClick={resumeGuide}
-                    >
-                        Continuar guía
-                    </Button>
-                </div>
+            <div className="flex items-center gap-[11px] rounded-control border border-[var(--sport-200)] bg-[var(--sport-100)] px-[13px] py-1">
+                <span className="flex shrink-0 text-[var(--sport-600)]">
+                    <Rocket className="size-4" />
+                </span>
+                <span className="flex-1 text-[13px] font-bold text-[var(--sport-700)]">
+                    Seguís con pasos pendientes en tu guía de inicio.
+                </span>
+                <button
+                    type="button"
+                    onClick={resumeGuide}
+                    className="min-h-11 shrink-0 touch-manipulation px-1 text-[12.5px] font-extrabold text-[var(--sport-700)]"
+                >
+                    Continuar guía
+                </button>
             </div>
         )
     }
 
-    const studentAppPath = buildCoachStudentPath({ slug: coachSlug, invite_code: coachInviteCode })
+    if (allDone) {
+        return (
+            <div className="flex items-center gap-[11px] rounded-card border border-[var(--success-500)]/30 bg-[var(--success-100)] p-4">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--success-500)] text-white">
+                    <PartyPopper className="size-[18px]" />
+                </span>
+                <div className="flex-1">
+                    <div className="text-[14.5px] font-extrabold text-[var(--success-700)]">
+                        ¡Activación lista!
+                    </div>
+                    <div className="text-[12.5px] text-[var(--success-700)] opacity-85">
+                        Tu cuenta está configurada. A entrenar.
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    onClick={dismiss}
+                    aria-label="Cerrar"
+                    className="flex size-11 shrink-0 touch-manipulation items-center justify-center text-[var(--success-700)]"
+                >
+                    <X className="size-[18px]" />
+                </button>
+            </div>
+        )
+    }
+
+    const guideOpen = guideOpenOverride ?? completedCount === 0
+
+    const steps: Array<{ key: StepKey; label: string; href: string }> = [
+        {
+            key: 'profile_branding',
+            label: 'Personalizá tu marca',
+            href: isFree ? '/coach/subscription' : '/coach/settings?tour=1',
+        },
+        { key: 'first_client', label: 'Sumá tu primer alumno', href: '/coach/clients' },
+        { key: 'first_plan', label: 'Creá tu primer plan', href: '/coach/workout-programs' },
+        { key: 'first_checkin', label: 'Recibí el primer check-in', href: '/coach/clients' },
+    ]
 
     return (
-        <>
-        <GlassCard className="overflow-hidden border-border bg-white/90 p-5 dark:bg-zinc-950 sm:p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0 flex-1 space-y-1">
-                    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                        Tu ruta en EVA
-                    </p>
-                    <h3 className="text-lg font-black tracking-tight text-foreground sm:text-xl">
-                        Pon tu estudio en marcha
-                    </h3>
-                    <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                        Cuatro pasos para cerrar el circuito: tu marca → un alumno → un plan asignado → señal de que tu
-                        alumno ya usa la app.
-                    </p>
-                </div>
-                <div className="flex shrink-0 items-start justify-between gap-3 sm:flex-col sm:items-end sm:text-right">
-                    <div>
-                        <p className="text-2xl font-black text-[color:var(--theme-primary)]">{progressPct}%</p>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                            Completado
-                        </p>
+        <div>
+            <button
+                type="button"
+                onClick={() => setGuideOpenOverride(!guideOpen)}
+                aria-expanded={guideOpen}
+                className={cn(
+                    'flex w-full items-center gap-[11px] border border-[var(--sport-200)] bg-[var(--sport-100)] px-[13px] py-[11px] text-left',
+                    guideOpen ? 'rounded-t-control border-b-0' : 'rounded-control'
+                )}
+            >
+                <span className="flex shrink-0 text-[var(--sport-600)]">
+                    <Rocket className="size-4" />
+                </span>
+                <span className="flex-1 text-[13px] font-bold text-[var(--sport-700)]">
+                    Guía de inicio
+                </span>
+                <span className="flex gap-1">
+                    {steps.map((s) => (
+                        <span
+                            key={s.key}
+                            className="size-[7px] rounded-full"
+                            style={{
+                                background: completed[s.key]
+                                    ? 'var(--sport-500)'
+                                    : 'var(--sport-300)',
+                                opacity: completed[s.key] ? 1 : 0.5,
+                            }}
+                        />
+                    ))}
+                </span>
+                <span className="min-w-[26px] text-right text-[12.5px] font-extrabold text-[var(--sport-700)]">
+                    {completedCount}/4
+                </span>
+                <span
+                    className={cn(
+                        'flex shrink-0 text-[var(--sport-600)] transition-transform duration-200',
+                        guideOpen && 'rotate-180'
+                    )}
+                >
+                    <ChevronDown className="size-4" />
+                </span>
+            </button>
+            {guideOpen && (
+                <div className="rounded-b-control border border-t-0 border-[var(--sport-200)] bg-[var(--sport-100)] px-[13px] pb-[13px] pt-1">
+                    <div className="flex flex-col gap-[7px]">
+                        {steps.map((s) => {
+                            const done = completed[s.key]
+                            return (
+                                <div key={s.key} className="flex items-center gap-[9px]">
+                                    <span
+                                        className={cn(
+                                            'flex size-5 shrink-0 items-center justify-center rounded-full text-white',
+                                            done
+                                                ? 'bg-[var(--sport-500)]'
+                                                : 'border-2 border-[var(--sport-300)]'
+                                        )}
+                                    >
+                                        {done && <Check className="size-3" />}
+                                    </span>
+                                    <Link
+                                        href={s.href}
+                                        className={cn(
+                                            'flex-1 py-0.5 text-[13.5px] font-semibold',
+                                            done
+                                                ? 'text-[var(--sport-600)] line-through opacity-70'
+                                                : 'text-[var(--sport-700)]'
+                                        )}
+                                    >
+                                        {s.label}
+                                    </Link>
+                                    {s.key === 'profile_branding' && (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.preventDefault()
+                                                e.stopPropagation()
+                                                toggleProfileStep()
+                                            }}
+                                            className="-my-2 min-h-11 shrink-0 touch-manipulation px-1 text-[12px] font-extrabold text-[var(--sport-700)]"
+                                        >
+                                            {done ? 'Desmarcar' : 'Marcar visto'}
+                                        </button>
+                                    )}
+                                </div>
+                            )
+                        })}
                     </div>
-                    <motion.button
+                    {!canUseNutrition && (
+                        <div className="mt-3 flex items-center gap-[9px] border-t border-[var(--sport-200)] pt-3">
+                            <span className="flex shrink-0 text-[var(--sport-600)]">
+                                <Sparkles className="size-[15px]" />
+                            </span>
+                            <span className="flex-1 text-xs leading-[1.35] text-[var(--sport-700)]">
+                                Sumá planes de nutrición con <b>Pro</b>.
+                            </span>
+                            <Link
+                                href="/coach/subscription"
+                                className="-my-2 inline-flex min-h-11 shrink-0 touch-manipulation items-center px-1 text-xs font-extrabold text-[var(--sport-700)]"
+                            >
+                                Mejorar
+                            </Link>
+                        </div>
+                    )}
+                    <button
                         type="button"
                         onClick={dismiss}
-                        aria-label="Saltar guía de inicio"
-                        animate={{ scale: [1, 1.06, 1], boxShadow: ['0 0 0px 0px rgba(251,146,60,0)', '0 0 12px 4px rgba(251,146,60,0.45)', '0 0 0px 0px rgba(251,146,60,0)'] }}
-                        transition={{ duration: 2.2, repeat: Infinity, repeatDelay: 2.5, ease: 'easeInOut' }}
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.93 }}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-orange-400 to-amber-400 px-3 py-2 text-xs font-bold text-white shadow-md min-h-11 touch-manipulation border-0"
+                        className="mt-1 min-h-11 touch-manipulation pr-2 text-left text-xs font-bold text-[var(--sport-600)]"
                     >
-                        <X className="h-3.5 w-3.5 shrink-0" />
-                        <span>Saltar guía</span>
-                    </motion.button>
-                </div>
-            </div>
-
-            {isFree && (
-                <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-3.5 text-sm">
-                    <p className="font-semibold text-foreground mb-2">Plan Free — lo que tenés incluido:</p>
-                    <div className="grid grid-cols-1 gap-1 sm:grid-cols-2 text-xs text-muted-foreground">
-                        <div className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />3 alumnos activos</div>
-                        <div className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />Entrenos ilimitados</div>
-                        <div className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />App para tus alumnos</div>
-                        <div className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />Check-ins</div>
-                        <div className="flex items-center gap-1.5 text-muted-foreground/60"><span className="w-3.5 h-3.5 shrink-0 text-center leading-none">✗</span>Marca personalizada (Starter+)</div>
-                        <div className="flex items-center gap-1.5 text-muted-foreground/60"><span className="w-3.5 h-3.5 shrink-0 text-center leading-none">✗</span>Nutrición (Pro+)</div>
-                    </div>
-                    <Link href="/coach/subscription" className="mt-2 text-xs text-primary hover:opacity-80 font-medium inline-block">Ver planes →</Link>
+                        Saltar guía
+                    </button>
                 </div>
             )}
-
-            {!allDone ? <OnboardingCompactLoopStrip /> : null}
-
-            {/* V3 gemelo: tabs en móvil, grid desde md (plan §5.2) */}
-            <div className="mt-5 md:hidden">
-                <Tabs defaultValue="coach" className="flex w-full flex-col gap-3">
-                    <TabsList className="grid h-auto w-full min-w-0 grid-cols-2 gap-1 p-1" variant="default">
-                        <TabsTrigger
-                            value="coach"
-                            className="min-h-11 gap-2 px-2 py-2 text-xs font-semibold sm:text-sm"
-                        >
-                            <Monitor className="h-4 w-4 shrink-0 text-[color:var(--theme-primary)]" aria-hidden />
-                            Tu panel
-                        </TabsTrigger>
-                        <TabsTrigger
-                            value="student"
-                            className="min-h-11 gap-2 px-2 py-2 text-xs font-semibold sm:text-sm"
-                        >
-                            <Smartphone className="h-4 w-4 shrink-0 text-[color:var(--theme-primary)]" aria-hidden />
-                            Tu alumno
-                        </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="coach" className="focus-visible:outline-none">
-                        <OnboardingGemelliCoachCard />
-                    </TabsContent>
-                    <TabsContent value="student" className="focus-visible:outline-none">
-                        <OnboardingGemelliStudentCard studentAppPath={studentAppPath} />
-                    </TabsContent>
-                </Tabs>
-            </div>
-            <div className="mt-5 hidden gap-4 md:grid md:grid-cols-2">
-                <OnboardingGemelliCoachCard />
-                <OnboardingGemelliStudentCard studentAppPath={studentAppPath} />
-            </div>
-
-            <div className="mt-5 h-2 overflow-hidden rounded-full bg-muted">
-                <div
-                    className="h-full bg-[color:var(--theme-primary)] transition-all duration-300"
-                    style={{ width: `${progressPct}%` }}
-                    role="progressbar"
-                    aria-valuenow={progressPct}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label="Progreso de la guía de inicio"
-                />
-            </div>
-
-            {!allDone ? <OnboardingStepsVignetteCarousel completed={completed} /> : null}
-
-            <OnboardingStepsJumpNav />
-
-            <div className="mt-5 space-y-3">
-                <OnboardingStepBlock
-                    anchorId="coach-onboarding-step-1"
-                    title="1. Tu marca en la app del alumno"
-                    description={
-                        isFree
-                            ? 'Disponible desde Starter. Podés marcarlo como visto o hacer upgrade para personalizar logo, color y mensajes.'
-                            : 'Logo, color y mensajes: lo que ves en Mi Marca es lo que ellos ven al instalar tu espacio.'
-                    }
-                    done={completed.profile_branding}
-                    actions={
-                        isFree ? (
-                            <>
-                                <Link
-                                    href="/coach/subscription"
-                                    className={cn(
-                                        buttonVariants({ variant: 'default' }),
-                                        'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4 text-center text-white'
-                                    )}
-                                >
-                                    Desbloquear con Starter ↑
-                                </Link>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    className="h-11 min-h-11 touch-manipulation text-muted-foreground"
-                                    onClick={(e) => {
-                                        e.preventDefault()
-                                        e.stopPropagation()
-                                        toggleProfileStep()
-                                    }}
-                                >
-                                    {completed.profile_branding ? 'Desmarcar paso' : 'Marcar como visto'}
-                                </Button>
-                            </>
-                        ) : (
-                            <>
-                                <Link
-                                    href="/coach/settings?tour=1"
-                                    className={cn(
-                                        buttonVariants({ variant: 'default' }),
-                                        'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4 text-center'
-                                    )}
-                                >
-                                    Ir a Mi Marca y guía
-                                </Link>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    className="h-11 min-h-11 touch-manipulation text-muted-foreground"
-                                    onClick={(e) => {
-                                        e.preventDefault()
-                                        e.stopPropagation()
-                                        toggleProfileStep()
-                                    }}
-                                >
-                                    {completed.profile_branding ? 'Desmarcar paso' : 'Ya lo dejé listo'}
-                                </Button>
-                            </>
-                        )
-                    }
-                />
-
-                <OnboardingStepBlock
-                    anchorId="coach-onboarding-step-2"
-                    title="2. Primer alumno"
-                    description="Creá o importá al menos un perfil para poder asignarle un plan."
-                    done={completed.first_client}
-                    actions={
-                        <Link
-                            href="/coach/clients"
-                            className={cn(
-                                buttonVariants({ variant: 'secondary' }),
-                                'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4'
-                            )}
-                        >
-                            Ir a alumnos
-                        </Link>
-                    }
-                />
-
-                <OnboardingStepBlock
-                    anchorId="coach-onboarding-step-3"
-                    title="3. Primer plan asignado"
-                    description="Desde programas o el constructor: activá un plan para ese alumno."
-                    done={completed.first_plan}
-                    actions={
-                        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                            <Link
-                                href="/coach/workout-programs"
-                                className={cn(
-                                    buttonVariants({ variant: 'secondary' }),
-                                    'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4'
-                                )}
-                            >
-                                Ver programas
-                            </Link>
-                            <Link
-                                href="/coach/workout-programs/builder"
-                                className={cn(
-                                    buttonVariants({ variant: 'outline' }),
-                                    'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4'
-                                )}
-                            >
-                                Abrir constructor
-                            </Link>
-                        </div>
-                    }
-                />
-
-                <OnboardingStepBlock
-                    anchorId="coach-onboarding-step-4"
-                    title="4. Tu alumno ya usó la app"
-                    description="Se marca listo si en los últimos 30 días hay al menos un check-in o un registro de entreno de tus alumnos (misma ventana que el dashboard)."
-                    done={completed.first_checkin}
-                    actions={
-                        <Link
-                            href="/coach/clients"
-                            className={cn(
-                                buttonVariants({ variant: 'secondary' }),
-                                'h-11 min-h-11 touch-manipulation inline-flex items-center justify-center px-4'
-                            )}
-                        >
-                            Ver alumnos
-                        </Link>
-                    }
-                />
-            </div>
-
-            <NutritionTierBlock subscriptionTier={subscriptionTier} />
-
-            {allDone ? (
-                <div className="mt-5 flex gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-                    <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" aria-hidden />
-                    <div>
-                        <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                            Activación lista
-                        </p>
-                        <p className="text-xs leading-relaxed text-muted-foreground">
-                            Completaste el circuito mínimo: marca, alumno, plan y señal de uso en los últimos 30 días.
-                            El enlace y el QR de arriba siguen disponibles para invitar a más gente.
-                        </p>
-                    </div>
-                </div>
-            ) : null}
-        </GlassCard>
-
-        </>
-    )
-}
-
-function OnboardingGemelliCoachCard() {
-    return (
-        <div className="rounded-2xl border border-border/80 bg-muted/20 p-4">
-            <div className="mb-2 flex items-center gap-2 text-foreground">
-                <Monitor className="h-4 w-4 shrink-0 text-[color:var(--theme-primary)]" aria-hidden />
-                <span className="text-xs font-bold uppercase tracking-wide">Tu panel</span>
-            </div>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-                Acá sumás alumnos, armás o duplicás programas y asignás planes. Todo lo que configurás acá es lo que
-                vos controlás como coach.
-            </p>
-        </div>
-    )
-}
-
-function OnboardingGemelliStudentCard({ studentAppPath }: { studentAppPath: string }) {
-    return (
-        <div className="rounded-2xl border border-border/80 bg-gradient-to-br from-[color:var(--theme-primary)]/12 to-transparent p-4">
-            <div className="mb-2 flex items-center gap-2 text-foreground">
-                <Smartphone className="h-4 w-4 shrink-0 text-[color:var(--theme-primary)]" aria-hidden />
-                <span className="text-xs font-bold uppercase tracking-wide">Tu alumno</span>
-            </div>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-                Tus alumnos entran a tu espacio con tu marca, ven su plan y registran entrenos o check-ins.
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Link
-                    href="/coach/settings/brand"
-                    className={cn(
-                        buttonVariants({ variant: 'secondary', size: 'sm' }),
-                        'h-10 min-h-10 touch-manipulation inline-flex items-center justify-center px-3'
-                    )}
-                >
-                    Vista previa alumno
-                </Link>
-                <Link
-                    href={studentAppPath}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={cn(
-                        buttonVariants({ variant: 'outline', size: 'sm' }),
-                        'h-10 min-h-10 touch-manipulation inline-flex items-center justify-center gap-1.5 px-3'
-                    )}
-                >
-                    Abrir app alumno
-                    <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                </Link>
-            </div>
-        </div>
-    )
-}
-
-function NutritionTierBlock({ subscriptionTier }: { subscriptionTier: SubscriptionTier }) {
-    const { canUseNutrition } = getTierCapabilities(subscriptionTier)
-    const isFree = subscriptionTier === 'free'
-
-    if (!canUseNutrition) {
-        return (
-            <div className="mt-5 rounded-2xl border border-border/70 bg-muted/20 p-4 sm:p-5">
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Nutrición</p>
-                <h4 className="mt-1 text-sm font-black tracking-tight text-foreground sm:text-base">
-                    Planes de nutrición en Pro o superior
-                </h4>
-                <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                    {isFree
-                        ? 'Tu plan Free incluye entrenos y check-ins. La nutrición está disponible desde Pro: plantillas, catálogo de alimentos y asignación de planes nutricionales.'
-                        : 'Tu plan Starter incluye entrenos y marca. Cuando subas de plan, desbloqueás plantillas, catálogo de alimentos y asignación de planes nutricionales a tus alumnos.'
-                    }
-                </p>
-                <Link
-                    href="/coach/subscription"
-                    className={cn(
-                        buttonVariants({ variant: 'secondary' }),
-                        'mt-3 inline-flex h-11 min-h-11 items-center justify-center px-4 touch-manipulation'
-                    )}
-                >
-                    Ver planes y upgrade
-                </Link>
-            </div>
-        )
-    }
-
-    return (
-        <div className="mt-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-4 sm:p-5 dark:border-emerald-500/25 dark:bg-emerald-500/10">
-            <p className="text-xs font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400/90">
-                Nutrición (opcional)
-            </p>
-            <h4 className="mt-1 text-sm font-black tracking-tight text-foreground sm:text-base">
-                Cuando quieras, seguí esta ruta
-            </h4>
-            <p className="mt-1 max-w-2xl text-xs text-muted-foreground sm:text-sm">
-                Ya tenés nutrición en tu plan. Estos tres pasos son independientes del circuito principal de arriba.
-            </p>
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {COACH_NUTRITION_ONBOARDING_STEPS.map((step) => {
-                    const Icon = step.icon
-                    const href = step.href ?? '/coach/nutrition-plans'
-                    return (
-                        <div
-                            key={step.number}
-                            className="flex flex-col rounded-xl border border-border/60 bg-card/50 p-3"
-                        >
-                            <div className="flex items-center gap-2">
-                                <span
-                                    className={cn(
-                                        'inline-flex h-8 w-8 items-center justify-center rounded-lg',
-                                        step.iconBg
-                                    )}
-                                >
-                                    <Icon className={cn('h-4 w-4', step.iconColor)} aria-hidden />
-                                </span>
-                                <span className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                                    Paso {step.number}
-                                </span>
-                            </div>
-                            <p className="mt-2 text-sm font-bold text-foreground">{step.title}</p>
-                            <p className="mt-1 flex-1 text-xs leading-relaxed text-muted-foreground">{step.description}</p>
-                            <Link
-                                href={href}
-                                className={cn(
-                                    buttonVariants({ variant: 'outline', size: 'sm' }),
-                                    'mt-3 h-9 min-h-9 touch-manipulation inline-flex items-center justify-center px-2 text-center'
-                                )}
-                            >
-                                {step.cta}
-                            </Link>
-                        </div>
-                    )
-                })}
-            </div>
-        </div>
-    )
-}
-
-
-function OnboardingStepBlock({
-    anchorId,
-    title,
-    description,
-    done,
-    actions,
-}: {
-    anchorId?: string
-    title: string
-    description: string
-    done: boolean
-    actions: ReactNode
-}) {
-    return (
-        <div
-            id={anchorId}
-            className={cn(
-                'rounded-xl border border-border/70 bg-card/40 p-4',
-                anchorId && 'scroll-mt-24 md:scroll-mt-28'
-            )}
-        >
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
-                        {done ? (
-                            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" aria-hidden />
-                        ) : (
-                            <Circle className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                        )}
-                        <h4 className="text-sm font-bold text-foreground">{title}</h4>
-                    </div>
-                    <p className="pl-6 text-xs leading-relaxed text-muted-foreground sm:text-sm">{description}</p>
-                </div>
-            </div>
-            <div className="mt-3 flex flex-col gap-2 pl-0 sm:mt-4 sm:flex-row sm:flex-wrap sm:items-center sm:pl-6">
-                {actions}
-            </div>
         </div>
     )
 }

@@ -69,7 +69,7 @@ function DraggableExerciseItem({ exercise, onSelect, onPreview, onTapAdd }: Drag
                         )
                     })()}
                 </div>
-                <div className="flex-1 min-w-0 pr-8">
+                <div className={cn('flex-1 min-w-0', onTapAdd && onPreview ? 'pr-20' : 'pr-8')}>
                     <p className="text-[13px] font-bold leading-tight text-foreground group-hover:text-primary transition-colors truncate">{exercise.name}</p>
                     <div className="flex items-center gap-2 mt-1">
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getMuscleColor(exercise.muscle_group) }} />
@@ -79,14 +79,25 @@ function DraggableExerciseItem({ exercise, onSelect, onPreview, onTapAdd }: Drag
             </div>
 
             {onTapAdd ? (
-                <button
-                    onClick={(e) => { e.stopPropagation(); onTapAdd(exercise) }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-primary text-white shadow-md active:scale-95 transition-transform z-10"
-                    style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
-                    title="Añadir al día"
-                >
-                    <Plus className="w-4 h-4" />
-                </button>
+                <>
+                    {onPreview && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onPreview(exercise) }}
+                            className="absolute right-[3.25rem] top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-surface-sunken text-muted-foreground transition-colors z-10"
+                            title="Ver técnica"
+                        >
+                            <Eye className="w-4 h-4" />
+                        </button>
+                    )}
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onTapAdd(exercise) }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-full bg-primary text-white shadow-md active:scale-95 transition-transform z-10"
+                        style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
+                        title="Añadir al día"
+                    >
+                        <Plus className="w-4 h-4" />
+                    </button>
+                </>
             ) : onPreview ? (
                 <button
                     onClick={(e) => { e.stopPropagation(); onPreview(exercise) }}
@@ -273,7 +284,7 @@ export function DraggableExerciseCatalog({
                                         <DraggableExerciseItem
                                             exercise={item.exercise}
                                             onSelect={onSelect}
-                                            onPreview={onTapAdd ? undefined : setPreviewExercise}
+                                            onPreview={setPreviewExercise}
                                             onTapAdd={onTapAdd}
                                         />
                                     )}

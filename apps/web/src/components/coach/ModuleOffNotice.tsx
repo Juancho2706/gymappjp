@@ -59,14 +59,14 @@ export function ModuleOffNotice({ moduleKey }: { moduleKey: ModuleKey }) {
             data-testid="module-off-notice"
             className="mx-auto flex min-h-[60dvh] max-w-lg flex-col items-center justify-center gap-4 px-6 text-center"
         >
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-muted-foreground dark:bg-white/5">
-                <Icon className="h-8 w-8" />
+            <div className="flex size-12 items-center justify-center rounded-[14px] bg-surface-sunken text-subtle">
+                <Icon className="size-6" />
             </div>
-            <h1 className="text-xl font-bold text-foreground">{copy.title}</h1>
-            <p className="text-sm text-muted-foreground">{copy.description}</p>
+            <h1 className="font-display text-xl font-extrabold tracking-[-0.02em] text-strong">{copy.title}</h1>
+            <p className="text-sm text-muted">{copy.description}</p>
             <Link
                 href="/coach/settings/modules"
-                className="flex min-h-[44px] items-center rounded-xl bg-primary px-6 text-xs font-bold uppercase tracking-widest text-primary-foreground transition-colors hover:bg-primary/90"
+                className="flex min-h-12 items-center gap-2 rounded-control bg-[var(--cta-fill)] px-[18px] text-[15px] font-bold text-[var(--text-on-sport)] shadow-[var(--shadow-sm)] transition-all hover:opacity-90 active:scale-[0.97]"
             >
                 Ver módulos disponibles
             </Link>

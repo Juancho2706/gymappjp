@@ -11,6 +11,8 @@ interface AuthSubmitButtonProps
     label: string
     pendingLabel?: string
     variant?: AuthVariant
+    /** DS Button sizes: md = 48px/16px, lg = 56px/17px (CTA primario del funnel de auth) */
+    size?: 'md' | 'lg'
     leadingIcon?: React.ReactNode
     trailingIcon?: React.ReactNode
 }
@@ -19,6 +21,7 @@ export function AuthSubmitButton({
     label,
     pendingLabel,
     variant = 'coach',
+    size = 'md',
     leadingIcon,
     trailingIcon,
     className,
@@ -33,7 +36,10 @@ export function AuthSubmitButton({
             disabled={pending}
             aria-busy={pending}
             className={cn(
-                'w-full min-h-[48px] rounded-control text-base font-bold tracking-[-0.01em] transition-all duration-200',
+                'w-full rounded-control font-bold tracking-[-0.01em] transition-all duration-200',
+                size === 'lg'
+                    ? 'min-h-14 px-[22px] text-[17px]'
+                    : 'min-h-[48px] text-base',
                 'flex items-center justify-center gap-2',
                 'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]',
                 'active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed',

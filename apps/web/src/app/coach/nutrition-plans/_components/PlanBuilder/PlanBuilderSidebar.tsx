@@ -23,7 +23,7 @@ import {
   type Goal,
   type Sex,
 } from '@eva/nutrition-engine'
-import { AlertTriangle, ChevronDown, ChevronUp, Lock, Sparkles, Zap } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronUp, Lock, PenLine, Sparkles, Zap } from 'lucide-react'
 
 interface Goals {
   calories: number
@@ -160,6 +160,7 @@ export function PlanBuilderSidebar({
   clientProfile,
   proBodyComp = false,
 }: Props) {
+  const [goalsOpen, setGoalsOpen] = useState(false)
   const [suggOpen, setSuggOpen] = useState(false)
   const [suggAge, setSuggAge] = useState('25')
   const [suggGender, setSuggGender] = useState<'M' | 'F'>('M')
@@ -221,6 +222,47 @@ export function PlanBuilderSidebar({
       </div>
 
       <div className="space-y-3">
+        {/* Hero inverse — Objetivo diario */}
+        <div className="rounded-card p-5" style={{ background: 'var(--surface-inverse)' }}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold uppercase tracking-[0.1em] text-sport-500">
+                Objetivo diario
+              </div>
+              <div className="mt-0.5 font-display text-[30px] font-black leading-tight tabular-nums text-on-dark">
+                {goals.calories > 0 ? goals.calories.toLocaleString('es-CL') : '—'}{' '}
+                <span className="text-[14px] font-semibold text-on-dark-muted">kcal</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-label="Editar objetivo"
+              aria-expanded={goalsOpen}
+              onClick={() => setGoalsOpen((v) => !v)}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-white/10 text-on-dark transition-colors hover:bg-white/20"
+            >
+              <PenLine className="h-[18px] w-[18px]" />
+            </button>
+          </div>
+          <div className="mt-3.5 flex gap-4">
+            {(
+              [
+                ['Proteína', goals.protein, 'var(--ember-400)'],
+                ['Carbos', goals.carbs, 'var(--sport-400)'],
+                ['Grasas', goals.fats, 'var(--aqua-400)'],
+              ] as const
+            ).map(([n, v, c]) => (
+              <div key={n} className="flex-1">
+                <div className="mb-1 text-[11px] text-on-dark-muted">{n}</div>
+                <div className="font-display text-[18px] font-black tabular-nums" style={{ color: c }}>
+                  {Math.round(v)}
+                  <span className="text-[11px] font-semibold text-on-dark-muted">g</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Header with toggle */}
         <div className="flex items-center justify-between">
           <p className="text-[10px] font-black uppercase tracking-widest text-muted">
@@ -252,32 +294,34 @@ export function PlanBuilderSidebar({
           </p>
         )}
 
-        <div className="grid grid-cols-2 gap-2">
-          {(
-            [
-              ['kcal', 'calories', goals.calories, 'Suma total de calorías al día. Se calcula automáticamente según los alimentos que agregues, o puedes establecerlo manualmente como meta.'],
-              ['Proteína (g)', 'protein', goals.protein, 'Para ganancia muscular: 1.6–2.2 g/kg de peso corporal. Para mantención: 1.2–1.6 g/kg.'],
-              ['Carbos (g)', 'carbs', goals.carbs, 'Principal fuente de energía. Ajusta según el nivel de actividad del alumno.'],
-              ['Grasas (g)', 'fats', goals.fats, 'Esenciales para hormonas y absorción de vitaminas. No bajar de 0.5 g/kg de peso corporal.'],
-            ] as const
-          ).map(([label, key, val, tip]) => (
-            <div key={key}>
-              <div className="flex items-center gap-1">
-                <Label className="text-[10px] text-muted">{label}</Label>
-                <InfoTooltip content={tip} />
+        {goalsOpen && (
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                ['kcal', 'calories', goals.calories, 'Suma total de calorías al día. Se calcula automáticamente según los alimentos que agregues, o puedes establecerlo manualmente como meta.'],
+                ['Proteína (g)', 'protein', goals.protein, 'Para ganancia muscular: 1.6–2.2 g/kg de peso corporal. Para mantención: 1.2–1.6 g/kg.'],
+                ['Carbos (g)', 'carbs', goals.carbs, 'Principal fuente de energía. Ajusta según el nivel de actividad del alumno.'],
+                ['Grasas (g)', 'fats', goals.fats, 'Esenciales para hormonas y absorción de vitaminas. No bajar de 0.5 g/kg de peso corporal.'],
+              ] as const
+            ).map(([label, key, val, tip]) => (
+              <div key={key}>
+                <div className="flex items-center gap-1">
+                  <Label className="text-[10px] text-muted">{label}</Label>
+                  <InfoTooltip content={tip} />
+                </div>
+                <ClampedIntInput
+                  className={cn('h-9 mt-0.5 transition-opacity', autoSync && 'opacity-50 pointer-events-none')}
+                  value={val}
+                  min={0}
+                  max={key === 'calories' ? 50000 : 10000}
+                  onValueChange={(n) =>
+                    !autoSync && onGoalsChange({ ...goals, [key]: n })
+                  }
+                />
               </div>
-              <ClampedIntInput
-                className={cn('h-9 mt-0.5 transition-opacity', autoSync && 'opacity-50 pointer-events-none')}
-                value={val}
-                min={0}
-                max={key === 'calories' ? 50000 : 10000}
-                onValueChange={(n) =>
-                  !autoSync && onGoalsChange({ ...goals, [key]: n })
-                }
-              />
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border border-[var(--border-subtle)]/80 bg-surface-sunken/20 p-3 space-y-2">
@@ -310,7 +354,7 @@ export function PlanBuilderSidebar({
       )}
 
       {mode === 'client-plan' && clientProfile?.weight_kg && clientProfile?.height_cm && (
-        <div className="rounded-xl border border-violet-500/25 bg-violet-500/5">
+        <div className="rounded-xl border border-aqua-500/25 bg-aqua-500/5">
           {/* div (no <button>): el InfoTooltip de base-ui renderiza su propio <button>;
               anidar button-en-button es HTML invalido y dispara un hydration error. */}
           <div
@@ -326,8 +370,8 @@ export function PlanBuilderSidebar({
             className="flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2.5 text-left"
           >
             <div className="flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-violet-500" />
-              <span className="text-[11px] font-bold text-violet-700 dark:text-violet-300">
+              <Sparkles className="h-3.5 w-3.5 text-aqua-600" />
+              <span className="text-[11px] font-bold text-aqua-700">
                 Macros sugeridos (Mifflin-St Jeor)
               </span>
               <span onClick={(e) => e.stopPropagation()}>
@@ -338,14 +382,14 @@ export function PlanBuilderSidebar({
               </span>
             </div>
             {suggOpen ? (
-              <ChevronUp className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+              <ChevronUp className="h-3.5 w-3.5 text-aqua-600 shrink-0" />
             ) : (
-              <ChevronDown className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+              <ChevronDown className="h-3.5 w-3.5 text-aqua-600 shrink-0" />
             )}
           </div>
 
           {suggOpen && (
-            <div className="border-t border-violet-500/20 px-3 pb-3 pt-2 space-y-3">
+            <div className="border-t border-aqua-500/20 px-3 pb-3 pt-2 space-y-3">
               <div className="grid grid-cols-2 gap-2 text-[10px] text-muted">
                 <div>
                   <span className="font-bold">Peso:</span> {clientProfile.weight_kg} kg
@@ -412,10 +456,10 @@ export function PlanBuilderSidebar({
               </div>
 
               {suggested && (
-                <div className="rounded-lg bg-violet-500/10 border border-violet-500/20 p-2.5 space-y-2">
+                <div className="rounded-lg bg-aqua-500/10 border border-aqua-500/20 p-2.5 space-y-2">
                   <div className="grid grid-cols-2 gap-1 text-[11px] font-bold">
                     <span className="text-muted">kcal:</span>
-                    <span className="tabular-nums text-violet-700 dark:text-violet-300">{suggested.calories}</span>
+                    <span className="tabular-nums text-aqua-700">{suggested.calories}</span>
                     <span className="text-muted">Proteína:</span>
                     <span className="tabular-nums text-[var(--ember-600)]">{suggested.protein}g</span>
                     <span className="text-muted">Carbos:</span>
@@ -427,7 +471,7 @@ export function PlanBuilderSidebar({
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="w-full h-7 text-[10px] font-bold border-violet-500/40 text-violet-700 dark:text-violet-300 hover:bg-violet-500/10"
+                    className="w-full h-7 text-[10px] font-bold border-aqua-500/40 text-aqua-700 hover:bg-aqua-500/10"
                     onClick={() => {
                       onGoalsChange(suggested)
                       if (autoSync) onAutoSyncToggle(false)
@@ -444,7 +488,7 @@ export function PlanBuilderSidebar({
 
       {/* ─── Avanzado (Pro): Objetivos por composición corporal ─────────────── */}
       {mode === 'client-plan' && clientProfile?.weight_kg && (
-        <div className="rounded-xl border border-indigo-500/25 bg-indigo-500/5">
+        <div className="rounded-xl border border-sport-500/25 bg-sport-500/5">
           <div
             role="button"
             tabIndex={0}
@@ -459,14 +503,14 @@ export function PlanBuilderSidebar({
           >
             <div className="flex items-center gap-1.5">
               {proBodyComp ? (
-                <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
+                <Sparkles className="h-3.5 w-3.5 text-sport-500" />
               ) : (
                 <Lock className="h-3.5 w-3.5 text-muted" />
               )}
-              <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
+              <span className="text-[11px] font-bold text-sport-700">
                 Objetivos por composición corporal
               </span>
-              <span className="rounded bg-indigo-500/15 px-1 py-0.5 text-[8px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-300">
+              <span className="rounded bg-sport-500/15 px-1 py-0.5 text-[8px] font-black uppercase tracking-wider text-sport-600">
                 Pro
               </span>
               <span onClick={(e) => e.stopPropagation()}>
@@ -477,14 +521,14 @@ export function PlanBuilderSidebar({
               </span>
             </div>
             {bcOpen ? (
-              <ChevronUp className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+              <ChevronUp className="h-3.5 w-3.5 text-sport-500 shrink-0" />
             ) : (
-              <ChevronDown className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+              <ChevronDown className="h-3.5 w-3.5 text-sport-500 shrink-0" />
             )}
           </div>
 
           {bcOpen && (
-            <div className="border-t border-indigo-500/20 px-3 pb-3 pt-2 space-y-3">
+            <div className="border-t border-sport-500/20 px-3 pb-3 pt-2 space-y-3">
               {!proBodyComp ? (
                 <p className="rounded-lg bg-surface-sunken/40 px-2.5 py-2 text-[10px] leading-relaxed text-muted">
                   Función <span className="font-bold">Pro</span>. Activa el módulo de
@@ -523,7 +567,7 @@ export function PlanBuilderSidebar({
                         className={cn(
                           'flex-1 rounded-md px-2 py-1 text-[10px] font-bold transition-colors',
                           bcInputMode === k
-                            ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
+                            ? 'bg-sport-500/15 text-sport-700'
                             : 'text-muted hover:text-strong'
                         )}
                       >
@@ -593,17 +637,17 @@ export function PlanBuilderSidebar({
                   {bcLeanMass != null && (
                     <p className="text-[10px] text-muted">
                       Masa magra usada:{' '}
-                      <span className="font-bold tabular-nums text-indigo-600 dark:text-indigo-300">
+                      <span className="font-bold tabular-nums text-sport-600">
                         {bcLeanMass.toFixed(1)} kg
                       </span>
                     </p>
                   )}
 
                   {bcSuggested && (
-                    <div className="rounded-lg bg-indigo-500/10 border border-indigo-500/20 p-2.5 space-y-2">
+                    <div className="rounded-lg bg-sport-500/10 border border-sport-500/20 p-2.5 space-y-2">
                       <div className="grid grid-cols-2 gap-1 text-[11px] font-bold">
                         <span className="text-muted">kcal:</span>
-                        <span className="tabular-nums text-indigo-700 dark:text-indigo-300">{bcSuggested.calories}</span>
+                        <span className="tabular-nums text-sport-700">{bcSuggested.calories}</span>
                         <span className="text-muted">Proteína:</span>
                         <span className="tabular-nums text-[var(--ember-600)]">{bcSuggested.protein}g</span>
                         <span className="text-muted">Carbos:</span>
@@ -615,7 +659,7 @@ export function PlanBuilderSidebar({
                         type="button"
                         size="sm"
                         variant="outline"
-                        className="w-full h-7 text-[10px] font-bold border-indigo-500/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/10"
+                        className="w-full h-7 text-[10px] font-bold border-sport-500/40 text-sport-700 hover:bg-sport-500/10"
                         onClick={() => {
                           onGoalsChange(bcSuggested)
                           if (autoSync) onAutoSyncToggle(false)

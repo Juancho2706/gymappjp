@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, ArrowRight, Check, Loader2, Users } from 'lucide-react'
+import { AlertCircle, ArrowLeft, ArrowRight, Check, Loader2, Users } from 'lucide-react'
 import {
     MOVEMENT_PATTERNS_V1,
     finalItemScore,
@@ -63,17 +63,24 @@ function initItems(saved: MovementAssessmentItem[]): ItemsState {
     return state
 }
 
+/** Dolor o descarte positivo fuerzan puntaje 0 (kit): el score row se oculta y el item cuenta como completo. */
+function isForcedZero(def: MovementPatternDef, item: ItemState): boolean {
+    return item.pain || (def.hasClearing && item.clearing_positive === true)
+}
+
 function isComplete(def: MovementPatternDef, item: ItemState): boolean {
+    if (isForcedZero(def, item)) return true
     return def.isPerSide ? item.score_left != null && item.score_right != null : item.score_single != null
 }
 
 function toCalcInput(def: MovementPatternDef, item: ItemState): CalcItemInput {
+    const forced = isForcedZero(def, item)
     return {
         pattern: def.slug,
         isPerSide: def.isPerSide,
-        scoreLeft: item.score_left,
-        scoreRight: item.score_right,
-        scoreSingle: item.score_single,
+        scoreLeft: item.score_left ?? (forced && def.isPerSide ? 0 : null),
+        scoreRight: item.score_right ?? (forced && def.isPerSide ? 0 : null),
+        scoreSingle: item.score_single ?? (forced && !def.isPerSide ? 0 : null),
         pain: item.pain,
         clearingPositive: item.clearing_positive,
     }
@@ -248,15 +255,18 @@ export function MovementWizard({
     function saveCurrent(onDone?: () => void) {
         if (!def) return
         const item = items[def.slug]
+        // Forzado a 0 (dolor/descarte): el schema exige los puntajes crudos → se persisten en 0
+        // (el motor finalItemScore fuerza el final a 0 igual; el server recalcula SIEMPRE).
+        const forced = isForcedZero(def, item)
         setSaveError(null)
         startSaving(async () => {
             const res = await upsertDraftItemAction({
                 client_id: clientId,
                 item: {
                     pattern: def.slug,
-                    score_left: def.isPerSide ? item.score_left : null,
-                    score_right: def.isPerSide ? item.score_right : null,
-                    score_single: def.isPerSide ? null : item.score_single,
+                    score_left: def.isPerSide ? (item.score_left ?? (forced ? 0 : null)) : null,
+                    score_right: def.isPerSide ? (item.score_right ?? (forced ? 0 : null)) : null,
+                    score_single: def.isPerSide ? null : (item.score_single ?? (forced ? 0 : null)),
                     pain: item.pain,
                     clearing_positive: def.hasClearing ? (item.clearing_positive ?? false) : null,
                     comment: item.comment.trim() || null,
@@ -308,7 +318,7 @@ export function MovementWizard({
                 </div>
             </header>
 
-            <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-5 pb-32">
+            <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-5 pb-32 md:pb-8">
                 {editedByOther && (
                     <p className="mb-4 flex items-center gap-2 rounded-control bg-[var(--warning-100)] px-3.5 py-2.5 text-xs font-semibold text-[color:var(--warning-700)]">
                         <Users className="size-3.5 shrink-0" aria-hidden />
@@ -327,7 +337,14 @@ export function MovementWizard({
                             </h1>
                         </div>
 
-                        {def.isPerSide ? (
+                        {isForcedZero(def, items[def.slug]) ? (
+                            <div className="flex items-center gap-[9px] rounded-control bg-[var(--danger-100)] px-3.5 py-3">
+                                <AlertCircle className="size-4 shrink-0 text-[color:var(--danger-600)]" aria-hidden />
+                                <p className="text-[12.5px] font-semibold text-[color:var(--danger-700)]">
+                                    El patrón se registra con puntaje 0.
+                                </p>
+                            </div>
+                        ) : def.isPerSide ? (
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <ScoreSegmented
                                     label={t('assessment.side.left')}
@@ -531,8 +548,9 @@ export function MovementWizard({
                 )}
             </main>
 
-            {/* Barra fija: total parcial + navegacion (safe-area, AC10) */}
-            <footer className="fixed inset-x-0 bottom-0 z-40 border-t border-subtle bg-[color-mix(in_oklab,var(--surface-card)_92%,transparent)] px-4 pb-safe backdrop-blur-xl">
+            {/* Barra fija en móvil: total parcial + navegacion (safe-area, AC10). En desktop
+                queda confinada a la columna de contenido (kit dt-stage) — jamás sobre el sidebar. */}
+            <footer className="fixed inset-x-0 bottom-0 z-40 border-t border-subtle bg-[color-mix(in_oklab,var(--surface-card)_92%,transparent)] px-4 pb-safe backdrop-blur-xl md:static md:inset-x-auto">
                 <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 py-3">
                     <div>
                         <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-muted">

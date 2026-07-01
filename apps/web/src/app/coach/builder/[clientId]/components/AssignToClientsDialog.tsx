@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { useIsDesktopMd } from './useIsDesktopMd'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Loader2, Users, Check } from 'lucide-react'
@@ -84,19 +86,10 @@ export function AssignToClientsDialog({ open, onClose, programId, programName }:
         setAssigning(false)
     }
 
-    return (
-        <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="max-w-md bg-background/95 backdrop-blur-2xl border border-border shadow-2xl">
-                <DialogHeader>
-                    <DialogTitle className="text-sm font-display uppercase tracking-[0.2em] text-foreground">
-                        Asignar a Clientes
-                    </DialogTitle>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                        {programName}
-                    </p>
-                </DialogHeader>
+    const isDesktop = useIsDesktopMd()
 
-                <div className="mt-2 space-y-4">
+    const body = (
+        <div className="mt-2 space-y-4">
                     {/* Búsqueda */}
                     <input
                         value={search}
@@ -207,7 +200,7 @@ export function AssignToClientsDialog({ open, onClose, programId, programName }:
                     <Button
                         onClick={handleAssign}
                         disabled={selected.length === 0 || assigning}
-                        className="w-full h-11 text-xs font-bold uppercase tracking-[0.2em]"
+                        className="w-full h-11 text-[15px] font-bold"
                         style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
                     >
                         {assigning ? (
@@ -218,7 +211,43 @@ export function AssignToClientsDialog({ open, onClose, programId, programName }:
                             `Asignar a ${selected.length} cliente${selected.length !== 1 ? 's' : ''}`
                         )}
                     </Button>
-                </div>
+        </div>
+    )
+
+    if (!isDesktop) {
+        return (
+            <Sheet open={open} onOpenChange={onClose}>
+                <SheetContent
+                    side="bottom"
+                    showCloseButton
+                    className="max-h-[88dvh] gap-0 rounded-t-sheet border-subtle bg-surface-card p-0 text-body"
+                >
+                    <div className="flex max-h-[88dvh] flex-col overflow-y-auto overscroll-contain px-5 pb-4 pt-3">
+                        <div className="mx-auto mb-3 h-1 w-9 shrink-0 rounded-full bg-[var(--border-strong)]" aria-hidden="true" />
+                        <SheetHeader className="border-0 bg-transparent p-0">
+                            <SheetTitle className="sr-only">Asignar a clientes</SheetTitle>
+                        </SheetHeader>
+                        <h2 className="font-display text-lg font-extrabold tracking-[-0.02em] text-strong">Asignar a clientes</h2>
+                        <p className="text-[13px] text-muted">{programName}</p>
+                        {body}
+                    </div>
+                </SheetContent>
+            </Sheet>
+        )
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onClose}>
+            <DialogContent className="max-w-md bg-background/95 backdrop-blur-2xl border border-border shadow-2xl">
+                <DialogHeader>
+                    <DialogTitle className="font-display text-[17px] font-extrabold normal-case tracking-[-0.02em] text-foreground">
+                        Asignar a clientes
+                    </DialogTitle>
+                    <p className="text-[13px] text-muted-foreground">
+                        {programName}
+                    </p>
+                </DialogHeader>
+                {body}
             </DialogContent>
         </Dialog>
     )

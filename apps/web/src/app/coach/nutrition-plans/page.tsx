@@ -8,7 +8,7 @@ import {
   getFoodLibrary,
 } from './_data/nutrition-coach.queries'
 import { getTierCapabilities, getTierPriceClp, type SubscriptionTier } from '@/lib/constants'
-import { Check, Salad } from 'lucide-react'
+import { ArrowUpCircle, PieChart, Repeat, Users, Utensils } from 'lucide-react'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 import { getNutritionPlansPageCoach, getCoachOrgNutritionTemplates } from './_data/nutrition-page.queries'
 import { OrgTemplatesSection } from './_components/OrgTemplatesSection'
@@ -38,31 +38,45 @@ export default async function NutritionPlansPage() {
     const proAnnualMonthly = Math.round(getTierPriceClp('pro', 'annual') / 12)
 
     return (
-      <main className="mx-auto max-w-2xl px-4 py-10 animate-fade-in space-y-4">
+      <main className="mx-auto max-w-2xl px-4 py-8 animate-fade-in space-y-4">
         <UpgradeGateTracker gate="nutrition" currentTier={tier} />
-        {/* Hero */}
-        <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/10 via-card to-card p-6">
-          <div className="relative z-10">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/15 border border-emerald-500/20 mb-4">
-              <Salad className="h-6 w-6 text-emerald-400" />
-            </div>
-            <h1 className="text-2xl font-extrabold text-foreground">Planes de nutrición</h1>
-            <p className="text-sm text-muted-foreground mt-1.5 max-w-sm">
-              Creá planes de alimentación personalizados para cada alumno. Seguimiento de macros y calorías — todo en EVA.
-            </p>
-          </div>
-          <div className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 rounded-full bg-emerald-400/15 blur-3xl" />
+        {/* TopBar — Nutrición · Módulo Pro (kit NutritionUpgradeGate) */}
+        <div className="px-1">
+          <h1 className="font-display text-2xl font-extrabold leading-tight tracking-[-0.02em] text-strong">
+            Nutrición
+          </h1>
+          <p className="mt-0.5 text-[13px] text-muted">Módulo Pro</p>
+        </div>
+
+        {/* Hero inverse */}
+        <div className="rounded-card p-6 text-center" style={{ background: 'var(--surface-inverse)' }}>
+          <span className="mb-3 inline-flex h-14 w-14 items-center justify-center rounded-control bg-[var(--sport-500)] text-white">
+            <Utensils className="h-7 w-7" />
+          </span>
+          <h2
+            className="font-display text-[24px] font-black leading-tight tracking-[-0.02em]"
+            style={{ color: 'var(--text-on-dark)' }}
+          >
+            Desbloqueá Nutrición
+          </h2>
+          <p
+            className="mx-auto mt-2 max-w-sm text-sm leading-relaxed"
+            style={{ color: 'var(--text-on-dark-muted)' }}
+          >
+            Armá planes de alimentación profesionales para tus alumnos. Disponible en el plan{' '}
+            <strong style={{ color: 'var(--text-on-dark)' }}>Pro</strong>.
+          </p>
         </div>
 
         {/* Visual mockup */}
-        <div className="rounded-2xl border border-border bg-card p-5 space-y-4 select-none pointer-events-none">
+        <div className="rounded-card border border-subtle bg-surface-card p-5 space-y-4 select-none pointer-events-none">
           <div className="flex items-center justify-between">
             <div>
-              <div className="h-2.5 w-32 rounded-full bg-emerald-500/40 mb-1.5" />
-              <div className="h-1.5 w-20 rounded-full bg-muted" />
+              <div className="h-2.5 w-32 rounded-full bg-sport-200 mb-1.5" />
+              <div className="h-1.5 w-20 rounded-full bg-surface-sunken" />
             </div>
-            <div className="rounded-lg bg-emerald-500/15 border border-emerald-500/20 px-3 py-1.5">
-              <span className="text-xs font-bold text-emerald-400">1.690 kcal</span>
+            <div className="rounded-lg bg-sport-100 px-3 py-1.5">
+              <span className="eva-mono text-xs font-bold text-sport-600">1.690 kcal</span>
             </div>
           </div>
 
@@ -73,23 +87,23 @@ export default async function NutritionPlansPage() {
             { meal: 'Cena',     time: '20:00', kcal: '490 kcal', w: 'w-32', done: false },
           ].map(({ meal, time, kcal, w, done }) => (
             <div key={meal} className="flex items-center gap-3">
-              <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${done ? 'border-emerald-500/40 bg-emerald-500/15' : 'border-border'}`}>
-                {done && <div className="h-2 w-2 rounded-full bg-emerald-400" />}
+              <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${done ? 'border-sport-300 bg-sport-100' : 'border-subtle'}`}>
+                {done && <div className="h-2 w-2 rounded-full bg-sport-500" />}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-medium text-foreground/70">{meal}</span>
-                  <span className="text-[10px] text-muted-foreground/50">{time}</span>
+                  <span className="text-xs font-medium text-body">{meal}</span>
+                  <span className="text-[10px] text-subtle">{time}</span>
                 </div>
-                <div className={`h-1.5 ${w} rounded-full ${done ? 'bg-emerald-500/35' : 'bg-muted'}`} />
+                <div className={`h-1.5 ${w} rounded-full ${done ? 'bg-sport-300' : 'bg-surface-sunken'}`} />
               </div>
-              <span className="text-[11px] text-muted-foreground/60 shrink-0">{kcal}</span>
+              <span className="eva-mono text-[11px] text-subtle shrink-0">{kcal}</span>
             </div>
           ))}
 
-          <div className="h-px bg-border" />
+          <div className="h-px bg-[var(--border-subtle)]" />
           <div className="grid grid-cols-3 gap-2">
-            {[['P', '145g', 'bg-blue-500/10 border-blue-500/20 text-blue-400'], ['C', '210g', 'bg-amber-500/10 border-amber-500/20 text-amber-400'], ['G', '65g', 'bg-rose-500/10 border-rose-500/20 text-rose-400']] .map(([macro, val, cls]) => (
+            {[['P', '145g', 'bg-ember-500/10 border-ember-500/20 text-ember-600'], ['C', '210g', 'bg-sport-500/10 border-sport-500/20 text-sport-600'], ['G', '65g', 'bg-aqua-500/10 border-aqua-500/20 text-aqua-600']] .map(([macro, val, cls]) => (
               <div key={macro} className={`rounded-lg border px-2 py-2 text-center ${cls}`}>
                 <p className="text-[10px] font-bold">{macro}</p>
                 <p className="text-xs font-semibold mt-0.5">{val}</p>
@@ -98,41 +112,51 @@ export default async function NutritionPlansPage() {
           </div>
         </div>
 
-        {/* Pricing + features + CTA */}
-        <div className="rounded-2xl border border-border bg-card p-5 space-y-5">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Disponible en Pro</p>
-            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 mt-1.5">
-              <span className="text-2xl font-extrabold text-foreground">${proMonthly.toLocaleString('es-CL')}</span>
-              <span className="text-sm text-muted-foreground">/mes</span>
-              <span className="text-muted-foreground/40">·</span>
-              <span className="text-sm font-semibold text-emerald-400">${proAnnualMonthly.toLocaleString('es-CL')}/mes anual</span>
-              <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-500">−20%</span>
-            </div>
-          </div>
-
-          <ul className="space-y-2.5">
-            {[
-              'Planes de nutrición personalizados por alumno',
-              'Seguimiento de macros y calorías diarias',
-              'Plantillas reutilizables por objetivo',
-              'Hasta 30 alumnos activos (3× más que Free)',
-            ].map((feat) => (
-              <li key={feat} className="flex items-start gap-2.5 text-sm text-muted-foreground">
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-                {feat}
-              </li>
+        {/* Feature tiles (kit: tiles sport-100/sport-600) */}
+        <div className="rounded-card border border-subtle bg-surface-card p-5">
+          <div className="flex flex-col gap-3.5">
+            {([
+              [Utensils, 'Planes de nutrición personalizados por alumno'],
+              [PieChart, 'Seguimiento de macros y calorías diarias'],
+              [Repeat, 'Plantillas reutilizables por objetivo'],
+              [Users, 'Hasta 30 alumnos activos (3× más que Free)'],
+            ] as const).map(([Icon, feat]) => (
+              <div key={feat} className="flex items-center gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-sport-100 text-sport-600">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="text-sm font-semibold text-body">{feat}</span>
+              </div>
             ))}
-          </ul>
-
-          <Link
-            href="/coach/subscription?upgrade=pro"
-            className="flex h-11 w-full items-center justify-center rounded-xl bg-emerald-500 px-5 text-sm font-semibold text-white hover:bg-emerald-400 transition-colors"
-          >
-            Desbloquear nutrición con Pro →
-          </Link>
-          <p className="text-center text-xs text-muted-foreground">Sin permanencia · Cancelá cuando quieras</p>
+          </div>
         </div>
+
+        {/* Pricing cards Mensual / Anual (kit: borde sport + badge -20% en Anual) */}
+        <div className="flex gap-2.5">
+          <div className="flex-1 rounded-card border border-subtle bg-surface-card p-4">
+            <p className="mb-1 text-xs font-bold text-muted">Mensual</p>
+            <p className="eva-metric text-[22px] text-strong">${proMonthly.toLocaleString('es-CL')}</p>
+            <p className="mt-0.5 text-[10.5px] text-subtle">/mes</p>
+          </div>
+          <div className="relative flex-1 rounded-card border-[1.5px] border-[color:var(--sport-500)] bg-surface-card p-4">
+            <span className="absolute -top-2.5 right-3 rounded-pill bg-sport-500 px-2 py-0.5 text-[10px] font-extrabold text-white">
+              -20%
+            </span>
+            <p className="mb-1 text-xs font-bold text-muted">Anual</p>
+            <p className="eva-metric text-[22px] text-strong">${proAnnualMonthly.toLocaleString('es-CL')}</p>
+            <p className="mt-0.5 text-[10.5px] text-subtle">/mes · facturado anual</p>
+          </div>
+        </div>
+
+        <Link
+          href="/coach/subscription?upgrade=pro"
+          className="eva-press flex h-12 w-full items-center justify-center gap-2 rounded-control text-[15px] font-bold text-white shadow-[var(--glow-sport)] transition-[filter] hover:brightness-105"
+          style={{ background: 'var(--cta-fill)' }}
+        >
+          <ArrowUpCircle className="h-[18px] w-[18px]" />
+          Mejorar a Pro
+        </Link>
+        <p className="text-center text-xs text-muted">Sin permanencia · Cancelá cuando quieras</p>
       </main>
     )
   }

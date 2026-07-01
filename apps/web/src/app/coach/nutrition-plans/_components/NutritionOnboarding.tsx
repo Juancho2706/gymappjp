@@ -14,9 +14,10 @@ interface Props {
   coachId: string
   hasClients: boolean
   onAssign?: () => void
+  onFoods?: () => void
 }
 
-export function NutritionOnboarding({ coachId, hasClients, onAssign }: Props) {
+export function NutritionOnboarding({ coachId, hasClients, onAssign, onFoods }: Props) {
   const [dismissed, setDismissed] = useState<boolean | null>(null)
 
   useEffect(() => {
@@ -37,12 +38,9 @@ export function NutritionOnboarding({ coachId, hasClients, onAssign }: Props) {
   return (
     <div className="rounded-2xl border border-dashed border-border/80 bg-card p-6 space-y-6">
       <div className="space-y-1.5">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">🥗</span>
-          <h2 className="text-xl font-black uppercase tracking-tighter text-foreground">
-            Bienvenido al módulo de nutrición
-          </h2>
-        </div>
+        <h2 className="font-display text-xl font-extrabold tracking-[-0.02em] text-strong">
+          Bienvenido al módulo de nutrición
+        </h2>
         <p className="text-sm text-muted-foreground max-w-xl">
           Sigue estos 3 pasos para empezar a asignar planes nutricionales a tus alumnos.
         </p>
@@ -88,9 +86,18 @@ export function NutritionOnboarding({ coachId, hasClients, onAssign }: Props) {
                   className={cn(
                     'inline-flex items-center gap-1 text-xs font-bold transition-colors',
                     isDisabled || !onAssign
-                      ? 'cursor-not-allowed text-muted-foreground'
-                      : 'text-sky-600 hover:text-sky-700 dark:text-sky-400'
+                      ? 'cursor-not-allowed text-muted'
+                      : 'text-[var(--aqua-600)] hover:text-[var(--aqua-700)]'
                   )}
+                >
+                  {step.cta}
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              ) : step.number === 1 && onFoods ? (
+                <button
+                  type="button"
+                  onClick={onFoods}
+                  className="inline-flex items-center gap-1 text-xs font-bold text-[var(--sport-600)] transition-colors hover:text-[var(--sport-700)]"
                 >
                   {step.cta}
                   <ChevronRight className="h-3.5 w-3.5" />
@@ -101,8 +108,8 @@ export function NutritionOnboarding({ coachId, hasClients, onAssign }: Props) {
                   className={cn(
                     'inline-flex items-center gap-1 text-xs font-bold transition-colors',
                     step.number === 1
-                      ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400'
-                      : 'text-violet-600 hover:text-violet-700 dark:text-violet-400'
+                      ? 'text-[var(--sport-600)] hover:text-[var(--sport-700)]'
+                      : 'text-[var(--ember-600)] hover:text-[var(--ember-700)]'
                   )}
                 >
                   {step.cta}

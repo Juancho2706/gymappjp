@@ -63,7 +63,7 @@ export function FoodListCompact({ items, coachId, emptyLabel = 'No hay alimentos
                   <span className="font-semibold text-sm text-foreground leading-snug pr-1 flex items-start gap-1.5 min-w-0">
                     <span className="truncate">{food.name}</span>
                     {isMine ? (
-                      <Star className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5 fill-primary/30" aria-hidden />
+                      <Star className="w-3.5 h-3.5 text-ember-500 shrink-0 mt-0.5 fill-ember-500/30" aria-hidden />
                     ) : (
                       <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" aria-hidden />
                     )}
@@ -76,7 +76,7 @@ export function FoodListCompact({ items, coachId, emptyLabel = 'No hay alimentos
                       <button
                         type="button"
                         onClick={() => onDelete(food.id)}
-                        className="rounded p-1 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                        className="rounded p-1 text-muted-foreground hover:text-[var(--danger-500)] hover:bg-[var(--danger-500)]/10 transition-colors"
                         aria-label={`Eliminar ${food.name}`}
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -86,9 +86,9 @@ export function FoodListCompact({ items, coachId, emptyLabel = 'No hay alimentos
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
                   <span className="tabular-nums">
-                    <span className="text-blue-600/90 dark:text-blue-400 font-bold">P</span> {food.protein_g}g ·{' '}
-                    <span className="text-emerald-600/90 dark:text-emerald-400 font-bold">C</span> {food.carbs_g}g ·{' '}
-                    <span className="text-purple-600/90 dark:text-purple-400 font-bold">G</span> {food.fats_g}g
+                    <span className="text-[var(--ember-600)] font-bold">P</span> {food.protein_g}g ·{' '}
+                    <span className="text-[var(--sport-600)] font-bold">C</span> {food.carbs_g}g ·{' '}
+                    <span className="text-[var(--aqua-600)] font-bold">G</span> {food.fats_g}g
                   </span>
                   {food.category?.trim() ? (
                     <Badge variant="secondary" className="text-[9px] h-5 px-1.5 font-bold">
@@ -104,7 +104,7 @@ export function FoodListCompact({ items, coachId, emptyLabel = 'No hay alimentos
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span className="font-medium truncate">{food.name}</span>
                     {isMine ? (
-                      <Star className="w-3.5 h-3.5 text-primary shrink-0 fill-primary/30" aria-label="Tuyo" />
+                      <Star className="w-3.5 h-3.5 text-ember-500 shrink-0 fill-ember-500/30" aria-label="Tuyo" />
                     ) : (
                       <Globe className="w-3.5 h-3.5 text-muted-foreground shrink-0" aria-label="Global" />
                     )}
@@ -117,16 +117,16 @@ export function FoodListCompact({ items, coachId, emptyLabel = 'No hay alimentos
                   {unitHint ? <span className="text-[10px] text-muted-foreground/85 truncate">{unitHint}</span> : null}
                 </div>
                 <span className="text-right tabular-nums text-xs font-semibold">{food.calories}</span>
-                <span className="text-right tabular-nums text-xs text-blue-600/90 dark:text-blue-400">{food.protein_g}</span>
-                <span className="text-right tabular-nums text-xs text-emerald-600/90 dark:text-emerald-400">{food.carbs_g}</span>
-                <span className="text-right tabular-nums text-xs text-purple-600/90 dark:text-purple-400">{food.fats_g}</span>
+                <span className="text-right tabular-nums text-xs text-[var(--ember-600)]">{food.protein_g}</span>
+                <span className="text-right tabular-nums text-xs text-[var(--sport-600)]">{food.carbs_g}</span>
+                <span className="text-right tabular-nums text-xs text-[var(--aqua-600)]">{food.fats_g}</span>
                 <span className="flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
                   {isMine ? 'Propio' : 'Global'}
                   {isMine && onDelete && (
                     <button
                       type="button"
                       onClick={() => onDelete(food.id)}
-                      className="rounded p-0.5 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                      className="rounded p-0.5 text-muted-foreground hover:text-[var(--danger-500)] hover:bg-[var(--danger-500)]/10 transition-colors"
                       aria-label={`Eliminar ${food.name}`}
                     >
                       <Trash2 className="w-3 h-3" />

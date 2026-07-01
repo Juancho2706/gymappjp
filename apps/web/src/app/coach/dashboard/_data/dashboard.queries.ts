@@ -31,6 +31,8 @@ export interface ActivityItemClient {
     date: string
     href: string
     photoUrl?: string | null
+    /** Presentacional: nombre del alumno para el bold parcial de la fila (kit: solo el nombre en strong). */
+    clientName?: string
 }
 
 /** Align with BillingTabB8: only completed / paid rows count toward coach revenue. */
@@ -454,6 +456,7 @@ async function getCoachDashboardDataInner(
             id: `client-${c.id}`,
             type: 'nuevo alumno',
             title: `${c.full_name} se ha unido`,
+            clientName: c.full_name,
             subtitle: c.onboarding_completed ? 'Onboarding completado' : 'Pendiente de onboarding',
             date: c.created_at,
             href: `/coach/clients/${c.id}`,
@@ -465,6 +468,7 @@ async function getCoachDashboardDataInner(
             id: `checkin-${c.id}`,
             type: 'check-in',
             title: `${c.clients.full_name} subio su Check-in`,
+            clientName: c.clients.full_name,
             subtitle: 'Revisa su progreso semanal',
             date: c.created_at,
             href: `/coach/clients/${c.clients.id}`,
@@ -483,6 +487,7 @@ async function getCoachDashboardDataInner(
                 id: `workout-${w.client_id}-${dayStr}`,
                 type: 'workout',
                 title: `${w.clients.full_name} completó una sesión`,
+                clientName: w.clients.full_name,
                 subtitle: 'Workout registrado',
                 date: w.logged_at,
                 href: `/coach/clients/${w.clients.id}`,

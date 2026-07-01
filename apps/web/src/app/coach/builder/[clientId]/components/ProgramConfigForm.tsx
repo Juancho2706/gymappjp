@@ -113,7 +113,7 @@ export function ProgramConfigForm({
                     autoComplete="off"
                     className="h-11 rounded-control bg-background border-border font-bold text-xs uppercase tracking-widest placeholder:text-muted-foreground"
                 />
-                <p className={`text-right text-[10px] tabular-nums ${programName.length > 85 ? 'text-amber-500' : 'text-muted-foreground/40'}`}>
+                <p className={`text-right text-[10px] tabular-nums ${programName.length > 85 ? 'text-[var(--warning-600)]' : 'text-muted-foreground/40'}`}>
                     {programName.length}/100
                 </p>
             </div>
@@ -266,7 +266,7 @@ export function ProgramConfigForm({
                         Añadir fase
                     </button>
                 </div>
-                <p className="text-[10px] text-foreground/80 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                <p className="text-[10px] text-foreground/80 bg-[var(--warning-100)] border border-[var(--warning-500)]/20 rounded-lg px-3 py-2">
                     Solo ordenan el timeline visual del programa; no cambian ejercicios ni cargas.
                 </p>
                 <div className="space-y-2">
@@ -371,7 +371,7 @@ export function ProgramConfigForm({
                     placeholder="Reglas del macrociclo, RIR general, consideraciones…"
                     maxLength={2000}
                 />
-                <p className={`text-right text-[10px] tabular-nums ${(programNotes?.length ?? 0) > 1800 ? 'text-amber-500' : 'text-muted-foreground/40'}`}>
+                <p className={`text-right text-[10px] tabular-nums ${(programNotes?.length ?? 0) > 1800 ? 'text-[var(--warning-600)]' : 'text-muted-foreground/40'}`}>
                     {programNotes?.length ?? 0}/2000
                 </p>
             </div>

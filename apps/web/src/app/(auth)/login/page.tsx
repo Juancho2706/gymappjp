@@ -29,7 +29,7 @@ export default async function CoachLoginPage({ searchParams }: CoachLoginPagePro
                 <ChevronLeft className="h-5 w-5" aria-hidden="true" />
             </Link>
 
-            <div className="w-full max-w-[360px]">
+            <div className="my-auto w-full max-w-[360px]">
                 {/* Encabezado centrado: logo EVA + título + subtítulo */}
                 <div className="flex flex-col items-center text-center">
                     <EvaBrandIcon className="h-[72px] w-[72px] sm:h-[72px] sm:w-[72px]" />

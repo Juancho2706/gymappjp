@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Users, ChevronRight, Trash2, Search, UserPlus, SlidersHorizontal, X } from 'lucide-react'
+import { Users, ChevronRight, Trash2, Search, UserPlus, SlidersHorizontal, X, TriangleAlert } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { unassignNutritionPlan, createEmptyClientNutritionPlan } from '../_actions/nutrition-coach.actions'
@@ -250,9 +250,12 @@ export function ActivePlansBoard({ coachId, activePlans, clientsWithoutPlan }: P
       <AlertDialog open={unassignTarget !== null} onOpenChange={(o) => !o && setUnassignTarget(null)}>
         <AlertDialogContent className="rounded-2xl border-border bg-card text-foreground">
           <AlertDialogHeader>
-            <AlertDialogTitle>Quitar plan de nutrición</AlertDialogTitle>
+            <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-control bg-[var(--danger-100)] text-[var(--danger-600)]">
+              <TriangleAlert className="h-[22px] w-[22px]" />
+            </div>
+            <AlertDialogTitle className="font-display font-extrabold normal-case tracking-[-0.01em]">Quitar plan</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Quitar el plan activo de este alumno? Podrás asignar otro después desde Plantillas.
+              El plan de este alumno se marcará inactivo. No se borran comidas ni el historial de adherencia.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-0">

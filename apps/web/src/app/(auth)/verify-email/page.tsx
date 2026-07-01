@@ -17,7 +17,7 @@ function VerifyEmailContent() {
     ]
 
     return (
-        <div className="w-full max-w-md mx-auto animate-slide-up text-center">
+        <div className="w-full max-w-md mx-auto my-auto animate-slide-up text-center">
             <div className="inline-flex h-[76px] w-[76px] items-center justify-center rounded-full bg-sport-100 text-sport-600 mb-5">
                 <MailCheck className="h-[34px] w-[34px]" />
             </div>
@@ -54,7 +54,7 @@ function VerifyEmailContent() {
 
             <Link
                 href="/login"
-                className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-control bg-[var(--cta-fill)] text-base font-bold tracking-[-0.01em] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] transition-all duration-200 hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)] active:scale-[0.98]"
+                className="mt-6 inline-flex h-14 w-full items-center justify-center gap-2 rounded-control bg-[var(--cta-fill)] text-[17px] font-bold tracking-[-0.01em] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] transition-all duration-200 hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)] active:scale-[0.98]"
             >
                 Ya confirmé · Ir al panel
                 <ArrowRight className="h-4 w-4" />

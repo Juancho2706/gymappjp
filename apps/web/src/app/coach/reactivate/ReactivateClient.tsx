@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { AlertTriangle, CheckCircle, Users } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Check, CheckCircle2, Users } from 'lucide-react'
 import {
     ADDON_CONFIG,
     ADDON_MODULE_KEYS,
@@ -251,310 +251,347 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
         (subscriptionStatus === 'pending_payment' || subscriptionStatus === 'expired')
 
     return (
-        <main className="mx-auto max-w-4xl px-4 py-10 bg-background dark:bg-zinc-950">
-            <div className="rounded-2xl border border-border bg-card p-6 shadow-sm dark:border-white/10 dark:bg-zinc-900/80 md:p-8">
-                <h1 className="text-2xl font-bold text-foreground md:text-3xl">Reactivar tu suscripción</h1>
-                <p className="mt-2 text-sm text-muted-foreground md:text-base">
-                    Sin un plan activo no puedes gestionar alumnos ni rutinas. Elige el plan que mejor se ajuste a tu
-                    negocio y completa el pago seguro con Mercado Pago.
-                </p>
+        <main className="mx-auto w-full max-w-2xl px-5 pb-12 pt-6">
+            {/* TopBar — título · subtítulo (diseño Reactivar.jsx) */}
+            <div className="mb-5">
+                <h1 className="font-display text-xl font-extrabold leading-tight tracking-tight text-strong">Reactivar plan</h1>
+                <p className="text-xs text-muted">Tu suscripción está pausada</p>
+            </div>
 
-                {subscriptionBlocked && (
-                    <div className="mt-4 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-                        <p className="font-semibold text-foreground dark:text-amber-50">Acceso restringido</p>
-                        <p className="mt-1 text-muted-foreground dark:text-amber-100/90">
+            {subscriptionBlocked && (
+                <div className="mb-3.5 flex items-start gap-2.5 rounded-card bg-[var(--warning-100)] px-3.5 py-3">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warning-600)]" />
+                    <div className="min-w-0 text-[13px]">
+                        <p className="font-semibold text-strong">Acceso restringido</p>
+                        <p className="mt-0.5 text-muted">
                             Tu cuenta quedó con un estado de suscripción que bloquea el panel. Al completar el pago,
                             recuperarás el acceso de inmediato.
                         </p>
                     </div>
-                )}
+                </div>
+            )}
 
-                {searchParams.get('from') === 'register' && (
-                    <p className="mt-4 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-800 dark:text-emerald-200">
+            {searchParams.get('from') === 'register' && (
+                <div className="mb-3.5 flex items-center gap-2.5 rounded-card bg-[var(--success-100)] px-3.5 py-2.5">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--success-600)]" />
+                    <p className="text-[13px] font-semibold text-strong">
                         Cuenta creada. Te falta completar el pago para activar acceso total al dashboard.
                     </p>
-                )}
+                </div>
+            )}
 
-                {paymentStatus === 'failure' && (
-                    <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-800 dark:text-red-200">
-                        El pago no se completó. Puedes intentarlo nuevamente.
-                    </p>
-                )}
+            {paymentStatus === 'failure' && (
+                <div className="mb-3.5 flex items-center gap-2.5 rounded-card bg-[var(--danger-100)] px-3.5 py-2.5">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-[var(--danger-600)]" />
+                    <p className="text-[13px] font-semibold text-strong">El pago no se completó. Puedes intentarlo nuevamente.</p>
+                </div>
+            )}
 
-                {paymentStatus === 'pending' && (
-                    <p className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
-                        Tu pago quedó pendiente. Espera unos minutos y vuelve a verificar.
-                    </p>
-                )}
+            {paymentStatus === 'pending' && (
+                <div className="mb-3.5 flex items-center gap-2.5 rounded-card bg-[var(--warning-100)] px-3.5 py-2.5">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-[var(--warning-600)]" />
+                    <p className="text-[13px] font-semibold text-strong">Tu pago quedó pendiente. Espera unos minutos y vuelve a verificar.</p>
+                </div>
+            )}
 
-                <section className="mt-8 overflow-x-auto rounded-xl border border-border dark:border-white/10">
-                    <h2 className="border-b border-border bg-muted/40 px-4 py-3 text-sm font-semibold text-foreground dark:border-white/10 dark:bg-white/5">
-                        Comparativa rápida de planes
-                    </h2>
-                    <table className="w-full min-w-[520px] text-left text-sm">
-                        <thead>
-                            <tr className="border-b border-border text-xs font-semibold uppercase tracking-wide text-muted-foreground dark:border-white/10">
-                                <th className="px-4 py-2">Plan</th>
-                                <th className="px-4 py-2">Alumnos</th>
-                                <th className="px-4 py-2">Desde / mes</th>
-                                <th className="px-4 py-2">Cobros</th>
-                                <th className="px-4 py-2">Nutrición</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {tierOptions.map(([key, option]) => (
-                                <tr
-                                    key={key}
-                                    className={`border-b border-border/80 last:border-0 dark:border-white/5 ${tier === key ? 'bg-primary/5 dark:bg-primary/10' : ''}`}
-                                >
-                                    <td className="px-4 py-2.5 font-medium text-foreground">{option.label}</td>
-                                    <td className="px-4 py-2.5 text-muted-foreground">{TIER_STUDENT_RANGE_LABEL[key]}</td>
-                                    <td className="px-4 py-2.5 text-foreground">
-                                        ${option.monthlyPriceClp.toLocaleString('es-CL')} CLP
-                                    </td>
-                                    <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                                        {getTierBillingCycleSummary(key)}
-                                    </td>
-                                    <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                                        {getTierNutritionSummary(key)}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </section>
-
-                <p className="mt-4 text-xs text-muted-foreground">
-                    Pagos procesados por Mercado Pago (PCI). EVA no almacena los datos de tu tarjeta.
-                </p>
-
-                <section className="mt-6">
-                    <h2 className="text-sm font-semibold text-foreground">Tier</h2>
-                    {activeClientCount > 0 && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                            Tienes <strong>{activeClientCount}</strong> alumno{activeClientCount !== 1 ? 's' : ''} activo{activeClientCount !== 1 ? 's' : ''}. Los planes que no los cubren están desactivados.
-                        </p>
+            {/* Banner warning (kit Reactivar): alumnos en pausa */}
+            <div className="mb-4 flex items-center gap-3 rounded-card border border-[var(--warning-500)] bg-[var(--warning-100)] p-4">
+                <AlertTriangle className="h-[22px] w-[22px] shrink-0 text-[var(--warning-600)]" />
+                <p className="text-[13px] leading-snug text-[var(--warning-600)]">
+                    {activeClientCount > 0 ? (
+                        <>
+                            Tus <strong>{activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''}</strong> están en
+                            pausa. Elegí un plan para reactivar el acceso.
+                        </>
+                    ) : (
+                        <>Sin un plan activo no puedes gestionar alumnos ni rutinas. Elegí un plan para reactivar el acceso.</>
                     )}
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        {tierOptions.map(([key, option]) => {
-                            const tooSmall = option.maxClients < activeClientCount
+                </p>
+            </div>
+
+            {/* Ciclo — pill segmentado centrado (kit Reactivar) */}
+            <div className="mb-4 flex justify-center">
+                <div className="inline-flex gap-1 rounded-full bg-surface-sunken p-[3px]">
+                    {allowedCycleOptions.map(([key, option]) => (
+                        <button
+                            key={key}
+                            type="button"
+                            onClick={() => setBillingCycle(key)}
+                            className={`min-h-[38px] rounded-full px-4 py-[7px] text-[13px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                                billingCycle === key ? 'bg-surface-card text-strong shadow-sm' : 'text-muted hover:text-strong'
+                            }`}
+                        >
+                            {option.label}
+                            {option.discountPercent > 0 && (
+                                <span className="ml-1 text-[11px] font-bold text-[var(--success-700)]">−{option.discountPercent}%</span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Tier — radio-cards (kit Reactivar) */}
+            <div className="mb-4 flex flex-col gap-2.5">
+                {tierOptions.map(([key, option]) => {
+                    const tooSmall = option.maxClients < activeClientCount
+                    const active = tier === key
+                    return (
+                        <button
+                            key={key}
+                            type="button"
+                            disabled={tooSmall}
+                            onClick={() => !tooSmall && setTier(key)}
+                            title={tooSmall ? `Tienes ${activeClientCount} alumnos activos — este plan no los cubre` : undefined}
+                            className={`flex items-center gap-3.5 rounded-control p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+                                tooSmall
+                                    ? 'cursor-not-allowed border-[1.5px] border-subtle bg-surface-card opacity-55'
+                                    : active
+                                    ? 'border-2 border-sport-500 bg-surface-card'
+                                    : 'border border-subtle bg-surface-card hover:bg-surface-sunken'
+                            }`}
+                        >
+                            <span
+                                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+                                    active ? 'bg-sport-500 text-white' : 'border-2 border-strong'
+                                }`}
+                                aria-hidden="true"
+                            >
+                                {active && <Check className="h-3.5 w-3.5" />}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                                <span className="flex items-center gap-2">
+                                    <span className="font-display text-[17px] font-extrabold tracking-tight text-strong">{option.label}</span>
+                                    {key === 'pro' && (
+                                        <span className="inline-flex items-center rounded-full bg-sport-500 px-2 py-0.5 text-[10px] font-bold text-white">Popular</span>
+                                    )}
+                                </span>
+                                <span className="block text-[12.5px] text-muted">Hasta {option.maxClients} alumnos</span>
+                                {tooSmall && (
+                                    <span className="block text-[12px] font-medium text-[var(--danger-600)]">
+                                        No cubre tus {activeClientCount} alumnos
+                                    </span>
+                                )}
+                            </span>
+                            <span className="shrink-0 text-right">
+                                <span className="eva-metric block text-[18px] text-strong">
+                                    ${option.monthlyPriceClp.toLocaleString('es-CL')}
+                                </span>
+                                <span className="text-[11px] text-subtle">/mes</span>
+                            </span>
+                        </button>
+                    )
+                })}
+            </div>
+
+            {exceedsTopSaleTier ? (
+                <div className="mb-4 flex items-start gap-2.5 rounded-card bg-[var(--sport-100)] px-3.5 py-3 text-[13px]">
+                    <Users className="mt-0.5 h-4 w-4 shrink-0 text-sport-600" />
+                    <div>
+                        <p className="font-semibold text-strong">Tu cartera supera el plan más alto</p>
+                        <p className="mt-0.5 text-muted">
+                            Tienes {activeClientCount} alumnos activos, más de los que cubre nuestro plan
+                            individual más alto. Conversemos de EVA Teams, pensado para carteras grandes y
+                            equipos de profesionales.{' '}
+                            <a
+                                href="mailto:contacto@eva-app.cl?subject=Quiero%20conocer%20EVA%20Teams"
+                                className="font-medium underline"
+                            >
+                                Escríbenos a contacto@eva-app.cl →
+                            </a>
+                        </p>
+                    </div>
+                </div>
+            ) : tierBlockedByClients ? (
+                <div className="mb-4 flex items-start gap-2.5 rounded-card bg-[var(--danger-100)] px-3.5 py-3 text-[13px]">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--danger-600)]" />
+                    <div>
+                        <p className="font-semibold text-strong">Plan insuficiente</p>
+                        <p className="mt-0.5 text-[var(--danger-600)]">
+                            Debes archivar {activeClientCount - getTierMaxClients(tier)} alumno{activeClientCount - getTierMaxClients(tier) !== 1 ? 's' : ''} antes de continuar con Plan {selectedTier.label}.{' '}
+                            <Link href="/coach/clients" className="underline font-medium">Ir a mis alumnos →</Link>
+                        </p>
+                    </div>
+                </div>
+            ) : null}
+
+            {/* Ex-add-ons pre-marcados (deseleccionables) — plan 05 F5.6. Solo con la compra activa. */}
+            {SELF_SERVICE_ADDONS_ENABLED && recentlyCancelledAddons.length > 0 && (
+                <section className="mb-4">
+                    <h2 className="px-1 text-[13px] font-bold uppercase tracking-wide text-muted">Volver a sumar tus módulos</h2>
+                    <p className="mt-1 px-1 text-xs text-muted">
+                        Tenías estos módulos activos. Vuelven pre-seleccionados al precio de lista vigente —
+                        quita los que no necesites.
+                    </p>
+                    <div className="mt-3 grid gap-2">
+                        {ADDON_MODULE_KEYS.filter((k) => recentlyCancelledAddons.includes(k)).map((key) => {
+                            const cfg = ADDON_CONFIG[key]
+                            const requiresNutrition = key === 'nutrition_exchanges' && !getTierCapabilities(tier).canUseNutrition
+                            const checked = selectedAddons.includes(key)
                             return (
-                                <button
+                                <label
                                     key={key}
-                                    type="button"
-                                    disabled={tooSmall}
-                                    onClick={() => !tooSmall && setTier(key)}
-                                    title={tooSmall ? `Tienes ${activeClientCount} alumnos activos — este plan no los cubre` : undefined}
-                                    className={`rounded-xl border p-4 text-left transition ${
-                                        tier === key
-                                            ? 'border-primary bg-primary/10'
-                                            : tooSmall
-                                            ? 'border-border/30 opacity-40 cursor-not-allowed'
-                                            : 'border-border hover:border-primary/40'
+                                    className={`flex items-start gap-2 rounded-control border p-3 text-left transition ${
+                                        requiresNutrition
+                                            ? 'border-subtle bg-surface-card opacity-60'
+                                            : checked
+                                                ? 'border-sport-500 bg-sport-100/40 cursor-pointer'
+                                                : 'border-subtle bg-surface-card hover:bg-surface-sunken cursor-pointer'
                                     }`}
                                 >
-                                    <p className="font-semibold text-foreground">{option.label}</p>
-                                    <p className="text-xs text-muted-foreground">Hasta {option.maxClients} alumnos</p>
-                                    <p className="mt-1 text-sm font-semibold text-foreground">
-                                        ${option.monthlyPriceClp.toLocaleString('es-CL')} CLP / mes
-                                    </p>
-                                    {tooSmall && (
-                                        <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                                            No cubre tus {activeClientCount} alumnos
-                                        </p>
-                                    )}
-                                </button>
+                                    <input
+                                        type="checkbox"
+                                        checked={checked}
+                                        disabled={requiresNutrition}
+                                        onChange={(e) =>
+                                            setSelectedAddons((prev) =>
+                                                e.target.checked ? [...prev, key] : prev.filter((k) => k !== key)
+                                            )
+                                        }
+                                        className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
+                                    />
+                                    <span className="min-w-0 flex-1">
+                                        <span className="flex items-center justify-between gap-2">
+                                            <span className="text-sm font-semibold text-strong">{cfg.label}</span>
+                                            <span className="shrink-0 text-xs font-semibold text-strong">
+                                                ${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes
+                                            </span>
+                                        </span>
+                                        {requiresNutrition && (
+                                            <span className="mt-1 inline-block text-[11px] font-medium text-[var(--warning-600)]">
+                                                Requiere un plan con nutrición (Pro o superior).
+                                            </span>
+                                        )}
+                                    </span>
+                                </label>
                             )
                         })}
                     </div>
                 </section>
+            )}
 
-                {exceedsTopSaleTier ? (
-                    <div className="mt-4 flex items-start gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-3 text-sm">
-                        <Users className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                        <div>
-                            <p className="font-semibold text-foreground">Tu cartera supera el plan más alto</p>
-                            <p className="mt-0.5 text-muted-foreground">
-                                Tienes {activeClientCount} alumnos activos, más de los que cubre nuestro plan
-                                individual más alto. Conversemos de EVA Teams, pensado para carteras grandes y
-                                equipos de profesionales.{' '}
-                                <a
-                                    href="mailto:contacto@eva-app.cl?subject=Quiero%20conocer%20EVA%20Teams"
-                                    className="font-medium underline"
-                                >
-                                    Escríbenos a contacto@eva-app.cl →
-                                </a>
-                            </p>
-                        </div>
-                    </div>
-                ) : tierBlockedByClients ? (
-                    <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-                        <div>
-                            <p className="font-semibold text-red-800 dark:text-red-200">Plan insuficiente</p>
-                            <p className="mt-0.5 text-red-700 dark:text-red-300">
-                                Debes archivar {activeClientCount - getTierMaxClients(tier)} alumno{activeClientCount - getTierMaxClients(tier) !== 1 ? 's' : ''} antes de continuar con Plan {selectedTier.label}.{' '}
-                                <Link href="/coach/clients" className="underline font-medium">Ir a mis alumnos →</Link>
-                            </p>
-                        </div>
-                    </div>
-                ) : null}
-
-                <section className="mt-6">
-                    <h2 className="text-sm font-semibold text-foreground">Frecuencia de pago</h2>
-                    <div className="mt-3 grid gap-3 md:grid-cols-3">
-                        {allowedCycleOptions.map(([key, option]) => (
-                            <button
-                                key={key}
-                                type="button"
-                                onClick={() => setBillingCycle(key)}
-                                className={`rounded-xl border p-4 text-left transition ${
-                                    billingCycle === key ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/40'
-                                }`}
-                            >
-                                <p className="font-semibold text-foreground">{option.label}</p>
-                                <p className="text-xs text-muted-foreground">
-                                    {option.discountPercent > 0 ? `Ahorro ${option.discountPercent}%` : 'Sin descuento'}
-                                </p>
-                                <p className="mt-1 text-sm font-semibold text-foreground">
-                                    ${getTierPriceClp(tier, key).toLocaleString('es-CL')} CLP
-                                </p>
-                            </button>
-                        ))}
-                    </div>
-                </section>
-
-                {/* Ex-add-ons pre-marcados (deseleccionables) — plan 05 F5.6. Solo con la compra activa. */}
-                {SELF_SERVICE_ADDONS_ENABLED && recentlyCancelledAddons.length > 0 && (
-                    <section className="mt-6">
-                        <h2 className="text-sm font-semibold text-foreground">Volver a sumar tus módulos</h2>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                            Tenías estos módulos activos. Vuelven pre-seleccionados al precio de lista vigente —
-                            quita los que no necesites.
-                        </p>
-                        <div className="mt-3 grid gap-2">
-                            {ADDON_MODULE_KEYS.filter((k) => recentlyCancelledAddons.includes(k)).map((key) => {
-                                const cfg = ADDON_CONFIG[key]
-                                const requiresNutrition = key === 'nutrition_exchanges' && !getTierCapabilities(tier).canUseNutrition
-                                const checked = selectedAddons.includes(key)
-                                return (
-                                    <label
-                                        key={key}
-                                        className={`flex items-start gap-2 rounded-xl border p-3 text-left transition ${
-                                            requiresNutrition
-                                                ? 'border-border opacity-60'
-                                                : checked
-                                                    ? 'border-primary bg-primary/10 cursor-pointer'
-                                                    : 'border-border hover:border-primary/40 cursor-pointer'
-                                        }`}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={checked}
-                                            disabled={requiresNutrition}
-                                            onChange={(e) =>
-                                                setSelectedAddons((prev) =>
-                                                    e.target.checked ? [...prev, key] : prev.filter((k) => k !== key)
-                                                )
-                                            }
-                                            className="mt-0.5 h-4 w-4 rounded border-border shrink-0"
-                                        />
-                                        <span className="min-w-0 flex-1">
-                                            <span className="flex items-center justify-between gap-2">
-                                                <span className="font-semibold text-foreground text-sm">{cfg.label}</span>
-                                                <span className="text-xs font-semibold text-foreground shrink-0">
-                                                    ${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes
-                                                </span>
-                                            </span>
-                                            {requiresNutrition && (
-                                                <span className="mt-1 inline-block text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                                                    Requiere un plan con nutrición (Pro o superior).
-                                                </span>
-                                            )}
-                                        </span>
-                                    </label>
-                                )
-                            })}
-                        </div>
-                    </section>
-                )}
-
-                <section className="mt-6 rounded-xl border border-border p-4">
-                    <p className="text-sm text-muted-foreground">
-                        Plan seleccionado: <span className="font-semibold text-foreground">{selectedTier.label}</span>
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        Precio: <span className="font-semibold text-foreground">${selectedPrice.toLocaleString('es-CL')} CLP</span>
-                        {billingCycle !== 'monthly' && (
-                            <span className="ml-2 text-xs">(mensual base ${monthlyBase.toLocaleString('es-CL')} CLP)</span>
-                        )}
-                    </p>
-                    {selectedAddons.length > 0 && (
-                        <p className="mt-1 text-sm text-muted-foreground">
-                            Módulos ({selectedAddons.map((k) => ADDON_CONFIG[k].label).join(', ')}):{' '}
-                            <span className="font-semibold text-foreground">+${addonsCycleTotal.toLocaleString('es-CL')} CLP</span>
-                            {' · '}Total <span className="font-semibold text-foreground">${(selectedPrice + addonsCycleTotal).toLocaleString('es-CL')} CLP</span>
-                        </p>
+            <section className="mb-4 rounded-card border border-subtle bg-surface-card p-4">
+                <p className="text-sm text-muted">
+                    Plan seleccionado: <span className="font-semibold text-strong">{selectedTier.label}</span>
+                </p>
+                <p className="mt-1 text-sm text-muted">
+                    Precio: <span className="eva-metric text-strong">${selectedPrice.toLocaleString('es-CL')} CLP</span>
+                    {billingCycle !== 'monthly' && (
+                        <span className="ml-2 text-xs">(mensual base ${monthlyBase.toLocaleString('es-CL')} CLP)</span>
                     )}
-                    <ul className="mt-3 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
-                        {selectedTier.features.map((feature) => (
-                            <li key={feature}>{feature}</li>
-                        ))}
-                    </ul>
-                </section>
-
-                {/* Canje de código de descuento (reactivación). Solo con tier pago + flag ON; el monto
-                    descontado lo aplica create-preference al "Continuar al pago". */}
-                <ReactivateCouponCard tier={tier} billingCycle={billingCycle} couponsEnabled={couponsEnabled} />
-
-                {error && (
-                    <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-                        {error}
+                </p>
+                {selectedAddons.length > 0 && (
+                    <p className="mt-1 text-sm text-muted">
+                        Módulos ({selectedAddons.map((k) => ADDON_CONFIG[k].label).join(', ')}):{' '}
+                        <span className="font-semibold text-strong">+${addonsCycleTotal.toLocaleString('es-CL')} CLP</span>
+                        {' · '}Total <span className="font-semibold text-strong">${(selectedPrice + addonsCycleTotal).toLocaleString('es-CL')} CLP</span>
                     </p>
                 )}
+                <ul className="mt-3 list-disc space-y-1 pl-4 text-sm text-muted">
+                    {selectedTier.features.map((feature) => (
+                        <li key={feature}>{feature}</li>
+                    ))}
+                </ul>
+            </section>
 
-                <div className="mt-6 flex flex-wrap gap-3">
-                    <button
-                        type="button"
-                        onClick={handleCheckout}
-                        disabled={isLoading || tierBlockedByClients || exceedsTopSaleTier}
-                        className="inline-flex h-12 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-md transition hover:opacity-95 disabled:opacity-60 w-full md:w-auto md:min-w-[220px]"
-                    >
-                        {isLoading ? 'Redirigiendo...' : 'Continuar al pago con Mercado Pago'}
-                    </button>
+            {/* Canje de código de descuento (reactivación). Solo con tier pago + flag ON; el monto
+                descontado lo aplica create-preference al "Continuar al pago". */}
+            <ReactivateCouponCard tier={tier} billingCycle={billingCycle} couponsEnabled={couponsEnabled} />
 
-                    <button
-                        type="button"
-                        onClick={() => confirmSubscription(preapprovalIdFromUrl)}
-                        disabled={isConfirming}
-                        className="inline-flex h-11 items-center justify-center rounded-xl border border-border px-6 text-sm font-semibold text-foreground hover:bg-secondary/40 disabled:opacity-60 dark:border-white/15 w-full md:w-auto"
-                    >
-                        {isConfirming ? 'Verificando...' : 'Ya pagué, verificar acceso'}
-                    </button>
+            {error && (
+                <div className="mt-4 flex items-center gap-2.5 rounded-control bg-[var(--danger-100)] px-3.5 py-2.5">
+                    <AlertTriangle className="h-4 w-4 shrink-0 text-[var(--danger-600)]" />
+                    <p className="text-[13px] font-semibold text-strong">{error}</p>
                 </div>
+            )}
 
-                {canActivateFree && (
-                    <div className="mt-6 rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-4 dark:border-white/10 dark:bg-zinc-800/50">
-                        <div className="flex items-start gap-2">
-                            <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                            <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold text-foreground">Continuar con plan gratuito</p>
-                                <p className="mt-0.5 text-xs text-muted-foreground">
-                                    Tenés {activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''} activo{activeClientCount !== 1 ? 's' : ''}. El plan gratuito cubre hasta 3 alumnos — calificás sin archivar a nadie.
-                                </p>
-                                <button
-                                    type="button"
-                                    onClick={handleActivateFree}
-                                    disabled={isActivatingFree}
-                                    className="mt-3 inline-flex h-9 items-center justify-center rounded-lg border border-zinc-300 bg-white px-4 text-xs font-semibold text-zinc-700 shadow-sm transition hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                                >
-                                    {isActivatingFree ? 'Activando...' : 'Activar plan gratuito (sin costo)'}
-                                </button>
-                            </div>
+            <div className="mt-6 flex flex-col gap-2">
+                <button
+                    type="button"
+                    onClick={handleCheckout}
+                    disabled={isLoading || tierBlockedByClients || exceedsTopSaleTier}
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-control bg-sport-500 px-5 text-sm font-bold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                >
+                    {isLoading ? 'Redirigiendo...' : (
+                        <>
+                            <span>Continuar al pago con Mercado Pago</span>
+                            <ArrowRight className="h-4 w-4" />
+                        </>
+                    )}
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => confirmSubscription(preapprovalIdFromUrl)}
+                    disabled={isConfirming}
+                    className="inline-flex h-11 w-full items-center justify-center rounded-control border border-default px-6 text-sm font-semibold text-strong hover:bg-surface-sunken disabled:opacity-60"
+                >
+                    {isConfirming ? 'Verificando...' : 'Ya pagué, verificar acceso'}
+                </button>
+            </div>
+
+            {canActivateFree && (
+                <div className="mt-6 rounded-card border border-subtle bg-surface-sunken px-4 py-4">
+                    <div className="flex items-start gap-2.5">
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--success-600)]" />
+                        <div className="min-w-0 flex-1">
+                            <p className="text-sm font-semibold text-strong">Continuar con plan gratuito</p>
+                            <p className="mt-0.5 text-xs text-muted">
+                                Tenés {activeClientCount} alumno{activeClientCount !== 1 ? 's' : ''} activo{activeClientCount !== 1 ? 's' : ''}. El plan gratuito cubre hasta 3 alumnos — calificás sin archivar a nadie.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={handleActivateFree}
+                                disabled={isActivatingFree}
+                                className="mt-3 inline-flex h-9 items-center justify-center rounded-control border border-default bg-surface-card px-4 text-xs font-semibold text-strong transition-colors hover:bg-surface-sunken disabled:opacity-60"
+                            >
+                                {isActivatingFree ? 'Activando...' : 'Activar plan gratuito (sin costo)'}
+                            </button>
                         </div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
+
+            {/* Comparativa (riqueza extra sobre el kit) — re-tokenizada EVA DS */}
+            <section className="mt-6 overflow-x-auto rounded-card border border-subtle">
+                <h2 className="border-b border-subtle bg-surface-sunken px-4 py-3 text-sm font-semibold text-strong">
+                    Comparativa rápida de planes
+                </h2>
+                <table className="w-full min-w-[520px] text-left text-sm">
+                    <thead>
+                        <tr className="border-b border-subtle text-xs font-semibold uppercase tracking-wide text-muted">
+                            <th className="px-4 py-2">Plan</th>
+                            <th className="px-4 py-2">Alumnos</th>
+                            <th className="px-4 py-2">Desde / mes</th>
+                            <th className="px-4 py-2">Cobros</th>
+                            <th className="px-4 py-2">Nutrición</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {tierOptions.map(([key, option]) => (
+                            <tr
+                                key={key}
+                                className={`border-b border-subtle last:border-0 ${tier === key ? 'bg-sport-100/40' : ''}`}
+                            >
+                                <td className="px-4 py-2.5 font-medium text-strong">{option.label}</td>
+                                <td className="px-4 py-2.5 text-muted">{TIER_STUDENT_RANGE_LABEL[key]}</td>
+                                <td className="px-4 py-2.5 text-strong">
+                                    ${option.monthlyPriceClp.toLocaleString('es-CL')} CLP
+                                </td>
+                                <td className="px-4 py-2.5 text-xs text-muted">
+                                    {getTierBillingCycleSummary(key)}
+                                </td>
+                                <td className="px-4 py-2.5 text-xs text-muted">
+                                    {getTierNutritionSummary(key)}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </section>
+
+            <p className="mt-4 text-xs text-subtle">
+                Pagos procesados por Mercado Pago (PCI). EVA no almacena los datos de tu tarjeta.
+            </p>
         </main>
     )
 }

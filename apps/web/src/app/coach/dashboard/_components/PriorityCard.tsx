@@ -244,7 +244,7 @@ export function PriorityCard({
 
                     <Link
                         href="/coach/clients?filter=risk"
-                        className="mt-[9px] inline-flex h-9 w-full items-center justify-center gap-1 rounded-control font-ui text-[13px] font-extrabold text-sport-400"
+                        className="mt-[9px] inline-flex h-9 w-full items-center justify-center gap-1 rounded-sm font-ui text-[13px] font-extrabold text-sport-400"
                     >
                         Ver todos en Alumnos <ArrowRight className="size-3.5" />
                     </Link>

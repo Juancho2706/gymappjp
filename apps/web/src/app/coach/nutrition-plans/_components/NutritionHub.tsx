@@ -3,7 +3,7 @@
 import type { CSSProperties } from 'react'
 import { useState } from 'react'
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
+import { BookOpen, Plus } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { TemplateLibrary, type TemplateLibraryItem } from './TemplateLibrary'
 import { ActivePlansBoard } from './ActivePlansBoard'
@@ -74,6 +74,14 @@ export function NutritionHub({
           <p className="text-[13px] text-[var(--text-muted)] mt-0.5">Planes, alimentos y recetas</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href="/coach/meal-groups"
+            title="Grupos de comidas"
+            aria-label="Grupos de comidas"
+            className="eva-press hidden h-9 w-9 items-center justify-center rounded-control border-[1.5px] border-[color:var(--border-default)] bg-[var(--surface-card)] text-[var(--text-strong)] transition-colors hover:bg-[var(--surface-sunken)] md:inline-flex"
+          >
+            <BookOpen className="h-[17px] w-[17px]" />
+          </Link>
           <CoachNutritionGuideDialog
             hasClients={hasClients}
             onAssign={() => setHubTab('clients')}
@@ -128,6 +136,7 @@ export function NutritionHub({
                 coachId={coachId}
                 hasClients={hasClients}
                 onAssign={() => setHubTab('clients')}
+                onFoods={() => setHubTab('foods')}
               />
             )}
             <TemplateLibrary templates={templates} coachId={coachId} clients={assignClients} />

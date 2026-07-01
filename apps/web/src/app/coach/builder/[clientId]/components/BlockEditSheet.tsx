@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
+import { Minus, Plus } from 'lucide-react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { Input } from '@/components/ui/input'
@@ -27,12 +28,14 @@ interface BlockEditSheetProps {
     clientId?: string | null
     /** Contexto del módulo cardio (zonas del alumno + plantillas); undefined ⇒ OFF. */
     cardio?: BuilderCardioContext
+    /** <760: bottom-sheet con grabber + steppers (desktop conserva el panel lateral) */
+    isMobile?: boolean
     onClose: () => void
     onUpdate: (block: BuilderBlock) => void
     onChange: (block: BuilderBlock) => void
 }
 
-const FIELD_LABEL_CLASS = 'text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5'
+const FIELD_LABEL_CLASS = 'text-[12.5px] font-semibold text-foreground flex items-center gap-1.5'
 const FIELD_INPUT_CLASS = 'h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground'
 
 const SIDE_MODE_OPTIONS: { value: SideMode | null; label: string }[] = [
@@ -186,6 +189,41 @@ function PaceInput({
     )
 }
 
+/** Stepper táctil 44px para Series en mobile (kit: botones circulares + numeral eva-metric). */
+function SeriesStepper({
+    value,
+    onValueChange,
+    min = 1,
+    max = 20,
+}: {
+    value: number
+    onValueChange: (n: number) => void
+    min?: number
+    max?: number
+}) {
+    return (
+        <div className="flex items-center justify-center gap-3">
+            <button
+                type="button"
+                aria-label="Menos series"
+                onClick={() => onValueChange(Math.max(min, (value || 0) - 1))}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-[1.5px] border-[var(--border-default)] bg-surface-card text-[var(--ink-700)] transition-colors active:bg-surface-sunken"
+            >
+                <Minus className="h-[18px] w-[18px]" />
+            </button>
+            <span className="eva-metric min-w-9 text-center text-2xl text-strong">{value || 0}</span>
+            <button
+                type="button"
+                aria-label="Más series"
+                onClick={() => onValueChange(Math.min(max, (value || 0) + 1))}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-[1.5px] border-[var(--border-default)] bg-surface-card text-[var(--ink-700)] transition-colors active:bg-surface-sunken"
+            >
+                <Plus className="h-[18px] w-[18px]" />
+            </button>
+        </div>
+    )
+}
+
 function SideModeSelector({ block, onChange }: { block: BuilderBlock; onChange: (b: BuilderBlock) => void }) {
     return (
         <div className="grid grid-cols-3 overflow-hidden rounded-control border border-border text-[10px] font-bold uppercase tracking-widest dark:border-white/10">
@@ -251,7 +289,7 @@ function HrZoneSelector({
             </div>
             {cardio?.enabled && block.hr_zone != null && (
                 selectedRange ? (
-                    <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    <p className="text-[10px] font-bold text-[var(--success-600)]">
                         Z{block.hr_zone} · {selectedRange.minBpm}–{selectedRange.maxBpm} bpm para este alumno
                     </p>
                 ) : (
@@ -427,14 +465,14 @@ function NotesField({ block, onChange, t }: { block: BuilderBlock; onChange: (b:
                 placeholder="Detalles biomecánicos o notas..."
                 maxLength={1000}
             />
-            <p className={`text-right text-[10px] tabular-nums ${(block.notes?.length ?? 0) > 900 ? 'text-amber-500' : 'text-muted-foreground/50'}`}>
+            <p className={`text-right text-[10px] tabular-nums ${(block.notes?.length ?? 0) > 900 ? 'text-[var(--warning-600)]' : 'text-muted-foreground/50'}`}>
                 {block.notes?.length ?? 0}/1000
             </p>
         </div>
     )
 }
 
-export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onChange }: BlockEditSheetProps) {
+export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onClose, onUpdate, onChange }: BlockEditSheetProps) {
     const { t } = useTranslation()
     const [history, setHistory] = useState<ExerciseHistory[]>([])
     const [loadingHistory, setLoadingHistory] = useState(false)
@@ -499,8 +537,18 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
 
     return (
         <Sheet open={!!block} onOpenChange={onClose}>
-            <SheetContent side="right" className="w-full max-w-full bg-background/95 p-0 shadow-2xl backdrop-blur-2xl sm:w-[540px] sm:max-w-[540px] border-l border-border">
-                <SheetHeader className="border-b border-border bg-muted/20 pb-6 pl-6 pr-14 pt-[max(1.5rem,env(safe-area-inset-top))]">
+            <SheetContent
+                side={isMobile ? 'bottom' : 'right'}
+                className={isMobile
+                    ? 'max-h-[92dvh] gap-0 rounded-t-sheet bg-background/95 p-0 shadow-2xl backdrop-blur-2xl'
+                    : 'w-full max-w-full bg-background/95 p-0 shadow-2xl backdrop-blur-2xl sm:w-[540px] sm:max-w-[540px] border-l border-border'}
+            >
+                {isMobile && (
+                    <div className="mx-auto mb-1 mt-2 h-1 w-9 shrink-0 rounded-full bg-[var(--border-strong)]" aria-hidden="true" />
+                )}
+                <SheetHeader className={isMobile
+                    ? 'border-b border-border bg-muted/20 px-5 pb-4 pt-1 pr-14'
+                    : 'border-b border-border bg-muted/20 pb-6 pl-6 pr-14 pt-[max(1.5rem,env(safe-area-inset-top))]'}>
                     <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-control bg-primary/10 flex items-center justify-center overflow-hidden border border-border shrink-0 relative">
                             {thumb ? (
@@ -519,10 +567,10 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                             )}
                         </div>
                         <div className="min-w-0 flex-1">
-                            <SheetTitle className="text-lg font-display uppercase tracking-widest text-foreground leading-tight break-words">
+                            <SheetTitle className="text-lg font-display font-extrabold normal-case tracking-[-0.02em] text-foreground leading-tight break-words">
                                 {block.exercise_name}
                             </SheetTitle>
-                            <p className="text-xs font-bold uppercase tracking-widest mt-1 text-muted-foreground flex items-center gap-2">
+                            <p className="text-xs mt-1 text-muted-foreground flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
                                 {block.muscle_group}
                             </p>
@@ -532,9 +580,9 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                                     {loadingHistory ? (
                                         <span className="text-[9px] text-muted-foreground/50 uppercase tracking-widest">Cargando historial...</span>
                                     ) : historyLabel ? (
-                                        <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2 py-1">
-                                            <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-500">Última vez {historyLabel.date}:</span>
-                                            <span className="text-[9px] font-bold text-emerald-400">{historyLabel.label}</span>
+                                        <div className="flex items-center gap-1.5 bg-[var(--success-100)] border border-[var(--success-500)]/20 rounded-lg px-2 py-1">
+                                            <span className="text-[10px] font-bold text-[var(--success-700)]">Última vez {historyLabel.date}:</span>
+                                            <span className="text-[10px] font-bold text-[var(--success-600)]">{historyLabel.label}</span>
                                         </div>
                                     ) : (
                                         <span className="text-[9px] text-muted-foreground/40 uppercase tracking-widest">Sin historial con este cliente</span>
@@ -576,24 +624,28 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                         <>
                     <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-3">
-                            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
+                            <label className="text-[12.5px] font-semibold text-foreground flex items-center gap-1.5">
                                 Series
-                                <span className="text-red-500">*</span>
+                                <span className="text-[var(--danger-500)]">*</span>
                             </label>
-                            <ClampedIntInput
-                                value={block.sets ?? 0}
-                                onValueChange={(sets) => onChange({ ...block, sets })}
-                                min={1}
-                                max={20}
-                                placeholder="Ej. 3"
-                                className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary text-center"
-                            />
+                            {isMobile ? (
+                                <SeriesStepper value={block.sets ?? 0} onValueChange={(sets) => onChange({ ...block, sets })} />
+                            ) : (
+                                <ClampedIntInput
+                                    value={block.sets ?? 0}
+                                    onValueChange={(sets) => onChange({ ...block, sets })}
+                                    min={1}
+                                    max={20}
+                                    placeholder="Ej. 3"
+                                    className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary text-center"
+                                />
+                            )}
                             <p className="text-[10px] text-muted-foreground/50 text-center">1–20 series</p>
                         </div>
                         <div className="space-y-3">
-                            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
+                            <label className="text-[12.5px] font-semibold text-foreground flex items-center gap-1.5">
                                 Repeticiones
-                                <span className="text-red-500">*</span>
+                                <span className="text-[var(--danger-500)]">*</span>
                             </label>
                             <Input
                                 value={block.reps}
@@ -609,7 +661,7 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
 
                     <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-3">
-                            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
+                            <label className="text-[12.5px] font-semibold text-foreground flex items-center gap-1.5">
                                 Peso Objetivo (kg)
                                 <InfoTooltip content={t('tooltip.weight')} />
                             </label>
@@ -624,7 +676,7 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                             <p className="text-[10px] text-muted-foreground/50">en kg, acepta decimales</p>
                         </div>
                         <div className="space-y-3">
-                            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
+                            <label className="text-[12.5px] font-semibold text-foreground flex items-center gap-1.5">
                                 RIR / RPE
                                 <InfoTooltip content={t('tooltip.rir')} />
                             </label>
@@ -642,7 +694,7 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
 
                     <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-3">
-                            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
+                            <label className="text-[12.5px] font-semibold text-foreground flex items-center gap-1.5">
                                 Tempo
                                 <InfoTooltip content={t('tooltip.tempo')} />
                             </label>
@@ -657,7 +709,7 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                             <p className="text-[10px] text-muted-foreground/50">excéntrica · pausa · concéntrica · pausa</p>
                         </div>
                         <div className="space-y-3">
-                            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
+                            <label className="text-[12.5px] font-semibold text-foreground flex items-center gap-1.5">
                                 Recuperación
                                 <InfoTooltip content={t('tooltip.rest')} />
                             </label>
@@ -772,13 +824,17 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                                 </div>
                                 <div className="space-y-3">
                                     <label className={FIELD_LABEL_CLASS}>Series del bloque</label>
-                                    <ClampedIntInput
-                                        value={block.sets ?? 1}
-                                        onValueChange={(sets) => onChange({ ...block, sets })}
-                                        min={1}
-                                        max={20}
-                                        className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary text-center"
-                                    />
+                                    {isMobile ? (
+                                        <SeriesStepper value={block.sets ?? 1} onValueChange={(sets) => onChange({ ...block, sets })} />
+                                    ) : (
+                                        <ClampedIntInput
+                                            value={block.sets ?? 1}
+                                            onValueChange={(sets) => onChange({ ...block, sets })}
+                                            min={1}
+                                            max={20}
+                                            className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary text-center"
+                                        />
+                                    )}
                                     <p className="text-[10px] text-muted-foreground/50 text-center">rondas del mismo trabajo</p>
                                 </div>
                             </div>
@@ -820,7 +876,7 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                                 <div className="space-y-3">
                                     <label className={FIELD_LABEL_CLASS}>
                                         Hold (seg)
-                                        <span className="text-red-500">*</span>
+                                        <span className="text-[var(--danger-500)]">*</span>
                                     </label>
                                     <OptionalIntInput
                                         value={block.duration_sec}
@@ -832,13 +888,17 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                                 </div>
                                 <div className="space-y-3">
                                     <label className={FIELD_LABEL_CLASS}>Series (holds)</label>
-                                    <ClampedIntInput
-                                        value={block.sets ?? 1}
-                                        onValueChange={(sets) => onChange({ ...block, sets })}
-                                        min={1}
-                                        max={20}
-                                        className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary text-center"
-                                    />
+                                    {isMobile ? (
+                                        <SeriesStepper value={block.sets ?? 1} onValueChange={(sets) => onChange({ ...block, sets })} />
+                                    ) : (
+                                        <ClampedIntInput
+                                            value={block.sets ?? 1}
+                                            onValueChange={(sets) => onChange({ ...block, sets })}
+                                            min={1}
+                                            max={20}
+                                            className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary text-center"
+                                        />
+                                    )}
                                     <p className="text-[10px] text-muted-foreground/50 text-center">repeticiones del hold</p>
                                 </div>
                             </div>
@@ -934,8 +994,8 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                     {effectiveType === 'strength' && (
                     <div className="space-y-3 rounded-card border border-border bg-muted/30 p-4 dark:border-white/10">
                         <div className="flex items-center justify-between">
-                            <label className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                                Progresión Automática
+                            <label className="text-[12.5px] font-semibold text-foreground">
+                                Progresión automática
                             </label>
                             <button
                                 onClick={() => onChange({
@@ -1021,15 +1081,15 @@ export function BlockEditSheet({ block, clientId, cardio, onClose, onUpdate, onC
                     <button
                         onClick={() => onUpdate(block)}
                         disabled={!blockIsValid}
-                        className="w-full py-4 mt-4 bg-primary text-primary-foreground font-bold uppercase tracking-[0.2em] text-xs rounded-control shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.4)] hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                        className="w-full py-4 mt-4 bg-primary text-primary-foreground font-bold text-[15px] rounded-control shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.4)] hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                         style={{
                             backgroundColor: 'var(--theme-primary, #007AFF)',
                             boxShadow: '0 0 20px -5px var(--theme-primary, rgba(0,122,255,0.4))'
                         }}
                     >
                         {!blockIsValid
-                            ? 'DATA INCOMPLETA'
-                            : 'SINCRONIZAR BLOQUE'}
+                            ? 'Datos incompletos'
+                            : 'Guardar bloque'}
                     </button>
                 </div>
             </SheetContent>

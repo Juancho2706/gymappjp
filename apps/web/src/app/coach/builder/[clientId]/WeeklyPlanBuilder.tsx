@@ -9,11 +9,11 @@ import {
     useSensor, useSensors, type DragEndEvent, type DragOverEvent, DragStartEvent, DragOverlay,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
-import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight, CircleHelp, Maximize2, Sparkles, Pencil, Moon, SlidersHorizontal, History, X } from 'lucide-react'
+import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight, CircleHelp, Maximize2, Sparkles, Pencil, Moon, SlidersHorizontal, History, X, Check, type LucideIcon } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { AppOnlyPopup } from '@/components/AppOnlyPopup'
 import { EditedByBadge } from '@/components/coach/EditedByBadge'
 import { saveWorkoutProgramAction, syncProgramFromTemplateAction, type WorkoutProgramInput } from './_actions/builder.actions'
@@ -211,6 +211,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     const [showAssign, setShowAssign] = useState(false)
     const [showBalance, setShowBalance] = useState(false)
     const [showPrint, setShowPrint] = useState(false)
+    const [showOverflow, setShowOverflow] = useState(false)
     const [isCatalogSidebarOpen, setIsCatalogSidebarOpen] = useState(false)
     const [isDragPending, setIsDragPending] = useState(false)
     // Marca si el drag en curso ya empujó un snapshot de historia (al primer cross-day TRANSFER).
@@ -586,6 +587,16 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         setHasUnsavedChanges(true)
     }, [setBlockArea])
 
+    const handleMoveBlock = useCallback((dayId: number, uid: string, dir: -1 | 1) => {
+        const d = days.find(x => x.id === dayId)
+        if (!d) return
+        const oldIndex = d.blocks.findIndex(b => b.uid === uid)
+        const newIndex = oldIndex + dir
+        if (oldIndex < 0 || newIndex < 0 || newIndex >= d.blocks.length) return
+        dispatchWithHistory({ type: 'MOVE_BLOCK', payload: { dayId, oldIndex, newIndex } })
+        setHasUnsavedChanges(true)
+    }, [days, dispatchWithHistory])
+
     const dismissBuilderHint = useCallback(() => {
         setShowBuilderHint(false)
         try { localStorage.setItem('builder_config_hint_v1', '1') } catch (e) {}
@@ -749,7 +760,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
 
     const tourFooterHint = useCallback((step: BuilderTourStep) => {
         if (isMobile && step.id === 'save-button') {
-            return 'En móvil, Guardar se muestra como ícono de disquete arriba a la derecha.'
+            return 'En móvil, Guardar es el botón fijo al pie de la pantalla.'
         }
         return undefined
     }, [isMobile])
@@ -985,34 +996,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
             <AppOnlyPopup storageKey="builder" title="Arma rutinas mejor en la app">
                 Reordena con gestos, arma offline y revisa el progreso con gráficas táctiles en la app de EVA.
             </AppOnlyPopup>
-            {showDraftBanner && (
-                <div className="fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] z-[72] animate-in slide-in-from-bottom rounded-card border border-primary/25 bg-primary/10 p-3 shadow-2xl backdrop-blur-xl md:static md:inset-auto md:bottom-auto md:mx-6 md:mt-2.5 md:rounded-control md:shadow-none">
-                    <div className="flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center sm:gap-3">
-                        <History className="hidden h-4 w-4 shrink-0 text-primary sm:block" />
-                        <p className="flex-1 text-xs font-semibold text-primary">Tenés un borrador sin guardar de esta sesión.</p>
-                        <div className="flex items-center justify-end gap-2">
-                            <Button
-                                size="sm"
-                                onClick={handleRestoreDraft}
-                                className="eva-press h-8 rounded-control px-3 text-xs font-bold bg-primary text-primary-foreground hover:opacity-90"
-                                style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
-                            >
-                                Restaurar
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={handleDiscardDraft}
-                                aria-label="Descartar borrador"
-                                className="h-8 w-8 text-primary/70 hover:text-primary hover:bg-primary/10"
-                            >
-                                <X className="h-4 w-4" />
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             <header className="z-20 flex-shrink-0 border-b border-subtle bg-surface-app/50 pt-safe pl-safe pr-safe backdrop-blur-xl">
                 <div className={`mx-auto flex max-w-[2000px] items-center justify-between gap-3 px-4 md:gap-4 md:px-6 ${isMobile && isSimpleMode ? 'h-12' : 'h-16'}`}>
                     <div className="flex min-w-0 items-center gap-3 md:gap-4">
@@ -1025,13 +1008,13 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             {/* Desktop title */}
                             <div className="hidden md:block">
                                 <div className="flex items-center gap-2">
-                                    <h1 className="max-w-[140px] truncate text-sm font-display uppercase tracking-[0.2em] text-strong md:max-w-[26rem]">
-                                        {programName || 'NUEVO PROGRAMA'}
+                                    <h1 className="max-w-[140px] truncate font-display text-[18px] font-extrabold tracking-[-0.02em] text-strong md:max-w-[26rem]">
+                                        {programName || 'Nuevo programa'}
                                     </h1>
                                     {hasUnsavedChanges && (
                                         <span className="hidden md:flex items-center gap-1 text-[9px] bg-[var(--warning-500)]/10 text-[var(--warning-600)] px-2 py-0.5 rounded-pill border border-[var(--warning-500)]/20 shrink-0">
                                             <span className="w-1.5 h-1.5 rounded-full bg-[var(--warning-500)] animate-pulse"></span>
-                                            CAMBIOS SIN GUARDAR
+                                            Cambios sin guardar
                                         </span>
                                     )}
                                     {lastEditor && (
@@ -1040,8 +1023,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]/60">
-                                    {client ? `Cliente: ${client.full_name}` : 'Plantilla Global'}
+                                <p className="text-xs text-muted">
+                                    {client ? `Cliente: ${client.full_name}` : 'Plantilla global'}
                                 </p>
                             </div>
                             {/* Mobile title — tap to edit (design 1:1) */}
@@ -1092,7 +1075,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             variant="ghost"
                             size="sm"
                             data-tour-id="templates-button"
-                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
+                            className="hidden md:flex h-10 w-auto px-3 text-[13px] font-bold text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
                             onClick={() => setShowTemplatePicker(true)}
                             title="Cargar plantilla"
                         >
@@ -1104,7 +1087,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             variant="outline"
                             size="sm"
                             data-tour-id="preview-button"
-                            className="eva-press hidden md:flex h-10 w-auto gap-2 rounded-pill border-subtle px-4 text-xs font-bold uppercase tracking-widest text-muted hover:text-strong"
+                            className="eva-press hidden md:flex h-10 w-auto gap-2 rounded-pill border-subtle px-4 text-[13px] font-bold text-muted hover:text-strong"
                             onClick={() => setShowPreview(true)}
                             title="Vista previa"
                         >
@@ -1116,7 +1099,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
+                                className="hidden md:flex h-10 w-auto px-3 text-[13px] font-bold text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
                                 onClick={() => setShowAssign(true)}
                                 title="Asignar a clientes"
                             >
@@ -1129,7 +1112,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             variant="outline"
                             size="sm"
                             data-tour-id="balance-button"
-                            className="eva-press hidden md:flex h-10 w-auto gap-2 rounded-pill border-subtle px-4 text-xs font-bold uppercase tracking-widest text-muted hover:text-strong"
+                            className="eva-press hidden md:flex h-10 w-auto gap-2 rounded-pill border-subtle px-4 text-[13px] font-bold text-muted hover:text-strong"
                             onClick={() => setShowBalance(true)}
                             title="Balance muscular"
                         >
@@ -1141,7 +1124,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             variant="ghost"
                             size="sm"
                             data-tour-id="print-button"
-                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
+                            className="hidden md:flex h-10 w-auto px-3 text-[13px] font-bold text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
                             onClick={() => setShowPrint(true)}
                             title="Imprimir / Exportar PDF"
                         >
@@ -1175,41 +1158,15 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                         </div>
 
                         {/* Mobile overflow menu — hidden on md+ */}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger
-                                data-tour-id="mobile-more-menu"
-                                className="md:hidden h-8 w-8 px-0 border-0 bg-transparent text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
-                                title="Más opciones"
-                            >
-                                <MoreVertical className="w-5 h-5" />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-52">
-                                <DropdownMenuItem onClick={() => setShowTemplatePicker(true)}>
-                                    <LayoutTemplate className="w-4 h-4 mr-2" /> Plantillas
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setShowPreview(true)}>
-                                    <Eye className="w-4 h-4 mr-2" /> Vista previa
-                                </DropdownMenuItem>
-                                {!client && initialProgram?.id && (
-                                    <DropdownMenuItem onClick={() => setShowAssign(true)}>
-                                        <Users className="w-4 h-4 mr-2" /> Asignar a clientes
-                                    </DropdownMenuItem>
-                                )}
-                                <DropdownMenuItem onClick={() => setShowBalance(true)}>
-                                    <BarChart3 className="w-4 h-4 mr-2" /> Balance muscular
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setShowPrint(true)}>
-                                    <Printer className="w-4 h-4 mr-2" /> Imprimir / PDF
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={undo} disabled={!canUndo}>
-                                    <Undo2 className="w-4 h-4 mr-2" /> Deshacer
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={redo} disabled={!canRedo}>
-                                    <Redo2 className="w-4 h-4 mr-2" /> Rehacer
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        <button
+                            type="button"
+                            data-tour-id="mobile-more-menu"
+                            onClick={() => setShowOverflow(true)}
+                            title="Más opciones"
+                            className="md:hidden flex h-8 w-8 items-center justify-center border-0 bg-transparent text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
+                        >
+                            <MoreVertical className="w-5 h-5" />
+                        </button>
 
                         <div className="relative">
                             {!hasSeenShortTour && (
@@ -1250,7 +1207,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 title="Configurar programa"
                             >
                                 <SlidersHorizontal className="w-4 h-4" />
-                                <span className="hidden md:inline text-xs font-bold uppercase tracking-widest">Configurar</span>
+                                <span className="hidden md:inline text-[13px] font-bold">Configurar</span>
                             </Button>
                         </div>
 
@@ -1258,7 +1215,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest border-[var(--aqua-600)]/30 text-[var(--aqua-600)] hover:bg-[var(--aqua-500)]/10"
+                                className="hidden md:flex h-10 w-auto px-3 text-[13px] font-bold border-[var(--aqua-600)]/30 text-[var(--aqua-600)] hover:bg-[var(--aqua-500)]/10"
                                 disabled={isPending}
                                 title="Copiar cambios de la plantilla base (no pisa bloques marcados Modif.)"
                                 onClick={() => {
@@ -1278,17 +1235,17 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             </Button>
                         )}
 
-                        {/* Save — always visible */}
+                        {/* Save — desktop (en móvil vive en la save-bar inferior) */}
                         <Button
                             onClick={() => handleSave()}
                             disabled={isPending || !programName.trim()}
-                            data-tour-id="save-button"
+                            data-tour-id={isMobile ? undefined : 'save-button'}
                             size="sm"
-                            className="eva-press h-10 w-10 min-h-10 min-w-10 shrink-0 rounded-pill text-xs font-bold uppercase tracking-[0.2em] bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] transition-all hover:opacity-90 disabled:opacity-50 md:h-10 md:w-auto md:min-h-10 md:min-w-0 md:px-6"
+                            className="eva-press hidden h-10 min-h-10 shrink-0 rounded-pill text-[13px] font-bold bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] transition-all hover:opacity-90 disabled:opacity-50 md:flex md:px-6"
                             style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
                         >
-                            {isPending ? <Loader2 className="w-4 h-4 animate-spin md:mr-2" /> : <Save className="w-4 h-4 md:mr-2" />}
-                            <span className="hidden md:inline">{isPending ? 'GUARDANDO...' : 'GUARDAR'}</span>
+                            {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                            {isPending ? 'Guardando...' : client ? 'Guardar y enviar' : 'Guardar plantilla'}
                         </Button>
                     </div>
                 </div>
@@ -1311,6 +1268,34 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
 
                 {!(isMobile && isSimpleMode) && <ProgramPhasesBar phases={programPhases} />}
             </header>
+
+            {showDraftBanner && (
+                <div className="mx-3 mt-2.5 animate-in slide-in-from-top-1 rounded-card border border-primary/25 bg-primary/10 p-3 md:mx-6 md:rounded-control">
+                    <div className="flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center sm:gap-3">
+                        <History className="hidden h-4 w-4 shrink-0 text-primary sm:block" />
+                        <p className="flex-1 text-xs font-semibold text-primary">Tenés un borrador sin guardar de esta sesión.</p>
+                        <div className="flex items-center justify-end gap-2">
+                            <Button
+                                size="sm"
+                                onClick={handleRestoreDraft}
+                                className="eva-press h-8 rounded-control px-3 text-xs font-bold bg-primary text-primary-foreground hover:opacity-90"
+                                style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
+                            >
+                                Restaurar
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={handleDiscardDraft}
+                                aria-label="Descartar borrador"
+                                className="h-8 w-8 text-primary/70 hover:text-primary hover:bg-primary/10"
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <DndContext
                 sensors={sensors}
@@ -1376,6 +1361,10 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                     ))}
                                 </div>
                             )}
+
+                            <span className="ml-auto text-[11px] font-bold text-subtle md:hidden">
+                                {programStructureType === 'weekly' ? 'Semanal' : `Ciclo ${cycleLength}d`} · {weeksToRepeat} sem
+                            </span>
 
                             {isABMode && (
                                 <p className="text-[9px] text-muted uppercase tracking-widest ml-auto hidden md:block">
@@ -1445,7 +1434,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                                 {d.is_rest ? (
                                                     <Moon className={`w-3 h-3 ${isActive ? 'text-muted' : 'text-[var(--text-muted)]/40'}`} />
                                                 ) : (
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${has ? 'bg-[var(--success-500)]' : (isActive ? 'bg-[var(--text-muted)]/50' : 'bg-[var(--text-muted)]/20')}`} />
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${has ? (isActive ? 'bg-[var(--sport-400)]' : 'bg-primary') : (isActive ? 'bg-[var(--text-muted)]/50' : 'bg-[var(--text-muted)]/20')}`} />
                                                 )}
                                             </button>
                                         )
@@ -1492,10 +1481,10 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                                 className="h-full overflow-y-auto"
                                                 style={{
                                                     width: `${100 / days.length}%`,
-                                                    /* Solo altura del sheet: el sheet ya lleva paddingBottom safe-area; sumar inset aquí duplicaba hueco */
+                                                    /* Altura del sheet + save-bar fija inferior (72px + safe-area) */
                                                     paddingBottom: isSimpleMode
-                                                        ? `calc(env(safe-area-inset-bottom, 0px) + 40px)`
-                                                        : `calc(${sheetHeight}vh + 6px)`,
+                                                        ? `calc(env(safe-area-inset-bottom, 0px) + 112px)`
+                                                        : `calc(${sheetHeight}vh + env(safe-area-inset-bottom, 0px) + 78px)`,
                                                     WebkitOverflowScrolling: 'touch',
                                                 } as React.CSSProperties}
                                             >
@@ -1508,6 +1497,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                                     narrowLayout={isMobile}
                                                     compact={isMobile && isSimpleMode}
                                                     areas={areas}
+                                                    onMoveBlock={handleMoveBlock}
                                                     onAddExercise={handleAddExercise}
                                                     onEditBlock={setEditingBlock}
                                                     onRemoveBlock={handleRemoveBlock}
@@ -1566,9 +1556,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 />
                             )}
                             <div
-                                className="fixed bottom-0 left-0 right-0 bg-surface-app border-t border-subtle shadow-2xl z-40 select-none rounded-t-3xl overflow-hidden"
+                                className="fixed left-0 right-0 bg-surface-app border-t border-subtle shadow-2xl z-40 select-none rounded-t-3xl overflow-hidden"
                                 data-tour-id="exercise-sheet-handle"
-                                style={{ height: `${sheetHeight}vh`, transition: isDraggingSheet ? 'none' : 'height 0.3s cubic-bezier(0.32, 0.72, 0, 1)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+                                style={{ height: `${sheetHeight}vh`, bottom: 'calc(env(safe-area-inset-bottom, 0px) + 72px)', transition: isDraggingSheet ? 'none' : 'height 0.3s cubic-bezier(0.32, 0.72, 0, 1)' }}
                             >
                                 {/* Drag handle — always visible */}
                                 <div
@@ -1657,8 +1647,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 onClick={() => setIsCatalogOpen(false)}
                             />
                             <div
-                                className="fixed bottom-0 left-0 right-0 bg-surface-app border-t border-subtle shadow-2xl z-40 select-none rounded-t-3xl overflow-hidden animate-in slide-in-from-bottom"
-                                style={{ height: '80vh', paddingBottom: 'env(safe-area-inset-bottom)' }}
+                                className="fixed left-0 right-0 bg-surface-app border-t border-subtle shadow-2xl z-40 select-none rounded-t-3xl overflow-hidden animate-in slide-in-from-bottom"
+                                style={{ height: '80vh', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 72px)' }}
                             >
                                 <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-subtle">
                                     <span className="text-[11px] font-bold uppercase tracking-widest text-strong">Añadir ejercicio</span>
@@ -1695,8 +1685,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             className="fixed right-4 z-40 flex flex-row items-center gap-3"
                             style={{
                                 bottom: isSimpleMode
-                                    ? `calc(env(safe-area-inset-bottom, 0px) + 16px)`
-                                    : `calc(${sheetHeight}vh + env(safe-area-inset-bottom, 0px) + 12px)`,
+                                    ? `calc(env(safe-area-inset-bottom, 0px) + 88px)`
+                                    : `calc(${sheetHeight}vh + env(safe-area-inset-bottom, 0px) + 84px)`,
                                 transition: 'bottom 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
                             }}
                         >
@@ -1705,8 +1695,25 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                     type="button"
                                     onClick={() => setIsCatalogOpen(true)}
                                     aria-label="Añadir ejercicio"
-                                    className="w-14 h-14 rounded-full bg-[var(--success-500)] hover:bg-[var(--success-600)] active:bg-[var(--success-700)] text-white shadow-xl flex items-center justify-center transition-colors"
-                                    style={{ boxShadow: '0 4px 24px rgba(16,185,129,0.45)' }}
+                                    className="w-14 h-14 rounded-full text-primary-foreground shadow-xl flex items-center justify-center transition-transform active:scale-95"
+                                    style={{
+                                        backgroundColor: 'var(--theme-primary, #2680FF)',
+                                        boxShadow: '0 6px 20px rgba(var(--theme-primary-rgb, 38, 128, 255), 0.42)',
+                                    }}
+                                >
+                                    <Plus className="w-6 h-6" strokeWidth={3} />
+                                </button>
+                            )}
+                            {!isSimpleMode && !days[activeMobileDayIndex]?.is_rest && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setIsCatalogOpen(true); setSheetHeight(80) }}
+                                    aria-label="Agregar ejercicio"
+                                    className="w-14 h-14 rounded-full text-primary-foreground shadow-xl flex items-center justify-center transition-transform active:scale-95"
+                                    style={{
+                                        backgroundColor: 'var(--theme-primary, #2680FF)',
+                                        boxShadow: '0 6px 20px rgba(var(--theme-primary-rgb, 38, 128, 255), 0.42)',
+                                    }}
                                 >
                                     <Plus className="w-6 h-6" strokeWidth={3} />
                                 </button>
@@ -1725,8 +1732,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                             : 'w-12 h-12 rounded-2xl text-white shadow-2xl'
                                     }`}
                                     style={!isSimpleMode ? {
-                                        background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%)',
-                                        boxShadow: '0 4px 20px rgba(139,92,246,0.55), 0 1px 0 rgba(255,255,255,0.15) inset',
+                                        background: 'linear-gradient(135deg, var(--surface-inverse) 0%, var(--surface-inverse-2) 100%)',
+                                        boxShadow: 'var(--shadow-lg)',
                                     } : undefined}
                                 >
                                     <Sparkles className="w-5 h-5" />
@@ -1773,6 +1780,69 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 </div>
             </DndContext>
 
+            {/* Save-bar fija inferior — mobile (kit: CTA primario domina el pie de pantalla) */}
+            {isMobile && (
+                <div
+                    className="fixed inset-x-0 bottom-0 z-[45] border-t border-subtle px-4 pt-3 backdrop-blur-xl"
+                    style={{
+                        paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
+                        background: 'color-mix(in srgb, var(--surface-card) 88%, transparent)',
+                    }}
+                >
+                    <button
+                        type="button"
+                        onClick={() => handleSave()}
+                        disabled={isPending || !programName.trim()}
+                        data-tour-id="save-button"
+                        className="eva-press flex h-12 w-full items-center justify-center gap-2 rounded-control text-[15px] font-bold text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] transition-all hover:opacity-90 disabled:opacity-50 disabled:shadow-none"
+                        style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
+                    >
+                        {isPending ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Check className="h-[18px] w-[18px]" strokeWidth={2.5} />}
+                        {isPending ? 'Guardando...' : client ? 'Guardar y enviar' : 'Guardar plantilla'}
+                    </button>
+                </div>
+            )}
+
+            {/* Overflow "Más" — bottom-sheet mobile (kit: filas ícono-tile + label) */}
+            <Sheet open={showOverflow} onOpenChange={setShowOverflow}>
+                <SheetContent
+                    side="bottom"
+                    showCloseButton={false}
+                    className="gap-0 rounded-t-sheet border-subtle bg-surface-card p-0 text-body md:hidden"
+                >
+                    <div className="flex max-h-[80dvh] flex-col overflow-y-auto px-4 pb-2 pt-3">
+                        <div className="mx-auto mb-3 h-1 w-9 shrink-0 rounded-full bg-[var(--border-strong)]" aria-hidden="true" />
+                        <SheetHeader className="border-0 bg-transparent p-0">
+                            <SheetTitle className="sr-only">Más opciones</SheetTitle>
+                        </SheetHeader>
+                        {([
+                            { icon: LayoutTemplate, label: 'Plantillas', onSelect: () => setShowTemplatePicker(true) },
+                            { icon: Eye, label: 'Vista previa', onSelect: () => setShowPreview(true) },
+                            ...(!client && initialProgram?.id
+                                ? [{ icon: Users, label: 'Asignar a alumnos', onSelect: () => setShowAssign(true) }]
+                                : []),
+                            { icon: BarChart3, label: 'Balance muscular', onSelect: () => setShowBalance(true) },
+                            { icon: Printer, label: 'Imprimir / PDF', onSelect: () => setShowPrint(true) },
+                            { icon: Undo2, label: 'Deshacer', onSelect: undo, disabled: !canUndo },
+                            { icon: Redo2, label: 'Rehacer', onSelect: redo, disabled: !canRedo },
+                        ] as Array<{ icon: LucideIcon; label: string; onSelect: () => void; disabled?: boolean }>).map(item => (
+                            <button
+                                key={item.label}
+                                type="button"
+                                disabled={item.disabled}
+                                onClick={() => { setShowOverflow(false); item.onSelect() }}
+                                className="flex w-full items-center gap-3 rounded-lg px-1 py-2 text-left transition-colors active:bg-surface-sunken disabled:opacity-40"
+                            >
+                                <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg bg-surface-sunken text-[var(--ink-700)]">
+                                    <item.icon className="h-[18px] w-[18px]" />
+                                </span>
+                                <span className="text-[15px] font-semibold text-strong">{item.label}</span>
+                            </button>
+                        ))}
+                    </div>
+                </SheetContent>
+            </Sheet>
+
             {modeTransitionLabel && (
                 <div
                     className="fixed inset-0 z-[100] bg-black flex items-center justify-center pointer-events-none animate-mode-transition"
@@ -1798,6 +1868,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 block={editingBlock}
                 clientId={client?.id}
                 cardio={cardio}
+                isMobile={isMobile}
                 onClose={() => setEditingBlock(null)}
                 onUpdate={(b) => {
                     updateBlock(b);

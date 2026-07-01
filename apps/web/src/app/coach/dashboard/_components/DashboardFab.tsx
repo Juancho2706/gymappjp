@@ -68,7 +68,7 @@ export function DashboardFab() {
                                     }}
                                     className="flex w-full items-center gap-3.5 px-1.5 py-3.5 text-left"
                                 >
-                                    <span className="flex size-10 shrink-0 items-center justify-center rounded-control bg-[var(--ink-950)] text-sport-400">
+                                    <span className="flex size-10 shrink-0 items-center justify-center rounded-sm bg-[var(--ink-950)] text-sport-400">
                                         <Icon className="size-5" />
                                     </span>
                                     <span className="text-[15.5px] font-bold text-[var(--text-strong)]">

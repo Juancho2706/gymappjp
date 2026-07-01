@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { Trash2 } from 'lucide-react'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
 import { deltaVsPrev, deviceLabel, formatKg, formatPct, readBiaMetrics } from '@/lib/bodycomp/view-helpers'
+import { StudentBiaSummary } from '@/components/bodycomp/StudentBiaSummary'
 import { deleteBodyCompositionAction } from '../_actions/body-composition.actions'
 
 type BiaSeriesKey = 'bodyFatPercent' | 'skeletalMuscleMassKg'
@@ -79,6 +80,9 @@ export function BiaTrendPanel({
 
     return (
         <div className="space-y-3">
+            {/* Última medición — grilla de tiles con deltas (kit; misma card que ve el alumno) */}
+            <StudentBiaSummary rows={rows} />
+
             <Card padding="md">
                 <div className="mb-3 flex flex-wrap items-center gap-2">
                     {SERIES.map((s) => (

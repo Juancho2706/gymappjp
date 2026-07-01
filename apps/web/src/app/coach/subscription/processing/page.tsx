@@ -333,24 +333,24 @@ export default function SubscriptionProcessingPage() {
         return (
             <main className="flex min-h-dvh items-center justify-center px-4 py-12 pt-safe pb-safe bg-background">
                 <div className="w-full max-w-md rounded-card border border-subtle bg-surface-card p-8 text-center shadow-xl">
-                    <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-2xl text-primary">
+                    <div className="mx-auto mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-[var(--success-100)] text-2xl text-[var(--success-600)]">
                         ✓
                     </div>
 
                     {(tierFromUrl || cycleFromUrl) && (
-                        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sport-500/30 bg-sport-100 px-3 py-1 text-xs font-semibold text-sport-600">
                             {tierLabel} · {cycleLabel}
                         </div>
                     )}
 
                     <div role="status" aria-live="polite">
-                        <h1 className="font-display text-xl font-bold tracking-tight text-foreground">Cambio agendado</h1>
-                        <p className="mt-2 text-sm text-muted-foreground">
+                        <h1 className="font-display text-xl font-bold tracking-tight text-strong">Cambio agendado</h1>
+                        <p className="mt-2 text-sm text-muted">
                             {cutLabel
                                 ? `Tu cambio se aplicará el ${cutLabel}.`
                                 : 'Tu cambio se aplicará al final de tu ciclo actual.'}
                         </p>
-                        <p className="mt-3 text-xs text-muted-foreground">
+                        <p className="mt-3 text-xs text-muted">
                             Conservas tu plan actual hasta esa fecha. No necesitas hacer nada más.
                         </p>
                     </div>
@@ -358,7 +358,7 @@ export default function SubscriptionProcessingPage() {
                     <div className="mt-6 flex flex-col gap-3">
                         <Link
                             href="/coach/subscription"
-                            className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                            className="inline-flex h-11 items-center justify-center rounded-control bg-sport-500 px-6 text-sm font-semibold text-white transition-colors hover:bg-sport-600"
                         >
                             Volver a mi suscripción
                         </Link>
@@ -374,18 +374,18 @@ export default function SubscriptionProcessingPage() {
         return (
             <main className="flex min-h-dvh items-center justify-center px-4 py-12 pt-safe pb-safe bg-background">
                 <div className="w-full max-w-md rounded-card border border-subtle bg-surface-card p-8 shadow-xl">
-                    <h1 className="font-display text-xl font-bold tracking-tight text-foreground">Confirma tu descuento</h1>
-                    <p className="mt-2 text-sm text-muted-foreground">{couponPreview.termsText}</p>
-                    <div className="mt-4 rounded-xl border border-border bg-secondary/30 p-4 text-sm">
-                        <div className="flex justify-between text-muted-foreground">
+                    <h1 className="font-display text-xl font-bold tracking-tight text-strong">Confirma tu descuento</h1>
+                    <p className="mt-2 text-sm text-muted">{couponPreview.termsText}</p>
+                    <div className="mt-4 rounded-control border border-subtle bg-surface-sunken p-4 text-sm">
+                        <div className="flex justify-between text-muted">
                             <span>Precio normal</span>
                             <span className="line-through">{clp(couponPreview.baseBeforeDiscountClp)}</span>
                         </div>
-                        <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                        <div className="flex justify-between text-[var(--success-600)]">
                             <span>Descuento ({couponPreview.durationLabel})</span>
                             <span>−{clp(couponPreview.discountClp)}</span>
                         </div>
-                        <div className="mt-1 flex justify-between border-t border-border pt-1 font-semibold text-foreground">
+                        <div className="mt-1 flex justify-between border-t border-default pt-1 font-semibold text-strong">
                             <span>Pagas</span>
                             <span>{clp(couponPreview.totalClp)}</span>
                         </div>
@@ -395,7 +395,7 @@ export default function SubscriptionProcessingPage() {
                             type="button"
                             onClick={() => void confirmCouponAndCheckout()}
                             disabled={couponPhase === 'applying'}
-                            className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                            className="inline-flex h-11 items-center justify-center rounded-control bg-sport-500 px-6 text-sm font-semibold text-white transition-colors hover:bg-sport-600 disabled:opacity-60"
                         >
                             {couponPhase === 'applying' ? 'Aplicando…' : 'Confirmar y pagar con descuento'}
                         </button>
@@ -406,7 +406,7 @@ export default function SubscriptionProcessingPage() {
                                 setCouponPreview(null)
                                 void startCheckoutFromRegister()
                             }}
-                            className="inline-flex h-11 items-center justify-center rounded-xl border border-border px-6 text-sm font-semibold text-foreground hover:bg-secondary/40"
+                            className="inline-flex h-11 items-center justify-center rounded-control border border-default px-6 text-sm font-semibold text-strong hover:bg-surface-sunken"
                         >
                             Continuar sin código
                         </button>
@@ -420,26 +420,26 @@ export default function SubscriptionProcessingPage() {
         <main className="flex min-h-dvh items-center justify-center px-4 py-12 pt-safe pb-safe bg-background">
             <div className="w-full max-w-md rounded-card border border-subtle bg-surface-card p-8 text-center shadow-xl">
                 {!error && (
-                    <div className="mx-auto mb-6 h-12 w-12 animate-spin rounded-full border-[3px] border-primary border-t-transparent" />
+                    <div className="mx-auto mb-6 h-12 w-12 animate-spin rounded-full border-[3px] border-sport-500 border-t-transparent" />
                 )}
 
                 {/* Plan info */}
                 {(tierFromUrl || cycleFromUrl) && (
-                    <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                    <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sport-500/30 bg-sport-100 px-3 py-1 text-xs font-semibold text-sport-600">
                         {tierLabel} · {cycleLabel}
                     </div>
                 )}
 
                 <div role="status" aria-live="polite">
-                    <h1 className="font-display text-xl font-bold tracking-tight text-foreground">
+                    <h1 className="font-display text-xl font-bold tracking-tight text-strong">
                         {error ? 'Problema al procesar' : 'Procesando tu suscripción'}
                     </h1>
-                    <p className="mt-2 text-sm text-muted-foreground">
+                    <p className="mt-2 text-sm text-muted">
                         {error ?? statusText}
                     </p>
 
                     {!error && (
-                        <p className="mt-3 text-xs text-muted-foreground">
+                        <p className="mt-3 text-xs text-muted">
                             Te redirigiremos automáticamente cuando tu suscripción esté activa.
                         </p>
                     )}
@@ -450,14 +450,14 @@ export default function SubscriptionProcessingPage() {
                         <button
                             type="button"
                             onClick={() => void startCheckoutFromRegister()}
-                            className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                            className="inline-flex h-11 items-center justify-center rounded-control bg-sport-500 px-6 text-sm font-semibold text-white transition-colors hover:bg-sport-600"
                         >
                             Reintentar
                         </button>
                     ) : canRetry ? (
                         <Link
                             href="/coach/reactivate"
-                            className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                            className="inline-flex h-11 items-center justify-center rounded-control bg-sport-500 px-6 text-sm font-semibold text-white transition-colors hover:bg-sport-600"
                         >
                             Ir a reactivación
                         </Link>
@@ -465,7 +465,7 @@ export default function SubscriptionProcessingPage() {
 
                     <Link
                         href="/coach/reactivate"
-                        className="inline-flex h-11 items-center justify-center rounded-xl border border-border px-6 text-sm font-semibold text-foreground hover:bg-secondary/40 transition-colors"
+                        className="inline-flex h-11 items-center justify-center rounded-control border border-default px-6 text-sm font-semibold text-strong hover:bg-surface-sunken transition-colors"
                     >
                         Ir a reactivación
                     </Link>

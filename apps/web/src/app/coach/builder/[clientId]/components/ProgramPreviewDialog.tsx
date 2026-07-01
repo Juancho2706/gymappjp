@@ -1,6 +1,8 @@
 'use client'
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { useIsDesktopMd } from './useIsDesktopMd'
 import { cn } from '@/lib/utils'
 import {
     groupContiguousSupersetRuns,
@@ -76,16 +78,10 @@ export function ProgramPreviewDialog({
         return `Duración: ${weeksToRepeat} semana${weeksToRepeat !== 1 ? 's' : ''}`
     }
 
-    return (
-        <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="max-w-2xl bg-background/95 backdrop-blur-2xl border border-border shadow-2xl">
-                <DialogHeader>
-                    <DialogTitle className="text-sm font-display uppercase tracking-[0.2em] text-foreground">
-                        Vista previa del programa
-                    </DialogTitle>
-                </DialogHeader>
+    const isDesktop = useIsDesktopMd()
 
-                <div className="mt-4 space-y-6 max-h-[70vh] overflow-y-auto pr-1">
+    const body = (
+        <>
                     {/* Header del programa */}
                     <div className="p-5 rounded-card border border-border bg-muted/30">
                         <h2 className="text-xl font-display font-bold uppercase tracking-widest text-foreground">
@@ -99,7 +95,7 @@ export function ProgramPreviewDialog({
                                 {activeDays.length} días activos
                             </span>
                             {restDays.length > 0 && (
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2 py-1 rounded-lg">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground bg-surface-sunken border border-border px-2 py-1 rounded-lg">
                                     {restDays.length} descansos
                                 </span>
                             )}
@@ -145,8 +141,8 @@ export function ProgramPreviewDialog({
                         {days.map(day => {
                             if (day.is_rest) return (
                                 <div key={day.id} className="p-3 rounded-control border border-border bg-muted/10 opacity-50">
-                                    <div className="text-[9px] font-bold uppercase tracking-widest text-indigo-400 flex items-center gap-2">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                                    <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60" />
                                         {day.name} — Descanso
                                     </div>
                                 </div>
@@ -231,7 +227,40 @@ export function ProgramPreviewDialog({
                             <p className="text-xs text-foreground/80 leading-relaxed">{programNotes}</p>
                         </div>
                     )}
-                </div>
+        </>
+    )
+
+    if (!isDesktop) {
+        return (
+            <Sheet open={open} onOpenChange={onClose}>
+                <SheetContent
+                    side="bottom"
+                    showCloseButton
+                    className="max-h-[90dvh] gap-0 rounded-t-sheet border-subtle bg-surface-card p-0 text-body"
+                >
+                    <div className="flex max-h-[90dvh] flex-col overflow-y-auto overscroll-contain px-5 pb-4 pt-3">
+                        <div className="mx-auto mb-3 h-1 w-9 shrink-0 rounded-full bg-[var(--border-strong)]" aria-hidden="true" />
+                        <SheetHeader className="border-0 bg-transparent p-0">
+                            <SheetTitle className="sr-only">Vista previa del programa</SheetTitle>
+                        </SheetHeader>
+                        <h2 className="font-display text-lg font-extrabold tracking-[-0.02em] text-strong">Vista previa</h2>
+                        <div className="mt-3 space-y-6">{body}</div>
+                    </div>
+                </SheetContent>
+            </Sheet>
+        )
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onClose}>
+            <DialogContent className="max-w-2xl bg-background/95 backdrop-blur-2xl border border-border shadow-2xl">
+                <DialogHeader>
+                    <DialogTitle className="font-display text-[17px] font-extrabold normal-case tracking-[-0.02em] text-foreground">
+                        Vista previa del programa
+                    </DialogTitle>
+                </DialogHeader>
+
+                <div className="mt-4 space-y-6 max-h-[70vh] overflow-y-auto pr-1">{body}</div>
             </DialogContent>
         </Dialog>
     )

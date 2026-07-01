@@ -1,10 +1,17 @@
 'use client'
 
 import { useState, useMemo, useActionState, useEffect, useTransition, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Search, Plus, Loader2, Save, SlidersHorizontal } from 'lucide-react'
+import { Search, Plus, Loader2, Save, SlidersHorizontal, Layers, ChevronRight, X } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetFooter,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -46,6 +53,7 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
   const [category, setCategory] = useState<string>('todos')
   const [scope, setScope] = useState<'all' | 'mine'>('all')
   const [sort, setSort] = useState<SortKey>('name')
+  const [filterOpen, setFilterOpen] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [pending, startTransition] = useTransition()
   const [loadingMore, setLoadingMore] = useState(false)
@@ -176,99 +184,226 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
     return list
   }, [foods, sort])
 
+  const filtersActive = scope !== 'all' || sort !== 'name'
+  const resetFilters = () => {
+    setScope('all')
+    setSort('name')
+  }
+  const SORT_LABELS: Record<SortKey, string> = { name: 'Nombre', calories: 'Kcal', protein: 'Proteína' }
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-        <div className="relative max-w-md w-full">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+    <div className="space-y-3">
+      {/* Entry-card — Grupos de comidas (kit FoodLibraryTab) */}
+      <Link
+        href="/coach/meal-groups"
+        className="eva-press flex w-full items-center gap-3 rounded-control border-[1.5px] border-default bg-surface-card px-3.5 py-3 transition-colors hover:bg-surface-sunken"
+      >
+        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-[var(--sport-100)] text-[var(--sport-600)]">
+          <Layers className="h-[17px] w-[17px]" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold text-strong">Grupos de comidas</span>
+          <span className="block text-[11.5px] text-subtle">Combos de alimentos reutilizables</span>
+        </span>
+        <ChevronRight className="h-[18px] w-[18px] shrink-0 text-subtle" />
+      </Link>
+
+      {/* Buscador + botón Filtros y orden (patrón CD, espejo del board Alumnos) */}
+      <div className="flex gap-2">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-subtle)]" />
           <Input
             placeholder="Buscar alimento…"
-            className="pl-12 h-12 rounded-2xl bg-muted/30 border-border/50"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            className="h-11 rounded-control border-default bg-surface-card pl-10 pr-10 text-base shadow-sm placeholder:text-muted md:text-sm"
+            aria-label="Buscar alimento"
           />
-          {pending && (
-            <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+          {pending ? (
+            <Loader2 className="absolute right-2.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-[var(--text-muted)]" />
+          ) : search ? (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              aria-label="Limpiar búsqueda"
+              className="eva-press absolute right-2.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full bg-surface-sunken text-[var(--text-muted)]"
+            >
+              <X className="size-3" />
+            </button>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => setFilterOpen(true)}
+          aria-label="Filtros y orden"
+          className="eva-press relative flex size-11 shrink-0 items-center justify-center rounded-control border-[1.5px] shadow-sm transition-colors"
+          style={{
+            borderColor: filtersActive ? 'var(--sport-300)' : 'var(--border-default)',
+            backgroundColor: filtersActive ? 'var(--sport-100)' : 'var(--surface-card)',
+            color: filtersActive ? 'var(--sport-600)' : 'var(--text-strong)',
+          }}
+        >
+          <SlidersHorizontal className="size-[18px]" />
+          {filtersActive && (
+            <span
+              className="absolute -right-1 -top-1 size-2.5 rounded-full border-2"
+              style={{ backgroundColor: 'var(--sport-500)', borderColor: 'var(--surface-card)' }}
+            />
+          )}
+        </button>
+      </div>
+
+      {/* Chips de filtros activos (removibles) */}
+      {filtersActive && (
+        <div className="flex flex-wrap gap-1.5">
+          {scope !== 'all' && (
+            <button
+              type="button"
+              onClick={() => setScope('all')}
+              className="eva-press inline-flex h-7 items-center gap-1.5 rounded-pill pl-2.5 pr-2 text-xs font-bold"
+              style={{ backgroundColor: 'var(--sport-100)', color: 'var(--sport-700)' }}
+            >
+              Mis alimentos
+              <X className="size-3" />
+            </button>
+          )}
+          {sort !== 'name' && (
+            <button
+              type="button"
+              onClick={() => setSort('name')}
+              className="eva-press inline-flex h-7 items-center gap-1.5 rounded-pill pl-2.5 pr-2 text-xs font-bold"
+              style={{ backgroundColor: 'var(--sport-100)', color: 'var(--sport-700)' }}
+            >
+              Orden: {SORT_LABELS[sort]}
+              <X className="size-3" />
+            </button>
           )}
         </div>
+      )}
 
+      {/* Pills de categoría (kit nutriSelPill) */}
+      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+        {[{ value: 'todos', label: 'Todas' }, ...FOOD_CATEGORIES].map((cat) => {
+          const on = category === cat.value
+          return (
+            <button
+              key={cat.value}
+              type="button"
+              onClick={() => setCategory(cat.value)}
+              className={
+                on
+                  ? 'eva-press inline-flex h-8 shrink-0 items-center rounded-pill border-[1.5px] border-transparent bg-[var(--sport-500)] px-3 text-xs font-bold text-[var(--text-on-sport)]'
+                  : 'eva-press inline-flex h-8 shrink-0 items-center rounded-pill border-[1.5px] border-default bg-surface-card px-3 text-xs font-bold text-muted hover:bg-surface-sunken'
+              }
+            >
+              {cat.label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Conteo + Nuevo (kit: línea mono + botón sport chico) */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="eva-mono text-[11px] text-subtle tabular-nums">
+          {search.trim()
+            ? `${displayed.length} ${displayed.length === 1 ? 'resultado' : 'resultados'}`
+            : `${displayed.length} visibles · ${total} en catálogo`}
+        </span>
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogTrigger className="h-12 rounded-2xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-[10px] gap-2 px-6 shadow-lg shadow-primary/20 flex items-center justify-center w-full md:w-auto">
-            <Plus className="w-4 h-4" />
-            Nuevo alimento
+          <DialogTrigger
+            className="eva-press inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-[10px] px-2.5 text-[12.5px] font-bold text-white transition-opacity hover:opacity-90"
+            style={{ backgroundColor: 'var(--theme-primary)' }}
+          >
+            <Plus className="size-3.5" />
+            Nuevo
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md bg-white dark:bg-zinc-950 border-border/50">
+          <DialogContent className="sm:max-w-md border-subtle bg-surface-card">
             <DialogHeader>
-              <DialogTitle className="text-xl font-black uppercase tracking-tighter">Crear alimento custom</DialogTitle>
+              <DialogTitle className="font-display text-[19px] font-extrabold normal-case tracking-[-0.01em] text-strong">
+                Crear alimento custom
+              </DialogTitle>
             </DialogHeader>
             <CustomFoodForm formAction={formAction} state={state} />
           </DialogContent>
         </Dialog>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1">
-          <SlidersHorizontal className="w-3 h-3" />
-          Orden
-        </span>
-        {(['name', 'calories', 'protein'] as const).map((k) => (
-          <Button
-            key={k}
-            type="button"
-            size="sm"
-            variant={sort === k ? 'default' : 'outline'}
-            className="h-8 text-[10px] font-bold uppercase"
-            onClick={() => setSort(k)}
-          >
-            {k === 'name' ? 'Nombre' : k === 'calories' ? 'Kcal' : 'Proteína'}
-          </Button>
-        ))}
-        <span className="text-xs text-muted-foreground ml-auto tabular-nums w-full sm:w-auto text-right">
-          Mostrando {displayed.length} · Total catálogo {total}
-        </span>
-      </div>
-
-      <div className="flex flex-wrap gap-2 items-center">
-        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Alcance</span>
-        <Button
-          type="button"
-          size="sm"
-          variant={scope === 'all' ? 'default' : 'outline'}
-          className="h-8 text-[10px] font-black uppercase"
-          onClick={() => setScope('all')}
+      {/* Bottom-sheet de filtros/orden — 1:1 patrón CD NutriFilterSheet */}
+      <Sheet open={filterOpen} onOpenChange={setFilterOpen}>
+        <SheetContent
+          side="bottom"
+          showCloseButton
+          className="max-h-[min(85dvh,520px)] rounded-t-sheet border-subtle bg-surface-card text-body shadow-lg"
         >
-          Todos
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={scope === 'mine' ? 'default' : 'outline'}
-          className="h-8 text-[10px] font-black uppercase"
-          onClick={() => setScope('mine')}
-        >
-          Mis alimentos
-        </Button>
-      </div>
-
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-        <Badge
-          variant={category === 'todos' ? 'default' : 'outline'}
-          className="cursor-pointer shrink-0 rounded-lg px-3 py-1"
-          onClick={() => setCategory('todos')}
-        >
-          Todas
-        </Badge>
-        {FOOD_CATEGORIES.map((cat) => (
-          <Badge
-            key={cat.value}
-            variant={category === cat.value ? 'default' : 'outline'}
-            className="cursor-pointer shrink-0 rounded-lg px-3 py-1"
-            onClick={() => setCategory(cat.value)}
-          >
-            {cat.label}
-          </Badge>
-        ))}
-      </div>
+          <SheetHeader className="flex-row items-center justify-between border-0 bg-surface-card px-6 pt-2">
+            <SheetTitle className="font-display font-extrabold normal-case tracking-[-0.02em] text-strong">
+              Filtros y orden
+            </SheetTitle>
+            {filtersActive && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="eva-press text-[13px] font-bold text-[var(--sport-600)]"
+              >
+                Restablecer
+              </button>
+            )}
+          </SheetHeader>
+          <div className="flex-1 space-y-4 overflow-y-auto px-6 pb-2">
+            <div className="space-y-2">
+              <span className="text-xs font-medium text-muted">Mostrar</span>
+              <div className="flex flex-wrap gap-2">
+                {([['all', 'Catálogo'], ['mine', 'Mis alimentos']] as const).map(([key, label]) => {
+                  const selected = scope === key
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setScope(key)}
+                      className="eva-press rounded-pill border-[1.5px] px-4 py-2 text-[13px] font-semibold transition-colors"
+                      style={{
+                        borderColor: selected ? 'var(--sport-300)' : 'var(--border-default)',
+                        backgroundColor: selected ? 'var(--sport-100)' : 'var(--surface-card)',
+                        color: selected ? 'var(--sport-700)' : 'var(--text-body)',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <span className="text-xs font-medium text-muted">Ordenar por</span>
+              <div className="flex flex-wrap gap-2">
+                {(['name', 'calories', 'protein'] as const).map((key) => {
+                  const selected = sort === key
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setSort(key)}
+                      className="eva-press rounded-pill border-[1.5px] px-4 py-2 text-[13px] font-semibold transition-colors"
+                      style={{
+                        borderColor: selected ? 'var(--sport-300)' : 'var(--border-default)',
+                        backgroundColor: selected ? 'var(--sport-100)' : 'var(--surface-card)',
+                        color: selected ? 'var(--sport-700)' : 'var(--text-body)',
+                      }}
+                    >
+                      {SORT_LABELS[key]}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+          <SheetFooter className="border-subtle bg-surface-card">
+            <Button type="button" variant="sport" className="w-full" onClick={() => setFilterOpen(false)}>
+              Ver resultados
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       {pending && displayed.length === 0 ?
         <div className="space-y-2">
@@ -285,7 +420,7 @@ export function FoodLibrary({ initialFoods, totalFoods, coachId }: Props) {
         </div>
       )}
       {!loadingMore && foods.length >= total && total > 0 && (
-        <p className="text-center text-[10px] font-black uppercase tracking-widest text-muted-foreground py-2">
+        <p className="eva-mono py-2 text-center text-[11px] text-subtle">
           Todos los alimentos cargados
         </p>
       )}
@@ -374,8 +509,8 @@ function CustomFoodForm({
         <Input name="name" placeholder="Ej: Avena cocida" required className="h-11 rounded-xl" />
       </div>
 
-      <div className="rounded-xl border border-border/50 bg-muted/30 px-3 py-2.5 space-y-1">
-        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Cómo cargar los datos</p>
+      <div className="rounded-control bg-surface-sunken px-3.5 py-3 space-y-1">
+        <p className="text-[10.5px] font-extrabold uppercase tracking-[0.05em] text-subtle">Cómo cargar los datos</p>
         <p className="text-xs text-muted-foreground leading-relaxed">
           Ingresá calorías y macros <span className="font-semibold text-foreground">por cada 100 g</span> del alimento. Podés usar decimales (ej. <code className="bg-muted px-1 rounded">6.5</code>) — se guardan redondeados al entero más cercano. Si no tenés el dato exacto de un macro, dejalo en 0.
         </p>
@@ -494,11 +629,7 @@ function CustomFoodForm({
 function SubmitButton() {
   const { pending } = useFormStatus()
   return (
-    <Button
-      type="submit"
-      disabled={pending}
-      className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-[11px] shadow-lg shadow-primary/20"
-    >
+    <Button type="submit" variant="sport" disabled={pending} className="w-full">
       {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
       {pending ? 'Guardando…' : 'Guardar alimento'}
     </Button>

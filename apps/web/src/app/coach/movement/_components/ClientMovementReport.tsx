@@ -41,7 +41,7 @@ export function ClientMovementReport({
             <header className="mb-5">
                 <Link
                     href="/coach/movement"
-                    className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-strong"
+                    className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-strong md:hidden"
                 >
                     <ArrowLeft className="size-4" aria-hidden />
                     {t('assessment.title')}

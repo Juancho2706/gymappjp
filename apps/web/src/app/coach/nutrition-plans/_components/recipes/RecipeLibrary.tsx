@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import Image from 'next/image'
-import { ChefHat, Users, Pencil, Trash2, Loader2 } from 'lucide-react'
+import { ChefHat, Users, Pencil, Trash2, Loader2, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { CreateRecipeDialog } from './CreateRecipeDialog'
 import { AssignRecipeModal, type RecipeAssignClient } from './AssignRecipeModal'
 import { deleteRecipeAction } from '../../_actions/recipes.actions'
@@ -21,6 +22,17 @@ export function RecipeLibrary({ recipes, clients }: Props) {
   const [assignTarget, setAssignTarget] = useState<RecipeRow | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const [query, setQuery] = useState('')
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return recipes
+    return recipes.filter(
+      (r) =>
+        r.name.toLowerCase().includes(q) ||
+        (r.ingredients_text?.toLowerCase().includes(q) ?? false)
+    )
+  }, [recipes, query])
 
   const handleDelete = (recipe: RecipeRow) => {
     setDeletingId(recipe.id)
@@ -50,6 +62,46 @@ export function RecipeLibrary({ recipes, clients }: Props) {
         <CreateRecipeDialog />
       </div>
 
+      {recipes.length > 0 && (
+        <div className="space-y-3">
+          <div className="relative min-w-0">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-subtle)]" />
+            <Input
+              placeholder="Buscar receta…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="h-11 rounded-control border-default bg-surface-card pl-10 pr-10 text-base shadow-sm placeholder:text-muted md:text-sm"
+              aria-label="Buscar receta"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                aria-label="Limpiar búsqueda"
+                className="eva-press absolute right-2.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full bg-surface-sunken text-[var(--text-muted)]"
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
+          {query.trim() && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-[var(--text-muted)]">
+                {filtered.length} {filtered.length === 1 ? 'resultado' : 'resultados'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                className="eva-press inline-flex items-center gap-1 text-xs font-bold text-[var(--sport-600)]"
+              >
+                <X className="size-3" />
+                Limpiar
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {recipes.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--ember-100)] text-[var(--ember-600)]">
@@ -61,9 +113,16 @@ export function RecipeLibrary({ recipes, clients }: Props) {
           </p>
           <CreateRecipeDialog />
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-card border border-dashed border-default bg-surface-card px-6 py-10 text-center">
+          <p className="font-display text-[15px] font-extrabold text-strong">Sin recetas</p>
+          <p className="mx-auto mt-1 max-w-xs text-xs text-muted">
+            Ninguna receta coincide con «{query.trim()}».
+          </p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {recipes.map((recipe) => (
+          {filtered.map((recipe) => (
             <div
               key={recipe.id}
               className="group flex flex-col rounded-2xl border border-border bg-card overflow-hidden transition-all hover:border-[color:var(--ember-300)] hover:shadow-lg"

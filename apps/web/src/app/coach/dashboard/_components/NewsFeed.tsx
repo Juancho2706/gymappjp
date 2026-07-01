@@ -130,7 +130,14 @@ function ActivityRow({ item }: { item: ActivityItemClient }) {
                 </span>
             )}
             <div className="min-w-0 flex-1 truncate text-[13.5px] text-[var(--text-body)]">
-                <b className="text-[var(--text-strong)]">{item.title}</b>
+                {item.clientName && item.title.startsWith(item.clientName) ? (
+                    <>
+                        <b className="text-[var(--text-strong)]">{item.clientName}</b>
+                        {item.title.slice(item.clientName.length)}
+                    </>
+                ) : (
+                    <b className="text-[var(--text-strong)]">{item.title}</b>
+                )}
             </div>
             <span className="shrink-0 whitespace-nowrap text-[11.5px] text-[var(--text-subtle)]">
                 {timeAgo(item.date)}

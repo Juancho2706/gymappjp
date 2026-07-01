@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { useIsDesktopMd } from './useIsDesktopMd'
 import { Button } from '@/components/ui/button'
 import { Loader2, FileText, ChevronRight, AlertTriangle } from 'lucide-react'
 import { getTemplatesForBuilderAction, loadTemplateForBuilderAction } from '../_actions/builder.actions'
@@ -176,16 +178,10 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
         return `${t.weeks_to_repeat} semana${t.weeks_to_repeat !== 1 ? 's' : ''}`
     }
 
-    return (
-        <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="max-w-lg bg-background/95 backdrop-blur-2xl border border-border shadow-2xl overflow-hidden">
-                <DialogHeader>
-                    <DialogTitle className="text-sm font-display uppercase tracking-[0.2em] text-foreground">
-                        Biblioteca de Plantillas
-                    </DialogTitle>
-                </DialogHeader>
+    const isDesktop = useIsDesktopMd()
 
-                <div className="mt-2 max-h-[60vh] overflow-y-auto space-y-2 pr-1">
+    const body = (
+        <div className={isDesktop ? 'mt-2 max-h-[60vh] overflow-y-auto space-y-2 pr-1' : 'mt-3 space-y-2'}>
                     {loading ? (
                         <div className="flex justify-center py-12">
                             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -218,7 +214,7 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
 
                                 {confirmId === tpl.id ? (
                                     <div className="flex items-center gap-2">
-                                        <div className="flex items-center gap-1 text-[9px] font-bold text-amber-600 dark:text-amber-400 uppercase">
+                                        <div className="flex items-center gap-1 text-[10px] font-bold text-[var(--warning-600)]">
                                             <AlertTriangle className="w-3 h-3" />
                                             ¿Reemplazar?
                                         </div>
@@ -256,7 +252,39 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
                             </div>
                         ))
                     )}
-                </div>
+        </div>
+    )
+
+    if (!isDesktop) {
+        return (
+            <Sheet open={open} onOpenChange={onClose}>
+                <SheetContent
+                    side="bottom"
+                    showCloseButton
+                    className="max-h-[85dvh] gap-0 rounded-t-sheet border-subtle bg-surface-card p-0 text-body"
+                >
+                    <div className="flex max-h-[85dvh] flex-col overflow-y-auto overscroll-contain px-5 pb-4 pt-3">
+                        <div className="mx-auto mb-3 h-1 w-9 shrink-0 rounded-full bg-[var(--border-strong)]" aria-hidden="true" />
+                        <SheetHeader className="border-0 bg-transparent p-0">
+                            <SheetTitle className="sr-only">Biblioteca de plantillas</SheetTitle>
+                        </SheetHeader>
+                        <h2 className="font-display text-lg font-extrabold tracking-[-0.02em] text-strong">Biblioteca de plantillas</h2>
+                        {body}
+                    </div>
+                </SheetContent>
+            </Sheet>
+        )
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onClose}>
+            <DialogContent className="max-w-lg bg-background/95 backdrop-blur-2xl border border-border shadow-2xl overflow-hidden">
+                <DialogHeader>
+                    <DialogTitle className="font-display text-[17px] font-extrabold normal-case tracking-[-0.02em] text-foreground">
+                        Biblioteca de plantillas
+                    </DialogTitle>
+                </DialogHeader>
+                {body}
             </DialogContent>
         </Dialog>
     )

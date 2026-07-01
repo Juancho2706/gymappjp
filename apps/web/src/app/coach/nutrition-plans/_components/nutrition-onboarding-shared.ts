@@ -16,8 +16,8 @@ export const COACH_NUTRITION_ONBOARDING_STEPS: readonly CoachNutritionOnboarding
   {
     number: 1,
     icon: Apple,
-    iconColor: 'text-emerald-500',
-    iconBg: 'bg-emerald-500/10',
+    iconColor: 'text-[var(--sport-600)]',
+    iconBg: 'bg-[var(--sport-100)]',
     title: 'Agrega tus alimentos',
     description:
       'Busca en el catálogo (~250 alimentos chilenos y globales) o crea los tuyos propios. Los alimentos son la base de todos tus planes.',
@@ -27,8 +27,8 @@ export const COACH_NUTRITION_ONBOARDING_STEPS: readonly CoachNutritionOnboarding
   {
     number: 2,
     icon: BookOpen,
-    iconColor: 'text-violet-500',
-    iconBg: 'bg-violet-500/10',
+    iconColor: 'text-[var(--ember-600)]',
+    iconBg: 'bg-[var(--ember-100)]',
     title: 'Crea tu primera plantilla',
     description:
       'Una plantilla es un modelo de plan reutilizable. Arma las comidas con sus alimentos y cantidades. Tarda menos de 5 minutos.',
@@ -38,8 +38,8 @@ export const COACH_NUTRITION_ONBOARDING_STEPS: readonly CoachNutritionOnboarding
   {
     number: 3,
     icon: Users,
-    iconColor: 'text-sky-500',
-    iconBg: 'bg-sky-500/10',
+    iconColor: 'text-[var(--aqua-600)]',
+    iconBg: 'bg-[var(--aqua-100)]',
     title: 'Asigna el plan a un alumno',
     description:
       'Una vez tengas una plantilla lista, asígnala a tus alumnos. Puedes asignar la misma plantilla a varios a la vez.',

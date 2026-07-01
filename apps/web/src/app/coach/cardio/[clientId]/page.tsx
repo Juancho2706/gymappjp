@@ -36,14 +36,14 @@ export default async function CardioClientPage({ params }: Props) {
             <header className="flex items-center gap-3">
                 <Link
                     href="/coach/cardio"
-                    className="flex size-11 items-center justify-center rounded-pill text-muted transition-colors hover:bg-surface-sunken hover:text-strong"
+                    className="flex size-11 items-center justify-center rounded-pill text-muted transition-colors hover:bg-surface-sunken hover:text-strong md:hidden"
                     aria-label="Volver a Cardio"
                 >
                     <ArrowLeft className="size-5" />
                 </Link>
                 <div>
                     <h1 className="flex items-center gap-2 font-display text-lg font-extrabold tracking-[-0.02em] text-strong">
-                        <span className="inline-flex size-8 items-center justify-center rounded-control bg-aqua-100 text-aqua-700">
+                        <span className="inline-flex size-8 items-center justify-center rounded-control bg-sport-100 text-sport-600">
                             <HeartPulse className="size-[18px]" />
                         </span>
                         Perfil cardio

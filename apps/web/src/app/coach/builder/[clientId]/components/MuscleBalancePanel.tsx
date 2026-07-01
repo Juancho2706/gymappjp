@@ -1,6 +1,8 @@
 'use client'
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { useIsDesktopMd } from './useIsDesktopMd'
 import {
     RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
     ResponsiveContainer, Tooltip
@@ -62,19 +64,10 @@ export function MuscleBalancePanel({ open, onClose, days }: MuscleBalancePanelPr
     const pullSets = (muscleSetMap['Dorsales'] || 0) + (muscleSetMap['Espalda Alta'] || 0)
     const pushPullRatio = pullSets > 0 ? pushSets / pullSets : pushSets > 0 ? 99 : 1
 
-    return (
-        <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="max-w-md bg-background/95 backdrop-blur-2xl border border-border shadow-2xl">
-                <DialogHeader>
-                    <DialogTitle className="text-sm font-display uppercase tracking-[0.2em] text-foreground">
-                        Balance Muscular
-                    </DialogTitle>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                        {totalSets} series totales · {activeMuscles.length} grupos activos
-                    </p>
-                </DialogHeader>
+    const isDesktop = useIsDesktopMd()
 
-                <div className="space-y-5 mt-2">
+    const body = (
+        <div className="space-y-5 mt-2">
                     {totalSets === 0 ? (
                         <div className="py-12 text-center text-muted-foreground">
                             <p className="text-xs font-bold uppercase tracking-widest opacity-40">Sin ejercicios añadidos</p>
@@ -147,12 +140,10 @@ export function MuscleBalancePanel({ open, onClose, days }: MuscleBalancePanelPr
 
                             {/* Push/Pull warning */}
                             {pushSets > 0 && pullSets > 0 && (
-                                <div className={`p-3 rounded-card border text-[10px] font-bold uppercase tracking-widest ${
-                                    pushPullRatio > 1.5
-                                        ? 'border-amber-500/20 bg-amber-500/5 text-amber-600 dark:text-amber-400'
-                                        : pushPullRatio < 0.65
-                                            ? 'border-amber-500/20 bg-amber-500/5 text-amber-600 dark:text-amber-400'
-                                            : 'border-emerald-500/20 bg-emerald-500/5 text-emerald-500'
+                                <div className={`p-3 rounded-card border text-xs font-semibold ${
+                                    pushPullRatio > 1.5 || pushPullRatio < 0.65
+                                        ? 'border-[var(--warning-500)]/25 bg-[var(--warning-100)] text-[var(--warning-600)]'
+                                        : 'border-[var(--success-500)]/25 bg-[var(--success-100)] text-[var(--success-600)]'
                                 }`}>
                                     {pushPullRatio > 1.5
                                         ? '⚠ Ratio empuje/jale desequilibrado — añade más trabajo de espalda'
@@ -165,6 +156,44 @@ export function MuscleBalancePanel({ open, onClose, days }: MuscleBalancePanelPr
                         </>
                     )}
                 </div>
+    )
+
+    if (!isDesktop) {
+        return (
+            <Sheet open={open} onOpenChange={onClose}>
+                <SheetContent
+                    side="bottom"
+                    showCloseButton
+                    className="max-h-[88dvh] gap-0 rounded-t-sheet border-subtle bg-surface-card p-0 text-body"
+                >
+                    <div className="flex max-h-[88dvh] flex-col overflow-y-auto overscroll-contain px-5 pb-4 pt-3">
+                        <div className="mx-auto mb-3 h-1 w-9 shrink-0 rounded-full bg-[var(--border-strong)]" aria-hidden="true" />
+                        <SheetHeader className="border-0 bg-transparent p-0">
+                            <SheetTitle className="sr-only">Balance muscular</SheetTitle>
+                        </SheetHeader>
+                        <h2 className="font-display text-lg font-extrabold tracking-[-0.02em] text-strong">Balance muscular</h2>
+                        <p className="text-[13px] text-muted">
+                            {totalSets} series totales · {activeMuscles.length} grupos activos
+                        </p>
+                        {body}
+                    </div>
+                </SheetContent>
+            </Sheet>
+        )
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onClose}>
+            <DialogContent className="max-w-md bg-background/95 backdrop-blur-2xl border border-border shadow-2xl">
+                <DialogHeader>
+                    <DialogTitle className="font-display text-[17px] font-extrabold normal-case tracking-[-0.02em] text-foreground">
+                        Balance muscular
+                    </DialogTitle>
+                    <p className="text-[13px] text-muted-foreground">
+                        {totalSets} series totales · {activeMuscles.length} grupos activos
+                    </p>
+                </DialogHeader>
+                {body}
             </DialogContent>
         </Dialog>
     )

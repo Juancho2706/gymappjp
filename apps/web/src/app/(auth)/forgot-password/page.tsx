@@ -1,10 +1,10 @@
 'use client'
 
-import { useActionState, Suspense } from 'react'
+import { useActionState, useState, Suspense } from 'react'
 import { useFormStatus } from 'react-dom'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Mail, Loader2, ArrowLeft, CheckCircle } from 'lucide-react'
+import { Mail, Loader2, ChevronLeft, ArrowRight, Send } from 'lucide-react'
 import { forgotPasswordAction, type ForgotPasswordState } from './_actions/forgot-password.actions'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,19 +20,22 @@ function SubmitButton() {
             type="submit"
             disabled={pending}
             className={cn(
-                'w-full h-12 text-base font-bold tracking-[-0.01em] rounded-control transition-all duration-200 active:scale-[0.98]',
+                'w-full h-14 flex items-center justify-center gap-2 text-[17px] font-bold tracking-[-0.01em] rounded-control transition-all duration-200 active:scale-[0.98]',
                 'bg-[var(--cta-fill)] text-[var(--text-on-sport)] shadow-[var(--glow-sport)]',
                 'hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)]',
                 'disabled:opacity-60 disabled:cursor-not-allowed'
             )}
         >
             {pending ? (
-                <span className="flex items-center justify-center gap-2">
+                <>
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Enviando...
-                </span>
+                </>
             ) : (
-                'Enviar enlace de recuperación'
+                <>
+                    Enviar enlace de recuperación
+                    <ArrowRight className="w-4 h-4" />
+                </>
             )}
         </button>
     )
@@ -40,6 +43,7 @@ function SubmitButton() {
 
 function ForgotPasswordForm() {
     const [state, formAction] = useActionState(forgotPasswordAction, initialState)
+    const [emailValue, setEmailValue] = useState('')
     const searchParams = useSearchParams()
     const coachSlug = searchParams.get('coach_slug')
     const teamSlug = searchParams.get('team_slug')
@@ -52,28 +56,48 @@ function ForgotPasswordForm() {
 
     return (
         <div className="animate-slide-up">
-            <div className="text-center mb-8 flex flex-col items-center">
-                <h1 className="text-2xl font-black tracking-[-0.02em] text-text-strong font-display">
-                    ¿Olvidaste tu contraseña?
-                </h1>
-                <p className="mt-2 text-text-muted text-sm">
-                    Ingresá tu email y te enviamos un enlace para crear una nueva
-                </p>
+            <div className="-ml-2 flex items-center">
+                <Link
+                    href={loginHref}
+                    aria-label="Volver al inicio de sesión"
+                    className="flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] bg-surface-sunken text-text-strong transition-colors hover:bg-[color-mix(in_oklab,var(--surface-sunken)_88%,#000)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
+                >
+                    <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                </Link>
             </div>
 
-            <div className="bg-surface-card border border-border-subtle rounded-card p-8 shadow-[var(--shadow-lg)]">
-                {state?.success ? (
-                    <div className="text-center py-4">
-                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[var(--success-100)] text-[var(--success-700)] mb-4">
-                            <CheckCircle className="w-8 h-8" />
-                        </div>
-                        <h2 className="font-display text-lg font-extrabold text-text-strong mb-2">Revisá tu correo</h2>
-                        <p className="text-text-muted text-sm">
-                            Si existe una cuenta asociada a ese email, te enviamos un enlace para restablecer tu contraseña. El enlace expira en 1 hora.
+            {state?.success ? (
+                <div className="pt-10 text-center">
+                    <div className="mb-[18px] inline-flex h-[72px] w-[72px] items-center justify-center rounded-full bg-[var(--success-100)] text-[var(--success-700)]">
+                        <Send className="h-[30px] w-[30px]" />
+                    </div>
+                    <h1 className="font-display text-2xl font-black tracking-[-0.02em] text-text-strong">
+                        Revisá tu correo
+                    </h1>
+                    <p className="mt-2 text-sm leading-relaxed text-text-muted">
+                        Si existe una cuenta asociada a{' '}
+                        <strong className="text-text-strong">{emailValue || 'ese email'}</strong>, te enviamos
+                        un enlace para restablecer tu contraseña. El enlace expira en 1 hora.
+                    </p>
+                    <Link
+                        href={loginHref}
+                        className="mt-6 inline-flex h-14 w-full items-center justify-center gap-2 rounded-control bg-[var(--cta-fill)] text-[17px] font-bold tracking-[-0.01em] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] transition-all duration-200 hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)] active:scale-[0.98]"
+                    >
+                        Volver al inicio de sesión
+                    </Link>
+                </div>
+            ) : (
+                <>
+                    <div className="mt-3">
+                        <h1 className="font-display text-[26px] font-black tracking-[-0.02em] text-text-strong">
+                            ¿Olvidaste tu contraseña?
+                        </h1>
+                        <p className="mt-2 text-sm leading-relaxed text-text-muted">
+                            Ingresá tu email y te enviamos un enlace para crear una nueva.
                         </p>
                     </div>
-                ) : (
-                    <form action={formAction} className="space-y-5">
+
+                    <form action={formAction} className="mt-[22px] space-y-5">
                         {coachSlug && <input type="hidden" name="coach_slug" value={coachSlug} />}
                         {teamSlug && <input type="hidden" name="team_slug" value={teamSlug} />}
                         <div className="space-y-2">
@@ -89,6 +113,7 @@ function ForgotPasswordForm() {
                                     placeholder="tu@email.com"
                                     autoComplete="email"
                                     required
+                                    onChange={(event) => setEmailValue(event.target.value)}
                                     className="pl-10"
                                 />
                             </div>
@@ -102,18 +127,18 @@ function ForgotPasswordForm() {
 
                         <SubmitButton />
                     </form>
-                )}
-            </div>
 
-            <div className="mt-6 text-center">
-                <Link
-                    href={loginHref}
-                    className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                    Volver al inicio de sesión
-                </Link>
-            </div>
+                    <div className="mt-6 text-center text-[13.5px] text-text-muted">
+                        ¿Te acordaste?{' '}
+                        <Link
+                            href={loginHref}
+                            className="font-bold text-sport-600 hover:opacity-80 transition-opacity"
+                        >
+                            Iniciá sesión
+                        </Link>
+                    </div>
+                </>
+            )}
         </div>
     )
 }

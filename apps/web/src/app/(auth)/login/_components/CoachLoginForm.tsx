@@ -96,6 +96,7 @@ export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: Coac
                     label="Entrar como coach"
                     pendingLabel="Iniciando sesión..."
                     variant="coach"
+                    size="lg"
                     trailingIcon={<ArrowRight className="h-4 w-4" />}
                 />
             </div>
@@ -109,7 +110,7 @@ export function CoachLoginForm({ urlError, showCaptcha, turnstileSiteKey }: Coac
             <button
                 type="button"
                 onClick={startCoachGoogleLogin}
-                className="w-full h-12 flex items-center justify-center gap-2.5 rounded-control border-[1.5px] border-border-default bg-surface-card hover:bg-surface-sunken transition-colors text-sm font-semibold text-text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
+                className="w-full h-14 flex items-center justify-center gap-2.5 rounded-control border-[1.5px] border-border-default bg-surface-card hover:bg-surface-sunken transition-colors text-[17px] font-semibold text-text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
             >
                 <svg
                     className="w-4 h-4 shrink-0"

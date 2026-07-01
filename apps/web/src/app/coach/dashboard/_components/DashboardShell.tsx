@@ -54,7 +54,7 @@ export function DashboardShell({
 
             {/* Sin px propio: el gutter lateral lo da CoachMainWrapper (px-4/md:px-8) — evita el
                 doble padding (36px) que estrechaba todo en móvil vs el diseño (~20px). */}
-            <div className="relative z-10 mx-auto w-full max-w-[1100px] pb-10 pt-2">
+            <div className="relative z-10 mx-auto w-full pb-10 pt-2">
                 {/* Billing / tier banners (functional — not part of the design tree) */}
                 <div className="mb-4">
                     <BillingBanners

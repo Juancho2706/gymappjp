@@ -4,7 +4,7 @@ import React, { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, X, Minus, Plus, CircleHelp, Check, ChevronDown } from 'lucide-react'
+import { GripVertical, X, Minus, Plus, CircleHelp, Check, ChevronDown, ChevronUp, Link2, Trash2 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { getMuscleColor } from '../muscle-colors'
@@ -33,11 +33,20 @@ interface ExerciseBlockProps {
     isDragPending?: boolean
     /** Viewport estrecho: ayuda y textos sin mencionar arrastrar a zonas de sección */
     narrowLayout?: boolean
+    /** Rail de reordenar por tap (mobile) — el drag queda como vía secundaria */
+    onMoveUp?: () => void
+    onMoveDown?: () => void
+    canMoveUp?: boolean
+    canMoveDown?: boolean
+    /** Mini-fila de acciones (mobile): toggle de superserie con el siguiente bloque */
+    onTapSuperset?: () => void
+    supersetEnabled?: boolean
 }
 
 function ExerciseBlockInner({
     block, dayId, areaVMs, currentAreaId, onEdit, onRemove, onUpdate, onToggleSuperset,
     onSetArea, onToggleOverride, showTemplateLink, isDragPending, narrowLayout = false,
+    onMoveUp, onMoveDown, canMoveUp = false, canMoveDown = false, onTapSuperset, supersetEnabled = false,
 }: ExerciseBlockProps) {
     const {
         attributes,
@@ -116,6 +125,30 @@ function ExerciseBlockInner({
         setIsQuickEditing(true)
     }
 
+    const overrideButton = showTemplateLink && onToggleOverride ? (
+        <button
+            type="button"
+            className={cn(
+                'rounded border px-1.5 text-[10px] font-bold transition-colors',
+                narrowLayout ? 'min-h-[44px] px-2' : 'py-0.5',
+                block.is_override
+                    ? 'bg-[var(--warning-500)]/15 border-[var(--warning-500)]/40 text-[var(--warning-600)]'
+                    : 'bg-muted/40 border-border text-muted-foreground hover:text-foreground'
+            )}
+            onClick={(e) => {
+                e.stopPropagation()
+                onToggleOverride()
+            }}
+            title={
+                block.is_override
+                    ? 'Marcado como modificado: no se sobrescribe al sincronizar con plantilla'
+                    : 'Marcar como modificado para excluirlo de la sincronización'
+            }
+        >
+            {block.is_override ? 'Modif.' : 'Base'}
+        </button>
+    ) : null
+
     return (
         <div ref={setNodeRef}
             className={cn(
@@ -131,7 +164,8 @@ function ExerciseBlockInner({
                 borderLeftColor: isDragging ? 'var(--theme-primary)' : muscleColor,
             }}
         >
-            <div className="flex min-w-0 items-center gap-3 p-3">
+            <div className="flex min-w-0 items-stretch">
+            <div className="flex min-w-0 flex-1 items-center gap-3 p-3">
                 <button {...attributes} {...listeners}
                     className="text-muted-foreground hover:text-primary cursor-grab active:cursor-grabbing p-1.5 -ml-1 rounded-lg hover:bg-muted transition-colors flex-shrink-0 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center">
                     <GripVertical className="w-4 h-4" />
@@ -157,7 +191,7 @@ function ExerciseBlockInner({
                     className="min-w-0 flex-1 cursor-pointer py-1"
                     onClick={() => !isQuickEditing && onEdit(block)}
                 >
-                    <div className="break-words font-bold text-xs uppercase leading-snug tracking-widest text-foreground group-hover:text-primary transition-colors pr-1 [overflow-wrap:anywhere]">
+                    <div className="break-words font-bold text-[13.5px] max-md:text-[14.5px] leading-snug text-foreground group-hover:text-primary transition-colors pr-1 [overflow-wrap:anywhere]">
                         {block.exercise_name}
                     </div>
 
@@ -230,10 +264,10 @@ function ExerciseBlockInner({
                                     </div>
                                 ) : (
                                     <div
-                                        className="flex items-center gap-1 bg-orange-500/10 border border-orange-500/20 px-1.5 py-0.5 rounded text-[9px] font-bold text-orange-500 cursor-pointer hover:bg-orange-500/20 transition-colors"
+                                        className="flex items-center gap-1 bg-[var(--danger-100)] border border-[var(--danger-500)]/20 px-1.5 py-0.5 rounded text-[10px] font-bold text-[var(--danger-600)] cursor-pointer hover:bg-[var(--danger-500)]/20 transition-colors"
                                         onDoubleClick={onUpdate ? startQuickEdit : undefined}
                                     >
-                                        INCOMPLETO
+                                        Incompleto
                                     </div>
                                 )}
                                 {block.rest_time && (
@@ -257,7 +291,7 @@ function ExerciseBlockInner({
                                 )}
                                 {block.progression_type && (
                                     <div
-                                        className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest bg-emerald-500/10 border border-emerald-500/20 text-emerald-500"
+                                        className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-primary/10 border border-primary/20 text-primary"
                                         title={`Progresión: +${block.progression_value ?? '?'}${block.progression_type === 'weight' ? 'kg/sem' : ' rep/ses'}`}
                                     >
                                         ↑{block.progression_type === 'weight' ? `${block.progression_value ?? '?'}kg` : `${block.progression_value ?? '?'}r`}
@@ -404,43 +438,79 @@ function ExerciseBlockInner({
                                         </Popover>
                                     </div>
                                 )}
-                                {showTemplateLink && onToggleOverride && (
-                                    <button
-                                        type="button"
-                                        className={cn(
-                                            'px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest border transition-colors',
-                                            block.is_override
-                                                ? 'bg-sky-500/15 border-sky-500/40 text-sky-600 dark:text-sky-400'
-                                                : 'bg-muted/40 border-border text-muted-foreground hover:text-foreground'
-                                        )}
-                                        onClick={(e) => {
-                                            e.stopPropagation()
-                                            onToggleOverride()
-                                        }}
-                                        title={
-                                            block.is_override
-                                                ? 'Marcado como modificado: no se sobrescribe al sincronizar con plantilla'
-                                                : 'Marcar como modificado para excluirlo de la sincronización'
-                                        }
-                                    >
-                                        {block.is_override ? 'Modif.' : 'Base'}
-                                    </button>
-                                )}
+                                {!narrowLayout && overrideButton}
                             </>
                         )}
                     </div>
                 </div>
 
-                <button onClick={(e) => {
-                    e.stopPropagation();
-                    onRemove(dayId, block.uid);
-                }}
-                    aria-label="Eliminar ejercicio"
-                    className="p-2.5 rounded-control text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all flex-shrink-0 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center"
-                >
-                    <X className="w-5 h-5 stroke-[2.5px]" />
-                </button>
+                {!narrowLayout && (
+                    <button onClick={(e) => {
+                        e.stopPropagation();
+                        onRemove(dayId, block.uid);
+                    }}
+                        aria-label="Eliminar ejercicio"
+                        className="p-2.5 rounded-control text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all flex-shrink-0 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center"
+                    >
+                        <X className="w-5 h-5 stroke-[2.5px]" />
+                    </button>
+                )}
             </div>
+
+            {/* Rail de reordenar por tap — mobile */}
+            {narrowLayout && (onMoveUp || onMoveDown) && (
+                <div className="flex shrink-0 flex-col self-stretch border-l border-subtle">
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onMoveUp?.() }}
+                        disabled={!canMoveUp}
+                        aria-label="Subir"
+                        className="flex w-[38px] flex-1 items-center justify-center border-b border-subtle text-subtle transition-colors active:bg-surface-sunken disabled:opacity-30"
+                    >
+                        <ChevronUp className="h-4 w-4" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onMoveDown?.() }}
+                        disabled={!canMoveDown}
+                        aria-label="Bajar"
+                        className="flex w-[38px] flex-1 items-center justify-center text-subtle transition-colors active:bg-surface-sunken disabled:opacity-30"
+                    >
+                        <ChevronDown className="h-4 w-4" />
+                    </button>
+                </div>
+            )}
+            </div>
+
+            {/* Mini-fila de acciones — mobile (SS · Base/Modif. · eliminar) */}
+            {narrowLayout && (onTapSuperset || overrideButton || onMoveUp || onMoveDown) && (
+                <div className="flex items-center gap-0.5 px-2 pb-1 pl-3">
+                    {onTapSuperset && (
+                        <button
+                            type="button"
+                            disabled={!supersetEnabled}
+                            onClick={(e) => { e.stopPropagation(); onTapSuperset() }}
+                            title={block.superset_group ? 'Quitar de la superserie' : 'Agrupar como superserie con el siguiente ejercicio'}
+                            className={cn(
+                                'inline-flex min-h-[44px] items-center gap-1 rounded-md px-2 text-[11.5px] font-bold transition-colors disabled:opacity-40',
+                                block.superset_group ? 'text-primary' : 'text-muted-foreground'
+                            )}
+                        >
+                            <Link2 className="h-[13px] w-[13px]" /> SS
+                        </button>
+                    )}
+                    {overrideButton}
+                    <span className="flex-1" />
+                    <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onRemove(dayId, block.uid) }}
+                        aria-label="Eliminar ejercicio"
+                        className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md px-2 text-[var(--danger-500)] transition-colors active:bg-[var(--danger-100)]"
+                    >
+                        <Trash2 className="h-4 w-4" />
+                    </button>
+                </div>
+            )}
         </div>
     )
 }

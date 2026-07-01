@@ -111,7 +111,8 @@ export function CreateRecipeDialog({ recipe, trigger, onSaved }: Props) {
           (trigger as React.ReactElement) ?? (
             <button
               type="button"
-              className="h-12 rounded-2xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-[10px] gap-2 px-6 shadow-lg shadow-primary/20 flex items-center justify-center w-full md:w-auto"
+              className="eva-press inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-control px-3.5 text-[13px] font-bold text-white transition-opacity hover:opacity-90 md:w-auto"
+              style={{ backgroundColor: 'var(--theme-primary)' }}
             >
               <ChefHat className="w-4 h-4" />
               Nueva receta
@@ -119,16 +120,18 @@ export function CreateRecipeDialog({ recipe, trigger, onSaved }: Props) {
           )
         }
       />
-      <DialogContent className="sm:max-w-lg bg-white dark:bg-zinc-950 border-border/50">
+      <DialogContent className="sm:max-w-lg border-subtle bg-surface-card">
         <DialogHeader>
-          <DialogTitle className="text-xl font-black uppercase tracking-tighter flex items-center gap-2">
-            <ChefHat className="w-5 h-5 text-[var(--ember-500)]" />
+          <DialogTitle className="flex items-center gap-2 font-display text-[19px] font-extrabold normal-case tracking-[-0.01em] text-strong">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[var(--ember-100)] text-[var(--ember-700)]">
+              <ChefHat className="h-4 w-4" />
+            </span>
             {isEdit ? 'Editar receta' : 'Nueva receta'}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="rounded-xl border border-border/50 bg-muted/30 px-3 py-2.5">
-          <p className="text-xs text-muted-foreground leading-relaxed">
+        <div className="rounded-control bg-surface-sunken px-3.5 py-3">
+          <p className="text-xs leading-relaxed text-muted">
             Ideas de recetas — inspiración para tus alumnos. No afectan macros ni adherencia.
           </p>
         </div>
@@ -264,11 +267,7 @@ export function CreateRecipeDialog({ recipe, trigger, onSaved }: Props) {
             )}
           </div>
 
-          <Button
-            type="submit"
-            disabled={pending || uploading}
-            className="w-full h-12 rounded-xl bg-primary text-primary-foreground font-black uppercase tracking-widest text-[11px] shadow-lg shadow-primary/20"
-          >
+          <Button type="submit" variant="sport" disabled={pending || uploading} className="w-full">
             {pending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
             {pending ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Crear receta'}
           </Button>

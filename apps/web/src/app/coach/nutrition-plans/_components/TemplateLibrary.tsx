@@ -10,7 +10,16 @@ import {
   Pencil,
   Copy,
   UserPlus,
+  SlidersHorizontal,
+  X,
 } from 'lucide-react'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetFooter,
+  SheetTitle,
+} from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -69,19 +78,53 @@ type Props = {
   clients: AssignModalClient[]
 }
 
+type TemplateSortKey = 'recent' | 'name' | 'kcalDesc' | 'kcalAsc'
+
+const TEMPLATE_SORT_LABELS: Record<TemplateSortKey, string> = {
+  recent: 'Recientes',
+  name: 'Nombre',
+  kcalDesc: 'Kcal ↓',
+  kcalAsc: 'Kcal ↑',
+}
+
+const TEMPLATE_GOAL_OPTIONS = ['Todos', 'Déficit', 'Volumen', 'Mantenimiento'] as const
+
 export function TemplateLibrary({ templates, coachId, clients }: Props) {
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState('')
+  const [goalFilter, setGoalFilter] = useState<string>('Todos')
+  const [sortBy, setSortBy] = useState<TemplateSortKey>('recent')
+  const [filterOpen, setFilterOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState<string | null>(null)
   const [isDuplicating, setIsDuplicating] = useState<string | null>(null)
   const [assignTemplate, setAssignTemplate] = useState<AssignModalTemplate | null>(null)
   const [templateToDelete, setTemplateToDelete] = useState<string | null>(null)
 
-  const filteredTemplates = templates.filter(
+  const filtersActive = goalFilter !== 'Todos' || sortBy !== 'recent'
+  const resetFilters = () => {
+    setGoalFilter('Todos')
+    setSortBy('recent')
+  }
+
+  let filteredTemplates = templates.filter(
     (t) =>
       t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (t.description?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
   )
+  if (goalFilter !== 'Todos') {
+    filteredTemplates = filteredTemplates.filter((t) => goalLabel(t.goal_type) === goalFilter)
+  }
+  if (sortBy === 'name') {
+    filteredTemplates = [...filteredTemplates].sort((a, b) => a.name.localeCompare(b.name))
+  } else if (sortBy === 'kcalDesc') {
+    filteredTemplates = [...filteredTemplates].sort(
+      (a, b) => (b.daily_calories ?? 0) - (a.daily_calories ?? 0)
+    )
+  } else if (sortBy === 'kcalAsc') {
+    filteredTemplates = [...filteredTemplates].sort(
+      (a, b) => (a.daily_calories ?? 0) - (b.daily_calories ?? 0)
+    )
+  }
 
   const runDeleteTemplate = async () => {
     if (!templateToDelete) return
@@ -132,27 +175,196 @@ export function TemplateLibrary({ templates, coachId, clients }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-subtle)]" />
-          <Input
-            placeholder="Buscar plantilla…"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9 h-11 rounded-control bg-surface-card border-[var(--border-default)] text-[var(--text-strong)]"
-          />
+      {/* Buscador + Filtros y orden + chips (patrón CD, espejo del board Alumnos) */}
+      <div className="space-y-3">
+        <div className="flex gap-2">
+          <div className="relative min-w-0 flex-1 md:max-w-md">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-subtle)]" />
+            <Input
+              placeholder="Buscar plantilla…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="h-11 rounded-control border-default bg-surface-card pl-10 pr-10 text-base shadow-sm placeholder:text-muted md:text-sm"
+              aria-label="Buscar plantilla"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                aria-label="Limpiar búsqueda"
+                className="eva-press absolute right-2.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full bg-surface-sunken text-[var(--text-muted)]"
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setFilterOpen(true)}
+            aria-label="Filtros y orden"
+            className="eva-press relative flex size-11 shrink-0 items-center justify-center rounded-control border-[1.5px] shadow-sm transition-colors"
+            style={{
+              borderColor: filtersActive ? 'var(--sport-300)' : 'var(--border-default)',
+              backgroundColor: filtersActive ? 'var(--sport-100)' : 'var(--surface-card)',
+              color: filtersActive ? 'var(--sport-600)' : 'var(--text-strong)',
+            }}
+          >
+            <SlidersHorizontal className="size-[18px]" />
+            {filtersActive && (
+              <span
+                className="absolute -right-1 -top-1 size-2.5 rounded-full border-2"
+                style={{ backgroundColor: 'var(--sport-500)', borderColor: 'var(--surface-card)' }}
+              />
+            )}
+          </button>
         </div>
+
+        {filtersActive && (
+          <div className="flex flex-wrap gap-1.5">
+            {goalFilter !== 'Todos' && (
+              <button
+                type="button"
+                onClick={() => setGoalFilter('Todos')}
+                className="eva-press inline-flex h-7 items-center gap-1.5 rounded-pill pl-2.5 pr-2 text-xs font-bold"
+                style={{ backgroundColor: 'var(--sport-100)', color: 'var(--sport-700)' }}
+              >
+                {goalFilter}
+                <X className="size-3" />
+              </button>
+            )}
+            {sortBy !== 'recent' && (
+              <button
+                type="button"
+                onClick={() => setSortBy('recent')}
+                className="eva-press inline-flex h-7 items-center gap-1.5 rounded-pill pl-2.5 pr-2 text-xs font-bold"
+                style={{ backgroundColor: 'var(--sport-100)', color: 'var(--sport-700)' }}
+              >
+                Orden: {TEMPLATE_SORT_LABELS[sortBy]}
+                <X className="size-3" />
+              </button>
+            )}
+          </div>
+        )}
+
+        {(searchTerm.trim() || filtersActive) && (
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-[var(--text-muted)]">
+              {filteredTemplates.length} {filteredTemplates.length === 1 ? 'resultado' : 'resultados'}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm('')
+                resetFilters()
+              }}
+              className="eva-press inline-flex items-center gap-1 text-xs font-bold text-[var(--sport-600)]"
+            >
+              <X className="size-3" />
+              Limpiar
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Bottom-sheet de filtros/orden — 1:1 patrón CD NutriFilterSheet */}
+      <Sheet open={filterOpen} onOpenChange={setFilterOpen}>
+        <SheetContent
+          side="bottom"
+          showCloseButton
+          className="max-h-[min(85dvh,520px)] rounded-t-sheet border-subtle bg-surface-card text-body shadow-lg"
+        >
+          <SheetHeader className="flex-row items-center justify-between border-0 bg-surface-card px-6 pt-2">
+            <SheetTitle className="font-display font-extrabold normal-case tracking-[-0.02em] text-strong">
+              Filtros y orden
+            </SheetTitle>
+            {filtersActive && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="eva-press text-[13px] font-bold text-[var(--sport-600)]"
+              >
+                Restablecer
+              </button>
+            )}
+          </SheetHeader>
+          <div className="flex-1 space-y-4 overflow-y-auto px-6 pb-2">
+            <div className="space-y-2">
+              <span className="text-xs font-medium text-muted">Objetivo</span>
+              <div className="flex flex-wrap gap-2">
+                {TEMPLATE_GOAL_OPTIONS.map((goal) => {
+                  const selected = goalFilter === goal
+                  return (
+                    <button
+                      key={goal}
+                      type="button"
+                      onClick={() => setGoalFilter(goal)}
+                      className="eva-press rounded-pill border-[1.5px] px-4 py-2 text-[13px] font-semibold transition-colors"
+                      style={{
+                        borderColor: selected ? 'var(--sport-300)' : 'var(--border-default)',
+                        backgroundColor: selected ? 'var(--sport-100)' : 'var(--surface-card)',
+                        color: selected ? 'var(--sport-700)' : 'var(--text-body)',
+                      }}
+                    >
+                      {goal}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <span className="text-xs font-medium text-muted">Ordenar por</span>
+              <div className="flex flex-wrap gap-2">
+                {(['recent', 'name', 'kcalDesc', 'kcalAsc'] as const).map((key) => {
+                  const selected = sortBy === key
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setSortBy(key)}
+                      className="eva-press rounded-pill border-[1.5px] px-4 py-2 text-[13px] font-semibold transition-colors"
+                      style={{
+                        borderColor: selected ? 'var(--sport-300)' : 'var(--border-default)',
+                        backgroundColor: selected ? 'var(--sport-100)' : 'var(--surface-card)',
+                        color: selected ? 'var(--sport-700)' : 'var(--text-body)',
+                      }}
+                    >
+                      {TEMPLATE_SORT_LABELS[key]}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+          <SheetFooter className="border-subtle bg-surface-card">
+            <Button type="button" variant="sport" className="w-full" onClick={() => setFilterOpen(false)}>
+              Ver resultados
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       {filteredTemplates.length === 0 ? (
         <div className="text-center py-16 px-6 flex flex-col items-center rounded-card border border-dashed border-[var(--border-default)] bg-surface-card">
-          <div className="w-[58px] h-[58px] rounded-lg bg-[var(--ember-100)] text-[var(--ember-600)] flex items-center justify-center mb-3.5">
+          <div className="w-[58px] h-[58px] rounded-lg bg-[var(--sport-100)] text-[var(--sport-600)] flex items-center justify-center mb-3.5">
             <CalendarHeart className="w-7 h-7" />
           </div>
-          <h3 className="text-[16.5px] font-extrabold font-display text-[var(--text-strong)]">Sin plantillas todavía</h3>
-          <p className="text-[13px] text-[var(--text-muted)] max-w-[252px] mx-auto mt-1.5 leading-snug">
-            Creá una plantilla de comidas reutilizable y asignala a tus alumnos en segundos.
-          </p>
+          {searchTerm.trim() || filtersActive ? (
+            <>
+              <h3 className="text-[16.5px] font-extrabold font-display text-[var(--text-strong)]">Sin plantillas</h3>
+              <p className="text-[13px] text-[var(--text-muted)] max-w-[252px] mx-auto mt-1.5 leading-snug">
+                {searchTerm.trim()
+                  ? `Ninguna plantilla coincide con «${searchTerm.trim()}».`
+                  : 'Ninguna plantilla con ese filtro. Probá quitarlo.'}
+              </p>
+            </>
+          ) : (
+            <>
+              <h3 className="text-[16.5px] font-extrabold font-display text-[var(--text-strong)]">Sin plantillas todavía</h3>
+              <p className="text-[13px] text-[var(--text-muted)] max-w-[252px] mx-auto mt-1.5 leading-snug">
+                Creá una plantilla de comidas reutilizable y asignala a tus alumnos en segundos.
+              </p>
+            </>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

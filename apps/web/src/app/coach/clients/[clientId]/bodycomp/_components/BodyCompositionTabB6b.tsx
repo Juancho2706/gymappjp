@@ -39,7 +39,7 @@ export function BodyCompositionTabB6b({
             <div className="flex items-center gap-3">
                 <Link
                     href={`/coach/clients/${clientId}`}
-                    className="inline-flex size-10 shrink-0 items-center justify-center rounded-control border-[1.5px] border-default bg-surface-card text-muted transition-colors hover:text-strong"
+                    className="inline-flex size-10 shrink-0 items-center justify-center rounded-control border-[1.5px] border-default bg-surface-card text-muted transition-colors hover:text-strong md:hidden"
                     aria-label="Volver a la ficha"
                 >
                     <ArrowLeft className="size-5" />

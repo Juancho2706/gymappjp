@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Ticket } from 'lucide-react'
+import { BadgeCheck, Ticket } from 'lucide-react'
 import type { BillingCycle, SaleTier } from '@/lib/constants'
 
 type Preview = {
@@ -118,16 +118,19 @@ export function ReactivateCouponCard({
     if (!couponsEnabled || tier === 'free') return null
 
     return (
-        <section className="mt-6 rounded-xl border border-border p-4">
-            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
-                <Ticket className="h-4 w-4 text-emerald-500" /> ¿Tienes un código de descuento?
+        <section className="mt-6 rounded-card border border-subtle bg-surface-card p-4">
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-strong">
+                <Ticket className="h-4 w-4 text-sport-500" /> ¿Tienes un código de descuento?
             </div>
 
             {activeCode ? (
-                <p className="text-sm text-emerald-600 dark:text-emerald-400">
-                    Código <span className="font-mono font-semibold">{activeCode}</span> aplicado. El descuento se
-                    reflejará en el monto al continuar al pago.
-                </p>
+                <div className="flex items-center gap-2.5 rounded-control bg-[var(--success-100)] px-3 py-2.5">
+                    <BadgeCheck className="h-[18px] w-[18px] shrink-0 text-[var(--success-700)]" />
+                    <p className="text-[13.5px] font-bold text-strong">
+                        Código <span className="font-mono">{activeCode}</span> aplicado. El descuento se
+                        reflejará en el monto al continuar al pago.
+                    </p>
+                </div>
             ) : (phase === 'preview' || phase === 'applying') && preview ? (
                 <div
                     ref={dialogRef}
@@ -137,17 +140,17 @@ export function ReactivateCouponCard({
                     aria-label="Confirmar código de descuento"
                     className="space-y-3"
                 >
-                    <p className="text-sm text-foreground/90">{preview.termsText}</p>
-                    <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
-                        <div className="flex justify-between text-muted-foreground">
+                    <p className="text-sm text-body">{preview.termsText}</p>
+                    <div className="rounded-control bg-surface-sunken p-3 text-sm">
+                        <div className="flex justify-between text-muted">
                             <span>Precio normal</span>
                             <span className="line-through">{clp(preview.baseBeforeDiscountClp)}</span>
                         </div>
-                        <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                        <div className="flex justify-between text-[var(--success-600)]">
                             <span>Descuento ({preview.durationLabel})</span>
                             <span>−{clp(preview.discountClp)}</span>
                         </div>
-                        <div className="mt-1 flex justify-between border-t border-border pt-1 font-semibold text-foreground">
+                        <div className="mt-1 flex justify-between border-t border-default pt-1 font-semibold text-strong">
                             <span>Pagas</span>
                             <span>{clp(preview.totalClp)}</span>
                         </div>
@@ -157,7 +160,7 @@ export function ReactivateCouponCard({
                             type="button"
                             onClick={onConfirmar}
                             disabled={phase === 'applying'}
-                            className="min-h-[44px] flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                            className="min-h-[44px] flex-1 rounded-control bg-sport-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-sport-600 disabled:opacity-50"
                         >
                             {phase === 'applying' ? 'Aplicando…' : 'Confirmar y aplicar'}
                         </button>
@@ -167,36 +170,39 @@ export function ReactivateCouponCard({
                                 setPhase('idle')
                                 setPreview(null)
                             }}
-                            className="min-h-[44px] rounded-lg border border-border px-4 py-2.5 text-sm text-muted-foreground"
+                            className="min-h-[44px] rounded-control border border-default px-4 py-2.5 text-sm text-muted"
                         >
                             Cancelar
                         </button>
                     </div>
                 </div>
             ) : phase === 'done' ? (
-                <p className="text-sm text-emerald-600 dark:text-emerald-400">
-                    ¡Código aplicado! El descuento se reflejará en el monto al continuar al pago.
-                </p>
+                <div className="flex items-center gap-2.5 rounded-control bg-[var(--success-100)] px-3 py-2.5">
+                    <BadgeCheck className="h-[18px] w-[18px] shrink-0 text-[var(--success-700)]" />
+                    <p className="text-[13.5px] font-bold text-strong">
+                        ¡Código aplicado! El descuento se reflejará en el monto al continuar al pago.
+                    </p>
+                </div>
             ) : (
                 <div className="flex gap-2">
                     <input
                         value={code}
                         onChange={(e) => setCode(e.target.value)}
                         placeholder="Ingresa tu código"
-                        className="h-11 min-h-[44px] flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                        className="h-11 min-h-[44px] flex-1 rounded-control border border-default bg-surface-card px-3 text-sm text-strong placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
                     />
                     <button
                         type="button"
                         onClick={onAplicar}
                         disabled={!code.trim() || phase === 'checking'}
-                        className="min-h-[44px] rounded-lg border border-border bg-secondary/40 px-4 text-sm font-medium text-foreground disabled:opacity-40"
+                        className="min-h-[44px] rounded-control bg-surface-sunken px-4 text-sm font-semibold text-strong disabled:opacity-40"
                     >
                         {phase === 'checking' ? '…' : 'Aplicar'}
                     </button>
                 </div>
             )}
 
-            {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+            {error && <p className="mt-2 text-xs text-[var(--danger-600)]">{error}</p>}
         </section>
     )
 }

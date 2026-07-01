@@ -1,8 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Search, Trash2, Edit2, LayoutGrid, Scale, Zap, Dumbbell, PieChart } from 'lucide-react'
-import { Button } from "@/components/ui/button"
+import { Plus, Search, Trash2, PencilLine, Layers, X } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { MealGroupModal } from './MealGroupModal'
@@ -46,7 +45,7 @@ export function MealGroupLibraryClient({ initialGroups, coachId }: { initialGrou
             const quantity = Number(item.quantity) || 0
             const unit = item.unit?.toLowerCase() || 'g'
             const factor = unit === 'g' || unit === 'ml' ? quantity / 100 : quantity
-            
+
             return {
                 calories: acc.calories + ((Number(item.food?.calories) || 0) * factor),
                 protein: acc.protein + ((Number(item.food?.protein_g) || 0) * factor),
@@ -57,106 +56,104 @@ export function MealGroupLibraryClient({ initialGroups, coachId }: { initialGrou
     }
 
     return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-                <div className="relative w-full">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <div className="space-y-4">
+            <div className="flex gap-2">
+                <div className="relative min-w-0 flex-1">
+                    <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--text-subtle)]" />
                     <Input
-                        placeholder="Buscar grupos..."
+                        placeholder="Buscar grupo…"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-9 h-11 rounded-xl bg-card border-border/60"
+                        className="h-11 rounded-control border-default bg-surface-card pl-10 pr-10 text-base shadow-sm placeholder:text-muted md:text-sm"
+                        aria-label="Buscar grupo"
                     />
+                    {searchTerm && (
+                        <button
+                            type="button"
+                            onClick={() => setSearchTerm('')}
+                            aria-label="Limpiar búsqueda"
+                            className="eva-press absolute right-2.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full bg-surface-sunken text-[var(--text-muted)]"
+                        >
+                            <X className="size-3" />
+                        </button>
+                    )}
                 </div>
-                <Button 
+                <button
+                    type="button"
                     onClick={() => {
                         setEditingGroup(null)
                         setIsModalOpen(true)
                     }}
-                    className="w-full sm:w-auto h-11 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold gap-2 px-6 shrink-0"
+                    className="eva-press inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-control px-3.5 text-[13px] font-bold text-white transition-opacity hover:opacity-90"
+                    style={{ backgroundColor: 'var(--theme-primary)' }}
                 >
-                    <Plus className="w-5 h-5" />
-                    Nuevo Grupo
-                </Button>
+                    <Plus className="size-4" />
+                    Grupo
+                </button>
             </div>
 
             {filteredGroups.length === 0 ? (
-                <div className="text-center py-20 bg-card border border-dashed border-border rounded-2xl">
-                    <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <LayoutGrid className="w-8 h-8 text-muted-foreground" />
+                <div className="flex flex-col items-center rounded-card border border-dashed border-[var(--border-default)] bg-surface-card px-6 py-16 text-center">
+                    <div className="mb-3.5 flex h-[58px] w-[58px] items-center justify-center rounded-lg bg-[var(--sport-100)] text-[var(--sport-600)]">
+                        <Layers className="h-7 w-7" />
                     </div>
-                    <h3 className="text-lg font-bold">No se encontraron grupos</h3>
-                    <p className="text-muted-foreground max-w-xs mx-auto mt-1">Crea tu primer grupo de alimentos para usarlo en tus planes.</p>
+                    <h3 className="font-display text-[16.5px] font-extrabold text-[var(--text-strong)]">
+                        {searchTerm ? 'Sin resultados' : 'Sin grupos todavía'}
+                    </h3>
+                    <p className="mx-auto mt-1.5 max-w-[252px] text-[13px] leading-snug text-[var(--text-muted)]">
+                        {searchTerm
+                            ? `Ningún grupo coincide con «${searchTerm.trim()}».`
+                            : 'Creá tu primer grupo de alimentos para usarlo en tus planes.'}
+                    </p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 gap-3">
                     {filteredGroups.map((group) => {
                         const totals = calculateTotals(group.items || [])
                         return (
-                            <Card key={group.id} className="overflow-hidden border-border/60 hover:border-primary/40 transition-all group">
-                                <CardContent className="p-0">
-                                    <div className="p-5">
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div className="min-w-0">
-                                                <h3 className="font-bold text-lg truncate group-hover:text-primary transition-colors">{group.name}</h3>
-                                                <p className="text-xs text-muted-foreground">{group.items?.length || 0} ingredientes</p>
-                                            </div>
-                                            <div className="flex gap-1 shrink-0">
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    className="h-8 w-8 rounded-lg text-muted-foreground hover:text-primary"
-                                                    onClick={() => {
-                                                        setEditingGroup(group)
-                                                        setIsModalOpen(true)
-                                                    }}
-                                                >
-                                                    <Edit2 className="w-4 h-4" />
-                                                </Button>
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="icon" 
-                                                    className="h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive"
-                                                    onClick={() => handleDelete(group.id)}
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </Button>
-                                            </div>
+                            <Card key={group.id} className="rounded-card border-[var(--border-subtle)] bg-surface-card">
+                                <CardContent className="space-y-2.5 p-4">
+                                    <div className="flex items-start justify-between gap-2.5">
+                                        <div className="min-w-0">
+                                            <h3 className="truncate text-[15.5px] font-bold text-strong">{group.name}</h3>
+                                            <p className="eva-mono mt-0.5 text-[11.5px] text-muted tabular-nums">
+                                                {group.items?.length || 0} ingredientes · ~{Math.round(totals.calories)} kcal · {Math.round(totals.protein)}g P
+                                            </p>
                                         </div>
-
-                                        <div className="grid grid-cols-4 gap-2">
-                                            <div className="bg-orange-500/5 border border-orange-500/10 rounded-lg p-1.5 text-center">
-                                                <p className="text-[9px] font-bold text-orange-600 uppercase">Cal</p>
-                                                <p className="text-xs font-bold text-orange-700">{Math.round(totals.calories)}</p>
-                                            </div>
-                                            <div className="bg-blue-500/5 border border-blue-500/10 rounded-lg p-1.5 text-center">
-                                                <p className="text-[9px] font-bold text-blue-600 uppercase">Prot</p>
-                                                <p className="text-xs font-bold text-blue-700">{Math.round(totals.protein)}g</p>
-                                            </div>
-                                            <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-lg p-1.5 text-center">
-                                                <p className="text-[9px] font-bold text-emerald-600 uppercase">Carb</p>
-                                                <p className="text-xs font-bold text-emerald-700">{Math.round(totals.carbs)}g</p>
-                                            </div>
-                                            <div className="bg-purple-500/5 border border-purple-500/10 rounded-lg p-1.5 text-center">
-                                                <p className="text-[9px] font-bold text-purple-600 uppercase">Fat</p>
-                                                <p className="text-xs font-bold text-purple-700">{Math.round(totals.fats)}g</p>
-                                            </div>
+                                        <div className="flex shrink-0 gap-1.5">
+                                            <button
+                                                type="button"
+                                                aria-label="Editar"
+                                                className="eva-press flex h-[34px] w-[34px] items-center justify-center rounded-[10px] border-[1.5px] border-default bg-surface-card text-muted transition-colors hover:text-strong"
+                                                onClick={() => {
+                                                    setEditingGroup(group)
+                                                    setIsModalOpen(true)
+                                                }}
+                                            >
+                                                <PencilLine className="h-[15px] w-[15px]" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                aria-label="Eliminar"
+                                                className="eva-press flex h-[34px] w-[34px] items-center justify-center rounded-[10px] border-[1.5px] border-default bg-surface-card text-muted transition-colors hover:text-[var(--danger-600)]"
+                                                onClick={() => handleDelete(group.id)}
+                                            >
+                                                <Trash2 className="h-[15px] w-[15px]" />
+                                            </button>
                                         </div>
                                     </div>
-                                    
-                                    <div className="px-5 pb-5">
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {group.items?.slice(0, 3).map((item: any) => (
-                                                <span key={item.id} className="text-[10px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground whitespace-nowrap">
-                                                    {item.food.name}
-                                                </span>
-                                            ))}
-                                            {(group.items?.length || 0) > 3 && (
-                                                <span className="text-[10px] bg-muted px-2 py-0.5 rounded-full text-muted-foreground">
-                                                    +{group.items.length - 3} más
-                                                </span>
-                                            )}
-                                        </div>
+
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {group.items?.slice(0, 3).map((item: any) => (
+                                            <span key={item.id} className="whitespace-nowrap rounded-[var(--radius-xs)] bg-surface-sunken px-2 py-0.5 text-[11px] font-semibold text-body">
+                                                {item.food.name}
+                                            </span>
+                                        ))}
+                                        {(group.items?.length || 0) > 3 && (
+                                            <span className="px-1 py-0.5 text-[11px] font-bold text-subtle">
+                                                +{group.items.length - 3}
+                                            </span>
+                                        )}
                                     </div>
                                 </CardContent>
                             </Card>
@@ -166,7 +163,7 @@ export function MealGroupLibraryClient({ initialGroups, coachId }: { initialGrou
             )}
 
             {isModalOpen && (
-                <MealGroupModal 
+                <MealGroupModal
                     isOpen={isModalOpen}
                     onClose={() => setIsModalOpen(false)}
                     onSave={handleSave}

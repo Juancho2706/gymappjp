@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Pencil, Trash2, Utensils, ChevronRight, Salad, UserPlus } from 'lucide-react'
+import { Search, Pencil, Trash2, Utensils, ChevronRight, Salad, UserPlus, TriangleAlert } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ProgressRing } from '@/components/ui/progress-ring'
 import { toast } from 'sonner'
@@ -266,9 +266,12 @@ export function NutritionRosterMasterDetail({ coachId, activePlans, clientsWitho
       <AlertDialog open={unassignTarget !== null} onOpenChange={(o) => !o && setUnassignTarget(null)}>
         <AlertDialogContent className="rounded-2xl border-border bg-card text-foreground">
           <AlertDialogHeader>
-            <AlertDialogTitle>Quitar plan de nutrición</AlertDialogTitle>
+            <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-control bg-[var(--danger-100)] text-[var(--danger-600)]">
+              <TriangleAlert className="h-[22px] w-[22px]" />
+            </div>
+            <AlertDialogTitle className="font-display font-extrabold normal-case tracking-[-0.01em]">Quitar plan</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Quitar el plan activo de este alumno? Podrás asignar otro después desde Plantillas.
+              El plan de este alumno se marcará inactivo. No se borran comidas ni el historial de adherencia.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2 sm:gap-0">

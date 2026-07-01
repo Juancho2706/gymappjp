@@ -94,13 +94,13 @@ function Banner({
 }) {
     const toneCls =
         tone === 'danger'
-            ? 'bg-rose-500/10 border-rose-500/30 text-rose-100'
+            ? 'border-[var(--danger-500)]/30 bg-[var(--danger-100)] text-[var(--danger-700)]'
             : tone === 'warn'
-              ? 'bg-amber-500/10 border-amber-500/30 text-amber-100'
-              : 'bg-primary/10 border-primary/30 text-foreground'
+              ? 'border-[var(--warning-500)]/30 bg-[var(--warning-100)] text-[var(--warning-700)]'
+              : 'border-[var(--sport-500)]/30 bg-[var(--sport-100)] text-[var(--sport-700)]'
     return (
         <div
-            className={`flex flex-wrap items-center gap-3 rounded-2xl border px-4 py-3 text-sm backdrop-blur-md ${toneCls}`}
+            className={`flex flex-wrap items-center gap-3 rounded-card border px-4 py-3 text-sm ${toneCls}`}
             role="status"
         >
             {icon}

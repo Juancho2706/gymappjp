@@ -4,7 +4,7 @@ import { useActionState, useEffect, useMemo, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
 import Script from 'next/script'
-import { Loader2, User, Mail, Lock, Store, CheckCircle2, Sparkles } from 'lucide-react'
+import { Loader2, User, Mail, Lock, Store, CheckCircle2, Sparkles, ChevronLeft, ArrowRight, Check, CreditCard } from 'lucide-react'
 import { registerAction, type RegisterState } from './_actions/register.actions'
 import { completeOAuthOnboarding, type CompleteOnboardingState } from '@/app/coach/onboarding/complete/_actions/complete.actions'
 import { cn } from '@/lib/utils'
@@ -46,22 +46,44 @@ function SubmitButton({ isFreeTier }: { isFreeTier: boolean }) {
             type="submit"
             disabled={pending}
             className={cn(
-                'w-full h-12 text-base font-bold tracking-[-0.01em] rounded-control transition-all duration-200 active:scale-[0.98]',
+                'w-full h-14 flex items-center justify-center gap-2 text-[17px] font-bold tracking-[-0.01em] rounded-control transition-all duration-200 active:scale-[0.98]',
                 'bg-[var(--cta-fill)] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)]',
                 'disabled:opacity-60 disabled:cursor-not-allowed'
             )}
         >
             {pending ? (
-                <span className="flex items-center justify-center gap-2">
+                <>
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Creando tu cuenta...
-                </span>
+                </>
             ) : isFreeTier ? (
-                'Crear mi cuenta gratuita'
+                <>
+                    Empezar gratis
+                    <ArrowRight className="w-4 h-4" />
+                </>
             ) : (
-                'Crear Cuenta'
+                <>
+                    Continuar al pago
+                    <CreditCard className="w-4 h-4" />
+                </>
             )}
         </button>
+    )
+}
+
+function CheckTile({ className }: { className?: string }) {
+    return (
+        <span
+            className={cn(
+                'flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] border-2 border-strong bg-transparent text-[var(--text-on-sport)] transition-colors',
+                'peer-checked:border-transparent peer-checked:bg-sport-500',
+                'peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--focus-ring)]',
+                '[&>svg]:opacity-0 peer-checked:[&>svg]:opacity-100',
+                className
+            )}
+        >
+            <Check className="h-3.5 w-3.5" />
+        </span>
     )
 }
 
@@ -175,7 +197,7 @@ export default function RegisterPage() {
                 }
             } else {
                 if (!fullName || !brandName || !email || password.length < 8) {
-                    setClientError('Completa tus datos antes de continuar al paso de plan y pago.')
+                    setClientError('Completá tus datos antes de continuar al paso de plan y pago.')
                     return
                 }
             }
@@ -194,22 +216,49 @@ export default function RegisterPage() {
             <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" strategy="afterInteractive" />
         )}
         <div className="w-full max-w-md mx-auto animate-slide-up">
-            {/* Header */}
-            <div className="text-center mb-8 flex flex-col items-center">
-                <h1 className="text-3xl font-black tracking-[-0.03em] text-text-strong font-display">
-                    Creá tu cuenta de coach
-                </h1>
-                <p className="mt-2 text-text-muted text-sm">
-                    {fromGoogle && step === 1
-                        ? 'Paso 1 de 3 — Un solo dato más y listo'
-                        : isFreeTier
-                            ? `Paso ${step} de 3 — Regístrate y accedé gratis`
-                            : `Paso ${step} de 3 — Regístrate, elige plan y activa tu suscripción`}
-                </p>
+            {/* Header sticky del wizard — back-chevron + "Paso X de N" + barras de progreso */}
+            <div className="sticky top-0 z-10 -mt-14 bg-surface-app pt-3.5 pb-3">
+                <div className="flex items-center gap-2.5">
+                    {step > 1 ? (
+                        <button
+                            type="button"
+                            onClick={prevStep}
+                            aria-label="Atrás"
+                            className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-surface-sunken text-text-strong transition-colors hover:bg-[color-mix(in_oklab,var(--surface-sunken)_88%,#000)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
+                        >
+                            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                        </button>
+                    ) : (
+                        <Link
+                            href="/"
+                            aria-label="Volver al inicio"
+                            className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-surface-sunken text-text-strong transition-colors hover:bg-[color-mix(in_oklab,var(--surface-sunken)_88%,#000)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
+                        >
+                            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                        </Link>
+                    )}
+                    <div className="flex-1">
+                        <div className="mb-1.5 flex items-baseline justify-between">
+                            <span className="text-[12.5px] font-bold text-text-strong">Paso {step} de 3</span>
+                            <span className="text-xs text-text-subtle">{['Tu cuenta', 'Tu plan', 'Confirmar'][step - 1]}</span>
+                        </div>
+                        <div className="flex gap-1">
+                            {[1, 2, 3].map((s) => (
+                                <div
+                                    key={s}
+                                    className={cn(
+                                        'h-1 flex-1 rounded-pill transition-colors duration-300',
+                                        step >= s ? 'bg-sport-500' : 'bg-surface-sunken'
+                                    )}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            {/* Card */}
-            <div className="bg-surface-card border border-border-subtle rounded-card p-8 shadow-[var(--shadow-sm)]">
+            {/* Contenido full-bleed del wizard */}
+            <div className="pt-2">
                 <form action={fromGoogle ? googleFormAction : formAction} className="space-y-4">
                     <input type="hidden" name="subscription_tier" value={tier} />
                     <input type="hidden" name="billing_cycle" value={billingCycle} />
@@ -240,20 +289,20 @@ export default function RegisterPage() {
                         </>
                     )}
 
-                    <div className="mb-2 flex items-center gap-2">
-                        {[1, 2, 3].map((s) => (
-                            <div
-                                key={s}
-                                className={cn(
-                                    'h-1.5 flex-1 rounded-pill transition-colors duration-300',
-                                    step >= s ? 'bg-sport-500' : 'bg-surface-sunken'
-                                )}
-                            />
-                        ))}
-                    </div>
+                    {(clientError || state?.error || googleState?.error) && (
+                        <div className="animate-fade-in rounded-control border border-transparent bg-[var(--danger-100)] px-4 py-3 text-sm font-semibold text-[var(--danger-600)]">
+                            {clientError ?? (fromGoogle ? googleState?.error : state?.error)}
+                        </div>
+                    )}
 
                     {step === 1 ? (
                         <>
+                    <div>
+                        <h1 className="font-display text-[26px] font-black leading-[1.1] tracking-[-0.02em] text-text-strong">
+                            Creá tu cuenta de coach
+                        </h1>
+                        <p className="mt-1.5 text-sm text-text-muted">Tu marca, tus alumnos, tu negocio — en una sola app.</p>
+                    </div>
                     {fromGoogle && email && (
                         <div className="flex items-center gap-2 rounded-control bg-surface-sunken border border-border-subtle px-3 py-2 text-xs text-text-muted">
                             <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -387,8 +436,13 @@ export default function RegisterPage() {
 
                     {step === 2 ? (
                         <>
+                            <div>
+                                <h1 className="font-display text-2xl font-black tracking-[-0.02em] text-text-strong">
+                                    Elegí tu plan
+                                </h1>
+                                <p className="mt-1 text-[13.5px] text-text-muted">Cambiá o cancelá cuando quieras. Empezá gratis si querés probar.</p>
+                            </div>
                             <section className="space-y-2">
-                                <h2 className="text-sm font-semibold text-foreground">Elige tu plan</h2>
                                 <div className="grid gap-2">
                                     {tierOptions.map(([key, option]) => {
                                         const caps = getTierCapabilities(key)
@@ -516,8 +570,9 @@ export default function RegisterPage() {
                                                                 e.target.checked ? [...prev, key] : prev.filter((k) => k !== key)
                                                             )
                                                         }
-                                                        className="mt-0.5 h-4 w-4 rounded border-border-default accent-[var(--sport-500)] shrink-0"
+                                                        className="peer sr-only"
                                                     />
+                                                    <CheckTile />
                                                     <span className="min-w-0 flex-1">
                                                         <span className="flex items-center justify-between gap-2">
                                                             <span className="font-semibold text-text-strong text-sm">{cfg.label}</span>
@@ -589,10 +644,16 @@ export default function RegisterPage() {
                     ) : null}
 
                     {step === 3 ? (
-                        <section className="rounded-card border border-border-subtle p-4 space-y-3">
-                            <h2 className="font-display font-extrabold tracking-[-0.01em] text-text-strong">
+                        <>
+                        <div>
+                            <h1 className="font-display text-2xl font-black tracking-[-0.02em] text-text-strong">
                                 {isFreeTier ? 'Tu plan gratuito' : 'Resumen antes de pagar'}
-                            </h2>
+                            </h1>
+                            <p className="mt-1 text-[13.5px] text-text-muted">
+                                Revisá y confirmá. {isFreeTier ? 'Sin tarjeta de crédito.' : 'El cobro ocurre en el checkout seguro.'}
+                            </p>
+                        </div>
+                        <section className="rounded-card border border-border-subtle bg-surface-card p-4 space-y-3">
                             <div className="space-y-1.5 text-sm">
                                 <div className="flex justify-between">
                                     <span className="text-text-muted">Plan</span>
@@ -652,113 +713,91 @@ export default function RegisterPage() {
                                 </p>
                             )}
                         </section>
+                        </>
                     ) : null}
 
-                    {/* Cloudflare Turnstile — invisible challenge, resolves silently for humans */}
+                    {/* Cloudflare Turnstile — montado desde el paso 1 (el token viaja en el submit),
+                       visible solo en Confirmar */}
                     {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY && (
-                        <div
-                            className="cf-turnstile"
-                            data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-                            data-appearance="interaction-only"
-                        />
-                    )}
-
-                    {/* Error */}
-                    {(clientError || state?.error || googleState?.error) && (
-                        <div className="animate-fade-in rounded-control border border-transparent bg-[var(--danger-100)] px-4 py-3 text-sm font-semibold text-[var(--danger-600)]">
-                            {clientError ?? (fromGoogle ? googleState?.error : state?.error)}
+                        <div className={step === 3 ? undefined : 'hidden'}>
+                            <div
+                                className="cf-turnstile"
+                                data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+                                data-appearance="interaction-only"
+                            />
                         </div>
                     )}
 
-                    <div className="rounded-control border border-border-subtle bg-surface-sunken p-3 space-y-3">
-                        {/* Checkbox 1: ToS + Privacy (required) */}
-                        <label className="flex items-start gap-2 text-xs text-text-muted">
-                            <input
-                                type="checkbox"
-                                name="accept_legal"
-                                required
-                                className="mt-0.5 h-4 w-4 rounded border-border-default accent-[var(--sport-500)] shrink-0"
-                            />
-                            <span>
-                                Acepto los{' '}
-                                <Link href="/legal" className="text-sport-600 hover:opacity-80">
-                                    términos de servicio
-                                </Link>{' '}
-                                y la{' '}
-                                <Link href="/privacidad" className="text-sport-600 hover:opacity-80">
-                                    política de privacidad
-                                </Link>
-                                .{' '}
-                                <span className="text-[var(--danger-600)] font-medium">*</span>
-                            </span>
-                        </label>
-                        {/* Checkbox 2: Health data consent (required — Ley 21.719 Art. 16) */}
-                        <label className="flex items-start gap-2 text-xs text-text-muted">
-                            <input
-                                type="checkbox"
-                                name="accept_health_data"
-                                required
-                                className="mt-0.5 h-4 w-4 rounded border-border-default accent-[var(--sport-500)] shrink-0"
-                            />
-                            <span>
-                                Acepto el tratamiento de datos de salud de mis alumnos (registros de entrenamiento,
-                                nutrición y métricas corporales) para prestar el servicio de coaching digital,
-                                conforme a la Ley 21.719.{' '}
-                                <span className="text-[var(--danger-600)] font-medium">*</span>
-                            </span>
-                        </label>
-                        {/* Checkbox 3: Marketing (optional — must be unchecked by default) */}
-                        <label className="flex items-start gap-2 text-xs text-text-muted">
-                            <input
-                                type="checkbox"
-                                name="accept_marketing"
-                                className="mt-0.5 h-4 w-4 rounded border-border-default accent-[var(--sport-500)] shrink-0"
-                            />
-                            <span>
-                                Quiero recibir novedades, ofertas y consejos de EVA por email.{' '}
-                                <span className="text-text-muted/60">(opcional)</span>
-                            </span>
-                        </label>
-                    </div>
+                    {step === 3 ? (
+                        <div className="flex flex-col gap-0.5">
+                            {/* Checkbox 1: ToS + Privacy (required) */}
+                            <label className="flex cursor-pointer items-start gap-2.5 py-1.5 text-[13px] leading-[1.45] text-text-muted">
+                                <input type="checkbox" name="accept_legal" required className="peer sr-only" />
+                                <CheckTile className="mt-px" />
+                                <span>
+                                    Acepto los{' '}
+                                    <Link href="/legal" className="font-bold text-sport-600 hover:opacity-80">
+                                        términos de servicio
+                                    </Link>{' '}
+                                    y la{' '}
+                                    <Link href="/privacidad" className="font-bold text-sport-600 hover:opacity-80">
+                                        política de privacidad
+                                    </Link>
+                                    .{' '}
+                                    <span className="text-[var(--danger-600)] font-medium">*</span>
+                                </span>
+                            </label>
+                            {/* Checkbox 2: Health data consent (required — Ley 21.719 Art. 16) */}
+                            <label className="flex cursor-pointer items-start gap-2.5 py-1.5 text-[13px] leading-[1.45] text-text-muted">
+                                <input type="checkbox" name="accept_health_data" required className="peer sr-only" />
+                                <CheckTile className="mt-px" />
+                                <span>
+                                    Acepto el tratamiento de datos de salud de mis alumnos (registros de entrenamiento,
+                                    nutrición y métricas corporales) para prestar el servicio de coaching digital,
+                                    conforme a la Ley 21.719.{' '}
+                                    <span className="text-[var(--danger-600)] font-medium">*</span>
+                                </span>
+                            </label>
+                            {/* Checkbox 3: Marketing (optional — must be unchecked by default) */}
+                            <label className="flex cursor-pointer items-start gap-2.5 py-1.5 text-[13px] leading-[1.45] text-text-muted">
+                                <input type="checkbox" name="accept_marketing" className="peer sr-only" />
+                                <CheckTile className="mt-px" />
+                                <span>
+                                    Quiero recibir novedades, ofertas y consejos de EVA por email.{' '}
+                                    <span className="text-text-subtle">(opcional)</span>
+                                </span>
+                            </label>
+                        </div>
+                    ) : null}
 
-                    <div className="pt-2 flex gap-2">
-                        {step > 1 ? (
-                            <button
-                                type="button"
-                                onClick={prevStep}
-                                className="h-12 px-4 rounded-control border-[1.5px] border-border-default bg-surface-card text-sm font-semibold text-text-strong hover:bg-surface-sunken transition-colors"
-                            >
-                                Atrás
-                            </button>
-                        ) : null}
+                    <div className="pt-2">
                         {step < 3 ? (
                             <button
                                 type="button"
                                 onClick={nextStep}
-                                className="flex-1 h-12 text-base font-bold tracking-[-0.01em] rounded-control transition-all duration-200 active:scale-[0.98] bg-[var(--cta-fill)] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)]"
+                                className="w-full h-14 flex items-center justify-center gap-2 text-[17px] font-bold tracking-[-0.01em] rounded-control transition-all duration-200 active:scale-[0.98] bg-[var(--cta-fill)] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] hover:bg-[color-mix(in_oklab,var(--cta-fill)_92%,#000)]"
                             >
                                 Continuar
+                                <ArrowRight className="w-4 h-4" />
                             </button>
                         ) : (
-                            <div className="flex-1">
-                                <SubmitButton isFreeTier={isFreeTier} />
-                            </div>
+                            <SubmitButton isFreeTier={isFreeTier} />
                         )}
                     </div>
                 </form>
 
-                {/* Google OAuth — hide when already in Google flow */}
-                {!fromGoogle && (
+                {/* Google OAuth — solo en el paso 1; hide when already in Google flow */}
+                {step === 1 && !fromGoogle && (
                     <>
-                        <div className="mt-6 flex items-center gap-3">
+                        <div className="my-[18px] flex items-center gap-3">
                             <div className="flex-1 h-px bg-border-subtle" />
-                            <span className="text-xs text-muted-foreground">o registrate con</span>
+                            <span className="text-xs font-semibold text-text-subtle">o</span>
                             <div className="flex-1 h-px bg-border-subtle" />
                         </div>
                         <button
                             type="button"
                             onClick={startCoachGoogleRegistration}
-                            className="mt-4 w-full h-12 flex items-center justify-center gap-2.5 rounded-control border-[1.5px] border-border-default bg-surface-card hover:bg-surface-sunken transition-colors text-sm font-semibold text-text-strong"
+                            className="w-full h-14 flex items-center justify-center gap-2.5 rounded-control border-[1.5px] border-border-default bg-surface-card hover:bg-surface-sunken transition-colors text-[17px] font-semibold text-text-strong"
                         >
                             <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -766,26 +805,22 @@ export default function RegisterPage() {
                                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
                                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                             </svg>
-                            Registrarse con Google
+                            Registrate con Google
                         </button>
                     </>
                 )}
 
-                {/* Divider */}
-                <div className="mt-6 flex items-center gap-3">
-                    <div className="flex-1 h-px bg-border-subtle" />
-                    <span className="text-xs text-muted-foreground">¿Ya tienes cuenta?</span>
-                    <div className="flex-1 h-px bg-border-subtle" />
-                </div>
-
-                <div className="mt-4 text-center">
-                    <Link
-                        href="/login"
-                        className="text-sm text-sport-600 hover:opacity-80 transition-opacity font-semibold"
-                    >
-                        Iniciar sesión →
-                    </Link>
-                </div>
+                {step === 1 && (
+                    <div className="pt-5 pb-2 text-center text-[13px] text-text-muted">
+                        ¿Ya tenés cuenta?{' '}
+                        <Link
+                            href="/login"
+                            className="font-bold text-sport-600 hover:opacity-80 transition-opacity"
+                        >
+                            Iniciá sesión
+                        </Link>
+                    </div>
+                )}
             </div>
 
             <p className="mt-6 text-center text-xs text-text-muted flex items-center justify-center gap-1">

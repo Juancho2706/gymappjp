@@ -25,7 +25,7 @@ export default async function CardioPage() {
             <header className="space-y-1.5">
                 <div className="flex items-center justify-between gap-3">
                     <h1 className="flex items-center gap-2 font-display text-xl font-extrabold tracking-[-0.02em] text-strong">
-                        <span className="inline-flex size-9 items-center justify-center rounded-control bg-aqua-100 text-aqua-700">
+                        <span className="inline-flex size-9 items-center justify-center rounded-control bg-sport-100 text-sport-600">
                             <HeartPulse className="size-5" />
                         </span>
                         Cardio

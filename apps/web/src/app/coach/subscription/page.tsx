@@ -29,7 +29,7 @@ import {
 import type { ModuleKey } from '@/services/entitlements.service'
 import { useCaptureAddonFunnel } from '@/lib/posthog/events'
 import Link from 'next/link'
-import { Check, Puzzle, Lock, Gift, ArrowLeft, ArrowRight, CreditCard, HeartPulse, Activity, Ruler, Utensils, type LucideIcon } from 'lucide-react'
+import { Check, CheckCircle2, Info, Puzzle, Lock, Gift, ArrowLeft, ArrowRight, CreditCard, HeartPulse, Activity, Ruler, Utensils, X, type LucideIcon } from 'lucide-react'
 import { CouponRedeemCard } from './_components/CouponRedeemCard'
 
 const TIER_BADGE: Partial<Record<SubscriptionTier, { label: string; cls: string }>> = {
@@ -115,7 +115,7 @@ export default function CoachSubscriptionPage() {
     const searchParams = useSearchParams()
     // Refs para hacer scroll-into-view del banner relevante al setearse (off-screen en móvil).
     const blockedMsgRef = useRef<HTMLDivElement | null>(null)
-    const feedbackBannerRef = useRef<HTMLParagraphElement | null>(null)
+    const feedbackBannerRef = useRef<HTMLDivElement | null>(null)
     // ids estables para semántica de diálogo / aria de los modales hechos a mano.
     const upgradeModalTitleId = useId()
     const addonModalTitleId = useId()
@@ -581,16 +581,24 @@ export default function CoachSubscriptionPage() {
                     : null}
             </div>
 
-            {/* Banners de feedback (arriba, como el diseño) */}
+            {/* Banners de feedback (arriba, como el diseño) — soft card con icono + cierre */}
             {error ? (
-                <p ref={feedbackBannerRef} role="alert" aria-live="assertive" className="mb-3.5 rounded-control border border-red-500/30 bg-red-500/10 px-3.5 py-2.5 text-sm font-medium text-red-700 dark:text-red-300">
-                    {error}
-                </p>
+                <div ref={feedbackBannerRef} role="alert" aria-live="assertive" className="mb-3.5 flex items-center gap-2.5 rounded-control bg-[var(--danger-100)] px-3.5 py-2.5">
+                    <Info className="h-4 w-4 shrink-0 text-[var(--danger-600)]" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 text-[13px] font-semibold text-strong">{error}</span>
+                    <button type="button" aria-label="Descartar aviso" onClick={() => setError(null)} className="shrink-0 p-1 text-muted hover:text-strong">
+                        <X className="h-[15px] w-[15px]" />
+                    </button>
+                </div>
             ) : null}
             {successMessage ? (
-                <p ref={feedbackBannerRef} aria-live="polite" className="mb-3.5 rounded-control border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-                    {successMessage}
-                </p>
+                <div ref={feedbackBannerRef} aria-live="polite" className="mb-3.5 flex items-center gap-2.5 rounded-control bg-[var(--success-100)] px-3.5 py-2.5">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-[var(--success-600)]" aria-hidden="true" />
+                    <span className="min-w-0 flex-1 text-[13px] font-semibold text-strong">{successMessage}</span>
+                    <button type="button" aria-label="Descartar aviso" onClick={() => setSuccessMessage(null)} className="shrink-0 p-1 text-muted hover:text-strong">
+                        <X className="h-[15px] w-[15px]" />
+                    </button>
+                </div>
             ) : null}
 
             {loading ? (
@@ -744,7 +752,7 @@ export default function CoachSubscriptionPage() {
                                                 type="button"
                                                 disabled={addonSaving || isCancelPendingCharged || isCommitted || !SELF_SERVICE_ADDONS_ENABLED}
                                                 onClick={(e) => { modalTriggerRef.current = e.currentTarget; setCancelAddonEffective(undefined); setCancelAddonKey(key) }}
-                                                className="shrink-0 h-9 rounded-control border border-default px-3.5 text-xs font-semibold text-red-600 hover:bg-red-500/10 disabled:opacity-60 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:text-red-400"
+                                                className="shrink-0 h-9 rounded-control px-3.5 text-xs font-semibold text-[var(--danger-600)] hover:bg-[var(--danger-100)] disabled:opacity-60 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                             >
                                                 {isCancelPendingCharged || isCommitted ? 'Baja solicitada' : 'Quitar'}
                                             </button>
@@ -1008,10 +1016,10 @@ export default function CoachSubscriptionPage() {
             </section>
             )}
 
-            {/* Upgrade confirmation modal */}
+            {/* Upgrade confirmation modal — bottom-sheet en <760 (kit sheet()), diálogo centrado en md+ */}
             {showUpgradeConfirm && (
                 <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+                    className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--surface-overlay)] md:items-center md:px-4"
                     onClick={() => setShowUpgradeConfirm(false)}
                 >
                     <div
@@ -1019,9 +1027,10 @@ export default function CoachSubscriptionPage() {
                         aria-modal="true"
                         aria-labelledby={upgradeModalTitleId}
                         onClick={(e) => e.stopPropagation()}
-                        className="w-full max-w-md rounded-card border border-subtle bg-surface-card p-6 pb-safe shadow-2xl max-h-[90dvh] overflow-y-auto"
+                        className="w-full rounded-t-sheet bg-surface-card p-6 pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] shadow-[var(--shadow-sheet)] max-h-[88dvh] overflow-y-auto md:max-w-md md:rounded-card md:border md:border-subtle md:shadow-2xl md:max-h-[90dvh]"
                     >
-                        <h2 id={upgradeModalTitleId} className="font-display text-lg font-bold tracking-tight text-strong">Confirmar cambio de plan</h2>
+                        <div className="mx-auto mb-4 h-1 w-[38px] rounded-full bg-[var(--ink-200)] md:hidden" aria-hidden="true" />
+                        <h2 id={upgradeModalTitleId} className="font-display text-xl font-extrabold tracking-tight text-strong">Confirmar cambio de plan</h2>
                         <div className="mt-4 space-y-2 rounded-control border border-subtle bg-surface-sunken p-4 text-sm">
                             {/* Issue #1: el copy depende de la DIRECCIÓN del cambio. Un UPGRADE de un pago
                                 activo se activa AHORA y cobra solo la DIFERENCIA prorrateada (el server hace
@@ -1029,25 +1038,25 @@ export default function CoachSubscriptionPage() {
                                 Downgrade y cambio de ciclo SÍ se agendan al corte (el copy original aplica). */}
                             {isUpgradeNow ? (
                                 <>
-                                    <p className="text-muted-foreground">
+                                    <p className="text-muted">
                                         Tu nuevo plan{' '}
-                                        <strong className="text-foreground">{TIER_CONFIG[selectedTier].label}</strong>{' '}
-                                        se activa <strong className="text-foreground">ahora</strong>. Hoy pagas solo la{' '}
-                                        <strong className="text-foreground">diferencia prorrateada</strong> por los días que
+                                        <strong className="text-strong">{TIER_CONFIG[selectedTier].label}</strong>{' '}
+                                        se activa <strong className="text-strong">ahora</strong>. Hoy pagas solo la{' '}
+                                        <strong className="text-strong">diferencia prorrateada</strong> por los días que
                                         restan de tu ciclo actual.
                                     </p>
-                                    <p className="text-muted-foreground">
+                                    <p className="text-muted">
                                         Desde tu próxima renovación se cobra el valor completo{' '}
-                                        <strong className="text-foreground">
+                                        <strong className="text-strong">
                                             ${getTierPriceClp(selectedTier, coachCycle).toLocaleString('es-CL')} CLP / {BILLING_CYCLE_CONFIG[coachCycle].label.toLowerCase()}
                                         </strong>
                                         {addons.some((a) => a.source === 'self_service' && a.status !== 'cancelled') && (
-                                            <span className="text-muted-foreground"> (más tus módulos add-on activos)</span>
+                                            <span className="text-muted"> (más tus módulos add-on activos)</span>
                                         )}
                                         . El monto exacto de la diferencia se calcula en el checkout seguro de Mercado Pago.
                                     </p>
                                     {upgradeAddons.length > 0 && (
-                                        <p className="text-muted-foreground text-xs">
+                                        <p className="text-muted text-xs">
                                             Nota: en un upgrade de plan, los módulos elegidos en &quot;Sumar módulos&quot;
                                             ({upgradeAddons.map((k) => ADDON_CONFIG[k].label).join(', ')}) no se incluyen en
                                             este cobro inmediato. Agrégalos desde la sección Módulos add-on cuando el plan esté activo.
@@ -1057,15 +1066,15 @@ export default function CoachSubscriptionPage() {
                             ) : (
                                 <>
                                     {coach?.current_period_end && (
-                                        <p className="text-muted-foreground">
+                                        <p className="text-muted">
                                             Tu plan actual{' '}
-                                            <strong className="text-foreground">
+                                            <strong className="text-strong">
                                                 ({coach.subscription_tier in TIER_CONFIG
                                                     ? TIER_CONFIG[coach.subscription_tier as SubscriptionTier].label
                                                     : coach.subscription_tier})
                                             </strong>{' '}
                                             continúa hasta el{' '}
-                                            <strong className="text-foreground">
+                                            <strong className="text-strong">
                                                 {new Date(coach.current_period_end).toLocaleDateString('es-CL', {
                                                     day: 'numeric', month: 'long', year: 'numeric',
                                                 })}
@@ -1073,18 +1082,18 @@ export default function CoachSubscriptionPage() {
                                             .
                                         </p>
                                     )}
-                                    <p className="text-muted-foreground">
+                                    <p className="text-muted">
                                         A partir de esa fecha, tu nuevo plan{' '}
-                                        <strong className="text-foreground">{TIER_CONFIG[selectedTier].label}</strong>{' '}
+                                        <strong className="text-strong">{TIER_CONFIG[selectedTier].label}</strong>{' '}
                                         se activará por{' '}
-                                        <strong className="text-foreground">
+                                        <strong className="text-strong">
                                             ${selectedCompositeNet.toLocaleString('es-CL')} CLP / {BILLING_CYCLE_CONFIG[selectedCycle].label.toLowerCase()}
                                         </strong>
                                         {selectedCouponDiscount > 0 && activeCoupon && (
                                             <span className="text-emerald-500"> (cupón {activeCoupon.code}: −${selectedCouponDiscount.toLocaleString('es-CL')})</span>
                                         )}
                                         {upgradeAddons.length > 0 && (
-                                            <span className="text-muted-foreground">
+                                            <span className="text-muted">
                                                 {' '}(plan ${selectedPrice.toLocaleString('es-CL')} + {upgradeAddons.map((k) => ADDON_CONFIG[k].label).join(', ')})
                                             </span>
                                         )}
@@ -1101,7 +1110,7 @@ export default function CoachSubscriptionPage() {
                             )}
                             {/* Add-ons activos viajan en el cambio de plan: el monto del checkout los incluye */}
                             {addons.some((a) => a.source === 'self_service' && a.status !== 'cancelled') && (
-                                <p className="text-muted-foreground text-xs">
+                                <p className="text-muted text-xs">
                                     Tus módulos add-on activos ({addons
                                         .filter((a) => a.source === 'self_service' && a.status !== 'cancelled')
                                         .map((a) => ADDON_CONFIG[a.moduleKey].label)
@@ -1110,22 +1119,22 @@ export default function CoachSubscriptionPage() {
                                 </p>
                             )}
                         </div>
-                        <div className="mt-4 flex gap-3">
-                            <button
-                                type="button"
-                                ref={(el) => { if (el) el.focus() }}
-                                onClick={() => setShowUpgradeConfirm(false)}
-                                className="flex-1 h-11 rounded-control border border-default text-sm font-semibold text-muted hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                            >
-                                Cancelar
-                            </button>
+                        <div className="mt-4 flex flex-col gap-1.5">
                             <button
                                 type="button"
                                 onClick={() => { setShowUpgradeConfirm(false); void handleChangePlan() }}
                                 disabled={saving}
-                                className="flex-1 h-11 rounded-control bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                className="h-12 w-full rounded-control bg-sport-500 text-sm font-bold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                             >
                                 {saving ? 'Procesando...' : 'Confirmar'}
+                            </button>
+                            <button
+                                type="button"
+                                ref={(el) => { if (el) el.focus() }}
+                                onClick={() => setShowUpgradeConfirm(false)}
+                                className="h-11 w-full rounded-control text-sm font-semibold text-muted hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            >
+                                Cancelar
                             </button>
                         </div>
                     </div>
@@ -1138,7 +1147,7 @@ export default function CoachSubscriptionPage() {
                 const rules = getAddonPaymentRulesForCycle(coachCycle)
                 return (
                     <div
-                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+                        className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--surface-overlay)] md:items-center md:px-4"
                         onClick={() => setAddonModalKey(null)}
                     >
                         <div
@@ -1146,22 +1155,23 @@ export default function CoachSubscriptionPage() {
                             aria-modal="true"
                             aria-labelledby={addonModalTitleId}
                             onClick={(e) => e.stopPropagation()}
-                            className="w-full max-w-lg rounded-card border border-subtle bg-surface-card p-6 pb-safe shadow-2xl max-h-[90dvh] overflow-y-auto"
+                            className="w-full rounded-t-sheet bg-surface-card p-6 pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] shadow-[var(--shadow-sheet)] max-h-[88dvh] overflow-y-auto md:max-w-lg md:rounded-card md:border md:border-subtle md:shadow-2xl md:max-h-[90dvh]"
                         >
-                            <h2 id={addonModalTitleId} className="font-display text-lg font-bold tracking-tight text-strong">Agregar {cfg.label}</h2>
-                            <p className="mt-1 text-sm text-muted-foreground">{cfg.description}</p>
+                            <div className="mx-auto mb-4 h-1 w-[38px] rounded-full bg-[var(--ink-200)] md:hidden" aria-hidden="true" />
+                            <h2 id={addonModalTitleId} className="font-display text-xl font-extrabold tracking-tight text-strong">Agregar {cfg.label}</h2>
+                            <p className="mt-1 text-sm text-muted">{cfg.description}</p>
 
                             {/* Desglose: el total compuesto en vivo lo da el endpoint (billing.totalClp) */}
                             <div className="mt-4 space-y-1.5 rounded-control border border-subtle bg-surface-sunken p-4 text-sm">
-                                <div className="flex justify-between text-muted-foreground">
+                                <div className="flex justify-between text-muted">
                                     <span>Tu plan ({TIER_CONFIG[coachTier]?.label ?? coachTier})</span>
-                                    <span className="text-foreground">${(billing?.baseClp ?? getTierPriceClp(coachTier, coachCycle)).toLocaleString('es-CL')} CLP</span>
+                                    <span className="text-strong">${(billing?.baseClp ?? getTierPriceClp(coachTier, coachCycle)).toLocaleString('es-CL')} CLP</span>
                                 </div>
-                                <div className="flex justify-between text-muted-foreground">
+                                <div className="flex justify-between text-muted">
                                     <span>{cfg.label}</span>
-                                    <span className="text-foreground">${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes</span>
+                                    <span className="text-strong">${cfg.priceClpMensual.toLocaleString('es-CL')} CLP / mes</span>
                                 </div>
-                                <p className="pt-1 text-xs text-muted-foreground">
+                                <p className="pt-1 text-xs text-muted">
                                     Pagas ahora un monto único prorrateado por los días que restan de tu ciclo.
                                     Desde la renovación, el valor del módulo se suma a tu cobro habitual. El monto exacto
                                     del pago inicial se calcula en el checkout seguro de Mercado Pago.
@@ -1181,18 +1191,18 @@ export default function CoachSubscriptionPage() {
 
                             {/* Las 5 reglas textuales (variante por ciclo) */}
                             <div className="mt-4">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Condiciones de cobro</p>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted">Condiciones de cobro</p>
                                 <ol className="mt-2 space-y-2">
                                     {rules.rules.map((r) => (
-                                        <li key={r.number} className="text-xs text-muted-foreground">
-                                            <span className="font-semibold text-foreground">{r.title}.</span> {r.text}
+                                        <li key={r.number} className="text-xs text-muted">
+                                            <span className="font-semibold text-strong">{r.title}.</span> {r.text}
                                         </li>
                                     ))}
                                 </ol>
                             </div>
 
                             {/* Checkbox obligatorio: habilita el CTA. Autofocus al abrir (primer interactivo). */}
-                            <label className="mt-4 flex items-start gap-2 text-xs text-muted-foreground">
+                            <label className="mt-4 flex items-start gap-2 text-xs text-muted">
                                 <input
                                     type="checkbox"
                                     ref={(el) => { if (el) el.focus() }}
@@ -1208,21 +1218,26 @@ export default function CoachSubscriptionPage() {
                                 <span>Acepto estas condiciones de cobro, renovación y término.</span>
                             </label>
 
-                            <div className="mt-5 flex gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setAddonModalKey(null)}
-                                    className="flex-1 h-11 rounded-control border border-default text-sm font-semibold text-muted hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                >
-                                    Cancelar
-                                </button>
+                            <div className="mt-5 flex flex-col gap-1.5">
                                 <button
                                     type="button"
                                     onClick={() => void handleAddAddon()}
                                     disabled={!addonTermsAccepted || addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
-                                    className="flex-1 h-11 rounded-control bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                    className="flex h-12 w-full items-center justify-center gap-2 rounded-control bg-sport-500 text-sm font-bold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                 >
-                                    {addonSaving ? 'Procesando...' : 'Ir a pagar'}
+                                    {addonSaving ? 'Procesando...' : (
+                                        <>
+                                            <span>Ir a pagar</span>
+                                            <ArrowRight className="h-4 w-4" />
+                                        </>
+                                    )}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setAddonModalKey(null)}
+                                    className="h-11 w-full rounded-control text-sm font-semibold text-muted hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                >
+                                    Cancelar
                                 </button>
                             </div>
                         </div>
@@ -1233,7 +1248,7 @@ export default function CoachSubscriptionPage() {
             {/* ── Modal de BAJA de add-on (plan 05 F5.2) ── */}
             {cancelAddonKey && (
                 <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+                    className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--surface-overlay)] md:items-center md:px-4"
                     onClick={() => { setCancelAddonKey(null); setCancelAddonEffective(undefined) }}
                 >
                     <div
@@ -1241,38 +1256,39 @@ export default function CoachSubscriptionPage() {
                         aria-modal="true"
                         aria-labelledby={cancelAddonModalTitleId}
                         onClick={(e) => e.stopPropagation()}
-                        className="w-full max-w-md rounded-card border border-subtle bg-surface-card p-6 pb-safe shadow-2xl max-h-[90dvh] overflow-y-auto"
+                        className="w-full rounded-t-sheet bg-surface-card p-6 pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] shadow-[var(--shadow-sheet)] max-h-[88dvh] overflow-y-auto md:max-w-md md:rounded-card md:border md:border-subtle md:shadow-2xl md:max-h-[90dvh]"
                     >
+                        <div className="mx-auto mb-4 h-1 w-[38px] rounded-full bg-[var(--ink-200)] md:hidden" aria-hidden="true" />
                         {cancelAddonEffective === undefined ? (
                             <>
-                                <h2 id={cancelAddonModalTitleId} className="font-display text-lg font-bold tracking-tight text-strong">Quitar {ADDON_CONFIG[cancelAddonKey].label}</h2>
-                                <p className="mt-2 text-sm text-muted-foreground">
+                                <h2 id={cancelAddonModalTitleId} className="font-display text-xl font-extrabold tracking-tight text-strong">Quitar {ADDON_CONFIG[cancelAddonKey].label}</h2>
+                                <p className="mt-2 text-sm text-muted">
                                     Conservas el acceso hasta el final del período que ya pagaste. No hay reembolsos por
                                     fracciones no usadas. ¿Confirmas que quieres quitar este módulo?
                                 </p>
-                                <div className="mt-5 flex gap-3">
-                                    <button
-                                        type="button"
-                                        ref={(el) => { if (el) el.focus() }}
-                                        onClick={() => setCancelAddonKey(null)}
-                                        className="flex-1 h-11 rounded-control border border-default text-sm font-semibold text-muted hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                    >
-                                        Volver
-                                    </button>
+                                <div className="mt-5 flex flex-col gap-1.5">
                                     <button
                                         type="button"
                                         onClick={() => void handleCancelAddon()}
                                         disabled={addonSaving || !SELF_SERVICE_ADDONS_ENABLED}
-                                        className="flex-1 h-11 rounded-control bg-red-600 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
+                                        className="h-12 w-full rounded-control border border-[var(--danger-100)] text-sm font-bold text-[var(--danger-600)] transition-colors hover:bg-[var(--danger-100)] disabled:opacity-60 disabled:hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--danger-500)] focus-visible:ring-offset-2"
                                     >
                                         {addonSaving ? 'Procesando...' : 'Quitar módulo'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        ref={(el) => { if (el) el.focus() }}
+                                        onClick={() => setCancelAddonKey(null)}
+                                        className="h-11 w-full rounded-control text-sm font-semibold text-muted hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                    >
+                                        Volver
                                     </button>
                                 </div>
                             </>
                         ) : (
                             <>
-                                <h2 id={cancelAddonModalTitleId} className="font-display text-lg font-bold tracking-tight text-strong">Baja registrada</h2>
-                                <p className="mt-2 text-sm text-muted-foreground" data-testid="addon-cancel-effective">
+                                <h2 id={cancelAddonModalTitleId} className="font-display text-xl font-extrabold tracking-tight text-strong">Baja registrada</h2>
+                                <p className="mt-2 text-sm text-muted" data-testid="addon-cancel-effective">
                                     {cancelAddonEffective
                                         ? `Conservas el acceso a ${ADDON_CONFIG[cancelAddonKey].label} hasta el ${new Date(cancelAddonEffective).toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}. Sin reembolso de fracciones.`
                                         : `Tu primer cobro incluirá igualmente ${ADDON_CONFIG[cancelAddonKey].label} (compromiso mínimo de un ciclo). Después de ese cobro se programa su término. Sin reembolso de fracciones.`}
@@ -1282,7 +1298,7 @@ export default function CoachSubscriptionPage() {
                                         type="button"
                                         ref={(el) => { if (el) el.focus() }}
                                         onClick={() => { setCancelAddonKey(null); setCancelAddonEffective(undefined) }}
-                                        className="h-11 w-full rounded-control bg-primary text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                        className="h-12 w-full rounded-control bg-sport-500 text-sm font-bold text-white transition-colors hover:bg-sport-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                                     >
                                         Entendido
                                     </button>

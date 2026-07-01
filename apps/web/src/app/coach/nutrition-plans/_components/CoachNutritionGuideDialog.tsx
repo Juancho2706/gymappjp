@@ -31,7 +31,7 @@ export function CoachNutritionGuideDialog({ hasClients, onAssign, triggerLabel =
       />
       <DialogContent className="sm:max-w-2xl bg-card border-border">
         <DialogHeader>
-          <DialogTitle className="text-xl font-black uppercase tracking-tight">Guía rápida — Nutrición</DialogTitle>
+          <DialogTitle className="font-display text-xl font-extrabold normal-case tracking-[-0.02em] text-strong">Guía rápida — Nutrición</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
           Tres pasos para sacar provecho al módulo. Puedes volver aquí cuando quieras.
@@ -74,8 +74,8 @@ export function CoachNutritionGuideDialog({ hasClients, onAssign, triggerLabel =
                     className={cn(
                       'inline-flex items-center gap-1 text-xs font-bold',
                       isDisabled || !onAssign
-                        ? 'cursor-not-allowed text-muted-foreground'
-                        : 'text-sky-600 hover:text-sky-700 dark:text-sky-400'
+                        ? 'cursor-not-allowed text-muted'
+                        : 'text-[var(--aqua-600)] hover:text-[var(--aqua-700)]'
                     )}
                   >
                     {step.cta}
@@ -87,8 +87,8 @@ export function CoachNutritionGuideDialog({ hasClients, onAssign, triggerLabel =
                     className={cn(
                       'inline-flex items-center gap-1 text-xs font-bold',
                       step.number === 1
-                        ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400'
-                        : 'text-violet-600 hover:text-violet-700 dark:text-violet-400'
+                        ? 'text-[var(--sport-600)] hover:text-[var(--sport-700)]'
+                        : 'text-[var(--ember-600)] hover:text-[var(--ember-700)]'
                     )}
                   >
                     {step.cta}

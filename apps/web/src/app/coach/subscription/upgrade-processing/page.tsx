@@ -124,17 +124,17 @@ export default function UpgradeProcessingPage() {
         <main className="flex min-h-dvh items-center justify-center px-4 py-12 pt-safe pb-safe bg-background">
             <div className="w-full max-w-md rounded-card border border-subtle bg-surface-card p-8 text-center shadow-xl">
                 {!error && (
-                    <div className="mx-auto mb-6 h-12 w-12 animate-spin rounded-full border-[3px] border-primary border-t-transparent" />
+                    <div className="mx-auto mb-6 h-12 w-12 animate-spin rounded-full border-[3px] border-sport-500 border-t-transparent" />
                 )}
 
                 <div role="status" aria-live="polite">
-                    <h1 className="font-display text-xl font-bold tracking-tight text-foreground">
+                    <h1 className="font-display text-xl font-bold tracking-tight text-strong">
                         {error ? 'Problema al procesar' : 'Activando tu nuevo plan'}
                     </h1>
-                    <p className="mt-2 text-sm text-muted-foreground">{error ?? statusText}</p>
+                    <p className="mt-2 text-sm text-muted">{error ?? statusText}</p>
 
                     {!error && (
-                        <p className="mt-3 text-xs text-muted-foreground">
+                        <p className="mt-3 text-xs text-muted">
                             Te llevaremos de vuelta a tu suscripción cuando tu nuevo plan esté activo.
                         </p>
                     )}
@@ -144,7 +144,7 @@ export default function UpgradeProcessingPage() {
                     <div className="mt-6 flex flex-col gap-3">
                         <Link
                             href="/coach/subscription"
-                            className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+                            className="inline-flex h-11 items-center justify-center rounded-control bg-sport-500 px-6 text-sm font-semibold text-white transition-colors hover:bg-sport-600"
                         >
                             Volver a mi suscripción
                         </Link>
