@@ -20,7 +20,7 @@ import { Check, ChevronLeft, Dumbbell, History, Play, Trophy } from 'lucide-reac
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
-import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '../../../lib/date-utils'
+import { getTodayInSantiago, getSantiagoUtcBoundsForDay, getSantiagoIsoYmdForUtcInstant } from '../../../lib/date-utils'
 import { cachePlan, enqueueLog, getCachedPlan } from '../../../lib/offline-cache'
 import { haptics } from '../../../lib/haptics'
 import { useEvaMotion } from '../../../lib/motion'
@@ -31,7 +31,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { RestTimer } from '../../../components/workout/RestTimer'
 import { WorkoutSummaryModal } from '../../../components/workout/WorkoutSummaryModal'
 import { programWeekIndex1Based } from '../../../lib/program-week-variant'
-import { computeEffectiveTarget, type EffectiveTarget } from '../../../lib/workout/progression'
+import { computeEffectiveTarget, type EffectiveTarget, type LastSessionForBlock } from '../../../lib/workout/progression'
 
 // ── Immersive "gym mode" palette (fixed DS ink ramp — 1:1 with web alumno-rutina.jsx,
 //    which renders the execution screen always-dark on ink-950). Brand accent stays
@@ -134,6 +134,7 @@ export default function WorkoutExecutionScreen() {
   const [clientId, setClientId] = useState<string | null>(null)
   const [logs, setLogs] = useState<Record<string, LogEntry[]>>({})
   const [previousHistory, setPreviousHistory] = useState<Record<string, PreviousHistory[]>>({})
+  const [lastSessionByBlock, setLastSessionByBlock] = useState<Record<string, LastSessionForBlock>>({})
   const [restSeconds, setRestSeconds] = useState<number | null>(null)
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [techniqueExercise, setTechniqueExercise] = useState<Exercise | null>(null)
@@ -207,6 +208,7 @@ export default function WorkoutExecutionScreen() {
       await Promise.all([
         loadTodayLogs(blockIds),
         loadPreviousHistory(client.id, sorted, blockIds),
+        loadLastSession(sorted, blockIds),
       ])
     }
 
@@ -288,6 +290,47 @@ export default function WorkoutExecutionScreen() {
       }
     }
     setPreviousHistory(history)
+  }
+
+  // Doble progresión (mode='double'): última sesión registrada por bloque (peso máx + reps por serie),
+  // de días PREVIOS a hoy. Solo se consulta si algún bloque usa ese modo. Espejo del web
+  // (workout-execution.queries.ts) para que computeEffectiveTarget pre-llene el peso objetivo en mobile.
+  async function loadLastSession(planBlocks: Block[], blockIds: string[]) {
+    const needsLastSession = planBlocks.some((b) => b.progression_mode === 'double')
+    if (!needsLastSession || blockIds.length === 0) {
+      setLastSessionByBlock({})
+      return
+    }
+    const { iso } = getTodayInSantiago()
+    const { startIso } = getSantiagoUtcBoundsForDay(iso)
+    const { data: priorLogs } = await supabase
+      .from('workout_logs')
+      .select('block_id, set_number, weight_kg, reps_done, logged_at')
+      .in('block_id', blockIds)
+      .lt('logged_at', startIso)
+      .order('logged_at', { ascending: false })
+      .limit(800)
+
+    // priorLogs viene desc por fecha → la 1ª aparición de cada bloque marca su día más reciente.
+    const grouped: Record<string, { day: string; rows: Array<{ set_number: number; weight_kg: number | null; reps_done: number | null }> }> = {}
+    for (const log of priorLogs ?? []) {
+      const bid = (log as any).block_id as string
+      const day = getSantiagoIsoYmdForUtcInstant((log as any).logged_at)
+      if (!grouped[bid]) grouped[bid] = { day, rows: [] }
+      if (grouped[bid].day === day) {
+        grouped[bid].rows.push({ set_number: (log as any).set_number, weight_kg: (log as any).weight_kg, reps_done: (log as any).reps_done })
+      }
+    }
+    const next: Record<string, LastSessionForBlock> = {}
+    for (const [bid, g] of Object.entries(grouped)) {
+      const sets = [...g.rows].sort((a, b) => a.set_number - b.set_number)
+      const weightKg = sets.reduce<number | null>(
+        (m, s) => (s.weight_kg != null && (m == null || s.weight_kg > m) ? s.weight_kg : m),
+        null,
+      )
+      next[bid] = { weightKg, repsDone: sets.map((s) => s.reps_done) }
+    }
+    setLastSessionByBlock(next)
   }
 
   function startRest(seconds: number) {
@@ -431,7 +474,7 @@ export default function WorkoutExecutionScreen() {
               >
                 <BlockCard
                   block={block}
-                  effective={computeEffectiveTarget(block, { currentWeek, weeksToRepeat })}
+                  effective={computeEffectiveTarget(block, { currentWeek, weeksToRepeat, lastSession: lastSessionByBlock[block.id] ?? null })}
                   logged={logs[block.id] ?? []}
                   previous={block.exercises?.id ? previousHistory[block.exercises.id] ?? [] : []}
                   onLogSet={logSet}

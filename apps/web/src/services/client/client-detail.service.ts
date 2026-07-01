@@ -859,10 +859,12 @@ export async function getClientWorkoutForDate(clientId: string, date: string) {
     const { startIso, endIso } = getSantiagoUtcBoundsForDay(date)
     const { data } = await supabase
         .from('workout_logs')
+        // P1-3: sin !inner → un set logueado cuyo bloque fue borrado (block_id NULL) sigue
+        // apareciendo en el detalle del día (el consumidor ya es null-safe: cae a "Ejercicio").
         .select(`
             set_number, weight_kg, reps_done, rpe, rir, logged_at,
             target_weight_at_log, target_reps_at_log,
-            workout_blocks!inner (
+            workout_blocks (
                 section, order_index, target_weight_kg, reps, sets, rir,
                 progression_mode, progression_type, progression_value, tempo,
                 exercises (name, muscle_group),

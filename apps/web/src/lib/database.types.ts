@@ -4438,6 +4438,7 @@ export type Database = {
           actual_pace_sec_per_km: number | null
           block_id: string
           client_id: string
+          exercise_id: string | null
           exercise_name_at_log: string | null
           id: string
           logged_at: string
@@ -4459,6 +4460,7 @@ export type Database = {
           actual_pace_sec_per_km?: number | null
           block_id: string
           client_id: string
+          exercise_id?: string | null
           exercise_name_at_log?: string | null
           id?: string
           logged_at?: string
@@ -4480,6 +4482,7 @@ export type Database = {
           actual_pace_sec_per_km?: number | null
           block_id?: string
           client_id?: string
+          exercise_id?: string | null
           exercise_name_at_log?: string | null
           id?: string
           logged_at?: string
