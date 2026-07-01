@@ -565,6 +565,24 @@ export const getClientProfileData = cache(async (clientId: string) => {
         cursor = subDays(cursor, 1)
     }
 
+    // Adherencia 30d contando TODOS los días de la ventana (los días SIN registro
+    // cuentan como 0%) — Fase 1 quick-win #3. ADITIVO: NO reemplaza a
+    // `nutritionMonthlyAvgPct` (que promedia solo días CON registro → infla, y alimenta
+    // el statbox "Prom. mensual" + el motor de alertas `deriveNutritionCoachAlerts`).
+    // Este valor es para el HEADLINE "Adherencia · 30 días" que debe reflejar la
+    // ventana completa. null si no hay plan activo (mantiene el "—" del display).
+    let nutritionAdherence30dAllDays: number | null = null
+    if (planId) {
+        let sumAll = 0
+        let curAll = parseISO(`${todayIso}T12:00:00`)
+        for (let i = 0; i < 30; i++) {
+            const key = format(curAll, 'yyyy-MM-dd')
+            sumAll += pctByDate.get(key) ?? 0
+            curAll = subDays(curAll, 1)
+        }
+        nutritionAdherence30dAllDays = Math.round(sumAll / 30)
+    }
+
     let lastActivityMs = 0
     if (client.updated_at) {
         lastActivityMs = Math.max(lastActivityMs, new Date(client.updated_at).getTime())
@@ -694,6 +712,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
         hasTodayNutritionLog,
         nutritionStreakDays,
         nutritionMonthlyAvgPct,
+        nutritionAdherence30dAllDays,
         todayIso,
         // P2: sign check-in photo paths (service-role; coaches have no storage SELECT policy).
         checkIns: await resolveCheckinPhotoUrls(createServiceRoleClient(), checkIns || []),

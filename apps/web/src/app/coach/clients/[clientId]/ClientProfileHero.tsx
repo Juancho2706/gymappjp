@@ -24,11 +24,15 @@ import {
     PersonStanding,
     Scale,
 } from 'lucide-react'
-import { differenceInDays } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { formatTrainingAgeLabel, formatRelativeLastActivity } from './profileOverviewUtils'
+import {
+    deriveClientStatus,
+    type ClientStatus,
+    type ClientStatusLevel,
+} from './clientStatusUtils'
 
 type HeroCompliance = {
     workoutsThisWeek?: number
@@ -39,6 +43,15 @@ type HeroCompliance = {
     planCurrentWeek?: number
     planTotalWeeks?: number
     currentStreak?: number
+    /** Días restantes del ciclo (el objeto lo trae; se declara para el status del hero). */
+    planDaysRemaining?: number
+}
+
+/** Nivel de estado → tono del badge único (danger/warning/success). */
+const STATUS_TONE: Record<ClientStatusLevel, 'danger' | 'warning' | 'success'> = {
+    urgent: 'danger',
+    attention: 'warning',
+    ok: 'success',
 }
 
 type ClientProfileHeroProps = {
@@ -62,28 +75,12 @@ type ClientProfileHeroProps = {
     activeProgramName?: string | null
     /** Entitlements de módulos movida (espejo del gate server-side). */
     moduleFlags?: { cardio: boolean; movement: boolean; bodycomp: boolean }
-}
-
-function attentionBadge(score: number): { label: string; tone: 'danger' | 'warning' | 'success' } {
-    if (score >= 50) return { label: 'Urgente', tone: 'danger' }
-    if (score >= 25) return { label: 'Revisar', tone: 'warning' }
-    return { label: 'Estable', tone: 'success' }
-}
-
-/**
- * Bucket de atención del hero — espejo verbatim de `rosterStatus` del rail
- * (CoachRosterMasterDetail): el diseño muestra el bucket "En riesgo / Atrasada /
- * Al día" como primer chip del hero (no el estado de cuenta Activo/Inactivo).
- * atrasada = sin actividad ≥7d · enriesgo = score ≥25 · al día = resto.
- */
-function attentionBucket(
-    score: number,
-    lastActivityAt: string | null
-): { label: string; tone: 'danger' | 'warning' | 'success' } {
-    const daysSince = lastActivityAt ? differenceInDays(new Date(), new Date(lastActivityAt)) : null
-    if (daysSince == null || daysSince >= 7) return { label: 'Atrasada', tone: 'danger' }
-    if (score >= 25) return { label: 'En riesgo', tone: 'warning' }
-    return { label: 'Al día', tone: 'success' }
+    /**
+     * Estado unificado del alumno ya computado server-side (con las señales crudas
+     * precisas: días sin check-in/entrenar, adherencia 30d, días de ciclo). Si no se
+     * pasa, el hero cae a un fallback derivado de las señales que ya recibe.
+     */
+    status?: ClientStatus
 }
 
 export function ClientProfileHero({
@@ -96,6 +93,7 @@ export function ClientProfileHero({
     weightDeltaKg,
     activeProgramName,
     moduleFlags,
+    status: statusProp,
 }: ClientProfileHeroProps) {
     const streakDays = compliance.currentStreak ?? 0
     const trainingAge = formatTrainingAgeLabel(
@@ -123,8 +121,20 @@ export function ClientProfileHero({
           ? `Semana ${planCur}`
           : 'Sin programa activo'
 
-    const ab = attentionBadge(attentionScore)
-    const bucket = attentionBucket(attentionScore, profileLastActivityAt)
+    // UN solo estado (badge + motivos + score en tooltip). Si el server no lo
+    // computó (statusProp), fallback con las señales disponibles en el hero: sin
+    // días crudos de check-in/entreno (no llegan por props hoy) los motivos precisos
+    // quedan al wiring server-side; el nivel se sostiene con el attentionScore.
+    const status =
+        statusProp ??
+        deriveClientStatus({
+            attentionScore,
+            daysSinceCheckin: null,
+            daysSinceWorkout: null,
+            hasActiveWorkoutProgram: Boolean(programName),
+            nutritionAdherencePct: null,
+            planDaysRemaining: compliance.planDaysRemaining ?? null,
+        })
 
     // Accesos a módulos de pago como botones-ícono pequeños (gateados por entitlement).
     const moduleButtons = [
@@ -197,19 +207,25 @@ export function ClientProfileHero({
                         </span>
                     </div>
                     <div className="min-w-0 flex-1 space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Badge tone={bucket.tone} size="sm">
-                                {bucket.label}
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <Badge
+                                tone={STATUS_TONE[status.level]}
+                                size="sm"
+                                title={`Score de atención: ${status.score}`}
+                            >
+                                {status.label}
                             </Badge>
-                            <Badge tone={ab.tone} size="sm">
-                                Score {attentionScore} · {ab.label}
-                            </Badge>
+                            {status.reasons.length > 0 && (
+                                <span className="min-w-0 text-[11.5px] text-on-dark-muted [overflow-wrap:anywhere]">
+                                    {status.reasons.join(' · ')}
+                                </span>
+                            )}
                         </div>
                         <p className="truncate text-[12.5px] text-on-dark-muted">{client.email}</p>
                         <p className="flex w-full min-w-0 flex-wrap gap-x-3.5 gap-y-1 text-[11.5px] text-on-dark-muted [overflow-wrap:anywhere] break-words">
                             <span className="inline-flex items-center gap-1">
                                 <Flame className="h-3.5 w-3.5 shrink-0 text-[var(--ember-400)]" />
-                                {streakDays} d de racha
+                                {streakDays} d de racha de actividad
                             </span>
                             <span className="inline-flex items-center gap-1">
                                 <Activity className="h-3.5 w-3.5 shrink-0 text-[var(--sport-400)]" />

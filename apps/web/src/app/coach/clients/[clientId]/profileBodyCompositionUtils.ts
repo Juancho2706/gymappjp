@@ -32,6 +32,32 @@ export function linearRegressionKgPerDay(
     return (n * sumXY - sumX * sumY) / denom
 }
 
+/**
+ * Banda de proyección de peso a N semanas (Fase 1 quick-win #4).
+ *
+ * Reemplaza el número único de extrapolación lineal (`last + slope*días`) por un
+ * RANGO ±(|slope|·marginDays) — por defecto ±1 semana de pendiente — para comunicar
+ * incertidumbre en vez de falsa precisión. El render pinta la banda + badge "estimado".
+ *
+ * FUNCIÓN PURA. Devuelve null si no hay peso base. Si la pendiente es ~0 la banda
+ * colapsa al punto (low == high == point), lo cual sigue siendo un "estimado" válido.
+ */
+export function projectedWeightRangeKg(
+    lastWeightKg: number | null | undefined,
+    slopeKgPerDay: number,
+    weeks = 4,
+    marginDays = 7
+): { low: number; high: number; point: number } | null {
+    if (lastWeightKg == null || !isFinite(lastWeightKg)) return null
+    const point = lastWeightKg + slopeKgPerDay * (weeks * 7)
+    const margin = Math.abs(slopeKgPerDay) * marginDays
+    return {
+        low: Number((point - margin).toFixed(1)),
+        high: Number((point + margin).toFixed(1)),
+        point: Number(point.toFixed(1)),
+    }
+}
+
 export function bmiFromMetric(weightKg: number, heightCm: number): number | null {
     if (!heightCm || heightCm <= 0 || !weightKg || weightKg <= 0) return null
     // Backward-compatible: some profiles store meters (e.g. 1.72) instead of cm.

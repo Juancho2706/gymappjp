@@ -111,6 +111,8 @@ type NutritionTabB5Props = {
   todayMacros?: TodayMacros
   hasTodayNutritionLog?: boolean
   nutritionMonthlyAvgPct?: number | null
+  /** Adherencia 30d que cuenta TODOS los días (días sin registro = 0%). */
+  nutritionAdherence30dAllDays?: number | null
   nutritionStreakDays?: number
   nutritionWeeklyAvgPct?: number
   nutritionPrevWeeklyAvgPct?: number
@@ -302,6 +304,7 @@ export function NutritionTabB5({
   todayMacros,
   hasTodayNutritionLog = false,
   nutritionMonthlyAvgPct,
+  nutritionAdherence30dAllDays,
   nutritionStreakDays = 0,
   nutritionWeeklyAvgPct = 0,
   nutritionPrevWeeklyAvgPct = 0,
@@ -444,9 +447,15 @@ export function NutritionTabB5({
     { name: 'Grasas', value: consF, color: MACRO_COLORS.fat },
   ].filter((d) => d.value > 0)
 
-  // Adherencia headline (% canónico del motor) — el mensual manda; cae al semanal.
+  // Adherencia headline (% canónico del motor) — la ventana de 30d que cuenta
+  // TODOS los días (sin registro = 0%) manda; cae al mensual (solo días con
+  // registro) y luego al semanal si el campo all-days no llegó por props.
   const headlineAdherencePct =
-    nutritionMonthlyAvgPct != null ? nutritionMonthlyAvgPct : nutritionWeeklyAvgPct
+    nutritionAdherence30dAllDays != null
+      ? nutritionAdherence30dAllDays
+      : nutritionMonthlyAvgPct != null
+        ? nutritionMonthlyAvgPct
+        : nutritionWeeklyAvgPct
   const atRisk = !!plan && kcal > 0 && headlineAdherencePct < 60
 
   const heatmapDays = useMemo(() => {
@@ -607,6 +616,9 @@ export function NutritionTabB5({
                 {Math.round(headlineAdherencePct)}%
               </span>
             </div>
+            <p className="mb-1 text-[10px] font-medium text-muted">
+              Promedio de 30 días; incluye los días sin registro como 0%.
+            </p>
             <p className="mb-2 text-[10px] font-medium text-muted">
               Color según % de comidas del plan completadas ese día.
             </p>
@@ -647,7 +659,7 @@ export function NutritionTabB5({
                 <div className="font-display text-base font-black tabular-nums text-strong">
                   {nutritionStreakDays} d
                 </div>
-                <div className="mt-0.5 text-[10px] text-muted">Racha ≥80%</div>
+                <div className="mt-0.5 text-[10px] text-muted">Racha de nutrición ≥80%</div>
               </div>
               <div className="rounded-control bg-surface-sunken px-2.5 py-2">
                 <div

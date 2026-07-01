@@ -17,6 +17,7 @@ import {
     bmiCategory,
     bmiFromMetric,
     linearRegressionKgPerDay,
+    projectedWeightRangeKg,
 } from './profileBodyCompositionUtils'
 import { Scale, Star, Images } from 'lucide-react'
 
@@ -185,7 +186,10 @@ export function ProgressBodyCompositionB6({
 
     const slopeKgPerDay = useMemo(() => linearRegressionKgPerDay(checkIns), [checkIns])
     const monthlyRate = slopeKgPerDay * 30
-    const projected4w = lastWeight != null ? lastWeight + slopeKgPerDay * 28 : null
+    const projected4wRange = useMemo(
+        () => projectedWeightRangeKg(lastWeight, slopeKgPerDay, 4, 7),
+        [lastWeight, slopeKgPerDay]
+    )
 
     const goalY =
         goalWeight != null && n > 0
@@ -383,18 +387,34 @@ export function ProgressBodyCompositionB6({
                         },
                         {
                             l: 'Proyección 4 sem',
-                            sub: 'si sigue',
                             v:
-                                projected4w != null && withWeight.length >= 2
-                                    ? `${projected4w.toFixed(1)} kg`
+                                projected4wRange != null && withWeight.length >= 2
+                                    ? projected4wRange.low === projected4wRange.high
+                                        ? `${projected4wRange.point.toFixed(1)} kg`
+                                        : `${projected4wRange.low.toFixed(1)}–${projected4wRange.high.toFixed(1)} kg`
                                     : '—',
+                            badge:
+                                projected4wRange != null && withWeight.length >= 2
+                                    ? 'estimado'
+                                    : undefined,
+                            hint:
+                                projected4wRange != null && withWeight.length >= 2
+                                    ? 'extrapolación lineal, no una promesa'
+                                    : undefined,
                         },
                         {
                             l: 'Energía media',
                             sub: '7 días',
                             v: avgEnergy7 != null ? `${avgEnergy7.toFixed(1)}/10` : '—',
                         },
-                    ] as { l: string; v: string; c?: string; sub?: string }[]).map((b) => (
+                    ] as {
+                        l: string
+                        v: string
+                        c?: string
+                        sub?: string
+                        badge?: string
+                        hint?: string
+                    }[]).map((b) => (
                         <div
                             key={b.l}
                             style={{
@@ -404,15 +424,49 @@ export function ProgressBodyCompositionB6({
                             }}
                         >
                             <div
-                                className="font-display font-black tracking-tight tabular-nums"
-                                style={{ fontSize: 15, color: b.c || 'var(--text-strong)', lineHeight: 1.1 }}
+                                className="flex items-center gap-1.5"
+                                style={{ flexWrap: 'wrap' }}
                             >
-                                {b.v}
+                                <span
+                                    className="font-display font-black tracking-tight tabular-nums"
+                                    style={{ fontSize: 15, color: b.c || 'var(--text-strong)', lineHeight: 1.1 }}
+                                >
+                                    {b.v}
+                                </span>
+                                {b.badge ? (
+                                    <span
+                                        className="font-semibold uppercase"
+                                        style={{
+                                            fontSize: 8.5,
+                                            letterSpacing: '0.04em',
+                                            padding: '1px 5px',
+                                            borderRadius: 'var(--radius-xs)',
+                                            background: 'var(--surface-card)',
+                                            color: 'var(--text-muted)',
+                                            border: '1px solid var(--border-subtle)',
+                                            lineHeight: 1.3,
+                                        }}
+                                    >
+                                        {b.badge}
+                                    </span>
+                                ) : null}
                             </div>
                             <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
                                 {b.l}
                                 {b.sub ? ' · ' + b.sub : ''}
                             </div>
+                            {b.hint ? (
+                                <div
+                                    style={{
+                                        fontSize: 9,
+                                        color: 'var(--text-subtle)',
+                                        marginTop: 3,
+                                        lineHeight: 1.25,
+                                    }}
+                                >
+                                    {b.hint}
+                                </div>
+                            ) : null}
                         </div>
                     ))}
                 </div>
