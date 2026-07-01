@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from 'react'
 import {
     ArrowUpDown,
     Check,
@@ -23,6 +23,13 @@ import {
     DialogTitle,
     DialogFooter,
 } from '@/components/ui/dialog'
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
@@ -137,6 +144,21 @@ function LibraryEmptyState({
     )
 }
 
+function subscribeAssignMd(cb: () => void) {
+    const mq = window.matchMedia('(min-width: 768px)')
+    mq.addEventListener('change', cb)
+    return () => mq.removeEventListener('change', cb)
+}
+
+/** matchMedia md-up (mismo patrón que ProgramPreviewPanel): desktop → Dialog, móvil → bottom-sheet. */
+function useIsDesktopMd() {
+    return useSyncExternalStore(
+        subscribeAssignMd,
+        () => window.matchMedia('(min-width: 768px)').matches,
+        () => true,
+    )
+}
+
 export function WorkoutProgramsClient({
     initialPrograms,
     availableClients,
@@ -144,6 +166,7 @@ export function WorkoutProgramsClient({
 }: WorkoutProgramsClientProps) {
     const router = useRouter()
     const reduceMotion = useReducedMotion()
+    const isAssignDesktop = useIsDesktopMd()
     const [search, setSearch] = useState('')
     const [filterType, setFilterType] = useState<LibraryFilters['filterType']>('all')
     const [sort, setSort] = useState<'Recientes' | 'Nombre'>('Recientes')
@@ -419,6 +442,229 @@ export function WorkoutProgramsClient({
             prev.includes(clientId) ? prev.filter((id) => id !== clientId) : [...prev, clientId]
         )
     }
+
+    // El contenedor de «Asignar programa» es responsive (bottom-sheet en móvil, dialog en
+    // desktop); el cuerpo y la botonera se comparten entre ambos — solo cambia el shell.
+    const handleAssignOpenChange = (open: boolean) => {
+        setIsAssignOpen(open)
+        if (!open) setOpenPopover(false)
+    }
+    const assignDescription = 'Duplicas la plantilla en el alumno; ajusta inicio, semanas y días aquí.'
+    const assignBody = (
+        <div className="space-y-3 py-3 sm:space-y-4 sm:py-4">
+            <div className="space-y-2">
+                <p className="text-sm font-medium text-body">
+                    Programa:{' '}
+                    <span className="font-semibold text-[var(--sport-600)]">{selectedProgram?.name}</span>
+                </p>
+            </div>
+            <div className="space-y-3">
+                <p className="text-sm font-medium text-body">Alumnos ({selectedClients.length})</p>
+                <Popover open={openPopover} onOpenChange={setOpenPopover}>
+                    <PopoverTrigger
+                        className="flex h-auto min-h-11 w-full items-center justify-between rounded-control border-[1.5px] border-default bg-surface-card px-3 py-2 text-left text-sm text-strong focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
+                    >
+                        <span className="truncate">
+                            {selectedClients.length > 0
+                                ? `${selectedClients.length} seleccionados`
+                                : 'Seleccionar alumnos…'}
+                        </span>
+                        <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                    </PopoverTrigger>
+                    <PopoverContent
+                        className="w-[var(--radix-popover-trigger-width)] p-0"
+                        align="start"
+                    >
+                        <div className="space-y-1 rounded-control border border-subtle bg-surface-card p-1 shadow-md">
+                            <div className="flex items-center gap-2 border-b border-subtle px-3 py-2">
+                                <Search className="size-4 shrink-0 opacity-50" />
+                                <input
+                                    className="h-8 w-full bg-transparent text-sm text-strong outline-none placeholder:text-muted"
+                                    placeholder="Buscar alumno…"
+                                    value={clientSearch}
+                                    onChange={(e) => setClientSearch(e.target.value)}
+                                />
+                            </div>
+                            <div className="max-h-[300px] overflow-y-auto">
+                                {availableClients.filter((c) =>
+                                    c.full_name.toLowerCase().includes(clientSearch.toLowerCase())
+                                ).length === 0 ? (
+                                    <div className="py-6 text-center text-sm text-muted">
+                                        No se encontraron alumnos.
+                                    </div>
+                                ) : (
+                                    availableClients
+                                        .filter((c) =>
+                                            c.full_name.toLowerCase().includes(clientSearch.toLowerCase())
+                                        )
+                                        .map((client) => (
+                                            <div
+                                                key={client.id}
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={() => toggleClient(client.id)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                        e.preventDefault()
+                                                        toggleClient(client.id)
+                                                    }
+                                                }}
+                                                className="relative flex cursor-pointer select-none items-center rounded-[10px] px-2 py-1.5 text-sm text-strong outline-none transition-colors hover:bg-surface-sunken"
+                                            >
+                                                <div
+                                                    className={cn(
+                                                        'mr-2 flex size-4 items-center justify-center rounded-[6px] border border-sport-500',
+                                                        selectedClients.includes(client.id)
+                                                            ? 'bg-sport-500 text-[var(--text-on-sport)]'
+                                                            : 'opacity-50'
+                                                    )}
+                                                >
+                                                    {selectedClients.includes(client.id) && (
+                                                        <Check className="size-3" />
+                                                    )}
+                                                </div>
+                                                {client.full_name}
+                                                {client.workout_programs && client.workout_programs.length > 0 && (
+                                                    <span className="ml-2 shrink-0 rounded-full border border-[var(--warning-500)]/30 bg-[var(--warning-100)] px-1.5 py-0.5 text-[10px] text-[var(--warning-700)]">
+                                                        Plan: {client.workout_programs[0].name}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ))
+                                )}
+                            </div>
+                        </div>
+                    </PopoverContent>
+                </Popover>
+            </div>
+            <div className="space-y-3 border-t border-subtle pt-3">
+                <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-strong">
+                    <span>Configuración de asignación</span>
+                    <InfoTooltip
+                        title="Cómo funciona la asignación"
+                        content="Ciclos, fases, tipo de duración y estructura del entrenamiento vienen siempre de la plantilla; no se editan aquí. Un alumno solo puede tener un programa activo: si ya tenía otro, se desactiva y se conserva el historial. Inicio: Hoy usa la fecha por defecto del servidor; Fecha específica fija el día y desactiva inicio flexible; Inicio flexible deja acomodar el calendario. Semanas: actualiza la ventana en semanas del plan asignado (no cambia las fases de la plantilla). Días Lun–Dom: filtran por día 1–7; sin marcar ninguno se copian todos los días. Si la plantilla usa días mayores que 7, edita en el builder o deja los días sin marcar."
+                    />
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                        <label className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                            Inicio
+                        </label>
+                        <Select
+                            value={assignmentStartMode}
+                            onValueChange={(v) =>
+                                setAssignmentStartMode(v as 'today' | 'custom' | 'flexible')
+                            }
+                        >
+                            <SelectTrigger className="h-11 min-h-11 w-full border-default bg-surface-card text-strong sm:h-10 sm:min-h-10">
+                                <SelectValue>
+                                    {assignmentStartMode === 'today'
+                                        ? 'Hoy'
+                                        : assignmentStartMode === 'custom'
+                                          ? 'Fecha específica'
+                                          : 'Flexible'}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="today">Hoy (fecha por defecto)</SelectItem>
+                                <SelectItem value="custom">Fecha específica</SelectItem>
+                                <SelectItem value="flexible">Inicio flexible</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                            Duración (semanas)
+                        </label>
+                        <Input
+                            type="number"
+                            min={1}
+                            max={52}
+                            value={assignmentDurationWeeks}
+                            onChange={(e) => setAssignmentDurationWeeks(e.target.value)}
+                            placeholder="Ej: 4"
+                            className="h-11 min-h-11 border-default bg-surface-card text-strong placeholder:text-muted sm:h-10 sm:min-h-10"
+                        />
+                    </div>
+                </div>
+                {assignmentStartMode === 'custom' && (
+                    <Input
+                        type="date"
+                        value={assignmentStartDate}
+                        onChange={(e) => setAssignmentStartDate(e.target.value)}
+                        className="h-11 min-h-11 border-default bg-surface-card text-strong sm:h-10 sm:min-h-10"
+                    />
+                )}
+                <div className="space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                            Días a copiar (opcional)
+                        </p>
+                        <InfoTooltip
+                            title="Filtro por día"
+                            content="Marca Lun–Dom para copiar solo esos entrenamientos (día 1–7). Si no marcas ninguno, se copian todos los días de la plantilla."
+                        />
+                    </div>
+                    {assignDaysMismatch ? (
+                        <p className="text-xs text-[var(--danger-600)]" role="alert">
+                            Ningún día marcado coincide con esta plantilla. Desmarca todo para copiar todos
+                            los días.
+                        </p>
+                    ) : null}
+                    <div className="grid grid-cols-7 gap-1 pt-0.5">
+                        {dayOptions.map((day) => {
+                            const active = assignmentDays.includes(day.id)
+                            return (
+                                <button
+                                    key={day.id}
+                                    type="button"
+                                    onClick={() =>
+                                        setAssignmentDays((prev) =>
+                                            active ? prev.filter((d) => d !== day.id) : [...prev, day.id]
+                                        )
+                                    }
+                                    className={cn(
+                                        'flex min-h-9 min-w-0 items-center justify-center rounded-control border-[1.5px] px-0.5 py-1.5 text-[10px] font-semibold leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-app)] sm:min-h-9 sm:text-xs',
+                                        active
+                                            ? 'border-[var(--sport-300)] bg-[var(--sport-100)] text-[var(--sport-700)]'
+                                            : 'border-subtle bg-surface-sunken text-muted hover:bg-surface-sunken hover:text-strong'
+                                    )}
+                                >
+                                    {day.label}
+                                </button>
+                            )
+                        })}
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+    const assignFooterButtons = (
+        <>
+            <Button
+                type="button"
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => setIsAssignOpen(false)}
+            >
+                Cancelar
+            </Button>
+            <Button
+                type="button"
+                variant="sport"
+                className="w-full sm:w-auto"
+                onClick={() => handleAssign(false)}
+                disabled={
+                    isPending || selectedClients.length === 0 || assignDaysMismatch
+                }
+            >
+                {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
+                {selectedClients.length === 1
+                    ? 'Asignar a 1 alumno'
+                    : `Asignar a ${selectedClients.length} alumnos`}
+            </Button>
+        </>
+    )
 
     return (
         <div
@@ -738,233 +984,46 @@ export function WorkoutProgramsClient({
                 )}
             </div>
 
-            <Dialog
-                open={isAssignOpen}
-                onOpenChange={(open) => {
-                    setIsAssignOpen(open)
-                    if (!open) setOpenPopover(false)
-                }}
-            >
-                <DialogContent className="max-h-[min(88dvh,88svh)] overflow-y-auto overscroll-contain border-subtle bg-surface-card px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] text-body sm:max-w-[440px]">
-                    <DialogHeader>
-                        <DialogTitle className="text-strong">Asignar programa</DialogTitle>
-                        <DialogDescription className="text-muted">
-                            Duplicas la plantilla en el alumno; ajusta inicio, semanas y días aquí.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-3 py-3 sm:space-y-4 sm:py-4">
-                        <div className="space-y-2">
-                            <p className="text-sm font-medium text-body">
-                                Programa:{' '}
-                                <span className="font-semibold text-[var(--sport-600)]">{selectedProgram?.name}</span>
-                            </p>
-                        </div>
-                        <div className="space-y-3">
-                            <p className="text-sm font-medium text-body">Alumnos ({selectedClients.length})</p>
-                            <Popover open={openPopover} onOpenChange={setOpenPopover}>
-                                <PopoverTrigger
-                                    className="flex h-auto min-h-11 w-full items-center justify-between rounded-control border-[1.5px] border-default bg-surface-card px-3 py-2 text-left text-sm text-strong focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
-                                >
-                                    <span className="truncate">
-                                        {selectedClients.length > 0
-                                            ? `${selectedClients.length} seleccionados`
-                                            : 'Seleccionar alumnos…'}
-                                    </span>
-                                    <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-                                </PopoverTrigger>
-                                <PopoverContent
-                                    className="w-[var(--radix-popover-trigger-width)] p-0"
-                                    align="start"
-                                >
-                                    <div className="space-y-1 rounded-control border border-subtle bg-surface-card p-1 shadow-md">
-                                        <div className="flex items-center gap-2 border-b border-subtle px-3 py-2">
-                                            <Search className="size-4 shrink-0 opacity-50" />
-                                            <input
-                                                className="h-8 w-full bg-transparent text-sm text-strong outline-none placeholder:text-muted"
-                                                placeholder="Buscar alumno…"
-                                                value={clientSearch}
-                                                onChange={(e) => setClientSearch(e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="max-h-[300px] overflow-y-auto">
-                                            {availableClients.filter((c) =>
-                                                c.full_name.toLowerCase().includes(clientSearch.toLowerCase())
-                                            ).length === 0 ? (
-                                                <div className="py-6 text-center text-sm text-muted">
-                                                    No se encontraron alumnos.
-                                                </div>
-                                            ) : (
-                                                availableClients
-                                                    .filter((c) =>
-                                                        c.full_name.toLowerCase().includes(clientSearch.toLowerCase())
-                                                    )
-                                                    .map((client) => (
-                                                        <div
-                                                            key={client.id}
-                                                            role="button"
-                                                            tabIndex={0}
-                                                            onClick={() => toggleClient(client.id)}
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === 'Enter' || e.key === ' ') {
-                                                                    e.preventDefault()
-                                                                    toggleClient(client.id)
-                                                                }
-                                                            }}
-                                                            className="relative flex cursor-pointer select-none items-center rounded-[10px] px-2 py-1.5 text-sm text-strong outline-none transition-colors hover:bg-surface-sunken"
-                                                        >
-                                                            <div
-                                                                className={cn(
-                                                                    'mr-2 flex size-4 items-center justify-center rounded-[6px] border border-sport-500',
-                                                                    selectedClients.includes(client.id)
-                                                                        ? 'bg-sport-500 text-[var(--text-on-sport)]'
-                                                                        : 'opacity-50'
-                                                                )}
-                                                            >
-                                                                {selectedClients.includes(client.id) && (
-                                                                    <Check className="size-3" />
-                                                                )}
-                                                            </div>
-                                                            {client.full_name}
-                                                            {client.workout_programs && client.workout_programs.length > 0 && (
-                                                                <span className="ml-2 shrink-0 rounded-full border border-[var(--warning-500)]/30 bg-[var(--warning-100)] px-1.5 py-0.5 text-[10px] text-[var(--warning-700)]">
-                                                                    Plan: {client.workout_programs[0].name}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    ))
-                                            )}
-                                        </div>
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
-                        </div>
-                        <div className="space-y-3 border-t border-subtle pt-3">
-                            <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-strong">
-                                <span>Configuración de asignación</span>
-                                <InfoTooltip
-                                    title="Cómo funciona la asignación"
-                                    content="Ciclos, fases, tipo de duración y estructura del entrenamiento vienen siempre de la plantilla; no se editan aquí. Un alumno solo puede tener un programa activo: si ya tenía otro, se desactiva y se conserva el historial. Inicio: Hoy usa la fecha por defecto del servidor; Fecha específica fija el día y desactiva inicio flexible; Inicio flexible deja acomodar el calendario. Semanas: actualiza la ventana en semanas del plan asignado (no cambia las fases de la plantilla). Días Lun–Dom: filtran por día 1–7; sin marcar ninguno se copian todos los días. Si la plantilla usa días mayores que 7, edita en el builder o deja los días sin marcar."
-                                />
+            {isAssignDesktop ? (
+                <Dialog open={isAssignOpen} onOpenChange={handleAssignOpenChange}>
+                    <DialogContent className="max-h-[min(88dvh,88svh)] overflow-y-auto overscroll-contain border-subtle bg-surface-card px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] text-body sm:max-w-[440px]">
+                        <DialogHeader>
+                            <DialogTitle className="text-strong">Asignar programa</DialogTitle>
+                            <DialogDescription className="text-muted">{assignDescription}</DialogDescription>
+                        </DialogHeader>
+                        {assignBody}
+                        <DialogFooter className="gap-2">{assignFooterButtons}</DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            ) : (
+                <Sheet open={isAssignOpen} onOpenChange={handleAssignOpenChange}>
+                    <SheetContent
+                        side="bottom"
+                        showCloseButton={false}
+                        className="max-h-[min(88dvh,88svh)] gap-0 rounded-t-sheet border-subtle bg-surface-card p-0 text-body"
+                    >
+                        <div className="flex max-h-[min(88dvh,88svh)] flex-col overflow-y-auto overscroll-contain px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pt-3">
+                            <div
+                                className="mx-auto mb-3 h-1 w-9 shrink-0 rounded-full bg-[var(--border-strong)]"
+                                aria-hidden="true"
+                            />
+                            <SheetHeader className="border-0 bg-transparent p-0">
+                                <SheetTitle className="sr-only">Asignar programa</SheetTitle>
+                                <SheetDescription className="sr-only">{assignDescription}</SheetDescription>
+                            </SheetHeader>
+                            <div>
+                                <h2 className="font-display text-xl font-extrabold tracking-[-0.02em] text-strong">
+                                    Asignar programa
+                                </h2>
+                                <p className="mt-0.5 text-sm text-muted">{assignDescription}</p>
                             </div>
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-                                        Inicio
-                                    </label>
-                                    <Select
-                                        value={assignmentStartMode}
-                                        onValueChange={(v) =>
-                                            setAssignmentStartMode(v as 'today' | 'custom' | 'flexible')
-                                        }
-                                    >
-                                        <SelectTrigger className="h-11 min-h-11 w-full border-default bg-surface-card text-strong sm:h-10 sm:min-h-10">
-                                            <SelectValue>
-                                                {assignmentStartMode === 'today'
-                                                    ? 'Hoy'
-                                                    : assignmentStartMode === 'custom'
-                                                      ? 'Fecha específica'
-                                                      : 'Flexible'}
-                                            </SelectValue>
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="today">Hoy (fecha por defecto)</SelectItem>
-                                            <SelectItem value="custom">Fecha específica</SelectItem>
-                                            <SelectItem value="flexible">Inicio flexible</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-                                        Duración (semanas)
-                                    </label>
-                                    <Input
-                                        type="number"
-                                        min={1}
-                                        max={52}
-                                        value={assignmentDurationWeeks}
-                                        onChange={(e) => setAssignmentDurationWeeks(e.target.value)}
-                                        placeholder="Ej: 4"
-                                        className="h-11 min-h-11 border-default bg-surface-card text-strong placeholder:text-muted sm:h-10 sm:min-h-10"
-                                    />
-                                </div>
-                            </div>
-                            {assignmentStartMode === 'custom' && (
-                                <Input
-                                    type="date"
-                                    value={assignmentStartDate}
-                                    onChange={(e) => setAssignmentStartDate(e.target.value)}
-                                    className="h-11 min-h-11 border-default bg-surface-card text-strong sm:h-10 sm:min-h-10"
-                                />
-                            )}
-                            <div className="space-y-1.5">
-                                <div className="flex flex-wrap items-center gap-1.5">
-                                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-                                        Días a copiar (opcional)
-                                    </p>
-                                    <InfoTooltip
-                                        title="Filtro por día"
-                                        content="Marca Lun–Dom para copiar solo esos entrenamientos (día 1–7). Si no marcas ninguno, se copian todos los días de la plantilla."
-                                    />
-                                </div>
-                                {assignDaysMismatch ? (
-                                    <p className="text-xs text-[var(--danger-600)]" role="alert">
-                                        Ningún día marcado coincide con esta plantilla. Desmarca todo para copiar todos
-                                        los días.
-                                    </p>
-                                ) : null}
-                                <div className="grid grid-cols-7 gap-1 pt-0.5">
-                                    {dayOptions.map((day) => {
-                                        const active = assignmentDays.includes(day.id)
-                                        return (
-                                            <button
-                                                key={day.id}
-                                                type="button"
-                                                onClick={() =>
-                                                    setAssignmentDays((prev) =>
-                                                        active ? prev.filter((d) => d !== day.id) : [...prev, day.id]
-                                                    )
-                                                }
-                                                className={cn(
-                                                    'flex min-h-9 min-w-0 items-center justify-center rounded-control border-[1.5px] px-0.5 py-1.5 text-[10px] font-semibold leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-app)] sm:min-h-9 sm:text-xs',
-                                                    active
-                                                        ? 'border-[var(--sport-300)] bg-[var(--sport-100)] text-[var(--sport-700)]'
-                                                        : 'border-subtle bg-surface-sunken text-muted hover:bg-surface-sunken hover:text-strong'
-                                                )}
-                                            >
-                                                {day.label}
-                                            </button>
-                                        )
-                                    })}
-                                </div>
-                            </div>
+                            {assignBody}
+                            <div className="mt-1 flex flex-col-reverse gap-2">{assignFooterButtons}</div>
                         </div>
-                    </div>
-                    <DialogFooter className="gap-2">
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            className="w-full sm:w-auto"
-                            onClick={() => setIsAssignOpen(false)}
-                        >
-                            Cancelar
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="sport"
-                            className="w-full sm:w-auto"
-                            onClick={() => handleAssign(false)}
-                            disabled={
-                                isPending || selectedClients.length === 0 || assignDaysMismatch
-                            }
-                        >
-                            {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                            {selectedClients.length === 1
-                                ? 'Asignar a 1 alumno'
-                                : `Asignar a ${selectedClients.length} alumnos`}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                    </SheetContent>
+                </Sheet>
+            )}
+
 
             <Dialog
                 open={!!programToDuplicate}

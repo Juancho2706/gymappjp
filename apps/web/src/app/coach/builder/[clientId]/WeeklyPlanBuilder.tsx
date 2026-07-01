@@ -974,14 +974,14 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
 
     if (!mounted) {
         return (
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center bg-background">
+            <div className="flex min-h-0 flex-1 flex-col items-center justify-center bg-surface-app">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
             </div>
         )
     }
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-app">
             <AppOnlyPopup storageKey="builder" title="Arma rutinas mejor en la app">
                 Reordena con gestos, arma offline y revisa el progreso con gráficas táctiles en la app de EVA.
             </AppOnlyPopup>
@@ -1013,24 +1013,24 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 </div>
             )}
 
-            <header className="z-20 flex-shrink-0 border-b border-border bg-background/50 pt-safe pl-safe pr-safe backdrop-blur-xl">
+            <header className="z-20 flex-shrink-0 border-b border-subtle bg-surface-app/50 pt-safe pl-safe pr-safe backdrop-blur-xl">
                 <div className={`mx-auto flex max-w-[2000px] items-center justify-between gap-3 px-4 md:gap-4 md:px-6 ${isMobile && isSimpleMode ? 'h-12' : 'h-16'}`}>
                     <div className="flex min-w-0 items-center gap-3 md:gap-4">
                         <Link href={client ? `/coach/clients/${client.id}` : '/coach/templates'}>
                             <Button variant="ghost" size="icon" className="shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                                <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+                                <ArrowLeft className="w-5 h-5 text-muted" />
                             </Button>
                         </Link>
                         <div className="min-w-0 flex-1">
                             {/* Desktop title */}
                             <div className="hidden md:block">
                                 <div className="flex items-center gap-2">
-                                    <h1 className="max-w-[140px] truncate text-sm font-display uppercase tracking-[0.2em] text-foreground md:max-w-[26rem]">
+                                    <h1 className="max-w-[140px] truncate text-sm font-display uppercase tracking-[0.2em] text-strong md:max-w-[26rem]">
                                         {programName || 'NUEVO PROGRAMA'}
                                     </h1>
                                     {hasUnsavedChanges && (
-                                        <span className="hidden md:flex items-center gap-1 text-[9px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-pill border border-amber-500/20 shrink-0">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                        <span className="hidden md:flex items-center gap-1 text-[9px] bg-[var(--warning-500)]/10 text-[var(--warning-600)] px-2 py-0.5 rounded-pill border border-[var(--warning-500)]/20 shrink-0">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-[var(--warning-500)] animate-pulse"></span>
                                             CAMBIOS SIN GUARDAR
                                         </span>
                                     )}
@@ -1040,7 +1040,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground/60">
+                                <p className="text-xs font-bold uppercase tracking-widest text-[var(--text-muted)]/60">
                                     {client ? `Cliente: ${client.full_name}` : 'Plantilla Global'}
                                 </p>
                             </div>
@@ -1054,21 +1054,21 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                         onBlur={() => setMobileNameEdit(false)}
                                         onKeyDown={(e) => { if (e.key === 'Enter') setMobileNameEdit(false) }}
                                         placeholder="Nombre del programa"
-                                        className="w-full border-none bg-transparent font-display text-[17px] font-extrabold text-foreground outline-none placeholder:text-muted-foreground/50"
+                                        className="w-full border-none bg-transparent font-display text-[17px] font-extrabold text-strong outline-none placeholder:text-[var(--text-muted)]/50"
                                     />
                                 ) : (
                                     <button type="button" onClick={() => setMobileNameEdit(true)} className="block w-full min-w-0 text-left">
-                                        <span className={`flex items-center gap-1.5 truncate font-display text-[17px] font-extrabold ${programName ? 'text-foreground' : 'text-muted-foreground/50'}`}>
+                                        <span className={`flex items-center gap-1.5 truncate font-display text-[17px] font-extrabold ${programName ? 'text-strong' : 'text-[var(--text-muted)]/50'}`}>
                                             <span className="truncate">{programName || 'Nombre del programa'}</span>
-                                            <Pencil className="w-3 h-3 shrink-0 text-muted-foreground/40" />
+                                            <Pencil className="w-3 h-3 shrink-0 text-[var(--text-muted)]/40" />
                                         </span>
                                     </button>
                                 )}
-                                <p className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-muted-foreground/70 truncate">
+                                <p className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-[var(--text-muted)]/70 truncate">
                                     <span className="truncate">{client ? client.full_name : 'Plantilla'}</span>
                                     {hasUnsavedChanges && (
-                                        <span className="flex shrink-0 items-center gap-1 font-bold text-amber-600 dark:text-amber-400">
-                                            · <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" /> Sin guardar
+                                        <span className="flex shrink-0 items-center gap-1 font-bold text-[var(--warning-600)]">
+                                            · <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--warning-500)] animate-pulse" /> Sin guardar
                                         </span>
                                     )}
                                 </p>
@@ -1080,7 +1080,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="hidden md:max-lg:flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            className="hidden md:max-lg:flex h-10 w-10 items-center justify-center text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
                             onClick={() => setIsCatalogSidebarOpen(v => !v)}
                             title={isCatalogSidebarOpen ? 'Ocultar catálogo' : 'Mostrar catálogo'}
                         >
@@ -1092,7 +1092,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             variant="ghost"
                             size="sm"
                             data-tour-id="templates-button"
-                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
                             onClick={() => setShowTemplatePicker(true)}
                             title="Cargar plantilla"
                         >
@@ -1104,7 +1104,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             variant="outline"
                             size="sm"
                             data-tour-id="preview-button"
-                            className="eva-press hidden md:flex h-10 w-auto gap-2 rounded-pill border-border px-4 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
+                            className="eva-press hidden md:flex h-10 w-auto gap-2 rounded-pill border-subtle px-4 text-xs font-bold uppercase tracking-widest text-muted hover:text-strong"
                             onClick={() => setShowPreview(true)}
                             title="Vista previa"
                         >
@@ -1116,7 +1116,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                                className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
                                 onClick={() => setShowAssign(true)}
                                 title="Asignar a clientes"
                             >
@@ -1129,7 +1129,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             variant="outline"
                             size="sm"
                             data-tour-id="balance-button"
-                            className="eva-press hidden md:flex h-10 w-auto gap-2 rounded-pill border-border px-4 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground"
+                            className="eva-press hidden md:flex h-10 w-auto gap-2 rounded-pill border-subtle px-4 text-xs font-bold uppercase tracking-widest text-muted hover:text-strong"
                             onClick={() => setShowBalance(true)}
                             title="Balance muscular"
                         >
@@ -1141,7 +1141,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             variant="ghost"
                             size="sm"
                             data-tour-id="print-button"
-                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                            className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
                             onClick={() => setShowPrint(true)}
                             title="Imprimir / Exportar PDF"
                         >
@@ -1154,7 +1154,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 variant="ghost"
                                 size="sm"
                                 data-tour-id="undo-button"
-                                className={`h-10 w-10 transition-colors ${canUndo ? 'text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5' : 'text-muted-foreground/30 cursor-not-allowed'}`}
+                                className={`h-10 w-10 transition-colors ${canUndo ? 'text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5' : 'text-[var(--text-muted)]/30 cursor-not-allowed'}`}
                                 onClick={undo}
                                 disabled={!canUndo}
                                 title="Deshacer (Ctrl+Z)"
@@ -1165,7 +1165,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 variant="ghost"
                                 size="sm"
                                 data-tour-id="redo-button"
-                                className={`h-10 w-10 transition-colors ${canRedo ? 'text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5' : 'text-muted-foreground/30 cursor-not-allowed'}`}
+                                className={`h-10 w-10 transition-colors ${canRedo ? 'text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5' : 'text-[var(--text-muted)]/30 cursor-not-allowed'}`}
                                 onClick={redo}
                                 disabled={!canRedo}
                                 title="Rehacer (Ctrl+Shift+Z)"
@@ -1178,7 +1178,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                         <DropdownMenu>
                             <DropdownMenuTrigger
                                 data-tour-id="mobile-more-menu"
-                                className="md:hidden h-8 w-8 px-0 border-0 bg-transparent text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5"
+                                className="md:hidden h-8 w-8 px-0 border-0 bg-transparent text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
                                 title="Más opciones"
                             >
                                 <MoreVertical className="w-5 h-5" />
@@ -1232,7 +1232,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                         <div className="relative">
                             {/* Ping permanente — sólo cuando el panel está cerrado */}
                             {!showConfig && (
-                                <span className="absolute inset-0 rounded-pill animate-ping bg-amber-400/20 pointer-events-none" />
+                                <span className="absolute inset-0 rounded-pill animate-ping bg-[var(--warning-500)]/20 pointer-events-none" />
                             )}
                             <Button
                                 variant="outline"
@@ -1240,8 +1240,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 data-tour-id="top-config-button"
                                 className={`eva-press relative h-8 w-8 gap-2 rounded-pill px-0 transition-all md:h-10 md:w-auto md:px-4 ${
                                     showConfig
-                                        ? 'border-amber-400/60 bg-amber-400/10 text-amber-500 dark:text-amber-400'
-                                        : 'border-amber-400/40 text-amber-500 dark:text-amber-400 hover:bg-amber-400/10 hover:border-amber-400/60 shadow-[0_0_10px_rgba(251,191,36,0.25)]'
+                                        ? 'border-[var(--warning-500)]/60 bg-[var(--warning-500)]/10 text-[var(--warning-600)]'
+                                        : 'border-[var(--warning-500)]/40 text-[var(--warning-600)] hover:bg-[var(--warning-500)]/10 hover:border-[var(--warning-500)]/60 shadow-[0_0_10px_rgba(251,191,36,0.25)]'
                                 }`}
                                 onClick={() => {
                                     setShowConfig(!showConfig)
@@ -1258,7 +1258,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest border-sky-500/30 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10"
+                                className="hidden md:flex h-10 w-auto px-3 text-xs font-bold uppercase tracking-widest border-[var(--aqua-600)]/30 text-[var(--aqua-600)] hover:bg-[var(--aqua-500)]/10"
                                 disabled={isPending}
                                 title="Copiar cambios de la plantilla base (no pisa bloques marcados Modif.)"
                                 onClick={() => {
@@ -1294,14 +1294,14 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 </div>
 
                 {showBuilderHint && (
-                    <div className="flex items-center gap-3 px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/20 animate-in slide-in-from-top-1 duration-300">
-                        <Settings className="w-4 h-4 text-amber-500 shrink-0" />
-                        <p className="flex-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                    <div className="flex items-center gap-3 px-4 py-2.5 bg-[var(--warning-500)]/10 border-b border-[var(--warning-500)]/20 animate-in slide-in-from-top-1 duration-300">
+                        <Settings className="w-4 h-4 text-[var(--warning-600)] shrink-0" />
+                        <p className="flex-1 text-xs font-medium text-[var(--warning-600)]">
                             <strong>Configura la base del programa.</strong> En <strong>Configurar</strong> defines estructura, duraci&oacute;n y fases (solo visuales).
                         </p>
                         <button
                             onClick={dismissBuilderHint}
-                            className="shrink-0 text-amber-500/60 hover:text-amber-500 text-lg leading-none"
+                            className="shrink-0 text-[var(--warning-600)]/60 hover:text-[var(--warning-600)] text-lg leading-none"
                             aria-label="Cerrar"
                         >
                             ✕
@@ -1319,16 +1319,16 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 onDragOver={handleDragOver}
                 onDragEnd={handleDragEnd}
             >
-                <div className="flex min-h-0 flex-1 overflow-hidden max-w-[2000px] w-full mx-auto relative bg-secondary/30 dark:bg-background/80">
+                <div className="flex min-h-0 flex-1 overflow-hidden max-w-[2000px] w-full mx-auto relative bg-surface-sunken/30 dark:bg-surface-app/80">
                     {/* Catalog sidebar — hidden mobile, collapsible tablet, always open desktop */}
-                    <div className={`hidden md:flex min-h-0 flex-col flex-shrink-0 border-r border-border bg-background/50 backdrop-blur-sm relative z-10 transition-all duration-300 lg:w-[350px] ${
+                    <div className={`hidden md:flex min-h-0 flex-col flex-shrink-0 border-r border-subtle bg-surface-app/50 backdrop-blur-sm relative z-10 transition-all duration-300 lg:w-[350px] ${
                         isCatalogSidebarOpen ? 'md:max-lg:w-[300px]' : 'md:max-lg:w-[48px] md:max-lg:overflow-hidden'
                     }`}>
                         {/* Toggle button — tablet only */}
-                        <div className="hidden md:max-lg:flex justify-center py-3 border-b border-border shrink-0">
+                        <div className="hidden md:max-lg:flex justify-center py-3 border-b border-subtle shrink-0">
                             <button
                                 onClick={() => setIsCatalogSidebarOpen(v => !v)}
-                                className="p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground min-w-[44px] min-h-[44px] flex items-center justify-center"
+                                className="p-2 rounded-lg hover:bg-surface-sunken transition-colors text-muted hover:text-strong min-w-[44px] min-h-[44px] flex items-center justify-center"
                                 title={isCatalogSidebarOpen ? 'Ocultar catálogo' : 'Mostrar catálogo'}
                             >
                                 <Search className="w-4 h-4" />
@@ -1343,16 +1343,16 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                         </div>
                     </div>
 
-                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/5 via-background to-background">
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/5 via-surface-app to-surface-app">
                         {/* A/B Mode bar */}
-                        <div className={`flex items-center gap-3 px-4 py-2 border-b border-border bg-background/50 flex-shrink-0 ${isMobile && isSimpleMode ? 'hidden' : ''}`}>
+                        <div className={`flex items-center gap-3 px-4 py-2 border-b border-subtle bg-surface-app/50 flex-shrink-0 ${isMobile && isSimpleMode ? 'hidden' : ''}`}>
                             <button
                                 onClick={() => setIsABMode(v => !v)}
                                 data-tour-id="ab-toggle"
                                 className={`flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg border transition-colors ${
                                     isABMode
                                         ? 'bg-primary/10 border-primary/30 text-primary'
-                                        : 'border-border text-muted-foreground hover:border-primary/30 hover:text-primary'
+                                        : 'border-subtle text-muted hover:border-primary/30 hover:text-primary'
                                 }`}
                             >
                                 <span className="font-black">A/B</span>
@@ -1360,15 +1360,15 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             </button>
 
                             {isABMode && (
-                                <div className="flex bg-muted/50 p-0.5 rounded-lg">
+                                <div className="flex bg-surface-sunken/50 p-0.5 rounded-lg">
                                     {(['A', 'B'] as const).map(v => (
                                         <button
                                             key={v}
                                             onClick={() => setActiveVariant(v)}
                                             className={`px-4 py-1 text-[11px] font-black uppercase tracking-widest rounded-md transition-colors ${
                                                 activeVariant === v
-                                                    ? 'bg-background text-foreground shadow-sm'
-                                                    : 'text-muted-foreground hover:text-foreground'
+                                                    ? 'bg-surface-app text-strong shadow-sm'
+                                                    : 'text-muted hover:text-strong'
                                             }`}
                                         >
                                             Semana {v}
@@ -1378,7 +1378,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             )}
 
                             {isABMode && (
-                                <p className="text-[9px] text-muted-foreground uppercase tracking-widest ml-auto hidden md:block">
+                                <p className="text-[9px] text-muted uppercase tracking-widest ml-auto hidden md:block">
                                     El sistema alterna A→B cada semana automáticamente
                                 </p>
                             )}
@@ -1388,14 +1388,14 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 <div className={`flex items-center gap-1 ${isABMode ? '' : 'ml-auto'}`}>
                                     <button
                                         onClick={() => scrollBoard('left')}
-                                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-subtle text-muted hover:text-strong hover:bg-surface-sunken transition-colors"
                                         title="Días anteriores"
                                     >
                                         <ChevronLeft className="w-4 h-4" />
                                     </button>
                                     <button
                                         onClick={() => scrollBoard('right')}
-                                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                        className="h-7 w-7 flex items-center justify-center rounded-lg border border-subtle text-muted hover:text-strong hover:bg-surface-sunken transition-colors"
                                         title="Días siguientes"
                                     >
                                         <ChevronRight className="w-4 h-4" />
@@ -1409,15 +1409,15 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             <div className="h-full flex flex-col">
                                 {isSimpleMode && isABMode && (
                                     <div className="flex justify-center mt-1 mb-0.5 mx-2">
-                                        <div className="flex bg-muted/50 p-0.5 rounded-md text-[9px] font-black uppercase tracking-widest">
+                                        <div className="flex bg-surface-sunken/50 p-0.5 rounded-md text-[9px] font-black uppercase tracking-widest">
                                             {(['A', 'B'] as const).map(v => (
                                                 <button
                                                     key={v}
                                                     onClick={() => setActiveVariant(v)}
                                                     className={`px-2.5 py-0.5 rounded-sm transition-colors ${
                                                         activeVariant === v
-                                                            ? 'bg-background text-foreground shadow-sm'
-                                                            : 'text-muted-foreground'
+                                                            ? 'bg-surface-app text-strong shadow-sm'
+                                                            : 'text-muted'
                                                     }`}
                                                 >
                                                     {v}
@@ -1436,16 +1436,16 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                                 key={d.id}
                                                 onClick={() => setActiveMobileDayIndex(idx)}
                                                 className={`flex-none flex flex-col items-center justify-center gap-1 min-w-[52px] h-[60px] px-2.5 rounded-xl transition-all ${
-                                                    isActive ? 'bg-foreground' : 'bg-card shadow-sm'
+                                                    isActive ? 'bg-foreground' : 'bg-surface-card shadow-sm'
                                                 }`}
                                             >
-                                                <span className={`font-display text-[13px] font-extrabold ${isActive ? 'text-background' : 'text-foreground'}`}>
+                                                <span className={`font-display text-[13px] font-extrabold ${isActive ? 'text-background' : 'text-strong'}`}>
                                                     {d.name.slice(0, 3)}
                                                 </span>
                                                 {d.is_rest ? (
-                                                    <Moon className={`w-3 h-3 ${isActive ? 'text-muted-foreground' : 'text-muted-foreground/40'}`} />
+                                                    <Moon className={`w-3 h-3 ${isActive ? 'text-muted' : 'text-[var(--text-muted)]/40'}`} />
                                                 ) : (
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${has ? (isActive ? 'bg-emerald-400' : 'bg-emerald-500') : (isActive ? 'bg-muted-foreground/50' : 'bg-muted-foreground/20')}`} />
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${has ? 'bg-[var(--success-500)]' : (isActive ? 'bg-[var(--text-muted)]/50' : 'bg-[var(--text-muted)]/20')}`} />
                                                 )}
                                             </button>
                                         )
@@ -1566,7 +1566,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 />
                             )}
                             <div
-                                className="fixed bottom-0 left-0 right-0 bg-background border-t border-border shadow-2xl z-40 select-none rounded-t-3xl overflow-hidden"
+                                className="fixed bottom-0 left-0 right-0 bg-surface-app border-t border-subtle shadow-2xl z-40 select-none rounded-t-3xl overflow-hidden"
                                 data-tour-id="exercise-sheet-handle"
                                 style={{ height: `${sheetHeight}vh`, transition: isDraggingSheet ? 'none' : 'height 0.3s cubic-bezier(0.32, 0.72, 0, 1)', paddingBottom: 'env(safe-area-inset-bottom)' }}
                             >
@@ -1580,13 +1580,13 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                         if (!isCatalogOpen) { setIsCatalogOpen(true); setSheetHeight(80) }
                                     }}
                                 >
-                                    <div className="w-10 h-1 bg-muted-foreground/25 rounded-full mb-2" />
+                                    <div className="w-10 h-1 bg-[var(--text-muted)]/25 rounded-full mb-2" />
                                     {/* Collapsed label */}
                                     {sheetHeight < 28 && (
                                         <div className="flex items-center gap-2 pb-1">
                                             <Plus className="w-3.5 h-3.5 text-primary" />
-                                            <span className="text-[11px] font-bold text-foreground">Añadir ejercicio</span>
-                                            <span className="text-[10px] text-muted-foreground ml-1">
+                                            <span className="text-[11px] font-bold text-strong">Añadir ejercicio</span>
+                                            <span className="text-[10px] text-muted ml-1">
                                                 · {days[activeMobileDayIndex]?.blocks.length || 0} en este día
                                             </span>
                                         </div>
@@ -1597,11 +1597,11 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 {sheetHeight >= 28 && sheetHeight < 60 && (
                                     <div className="flex flex-col h-[calc(100%-48px)] px-4 pb-4 gap-3">
                                         <div className="relative">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
                                             <input
                                                 type="text"
                                                 placeholder="Buscar ejercicio..."
-                                                className="w-full pl-9 pr-4 py-2.5 text-[16px] bg-muted/50 border border-border rounded-control focus:outline-none focus:border-primary"
+                                                className="w-full pl-9 pr-4 py-2.5 text-[16px] bg-surface-sunken/50 border border-subtle rounded-control focus:outline-none focus:border-primary"
                                                 onFocus={() => { setIsCatalogOpen(true); setSheetHeight(80) }}
                                             />
                                         </div>
@@ -1615,14 +1615,14 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                                         setIsCatalogOpen(true)
                                                         setSheetHeight(80)
                                                     }}
-                                                    className="flex-shrink-0 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border border-border bg-background hover:border-primary/50 transition-colors"
+                                                    className="flex-shrink-0 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border border-subtle bg-surface-app hover:border-primary/50 transition-colors"
                                                     style={{ color: getMuscleColor(m) }}
                                                 >
                                                     {m}
                                                 </button>
                                             ))}
                                         </div>
-                                        <p className="text-[10px] text-muted-foreground text-center">
+                                        <p className="text-[10px] text-muted text-center">
                                             Toca un grupo muscular para ver todos los ejercicios
                                         </p>
                                     </div>
@@ -1657,15 +1657,15 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 onClick={() => setIsCatalogOpen(false)}
                             />
                             <div
-                                className="fixed bottom-0 left-0 right-0 bg-background border-t border-border shadow-2xl z-40 select-none rounded-t-3xl overflow-hidden animate-in slide-in-from-bottom"
+                                className="fixed bottom-0 left-0 right-0 bg-surface-app border-t border-subtle shadow-2xl z-40 select-none rounded-t-3xl overflow-hidden animate-in slide-in-from-bottom"
                                 style={{ height: '80vh', paddingBottom: 'env(safe-area-inset-bottom)' }}
                             >
-                                <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-border">
-                                    <span className="text-[11px] font-bold uppercase tracking-widest text-foreground">Añadir ejercicio</span>
+                                <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-subtle">
+                                    <span className="text-[11px] font-bold uppercase tracking-widest text-strong">Añadir ejercicio</span>
                                     <button
                                         type="button"
                                         onClick={() => setIsCatalogOpen(false)}
-                                        className="h-9 w-9 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                        className="h-9 w-9 flex items-center justify-center rounded-full text-muted hover:text-strong hover:bg-surface-sunken transition-colors"
                                         aria-label="Cerrar catálogo"
                                     >
                                         <span className="text-xl leading-none">×</span>
@@ -1705,7 +1705,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                     type="button"
                                     onClick={() => setIsCatalogOpen(true)}
                                     aria-label="Añadir ejercicio"
-                                    className="w-14 h-14 rounded-full bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-white shadow-xl flex items-center justify-center transition-colors"
+                                    className="w-14 h-14 rounded-full bg-[var(--success-500)] hover:bg-[var(--success-600)] active:bg-[var(--success-700)] text-white shadow-xl flex items-center justify-center transition-colors"
                                     style={{ boxShadow: '0 4px 24px rgba(16,185,129,0.45)' }}
                                 >
                                     <Plus className="w-6 h-6" strokeWidth={3} />
@@ -1721,7 +1721,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                     title={isSimpleMode ? 'Modo normal' : 'Modo simple'}
                                     className={`relative flex items-center justify-center transition-all active:scale-95 ${
                                         isSimpleMode
-                                            ? 'w-12 h-12 rounded-full bg-background/90 border border-border/80 text-muted-foreground hover:bg-muted backdrop-blur-sm shadow-lg'
+                                            ? 'w-12 h-12 rounded-full bg-surface-app/90 border border-[var(--border-subtle)]/80 text-muted hover:bg-surface-sunken backdrop-blur-sm shadow-lg'
                                             : 'w-12 h-12 rounded-2xl text-white shadow-2xl'
                                     }`}
                                     style={!isSimpleMode ? {
@@ -1731,7 +1731,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 >
                                     <Sparkles className="w-5 h-5" />
                                     {!isSimpleMode && (
-                                        <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] font-black uppercase tracking-[0.18em] text-emerald-400 animate-nuevo-glow pointer-events-none select-none">
+                                        <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] font-black uppercase tracking-[0.18em] text-[var(--success-500)] animate-nuevo-glow pointer-events-none select-none">
                                             NUEVO
                                         </span>
                                     )}
