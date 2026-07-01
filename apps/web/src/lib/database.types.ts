@@ -554,6 +554,7 @@ export type Database = {
           id: string
           injuries: string | null
           medical_conditions: string | null
+          sex: string | null
           updated_at: string
           weight_kg: number
         }
@@ -567,6 +568,7 @@ export type Database = {
           id?: string
           injuries?: string | null
           medical_conditions?: string | null
+          sex?: string | null
           updated_at?: string
           weight_kg: number
         }
@@ -580,6 +582,7 @@ export type Database = {
           id?: string
           injuries?: string | null
           medical_conditions?: string | null
+          sex?: string | null
           updated_at?: string
           weight_kg?: number
         }
