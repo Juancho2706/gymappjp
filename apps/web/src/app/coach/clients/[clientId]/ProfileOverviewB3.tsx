@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
@@ -20,6 +20,10 @@ import {
     HeartPulse,
     PersonStanding,
     PencilLine,
+    Droplet,
+    Footprints,
+    Moon,
+    ChevronDown,
 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -42,6 +46,7 @@ import {
 } from './profileOverviewUtils'
 import { ProfileProgramSummaryCard } from './ProfileProgramSummaryCard'
 import { ProfileCheckInSnapshot } from './ProfileCheckInSnapshot'
+import type { DailyHabitRow, DailyHabitsSummary } from './profileDataHelpers'
 import { subDays } from 'date-fns'
 
 type ComplianceShape = {
@@ -98,6 +103,10 @@ type ProfileOverviewB3Props = {
     onViewProgress?: () => void
     /** Navega a la pestaña Programa (card de programa clickeable). */
     onOpenProgram?: () => void
+    /** Resumen de hábitos diarios (agua/pasos/sueño/ayuno) — hoy + prom. 7d. */
+    dailyHabitsSummary?: DailyHabitsSummary
+    /** Filas crudas de hábitos (ventana 7d, DESC) — alimenta el detalle expandible. */
+    dailyHabits?: DailyHabitRow[]
 }
 
 const ringSize = 84
@@ -134,6 +143,8 @@ export function ProfileOverviewB3({
     onViewNutrition,
     onViewProgress,
     onOpenProgram,
+    dailyHabitsSummary,
+    dailyHabits,
 }: ProfileOverviewB3Props) {
     const calendarData = useMemo(
         () => buildProfileActivityCalendarData(workoutHistory, checkIns, 371),
@@ -325,6 +336,9 @@ export function ProfileOverviewB3({
                     </motion.div>
                 ))}
             </div>
+
+            {/* ===== Hábitos diarios (mini-widget · cosecha Fase 0) ===== */}
+            <HabitsMiniWidget summary={dailyHabitsSummary} rows={dailyHabits} />
 
             {/* ===== Programa ===== */}
             <div>
@@ -575,5 +589,207 @@ function ComplianceRing({
                 ) : null}
             </div>
         </Wrapper>
+    )
+}
+
+// ── Formateadores de hábitos (unidades explícitas · null-safe) ──
+function fmtWaterL(ml: number | null | undefined): string | null {
+    if (ml == null) return null
+    const l = ml / 1000
+    return `${Number.isInteger(l) ? l : l.toFixed(1)} L`
+}
+function fmtSteps(steps: number | null | undefined): string | null {
+    if (steps == null) return null
+    return `${Math.round(steps).toLocaleString('es-CL')}`
+}
+function fmtHours(h: number | null | undefined): string | null {
+    if (h == null) return null
+    return `${Number.isInteger(h) ? h : h.toFixed(1)} h`
+}
+/** Parseo local de `log_date` (YYYY-MM-DD) para evitar corrimiento de día por TZ. */
+function fmtHabitDate(logDate: string): string {
+    const [y, m, d] = logDate.split('-').map(Number)
+    if (!y || !m || !d) return logDate
+    return new Date(y, m - 1, d).toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: 'short',
+    })
+}
+
+/**
+ * Mini-widget de hábitos diarios en el Resumen del coach.
+ * Fila compacta con los valores de HOY (agua/pasos/sueño) — solo los que tienen
+ * dato — y detalle expandible de la ventana de 7 días (incluye ayuno + suplementos).
+ * Progressive disclosure: la densidad vive dentro del <details>, no en la fila.
+ * Theme-aware (tokens semánticos), degrada con gracia sin registro.
+ */
+function HabitsMiniWidget({
+    summary,
+    rows,
+}: {
+    summary?: DailyHabitsSummary
+    rows?: DailyHabitRow[]
+}) {
+    const [open, setOpen] = useState(false)
+
+    // Sin datos en la ventana → omitir el widget (no ensuciar el overview).
+    if (!summary || summary.daysLogged === 0) return null
+
+    const { today, avg, daysLogged } = summary
+    const hasToday = today != null
+
+    const cells: {
+        icon: typeof Droplet
+        label: string
+        todayValue: string | null
+        avgValue: string | null
+    }[] = [
+        {
+            icon: Droplet,
+            label: 'Agua',
+            todayValue: fmtWaterL(today?.water_ml),
+            avgValue: fmtWaterL(avg.water_ml),
+        },
+        {
+            icon: Footprints,
+            label: 'Pasos',
+            todayValue: fmtSteps(today?.steps),
+            avgValue: fmtSteps(avg.steps),
+        },
+        {
+            icon: Moon,
+            label: 'Sueño',
+            todayValue: fmtHours(today?.sleep_hours),
+            avgValue: fmtHours(avg.sleep_hours),
+        },
+    ]
+
+    const anyTodayValue = cells.some((c) => c.todayValue != null)
+    const detailRows = (rows ?? []).slice(0, 7)
+    const canExpand = detailRows.length > 0
+
+    return (
+        <Card padding="md">
+            <div className="mb-3 flex items-center justify-between gap-2">
+                <SectionTitle icon={Droplet}>Hábitos diarios</SectionTitle>
+                <span className="text-[10px] font-medium uppercase tracking-widest text-subtle">
+                    {hasToday && anyTodayValue ? 'Hoy' : 'prom. 7d'}
+                </span>
+            </div>
+
+            {/* Fila compacta — solo hábitos con dato hoy (o promedios como fallback). */}
+            <div className="grid grid-cols-3 gap-2">
+                {cells.map((c) => {
+                    const showToday = hasToday && c.todayValue != null
+                    const main = showToday ? c.todayValue : c.avgValue
+                    return (
+                        <div
+                            key={c.label}
+                            className="flex flex-col items-center gap-1 rounded-control border border-subtle bg-surface-sunken px-1 py-2.5 text-center"
+                        >
+                            <c.icon className="h-4 w-4 text-sport-600" />
+                            <p className="font-display text-base font-black leading-none text-strong tabular-nums">
+                                {main ?? '—'}
+                            </p>
+                            <p className="text-[9px] font-medium uppercase tracking-widest text-muted">
+                                {c.label}
+                                {!showToday && main != null ? ' · prom.' : ''}
+                            </p>
+                        </div>
+                    )
+                })}
+            </div>
+
+            {/* Hint cuando no hay registro de HOY → el coach ve promedios, no ceros. */}
+            {(!hasToday || !anyTodayValue) && (
+                <p className="mt-2 text-[10.5px] font-medium text-muted">
+                    Sin registro hoy · mostrando promedio de {daysLogged} día
+                    {daysLogged === 1 ? '' : 's'} con datos (7d)
+                </p>
+            )}
+
+            {/* Suplementos declarados hoy (si los hay) */}
+            {hasToday && today?.supplements && today.supplements.length > 0 && (
+                <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-subtle">
+                        Suplementos
+                    </span>
+                    {today.supplements.map((s, i) => (
+                        <span
+                            key={`${s}-${i}`}
+                            className="rounded-[var(--radius-xs)] bg-surface-sunken px-2 py-0.5 text-[10px] font-medium text-muted"
+                        >
+                            {s}
+                        </span>
+                    ))}
+                </div>
+            )}
+
+            {/* Detalle 7 días — progressive disclosure */}
+            {canExpand && (
+                <>
+                    <button
+                        type="button"
+                        onClick={() => setOpen((v) => !v)}
+                        aria-expanded={open}
+                        className="mt-3 flex w-full items-center justify-center gap-1 rounded-control py-1.5 text-[10px] font-black uppercase tracking-widest text-sport-600 transition-colors hover:bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
+                    >
+                        {open ? 'Ocultar' : 'Ver 7 días'}
+                        <ChevronDown
+                            className={cn(
+                                'h-3.5 w-3.5 transition-transform',
+                                open && 'rotate-180'
+                            )}
+                        />
+                    </button>
+
+                    {open && (
+                        <div className="mt-2 overflow-hidden rounded-control border border-subtle">
+                            <table className="w-full text-[11px]">
+                                <thead>
+                                    <tr className="bg-surface-sunken text-[9px] uppercase tracking-widest text-subtle">
+                                        <th className="px-2 py-1.5 text-left font-bold">Día</th>
+                                        <th className="px-2 py-1.5 text-right font-bold">Agua</th>
+                                        <th className="px-2 py-1.5 text-right font-bold">Pasos</th>
+                                        <th className="px-2 py-1.5 text-right font-bold">Sueño</th>
+                                        <th className="px-2 py-1.5 text-right font-bold">Ayuno</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {detailRows.map((r) => (
+                                        <tr
+                                            key={r.log_date}
+                                            className="border-t border-subtle text-body"
+                                        >
+                                            <td className="px-2 py-1.5 text-left font-medium text-muted">
+                                                {fmtHabitDate(r.log_date)}
+                                            </td>
+                                            <td className="px-2 py-1.5 text-right tabular-nums text-strong">
+                                                {fmtWaterL(r.water_ml) ?? '—'}
+                                            </td>
+                                            <td className="px-2 py-1.5 text-right tabular-nums text-strong">
+                                                {fmtSteps(r.steps) ?? '—'}
+                                            </td>
+                                            <td className="px-2 py-1.5 text-right tabular-nums text-strong">
+                                                {fmtHours(r.sleep_hours) ?? '—'}
+                                            </td>
+                                            <td className="px-2 py-1.5 text-right tabular-nums text-strong">
+                                                {fmtHours(r.fasting_hours) ?? '—'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </>
+            )}
+
+            {/* Explicabilidad inline */}
+            <p className="mt-3 text-[9.5px] leading-relaxed text-subtle">
+                prom. 7d = promedio de los días CON registro. Ayuno = horas de ayuno
+                declaradas por el alumno.
+            </p>
+        </Card>
     )
 }

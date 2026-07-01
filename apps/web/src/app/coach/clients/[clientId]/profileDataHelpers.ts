@@ -117,3 +117,94 @@ export function mapMuscleVolumeRpc(rows: MuscleVolumeRpcRow[] | null): MuscleVol
         .filter((r) => r.volume > 0)
         .sort((a, b) => b.volume - a.volume)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cosecha de datos del alumno (fase render) — helpers PUROS. No tocan Supabase.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Fila cruda de `daily_habits` (subset que trae el loader de la ficha). */
+export type DailyHabitRow = {
+    log_date: string
+    water_ml: number | null
+    steps: number | null
+    sleep_hours: number | null
+    fasting_hours: number | null
+    supplements: string[] | null
+    notes: string | null
+}
+
+/** Resumen de hábitos: valores de HOY + promedios de los días CON registro en la ventana. */
+export type DailyHabitsSummary = {
+    /** Fila de hoy (si el alumno registró hoy), o null. */
+    today: DailyHabitRow | null
+    /** Nº de días con al menos un hábito registrado en la ventana (denominador de los promedios). */
+    daysLogged: number
+    /** Promedios sobre los días con dato (null si ningún día tiene ese hábito). */
+    avg: {
+        water_ml: number | null
+        steps: number | null
+        sleep_hours: number | null
+        fasting_hours: number | null
+    }
+}
+
+const _avgOf = (nums: number[]): number | null =>
+    nums.length ? Math.round((nums.reduce((s, n) => s + n, 0) / nums.length) * 10) / 10 : null
+
+/**
+ * Resume las filas de `daily_habits` (ventana 7d) en el mini-widget del Resumen.
+ * Promedia SOLO los días donde el hábito tiene valor (no cuenta null como 0).
+ */
+export function summarizeDailyHabits(
+    rows: DailyHabitRow[] | null | undefined,
+    todayIso: string
+): DailyHabitsSummary {
+    const list = rows ?? []
+    const pick = (k: 'water_ml' | 'steps' | 'sleep_hours' | 'fasting_hours') =>
+        _avgOf(list.map((r) => r[k]).filter((v): v is number => typeof v === 'number'))
+    const daysLogged = list.filter(
+        (r) =>
+            r.water_ml != null ||
+            r.steps != null ||
+            r.sleep_hours != null ||
+            r.fasting_hours != null ||
+            (r.supplements?.length ?? 0) > 0
+    ).length
+    return {
+        today: list.find((r) => r.log_date === todayIso) ?? null,
+        daysLogged,
+        avg: {
+            water_ml: pick('water_ml'),
+            steps: pick('steps'),
+            sleep_hours: pick('sleep_hours'),
+            fasting_hours: pick('fasting_hours'),
+        },
+    }
+}
+
+/**
+ * Porción realmente consumida (0-100) de un meal log. `consumed_quantity` es un
+ * porcentaje explícito; ausencia/null en una comida COMPLETADA = 100% (modo binario).
+ * Devuelve null si la comida no está completada (no se consumió nada medible).
+ */
+export function mealConsumedPct(mealLog: {
+    is_completed?: boolean | null
+    consumed_quantity?: number | null
+}): number | null {
+    if (!mealLog.is_completed) return null
+    const n = mealLog.consumed_quantity
+    if (n == null || Number.isNaN(Number(n))) return 100
+    return Math.min(100, Math.max(0, Math.round(Number(n))))
+}
+
+/** Promedio de satisfacción (1-5) sobre los meal logs que tienen score. null si ninguno. */
+export function avgSatisfaction(
+    mealLogs: ReadonlyArray<{ satisfaction_score?: number | null }> | null | undefined
+): number | null {
+    const scores = (mealLogs ?? [])
+        .map((m) => m.satisfaction_score)
+        .filter((v): v is number => typeof v === 'number' && v > 0)
+    return scores.length
+        ? Math.round((scores.reduce((s, n) => s + n, 0) / scores.length) * 10) / 10
+        : null
+}

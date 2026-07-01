@@ -589,8 +589,28 @@ export function TrainingTabB4Panels({
     )
 }
 
-// ── Sub-componente: vista de sesión de entrenamiento (solo lectura, dark) ─────
+// ── Sub-componente: vista de sesión de entrenamiento (solo lectura, theme-aware) ─
 type WorkoutLog = Awaited<ReturnType<typeof getClientWorkoutForDate>>[number]
+
+/** Traduce el modo de progresión del bloque a etiqueta legible + valor. */
+function progressionLabel(mode?: string | null, value?: number | null): string | null {
+    switch (mode) {
+        case 'weekly_linear':
+            return value != null ? `Lineal +${value}/sem` : 'Lineal'
+        case 'double':
+            return 'Doble progresión'
+        default:
+            return null
+    }
+}
+
+/** Peso prescrito para la serie: preferir el congelado al momento del log, fallback al bloque. */
+function targetWeightForSet(s: WorkoutLog): number | null {
+    const frozen = (s as any).target_weight_at_log as number | null | undefined
+    if (frozen != null) return frozen
+    const blockTarget = (s as any).workout_blocks?.target_weight_kg as number | null | undefined
+    return blockTarget ?? null
+}
 
 function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
     const byExercise = new Map<string, { name: string; muscle: string; sets: WorkoutLog[] }>()
@@ -625,29 +645,91 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
             <div className="space-y-3">
                 {exercises.map(({ name, muscle, sets }) => {
                     const sortedSets = [...sets].sort((a, b) => (a.set_number ?? 0) - (b.set_number ?? 0))
+                    // Prescripción/progresión: propiedad del BLOQUE → leer una sola vez por ejercicio.
+                    const block = (sortedSets[0] as any)?.workout_blocks
+                    const prog = progressionLabel(block?.progression_mode, block?.progression_value)
+                    const metaWeight = block?.target_weight_kg as number | null | undefined
+                    const metaReps = block?.reps as string | null | undefined
+                    const metaSets = block?.sets as number | null | undefined
+                    const metaRir = block?.rir as string | null | undefined
+                    const metaTempo = block?.tempo as string | null | undefined
+                    const metaParts = [
+                        metaWeight != null ? `${metaWeight}kg` : null,
+                        metaReps ? `×${metaReps}` : null,
+                        metaSets != null ? `· ${metaSets} series` : null,
+                        metaRir ? `· RIR ${metaRir}` : null,
+                        metaTempo ? `· tempo ${metaTempo}` : null,
+                    ].filter(Boolean)
                     return (
                         <div key={name}>
-                            <div className="mb-1.5 flex items-center gap-2">
+                            <div className="mb-1 flex items-center gap-2">
                                 <span className="text-[13px] font-bold text-strong">{name}</span>
                                 {muscle && <span className="text-[11px] text-muted">{muscle}</span>}
                             </div>
+                            {/* Micro-línea de prescripción + progresión (una vez por ejercicio) */}
+                            {(metaParts.length > 0 || prog) && (
+                                <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[10.5px]">
+                                    {metaParts.length > 0 && (
+                                        <span className="text-muted">
+                                            <span className="uppercase tracking-widest text-[9px]">Meta</span>{' '}
+                                            {metaParts.join(' ')}
+                                        </span>
+                                    )}
+                                    {prog && (
+                                        <span className="rounded-[var(--radius-xs)] border border-subtle bg-surface-sunken px-1.5 py-[1px] text-muted">
+                                            {prog}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
                             <div className="flex flex-wrap gap-1.5">
-                                {sortedSets.map((s, si) => (
-                                    <span
-                                        key={si}
-                                        className="rounded-[var(--radius-xs)] bg-surface-sunken px-1.5 py-[3px] text-[11.5px] text-strong"
-                                        style={{ fontFamily: 'var(--font-mono)' }}
-                                    >
-                                        {(s.set_number ?? si + 1)}: {s.weight_kg ? `${s.weight_kg}kg` : 'PC'} ×{' '}
-                                        {s.reps_done ?? '—'}
-                                        {s.rpe != null ? ` · RPE ${s.rpe}` : ''}
-                                    </span>
-                                ))}
+                                {sortedSets.map((s, si) => {
+                                    const target = targetWeightForSet(s)
+                                    const done = s.weight_kg
+                                    const cmp =
+                                        target != null && done != null
+                                            ? done > target
+                                                ? 'over'
+                                                : done < target
+                                                  ? 'under'
+                                                  : 'eq'
+                                            : null
+                                    const weightClass =
+                                        cmp === 'over'
+                                            ? 'text-[var(--success-600)]'
+                                            : cmp === 'under'
+                                              ? 'text-[var(--warning-600)]'
+                                              : 'text-strong'
+                                    return (
+                                        <span
+                                            key={si}
+                                            className="rounded-[var(--radius-xs)] border border-subtle bg-surface-sunken px-1.5 py-[3px] text-[11.5px] text-strong"
+                                            style={{ fontFamily: 'var(--font-mono)' }}
+                                        >
+                                            {s.set_number ?? si + 1}:{' '}
+                                            <span className={cmp ? weightClass : undefined}>
+                                                {done != null ? `${done}kg` : 'PC'}
+                                            </span>{' '}
+                                            × {s.reps_done ?? '—'}
+                                            {s.rpe != null ? ` · RPE ${s.rpe}` : ''}
+                                            {s.rir != null ? ` · RIR ${s.rir}` : ''}
+                                        </span>
+                                    )
+                                })}
                             </div>
                         </div>
                     )
                 })}
             </div>
+
+            {/* Explicabilidad inline: leyenda de la jerga */}
+            <p className="mt-2.5 border-t border-subtle pt-2 text-[10px] leading-relaxed text-muted">
+                <span className="text-strong">Meta</span> = prescrito · color del peso: los que{' '}
+                <span className="text-[var(--success-600)]">superan</span> /{' '}
+                <span className="text-[var(--warning-600)]">no alcanzan</span> la meta.{' '}
+                <span className="text-strong">RPE</span> = esfuerzo percibido 6-10 (10 = al fallo).{' '}
+                <span className="text-strong">RIR</span> = reps en reserva (0 = al fallo).
+            </p>
         </Card>
     )
 }

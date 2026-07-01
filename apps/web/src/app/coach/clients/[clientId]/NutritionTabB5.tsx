@@ -53,6 +53,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner'
 import { getClientNutritionForDate, getClientNutritionActivityDates, getClientHabitsForDate } from './_actions/client-detail.actions'
 import { calculateFoodItemMacros } from '@/lib/nutrition-utils'
+import { mealConsumedPct, avgSatisfaction } from './profileDataHelpers'
 import { duplicatePlanToClient, getCoachClientsLite } from '@/app/coach/nutrition-plans/_actions/nutrition-coach.actions'
 import { deriveNutritionCoachAlerts } from '@/lib/nutrition-coach-alerts'
 import { NutritionCoachAlertsPanel } from './NutritionCoachAlertsPanel'
@@ -1598,6 +1599,9 @@ function NutritionDayReadOnly({ log }: { log: NutritionDayLog }) {
     (a, b) => (a.nutrition_meals?.order_index ?? 0) - (b.nutrition_meals?.order_index ?? 0)
   )
 
+  // Satisfacción promedio del día (1-5), solo comidas con score declarado por el alumno
+  const dayAvgSat = avgSatisfaction(mealLogs)
+
   return (
     <div className="space-y-4">
       {/* Resumen macros del día */}
@@ -1616,6 +1620,23 @@ function NutritionDayReadOnly({ log }: { log: NutritionDayLog }) {
           </div>
         ))}
       </div>
+      {/* Satisfacción promedio del día (declarada por el alumno, 1-5) */}
+      {dayAvgSat != null && (
+        <div className="flex items-center justify-between rounded-control border border-subtle bg-surface-card px-3 py-2">
+          <div className="flex items-center gap-1.5">
+            <Heart className="h-3.5 w-3.5 text-sport-600" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted">
+              Satisfacción prom.
+            </span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="font-display text-sm font-black tabular-nums text-strong">
+              {dayAvgSat}<span className="text-[10px] font-bold text-muted">/5</span>
+            </span>
+            <span className="text-[9px] text-muted">satisfacción declarada por el alumno, 1-5</span>
+          </div>
+        </div>
+      )}
       {/* Lista de comidas */}
       <div className="space-y-2">
         {sortedMeals.map((ml: any) => {
@@ -1632,14 +1653,29 @@ function NutritionDayReadOnly({ log }: { log: NutritionDayLog }) {
                   : 'border-subtle bg-surface-sunken opacity-70'
               )}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-black uppercase tracking-widest text-strong">{meal.name}</p>
-                <span
-                  className="text-[10px] font-bold"
-                  style={{ color: ml.is_completed ? 'var(--success-600)' : 'var(--text-muted)' }}
-                >
-                  {ml.is_completed ? 'Completada' : 'No completada'}
-                </span>
+                {(() => {
+                  const pct = mealConsumedPct(ml)
+                  if (pct == null) {
+                    // No completada: mantener el estado binario existente
+                    return (
+                      <span className="text-[10px] font-bold" style={{ color: 'var(--text-muted)' }}>
+                        No completada
+                      </span>
+                    )
+                  }
+                  const partial = pct < 100
+                  return (
+                    <span
+                      title="porción consumida (% de lo prescrito)"
+                      className="shrink-0 rounded-[var(--radius-xs)] border border-subtle bg-surface-sunken px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+                      style={{ color: partial ? 'var(--warning-600)' : 'var(--success-600)' }}
+                    >
+                      {partial ? `Comió ${pct}%` : 'Completa 100%'}
+                    </span>
+                  )
+                })()}
               </div>
               {(meal.food_items ?? []).length > 0 && (
                 <ul className="space-y-0.5">

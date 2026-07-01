@@ -30,6 +30,8 @@ import {
 import {
     mapExercisePrsRpc,
     mapMuscleVolumeRpc,
+    summarizeDailyHabits,
+    type DailyHabitRow,
 } from '@/app/coach/clients/[clientId]/profileDataHelpers'
 import { checkInRegularityPercentAsOf } from '@/app/coach/clients/[clientId]/profileOverviewUtils'
 import {
@@ -151,7 +153,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
         .select(`
             *,
             nutrition_meal_logs (
-                id, meal_id, is_completed, consumed_quantity,
+                id, meal_id, is_completed, consumed_quantity, satisfaction_score,
                 nutrition_meals ( name, order_index, day_of_week )
             )
         `)
@@ -623,10 +625,16 @@ export const getClientProfileData = cache(async (clientId: string) => {
         checkInCompliancePercentWeekAgo,
     }
 
+    // Hábitos diarios (agua/pasos/sueño/ayuno/suplementos) — ventana 7d inclusive hoy.
+    // El coach lee daily_habits por RLS (policy "coach read client habits"). Aditivo:
+    // alimenta el mini-widget de hábitos del Resumen (data.dailyHabits / dailyHabitsSummary).
+    const habitsFromIso = format(subDays(parseISO(`${todayIso}T12:00:00`), 6), 'yyyy-MM-dd')
+
     const [
         { data: favoritePrefsRows },
         { data: nutritionPlanCyclesRows },
         { data: nutritionTemplatesLiteRows },
+        { data: dailyHabitsRows },
     ] = await Promise.all([
         supabase
             .from('client_food_preferences')
@@ -645,7 +653,16 @@ export const getClientProfileData = cache(async (clientId: string) => {
             .select('id, name')
             .eq('coach_id', user.id)
             .order('name', { ascending: true }),
+        supabase
+            .from('daily_habits')
+            .select('log_date, water_ml, steps, sleep_hours, fasting_hours, supplements, notes')
+            .eq('client_id', clientId)
+            .gte('log_date', habitsFromIso)
+            .order('log_date', { ascending: false }),
     ])
+
+    const dailyHabits = (dailyHabitsRows ?? []) as DailyHabitRow[]
+    const dailyHabitsSummary = summarizeDailyHabits(dailyHabits, todayIso)
 
     const clientFavoriteFoods = (favoritePrefsRows ?? []).map((row: { food_id: string; foods?: { name?: string | null } | null }) => ({
         id: row.food_id,
@@ -691,6 +708,9 @@ export const getClientProfileData = cache(async (clientId: string) => {
         nutritionPlanCycles: nutritionPlanCyclesRows ?? [],
         nutritionTemplatesLite: nutritionTemplatesLiteRows ?? [],
         nutritionPlanHistoryEntries,
+        // Cosecha aditiva (fase render): hábitos 7d para el mini-widget del Resumen.
+        dailyHabits,
+        dailyHabitsSummary,
     }
 })
 
@@ -790,7 +810,7 @@ export async function getClientNutritionForDate(clientId: string, date: string) 
                 swapped_food:foods!nutrition_meal_food_swaps_swapped_food_id_fkey ( id, name )
             ),
             nutrition_meal_logs (
-                id, is_completed,
+                id, is_completed, consumed_quantity, satisfaction_score,
                 nutrition_meals (
                     id, name, order_index, day_of_week,
                     food_items (
@@ -820,9 +840,11 @@ export async function getClientWorkoutForDate(clientId: string, date: string) {
     const { data } = await supabase
         .from('workout_logs')
         .select(`
-            set_number, weight_kg, reps_done, rpe, logged_at,
+            set_number, weight_kg, reps_done, rpe, rir, logged_at,
+            target_weight_at_log, target_reps_at_log,
             workout_blocks!inner (
-                section, order_index,
+                section, order_index, target_weight_kg, reps, sets, rir,
+                progression_mode, progression_type, progression_value, tempo,
                 exercises (name, muscle_group),
                 workout_plans (title, day_of_week)
             )

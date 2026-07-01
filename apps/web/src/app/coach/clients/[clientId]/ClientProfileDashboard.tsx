@@ -401,6 +401,8 @@ export function ClientProfileDashboard({
                             initialHeightCm={client.client_intake?.height_cm ?? null}
                             initialWeightKg={client.client_intake?.weight_kg ?? null}
                             moduleFlags={moduleFlags}
+                            dailyHabitsSummary={data.dailyHabitsSummary}
+                            dailyHabits={data.dailyHabits}
                             onViewNutrition={goToNutritionProgress}
                             onViewProgress={goToProgressHistory}
                             onOpenProgram={() => handleTabChange('program')}
