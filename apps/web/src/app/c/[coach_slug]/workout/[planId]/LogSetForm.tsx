@@ -77,9 +77,8 @@ function StrengthLogSetForm({
     const reducedMotion = useReducedMotion()
     const weightRef = useRef<HTMLInputElement>(null)
     const repsRef = useRef<HTMLInputElement>(null)
+    const rpeRef = useRef<HTMLInputElement>(null)
     const formRef = useRef<HTMLFormElement>(null)
-    const [rpeLocal, setRpeLocal] = useState<number | null>(existingLog?.rpe ?? null)
-    const [rpeDraft, setRpeDraft] = useState(8)
     const [rirLocal, setRirLocal] = useState<number | null>(existingLog?.rir ?? null)
     const [rirDraft, setRirDraft] = useState(2)
 
@@ -138,9 +137,11 @@ function StrengthLogSetForm({
     // Always show metrics panel once set is logged
     const showMetrics = isLogged
 
-    const submitMetricsUpdate = (rpe: number | null, rir: number | null) => {
+    const submitMetricsUpdate = (rir: number | null) => {
         const w = weightRef.current?.value
         const r = repsRef.current?.value
+        const rpeStr = rpeRef.current?.value
+        const rpe = rpeStr != null && rpeStr !== '' ? Number(rpeStr) : null
         const fd = new FormData()
         fd.set('block_id', blockId)
         fd.set('set_number', String(setNumber))
@@ -169,7 +170,7 @@ function StrengthLogSetForm({
                 key={existingLog ? `log-${existingLog.weight_kg}-${existingLog.reps_done}` : 'new'}
                 ref={formRef}
                 action={handleSubmit}
-                className="grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 items-center px-1.5 md:px-2 py-1.5"
+                className="grid grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_3.5rem_auto] gap-2 items-center px-1.5 md:px-2 py-1.5"
             >
                 <input type="hidden" name="block_id" value={blockId} />
                 <input type="hidden" name="set_number" value={setNumber} />
@@ -205,10 +206,23 @@ function StrengthLogSetForm({
                 ${isLogged ? 'text-primary border-primary/40 focus:border-primary focus:ring-primary' : 'text-on-dark border-[var(--border-inverse)] focus:border-primary focus:ring-primary'}`}
                 />
 
-                {/* Hidden inputs carry current RPE/RIR on main form submit */}
-                {(rpeLocal != null) && (
-                    <input type="hidden" name="rpe" value={rpeLocal} />
-                )}
+                {/* RPE inline (CD): esfuerzo percibido por serie; viaja con el submit principal */}
+                <input
+                    ref={rpeRef}
+                    name="rpe"
+                    type="number"
+                    min="6"
+                    max="10"
+                    step="1"
+                    inputMode="numeric"
+                    defaultValue={existingLog?.rpe ?? ''}
+                    placeholder="rpe"
+                    aria-label="RPE (esfuerzo percibido, 6-10)"
+                    className={`h-11 md:h-9 px-1 text-center text-xs md:text-sm font-semibold font-mono rounded-control bg-white/[0.06] border transition-colors focus:outline-none focus:ring-1 placeholder:text-[10px] placeholder:font-normal
+                ${isLogged ? 'text-primary border-primary/40 focus:border-primary focus:ring-primary' : 'text-on-dark border-[var(--border-inverse)] focus:border-primary focus:ring-primary'}`}
+                />
+
+                {/* RIR sigue en el panel colapsable post-log (hidden carrier) */}
                 {(rirLocal != null) && (
                     <input type="hidden" name="rir" value={rirLocal} />
                 )}
@@ -245,36 +259,9 @@ function StrengthLogSetForm({
                         transition={reducedMotion ? { duration: 0 } : { duration: 0.25 }}
                         className="overflow-hidden px-2 pb-2 space-y-2"
                     >
-                        {/* RPE slider */}
+                        {/* RIR slider (opcional; el RPE ahora es columna inline en la fila) */}
                         <div>
                             <div className="text-[10px] font-semibold text-on-dark-muted mb-1 mt-1 flex items-center gap-1">
-                                <span>RPE {rpeLocal != null ? `· ${rpeLocal}` : '(opcional)'}</span>
-                                <InfoTooltip content={t('tooltip.rpe')} />
-                            </div>
-                            <input
-                                type="range"
-                                min={6}
-                                max={10}
-                                step={1}
-                                value={rpeDraft}
-                                className="w-full accent-[var(--theme-primary)]"
-                                aria-label="RPE"
-                                onChange={(e) => setRpeDraft(Number(e.target.value))}
-                                onPointerUp={(e) => {
-                                    const val = Number((e.currentTarget as HTMLInputElement).value)
-                                    setRpeLocal(val)
-                                    submitMetricsUpdate(val, rirLocal)
-                                }}
-                            />
-                            <div className="flex justify-between text-[10px] text-on-dark-muted">
-                                <span>6</span>
-                                <span>10</span>
-                            </div>
-                        </div>
-
-                        {/* RIR slider */}
-                        <div>
-                            <div className="text-[10px] font-semibold text-on-dark-muted mb-1 flex items-center gap-1">
                                 <span>RIR {rirLocal != null ? `· ${rirLocal}` : '(opcional)'}</span>
                                 <InfoTooltip content={t('tooltip.rir')} />
                             </div>
@@ -290,7 +277,7 @@ function StrengthLogSetForm({
                                 onPointerUp={(e) => {
                                     const val = Number((e.currentTarget as HTMLInputElement).value)
                                     setRirLocal(val)
-                                    submitMetricsUpdate(rpeLocal, val)
+                                    submitMetricsUpdate(val)
                                 }}
                             />
                             <div className="flex justify-between text-[10px] text-on-dark-muted">
@@ -575,12 +562,12 @@ function SubmitSetButton({ isLogged }: { isLogged: boolean }) {
     return (
         <button
             type="submit"
-            className={`w-11 h-11 md:w-7 md:h-7 rounded-control flex items-center justify-center transition-all shadow-sm
-            ${isLogged ? 'bg-primary/20 text-primary' : 'bg-white/10 text-on-dark-muted hover:bg-primary hover:text-primary-foreground'}`}
+            className={`w-11 h-11 md:w-8 md:h-8 rounded-full border-2 flex items-center justify-center transition-all shrink-0
+            ${isLogged ? 'bg-[var(--sport-500)] border-[var(--sport-500)] text-white' : 'border-white/25 text-on-dark-muted hover:border-[var(--sport-500)] hover:text-[var(--sport-500)]'}`}
             title={pending ? 'Guardando set...' : isLogged ? 'Set guardado · toca para editar' : 'Guardar set'}
             aria-label={pending ? 'Guardando set...' : isLogged ? 'Set guardado, toca para editar' : 'Guardar set'}
         >
-            {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-5 h-5 md:w-4 md:h-4" />}
+            {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className={`w-5 h-5 md:w-4 md:h-4 ${isLogged ? '' : 'opacity-40'}`} />}
         </button>
     )
 }

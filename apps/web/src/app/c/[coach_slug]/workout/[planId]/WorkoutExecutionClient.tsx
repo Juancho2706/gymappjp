@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { motion, useReducedMotion } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff } from 'lucide-react'
+import { ArrowLeft, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, Play } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { LogSetForm } from './LogSetForm'
 import { WorkoutTimerProvider, useWorkoutTimer } from './WorkoutTimerProvider'
@@ -144,6 +144,35 @@ const SIDE_LABEL: Record<string, string> = {
     alternating: 'Alternado',
 }
 
+/** Meta por tipo de bloque para el chip de tipo (color + label), estilo CD. */
+const RUT_TYPE_META: Record<WorkoutKind, { label: string; color: string }> = {
+    strength: { label: 'Fuerza', color: 'var(--sport-500)' },
+    cardio: { label: 'Cardio', color: 'var(--ember-500)' },
+    mobility: { label: 'Movilidad', color: '#14b8a6' },
+    roller: { label: 'Roller', color: '#8b5cf6' },
+}
+
+/** Nombre de la fase activa del programa (semanas de program_phases acumuladas vs semana actual). */
+function currentPhaseName(
+    phases: { name: string; weeks: number }[] | null | undefined,
+    week: number | null | undefined,
+): string | null {
+    if (!phases?.length || week == null) return null
+    let acc = 0
+    for (const ph of phases) {
+        acc += ph.weeks
+        if (week <= acc) return ph.name
+    }
+    return phases[phases.length - 1]?.name ?? null
+}
+
+/** mm:ss desde segundos (cronómetro de sesión). */
+function fmtElapsed(totalSec: number): string {
+    const m = Math.floor(totalSec / 60)
+    const s = totalSec % 60
+    return `${m}:${String(s).padStart(2, '0')}`
+}
+
 /** Cards de objetivo por tipo (cardio/movilidad/roller) — los strength quedan intactos (AC3). */
 function TypedTargetGrid({ block, kind, cardio }: { block: BlockType; kind: WorkoutKind; cardio?: ClientCardioView }) {
     const cards: { label: string; value: string; highlight?: boolean }[] = []
@@ -202,12 +231,12 @@ function TypedTargetGrid({ block, kind, cardio }: { block: BlockType; kind: Work
     }
 
     return (
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
             {cards.map((card) => (
                 <div
                     key={card.label}
                     className={cn(
-                        'flex-1 min-w-[64px] rounded-sm border px-2.5 py-2',
+                        'rounded-sm border px-2.5 py-2',
                         card.highlight
                             ? 'border-[var(--ember-500)]/30 bg-[var(--ember-500)]/[0.14]'
                             : 'border-[var(--border-inverse)] bg-white/[0.05]'
@@ -374,6 +403,7 @@ export function WorkoutExecutionClient({
     const [selectedExercise, setSelectedExercise] = useState<ExerciseType | null>(null)
     const [sessionLogs, setSessionLogs] = useState(logs)
     const [isOffline, setIsOffline] = useState(false)
+    const [sessionElapsed, setSessionElapsed] = useState(0)
 
     useEffect(() => {
         const onOnline = () => setIsOffline(false)
@@ -385,6 +415,15 @@ export function WorkoutExecutionClient({
             window.removeEventListener('offline', onOffline)
         }
     }, [])
+
+    // Cronómetro de sesión (32:14) — solo display, arranca al montar la pantalla.
+    useEffect(() => {
+        const start = Date.now()
+        const id = window.setInterval(() => setSessionElapsed(Math.floor((Date.now() - start) / 1000)), 1000)
+        return () => window.clearInterval(id)
+    }, [])
+
+    const phaseName = currentPhaseName(program?.program_phases, currentWeek)
 
     const getExercise = (block: BlockType) => (Array.isArray(block.exercises) ? block.exercises[0] : block.exercises) || null
 
@@ -497,7 +536,8 @@ export function WorkoutExecutionClient({
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-on-dark-muted">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-on-dark-muted truncate">
+                                    {phaseName ? `${phaseName} · ` : ''}
                                     {program?.program_structure_type === 'cycle'
                                         ? `Día ${plan.day_of_week || 1} de ${program.cycle_length || '?'}`
                                         : 'Programa semanal'}
@@ -528,8 +568,10 @@ export function WorkoutExecutionClient({
                             <span>
                                 <strong className="text-on-dark">{completedSetCount}</strong>/{requiredSets} series
                             </span>
-                            <span style={{ color: 'var(--sport-400)' }} className="font-bold">
-                                {completionPct}%
+                            <span className="flex items-center gap-1.5 font-bold">
+                                <span className="font-medium text-on-dark-muted">{fmtElapsed(sessionElapsed)}</span>
+                                <span className="font-medium text-on-dark-muted">·</span>
+                                <span style={{ color: 'var(--sport-400)' }}>{completionPct}%</span>
                             </span>
                         </div>
                     </div>
@@ -648,39 +690,60 @@ export function WorkoutExecutionClient({
                                                                     : 'border-[var(--border-inverse)]'
                                                             )}
                                                         >
-                                                            {complete && (
-                                                                <motion.div
-                                                                    initial={reducedMotion ? false : { scale: 0 }}
-                                                                    animate={{ scale: 1 }}
-                                                                    transition={reducedMotion ? { duration: 0 } : springs.elastic}
-                                                                    className="absolute top-2 right-2 text-[var(--sport-400)]"
-                                                                >
-                                                                    <CheckCircle2 className="w-6 h-6" />
-                                                                </motion.div>
-                                                            )}
-                                                            <div className="flex items-start justify-between gap-3">
-                                                                <div className="min-w-0 flex-1">
-                                                                    <h3 className="font-display text-[19px] font-black leading-[1.15] tracking-[-0.02em] text-on-dark">{exercise.name}</h3>
-                                                                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                                                        <span className="inline-flex items-center rounded-full bg-[var(--sport-500)]/15 px-2 py-0.5 text-[11px] font-bold text-[var(--sport-300)]">
-                                                                            {group.type === 'superset'
-                                                                                ? `${group.supersetLetter ?? 'SS'}-${blockIndex + 1} · ${exercise.muscle_group}`
-                                                                                : exercise.muscle_group}
+                                                            <div className="space-y-2">
+                                                                {/* Chips: tipo de bloque + superserie (CD) */}
+                                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-bold text-on-dark">
+                                                                        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: RUT_TYPE_META[effType].color }} />
+                                                                        {RUT_TYPE_META[effType].label}
+                                                                    </span>
+                                                                    {group.type === 'superset' && (
+                                                                        <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-on-dark-muted">
+                                                                            Superserie {group.supersetLetter ?? group.key} · {group.blocks.length} ejercicios
                                                                         </span>
-                                                                        {(exercise.gif_url || exercise.video_url) && (
-                                                                            <button onClick={() => openTechnique(exercise)} className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-on-dark-muted transition-colors hover:text-on-dark">
-                                                                                <Info className="w-3.5 h-3.5" /> Ver técnica
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
+                                                                    )}
                                                                 </div>
-                                                                <span className={cn("shrink-0 text-xs px-2 py-1 rounded-full border", complete ? "bg-[var(--sport-500)]/15 border-[var(--sport-500)]/30 text-[var(--sport-300)]" : "bg-white/[0.06] border-[var(--border-inverse)] text-on-dark-muted")}>
-                                                                    {complete ? 'Completado' : 'Pendiente'}
-                                                                </span>
+                                                                <div className="flex items-start justify-between gap-3">
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <h3 className="font-display text-[19px] font-black leading-[1.15] tracking-[-0.02em] text-on-dark">{exercise.name}</h3>
+                                                                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                                                            <span className="inline-flex items-center rounded-full bg-[var(--sport-500)]/15 px-2 py-0.5 text-[11px] font-bold text-[var(--sport-300)]">
+                                                                                {group.type === 'superset'
+                                                                                    ? `${group.supersetLetter ?? 'SS'}-${blockIndex + 1} · ${exercise.muscle_group}`
+                                                                                    : exercise.muscle_group}
+                                                                            </span>
+                                                                            {(exercise.gif_url || exercise.video_url) && (
+                                                                                <button onClick={() => openTechnique(exercise)} className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-on-dark-muted transition-colors hover:text-on-dark">
+                                                                                    <Info className="w-3.5 h-3.5" /> Ver técnica
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                    {/* Derecha: check si completado; si no, botón play (abre técnica) */}
+                                                                    {complete ? (
+                                                                        <motion.div
+                                                                            initial={reducedMotion ? false : { scale: 0 }}
+                                                                            animate={{ scale: 1 }}
+                                                                            transition={reducedMotion ? { duration: 0 } : springs.elastic}
+                                                                            className="shrink-0 text-[var(--sport-400)]"
+                                                                        >
+                                                                            <CheckCircle2 className="w-8 h-8" />
+                                                                        </motion.div>
+                                                                    ) : (exercise.gif_url || exercise.video_url) ? (
+                                                                        <button
+                                                                            onClick={() => openTechnique(exercise)}
+                                                                            className="shrink-0 flex h-12 w-12 items-center justify-center rounded-control text-white shadow-lg transition-transform active:scale-95"
+                                                                            style={{ backgroundColor: RUT_TYPE_META[effType].color }}
+                                                                            aria-label={`Ver técnica de ${exercise.name}`}
+                                                                        >
+                                                                            <Play className="w-5 h-5 fill-current" />
+                                                                        </button>
+                                                                    ) : null}
+                                                                </div>
                                                             </div>
                                                             {effType === 'strength' ? (
-                                                            <div className="flex flex-wrap gap-2">
-                                                                <div className="flex-1 min-w-[64px] rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2">
+                                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                                                                <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2">
                                                                     <p className="text-[9.5px] font-bold uppercase tracking-wide text-on-dark-muted">Series x reps</p>
                                                                     <p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.sets} x {block.reps}</p>
                                                                 </div>
@@ -689,7 +752,7 @@ export function WorkoutExecutionClient({
                                                                     const showBase = eff != null && eff.weightKg != null && eff.baseWeightKg != null && eff.weightKg !== eff.baseWeightKg
                                                                     const label = eff?.status === 'holding' ? 'Peso a mantener' : eff?.status === 'progressed' ? 'Peso hoy' : 'Peso'
                                                                     return (
-                                                                        <div className={cn('flex-1 min-w-[64px] rounded-sm border px-2.5 py-2', highlight ? 'border-emerald-500/40 bg-emerald-500/[0.12]' : 'border-[var(--border-inverse)] bg-white/[0.05]')}>
+                                                                        <div className={cn('rounded-sm border px-2.5 py-2', highlight ? 'border-emerald-500/40 bg-emerald-500/[0.12]' : 'border-[var(--border-inverse)] bg-white/[0.05]')}>
                                                                             <p className={cn('text-[9.5px] font-bold uppercase tracking-wide', highlight ? 'text-emerald-300' : 'text-on-dark-muted')}>{label}</p>
                                                                             <p className={cn('font-mono text-[15px] font-bold tabular-nums mt-0.5', highlight ? 'text-emerald-300' : 'text-on-dark')}>
                                                                                 {(eff?.weightKg ?? block.target_weight_kg)}kg
@@ -698,9 +761,9 @@ export function WorkoutExecutionClient({
                                                                         </div>
                                                                     )
                                                                 })()}
-                                                                {block.rest_time && <div className="flex-1 min-w-[64px] rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-wide text-on-dark-muted">Descanso</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.rest_time}</p></div>}
-                                                                {block.tempo && <div className="flex-1 min-w-[64px] rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-wide text-on-dark-muted">Tempo</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.tempo}</p></div>}
-                                                                {block.rir && <div className="flex-1 min-w-[64px] rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-wide text-on-dark-muted">RIR</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-[var(--sport-300)]">{block.rir}</p></div>}
+                                                                {block.rest_time && <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-wide text-on-dark-muted">Descanso</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.rest_time}</p></div>}
+                                                                {block.tempo && <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-wide text-on-dark-muted">Tempo</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.tempo}</p></div>}
+                                                                {block.rir && <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-wide text-on-dark-muted">RIR</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-[var(--sport-300)]">{block.rir}</p></div>}
                                                             </div>
                                                             ) : (
                                                                 <>
@@ -765,28 +828,29 @@ export function WorkoutExecutionClient({
                                                                     </div>
                                                                 </div>
                                                             )}
-                                                            {effType === 'strength' && previousHistory[exercise.id] && previousHistory[exercise.id].length > 0 && (
-                                                                <div className="rounded-sm bg-white/[0.04] px-3 py-2.5">
-                                                                    <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-on-dark-muted">
-                                                                        <History className="w-3 h-3 shrink-0" />
-                                                                        Sesión anterior ·{' '}
-                                                                        {formatRelativeDate(previousHistory[exercise.id][0].date)}
-                                                                    </p>
-                                                                    <div className="flex flex-wrap gap-1.5">
-                                                                        {previousHistory[exercise.id].map((log, idx) => (
-                                                                            <span key={idx} className="font-mono text-xs px-2 py-1 rounded bg-white/[0.06] border border-[var(--border-inverse)] text-on-dark">
-                                                                                S{idx + 1}: {log.weight_kg ? `${log.weight_kg}kg` : '-'} x {log.reps_done || '-'}
-                                                                            </span>
-                                                                        ))}
+                                                            {effType === 'strength' && previousHistory[exercise.id] && previousHistory[exercise.id].length > 0 && (() => {
+                                                                const prev = previousHistory[exercise.id]
+                                                                // Pill compacta (CD): mejor serie de la sesión anterior (mayor peso).
+                                                                const best = prev.reduce((m, s) => ((s.weight_kg ?? 0) > (m.weight_kg ?? 0) ? s : m), prev[0])
+                                                                return (
+                                                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-sm bg-white/[0.04] px-3 py-2">
+                                                                        <History className="w-3.5 h-3.5 shrink-0 text-on-dark-muted" />
+                                                                        <span className="text-[11px] font-semibold text-on-dark-muted">
+                                                                            Sesión anterior · {formatRelativeDate(prev[0].date)}:
+                                                                        </span>
+                                                                        <span className="font-mono text-xs font-bold text-on-dark">
+                                                                            {best.weight_kg ? `${best.weight_kg}kg` : '-'} × {best.reps_done || '-'}
+                                                                        </span>
                                                                     </div>
-                                                                </div>
-                                                            )}
+                                                                )
+                                                            })()}
                                                             <div className="rounded-card border border-[var(--border-inverse)] bg-white/[0.02] p-2">
                                                                 {effType === 'strength' ? (
-                                                                <div className="grid grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10">
+                                                                <div className="grid grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_3.5rem_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10">
                                                                     <div className="w-4 text-center">Set</div>
                                                                     <div className="text-center">Kg</div>
                                                                     <div className="text-center">Reps</div>
+                                                                    <div className="text-center">RPE</div>
                                                                     <div className="w-8"></div>
                                                                 </div>
                                                                 ) : (
