@@ -28,6 +28,83 @@ interface Props {
 /** Cuántas tarjetas se montan por tanda (evita renderizar 800+ <Image> de golpe). */
 const PAGE_SIZE = 48;
 
+/**
+ * Best-effort thumbnail URL for an exercise, or `null` when it has no usable
+ * media. Mirrors the priority order of `ExerciseCard.renderThumb`:
+ * gif → YouTube poster → direct image/video URL.
+ */
+function getThumbSrc(ex: Exercise): string | null {
+  if (ex.gif_url) return ex.gif_url;
+
+  const url = ex.video_url;
+  const ytId = url ? extractYoutubeVideoId(url) : null;
+  if (ytId) return `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`;
+
+  const isYouTube = url?.includes("youtube.com") || url?.includes("youtu.be");
+  if (url && !isYouTube) return url;
+
+  return null;
+}
+
+/**
+ * Hero "Destacado" card (CD parity — Aprender.jsx). Bigger media banner + name
+ * + muscle/equipment. Tapping opens the same detail modal as the grid cards.
+ */
+function FeaturedExerciseCard({
+  ex,
+  primaryColor,
+  onSelect,
+}: {
+  ex: Exercise;
+  primaryColor: string;
+  onSelect: () => void;
+}) {
+  const thumb = getThumbSrc(ex);
+  return (
+    <div
+      onClick={onSelect}
+      className="group/feat cursor-pointer overflow-hidden rounded-card border border-subtle bg-surface-card shadow-sm transition-[transform,box-shadow] duration-150 ease-[cubic-bezier(.22,1,.36,1)] hover:-translate-y-px hover:shadow-md active:scale-[0.98]"
+    >
+      <div className="relative flex h-[150px] w-full items-center justify-center overflow-hidden bg-gradient-to-br from-[#1B2129] to-[#0B0E13] md:h-[200px]">
+        {thumb && (
+          <>
+            <Image
+              src={thumb}
+              alt={ex.name}
+              fill
+              sizes="(max-width: 768px) 100vw, 640px"
+              className="object-cover transition-transform duration-500 group-hover/feat:scale-105"
+              unoptimized
+            />
+            <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 to-transparent" />
+          </>
+        )}
+        <span
+          className="relative z-10 flex h-[60px] w-[60px] items-center justify-center rounded-full text-white transition-transform group-hover/feat:scale-105"
+          style={{ backgroundColor: primaryColor, boxShadow: "var(--glow-sport)" }}
+        >
+          <Play className="h-[26px] w-[26px]" />
+        </span>
+        <span
+          className="absolute left-3 top-3 z-10 rounded-pill px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-[0.05em] text-on-sport"
+          style={{ backgroundColor: primaryColor }}
+        >
+          Destacado
+        </span>
+      </div>
+      <div className="p-4">
+        <h3 className="font-display text-lg font-extrabold leading-tight text-strong">
+          {ex.name}
+        </h3>
+        <p className="mt-0.5 text-[13px] text-muted">
+          {ex.muscle_group}
+          {ex.equipment ? ` · ${ex.equipment}` : ""}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /** Image that fades in once the GIF / next-image has finished loading. */
 function FadeImage({ src, alt }: { src: string; alt: string }) {
   const [loaded, setLoaded] = useState(false);
@@ -119,6 +196,14 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
   const displayed = filteredExercises.slice(0, visibleCount);
   const hasMore = visibleCount < filteredExercises.length;
 
+  // Ejercicio "Destacado": el primero con media utilizable. Solo se muestra en
+  // la vista por defecto (sin búsqueda ni filtro de músculo) y degrada a null si
+  // ningún ejercicio tiene gif/video.
+  const featured =
+    !search.trim() && selectedMuscle === "Todos"
+      ? (allExercises.find((e) => getThumbSrc(e) !== null) ?? null)
+      : null;
+
   // Reset de la paginación cuando cambia el filtro/búsqueda.
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
@@ -193,15 +278,31 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 md:gap-4 md:[grid-template-columns:repeat(auto-fill,minmax(200px,1fr))]">
-          {displayed.map((ex) => (
-            <ExerciseCard
-              key={ex.id}
-              ex={ex}
-              onSelect={() => openExercise(ex)}
+        <>
+          {featured && (
+            <FeaturedExerciseCard
+              ex={featured}
+              primaryColor={primaryColor}
+              onSelect={() => openExercise(featured)}
             />
-          ))}
-        </div>
+          )}
+
+          {featured && (
+            <h2 className="font-display text-base font-black tracking-[-0.01em] text-strong">
+              Biblioteca
+            </h2>
+          )}
+
+          <div className="grid grid-cols-2 gap-3 md:gap-4 md:[grid-template-columns:repeat(auto-fill,minmax(200px,1fr))]">
+            {displayed.map((ex) => (
+              <ExerciseCard
+                key={ex.id}
+                ex={ex}
+                onSelect={() => openExercise(ex)}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Infinite-scroll sentinel + contador */}

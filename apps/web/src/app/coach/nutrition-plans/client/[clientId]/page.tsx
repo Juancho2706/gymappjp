@@ -117,7 +117,7 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
       <header className="flex items-center gap-3">
         <Link
           href="/coach/nutrition-plans"
-          className="p-2 rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="p-2 rounded-xl text-muted hover:bg-surface-sunken hover:text-strong transition-colors"
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
@@ -126,7 +126,7 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
             <h1 className="text-2xl font-black tracking-tight">Plan nutricional</h1>
             {lastEditor && <EditedByBadge name={lastEditor.name} at={lastEditor.at} />}
           </div>
-          <p className="text-xs text-muted-foreground font-medium">{client.full_name}</p>
+          <p className="text-xs text-muted font-medium">{client.full_name}</p>
         </div>
         <Link
           href={`/coach/clients/${clientId}`}
@@ -150,8 +150,8 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
         </div>
         {adherence.length > 0 && planMealsStrip.length > 0 && (
           <aside className="w-full lg:w-72 shrink-0 lg:sticky lg:top-24 space-y-3">
-            <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Alumno — 30 días</p>
-            <div className="bg-card border border-border rounded-2xl p-4">
+            <p className="text-xs font-black uppercase tracking-wider text-muted">Alumno — 30 días</p>
+            <div className="bg-surface-card border border-subtle rounded-2xl p-4">
               <AdherenceStrip data={adherence} planMeals={planMealsStrip} />
             </div>
           </aside>

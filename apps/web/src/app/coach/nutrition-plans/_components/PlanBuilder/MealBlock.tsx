@@ -98,13 +98,13 @@ export function MealBlock({
     <div
       ref={setNodeRef}
       style={style}
-      className={`w-full min-w-0 rounded-2xl border border-border bg-card p-4 shadow-sm ${isDragging ? 'z-10 opacity-90 ring-2 ring-[color:var(--theme-primary)]' : ''}`}
+      className={`w-full min-w-0 rounded-2xl border border-subtle bg-surface-card p-4 shadow-sm ${isDragging ? 'z-10 opacity-90 ring-2 ring-[color:var(--theme-primary)]' : ''}`}
     >
       <div className="mb-3 space-y-3">
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="touch-none shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+            className="touch-none shrink-0 rounded-lg p-1.5 text-muted hover:bg-surface-sunken"
             {...attributes}
             {...listeners}
           >
@@ -128,7 +128,7 @@ export function MealBlock({
         </div>
         <div className="flex w-full flex-col gap-1.5">
           <div className="flex items-center gap-1">
-            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-muted">
               Día del plan
             </Label>
             <InfoTooltip content="Todos los días: la comida aparece siempre en el plan del alumno. Día fijo: solo se muestra ese día de la semana (zona horaria Santiago). Útil para variar la alimentación según el tipo de entrenamiento." />
@@ -140,7 +140,7 @@ export function MealBlock({
               else onUpdateDayOfWeek(Number.parseInt(v, 10))
             }}
           >
-            <SelectTrigger className="h-10 w-full rounded-xl bg-background border-input" size="sm">
+            <SelectTrigger className="h-10 w-full rounded-xl bg-surface-app border-default" size="sm">
               <SelectValue>{dowLabelMap[dowSelectValue] ?? 'Todos los días'}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -151,7 +151,7 @@ export function MealBlock({
               ))}
             </SelectContent>
           </Select>
-          <p className="text-[10px] leading-snug text-muted-foreground">
+          <p className="text-[10px] leading-snug text-muted">
             Todos los días: la comida se muestra siempre. Día fijo: solo ese día (1=lun … 7=dom, zona Santiago).
           </p>
         </div>
@@ -191,9 +191,9 @@ export function MealBlock({
       )}
 
       <div className="mb-3 space-y-1">
-        <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+        <Label className="text-[10px] font-black uppercase tracking-widest text-muted">
           Nota para el alumno
-          <span className="ml-1 font-normal normal-case tracking-normal text-muted-foreground/60">(opcional)</span>
+          <span className="ml-1 font-normal normal-case tracking-normal text-[var(--text-muted)]/60">(opcional)</span>
         </Label>
         <textarea
           value={meal.notes ?? ''}
@@ -201,7 +201,7 @@ export function MealBlock({
           placeholder="Ej: Puedes reemplazar el arroz por papa. Comer 30 min antes del entrenamiento."
           maxLength={500}
           rows={2}
-          className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+          className="w-full rounded-xl border border-default bg-surface-app px-3 py-2 text-sm text-strong placeholder:text-[var(--text-muted)]/50 focus:outline-none focus:ring-1 focus:ring-ring resize-none"
         />
       </div>
 

@@ -60,16 +60,16 @@ export function ExchangeModePanel({
   const [, startTransition] = useTransition()
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-4 space-y-4">
+    <section className="rounded-2xl border border-subtle bg-surface-card p-4 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-black tracking-tight text-foreground">
+          <h3 className="text-sm font-black tracking-tight text-strong">
             {t('nutrition.exchange.modeTitle')}
           </h3>
           <InfoTooltip content={t('nutrition.exchange.modeTooltip')} />
         </div>
         <label className="flex min-h-11 cursor-pointer items-center gap-2">
-          <span className={cn('text-xs font-bold', !active ? 'text-foreground' : 'text-muted-foreground')}>
+          <span className={cn('text-xs font-bold', !active ? 'text-strong' : 'text-muted')}>
             {t('nutrition.exchange.modeGrams')}
           </span>
           <Switch
@@ -84,14 +84,14 @@ export function ExchangeModePanel({
             }}
             aria-label={t('nutrition.exchange.modeTitle')}
           />
-          <span className={cn('text-xs font-bold', active ? 'text-foreground' : 'text-muted-foreground')}>
+          <span className={cn('text-xs font-bold', active ? 'text-strong' : 'text-muted')}>
             {t('nutrition.exchange.modePortions')}
           </span>
         </label>
       </div>
 
       {!canToggle && (
-        <p className="text-[11px] leading-snug text-muted-foreground">
+        <p className="text-[11px] leading-snug text-muted">
           {t('nutrition.exchange.savePlanFirst')}
         </p>
       )}
@@ -99,13 +99,13 @@ export function ExchangeModePanel({
       {active && (
         <>
           {provisional && (
-            <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
+            <p className="rounded-xl border border-[var(--warning-500)]/30 bg-[var(--warning-100)] px-3 py-2 text-[11px] leading-snug text-[var(--warning-700)]">
               {t('nutrition.exchange.provisionalNotice')}
             </p>
           )}
 
           <div className="space-y-1.5">
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted">
               {t('nutrition.exchange.derivedVsGoal')}
             </p>
             {totalsByVariant.map((row) => {
@@ -113,12 +113,12 @@ export function ExchangeModePanel({
               return (
                 <div
                   key={row.variantId ?? '__all__'}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-muted/30 px-3 py-2"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface-sunken/30 px-3 py-2"
                 >
-                  <span className="text-xs font-bold text-foreground">
+                  <span className="text-xs font-bold text-strong">
                     {row.name ?? t('nutrition.exchange.wholeDay')}
                   </span>
-                  <span className="text-[11px] font-bold tabular-nums text-muted-foreground">
+                  <span className="text-[11px] font-bold tabular-nums text-muted">
                     {Math.round(d.calories)}/{goals.calories} kcal · P {d.proteinG}/{goals.protein} · C{' '}
                     {d.carbsG}/{goals.carbs} · G {d.fatsG}/{goals.fats}
                   </span>
@@ -128,14 +128,14 @@ export function ExchangeModePanel({
           </div>
 
           <div className="space-y-2">
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted">
               {t('nutrition.exchange.dayVariants')}
             </p>
             <div className="flex flex-wrap gap-1.5">
               {variants.map((v) => (
                 <span
                   key={v.id}
-                  className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2 py-1 text-[11px] font-bold text-foreground"
+                  className="inline-flex items-center gap-1 rounded-lg border border-subtle bg-surface-app px-2 py-1 text-[11px] font-bold text-strong"
                 >
                   {v.name}
                   <button
@@ -143,7 +143,7 @@ export function ExchangeModePanel({
                     disabled={variantPending}
                     onClick={() => onDeleteVariant(v.id)}
                     aria-label={`${t('nutrition.exchange.deleteVariant')} ${v.name}`}
-                    className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-[var(--danger-600)] touch-manipulation"
+                    className="flex h-6 w-6 items-center justify-center rounded-md text-muted hover:bg-surface-sunken hover:text-[var(--danger-600)] touch-manipulation"
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>
@@ -157,7 +157,7 @@ export function ExchangeModePanel({
                   type="button"
                   disabled={variantPending || !canToggle}
                   onClick={() => onCreateVariant(preset)}
-                  className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-dashed border-border px-2 py-1 text-[11px] font-bold text-muted-foreground transition-colors hover:bg-muted touch-manipulation"
+                  className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-dashed border-subtle px-2 py-1 text-[11px] font-bold text-muted transition-colors hover:bg-surface-sunken touch-manipulation"
                 >
                   <Plus className="h-3 w-3" />
                   {preset}
@@ -187,9 +187,9 @@ export function ExchangeModePanel({
             </div>
           </div>
 
-          <div className="space-y-2 border-t border-border/60 pt-3">
+          <div className="space-y-2 border-t border-[var(--border-subtle)]/60 pt-3">
             <div className="flex items-center gap-1.5">
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted">
                 {t('nutrition.exchange.pdfTitle')}
               </p>
               <InfoTooltip content={t('nutrition.exchange.pdfTooltip')} />
@@ -211,7 +211,7 @@ export function ExchangeModePanel({
                     'min-h-11 rounded-xl px-3 py-2 text-xs font-bold transition-colors touch-manipulation',
                     pdfFormat === value
                       ? 'bg-[color:var(--theme-primary)] text-white'
-                      : 'border border-border bg-background text-muted-foreground hover:bg-muted'
+                      : 'border border-subtle bg-surface-app text-muted hover:bg-surface-sunken'
                   )}
                 >
                   {label}
@@ -227,9 +227,9 @@ export function ExchangeModePanel({
               <FileDown className="h-4 w-4" />
               {pdfPending ? t('nutrition.exchange.pdfGenerating') : t('nutrition.exchange.pdfDownload')}
             </Button>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-[10px] text-muted">
               {t('nutrition.exchange.pdfBrandPreview')}{' '}
-              <span className="font-bold text-foreground">{brand.brandName}</span>
+              <span className="font-bold text-strong">{brand.brandName}</span>
             </p>
           </div>
         </>

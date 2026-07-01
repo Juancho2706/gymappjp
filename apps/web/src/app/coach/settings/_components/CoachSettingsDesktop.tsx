@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState, type ReactNode } from 'react'
 import {
     Palette,
@@ -7,7 +8,9 @@ import {
     Package,
     SlidersHorizontal,
     LayoutList,
+    Upload,
     Moon,
+    LifeBuoy,
     Trash2,
     type LucideIcon,
 } from 'lucide-react'
@@ -33,11 +36,14 @@ export type SettingsSectionId =
     | 'eliminar'
 
 interface Cat {
-    id: SettingsSectionId
+    id: SettingsSectionId | 'importar' | 'soporte'
     label: string
     icon: LucideIcon
     group: string
     danger?: boolean
+    /** Ítem navegable: la ruta ya existe como página propia, no se embebe como pane.
+     *  Se renderiza como <Link> (sale de la SettingsShell) en vez de botón que setea `sel`. */
+    href?: string
 }
 
 // Orden + agrupación espejo de DesktopOpciones (CATS). El label del rail es también el
@@ -48,7 +54,9 @@ const CATS: Cat[] = [
     { id: 'modulos', label: 'Módulos', icon: Package, group: 'Entrenamiento' },
     { id: 'funciones', label: 'Funciones', icon: SlidersHorizontal, group: 'Entrenamiento' },
     { id: 'areas', label: 'Áreas del builder', icon: LayoutList, group: 'Entrenamiento' },
+    { id: 'importar', label: 'Importar alumnos', icon: Upload, group: 'Entrenamiento', href: '/coach/clients/import' },
     { id: 'apariencia', label: 'Apariencia', icon: Moon, group: 'Preferencias' },
+    { id: 'soporte', label: 'Soporte', icon: LifeBuoy, group: 'Ayuda', href: '/coach/support' },
     { id: 'eliminar', label: 'Eliminar cuenta', icon: Trash2, group: 'Ayuda', danger: true },
 ]
 
@@ -60,9 +68,10 @@ export function CoachSettingsDesktop({
     initial?: SettingsSectionId
 }) {
     // Solo las secciones con contenido disponible (ej. funciones/áreas pueden venir vacías
-    // en algún contexto de team sin gestión).
-    const cats = CATS.filter((c) => sections[c.id] != null)
-    const firstId = cats[0]?.id ?? 'marca'
+    // en algún contexto de team sin gestión). Los ítems navegables (href) siempre se muestran:
+    // apuntan a rutas propias que ya existen.
+    const cats = CATS.filter((c) => c.href != null || sections[c.id as SettingsSectionId] != null)
+    const firstId = (cats.find((c) => c.href == null)?.id ?? 'marca') as SettingsSectionId
     const [sel, setSel] = useState<SettingsSectionId>(
         sections[initial] != null ? initial : firstId,
     )
@@ -86,14 +95,33 @@ export function CoachSettingsDesktop({
                                     .filter((c) => c.group === g)
                                     .map((c) => {
                                         const Icon = c.icon
+                                        // Ítem navegable (ruta propia): Link, nunca queda "activo"
+                                        // en el rail porque saca al coach de la SettingsShell.
+                                        if (c.href) {
+                                            return (
+                                                <Link
+                                                    key={c.id}
+                                                    href={c.href}
+                                                    className="dt-set-railitem"
+                                                    data-active="0"
+                                                    data-danger={c.danger ? '1' : '0'}
+                                                >
+                                                    <span className="dt-set-railico">
+                                                        <Icon size={18} />
+                                                    </span>
+                                                    <span>{c.label}</span>
+                                                </Link>
+                                            )
+                                        }
+                                        const id = c.id as SettingsSectionId
                                         return (
                                             <button
                                                 key={c.id}
                                                 type="button"
                                                 className="dt-set-railitem"
-                                                data-active={sel === c.id ? '1' : '0'}
+                                                data-active={sel === id ? '1' : '0'}
                                                 data-danger={c.danger ? '1' : '0'}
-                                                onClick={() => setSel(c.id)}
+                                                onClick={() => setSel(id)}
                                             >
                                                 <span className="dt-set-railico">
                                                     <Icon size={18} />

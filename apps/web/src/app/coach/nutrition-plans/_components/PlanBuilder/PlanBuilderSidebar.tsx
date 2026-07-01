@@ -212,9 +212,9 @@ export function PlanBuilderSidebar({
     goals.calories > 0 ? Math.min(100, (realTotals.calories / goals.calories) * 100) : 0
 
   return (
-    <div className="space-y-5 rounded-2xl border border-border bg-card p-4 shadow-sm">
+    <div className="space-y-5 rounded-2xl border border-subtle bg-surface-card p-4 shadow-sm">
       <div>
-        <Label className="text-xs font-bold uppercase text-muted-foreground">
+        <Label className="text-xs font-bold uppercase text-muted">
           {mode === 'template' ? 'Nombre de la plantilla' : 'Nombre del plan'}
         </Label>
         <Input value={planName} onChange={(e) => onNameChange(e.target.value)} className="mt-1 h-11 font-bold" />
@@ -223,15 +223,15 @@ export function PlanBuilderSidebar({
       <div className="space-y-3">
         {/* Header with toggle */}
         <div className="flex items-center justify-between">
-          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted">
             Metas {autoSync ? '' : '(manual)'}
           </p>
           <label className="flex cursor-pointer items-center gap-2">
             <span className={cn(
               'flex items-center gap-1 text-[10px] font-bold transition-colors',
-              autoSync ? 'text-emerald-500' : 'text-muted-foreground'
+              autoSync ? 'text-[var(--success-500)]' : 'text-muted'
             )}>
-              <Zap className={cn('h-3 w-3', autoSync && 'fill-emerald-500')} />
+              <Zap className={cn('h-3 w-3', autoSync && 'fill-[var(--success-500)]')} />
               Auto
             </span>
             <InfoTooltip content="Cuando está activo, las metas se calculan automáticamente desde los macros reales de los alimentos que agregas. Desactívalo para definir metas manualmente." />
@@ -247,7 +247,7 @@ export function PlanBuilderSidebar({
         </div>
 
         {autoSync && (
-          <p className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 text-[10px] text-emerald-600 dark:text-emerald-400">
+          <p className="rounded-lg bg-[var(--success-100)] border border-[var(--success-500)]/20 px-2.5 py-1.5 text-[10px] text-[var(--success-700)]">
             Calculando metas en tiempo real desde los alimentos añadidos.
           </p>
         )}
@@ -263,7 +263,7 @@ export function PlanBuilderSidebar({
           ).map(([label, key, val, tip]) => (
             <div key={key}>
               <div className="flex items-center gap-1">
-                <Label className="text-[10px] text-muted-foreground">{label}</Label>
+                <Label className="text-[10px] text-muted">{label}</Label>
                 <InfoTooltip content={tip} />
               </div>
               <ClampedIntInput
@@ -280,15 +280,15 @@ export function PlanBuilderSidebar({
         </div>
       </div>
 
-      <div className="rounded-xl border border-border/80 bg-muted/20 p-3 space-y-2">
+      <div className="rounded-xl border border-[var(--border-subtle)]/80 bg-surface-sunken/20 p-3 space-y-2">
         <div className="flex justify-between text-xs font-bold">
-          <span className="text-muted-foreground">Suma real (alimentos)</span>
+          <span className="text-muted">Suma real (alimentos)</span>
           <span className="tabular-nums">
             {Math.round(realTotals.calories)} / {goals.calories || '—'} kcal
           </span>
         </div>
         <Progress value={Math.min(kcalPct, 100)} className="h-2" />
-        <div className="grid grid-cols-3 gap-1 text-[10px] tabular-nums text-muted-foreground">
+        <div className="grid grid-cols-3 gap-1 text-[10px] tabular-nums text-muted">
           <span>P {Math.round(realTotals.protein)}</span>
           <span>C {Math.round(realTotals.carbs)}</span>
           <span>G {Math.round(realTotals.fats)}</span>
@@ -296,10 +296,10 @@ export function PlanBuilderSidebar({
       </div>
 
       {mismatch && !autoSync && (
-        <div className="flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+        <div className="flex gap-2 rounded-xl border border-[var(--warning-500)]/30 bg-[var(--warning-100)] p-3 text-xs">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-[var(--warning-600)]" />
           <div className="space-y-2">
-            <p className="font-medium text-amber-900 dark:text-amber-200">
+            <p className="font-medium text-[var(--warning-700)]">
               Los macros reales difieren más de un 5% de la meta.
             </p>
             <Button type="button" size="sm" variant="secondary" className="h-8 text-xs" onClick={onAutoSync}>
@@ -346,7 +346,7 @@ export function PlanBuilderSidebar({
 
           {suggOpen && (
             <div className="border-t border-violet-500/20 px-3 pb-3 pt-2 space-y-3">
-              <div className="grid grid-cols-2 gap-2 text-[10px] text-muted-foreground">
+              <div className="grid grid-cols-2 gap-2 text-[10px] text-muted">
                 <div>
                   <span className="font-bold">Peso:</span> {clientProfile.weight_kg} kg
                 </div>
@@ -357,7 +357,7 @@ export function PlanBuilderSidebar({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label className="text-[10px] text-muted-foreground">Edad</Label>
+                  <Label className="text-[10px] text-muted">Edad</Label>
                   <Input
                     type="number"
                     value={suggAge}
@@ -368,7 +368,7 @@ export function PlanBuilderSidebar({
                   />
                 </div>
                 <div>
-                  <Label className="text-[10px] text-muted-foreground">Género</Label>
+                  <Label className="text-[10px] text-muted">Género</Label>
                   <Select value={suggGender} onValueChange={(v) => setSuggGender(v as 'M' | 'F')}>
                     <SelectTrigger className="h-8 mt-0.5 text-sm">
                       <SelectValue />
@@ -382,7 +382,7 @@ export function PlanBuilderSidebar({
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-[10px] text-muted-foreground">Actividad</Label>
+                <Label className="text-[10px] text-muted">Actividad</Label>
                 <Select value={suggActivity} onValueChange={(v) => setSuggActivity(v as ActivityKey)}>
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue>{ACTIVITY_LABELS[suggActivity]}</SelectValue>
@@ -398,7 +398,7 @@ export function PlanBuilderSidebar({
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-[10px] text-muted-foreground">Objetivo</Label>
+                <Label className="text-[10px] text-muted">Objetivo</Label>
                 <Select value={suggGoal} onValueChange={(v) => setSuggGoal(v as GoalKey)}>
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue>{GOAL_LABELS[suggGoal]}</SelectValue>
@@ -414,13 +414,13 @@ export function PlanBuilderSidebar({
               {suggested && (
                 <div className="rounded-lg bg-violet-500/10 border border-violet-500/20 p-2.5 space-y-2">
                   <div className="grid grid-cols-2 gap-1 text-[11px] font-bold">
-                    <span className="text-muted-foreground">kcal:</span>
+                    <span className="text-muted">kcal:</span>
                     <span className="tabular-nums text-violet-700 dark:text-violet-300">{suggested.calories}</span>
-                    <span className="text-muted-foreground">Proteína:</span>
+                    <span className="text-muted">Proteína:</span>
                     <span className="tabular-nums text-[var(--ember-600)]">{suggested.protein}g</span>
-                    <span className="text-muted-foreground">Carbos:</span>
+                    <span className="text-muted">Carbos:</span>
                     <span className="tabular-nums text-[var(--sport-600)]">{suggested.carbs}g</span>
-                    <span className="text-muted-foreground">Grasas:</span>
+                    <span className="text-muted">Grasas:</span>
                     <span className="tabular-nums text-[var(--aqua-600)]">{suggested.fats}g</span>
                   </div>
                   <Button
@@ -461,7 +461,7 @@ export function PlanBuilderSidebar({
               {proBodyComp ? (
                 <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
               ) : (
-                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                <Lock className="h-3.5 w-3.5 text-muted" />
               )}
               <span className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
                 Objetivos por composición corporal
@@ -486,7 +486,7 @@ export function PlanBuilderSidebar({
           {bcOpen && (
             <div className="border-t border-indigo-500/20 px-3 pb-3 pt-2 space-y-3">
               {!proBodyComp ? (
-                <p className="rounded-lg bg-muted/40 px-2.5 py-2 text-[10px] leading-relaxed text-muted-foreground">
+                <p className="rounded-lg bg-surface-sunken/40 px-2.5 py-2 text-[10px] leading-relaxed text-muted">
                   Función <span className="font-bold">Pro</span>. Activa el módulo de
                   nutrición avanzada para calcular objetivos desde la masa magra
                   (Katch-McArdle / Cunningham).
@@ -494,7 +494,7 @@ export function PlanBuilderSidebar({
               ) : (
                 <>
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] text-muted-foreground">Fórmula (BMR)</Label>
+                    <Label className="text-[10px] text-muted">Fórmula (BMR)</Label>
                     <Select value={bcFormula} onValueChange={(v) => setBcFormula(v as BodyCompFormula)}>
                       <SelectTrigger className="h-8 text-sm">
                         <SelectValue>{BODYCOMP_LABELS[bcFormula]}</SelectValue>
@@ -509,7 +509,7 @@ export function PlanBuilderSidebar({
                     </Select>
                   </div>
 
-                  <div className="flex gap-1 rounded-lg bg-muted/30 p-0.5">
+                  <div className="flex gap-1 rounded-lg bg-surface-sunken/30 p-0.5">
                     {(
                       [
                         ['bodyfat', '% Grasa'],
@@ -524,7 +524,7 @@ export function PlanBuilderSidebar({
                           'flex-1 rounded-md px-2 py-1 text-[10px] font-bold transition-colors',
                           bcInputMode === k
                             ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300'
-                            : 'text-muted-foreground hover:text-foreground'
+                            : 'text-muted hover:text-strong'
                         )}
                       >
                         {label}
@@ -534,7 +534,7 @@ export function PlanBuilderSidebar({
 
                   {bcInputMode === 'bodyfat' ? (
                     <div>
-                      <Label className="text-[10px] text-muted-foreground">% Grasa corporal</Label>
+                      <Label className="text-[10px] text-muted">% Grasa corporal</Label>
                       <Input
                         type="number"
                         value={bcBodyFat}
@@ -547,7 +547,7 @@ export function PlanBuilderSidebar({
                     </div>
                   ) : (
                     <div>
-                      <Label className="text-[10px] text-muted-foreground">Masa magra (kg)</Label>
+                      <Label className="text-[10px] text-muted">Masa magra (kg)</Label>
                       <Input
                         type="number"
                         value={bcLbm}
@@ -561,7 +561,7 @@ export function PlanBuilderSidebar({
 
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] text-muted-foreground">Actividad</Label>
+                      <Label className="text-[10px] text-muted">Actividad</Label>
                       <Select value={suggActivity} onValueChange={(v) => setSuggActivity(v as ActivityKey)}>
                         <SelectTrigger className="h-8 text-sm">
                           <SelectValue>{ACTIVITY_LABELS[suggActivity]}</SelectValue>
@@ -576,7 +576,7 @@ export function PlanBuilderSidebar({
                       </Select>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] text-muted-foreground">Objetivo</Label>
+                      <Label className="text-[10px] text-muted">Objetivo</Label>
                       <Select value={suggGoal} onValueChange={(v) => setSuggGoal(v as GoalKey)}>
                         <SelectTrigger className="h-8 text-sm">
                           <SelectValue>{GOAL_LABELS[suggGoal]}</SelectValue>
@@ -591,7 +591,7 @@ export function PlanBuilderSidebar({
                   </div>
 
                   {bcLeanMass != null && (
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-[10px] text-muted">
                       Masa magra usada:{' '}
                       <span className="font-bold tabular-nums text-indigo-600 dark:text-indigo-300">
                         {bcLeanMass.toFixed(1)} kg
@@ -602,13 +602,13 @@ export function PlanBuilderSidebar({
                   {bcSuggested && (
                     <div className="rounded-lg bg-indigo-500/10 border border-indigo-500/20 p-2.5 space-y-2">
                       <div className="grid grid-cols-2 gap-1 text-[11px] font-bold">
-                        <span className="text-muted-foreground">kcal:</span>
+                        <span className="text-muted">kcal:</span>
                         <span className="tabular-nums text-indigo-700 dark:text-indigo-300">{bcSuggested.calories}</span>
-                        <span className="text-muted-foreground">Proteína:</span>
+                        <span className="text-muted">Proteína:</span>
                         <span className="tabular-nums text-[var(--ember-600)]">{bcSuggested.protein}g</span>
-                        <span className="text-muted-foreground">Carbos:</span>
+                        <span className="text-muted">Carbos:</span>
                         <span className="tabular-nums text-[var(--sport-600)]">{bcSuggested.carbs}g</span>
-                        <span className="text-muted-foreground">Grasas:</span>
+                        <span className="text-muted">Grasas:</span>
                         <span className="tabular-nums text-[var(--aqua-600)]">{bcSuggested.fats}g</span>
                       </div>
                       <Button
@@ -634,7 +634,7 @@ export function PlanBuilderSidebar({
 
       <div>
         <div className="flex items-center gap-1">
-          <Label className="text-xs font-bold uppercase text-muted-foreground">Indicaciones</Label>
+          <Label className="text-xs font-bold uppercase text-muted">Indicaciones</Label>
           <InfoTooltip content="Notas visibles para el alumno en su plan. Úsalas para agregar contexto: horarios sugeridos, tip de preparación, o recordatorios específicos para este alumno." />
         </div>
         <Textarea

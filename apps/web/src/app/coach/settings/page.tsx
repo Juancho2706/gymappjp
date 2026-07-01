@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { getTierCapabilities, ADDON_MODULE_KEYS, type SubscriptionTier } from '@/lib/constants'
-import { Check, Palette, Package, ChevronRight, Users, CreditCard, SlidersHorizontal, LayoutGrid, Sparkles, ArrowRight, Image as ImageIcon, Type, MessageSquare, type LucideIcon } from 'lucide-react'
+import { Check, Palette, Package, ChevronRight, Users, CreditCard, SlidersHorizontal, LayoutGrid, LifeBuoy, Sparkles, ArrowRight, Image as ImageIcon, Type, MessageSquare, type LucideIcon } from 'lucide-react'
 import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 import { DangerZone } from './_components/DangerZone'
 import { ThemeToggleCard } from './_components/ThemeToggleCard'
@@ -484,6 +484,16 @@ export default async function CoachSettingsPage() {
                         icon={LayoutGrid}
                         title="Áreas del builder"
                         desc="Organizá los días del planificador"
+                    />
+                </div>
+
+                <div className="space-y-3">
+                    <Eyebrow>Cuenta</Eyebrow>
+                    <HubCard
+                        href="/coach/support"
+                        icon={LifeBuoy}
+                        title="Soporte"
+                        desc="Escribinos si algo no funciona o necesitás ayuda"
                     />
                 </div>
 

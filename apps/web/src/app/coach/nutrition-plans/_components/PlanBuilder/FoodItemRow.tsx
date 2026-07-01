@@ -56,7 +56,7 @@ function SwapQtyInput({
       type="number"
       min={0}
       step="any"
-      className="h-8 w-20 bg-white dark:bg-background text-[11px] font-bold"
+      className="h-8 w-20 bg-surface-card text-[11px] font-bold"
       value={qtyStr}
       onChange={(e) => {
         setQtyStr(e.target.value)
@@ -105,29 +105,29 @@ export function FoodItemRow({
     <div
       ref={setNodeRef}
       style={dragStyle}
-      className={`rounded-xl border border-slate-200 dark:border-border/60 bg-slate-50 dark:bg-muted/20 px-3 py-2 space-y-2 ${isDragging ? 'z-10 opacity-80 ring-2 ring-[color:var(--theme-primary)]' : ''}`}
+      className={`rounded-xl border border-subtle bg-surface-sunken/20 px-3 py-2 space-y-2 ${isDragging ? 'z-10 opacity-80 ring-2 ring-[color:var(--theme-primary)]' : ''}`}
     >
       <div className="flex flex-wrap items-center gap-2">
       <button
         type="button"
-        className="touch-none shrink-0 cursor-grab text-muted-foreground hover:text-foreground"
+        className="touch-none shrink-0 cursor-grab text-muted hover:text-strong"
         {...attributes}
         {...listeners}
         aria-label="Arrastrar para reordenar"
       >
         <GripVertical className="h-4 w-4" />
       </button>
-      <span className="flex-1 min-w-[120px] text-sm font-semibold text-foreground truncate">
+      <span className="flex-1 min-w-[120px] text-sm font-semibold text-strong truncate">
         {item.food.name}
         {item.food.brand && (
-          <span className="ml-1 text-[10px] font-normal text-muted-foreground">{item.food.brand}</span>
+          <span className="ml-1 text-[10px] font-normal text-muted">{item.food.brand}</span>
         )}
       </span>
       <Input
         type="number"
         min={0}
         step="any"
-        className="h-9 w-20 font-mono text-sm bg-white dark:bg-background text-slate-900 dark:text-foreground border-slate-300 dark:border-border"
+        className="h-9 w-20 font-mono text-sm bg-surface-card text-strong border-default"
         value={qtyStr}
         onChange={(e) => {
           setQtyStr(e.target.value)
@@ -146,7 +146,7 @@ export function FoodItemRow({
           value={item.unit ?? defaultUnit}
           onValueChange={(u) => onUpdate(item.quantity, u == null ? defaultUnit : u)}
         >
-          <SelectTrigger className="h-9 w-[80px] bg-white dark:bg-background text-slate-900 dark:text-foreground border-slate-300 dark:border-border">
+          <SelectTrigger className="h-9 w-[80px] bg-surface-card text-strong border-default">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -160,7 +160,7 @@ export function FoodItemRow({
         <InfoTooltip content="g = gramos (macros proporcionales a 100g). ml = mililitros, mismo cálculo que g (para líquidos y aceites). un = unidades (macros según la porción registrada en el alimento)." />
       </div>
       <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={onRemove}>
-        <Trash2 className="h-4 w-4 text-muted-foreground" />
+        <Trash2 className="h-4 w-4 text-muted" />
       </Button>
       </div>
 
@@ -185,18 +185,18 @@ export function FoodItemRow({
             const allowedUnits = swapOptionAllowedUnits(isLiquid)
             const effectiveUnit = coerceSwapOptionUnit(opt.unit, isLiquid)
             return (
-              <div key={opt.food_id} className="rounded-xl border border-sky-500/25 bg-sky-500/10 p-2.5">
+              <div key={opt.food_id} className="rounded-xl border border-[var(--aqua-500)]/25 bg-[var(--aqua-500)]/10 p-2.5">
                 <div className="flex items-start gap-2">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-black text-sky-800 dark:text-sky-200">{opt.food.name}</p>
-                    <p className="mt-0.5 text-[10px] font-semibold text-sky-700/80 dark:text-sky-300/80">
+                    <p className="truncate text-xs font-black text-[var(--aqua-700)] dark:text-[var(--aqua-200)]">{opt.food.name}</p>
+                    <p className="mt-0.5 text-[10px] font-semibold text-[var(--aqua-700)]/80 dark:text-[var(--aqua-200)]/80">
                       Porción base: {Math.round(opt.food.serving_size)} {opt.food.serving_unit ?? 'g'}
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => onRemoveSwapOption(opt.food_id)}
-                    className="rounded p-1 hover:bg-sky-500/20"
+                    className="rounded p-1 hover:bg-[var(--aqua-500)]/20"
                     aria-label={`Quitar alternativa ${opt.food.name}`}
                   >
                     <X className="h-3 w-3" />
@@ -216,7 +216,7 @@ export function FoodItemRow({
                       onUpdateSwapOption(opt.food_id, opt.quantity, coerceSwapOptionUnit(u, isLiquid))
                     }
                   >
-                    <SelectTrigger className="h-8 w-[68px] bg-white dark:bg-background text-[11px] font-bold">
+                    <SelectTrigger className="h-8 w-[68px] bg-surface-card text-[11px] font-bold">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

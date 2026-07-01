@@ -173,7 +173,7 @@ function VirtualFoodList({
                     className={cn(
                       'w-full rounded-xl border px-3 py-3 text-left transition-colors active:scale-[0.99]',
                       isAllergy
-                        ? 'border-rose-300 bg-rose-50/70 hover:bg-rose-50 dark:border-rose-500/30 dark:bg-rose-500/[0.07] dark:hover:bg-rose-500/10'
+                        ? 'border-[var(--danger-500)]/40 bg-[var(--danger-500)]/[0.06] hover:bg-[var(--danger-500)]/10'
                         : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50 dark:border-white/8 dark:bg-white/[0.03] dark:hover:bg-white/[0.07] dark:hover:border-white/15'
                     )}
                   >
@@ -183,12 +183,12 @@ function VirtualFoodList({
                         {f.brand && <span className="ml-1.5 text-[10px] font-normal text-zinc-400">{f.brand}</span>}
                       </p>
                       {isAllergy && (
-                        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-md bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-rose-600 dark:text-rose-400">
+                        <span className="inline-flex shrink-0 items-center gap-0.5 rounded-md bg-[var(--danger-500)]/15 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-[var(--danger-600)]">
                           <AlertTriangle className="h-3 w-3" /> Alergia
                         </span>
                       )}
                       {isIntolerance && (
-                        <span className="inline-flex shrink-0 items-center rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                        <span className="inline-flex shrink-0 items-center rounded-md bg-[var(--warning-500)]/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--warning-600)]">
                           Intolerancia
                         </span>
                       )}
@@ -198,7 +198,7 @@ function VirtualFoodList({
                         </span>
                       )}
                       {clientFavoriteIds?.has(f.id) && (
-                        <Heart role="img" className="h-3.5 w-3.5 shrink-0 fill-rose-400 text-rose-400" aria-label="Favorito del cliente" />
+                        <Heart role="img" className="h-3.5 w-3.5 shrink-0 fill-[var(--danger-500)] text-[var(--danger-500)]" aria-label="Favorito del cliente" />
                       )}
                     </div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1">
@@ -208,7 +208,7 @@ function VirtualFoodList({
                       <MacroPill label="C " value={f.carbs_g} color="text-[var(--sport-600)] bg-[var(--sport-100)]" />
                       <MacroPill label="G " value={f.fats_g} color="text-[var(--aqua-700)] bg-[var(--aqua-100)]" />
                       {f.is_liquid && (
-                        <span className="rounded-md bg-sky-50 px-1.5 py-0.5 text-[10px] font-bold text-sky-500 dark:bg-sky-500/10">ml</span>
+                        <span className="rounded-md bg-[var(--aqua-500)]/10 px-1.5 py-0.5 text-[10px] font-bold text-[var(--aqua-600)]">ml</span>
                       )}
                     </div>
                   </button>
@@ -644,7 +644,7 @@ export function FoodSearchDrawer({
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <Label className="text-[10px] font-black uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                  Kcal (100g)<span className="text-rose-500 ml-0.5">*</span>
+                  Kcal (100g)<span className="text-[var(--danger-500)] ml-0.5">*</span>
                 </Label>
                 <Input type="number" step="0.1" min={0} value={newCalories} onChange={(e) => setNewCalories(e.target.value)} className="h-10 bg-zinc-100 border-zinc-200 dark:bg-white/5 dark:border-white/10" />
               </div>
@@ -836,15 +836,15 @@ export function FoodSearchDrawer({
             aria-modal
             aria-label="Confirmar alérgeno"
             aria-describedby="allergy-confirm-desc"
-            className="relative w-full max-w-sm rounded-2xl border border-rose-300 bg-white p-5 shadow-2xl dark:border-rose-500/40 dark:bg-zinc-900"
+            className="relative w-full max-w-sm rounded-2xl border border-[var(--danger-500)]/40 bg-white p-5 shadow-2xl dark:bg-zinc-900"
           >
-            <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400">
+            <div className="flex items-center gap-2 text-[var(--danger-600)]">
               <AlertTriangle aria-hidden="true" className="h-5 w-5" />
               <p className="text-sm font-black uppercase tracking-widest">Posible alérgeno</p>
             </div>
             <p id="allergy-confirm-desc" className="mt-3 text-sm text-zinc-700 dark:text-zinc-200">
               Este alumno marcó <span className="font-bold">{allergyConfirm.name}</span> como{' '}
-              <span className="font-bold text-rose-600 dark:text-rose-400">alergia</span>. Agregarlo a
+              <span className="font-bold text-[var(--danger-600)]">alergia</span>. Agregarlo a
               su plan puede ser peligroso.
             </p>
             <div className="mt-5 flex gap-2">
@@ -864,7 +864,7 @@ export function FoodSearchDrawer({
                   setAllergyConfirm(null)
                   handlePickFood(f)
                 }}
-                className="h-11 flex-1 rounded-xl bg-rose-600 font-bold text-white hover:bg-rose-700"
+                className="h-11 flex-1 rounded-xl bg-[var(--danger-600)] font-bold text-white hover:bg-[var(--danger-700)]"
               >
                 Agregar igual
               </Button>

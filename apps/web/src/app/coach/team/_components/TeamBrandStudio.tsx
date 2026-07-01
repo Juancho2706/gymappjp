@@ -82,10 +82,10 @@ function ColorInput({ label, value, onChange, fallback, disabled, hint }: {
 }) {
     return (
         <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
+            <Label className="text-xs font-medium text-muted">{label}</Label>
             <div className="flex items-center gap-2">
                 <label
-                    className="relative h-9 w-9 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-border shadow-sm transition-transform active:scale-95"
+                    className="relative h-9 w-9 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-subtle shadow-sm transition-transform active:scale-95"
                     style={{ backgroundColor: value || fallback }}
                 >
                     <input
@@ -110,13 +110,13 @@ function ColorInput({ label, value, onChange, fallback, disabled, hint }: {
                         type="button"
                         onClick={() => onChange('')}
                         disabled={disabled}
-                        className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+                        className="text-[11px] text-muted underline-offset-2 hover:underline"
                     >
                         limpiar
                     </button>
                 )}
             </div>
-            {hint && <p className="text-[11px] leading-snug text-muted-foreground/70">{hint}</p>}
+            {hint && <p className="text-[11px] leading-snug text-muted/70">{hint}</p>}
         </div>
     )
 }
@@ -134,34 +134,34 @@ function LogoDrop({ label, currentUrl, previewUrl, onFile, disabled, dark, input
     const shown = previewUrl ?? currentUrl
     return (
         <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
+            <Label className="text-xs font-medium text-muted">{label}</Label>
             <button
                 type="button"
                 onClick={() => ref.current?.click()}
                 disabled={disabled}
                 className={cn(
                     'group flex w-full items-center gap-3 rounded-xl border border-dashed p-3 text-left transition-colors',
-                    dark ? 'border-neutral-700 bg-neutral-950' : 'border-border bg-muted/40',
+                    dark ? 'border-neutral-700 bg-neutral-950' : 'border-subtle bg-surface-sunken/40',
                     !disabled && 'hover:border-primary/50'
                 )}
             >
                 <span className={cn(
                     'relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border',
-                    dark ? 'border-neutral-700 bg-neutral-900' : 'border-border bg-white'
+                    dark ? 'border-neutral-700 bg-neutral-900' : 'border-subtle bg-white'
                 )}>
                     {shown ? (
                         // Preview local (object URL) o remoto — img plano evita el dominio whitelist de next/image para blobs.
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={shown} alt={label} className="h-full w-full object-contain p-1.5" />
                     ) : (
-                        <ImageIcon className={cn('h-5 w-5', dark ? 'text-neutral-600' : 'text-muted-foreground/50')} />
+                        <ImageIcon className={cn('h-5 w-5', dark ? 'text-neutral-600' : 'text-muted/50')} />
                     )}
                 </span>
                 <span className="min-w-0">
-                    <span className={cn('block text-xs font-medium', dark ? 'text-neutral-200' : 'text-foreground')}>
+                    <span className={cn('block text-xs font-medium', dark ? 'text-neutral-200' : 'text-strong')}>
                         {shown ? 'Cambiar imagen' : 'Subir imagen'}
                     </span>
-                    <span className={cn('block text-[11px]', dark ? 'text-neutral-500' : 'text-muted-foreground')}>
+                    <span className={cn('block text-[11px]', dark ? 'text-neutral-500' : 'text-muted')}>
                         PNG/JPEG · ideal 512×512 · ≤2 MB
                     </span>
                 </span>
@@ -282,7 +282,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                     <Section icon={Type} title="Identidad">
                         <div className="space-y-4">
                             <div className="space-y-1.5">
-                                <Label htmlFor="tbs-name" className="text-xs font-medium text-muted-foreground">Nombre del equipo</Label>
+                                <Label htmlFor="tbs-name" className="text-xs font-medium text-muted">Nombre del equipo</Label>
                                 <Input
                                     id="tbs-name"
                                     value={draft.name}
@@ -323,7 +323,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                     <Section icon={Palette} title="Colores">
                         <div className="space-y-4">
                             <div className="space-y-2">
-                                <Label className="text-xs font-medium text-muted-foreground">Color principal</Label>
+                                <Label className="text-xs font-medium text-muted">Color principal</Label>
                                 <div className="flex flex-wrap items-center gap-2">
                                     {PRESET_COLORS.map((c) => (
                                         <button
@@ -334,7 +334,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                                             className={cn(
                                                 'h-8 w-8 rounded-full border-2 transition-transform active:scale-90',
                                                 draft.primary_color.toLowerCase() === c.toLowerCase()
-                                                    ? 'border-foreground scale-110 shadow-md'
+                                                    ? 'border-strong scale-110 shadow-md'
                                                     : 'border-transparent hover:scale-105'
                                             )}
                                             style={{ backgroundColor: c }}
@@ -342,9 +342,9 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                                         />
                                     ))}
                                     <label
-                                        className="relative flex h-8 items-center gap-1.5 cursor-pointer rounded-full border border-border px-2.5 text-[11px] font-medium text-muted-foreground hover:border-primary/50"
+                                        className="relative flex h-8 items-center gap-1.5 cursor-pointer rounded-full border border-subtle px-2.5 text-[11px] font-medium text-muted hover:border-primary/50"
                                     >
-                                        <span className="h-3.5 w-3.5 rounded-full border border-border" style={{ backgroundColor: primary }} />
+                                        <span className="h-3.5 w-3.5 rounded-full border border-subtle" style={{ backgroundColor: primary }} />
                                         {draft.primary_color.toUpperCase()}
                                         <input
                                             type="color"
@@ -370,7 +370,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                             </div>
 
                             <details className="group">
-                                <summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground hover:text-foreground">
+                                <summary className="cursor-pointer list-none text-xs font-medium text-muted hover:text-strong">
                                     <span className="inline-flex items-center gap-1">Ajustes avanzados de color <span className="transition-transform group-open:rotate-90">›</span></span>
                                 </summary>
                                 <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -383,7 +383,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                                             checked={draft.neutral_tint}
                                             onChange={(e) => set('neutral_tint', e.target.checked)}
                                             disabled={dis}
-                                            className="h-4 w-4 rounded border-border"
+                                            className="h-4 w-4 rounded border-subtle"
                                         />
                                         <span className="text-xs">Teñir grises con el color de marca</span>
                                     </label>
@@ -395,7 +395,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                     <Section icon={Sparkles} title="Pantalla de carga">
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <div className="space-y-1.5">
-                                <Label htmlFor="tbs-loader-text" className="text-xs font-medium text-muted-foreground">Texto (≤24)</Label>
+                                <Label htmlFor="tbs-loader-text" className="text-xs font-medium text-muted">Texto (≤24)</Label>
                                 <Input
                                     id="tbs-loader-text"
                                     value={draft.loader_text}
@@ -407,8 +407,8 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                             </div>
                             <ColorInput label="Color del texto" value={draft.loader_text_color} onChange={(v) => set('loader_text_color', v)} fallback="#FFFFFF" disabled={dis} />
                             <div className="space-y-1.5">
-                                <Label className="text-xs font-medium text-muted-foreground">Ícono</Label>
-                                <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-border text-xs font-medium" role="radiogroup" aria-label="Ícono del loader">
+                                <Label className="text-xs font-medium text-muted">Ícono</Label>
+                                <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-subtle text-xs font-medium" role="radiogroup" aria-label="Ícono del loader">
                                     {ICON_MODES.map((m) => (
                                         <button
                                             key={m.value}
@@ -421,7 +421,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                                                 'min-h-[36px] px-2 transition-colors',
                                                 draft.loader_icon_mode === m.value
                                                     ? 'bg-primary text-primary-foreground'
-                                                    : 'bg-background text-muted-foreground hover:bg-muted'
+                                                    : 'bg-surface-app text-muted hover:bg-surface-sunken'
                                             )}
                                         >
                                             {m.label}
@@ -435,7 +435,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                                     checked={draft.use_custom_loader}
                                     onChange={(e) => set('use_custom_loader', e.target.checked)}
                                     disabled={dis}
-                                    className="h-4 w-4 rounded border-border"
+                                    className="h-4 w-4 rounded border-subtle"
                                 />
                                 <span className="text-xs">Activar loader personalizado</span>
                             </label>
@@ -454,7 +454,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                                     role="radio"
                                     aria-checked={previewMode === 'light'}
                                     onClick={() => setPreviewMode('light')}
-                                    className={cn('flex min-h-[32px] items-center px-2.5', previewMode === 'light' ? 'bg-muted text-foreground' : 'text-muted-foreground')}
+                                    className={cn('flex min-h-[32px] items-center px-2.5', previewMode === 'light' ? 'bg-surface-sunken text-strong' : 'text-muted')}
                                 >
                                     <Sun className="h-3.5 w-3.5" />
                                 </button>
@@ -463,7 +463,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                                     role="radio"
                                     aria-checked={previewMode === 'dark'}
                                     onClick={() => setPreviewMode('dark')}
-                                    className={cn('flex min-h-[32px] items-center px-2.5', previewMode === 'dark' ? 'bg-muted text-foreground' : 'text-muted-foreground')}
+                                    className={cn('flex min-h-[32px] items-center px-2.5', previewMode === 'dark' ? 'bg-surface-sunken text-strong' : 'text-muted')}
                                 >
                                     <Moon className="h-3.5 w-3.5" />
                                 </button>
@@ -526,7 +526,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
 
                         {/* Splash preview */}
                         <div className="mt-3">
-                            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Pantalla de carga</p>
+                            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">Pantalla de carga</p>
                             <div className="flex h-20 flex-col items-center justify-center gap-1.5 rounded-xl" style={{ backgroundColor: splash }}>
                                 {draft.loader_icon_mode === 'logo' && shownLogo && (
                                     // eslint-disable-next-line @next/next/no-img-element
@@ -542,7 +542,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                             </div>
                         </div>
 
-                        <p className="mt-3 text-center font-mono text-[10px] text-muted-foreground/60">/t/{teamSlug}</p>
+                        <p className="mt-3 text-center font-mono text-[10px] text-muted/60">/t/{teamSlug}</p>
                     </div>
                 </div>
             </div>
@@ -561,7 +561,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
 
             {/* Sticky save bar — aparece solo con cambios sin publicar */}
             {canEdit && dirty && (
-                <div className="sticky bottom-2 z-20 flex items-center justify-between gap-3 rounded-card border border-subtle bg-card/95 px-4 py-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/80">
+                <div className="sticky bottom-2 z-20 flex items-center justify-between gap-3 rounded-card border border-subtle bg-surface-card/95 px-4 py-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-surface-card/80">
                     <p className="text-xs text-muted">
                         <span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-amber-500" />
                         Cambios sin publicar
