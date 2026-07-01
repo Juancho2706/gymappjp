@@ -63,6 +63,10 @@ export interface BuilderBlock {
     hr_zone?: number | null
     instructions?: string
     interval_config?: IntervalConfig | null
+    /** Por-lado (movilidad/cardio unilateral). Faltaba en el round-trip → se perdía al guardar. */
+    is_unilateral?: boolean | null
+    /** Metadata de targets secundarios. Faltaba en el round-trip → se perdía al guardar. */
+    extra_targets?: Record<string, unknown> | null
 }
 
 export interface ProgramPhase {

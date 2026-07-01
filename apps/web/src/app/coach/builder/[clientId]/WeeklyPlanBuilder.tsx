@@ -916,6 +916,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                         hr_zone: b.hr_zone ?? null,
                         instructions: b.instructions?.trim() ? b.instructions.trim() : null,
                         interval_config: b.interval_config ?? null,
+                        is_unilateral: b.is_unilateral ?? null,
+                        extra_targets: b.extra_targets ?? null,
                         order_index: idx,
                     }
                 })
