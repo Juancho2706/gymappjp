@@ -412,17 +412,23 @@ export async function updateTeamBrandAction(teamId: string, formData: FormData) 
     if (formData.has('neutral_tint')) updates.neutral_tint = formData.get('neutral_tint') === 'on' || formData.get('neutral_tint') === 'true'
 
     // Logos: claro + oscuro (upload service-role tras el gate de manager; bucket logos público).
+    // "Quitar logo" (remove_logo/_dark = 'true') nulea la columna. Espejo del standalone: se deja
+    // el archivo en el bucket (huérfano) — el path es fijo (upsert), así que un re-upload lo pisa.
     const logoFile = formData.get('logo') as File | null
     if (logoFile && logoFile.size > 0) {
         const up = await uploadTeamImage(admin, teamId, logoFile, 'logo')
         if (up.error) return { error: up.error }
         updates.logo_url = up.url!
+    } else if (formData.get('remove_logo') === 'true') {
+        updates.logo_url = null
     }
     const logoDarkFile = formData.get('logo_dark') as File | null
     if (logoDarkFile && logoDarkFile.size > 0) {
         const up = await uploadTeamImage(admin, teamId, logoDarkFile, 'logo-dark')
         if (up.error) return { error: up.error }
         updates.logo_url_dark = up.url!
+    } else if (formData.get('remove_logo_dark') === 'true') {
+        updates.logo_url_dark = null
     }
 
     if (Object.keys(updates).length === 0) return { error: 'Nada que actualizar.' }

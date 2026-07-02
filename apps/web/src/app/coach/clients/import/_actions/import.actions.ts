@@ -44,6 +44,63 @@ export type ImportClientsState = {
     rowErrors?: ImportRowError[]
 }
 
+// Data + gating del importador para el cliente (pane embebido en Opciones + ruta directa).
+export type ImportContext =
+    | { allowed: true; coachId: string; orgId: string | null; maxClients: number; activeCount: number }
+    | { allowed: false; reason: 'unauth' | 'org_coach' | 'upsell'; tier: SubscriptionTier }
+
+/**
+ * Gating + data del importador, espejo EXACTO de lo que hacía la RSC `clients/import/page.tsx`:
+ * getClaims → contexto org → capacidades del tier → conteo de alumnos activos. Es una LECTURA
+ * (no redirige): quien la consume decide con `reason` — la ruta directa redirige, el pane
+ * embebido en Opciones muestra el upsell o nada (no puede redirigir sin sacar al coach de la
+ * SettingsShell). Reutilizada por `ImportContent` (cliente) para no duplicar el gating.
+ */
+export async function getImportContext(): Promise<ImportContext> {
+    const supabase = await createClient()
+    // getClaims(): verificación local del JWT (ES256), sin /user — igual que la page RSC original.
+    const { data: __cl } = await supabase.auth.getClaims()
+    const userId = __cl?.claims?.sub as string | undefined
+    if (!userId) return { allowed: false, reason: 'unauth', tier: 'free' }
+
+    const ctx = await getCoachOrgContext()
+    // Enterprise coach (role='coach' dentro de una org) no puede importar.
+    if (ctx?.isOrgUser && !ctx.isOrgAdmin) {
+        return { allowed: false, reason: 'org_coach', tier: 'free' }
+    }
+
+    const { data: coach } = await supabase
+        .from('coaches')
+        .select('id, subscription_tier, max_clients')
+        .eq('id', userId)
+        .maybeSingle()
+    if (!coach) return { allowed: false, reason: 'unauth', tier: 'free' }
+
+    const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
+    // Los org admins siempre importan (la org gestiona el billing); el resto necesita la capacidad.
+    if (!ctx?.isOrgAdmin && !getTierCapabilities(tier).canImportClients) {
+        return { allowed: false, reason: 'upsell', tier }
+    }
+
+    const orgId = ctx?.isOrgAdmin ? ctx.orgId : null
+
+    const countQuery = supabase
+        .from('clients')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_archived', false)
+    if (orgId) countQuery.eq('org_id', orgId)
+    else countQuery.eq('coach_id', coach.id)
+    const { count: activeCount } = await countQuery
+
+    return {
+        allowed: true,
+        coachId: coach.id,
+        orgId,
+        maxClients: coach.max_clients ?? 10,
+        activeCount: activeCount ?? 0,
+    }
+}
+
 function normalizeImportDate(raw: string | null | undefined): string | null {
     if (!raw) return null
     const s = raw.trim()

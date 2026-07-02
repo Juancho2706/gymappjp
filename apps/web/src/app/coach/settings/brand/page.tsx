@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { ArrowLeft, Palette } from 'lucide-react'
 import type { Metadata } from 'next'
 import { BrandSettingsForm } from '../BrandSettingsForm'
-import { LogoUploadForm } from '../LogoUploadForm'
 import { BrandSettingsTourClient } from '../_components/BrandSettingsTourClient'
 import { BrandUpsell } from '../_components/BrandUpsell'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
@@ -51,7 +50,7 @@ export default async function CoachBrandPage() {
                     Opciones
                 </Link>
 
-                <div className="flex items-start gap-3">
+                <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control" style={{ background: 'var(--sport-100)', color: 'var(--sport-600)' }}>
                         <Palette className="h-5 w-5" />
                     </div>
@@ -59,24 +58,15 @@ export default async function CoachBrandPage() {
                         <h1 className="font-display text-2xl font-black tracking-tight text-strong">
                             Mi Marca
                         </h1>
-                        <p className="mt-1 text-sm leading-relaxed text-muted">
-                            Personaliza la app de tus alumnos: logo, colores, nombre y mensajes.
-                            Cada alumno ve <span className="font-semibold text-strong">TU marca</span>, no la de EVA — instalan tu app como si fuera tuya.
+                        <p className="mt-0.5 text-sm text-muted">
+                            La app que ven tus alumnos, con tu identidad.
                         </p>
                     </div>
                 </div>
             </div>
 
-            <div className="space-y-6">
-                {/* Logo upload */}
-                <LogoUploadForm
-                    currentLogoUrl={coach.logo_url}
-                    brandName={coach.brand_name}
-                />
-
-                {/* Brand settings form */}
-                <BrandSettingsForm coach={coach} />
-            </div>
+            {/* Brand settings form (incluye logo, identidad, colores, avanzado y guardado unificado) */}
+            <BrandSettingsForm coach={coach} />
 
             <BrandSettingsTourClient
                 coachId={coach.id}

@@ -1,0 +1,63 @@
+# Gap de fidelidad visual — shell-alumno (app white-label /c/[coach_slug]/*)
+
+Auditoría del SHELL del lado alumno: tab bar (mobile), sidebar (desktop), headers y safe-areas.
+Kit = floating glass capsule (`TabBar floating`) + `DesktopSidebar`. App = `ClientNav.tsx` + `layout.tsx`.
+
+Fuentes:
+- Kit mobile tab bar (DS): `docs/design-source/_ds_bundle.js` `TabBar` (líneas 1040-1252), variante `floating` en 1088-1169.
+- Kit render + navMin (hide-on-scroll): `docs/design-source/ui_kits/eva-app/index.html` `EvaTabBar` (159-163), `alumnoTabs`/`<EvaTabBar minimized={navMin}>` (419-435), scroll→navMin (194-201), CSS filled-glyph (64), phone shell/home-indicator (17-36).
+- Kit desktop sidebar: `docs/design-source/ui_kits/eva-desktop/desktop-shell.jsx` `DesktopSidebar` (85-171); CSS `.dt-side`/`.dt-nav-item`/`.dt-nav-accent`/`.dt-side-foot` en `eva-desktop/index.html` (76-129).
+- App: `apps/web/src/components/client/ClientNav.tsx`, `apps/web/src/app/c/[coach_slug]/layout.tsx`, tokens `apps/web/src/app/globals.css`.
+
+---
+
+## [P0] El tab bar del alumno (mobile) es una barra ACOPLADA de ancho completo, no la cápsula flotante de vidrio del DS
+
+- **Kit:** `_ds_bundle.js` `TabBar` variante `floating` (líneas 1088-1107) — la navegación oficial del DS es una **cápsula flotante de vidrio esmerilado**: `position:absolute; left:14; right:14; bottom:24` (flota con márgenes en los 3 lados, NO toca los bordes), `padding:8`, `borderRadius:30` (cápsula redondeada), `background: color-mix(surface-card 74%, transparent)`, `backdropFilter: saturate(180%) blur(26px)`, `border: 1px solid color-mix(text-strong 9%)`, y sombra elevada flotante `boxShadow: 0 1px 0 rgba(255,255,255,0.45) inset, 0 14px 36px rgba(13,18,28,0.24), 0 4px 12px rgba(13,18,28,0.12)`. El docstring lo declara "the official default … floating capsule (iOS-26 style)" (1044-1056) y `flow.jsx`/`index.html` (línea 160) lo fija como decisión: "Navegación flotante = decisión del design system (cápsula de vidrio)".
+- **App:** `ClientNav.tsx:411-417` — la `<nav className="client-nav-mobile md:hidden fixed bottom-0 left-0 right-0 z-[59] flex items-stretch gap-0.5 border-t border-subtle bg-surface-card/95 backdrop-blur-xl px-1.5 pt-1.5 pb-safe … shadow-md">` es una **barra rectangular pegada a los bordes** (`fixed bottom-0 left-0 right-0`, sin márgenes), con **borde superior** (`border-t border-subtle`) en vez de cápsula, opacidad 95% (kit 74%), `blur-xl`≈24px (kit blur 26px + saturate 180%), y `shadow-md` plano (sin la sombra flotante elevada ni el inset highlight superior). Reserva `--mobile-bottom-bar-h: 88px` (`globals.css:198`).
+- **Diferencia concreta:** el elemento firma del shell del DS (cápsula que levita sobre el contenido con radios de 30px y márgenes) está ausente; la app usa una barra docked full-bleed. Es la desviación estructural más visible del shell alumno.
+- **Fix propuesto:** reestilar `nav.client-nav-mobile` a cápsula flotante: quitar `left-0 right-0 border-t`, usar `left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+8px)] rounded-[30px] p-2`, `background: color-mix(in srgb, var(--surface-card) 74%, transparent)`, `backdrop-blur: saturate(180%) blur(26px)`, `border: 1px solid color-mix(in srgb, var(--text-strong) 9%, transparent)` y la `box-shadow` de 2 capas + inset del kit. Ajustar `--mobile-content-bottom-offset` para el nuevo alto/hueco flotante.
+- **Verdict:** CONFIRMED (P0). Verificado 1:1: `_ds_bundle.js:1088-1107` es exactamente la cápsula flotante descrita (absolute, left/right 14, bottom 24, radius 30, bg surface-card 74%, blur 26 + saturate 180%, border text-strong 9%, boxShadow inset+2 capas) y el docstring 1044-1056 la declara "the official default … floating capsule". El render real del kit la usa: `eva-app/index.html:161-163` `EvaTabBar` = `<TabBar floating …>`, montada para `alumnoTabs` en 434-435, con comentario duro "Navegación flotante = decisión del design system (cápsula de vidrio)" (160, 374). La app (`ClientNav.tsx:411-417`, confirmado como el nav vivo — importado/renderizado en `layout.tsx:288`) es la barra docked full-bleed `fixed bottom-0 left-0 right-0 border-t … bg-surface-card/95 backdrop-blur-xl … shadow-md`. NO refutable como decisión intencional: el DS marca la docked como variante "legacy" (`floating={false}`, 1055, 1172) y fija la flotante como decisión. No existe componente hermano ni override CSS que la vuelva cápsula (grep de `floating`/`rounded-[30px]`/`left-3 right-3` en `components/client` = 0; único CSS de `nav.client-nav-mobile` en globals.css es el hide de workout, 1022). Gap estructural real.
+
+## [P1] Indicador de tab activo: la app usa un guion arriba + glifo sin relleno; el kit usa una píldora deslizante DETRÁS del tab + glifo relleno
+
+- **Kit:** `_ds_bundle.js:1108-1123` — el activo se marca con una **píldora que se desliza por detrás** del tab (`position:absolute; top:8; bottom:8; left:calc(...activeIndex...); borderRadius:22; background: color-mix(sport-500 15%); border: 1px solid color-mix(sport-500 24%)`) con transición spring en `left`. El glifo activo va **relleno** (`.eva-tabbar-ico-on svg { fill: currentColor; fill-opacity:.18 }`, `index.html:64` / `_ds_bundle.js:1069`) + color `var(--sport-600)` + `translateY(-1px)`; label activo `fontWeight:800` (1161).
+- **App:** `ClientNav.tsx:210-222` — el activo se marca con un **guion de 4px arriba del tile** (`absolute -top-0.5 left-1/2 h-1 w-8 -translate-x-1/2 rounded-pill`, bg `var(--theme-primary)`), el glifo NO se rellena (solo `color: var(--theme-primary)`), y el label activo mantiene `font-semibold` sin subir a 800.
+- **Diferencia concreta:** falta la píldora deslizante detrás del tab (el motivo iOS-26 del DS), el relleno del glifo activo y el bump de peso del label.
+- **Fix propuesto:** añadir el `<span>` indicador absoluto detrás de los tiles con `left` calculado por índice + transición spring; rellenar el ícono activo (fill-opacity .18 sobre `currentColor`) y subir el label activo a `font-extrabold`.
+- **Verdict:** CONFIRMED (P1). Verificado: `_ds_bundle.js:1108-1123` = píldora deslizante detrás del tab (absolute top/bottom 8, `left: calc(8px + activeIndex*…)`, radius 22, bg sport-500 15%, border sport-500 24%, transición spring en `left`); glifo relleno vía `.eva-tabbar-ico-on svg{fill:currentColor;fill-opacity:.18}` (1069 == `index.html:64`) + color `--sport-600` + `translateY(-1px)`; label activo `fontWeight:800` (1161). La app (`ClientNav.tsx:210-222`) marca el activo con guion 4px arriba (`absolute -top-0.5 h-1 w-8 rounded-pill`), glifo SIN fill (solo `color: theme-primary`) y label `font-semibold` (600). Motivo estructural distinto — NO es "token faltante" (el ícono de la app explícitamente solo setea `color`, sin fill) ni la diferencia de color white-label (sport vs theme-primary, esa parte sí sería intencional). El gap es el motivo iOS-26 (píldora detrás + relleno + peso 800), ausente.
+
+## [P1] Falta el comportamiento hide-on-scroll (minimize) del tab bar
+
+- **Kit:** `index.html:194-201` (`onScrollMin` → `navMin`) + `TabBar` `minimized` (1079-1080, 1092-1093, 1138-1168): al scrollear hacia abajo la cápsula se **colapsa a una píldora solo-íconos** (`left/right:72`, labels con `maxHeight:0; opacity:0`, gap/padding reducidos) y reaparece al subir. Es parte del carácter flotante del nav.
+- **App:** `ClientNav.tsx:411-437` — la barra mobile es siempre visible con tamaño fijo; no hay estado minimizado ni listener de scroll.
+- **Diferencia concreta:** la interacción de minimizar-al-scrollear (y el estado icon-only) no existe en la app.
+- **Fix propuesto:** añadir un listener de scroll en `<main>` (o IntersectionObserver) que togglee un estado `minimized` colapsando labels y estrechando la cápsula; respetar `prefers-reduced-motion`.
+- **Verdict:** DOWNGRADED → P2. El gap es REAL (verificado: `ClientNav.tsx` no tiene ni estado `minimized` ni listener de scroll; el kit sí lo cablea, `index.html:193-201` `onScrollMin`→`navMin` + `onScroll` en 433 + `minimized={navMin}` en 435, colapsando la cápsula a píldora icon-only, `_ds_bundle.js:1092-1093,1163-1164`). Pero la severidad como P1 es inflada: es una micro-interacción disparada solo al scrollear (invisible en reposo) y está 100% SUBORDINADA al P0 — el estado `minimized` únicamente anima los márgenes `left/right` de la cápsula de 14→72 y oculta labels, lo cual no tiene sentido sobre una barra docked full-bleed. Sin adoptar la cápsula flotante (P0) este comportamiento es moot. Polish de motion secundario, no gap de fidelidad visual estática → P2.
+
+## [P2] Desktop — el item de nav activo usa chevron derecho + tinte de tema, no la barra-acento izquierda (3px sport) del kit
+
+- **Kit:** `eva-desktop/index.html:100-106` — item activo = `background: var(--sport-100); color: var(--sport-600); font-weight:750` **+ una barra-acento vertical a la izquierda** (`.dt-nav-accent`: `position:absolute; left:-14px; width:3px; height:22px; border-radius:0 3px 3px 0; background: var(--sport-500)`), que crece con transición.
+- **App:** `ClientNav.tsx:171,183-185` — item activo = `activeBgStyle` (bg `color-mix(theme-primary 10%)` + `border color-mix(theme-primary 20%)`) + texto `var(--theme-primary)` + un **`ChevronRight` a la derecha** (`ml-auto h-3 w-3 opacity-60`). No hay barra-acento izquierda.
+- **Diferencia concreta:** motivo de activo distinto (chevron+borde vs. accent-bar izquierda); menor y en viewport secundario.
+- **Fix propuesto:** reemplazar el chevron por una barra-acento izquierda `w-[3px] h-[22px] bg-[--theme-primary] rounded-r` posicionada en el borde del sidebar, para igualar `.dt-nav-accent`.
+
+## [P2] Desktop — el sidebar no tiene el bloque de identidad "Tu coach" en el footer del kit
+
+- **Kit:** `desktop-shell.jsx:152-168` — el `.dt-side-foot` cierra con un `.dt-profile` (avatar/logo del coach + `.dt-profile-sub` "Tu coach" en mayúsculas + `.dt-profile-name` con el nombre del coach) y debajo el botón de colapsar (`.dt-collapse`, con label "Colapsar menú").
+- **App:** `ClientNav.tsx:238-266,284-315` — la identidad del coach vive ARRIBA (logo + "Mi Coach" + `coachBrand`, 250-257) y el botón colapsar está en el header (259-265); el footer contiene en cambio PWA/Tema/Colores/Cerrar sesión. No hay bloque de identidad "Tu coach" al pie.
+- **Diferencia concreta:** el patrón del kit repite la identidad del coach como perfil de pie (con avatar circular) y baja el toggle de colapsar; la app la muestra solo arriba. Es reorganización menor (la identidad SÍ está presente).
+- **Fix propuesto:** opcional — añadir un `dt-profile`-equivalente al pie con avatar del coach + "Tu coach" + nombre, y/o mover el toggle de colapsar al pie. Baja prioridad; la identidad ya se muestra.
+
+---
+
+## Verificado sin gap (para descartar falsos positivos)
+
+- **Items del nav mobile 1:1:** `baseItems` de la app (Inicio · Plan · Aprender · Check-in) + botón "Más" (`ClientNav.tsx:87-92,419-436`) == `alumnoTabs` del kit (`index.html:419-425`). Iconos y labels cortos coinciden. Los módulos de pago (Movimiento/Composición) van al overflow "Más" en ambos.
+- **"Más" como overflow del shell:** el sheet mobile de la app (`ClientNav.tsx:318-406`: Historial + módulos + Tema/Colores/Instalar/Cerrar sesión) es el overflow correcto del nav. El HUB completo de "Más" del kit (perfil, stats, compartir logro, zona de peligro — `alumno.jsx:904-971` / `DesktopAlumnoMas` `desktop-coach.jsx:564-659`) es una PANTALLA, fuera del scope de shell (auditar en el área mas/opciones-alumno). No lo cuento como gap de shell.
+- **Sidebar desktop — estructura:** logo header + nav vertical + grupo "Módulos" + footer de acciones (`ClientNav.tsx:231-316`) reproduce el patrón `.dt-side` (header brand + `.dt-nav` + `.dt-nav2` "Más" + `.dt-side-foot`). Ancho `md:w-64` (256px) vs kit 248px — diferencia despreciable. Colapsable con `md:w-20` vs kit 76px — equivalente.
+- **Safe-areas:** el nav mobile usa `pb-safe pl-safe pr-safe` (`ClientNav.tsx:414`) y `main` reserva `pb-[var(--mobile-content-bottom-offset)]` = `env(safe-area-inset-bottom) + 88px` (`layout.tsx:302`, `globals.css:203`). Manejo de safe-area correcto (se ajustará el offset si se adopta la cápsula flotante del P0).
+- **Oculto durante ejecución de rutina:** el nav se oculta en `/workout/` (`ClientNav.tsx:150,320,416`), espejo del `hideNav`/`fullbleed` del kit (`index.html:370-377`). Correcto.
+- **White-label del activo:** color activo = `var(--theme-primary)` (deriva del coach). Diferencias de color con el kit = data del coach, intencional (no gap).
+
+Verificado 1:1

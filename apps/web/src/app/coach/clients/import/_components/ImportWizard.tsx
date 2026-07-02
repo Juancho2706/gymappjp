@@ -23,24 +23,30 @@ interface Props {
     orgId?: string | null
     maxClients: number
     activeCount: number
+    /** Embebido en el pane "Importar alumnos" de Opciones: el SettingsShell ya rotula el título
+     *  (panehd) y aporta el scroll/ancho de la sección → ocultamos el encabezado propio y aflojamos
+     *  el padding superior para no duplicar. Página directa (false) = layout autónomo original. */
+    embedded?: boolean
 }
 
 const STEP_LABELS = ['Subir archivo', 'Mapear columnas', 'Revisar datos', 'Confirmar']
 
-export function ImportWizard({ coachId, orgId: _orgId, maxClients, activeCount }: Props) {
+export function ImportWizard({ coachId, orgId: _orgId, maxClients, activeCount, embedded = false }: Props) {
     const [step, setStep] = useState(1)
     const [sheet, setSheet] = useState<ParsedSheet | null>(null)
     const [mapping, setMapping] = useState<ColumnMapping>({})
     const [mappedRows, setMappedRows] = useState<MappedRow[]>([])
 
     return (
-        <div className="p-4 md:p-8 max-w-4xl mx-auto animate-fade-in">
-            <div className="mb-8">
-                <h1 className="text-2xl font-extrabold text-foreground">Importar Alumnos</h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                    Importá tu cartera desde un archivo Excel o CSV.
-                </p>
-            </div>
+        <div className={`max-w-4xl mx-auto animate-fade-in ${embedded ? 'px-4 pb-10 pt-2 md:px-8' : 'p-4 md:p-8'}`}>
+            {!embedded && (
+                <div className="mb-8">
+                    <h1 className="text-2xl font-extrabold text-foreground">Importar Alumnos</h1>
+                    <p className="text-sm text-muted-foreground mt-1">
+                        Importá tu cartera desde un archivo Excel o CSV.
+                    </p>
+                </div>
+            )}
 
             {/* Stepper */}
             <div className="flex items-center gap-0 mb-8 overflow-x-auto pb-1">

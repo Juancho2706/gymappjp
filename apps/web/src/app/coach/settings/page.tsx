@@ -11,7 +11,6 @@ import { CoachSignOutCard } from './_components/CoachSignOut'
 import { ThemeToggleCard } from './_components/ThemeToggleCard'
 import { getCoachSettingsForUser } from './_data/settings.queries'
 import { BrandSettingsForm } from './BrandSettingsForm'
-import { LogoUploadForm } from './LogoUploadForm'
 import { ModulesForm } from './modules/_components/ModulesForm'
 import { FeaturePrefsPanel } from '@/components/coach/FeaturePrefsPanel'
 import { AreasManager } from './areas/_components/AreasManager'
@@ -250,10 +249,7 @@ export default async function CoachSettingsPage() {
     const sections: Partial<Record<SettingsSectionId, ReactNode>> = {
         marca: canUseBranding ? (
             <PaneBody desc="Personalizá la app de tus alumnos: logo, colores, nombre y mensajes. Cada alumno ve TU marca, no la de EVA.">
-                <div className="space-y-6">
-                    <LogoUploadForm currentLogoUrl={coach.logo_url} brandName={coach.brand_name} />
-                    <BrandSettingsForm coach={coach} />
-                </div>
+                <BrandSettingsForm coach={coach} />
             </PaneBody>
         ) : (
             <PaneBody desc="Tu app, con tu identidad — disponible desde Starter.">

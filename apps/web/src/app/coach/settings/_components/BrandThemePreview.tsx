@@ -37,6 +37,13 @@ interface Props {
     fontFamily?: string
     /** Variante de loader elegida (white-label v2) — muestra la variante real en vivo. */
     loaderVariant?: LoaderVariant
+    /** Modo claro/oscuro CONTROLADO (opcional): comparte una única instancia lógica entre el preview
+     *  mobile-top, el sticky de desktop y el modal de zoom. Si no se pasa, usa estado local. */
+    isDark?: boolean
+    onToggleDark?: () => void
+    /** Pestaña activa CONTROLADA (opcional) — misma razón: una sola instancia lógica sincronizada. */
+    activeTab?: string
+    onTabChange?: (tab: string) => void
 }
 
 /* ─── helpers ─── */
@@ -376,9 +383,19 @@ export function BrandThemePreview({
     loaderIconMode,
     fontFamily,
     loaderVariant = 'eva',
+    isDark: isDarkProp,
+    onToggleDark,
+    activeTab: activeTabProp,
+    onTabChange,
 }: Props) {
-    const [isDark, setIsDark] = useState(false)
-    const [activeTab, setActiveTab] = useState('home')
+    // Modo/pestaña: controlados por el padre si se pasan (instancia lógica única compartida),
+    // o estado local como fallback autónomo.
+    const [localDark, setLocalDark] = useState(false)
+    const [localTab, setLocalTab] = useState('home')
+    const isDark = isDarkProp ?? localDark
+    const activeTab = activeTabProp ?? localTab
+    const toggleDark = onToggleDark ?? (() => setLocalDark((v) => !v))
+    const setActiveTab = onTabChange ?? setLocalTab
 
     const muted = mutedCls(isDark)
     const strong = strongCls(isDark)
@@ -396,7 +413,7 @@ export function BrandThemePreview({
                 <h2 className="text-base font-bold text-strong">Vista previa de tu app</h2>
                 <button
                     type="button"
-                    onClick={() => setIsDark(!isDark)}
+                    onClick={toggleDark}
                     className={cn(
                         'flex items-center gap-2 rounded-control border px-3 py-1.5 text-xs font-bold transition-all',
                         isDark

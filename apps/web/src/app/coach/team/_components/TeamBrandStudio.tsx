@@ -143,21 +143,36 @@ function ColorInput({ label, value, onChange, fallback, disabled, hint }: {
 }
 
 /** Dropzone de logo del kit (teams-equipo.jsx:24-40): 76px, logo centrado + "x" para quitar el pick local. */
-function LogoDrop({ label, hint, currentUrl, previewUrl, onFile, disabled, dark, inputName }: {
+function LogoDrop({ label, hint, currentUrl, previewUrl, removed, onFile, onRemove, disabled, dark, inputName }: {
     label: string
     hint?: string
     currentUrl: string | null
     previewUrl: string | null
+    removed: boolean
     onFile: (f: File | null) => void
+    onRemove: () => void
     disabled: boolean
     dark?: boolean
     inputName: string
 }) {
     const ref = useRef<HTMLInputElement>(null)
-    const shown = previewUrl ?? currentUrl
+    const shown = previewUrl ?? (removed ? null : currentUrl)
+    // "Quitar logo": solo con un logo YA guardado a la vista (no un pick local) y edición habilitada.
+    const canRemove = !!currentUrl && !previewUrl && !removed && !disabled
     return (
         <div className="min-w-0 flex-1">
-            <div className="mb-1.5 text-[11px] font-bold text-muted">{label}</div>
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-muted">{label}</span>
+                {canRemove && (
+                    <button
+                        type="button"
+                        onClick={onRemove}
+                        className="text-[11px] font-semibold text-subtle"
+                    >
+                        Quitar
+                    </button>
+                )}
+            </div>
             <button
                 type="button"
                 onClick={() => ref.current?.click()}
@@ -248,6 +263,8 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
     const [logoDarkPreview, setLogoDarkPreview] = useState<string | null>(null)
     const [logoPicked, setLogoPicked] = useState(false)
     const [logoDarkPicked, setLogoDarkPicked] = useState(false)
+    const [logoRemoved, setLogoRemoved] = useState(false)
+    const [logoDarkRemoved, setLogoDarkRemoved] = useState(false)
     const [previewMode, setPreviewMode] = useState<'light' | 'dark'>('light')
     const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; msg: string } | null>(null)
     const formRef = useRef<HTMLFormElement>(null)
@@ -255,8 +272,8 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
     const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }))
 
     const dirty = useMemo(
-        () => logoPicked || logoDarkPicked || JSON.stringify(draft) !== JSON.stringify(saved),
-        [draft, saved, logoPicked, logoDarkPicked]
+        () => logoPicked || logoDarkPicked || logoRemoved || logoDarkRemoved || JSON.stringify(draft) !== JSON.stringify(saved),
+        [draft, saved, logoPicked, logoDarkPicked, logoRemoved, logoDarkRemoved]
     )
 
     const primary = HEX_RE.test(draft.primary_color) ? draft.primary_color : '#10B981'
@@ -280,10 +297,10 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
     }, [primary, draft.accent_light, draft.accent_dark, draft.neutral_tint])
 
     const splash = HEX_RE.test(draft.splash_bg_color) ? draft.splash_bg_color : primary
-    const shownLogo = previewMode === 'dark'
-        ? (logoDarkPreview ?? brand.logo_url_dark ?? logoPreview ?? brand.logo_url)
-        : (logoPreview ?? brand.logo_url)
-    const lightLogo = logoPreview ?? brand.logo_url
+    // El pick local gana; si el logo guardado está marcado para quitar, el preview cae al fallback.
+    const lightLogo = logoPreview ?? (logoRemoved ? null : brand.logo_url)
+    const darkLogo = logoDarkPreview ?? (logoDarkRemoved ? null : brand.logo_url_dark)
+    const shownLogo = previewMode === 'dark' ? (darkLogo ?? lightLogo) : lightLogo
 
     // Neutrales del mock = familia ink del kit (BrandPreview, teams-equipo.jsx:85-88).
     const N = previewMode === 'dark'
@@ -306,6 +323,8 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
             setSaved(draft)
             setLogoPicked(false)
             setLogoDarkPicked(false)
+            setLogoRemoved(false)
+            setLogoDarkRemoved(false)
             setFeedback({ type: 'success', msg: 'Marca publicada · el equipo y los alumnos ya la ven' })
             window.setTimeout(() => setFeedback((f) => (f?.type === 'success' ? null : f)), 2600)
         })
@@ -326,6 +345,8 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
             <input type="hidden" name="loader_icon_mode" value={draft.loader_icon_mode} />
             <input type="hidden" name="use_custom_loader" value={draft.use_custom_loader ? 'true' : 'false'} />
             <input type="hidden" name="neutral_tint" value={draft.neutral_tint ? 'true' : 'false'} />
+            <input type="hidden" name="remove_logo" value={logoRemoved ? 'true' : ''} />
+            <input type="hidden" name="remove_logo_dark" value={logoDarkRemoved ? 'true' : ''} />
 
             {/* ── Live preview con toggle claro/oscuro ─────────────────── */}
             <div className="mb-2.5 flex items-center justify-between">
@@ -425,11 +446,18 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                         hint="PNG/JPEG · 512×512 · ≤2 MB"
                         currentUrl={brand.logo_url}
                         previewUrl={logoPreview}
+                        removed={logoRemoved}
                         inputName="logo"
                         disabled={dis}
+                        onRemove={() => {
+                            setLogoRemoved(true)
+                            setLogoPreview(null)
+                            setLogoPicked(false)
+                        }}
                         onFile={(f) => {
                             setLogoPreview(f ? URL.createObjectURL(f) : null)
                             setLogoPicked(!!f)
+                            if (f) setLogoRemoved(false)
                         }}
                     />
                     <LogoDrop
@@ -437,12 +465,19 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                         hint="Para fondos oscuros"
                         currentUrl={brand.logo_url_dark}
                         previewUrl={logoDarkPreview}
+                        removed={logoDarkRemoved}
                         inputName="logo_dark"
                         disabled={dis}
                         dark
+                        onRemove={() => {
+                            setLogoDarkRemoved(true)
+                            setLogoDarkPreview(null)
+                            setLogoDarkPicked(false)
+                        }}
                         onFile={(f) => {
                             setLogoDarkPreview(f ? URL.createObjectURL(f) : null)
                             setLogoDarkPicked(!!f)
+                            if (f) setLogoDarkRemoved(false)
                         }}
                     />
                 </div>
@@ -649,6 +684,8 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                             setLogoDarkPreview(null)
                             setLogoPicked(false)
                             setLogoDarkPicked(false)
+                            setLogoRemoved(false)
+                            setLogoDarkRemoved(false)
                             formRef.current?.reset()
                         }}
                     >

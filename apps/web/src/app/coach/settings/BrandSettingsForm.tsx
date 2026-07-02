@@ -1,54 +1,118 @@
 'use client'
 
-import { useActionState, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { useFormStatus } from 'react-dom'
+import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Loader2, Save, Palette, ExternalLink, Copy, Check, ImageIcon, Type, MessageSquare, SlidersHorizontal, QrCode, Play, FileText, RotateCcw, ShieldCheck, ShieldAlert, ShieldX, Maximize2, X } from 'lucide-react'
-import { updateBrandSettingsAction, type BrandSettingsState } from './_actions/settings.actions'
+import { Loader2, Save, Palette, ExternalLink, Copy, Check, Type, MessageSquare, QrCode, Play, FileText, RotateCcw, ShieldCheck, ShieldAlert, ShieldX, Maximize2, X, ImagePlus, Moon } from 'lucide-react'
+import { updateBrandSettingsAction, updateLogoAction, updateLogoDarkAction, type BrandSettingsState } from './_actions/settings.actions'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/database.types'
 import { generateBrandPalette, getContrastInfo, hexToRgb } from '@/lib/color-utils'
 import { BrandThemePreview } from './_components/BrandThemePreview'
 import { QRCodeSVG } from 'qrcode.react'
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
-import { BrandAdvancedSection, type AdvancedBrandValue } from './BrandAdvancedSection'
+import { BrandAdvancedSection, type AdvancedBrandValue, type AdvancedLoaderValue } from './BrandAdvancedSection'
 import type { SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack, isFontKey, type FontKey } from '@/lib/brand-fonts'
 import { resolveLoaderVariant, type LoaderVariant } from '@/lib/brand-loaders'
+import { BRAND_LOGO_WEB } from '@/lib/brand-assets'
 
 type Coach = Tables<'coaches'>
 
 const initialState: BrandSettingsState = {}
+const MAX_LOGO = 2 * 1024 * 1024
 
 const PRESET_COLORS = [
     '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B',
     '#EF4444', '#EC4899', '#06B6D4', '#F97316',
 ]
 
-function SaveButton() {
-    const { pending } = useFormStatus()
+/** Slot de logo (claro u oscuro) — elige archivo a STAGE (no auto-guarda; entra al FAB unificado). */
+function LogoSlot({
+    label,
+    hint,
+    dark = false,
+    displayUrl,
+    brandName,
+    staged,
+    onPick,
+    onClear,
+}: {
+    label: string
+    hint: string
+    dark?: boolean
+    displayUrl: string | null
+    brandName: string
+    staged: boolean
+    onPick: (file: File) => void
+    onClear: () => void
+}) {
+    const fileRef = useRef<HTMLInputElement>(null)
+    const [drag, setDrag] = useState(false)
+    const pick = (f?: File | null) => { if (f) onPick(f) }
+
     return (
-        <button
-            type="submit"
-            disabled={pending}
-            className={cn(
-                'flex items-center gap-2 rounded-pill transition-all duration-200 text-[var(--text-on-sport)] shadow-[var(--glow-sport)]',
-                'h-12 px-5 text-sm font-bold',
-                'disabled:opacity-60 disabled:cursor-not-allowed hover:opacity-90 hover:-translate-y-0.5'
-            )}
-            style={{ backgroundColor: 'var(--theme-primary)' }}
-        >
-            {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            <span className="hidden sm:inline">{pending ? 'Guardando...' : 'Guardar cambios'}</span>
-        </button>
+        <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex items-center gap-1.5">
+                {dark && <Moon className="h-3.5 w-3.5 text-muted" />}
+                <span className="text-xs font-bold text-strong">{label}</span>
+            </div>
+            <div
+                onClick={() => fileRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setDrag(true) }}
+                onDragLeave={() => setDrag(false)}
+                onDrop={(e) => { e.preventDefault(); setDrag(false); pick(e.dataTransfer.files?.[0]) }}
+                className={cn(
+                    'relative flex aspect-[16/9] cursor-pointer items-center justify-center overflow-hidden rounded-control border-2 border-dashed transition-colors',
+                    dark ? 'bg-[#121212]' : 'bg-surface-sunken',
+                    drag ? 'border-[var(--sport-500)]' : 'border-default hover:border-[var(--sport-400)]'
+                )}
+            >
+                {displayUrl ? (
+                    <Image src={displayUrl} alt={brandName} fill sizes="220px" className="object-contain p-3" unoptimized />
+                ) : dark ? (
+                    <span className="text-[11px] text-zinc-400">Opcional — usa el claro si no lo defines</span>
+                ) : (
+                    <Image src={BRAND_LOGO_WEB} alt="EVA" fill sizes="220px" className="object-contain p-3" />
+                )}
+                {staged && (
+                    <span className="absolute right-1.5 top-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-bold text-white">Sin guardar</span>
+                )}
+                <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/40 py-1 text-[10px] font-semibold text-white">
+                    <ImagePlus className="h-3 w-3" /> {drag ? 'Suelta aquí' : 'Arrastra o haz clic'}
+                </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] text-muted">{hint}</p>
+                {staged && (
+                    <button type="button" onClick={onClear} className="shrink-0 text-[10px] font-semibold text-muted underline">
+                        Descartar
+                    </button>
+                )}
+            </div>
+            <input
+                ref={fileRef}
+                type="file"
+                accept="image/png,image/jpeg"
+                aria-hidden="true"
+                tabIndex={-1}
+                className="sr-only"
+                onChange={(e) => { pick(e.target.files?.[0]); e.target.value = '' }}
+            />
+        </div>
     )
 }
 
 export function BrandSettingsForm({ coach }: { coach: Coach }) {
-    const [state, formAction] = useActionState(updateBrandSettingsAction, initialState)
+    const router = useRouter()
+    const formRef = useRef<HTMLFormElement>(null)
+    const [state, setState] = useState<BrandSettingsState>(initialState)
+    const [isSaving, setIsSaving] = useState(false)
+
     const [selectedColor, setSelectedColor] = useState(coach.primary_color)
     const [useCoachColors, setUseCoachColors] = useState(!!coach.use_brand_colors_coach)
     const [useCustomLoader, setUseCustomLoader] = useState(coach.use_custom_loader ?? false)
@@ -70,8 +134,18 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     const [neutralTint, setNeutralTint] = useState(coach.neutral_tint ?? false)
     const [fontKey, setFontKey] = useState<FontKey | ''>(isFontKey(coach.brand_font_key) ? coach.brand_font_key : '')
     const [loaderVariant, setLoaderVariant] = useState<LoaderVariant>(resolveLoaderVariant(coach.loader_variant))
-    // Vista previa a pantalla completa (mismo componente fiel que el sticky — refleja lo que editás).
+    // Vista previa: modo y pestaña LEVANTADOS al padre → una sola instancia lógica compartida
+    // (mobile-top + sticky desktop + modal de zoom), toggle claro/oscuro ÚNICO.
+    const [previewDark, setPreviewDark] = useState(false)
+    const [previewTab, setPreviewTab] = useState('home')
     const [previewExpanded, setPreviewExpanded] = useState(false)
+
+    // Logo unificado: se ELIGE acá (stage) y se sube al presionar Guardar (mismas actions multipart).
+    const [stagedLogo, setStagedLogo] = useState<File | null>(null)
+    const [stagedLogoUrl, setStagedLogoUrl] = useState<string | null>(null)
+    const [stagedLogoDark, setStagedLogoDark] = useState<File | null>(null)
+    const [stagedLogoDarkUrl, setStagedLogoDarkUrl] = useState<string | null>(null)
+    const objectUrlsRef = useRef<string[]>([])
 
     const advancedValue: AdvancedBrandValue = { secondaryColor, accentLight, accentDark, neutralTint, fontKey, loaderVariant }
     const handleAdvancedChange = (patch: Partial<AdvancedBrandValue>) => {
@@ -82,8 +156,17 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
         if (patch.fontKey !== undefined) setFontKey(patch.fontKey)
         if (patch.loaderVariant !== undefined) setLoaderVariant(patch.loaderVariant)
     }
+    const loaderValue: AdvancedLoaderValue = { useCustomLoader, loaderText, loaderIconMode, loaderTextColor }
+    const handleLoaderChange = (patch: Partial<AdvancedLoaderValue>) => {
+        if (patch.useCustomLoader !== undefined) setUseCustomLoader(patch.useCustomLoader)
+        if (patch.loaderText !== undefined) setLoaderText(patch.loaderText)
+        if (patch.loaderIconMode !== undefined) setLoaderIconMode(patch.loaderIconMode)
+        if (patch.loaderTextColor !== undefined) setLoaderTextColor(patch.loaderTextColor)
+    }
     // Fuente resuelta para el preview del teléfono (solo si el coach eligió una; '' = sin cambio visual).
     const previewFontFamily = fontKey ? resolveBrandFontStack(fontKey) : undefined
+    // Logo mostrado en el preview/avanzado: el recién elegido (stage) o el guardado.
+    const previewLogoUrl = stagedLogoUrl ?? coach.logo_url
 
     const palette = generateBrandPalette(selectedColor ?? '#007AFF')
     const publicStudentIdentifier = getCoachPublicIdentifier(coach)
@@ -93,16 +176,21 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
 
     const contrast = useMemo(() => getContrastInfo(selectedColor ?? '#007AFF'), [selectedColor])
 
+    // Brand Score (H6): recalibrado para que el branding avanzado (fuente / loader / color2) cuente
+    // y el 100% sea alcanzable. Suma exacta = 100.
     const brandScore = useMemo(() => {
         let score = 0
-        if (coach.logo_url) score += 25
-        if (selectedColor && selectedColor !== '#007AFF') score += 20
-        if (welcomeMessageInput.trim()) score += 15
-        if (useCustomLoader && loaderText.trim()) score += 15
-        if (welcomeModalEnabled && welcomeModalContent.trim()) score += 15
+        if (coach.logo_url || stagedLogo) score += 20
+        if (selectedColor && selectedColor !== '#007AFF') score += 15
+        if (welcomeMessageInput.trim()) score += 10
+        if (welcomeModalEnabled && welcomeModalContent.trim()) score += 10
         if (coach.brand_name && coach.brand_name !== coach.full_name) score += 10
+        if (useCustomLoader && loaderText.trim()) score += 10
+        if (fontKey) score += 10
+        if (loaderVariant !== 'eva') score += 10
+        if (/^#[0-9a-fA-F]{6}$/.test(secondaryColor)) score += 5
         return score
-    }, [coach, selectedColor, welcomeMessageInput, useCustomLoader, loaderText, welcomeModalEnabled, welcomeModalContent])
+    }, [coach, stagedLogo, selectedColor, welcomeMessageInput, welcomeModalEnabled, welcomeModalContent, useCustomLoader, loaderText, fontKey, loaderVariant, secondaryColor])
 
     const qrNode = useMemo(() => (
         <QRCodeSVG value={studentUrl} size={96} level="M" />
@@ -121,6 +209,9 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             welcomeModalContent !== (coach.welcome_modal_content ?? '') ||
             (welcomeModalType as string) !== ((coach.welcome_modal_type ?? 'text') as string) ||
             welcomeMessageInput !== (coach.welcome_message ?? '') ||
+            // logo (staged, se sube en el save)
+            stagedLogo !== null ||
+            stagedLogoDark !== null ||
             // white-label v2 (branding avanzado Pro) — fuente/loader/color2/acentos/tinte
             secondaryColor !== (coach.brand_secondary_color ?? '') ||
             accentLight !== (coach.accent_light ?? '') ||
@@ -129,18 +220,10 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             fontKey !== (isFontKey(coach.brand_font_key) ? coach.brand_font_key : '') ||
             loaderVariant !== resolveLoaderVariant(coach.loader_variant)
         )
-    }, [selectedColor, useCoachColors, useCustomLoader, loaderText, loaderTextColor, loaderIconMode, welcomeModalEnabled, welcomeModalContent, welcomeModalType, welcomeMessageInput, secondaryColor, accentLight, accentDark, neutralTint, fontKey, loaderVariant, coach])
+    }, [selectedColor, useCoachColors, useCustomLoader, loaderText, loaderTextColor, loaderIconMode, welcomeModalEnabled, welcomeModalContent, welcomeModalType, welcomeMessageInput, stagedLogo, stagedLogoDark, secondaryColor, accentLight, accentDark, neutralTint, fontKey, loaderVariant, coach])
 
-    useEffect(() => {
-        if (state.success) {
-            toast.success('Marca actualizada', { id: 'coach-brand-saved' })
-        }
-        if (state.error) {
-            toast.error(state.error, { id: 'coach-brand-err' })
-        }
-    }, [state.success, state.error])
-
-    // Live Preview Effect
+    // Live Preview Effect (H7: el mockup del teléfono SIEMPRE usa selectedColor; este efecto solo
+    // tiñe el CHROME del panel del coach, y solo si use_brand_colors_coach está ON).
     useEffect(() => {
         const container = document.querySelector('.coach-layout-container') as HTMLElement;
         const originalColor = coach.use_brand_colors_coach === false ? '#007AFF' : (coach.primary_color || '#007AFF');
@@ -179,6 +262,26 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
         return () => window.removeEventListener('keydown', onKey)
     }, [previewExpanded]);
 
+    // Revocar object URLs de los logos staged al desmontar.
+    useEffect(() => {
+        return () => {
+            objectUrlsRef.current.forEach((u) => URL.revokeObjectURL(u))
+            objectUrlsRef.current = []
+        }
+    }, []);
+
+    const stageLogo = (file: File, which: 'light' | 'dark') => {
+        if (file.size > MAX_LOGO) { toast.error('El archivo supera 2 MB'); return }
+        const url = URL.createObjectURL(file)
+        objectUrlsRef.current.push(url)
+        if (which === 'light') { setStagedLogo(file); setStagedLogoUrl(url) }
+        else { setStagedLogoDark(file); setStagedLogoDarkUrl(url) }
+    }
+    const clearStagedLogos = () => {
+        setStagedLogo(null); setStagedLogoUrl(null)
+        setStagedLogoDark(null); setStagedLogoDarkUrl(null)
+    }
+
     const handleCopyLink = async () => {
         try {
             await navigator.clipboard.writeText(studentUrl)
@@ -190,10 +293,46 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
         }
     }
 
+    // Guardado UNIFICADO: primero los logos staged (multipart inmediato), luego el resto del form.
+    const handleSave = async () => {
+        if (isSaving) return
+        setIsSaving(true)
+        try {
+            if (stagedLogo) {
+                const fd = new FormData(); fd.set('logo', stagedLogo)
+                const r = await updateLogoAction(initialState, fd)
+                if (r.error) { setState({ error: r.error }); toast.error(r.error); return }
+            }
+            if (stagedLogoDark) {
+                const fd = new FormData(); fd.set('logo', stagedLogoDark)
+                const r = await updateLogoDarkAction(initialState, fd)
+                if (r.error) { setState({ error: r.error }); toast.error(r.error); return }
+            }
+            const fd = new FormData(formRef.current!)
+            const r2 = await updateBrandSettingsAction(initialState, fd)
+            if (r2.fieldErrors) { setState({ fieldErrors: r2.fieldErrors }); toast.error('Revisá los campos marcados.'); return }
+            if (r2.error) { setState({ error: r2.error }); toast.error(r2.error); return }
+            setState({ success: true })
+            toast.success('Marca actualizada', { id: 'coach-brand-saved' })
+            clearStagedLogos()
+            router.refresh()
+        } catch {
+            setState({ error: 'No se pudo guardar. Intentá de nuevo.' })
+            toast.error('No se pudo guardar. Intentá de nuevo.')
+        } finally {
+            setIsSaving(false)
+        }
+    }
+
     return (
-        <form key={`brand-form-${coach.updated_at ?? coach.id}`} action={formAction} className="space-y-8 lg:space-y-0">
+        <form
+            ref={formRef}
+            key={`brand-form-${coach.updated_at ?? coach.id}`}
+            onSubmit={(e) => { e.preventDefault(); void handleSave() }}
+            className="space-y-8"
+        >
             {/* Brand Score */}
-            <div className="flex items-center justify-between gap-3 px-1 mb-2">
+            <div className="flex items-center justify-between gap-3 px-1">
                 <div className="flex items-center gap-2 text-xs text-muted">
                     <span className="font-semibold">Marca completada</span>
                     <span className="font-display font-black tabular-nums" style={{ color: brandScore >= 80 ? 'var(--success-600)' : brandScore >= 50 ? 'var(--warning-600)' : undefined }}>{brandScore}%</span>
@@ -215,12 +354,16 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                 )}
             </div>
 
-            {/* Vista previa en vivo — <lg va ARRIBA, tras el Brand Score (kit MiMarca); en lg vive sticky a la derecha */}
-            <div className="lg:hidden">
+            {/* Container query: el breakpoint mide el ANCHO REAL del form (no el viewport) → en el pane
+                embebido angosto (~720px) cae a 1 columna aunque el viewport sea ancho (RSP1/#10). El
+                @container NO va en el <form> para no volverlo bloque contenedor del modal `fixed`. */}
+            <div className="@container/brandform space-y-8">
+            {/* Vista previa en vivo — en contenedor angosto va ARRIBA (tras el Brand Score); en ancho vive sticky a la derecha */}
+            <div className="@4xl/brandform:hidden">
                 <BrandThemePreview
                     brandName={coach.brand_name}
                     primaryColor={selectedColor}
-                    logoUrl={coach.logo_url}
+                    logoUrl={previewLogoUrl}
                     welcomeMessage={welcomeMessageInput}
                     loaderText={loaderText}
                     useCustomLoader={useCustomLoader}
@@ -228,547 +371,427 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                     loaderIconMode={loaderIconMode}
                     fontFamily={previewFontFamily}
                     loaderVariant={loaderVariant}
+                    isDark={previewDark}
+                    onToggleDark={() => setPreviewDark((v) => !v)}
+                    activeTab={previewTab}
+                    onTabChange={setPreviewTab}
                 />
             </div>
 
-            <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-8">
+            <div className="@4xl/brandform:grid @4xl/brandform:grid-cols-[1fr_300px] @4xl/brandform:gap-8">
                 <div className="space-y-8">
-            {/* Identity */}
-            <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-identity">
-                <div className="flex items-center gap-2">
-                    <Type className="w-4 h-4 text-primary" />
-                    <h2 className="text-base font-bold text-strong">Identidad de tu marca</h2>
-                </div>
-                <p className="text-xs text-muted -mt-3">
-                    Esta información es lo primero que ven tus alumnos al abrir tu app.
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                        <Label htmlFor="full_name" className="text-sm text-strong font-semibold">
-                            Tu nombre completo
-                        </Label>
-                        <Input
-                            id="full_name"
-                            name="full_name"
-                            defaultValue={coach.full_name}
-                            required
-                            className="h-10 bg-surface-sunken border-default text-strong rounded-xl focus:border-primary"
-                        />
-                        <p className="text-[10px] text-muted">Nombre privado para facturación y soporte.</p>
-                        {state.fieldErrors?.full_name && (
-                            <p className="text-xs text-destructive">{state.fieldErrors.full_name[0]}</p>
-                        )}
-                    </div>
-
-                    <div className="space-y-1.5">
-                        <Label htmlFor="brand_name" className="text-sm text-strong font-semibold">
-                            Nombre de tu marca
-                        </Label>
-                        <Input
-                            id="brand_name"
-                            name="brand_name"
-                            defaultValue={coach.brand_name}
-                            required
-                            className="h-10 bg-surface-sunken border-default text-strong rounded-xl focus:border-primary"
-                        />
-                        <p className="text-[10px] text-muted">
-                            Nombre que ven tus alumnos en la app instalada, la pestaña del navegador y el título.
-                        </p>
-                        {state.fieldErrors?.brand_name && (
-                            <p className="text-xs text-destructive">{state.fieldErrors.brand_name[0]}</p>
-                        )}
-                    </div>
-                </div>
-
-                {coach.slug && (
-                    <div className="space-y-1.5">
-                        <Label className="text-sm text-strong font-semibold">
-                            URL legacy (alias)
-                        </Label>
-                        <div className="flex items-center gap-0">
-                            <div className="flex h-10 items-center whitespace-nowrap rounded-l-xl border border-r-0 border-subtle bg-surface-sunken px-3 text-sm text-muted">
-                                /c/
-                            </div>
-                            <div className="flex h-10 flex-1 items-center rounded-r-xl border border-subtle bg-surface-sunken px-3 text-sm text-strong">
-                                {coach.slug}
-                            </div>
+                    {/* Logo — parte del guardado unificado (FAB), ya no auto-guarda */}
+                    <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-4 shadow-[var(--shadow-sm)]" data-tour-id="brand-logo">
+                        <div>
+                            <h2 className="text-base font-bold text-strong">Logo de tu marca</h2>
+                            <p className="mt-1 text-xs text-muted">
+                                También es el ícono que tus alumnos ven al instalar tu app. PNG o JPG · máx 2 MB · 512×512 px, fondo transparente. Se guarda junto con el resto al presionar Guardar.
+                            </p>
                         </div>
-                        <div className="flex items-center gap-2 text-[11px] text-muted">
-                            <ExternalLink className="w-3 h-3 shrink-0" />
-                            <span className="truncate">{legacyStudentUrl}</span>
+                        <div className="flex flex-col gap-4 sm:flex-row">
+                            <LogoSlot
+                                label="Logo claro"
+                                hint="Para fondos claros (modo claro)."
+                                displayUrl={stagedLogoUrl ?? coach.logo_url}
+                                brandName={coach.brand_name}
+                                staged={stagedLogo !== null}
+                                onPick={(f) => stageLogo(f, 'light')}
+                                onClear={() => { setStagedLogo(null); setStagedLogoUrl(null) }}
+                            />
+                            <LogoSlot
+                                label="Logo oscuro"
+                                hint="Se usa en modo oscuro de la app del alumno."
+                                dark
+                                displayUrl={stagedLogoDarkUrl ?? coach.logo_url_dark}
+                                brandName={coach.brand_name}
+                                staged={stagedLogoDark !== null}
+                                onPick={(f) => stageLogo(f, 'dark')}
+                                onClear={() => { setStagedLogoDark(null); setStagedLogoDarkUrl(null) }}
+                            />
                         </div>
-                        <p className="text-[10px] text-muted">
-                            Alias web antiguo (no editable). Los links nuevos usan tu código corto; este slug sigue funcionando para tus alumnos actuales.
-                        </p>
                     </div>
-                )}
 
-                <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                        <MessageSquare className="w-3.5 h-3.5 text-muted" />
-                        <Label htmlFor="welcome_message" className="text-sm text-strong font-semibold">
-                            Mensaje de bienvenida
-                        </Label>
-                    </div>
-                    <Textarea
-                        id="welcome_message"
-                        name="welcome_message"
-                        value={welcomeMessageInput}
-                        onChange={(e) => setWelcomeMessageInput(e.target.value)}
-                        rows={3}
-                        maxLength={240}
-                        placeholder="Ej: Bienvenido/a. Esta semana nos enfocamos en consistencia y buena técnica."
-                        className="bg-surface-sunken border-default text-strong rounded-xl focus:border-primary resize-none"
-                    />
-                    <p className="text-[10px] text-muted">
-                        Aparece debajo de tu logo en la pantalla de login de tus alumnos. Máximo 240 caracteres.
-                    </p>
-                    {state.fieldErrors?.welcome_message && (
-                        <p className="text-xs text-destructive">{state.fieldErrors.welcome_message[0]}</p>
-                    )}
-                </div>
-
-                {/* Welcome Modal */}
-                <div className="rounded-control border border-subtle bg-surface-card p-4 space-y-4" data-tour-id="brand-welcome-modal">
-                    <div className="flex items-center justify-between gap-3">
+                    {/* Identity */}
+                    <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-identity">
                         <div className="flex items-center gap-2">
-                            <Play className="w-4 h-4 text-primary" />
-                            <h3 className="text-sm font-bold text-strong">Mensaje de bienvenida al dashboard</h3>
+                            <Type className="w-4 h-4 text-primary" />
+                            <h2 className="text-base font-bold text-strong">Identidad de tu marca</h2>
                         </div>
-                        <input
-                            type="checkbox"
-                            name="welcome_modal_enabled"
-                            checked={welcomeModalEnabled}
-                            onChange={(e) => setWelcomeModalEnabled(e.target.checked)}
-                            className="w-5 h-5 rounded border-border text-primary focus:ring-primary"
-                        />
-                    </div>
-                    <p className="text-xs text-muted -mt-2">
-                        Muestra un mensaje o video a tus alumnos cada vez que entran a su dashboard. Útil para anuncios, motivación o instrucciones.
-                    </p>
+                        <p className="text-xs text-muted -mt-3">
+                            Esta información es lo primero que ven tus alumnos al abrir tu app.
+                        </p>
 
-                    {welcomeModalEnabled && (
-                        <div className="space-y-4">
-                            <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setWelcomeModalType('text')}
-                                    className={cn(
-                                        'flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg border transition-all',
-                                        welcomeModalType === 'text'
-                                            ? 'bg-primary/10 border-primary/30 text-primary'
-                                            : 'bg-surface-sunken border-default text-muted hover:text-strong'
-                                    )}
-                                >
-                                    <FileText className="w-3.5 h-3.5" />
-                                    Texto
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setWelcomeModalType('video')}
-                                    className={cn(
-                                        'flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg border transition-all',
-                                        welcomeModalType === 'video'
-                                            ? 'bg-primary/10 border-primary/30 text-primary'
-                                            : 'bg-surface-sunken border-default text-muted hover:text-strong'
-                                    )}
-                                >
-                                    <Play className="w-3.5 h-3.5" />
-                                    Video
-                                </button>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="brand_name" className="text-sm text-strong font-semibold">
+                                Nombre de tu marca
+                            </Label>
+                            <Input
+                                id="brand_name"
+                                name="brand_name"
+                                defaultValue={coach.brand_name}
+                                required
+                                className="h-10 bg-surface-sunken border-default text-strong rounded-xl focus:border-primary"
+                            />
+                            <p className="text-[10px] text-muted">
+                                Nombre que ven tus alumnos en la app instalada, la pestaña del navegador y el título.
+                            </p>
+                            {state.fieldErrors?.brand_name && (
+                                <p className="text-xs text-destructive">{state.fieldErrors.brand_name[0]}</p>
+                            )}
+                        </div>
+
+                        {coach.slug && (
+                            <div className="space-y-1.5">
+                                <Label className="text-sm text-strong font-semibold">
+                                    URL legacy (alias)
+                                </Label>
+                                <div className="flex items-center gap-0">
+                                    <div className="flex h-10 items-center whitespace-nowrap rounded-l-xl border border-r-0 border-subtle bg-surface-sunken px-3 text-sm text-muted">
+                                        /c/
+                                    </div>
+                                    <div className="flex h-10 flex-1 items-center rounded-r-xl border border-subtle bg-surface-sunken px-3 text-sm text-strong">
+                                        {coach.slug}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 text-[11px] text-muted">
+                                    <ExternalLink className="w-3 h-3 shrink-0" />
+                                    <span className="truncate">{legacyStudentUrl}</span>
+                                </div>
+                                <p className="text-[10px] text-muted">
+                                    Alias web antiguo (no editable). Los links nuevos usan tu código corto; este slug sigue funcionando para tus alumnos actuales.
+                                </p>
                             </div>
+                        )}
 
-                            {welcomeModalType === 'text' ? (
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="welcome_modal_content" className="text-sm text-strong font-semibold">
-                                        Mensaje para tus alumnos
-                                    </Label>
-                                    <Textarea
-                                        id="welcome_modal_content"
-                                        name="welcome_modal_content"
-                                        value={welcomeModalContent}
-                                        onChange={(e) => setWelcomeModalContent(e.target.value)}
-                                        rows={5}
-                                        maxLength={1000}
-                                        placeholder="Ej: ¡Feliz lunes! Esta semana tenemos un nuevo foco de entrenamiento..."
-                                        className="bg-surface-sunken border-default text-strong rounded-xl focus:border-primary resize-none"
-                                    />
-                                    <p className="text-[10px] text-muted">
-                                        Máximo 1000 caracteres. Tus alumnos verán este mensaje en un modal al entrar a su dashboard.
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="welcome_modal_content" className="text-sm text-strong font-semibold">
-                                        URL del video
-                                    </Label>
-                                    <Input
-                                        id="welcome_modal_content"
-                                        name="welcome_modal_content"
-                                        value={welcomeModalContent}
-                                        onChange={(e) => setWelcomeModalContent(e.target.value)}
-                                        placeholder="https://youtube.com/watch?v=... o https://vimeo.com/..."
-                                        className="h-10 bg-surface-sunken border-default text-strong rounded-xl focus:border-primary"
-                                    />
-                                    <p className="text-[10px] text-muted">
-                                        Pega el link de YouTube o Vimeo. El video se mostrará embebido en el modal.
-                                    </p>
-                                </div>
-                            )}
-                            {state.fieldErrors?.welcome_modal_content && (
-                                <p className="text-xs text-destructive">{state.fieldErrors.welcome_modal_content[0]}</p>
+                        {/* Datos privados — separado de lo público (facturación/soporte) */}
+                        <div className="space-y-1.5 border-t border-border pt-4">
+                            <Label htmlFor="full_name" className="text-sm text-strong font-semibold">
+                                Tu nombre completo
+                            </Label>
+                            <Input
+                                id="full_name"
+                                name="full_name"
+                                defaultValue={coach.full_name}
+                                required
+                                className="h-10 bg-surface-sunken border-default text-strong rounded-xl focus:border-primary"
+                            />
+                            <p className="text-[10px] text-muted">Privado — para facturación y soporte. Tus alumnos no lo ven.</p>
+                            {state.fieldErrors?.full_name && (
+                                <p className="text-xs text-destructive">{state.fieldErrors.full_name[0]}</p>
                             )}
                         </div>
-                    )}
-                </div>
-            </div>
+                    </div>
 
-            {/* Brand color */}
-            <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-color">
-                <div className="flex items-center gap-2">
-                    <Palette className="w-4 h-4 text-primary" />
-                    <h2 className="text-base font-bold text-strong">Color de marca</h2>
-                </div>
-                <p className="text-xs text-muted -mt-3">
-                    Este color se aplica a botones, elementos activos, gráficos y brillos de tu app. Generamos automáticamente variantes más claras y oscuras.
-                </p>
+                    {/* Mensajes de bienvenida — login + modal del dashboard, en UN solo bloque (de-anidado) */}
+                    <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-welcome-modal">
+                        <div className="flex items-center gap-2">
+                            <MessageSquare className="w-4 h-4 text-primary" />
+                            <h2 className="text-base font-bold text-strong">Mensajes de bienvenida</h2>
+                        </div>
+                        <p className="text-xs text-muted -mt-3">
+                            Dos mensajes distintos: uno en el login y otro al abrir el dashboard.
+                        </p>
 
-                <div className="flex flex-wrap gap-3">
-                    {PRESET_COLORS.map((color) => (
-                        <button
-                            key={color}
-                            type="button"
-                            onClick={() => setSelectedColor(color)}
-                            className={cn(
-                                'h-10 w-10 rounded-control border-2 transition-all duration-150 hover:scale-110',
-                                selectedColor === color
-                                    ? 'scale-110 border-strong shadow-[var(--shadow-md)]'
-                                    : 'border-transparent'
+                        {/* Mensaje en el login */}
+                        <div className="space-y-1.5">
+                            <Label htmlFor="welcome_message" className="text-sm text-strong font-semibold">
+                                Mensaje en el login
+                            </Label>
+                            <Textarea
+                                id="welcome_message"
+                                name="welcome_message"
+                                value={welcomeMessageInput}
+                                onChange={(e) => setWelcomeMessageInput(e.target.value)}
+                                rows={3}
+                                maxLength={240}
+                                placeholder="Ej: Bienvenido/a. Esta semana nos enfocamos en consistencia y buena técnica."
+                                className="bg-surface-sunken border-default text-strong rounded-xl focus:border-primary resize-none"
+                            />
+                            <p className="text-[10px] text-muted">
+                                Aparece debajo de tu logo en la pantalla de login de tus alumnos. Máximo 240 caracteres.
+                            </p>
+                            {state.fieldErrors?.welcome_message && (
+                                <p className="text-xs text-destructive">{state.fieldErrors.welcome_message[0]}</p>
                             )}
-                            style={{ backgroundColor: color }}
-                            title={color}
-                        />
-                    ))}
+                        </div>
 
-                    <div className="flex items-center gap-2 ml-2">
-                        <input
-                            type="color"
-                            value={selectedColor ?? '#007AFF'}
-                            onChange={(e) => setSelectedColor(e.target.value)}
-                            className="w-10 h-10 rounded-xl cursor-pointer border-2 border-border bg-transparent"
-                            title="Color personalizado"
-                        />
-                        <span className="text-xs text-muted font-mono">{selectedColor}</span>
+                        {/* Aviso al abrir el dashboard (modal) */}
+                        <div className="space-y-4 border-t border-border pt-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2">
+                                    <Play className="w-4 h-4 text-primary" />
+                                    <h3 className="text-sm font-bold text-strong">Aviso al abrir el dashboard (modal)</h3>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    name="welcome_modal_enabled"
+                                    checked={welcomeModalEnabled}
+                                    onChange={(e) => setWelcomeModalEnabled(e.target.checked)}
+                                    className="w-5 h-5 rounded border-border text-primary focus:ring-primary"
+                                />
+                            </div>
+                            <p className="text-xs text-muted -mt-2">
+                                Muestra un mensaje o video a tus alumnos cada vez que entran a su dashboard. Útil para anuncios, motivación o instrucciones.
+                            </p>
+
+                            {welcomeModalEnabled && (
+                                <div className="space-y-4">
+                                    <div className="flex gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setWelcomeModalType('text')}
+                                            className={cn(
+                                                'flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg border transition-all',
+                                                welcomeModalType === 'text'
+                                                    ? 'bg-primary/10 border-primary/30 text-primary'
+                                                    : 'bg-surface-sunken border-default text-muted hover:text-strong'
+                                            )}
+                                        >
+                                            <FileText className="w-3.5 h-3.5" />
+                                            Texto
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setWelcomeModalType('video')}
+                                            className={cn(
+                                                'flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-lg border transition-all',
+                                                welcomeModalType === 'video'
+                                                    ? 'bg-primary/10 border-primary/30 text-primary'
+                                                    : 'bg-surface-sunken border-default text-muted hover:text-strong'
+                                            )}
+                                        >
+                                            <Play className="w-3.5 h-3.5" />
+                                            Video
+                                        </button>
+                                    </div>
+
+                                    {welcomeModalType === 'text' ? (
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="welcome_modal_content" className="text-sm text-strong font-semibold">
+                                                Mensaje para tus alumnos
+                                            </Label>
+                                            <Textarea
+                                                id="welcome_modal_content"
+                                                value={welcomeModalContent}
+                                                onChange={(e) => setWelcomeModalContent(e.target.value)}
+                                                rows={5}
+                                                maxLength={1000}
+                                                placeholder="Ej: ¡Feliz lunes! Esta semana tenemos un nuevo foco de entrenamiento..."
+                                                className="bg-surface-sunken border-default text-strong rounded-xl focus:border-primary resize-none"
+                                            />
+                                            <p className="text-[10px] text-muted">
+                                                Máximo 1000 caracteres. Tus alumnos verán este mensaje en un modal al entrar a su dashboard.
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="welcome_modal_content" className="text-sm text-strong font-semibold">
+                                                URL del video
+                                            </Label>
+                                            <Input
+                                                id="welcome_modal_content"
+                                                value={welcomeModalContent}
+                                                onChange={(e) => setWelcomeModalContent(e.target.value)}
+                                                placeholder="https://youtube.com/watch?v=... o https://vimeo.com/..."
+                                                className="h-10 bg-surface-sunken border-default text-strong rounded-xl focus:border-primary"
+                                            />
+                                            <p className="text-[10px] text-muted">
+                                                Pega el link de YouTube o Vimeo. El video se mostrará embebido en el modal.
+                                            </p>
+                                        </div>
+                                    )}
+                                    {state.fieldErrors?.welcome_modal_content && (
+                                        <p className="text-xs text-destructive">{state.fieldErrors.welcome_modal_content[0]}</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
 
-                {/* Contrast badge + reset */}
-                <div className="flex items-center gap-3 flex-wrap">
-                    <div
-                        className="flex items-center gap-1.5 rounded-control px-2.5 py-1 text-xs font-bold"
-                        style={
-                            contrast.level === 'AA'
-                                ? { background: 'var(--success-100)', color: 'var(--success-700)' }
-                                : contrast.level === 'AA-large'
-                                ? { background: 'var(--warning-100)', color: 'var(--warning-700)' }
-                                : { background: 'var(--danger-100)', color: 'var(--danger-600)' }
-                        }
-                    >
-                        {contrast.level === 'AA' && <ShieldCheck className="w-3.5 h-3.5" />}
-                        {contrast.level === 'AA-large' && <ShieldAlert className="w-3.5 h-3.5" />}
-                        {contrast.level === 'fail' && <ShieldX className="w-3.5 h-3.5" />}
-                        {contrast.level === 'AA' ? 'Legible (WCAG AA)' : contrast.level === 'AA-large' ? 'Solo textos grandes' : 'Bajo contraste'}
-                        <span className="opacity-60">{contrast.ratio.toFixed(1)}:1</span>
-                    </div>
-                    {selectedColor && selectedColor !== '#007AFF' && (
-                        <button
-                            type="button"
-                            onClick={() => setSelectedColor('#007AFF')}
-                            className="flex items-center gap-1 text-xs text-muted hover:text-strong transition-colors"
-                        >
-                            <RotateCcw className="w-3 h-3" />
-                            Restaurar por defecto
-                        </button>
-                    )}
-                </div>
+                    {/* Brand color */}
+                    <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-color">
+                        <div className="flex items-center gap-2">
+                            <Palette className="w-4 h-4 text-primary" />
+                            <h2 className="text-base font-bold text-strong">Color de marca</h2>
+                        </div>
+                        <p className="text-xs text-muted -mt-3">
+                            Este color se aplica a botones, elementos activos, gráficos y brillos de tu app. Generamos automáticamente variantes más claras y oscuras.
+                        </p>
 
-                <input type="hidden" name="primary_color" value={selectedColor} />
-
-                {/* Generated palette */}
-                <div className="space-y-2">
-                    <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Paleta generada automáticamente</p>
-                    <div className="flex gap-2">
-                        {[
-                            { label: 'Primario', color: palette.primary },
-                            { label: 'Oscuro', color: palette.primaryDark },
-                            { label: 'Claro', color: palette.primaryLight },
-                            { label: 'Superficie', color: palette.primarySurface },
-                            { label: 'Brillo', color: palette.primaryGlow },
-                        ].map(({ label, color }) => (
-                            <div key={label} className="flex flex-col items-center gap-1">
-                                <div
-                                    className="w-8 h-8 rounded-lg border border-border/50"
+                        <div className="flex flex-wrap gap-3">
+                            {PRESET_COLORS.map((color) => (
+                                <button
+                                    key={color}
+                                    type="button"
+                                    onClick={() => setSelectedColor(color)}
+                                    className={cn(
+                                        'h-10 w-10 rounded-control border-2 transition-all duration-150 hover:scale-110',
+                                        selectedColor === color
+                                            ? 'scale-110 border-strong shadow-[var(--shadow-md)]'
+                                            : 'border-transparent'
+                                    )}
                                     style={{ backgroundColor: color }}
                                     title={color}
                                 />
-                                <span className="text-[9px] text-muted">{label}</span>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                            ))}
 
-                <div className="rounded-control border border-subtle bg-surface-sunken p-4">
-                    <p className="mb-3 text-xs text-muted">Vista previa del botón principal</p>
-                    <button
-                        type="button"
-                        className="px-5 py-2.5 text-sm font-bold rounded-xl text-white transition-all"
-                        style={{ backgroundColor: selectedColor }}
-                    >
-                        Ingresar al Panel
-                    </button>
-                </div>
-
-                <div className="space-y-4 pt-4 border-t border-border">
-                    <h3 className="text-sm font-bold flex items-center gap-2">
-                        <SlidersHorizontal className="w-3.5 h-3.5" />
-                        Configuración de visualización
-                    </h3>
-                    <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-border bg-card">
-                        <div className="space-y-0.5">
-                            <Label className="text-sm font-semibold">Usar todos mis estilos personalizados en mi dashboard actual</Label>
-                            <p className="text-xs text-muted">Si se activa, tu panel de coach usa tu color, loader y estilos de marca. Si no, usa los valores del sistema.</p>
-                        </div>
-                        <input
-                            type="checkbox"
-                            name="use_brand_colors_coach"
-                            checked={useCoachColors}
-                            onChange={(e) => setUseCoachColors(e.target.checked)}
-                            className="w-5 h-5 rounded border-border text-primary focus:ring-primary"
-                        />
-                    </div>
-                </div>
-
-                {state.fieldErrors?.primary_color && (
-                    <p className="text-xs text-destructive">{state.fieldErrors.primary_color[0]}</p>
-                )}
-            </div>
-
-            {/* white-label v2 — branding avanzado (Pro): color2 + fuente + dark + loader */}
-            <BrandAdvancedSection
-                tier={(coach.subscription_tier ?? 'starter') as SubscriptionTier}
-                primaryColor={selectedColor || '#10B981'}
-                value={advancedValue}
-                onChange={handleAdvancedChange}
-            />
-
-            {/* Loader customization */}
-            <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-loader">
-                <div className="flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4 text-primary" />
-                    <h2 className="text-base font-bold text-strong">Loader animado</h2>
-                </div>
-                <p className="text-xs text-muted -mt-3">
-                    Animación que aparece cuando tus alumnos cargan la app o navegan entre páginas.
-                </p>
-
-                <div className="flex items-center justify-between gap-4 p-4 rounded-xl border border-border bg-card">
-                    <div className="space-y-0.5">
-                        <Label className="text-sm font-semibold">Usar texto personalizado</Label>
-                        <p className="text-xs text-muted">Muestra tu marca en vez de &quot;EVA&quot; en la animación de carga.</p>
-                    </div>
-                    <input
-                        type="checkbox"
-                        name="use_custom_loader"
-                        checked={useCustomLoader}
-                        onChange={(e) => setUseCustomLoader(e.target.checked)}
-                        className="w-5 h-5 rounded border-border text-primary focus:ring-primary"
-                    />
-                </div>
-
-                {useCustomLoader && (
-                    <div className="space-y-4">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="loader_text" className="text-sm text-strong font-semibold">
-                                Texto del loader
-                            </Label>
-                            <Input
-                                id="loader_text"
-                                name="loader_text"
-                                value={loaderText}
-                                onChange={(e) => setLoaderText(e.target.value.toUpperCase())}
-                                maxLength={10}
-                                placeholder="EVA"
-                                className="h-10 bg-surface-sunken border-default text-strong rounded-xl focus:border-primary uppercase"
-                            />
-                            <p className="text-xs text-muted">
-                                Máximo 10 caracteres. Se transforma automáticamente a mayúsculas.
-                            </p>
-                            {state.fieldErrors?.loader_text && (
-                                <p className="text-xs text-destructive">{state.fieldErrors.loader_text[0]}</p>
-                            )}
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label className="text-sm text-strong font-semibold">Ícono del loader</Label>
-                            <div className="grid grid-cols-3 gap-2">
-                                {([
-                                    { value: 'eva', label: 'Logo EVA', desc: 'Ícono animado de EVA' },
-                                    { value: 'coach', label: 'Mi logo', desc: coach.logo_url ? 'Tu logo de marca' : 'Sube un logo primero' },
-                                    { value: 'none', label: 'Sin ícono', desc: 'Solo el texto' },
-                                ] as const).map(({ value, label, desc }) => (
-                                    <button
-                                        key={value}
-                                        type="button"
-                                        disabled={value === 'coach' && !coach.logo_url}
-                                        onClick={() => setLoaderIconMode(value)}
-                                        className={cn(
-                                            'flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all text-center',
-                                            loaderIconMode === value
-                                                ? 'border-primary bg-primary/5'
-                                                : 'border-border hover:border-primary/40',
-                                            value === 'coach' && !coach.logo_url && 'opacity-40 cursor-not-allowed'
-                                        )}
-                                    >
-                                        <span className="text-xs font-bold">{label}</span>
-                                        <span className="text-[10px] text-muted leading-tight">{desc}</span>
-                                    </button>
-                                ))}
-                            </div>
-                            <input type="hidden" name="loader_icon_mode" value={loaderIconMode} />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label className="text-sm text-strong font-semibold">Estilo del texto</Label>
-                            {(() => {
-                                const p = generateBrandPalette(selectedColor ?? '#007AFF')
-                                const brandGradient = `linear-gradient(90deg, ${p.primaryLight}, ${p.primary}, ${p.primaryDark}, ${p.primaryLight})`
-                                return (
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setLoaderTextColor('')}
-                                            className={cn(
-                                                'flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all',
-                                                loaderTextColor === ''
-                                                    ? 'border-primary bg-primary/5'
-                                                    : 'border-border hover:border-primary/40'
-                                            )}
-                                        >
-                                            <span
-                                                className="text-xl font-extrabold bg-clip-text text-transparent"
-                                                style={{ backgroundImage: brandGradient }}
-                                            >
-                                                {(loaderText || 'EVA').toUpperCase()}
-                                            </span>
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted">Gradiente animado</span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setLoaderTextColor(loaderTextColor || selectedColor || '#007AFF')}
-                                            className={cn(
-                                                'flex flex-col items-center gap-1 p-3 rounded-xl border-2 transition-all',
-                                                loaderTextColor !== ''
-                                                    ? 'border-primary bg-primary/5'
-                                                    : 'border-border hover:border-primary/40'
-                                            )}
-                                        >
-                                            <span
-                                                className="text-xl font-extrabold"
-                                                style={{ color: loaderTextColor || selectedColor || '#007AFF' }}
-                                            >
-                                                {(loaderText || 'EVA').toUpperCase()}
-                                            </span>
-                                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted">Color sólido</span>
-                                        </button>
-                                    </div>
-                                )
-                            })()}
-
-                            {loaderTextColor !== '' && (
-                                <div className="flex items-center gap-3 pt-2">
-                                    <input
-                                        type="color"
-                                        value={loaderTextColor || selectedColor || '#007AFF'}
-                                        onChange={(e) => setLoaderTextColor(e.target.value)}
-                                        className="w-9 h-9 rounded-xl cursor-pointer border-2 border-border bg-transparent"
-                                    />
-                                    <Input
-                                        id="loader_text_color"
-                                        value={loaderTextColor}
-                                        onChange={(e) => setLoaderTextColor(e.target.value)}
-                                        placeholder="#007AFF"
-                                        className="h-10 bg-surface-sunken border-default text-strong rounded-xl focus:border-primary flex-1"
-                                    />
-                                </div>
-                            )}
-                            <input type="hidden" name="loader_text_color" value={loaderTextColor} />
-                            <p className="text-[10px] text-muted">
-                                Gradiente: el mismo estilo animado que usa EVA. Color sólido: tu color de marca con animación de pulso.
-                            </p>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Share with students */}
-            <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-share">
-                <div className="flex items-center gap-2">
-                    <QrCode className="w-4 h-4 text-primary" />
-                    <h2 className="text-base font-bold text-strong">Compartir con alumnos</h2>
-                </div>
-                <p className="text-xs text-muted -mt-3">
-                    Tus alumnos entran con tu código corto. Los slugs antiguos siguen funcionando como alias.
-                </p>
-
-                <div className="flex flex-col sm:flex-row gap-4 items-start">
-                    <div className="p-3 bg-white rounded-xl border border-border shrink-0">
-                        {qrNode}
-                    </div>
-                    <div className="flex-1 min-w-0 space-y-3 w-full">
-                        <div className="space-y-1">
-                            <Label className="text-sm font-semibold">Link principal para tus alumnos</Label>
-                            {coach.invite_code ? (
-                                <div className="inline-flex items-center rounded-lg border border-primary/20 bg-primary/10 px-3 py-1.5 font-mono text-sm font-black tracking-[0.22em] text-primary">
-                                    {coach.invite_code}
-                                </div>
-                            ) : null}
-                            <div className="flex items-center gap-2">
-                                <Input
-                                    readOnly
-                                    value={studentUrl}
-                                    className="h-10 bg-surface-sunken border-default text-strong rounded-xl text-sm"
+                            <div className="flex items-center gap-2 ml-2">
+                                <input
+                                    type="color"
+                                    value={selectedColor ?? '#007AFF'}
+                                    onChange={(e) => setSelectedColor(e.target.value)}
+                                    className="w-10 h-10 rounded-xl cursor-pointer border-2 border-border bg-transparent"
+                                    title="Color personalizado"
                                 />
+                                <span className="text-xs text-muted font-mono">{selectedColor}</span>
+                            </div>
+                        </div>
+
+                        {/* Contrast badge + reset */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                            <div
+                                className="flex items-center gap-1.5 rounded-control px-2.5 py-1 text-xs font-bold"
+                                style={
+                                    contrast.level === 'AA'
+                                        ? { background: 'var(--success-100)', color: 'var(--success-700)' }
+                                        : contrast.level === 'AA-large'
+                                        ? { background: 'var(--warning-100)', color: 'var(--warning-700)' }
+                                        : { background: 'var(--danger-100)', color: 'var(--danger-600)' }
+                                }
+                            >
+                                {contrast.level === 'AA' && <ShieldCheck className="w-3.5 h-3.5" />}
+                                {contrast.level === 'AA-large' && <ShieldAlert className="w-3.5 h-3.5" />}
+                                {contrast.level === 'fail' && <ShieldX className="w-3.5 h-3.5" />}
+                                {contrast.level === 'AA' ? 'Legible (WCAG AA)' : contrast.level === 'AA-large' ? 'Solo textos grandes' : 'Bajo contraste'}
+                                <span className="opacity-60">{contrast.ratio.toFixed(1)}:1</span>
+                            </div>
+                            {selectedColor && selectedColor !== '#007AFF' && (
                                 <button
                                     type="button"
-                                    onClick={handleCopyLink}
-                                    className={cn(
-                                        'h-10 shrink-0 rounded-control border px-3 text-sm font-bold transition-all',
-                                        copied
-                                            ? 'border-transparent'
-                                            : 'border-default bg-surface-sunken text-muted hover:border-[var(--sport-400)] hover:text-strong'
-                                    )}
-                                    style={copied ? { background: 'var(--success-100)', color: 'var(--success-700)' } : undefined}
+                                    onClick={() => setSelectedColor('#007AFF')}
+                                    className="flex items-center gap-1 text-xs text-muted hover:text-strong transition-colors"
                                 >
-                                    {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                    <RotateCcw className="w-3 h-3" />
+                                    Restaurar por defecto
                                 </button>
+                            )}
+                        </div>
+
+                        <input type="hidden" name="primary_color" value={selectedColor} />
+
+                        {/* Generated palette */}
+                        <div className="space-y-2">
+                            <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Paleta generada automáticamente</p>
+                            <div className="flex gap-2">
+                                {[
+                                    { label: 'Primario', color: palette.primary },
+                                    { label: 'Oscuro', color: palette.primaryDark },
+                                    { label: 'Claro', color: palette.primaryLight },
+                                    { label: 'Superficie', color: palette.primarySurface },
+                                    { label: 'Brillo', color: palette.primaryGlow },
+                                ].map(({ label, color }) => (
+                                    <div key={label} className="flex flex-col items-center gap-1">
+                                        <div
+                                            className="w-8 h-8 rounded-lg border border-border/50"
+                                            style={{ backgroundColor: color }}
+                                            title={color}
+                                        />
+                                        <span className="text-[9px] text-muted">{label}</span>
+                                    </div>
+                                ))}
                             </div>
                         </div>
-                        <p className="text-xs text-muted">
-                            Comparte este link por WhatsApp, Instagram o muestra el QR en tu gym. Si un alumno tiene un link antiguo con tu slug, también seguirá funcionando.
+
+                        {state.fieldErrors?.primary_color && (
+                            <p className="text-xs text-destructive">{state.fieldErrors.primary_color[0]}</p>
+                        )}
+                    </div>
+
+                    {/* Aplicar mi marca a mi propio panel (de-anidado de "Color", es otra cosa: el chrome del coach) */}
+                    <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 shadow-sm">
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="space-y-0.5">
+                                <Label className="text-sm font-semibold text-strong">Usar mi marca también en mi panel</Label>
+                                <p className="text-xs text-muted">Si se activa, tu panel de coach usa tu color y estilos de marca. Si no, usa los del sistema. No afecta la app del alumno.</p>
+                            </div>
+                            <input
+                                type="checkbox"
+                                name="use_brand_colors_coach"
+                                checked={useCoachColors}
+                                onChange={(e) => setUseCoachColors(e.target.checked)}
+                                className="w-5 h-5 rounded border-border text-primary focus:ring-primary shrink-0"
+                            />
+                        </div>
+                    </div>
+
+                    {/* white-label v2 — branding avanzado (Pro): acordeón cerrado (color2 + fuente + dark + loader) */}
+                    <BrandAdvancedSection
+                        tier={(coach.subscription_tier ?? 'starter') as SubscriptionTier}
+                        primaryColor={selectedColor || '#10B981'}
+                        value={advancedValue}
+                        onChange={handleAdvancedChange}
+                        loader={loaderValue}
+                        onLoaderChange={handleLoaderChange}
+                        logoUrl={previewLogoUrl}
+                    />
+
+                    {/* Share with students */}
+                    <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-share">
+                        <div className="flex items-center gap-2">
+                            <QrCode className="w-4 h-4 text-primary" />
+                            <h2 className="text-base font-bold text-strong">Compartir con alumnos</h2>
+                        </div>
+                        <p className="text-xs text-muted -mt-3">
+                            Tus alumnos entran con tu código corto. Los slugs antiguos siguen funcionando como alias.
                         </p>
+
+                        <div className="flex flex-col sm:flex-row gap-4 items-start">
+                            <div className="p-3 bg-white rounded-xl border border-border shrink-0">
+                                {qrNode}
+                            </div>
+                            <div className="flex-1 min-w-0 space-y-3 w-full">
+                                <div className="space-y-1">
+                                    <Label className="text-sm font-semibold">Link principal para tus alumnos</Label>
+                                    {coach.invite_code ? (
+                                        <div className="inline-flex items-center rounded-lg border border-primary/20 bg-primary/10 px-3 py-1.5 font-mono text-sm font-black tracking-[0.22em] text-primary">
+                                            {coach.invite_code}
+                                        </div>
+                                    ) : null}
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            readOnly
+                                            value={studentUrl}
+                                            className="h-10 bg-surface-sunken border-default text-strong rounded-xl text-sm"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleCopyLink}
+                                            className={cn(
+                                                'h-10 shrink-0 rounded-control border px-3 text-sm font-bold transition-all',
+                                                copied
+                                                    ? 'border-transparent'
+                                                    : 'border-default bg-surface-sunken text-muted hover:border-[var(--sport-400)] hover:text-strong'
+                                            )}
+                                            style={copied ? { background: 'var(--success-100)', color: 'var(--success-700)' } : undefined}
+                                        >
+                                            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                        </button>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-muted">
+                                    Comparte este link por WhatsApp, Instagram o muestra el QR en tu gym. Si un alumno tiene un link antiguo con tu slug, también seguirá funcionando.
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-                </div>
-
-                {/* Right column: Live preview (sticky, solo lg — en <lg la instancia vive arriba tras el Brand Score) */}
-                <div className="hidden lg:sticky lg:top-6 lg:block lg:self-start space-y-6" data-tour-id="brand-preview">
+                {/* Right column: Live preview (sticky, solo en ancho — en angosto la instancia vive arriba) */}
+                <div className="hidden @4xl/brandform:block @4xl/brandform:sticky @4xl/brandform:top-6 @4xl/brandform:self-start space-y-6" data-tour-id="brand-preview">
                     <BrandThemePreview
                         brandName={coach.brand_name}
                         primaryColor={selectedColor}
-                        logoUrl={coach.logo_url}
+                        logoUrl={previewLogoUrl}
                         welcomeMessage={welcomeMessageInput}
                         loaderText={loaderText}
                         useCustomLoader={useCustomLoader}
@@ -776,19 +799,21 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         loaderIconMode={loaderIconMode}
                         fontFamily={previewFontFamily}
                         loaderVariant={loaderVariant}
+                        isDark={previewDark}
+                        onToggleDark={() => setPreviewDark((v) => !v)}
+                        activeTab={previewTab}
+                        onTabChange={setPreviewTab}
                     />
                 </div>
             </div>
+            </div>
 
-            {/* Hidden inputs always rendered */}
+            {/* Hidden inputs always rendered — el modal siempre envía su estado aunque esté colapsado */}
             <input type="hidden" name="welcome_modal_type" value={welcomeModalType} />
             <input type="hidden" name="welcome_modal_content" value={welcomeModalContent} />
 
-            {/* Spacer to prevent FAB from covering last content */}
-            <div className="h-20 md:h-8" />
-
-            {/* FAB Save Button */}
-            <div className="fixed bottom-[calc(var(--mobile-content-bottom-offset,0px)+1.5rem)] right-4 z-50 md:bottom-6 md:right-8" data-tour-id="brand-save">
+            {/* Guardado — sticky dentro del form (contenido, NO fixed al viewport → no flota sobre el rail en el pane embebido) */}
+            <div className="sticky z-40 flex justify-end bottom-[calc(var(--mobile-content-bottom-offset,0px)+1rem)] md:bottom-6" data-tour-id="brand-save">
                 <div className="flex flex-col items-end gap-2">
                     {state.error && (
                         <div className="max-w-[260px] rounded-control border px-3 py-2 text-xs shadow-[var(--shadow-lg)]" style={{ background: 'var(--danger-100)', borderColor: 'var(--danger-100)', color: 'var(--danger-600)' }}>
@@ -809,12 +834,27 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                             <Maximize2 className="w-4 h-4" />
                             <span className="hidden sm:inline">Expandir vista</span>
                         </button>
-                        <SaveButton />
+                        <button
+                            type="submit"
+                            disabled={isSaving}
+                            className={cn(
+                                'flex items-center gap-2 rounded-pill transition-all duration-200 text-[var(--text-on-sport)] shadow-[var(--glow-sport)]',
+                                'h-12 px-5 text-sm font-bold',
+                                'disabled:opacity-60 disabled:cursor-not-allowed hover:opacity-90 hover:-translate-y-0.5'
+                            )}
+                            style={{ backgroundColor: 'var(--theme-primary)' }}
+                        >
+                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            <span className="hidden sm:inline">{isSaving ? 'Guardando...' : 'Guardar cambios'}</span>
+                        </button>
                     </div>
                 </div>
             </div>
 
-            {/* Vista previa expandida — el MISMO preview fiel (refleja lo que editás), a pantalla completa */}
+            {/* Colchón inferior: deja que el FAB sticky se mantenga sobre la barra de navegación móvil */}
+            <div className="h-[calc(var(--mobile-content-bottom-offset,0px)+0.5rem)] md:h-2" aria-hidden="true" />
+
+            {/* Vista previa expandida — el MISMO preview fiel (misma instancia lógica), a pantalla completa */}
             {previewExpanded && (
                 <div
                     className="fixed inset-0 z-[60] flex items-center justify-center p-4 backdrop-blur-sm"
@@ -836,7 +876,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         <BrandThemePreview
                             brandName={coach.brand_name}
                             primaryColor={selectedColor}
-                            logoUrl={coach.logo_url}
+                            logoUrl={previewLogoUrl}
                             welcomeMessage={welcomeMessageInput}
                             loaderText={loaderText}
                             useCustomLoader={useCustomLoader}
@@ -844,6 +884,10 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                             loaderIconMode={loaderIconMode}
                             fontFamily={previewFontFamily}
                             loaderVariant={loaderVariant}
+                            isDark={previewDark}
+                            onToggleDark={() => setPreviewDark((v) => !v)}
+                            activeTab={previewTab}
+                            onTabChange={setPreviewTab}
                         />
                     </div>
                 </div>

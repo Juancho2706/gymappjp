@@ -177,6 +177,73 @@ export async function updateLogoAction(
     return { success: true }
 }
 
+// ── Logo modo oscuro (H4, white-label v2) ────────────────────────────────────
+// Espejo EXACTO de updateLogoAction: mismo bucket ('logos'), mismas validaciones (≤2 MB +
+// magic bytes JPEG/PNG), mismo gate Pro+. Solo cambia el path (logo-dark) y la columna
+// (logo_url_dark, que la app del alumno YA consume). El alumno usa este logo en modo oscuro.
+export async function updateLogoDarkAction(
+    _prev: BrandSettingsState,
+    formData: FormData
+): Promise<BrandSettingsState> {
+    const file = formData.get('logo') as File | null
+    if (!file || file.size === 0) return { error: 'Selecciona un archivo.' }
+    if (file.size > 2 * 1024 * 1024) return { error: 'El logo no puede superar 2 MB.' }
+    if (!file.type.startsWith('image/')) return { error: 'Solo se permiten imágenes.' }
+
+    // Validate magic bytes (JPEG / PNG)
+    const buffer = await file.arrayBuffer()
+    const bytes = new Uint8Array(buffer.slice(0, 4))
+    const isJpeg = bytes[0] === 0xFF && bytes[1] === 0xD8
+    const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47
+    if (!isJpeg && !isPng) {
+        return { error: 'El archivo no es una imagen válida (JPEG o PNG).' }
+    }
+
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'No autenticado.' }
+
+    // Gate de branding (Pro+ ENTERO): un coach < Pro no sube logo (su app cae a EVA).
+    // Enforcement server-side — el control se oculta en UI pero el action es POSTeable.
+    const { data: logoCoach } = await supabase
+        .from('coaches')
+        .select('subscription_tier')
+        .eq('id', user.id)
+        .single()
+    if (!isBrandingAllowed((logoCoach?.subscription_tier ?? 'free') as SubscriptionTier)) {
+        return { error: 'El branding personalizado está disponible desde el plan Pro.' }
+    }
+
+    const ext = file.name.split('.').pop() ?? 'png'
+    const path = `${user.id}/logo-dark.${ext}`
+
+    const { error: uploadError } = await supabase.storage
+        .from('logos')
+        .upload(path, file, { upsert: true, contentType: file.type })
+
+    if (uploadError) {
+        console.error('Logo (dark) upload error:', uploadError)
+        return { error: 'Error al subir el logo: ' + uploadError.message }
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(path)
+
+    // Añadir timestamp para evitar problemas de caché del navegador
+    const cacheBusterUrl = `${publicUrl}?t=${Date.now()}`
+
+    const { error: dbError } = await supabase
+        .from('coaches')
+        .update({ logo_url_dark: cacheBusterUrl })
+        .eq('id', user.id)
+
+    if (dbError) return { error: dbError.message }
+
+    revalidatePath('/coach/settings', 'page')
+    revalidatePath('/coach/dashboard', 'layout')
+    revalidatePath('/', 'layout')
+    return { success: true }
+}
+
 // ── Delete Account (Ley 21.719 — right to erasure) ───────────────────────────
 
 export type DeleteAccountResult = { success: true } | { error: string }
