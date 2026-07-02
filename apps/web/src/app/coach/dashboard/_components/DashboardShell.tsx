@@ -13,9 +13,11 @@ import { NewsFeed } from './NewsFeed'
 import { DashboardFab } from './DashboardFab'
 import { DesktopBento } from './DesktopBento'
 import { ClientStatsSheet } from './sheets/ClientStatsSheet'
+import { WorkspaceSwitchSheet } from './sheets/WorkspaceSwitchSheet'
 import { CoachOnboardingChecklist } from '../CoachOnboardingChecklist'
 import { todayLabel } from '../_lib/dashboard-design'
 import type { DashboardV2Data } from '../_data/types'
+import type { WorkspaceSummary } from '@/domain/auth/types'
 import type { Json } from '@/lib/database.types'
 import type { SubscriptionTier } from '@/lib/constants'
 import { TIER_CONFIG } from '@/lib/constants'
@@ -30,6 +32,7 @@ interface Props {
     initialOnboardingGuide: Json
     subscriptionTier: SubscriptionTier
     hasCoachLogo: boolean
+    workspaces: WorkspaceSummary[]
 }
 
 export function DashboardShell({
@@ -41,10 +44,16 @@ export function DashboardShell({
     initialOnboardingGuide,
     subscriptionTier,
     hasCoachLogo,
+    workspaces,
 }: Props) {
     const [statsSheetOpen, setStatsSheetOpen] = useState(false)
+    const [wsSheetOpen, setWsSheetOpen] = useState(false)
     const firstName = coachName?.split(' ')[0] || 'Coach'
     const openInsights = () => setStatsSheetOpen(true)
+    // Multi-workspace ⇒ el avatar abre el switcher de espacio (bottom-sheet). Con un solo
+    // espacio el avatar sigue navegando a Opciones y NO lleva caret (misma condición que el
+    // topbar desktop: workspaces.length > 1).
+    const hasMultiWorkspace = workspaces.length > 1
 
     return (
         <>
@@ -99,18 +108,30 @@ export function DashboardShell({
                                 <Bell className="size-[19px]" />
                                 <span className="absolute right-[9px] top-2 size-2 rounded-full border-2 border-[var(--surface-card)] bg-[var(--danger-500)]" />
                             </button>
-                            {/* Avatar de espacio + flechita de cambio (workspace switch). El glyph
-                                es la afford. del diseño (WorkspaceMenu) — abre Opciones/espacio. */}
-                            <Link
-                                href="/coach/settings"
-                                aria-label="Tu espacio"
-                                className="relative shrink-0"
-                            >
-                                <Avatar name={coachName} size="md" ring="sport" />
-                                <span className="absolute -bottom-0.5 -right-0.5 flex size-[18px] items-center justify-center rounded-full border-2 border-[var(--surface-app)] bg-surface-card text-[var(--text-muted)] shadow-[var(--shadow-sm)]">
-                                    <ChevronDown className="size-3" />
-                                </span>
-                            </Link>
+                            {/* Avatar de espacio. Con >1 workspace: botón con caret que abre el
+                                switcher de espacio (bottom-sheet). Con 1 solo: link a Opciones,
+                                sin caret. */}
+                            {hasMultiWorkspace ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setWsSheetOpen(true)}
+                                    aria-label="Cambiar de espacio"
+                                    className="relative shrink-0"
+                                >
+                                    <Avatar name={coachName} size="md" ring="sport" />
+                                    <span className="absolute -bottom-0.5 -right-0.5 flex size-[18px] items-center justify-center rounded-full border-2 border-[var(--surface-app)] bg-surface-card text-[var(--text-muted)] shadow-[var(--shadow-sm)]">
+                                        <ChevronDown className="size-3" />
+                                    </span>
+                                </button>
+                            ) : (
+                                <Link
+                                    href="/coach/settings"
+                                    aria-label="Tu cuenta"
+                                    className="relative shrink-0"
+                                >
+                                    <Avatar name={coachName} size="md" ring="sport" />
+                                </Link>
+                            )}
                         </div>
                     </header>
 
@@ -169,6 +190,14 @@ export function DashboardShell({
                 adherenceStats={data.adherenceStats}
                 nutritionStats={data.nutritionStats}
             />
+
+            {hasMultiWorkspace && (
+                <WorkspaceSwitchSheet
+                    open={wsSheetOpen}
+                    onOpenChange={setWsSheetOpen}
+                    workspaces={workspaces}
+                />
+            )}
         </>
     )
 }

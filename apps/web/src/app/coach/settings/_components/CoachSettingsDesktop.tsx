@@ -12,8 +12,11 @@ import {
     Moon,
     LifeBuoy,
     Trash2,
+    LogOut,
+    Loader2,
     type LucideIcon,
 } from 'lucide-react'
+import { useCoachSignOut } from './CoachSignOut'
 
 /**
  * Opciones (coach) · desktop 2-panel — SettingsShell 1:1 con `DesktopOpciones`
@@ -82,6 +85,7 @@ export function CoachSettingsDesktop({
         if (!groups.includes(c.group)) groups.push(c.group)
     })
     const active = cats.find((c) => c.id === sel) ?? cats[0]
+    const { signOut, pending: signOutPending } = useCoachSignOut()
 
     return (
         <div className="dt-settings-host">
@@ -133,6 +137,25 @@ export function CoachSettingsDesktop({
                                     })}
                             </div>
                         ))}
+                        {/* Sesión — cierre de sesión (acción, no navegación ni pane).
+                            Tono neutro: la acción destructiva/roja es "Eliminar cuenta". */}
+                        <div className="dt-set-railgrp">
+                            <div className="dt-set-raillbl">Sesión</div>
+                            <button
+                                type="button"
+                                className="dt-set-railitem"
+                                data-active="0"
+                                data-danger="0"
+                                onClick={signOut}
+                                disabled={signOutPending}
+                                aria-label="Cerrar sesión"
+                            >
+                                <span className="dt-set-railico">
+                                    {signOutPending ? <Loader2 size={18} className="animate-spin" /> : <LogOut size={18} />}
+                                </span>
+                                <span>Cerrar sesión</span>
+                            </button>
+                        </div>
                     </div>
                 </aside>
 

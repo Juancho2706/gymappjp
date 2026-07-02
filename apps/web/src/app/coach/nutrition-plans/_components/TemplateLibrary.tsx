@@ -442,58 +442,63 @@ export function TemplateLibrary({ templates, coachId, clients }: Props) {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2 pt-3 border-t border-[var(--border-subtle)] mt-auto">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-[var(--text-subtle)] mr-auto">
-                      <Utensils className="w-3.5 h-3.5" />
-                      {meals.length} comidas
+                  {/* Footer de acciones — flex-wrap + cluster de botones agrupado (shrink-0):
+                      en anchos intermedios (~880-1050px, 2 columnas) el cluster cae a su propia
+                      línea en vez de desbordar la card (Asignar recortado en el borde) */}
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-2 pt-3 border-t border-[var(--border-subtle)] mt-auto">
+                    <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-[var(--text-subtle)] mr-auto">
+                      <Utensils className="w-3.5 h-3.5 shrink-0" />
+                      <span className="whitespace-nowrap">{meals.length} comidas</span>
                       {assigned.length > 0 && (
-                        <Badge tone="sport" variant="soft" size="sm" className="ml-1">
+                        <Badge tone="sport" variant="soft" size="sm" className="ml-1 shrink-0">
                           {assigned.length} activos
                         </Badge>
                       )}
                     </span>
-                    <Button
-                      variant="secondary"
-                      size="icon-sm"
-                      onClick={() => router.push(`/coach/nutrition-plans/${template.id}/edit`)}
-                      title="Editar"
-                      aria-label="Editar"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="icon-sm"
-                      onClick={() => handleDuplicate(template.id)}
-                      disabled={isDuplicating === template.id}
-                      title="Duplicar"
-                      aria-label="Duplicar"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="icon-sm"
-                      onClick={() => setTemplateToDelete(template.id)}
-                      disabled={isDeleting === template.id}
-                      title="Eliminar"
-                      aria-label="Eliminar"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      style={{ backgroundColor: 'var(--theme-primary)', color: 'white' }}
-                      className="font-black uppercase tracking-widest text-[10px]"
-                      onClick={() => setAssignTemplate({
-                        id: template.id,
-                        name: template.name,
-                        assigned_client_ids: template.assigned_clients?.map((c) => c.id) ?? [],
-                      })}
-                    >
-                      <UserPlus className="w-3.5 h-3.5 mr-1" />
-                      Asignar
-                    </Button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button
+                        variant="secondary"
+                        size="icon-sm"
+                        onClick={() => router.push(`/coach/nutrition-plans/${template.id}/edit`)}
+                        title="Editar"
+                        aria-label="Editar"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="icon-sm"
+                        onClick={() => handleDuplicate(template.id)}
+                        disabled={isDuplicating === template.id}
+                        title="Duplicar"
+                        aria-label="Duplicar"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="icon-sm"
+                        onClick={() => setTemplateToDelete(template.id)}
+                        disabled={isDeleting === template.id}
+                        title="Eliminar"
+                        aria-label="Eliminar"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        style={{ backgroundColor: 'var(--theme-primary)', color: 'white' }}
+                        className="font-black uppercase tracking-widest text-[10px]"
+                        onClick={() => setAssignTemplate({
+                          id: template.id,
+                          name: template.name,
+                          assigned_client_ids: template.assigned_clients?.map((c) => c.id) ?? [],
+                        })}
+                      >
+                        <UserPlus className="w-3.5 h-3.5 mr-1" />
+                        Asignar
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

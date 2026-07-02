@@ -105,15 +105,20 @@ export function NutritionHub({
       </div>
 
       <Tabs value={hubTab} onValueChange={setHubTab} className="w-full flex flex-col gap-5">
-        {/* Header compacto: móvil = tabs centrados; desktop = título + tabs + acciones en UNA fila */}
-        <div className="sticky top-[var(--coach-mobile-content-top-offset)] md:top-0 z-20 bg-background/80 backdrop-blur-md -mx-4 px-4 md:mx-0 md:px-0 pb-4 pt-2 md:py-2 flex justify-center md:flex-wrap md:items-center md:justify-between md:gap-x-6 md:gap-y-3">
+        {/* Header compacto: móvil = tabs centrados; desktop = título + strip de tabs CLAVADO a
+            la derecha del título (left-aligned) + acciones en un slot derecho (md:ml-auto) que
+            absorbe la diferencia de ancho entre pestañas (con/sin "+ Plantilla"). Así el strip
+            no "baila" al cambiar de pestaña. */}
+        <div className="sticky top-[var(--coach-mobile-content-top-offset)] md:top-0 z-20 bg-background/80 backdrop-blur-md -mx-4 px-4 md:mx-0 md:px-0 pb-4 pt-2 md:py-2 flex justify-center md:flex-wrap md:items-center md:justify-start md:gap-x-6 md:gap-y-3">
           <div className="hidden min-w-0 shrink-0 md:block">
             <h1 className="font-display font-extrabold text-2xl leading-tight text-[var(--text-strong)]">
               Nutrición
             </h1>
             <p className="text-[13px] text-[var(--text-muted)] mt-0.5">Planes, alimentos y recetas</p>
           </div>
-          <div className="flex w-full max-w-2xl items-center gap-3 md:w-auto md:min-w-0 md:max-w-none">
+          {/* Strip de tabs: móvil full-width centrado; desktop ancho de contenido, anclado
+              junto al título (shrink-0 = nunca lo comprimen las acciones) */}
+          <div className="flex w-full max-w-2xl items-center md:w-auto md:min-w-0 md:max-w-none md:shrink-0">
             <TabsList
               className="bg-surface-sunken p-[3px] h-auto flex gap-1 w-full md:w-auto rounded-control"
               style={{ '--theme-primary': 'var(--theme-primary)' } as CSSProperties}
@@ -122,7 +127,7 @@ export function NutritionHub({
                 <TabsTrigger
                   key={t.value}
                   value={t.value}
-                  className="group/tab flex-1 min-w-0 md:flex-none h-[46px] flex flex-col items-center justify-center gap-0.5 rounded-[11px] px-1 md:px-4 transition-[background-color,box-shadow] duration-150 data-active:bg-surface-card data-active:shadow-sm"
+                  className="group/tab flex-1 min-w-0 md:flex-none md:min-w-[88px] h-[46px] flex flex-col items-center justify-center gap-0.5 rounded-[11px] px-1 md:px-4 transition-[background-color,box-shadow] duration-150 data-active:bg-surface-card data-active:shadow-sm"
                 >
                 <span className="max-w-full truncate text-[12.5px] leading-none font-semibold text-[var(--text-muted)] group-data-[active]/tab:font-extrabold group-data-[active]/tab:text-[var(--text-strong)]">
                   {t.shortLabel ? (
@@ -140,8 +145,10 @@ export function NutritionHub({
               </TabsTrigger>
             ))}
             </TabsList>
-            <div className="hidden items-center gap-2 shrink-0 md:flex">{actions}</div>
           </div>
+          {/* Acciones: slot derecho — md:ml-auto lo empuja a la orilla y absorbe la diferencia
+              de ancho (con/sin "+ Plantilla") sin mover el strip de tabs */}
+          <div className="hidden items-center gap-2 shrink-0 md:ml-auto md:flex">{actions}</div>
         </div>
 
         <TabsContent value="templates" className="mt-0 focus-visible:outline-none">

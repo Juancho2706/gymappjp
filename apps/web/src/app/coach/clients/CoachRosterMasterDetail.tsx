@@ -73,14 +73,14 @@ function initialsOf(name?: string | null): string {
 interface CoachRosterMasterDetailProps {
     clients: any[]
     pulseByClientId: Record<string, DirectoryPulseRow>
-    /** Cambia la vista de nivel superior a "Tabla" (acción del botón cuadrícula del rail). */
-    onShowTable: () => void
+    /** Muestra el acceso a Herramientas en la cabecera del rail (≥1 módulo del hub activo). */
+    showTools?: boolean
 }
 
 export function CoachRosterMasterDetail({
     clients,
     pulseByClientId,
-    onShowTable,
+    showTools = false,
 }: CoachRosterMasterDetailProps) {
     const [search, setSearch] = useState('')
     const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -167,16 +167,20 @@ export function CoachRosterMasterDetail({
                         <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[12px] font-bold text-subtle">
                             {activeClients.length}
                         </span>
-                        <div className="ml-auto flex gap-1.5">
-                            <button
-                                type="button"
-                                onClick={onShowTable}
-                                title="Vista tabla"
-                                aria-label="Vista tabla"
-                                className="flex h-[30px] w-[30px] items-center justify-center rounded-[10px] border border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-strong"
+                        {showTools && (
+                            <Link
+                                href="/coach/tools"
+                                prefetch={false}
+                                title="Herramientas · Cardio · Movimiento · Composición"
+                                className="group ml-1 inline-flex h-[30px] shrink-0 items-center gap-1.5 rounded-[10px] border border-[color-mix(in_srgb,var(--sport-500)_28%,transparent)] bg-sport-100 px-2 text-sport-700 transition-colors hover:bg-sport-200"
                             >
-                                <LayoutGrid className="h-4 w-4" />
-                            </button>
+                                <LayoutGrid className="h-[15px] w-[15px] shrink-0" />
+                                <span className="hidden text-[12px] font-extrabold min-[1000px]:inline">
+                                    Herramientas
+                                </span>
+                            </Link>
+                        )}
+                        <div className="ml-auto flex gap-1.5">
                             <button
                                 type="button"
                                 onClick={() => setCreateOpen(true)}

@@ -7,6 +7,7 @@ import { BrandUpsell } from './_components/BrandUpsell'
 import { SupportPane } from './_components/SupportPane'
 import { SubscriptionContent } from '../subscription/_components/SubscriptionContent'
 import { DangerZone } from './_components/DangerZone'
+import { CoachSignOutCard } from './_components/CoachSignOut'
 import { ThemeToggleCard } from './_components/ThemeToggleCard'
 import { getCoachSettingsForUser } from './_data/settings.queries'
 import { BrandSettingsForm } from './BrandSettingsForm'
@@ -221,6 +222,7 @@ export default async function CoachSettingsPage() {
                         title="Soporte"
                         desc="Escribinos si algo no funciona o necesitás ayuda"
                     />
+                    <CoachSignOutCard />
                 </div>
 
                 <DangerZone />
@@ -398,6 +400,7 @@ export default async function CoachSettingsPage() {
                         title="Soporte"
                         desc="Escribinos si algo no funciona o necesitás ayuda"
                     />
+                    <CoachSignOutCard />
                 </div>
 
                 {/* Danger zone — account deletion (siempre alcanzable) */}

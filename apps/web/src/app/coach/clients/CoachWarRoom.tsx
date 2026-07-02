@@ -14,8 +14,6 @@ import {
     ChevronRight,
     ArrowRight,
     FileUp,
-    KeyRound,
-    Apple,
     LayoutGrid,
     Link as LinkIcon,
 } from 'lucide-react'
@@ -42,6 +40,8 @@ interface CoachWarRoomProps {
     pulse: DirectoryPulseRow[]
     activeFilter: DirectoryRiskFilter
     onFilterChange: (f: DirectoryRiskFilter) => void
+    /** Acceso a Herramientas solo si el coach tiene ≥1 módulo del hub activo (cardio/movimiento/composición). */
+    toolsEnabled?: boolean
 }
 
 function AnimatedNumber({ value }: { value: number }) {
@@ -58,55 +58,6 @@ function AnimatedNumber({ value }: { value: number }) {
     })
 
     return <span className="tabular-nums">{text}</span>
-}
-
-// ===== DirBanner · señal accionable (transcripción del DirBanner del diseño coach-directory.jsx) =====
-// border 1px tono-500 · fondo tono-100 · icono tono-700 · "Ver →" 12/800.
-const BANNER_TONE = {
-    danger: { bd: 'var(--danger-500)', bg: 'var(--danger-100)', fg: 'var(--danger-700)' },
-    warning: { bd: 'var(--warning-500)', bg: 'var(--warning-100)', fg: 'var(--warning-700)' },
-    info: { bd: 'var(--info-400, #60A5FA)', bg: 'var(--info-100, #E6F0FB)', fg: 'var(--info-700, #1D4ED8)' },
-    ember: { bd: 'var(--ember-500)', bg: 'var(--ember-100)', fg: 'var(--ember-700)' },
-} as const
-
-function DirBanner({
-    tone,
-    icon,
-    children,
-    onView,
-}: {
-    tone: keyof typeof BANNER_TONE
-    icon: React.ReactNode
-    children: React.ReactNode
-    onView: () => void
-}) {
-    const t = BANNER_TONE[tone]
-    return (
-        <motion.button
-            type="button"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            onClick={onView}
-            className="flex w-full items-center gap-2.5 rounded-[var(--radius-md)] border px-[13px] py-2.5 text-left"
-            style={{ borderColor: t.bd, background: t.bg }}
-        >
-            <span className="inline-flex shrink-0" style={{ color: t.fg }}>
-                {icon}
-            </span>
-            <span
-                className="min-w-0 flex-1 text-[12.5px] font-semibold leading-[1.3]"
-                style={{ color: t.fg }}
-            >
-                {children}
-            </span>
-            <span
-                className="inline-flex shrink-0 items-center gap-[3px] text-[12px] font-extrabold"
-                style={{ color: t.fg }}
-            >
-                Ver <ArrowRight className="h-[13px] w-[13px]" />
-            </span>
-        </motion.button>
-    )
 }
 
 // ===== DirPulseCard · prioridad jerárquica (Riesgo / Atención) — botón-filtro =====
@@ -234,6 +185,7 @@ export function CoachWarRoom({
     pulse,
     activeFilter,
     onFilterChange,
+    toolsEnabled = false,
 }: CoachWarRoomProps) {
     const router = useRouter()
     const { t } = useTranslation()
@@ -273,13 +225,6 @@ export function CoachWarRoom({
             ? Math.round(pulse.reduce((a, p) => a + p.percentage, 0) / pulse.length)
             : 0
 
-    const expiredProgramsCount = pulse.filter(
-        (p) => p.planDaysRemaining !== null && p.planDaysRemaining <= 0
-    ).length
-    const noCheckin1m = pulse.filter((p) =>
-        (p.attentionFlags ?? []).includes('SIN_CHECKIN_1M')
-    ).length
-    const pendingPassword = clients.filter((c) => c.force_password_change).length
     const nutritionLowCount = pulse.filter((p) =>
         (p.attentionFlags ?? []).includes('NUTRICION_RIESGO')
     ).length
@@ -299,14 +244,6 @@ export function CoachWarRoom({
     }
 
     const allClear = activeFilter === 'all'
-
-    const showCheckinBanner = noCheckin1m > 0 && urgentCount === 0
-    const hasBanners =
-        urgentCount > 0 ||
-        expiredProgramsCount > 0 ||
-        pendingPassword > 0 ||
-        nutritionLowCount > 0 ||
-        showCheckinBanner
 
     return (
         <>
@@ -344,22 +281,25 @@ export function CoachWarRoom({
                     </div>
                 </div>
 
-                {/* ===== Herramientas / Módulos (entrada tool-first, arriba del directorio) ===== */}
-                <Link
-                    href="/coach/tools"
-                    className="eva-press flex w-full items-center gap-3 rounded-card border border-subtle bg-surface-card px-[13px] py-[11px] text-left shadow-[var(--shadow-xs)]"
-                >
-                    <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[11px] bg-sport-100 text-sport-600">
-                        <LayoutGrid className="h-[19px] w-[19px]" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-bold text-strong">Herramientas</span>
-                        <span className="block truncate text-[11.5px] text-muted">
-                            Cardio · Movimiento · Composición
+                {/* ===== Herramientas / Módulos (entrada tool-first, arriba del directorio) —
+                    solo si el coach tiene ≥1 módulo del hub activo (cardio/movimiento/composición). ===== */}
+                {toolsEnabled && (
+                    <Link
+                        href="/coach/tools"
+                        className="eva-press flex w-full items-center gap-3 rounded-card border border-subtle bg-surface-card px-[13px] py-[11px] text-left shadow-[var(--shadow-xs)]"
+                    >
+                        <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[11px] bg-sport-100 text-sport-600">
+                            <LayoutGrid className="h-[19px] w-[19px]" />
                         </span>
-                    </span>
-                    <ChevronRight className="h-[18px] w-[18px] shrink-0 text-[var(--ink-300)]" />
-                </Link>
+                        <span className="min-w-0 flex-1">
+                            <span className="block text-sm font-bold text-strong">Herramientas</span>
+                            <span className="block truncate text-[11.5px] text-muted">
+                                Cardio · Movimiento · Composición
+                            </span>
+                        </span>
+                        <ChevronRight className="h-[18px] w-[18px] shrink-0 text-[var(--ink-300)]" />
+                    </Link>
+                )}
 
                 {/* ===== Resumen · hoy — pulso colapsable ===== */}
                 <div className="relative z-10">
@@ -443,67 +383,6 @@ export function CoachWarRoom({
                         </div>
                     )}
                 </div>
-
-                {/* ===== Señales accionables (banners) ===== */}
-                {hasBanners && (
-                    <div className="relative z-10 space-y-2.5">
-                        {urgentCount > 0 && (
-                            <DirBanner
-                                tone="danger"
-                                icon={<AlertOctagon className="h-[17px] w-[17px]" />}
-                                onView={() => onFilterChange('urgent')}
-                            >
-                                {urgentCount} cliente{urgentCount !== 1 ? 's' : ''} con atención urgente
-                                (score ≥ 50)
-                            </DirBanner>
-                        )}
-
-                        {expiredProgramsCount > 0 && (
-                            <DirBanner
-                                tone="warning"
-                                icon={<AlertTriangle className="h-[17px] w-[17px]" />}
-                                onView={() => onFilterChange('expired_program')}
-                            >
-                                {expiredProgramsCount} programa
-                                {expiredProgramsCount !== 1 ? 's' : ''} vencido
-                                {expiredProgramsCount !== 1 ? 's' : ''}
-                            </DirBanner>
-                        )}
-
-                        {pendingPassword > 0 && (
-                            <DirBanner
-                                tone="info"
-                                icon={<KeyRound className="h-[17px] w-[17px]" />}
-                                onView={() => onFilterChange('password_reset')}
-                            >
-                                {pendingPassword} alumno{pendingPassword !== 1 ? 's' : ''} con cambio de
-                                contraseña pendiente
-                            </DirBanner>
-                        )}
-
-                        {nutritionLowCount > 0 && (
-                            <DirBanner
-                                tone="ember"
-                                icon={<Apple className="h-[17px] w-[17px]" />}
-                                onView={() => onFilterChange('nutrition_low')}
-                            >
-                                {nutritionLowCount} alumno{nutritionLowCount !== 1 ? 's' : ''} con
-                                cumplimiento nutricional bajo ({'<'}60%)
-                            </DirBanner>
-                        )}
-
-                        {showCheckinBanner && (
-                            <DirBanner
-                                tone="warning"
-                                icon={<AlertTriangle className="h-[17px] w-[17px]" />}
-                                onView={() => onFilterChange('urgent')}
-                            >
-                                ALERTA: {noCheckin1m} cliente{noCheckin1m !== 1 ? 's' : ''} llevan mas de 1
-                                mes sin check-in (desde el ultimo registrado)
-                            </DirBanner>
-                        )}
-                    </div>
-                )}
             </div>
 
             {/* ===================== DESKTOP (md+) ===================== */}

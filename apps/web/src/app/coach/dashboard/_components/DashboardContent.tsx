@@ -1,6 +1,7 @@
 import type { Json } from '@/lib/database.types'
 import type { SubscriptionTier } from '@/lib/constants'
 import { getCoachDashboardDataV2 } from '../_data/dashboard.queries'
+import { listUserWorkspacesForRender } from '@/services/auth/workspace-render-cache'
 import { DashboardShell } from './DashboardShell'
 
 export async function DashboardContent({
@@ -20,7 +21,12 @@ export async function DashboardContent({
     subscriptionTier: SubscriptionTier
     hasCoachLogo: boolean
 }) {
-    const data = await getCoachDashboardDataV2(userId)
+    // workspaces: React.cache-memoizado por userId (ya lo resuelve el layout en el mismo
+    // request → dedup, sin costo extra de DB). Habilita el switcher de espacio del header móvil.
+    const [data, workspaces] = await Promise.all([
+        getCoachDashboardDataV2(userId),
+        listUserWorkspacesForRender(userId),
+    ])
     return (
         <DashboardShell
             data={data}
@@ -31,6 +37,7 @@ export async function DashboardContent({
             initialOnboardingGuide={initialOnboardingGuide}
             subscriptionTier={subscriptionTier}
             hasCoachLogo={hasCoachLogo}
+            workspaces={workspaces}
         />
     )
 }
