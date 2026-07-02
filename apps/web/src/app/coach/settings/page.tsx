@@ -1,10 +1,11 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import type { ReactNode } from 'react'
+import { Suspense, type ReactNode } from 'react'
 import { getTierCapabilities, ADDON_MODULE_KEYS, type SubscriptionTier } from '@/lib/constants'
-import { Palette, Package, ChevronRight, Users, CreditCard, SlidersHorizontal, LayoutGrid, LifeBuoy, ArrowRight, type LucideIcon } from 'lucide-react'
+import { Palette, Package, ChevronRight, Users, CreditCard, SlidersHorizontal, LayoutGrid, LifeBuoy, type LucideIcon } from 'lucide-react'
 import { BrandUpsell } from './_components/BrandUpsell'
 import { SupportPane } from './_components/SupportPane'
+import { SubscriptionContent } from '../subscription/_components/SubscriptionContent'
 import { DangerZone } from './_components/DangerZone'
 import { ThemeToggleCard } from './_components/ThemeToggleCard'
 import { getCoachSettingsForUser } from './_data/settings.queries'
@@ -259,24 +260,9 @@ export default async function CoachSettingsPage() {
         ),
         suscripcion: (
             <PaneBody desc="Tu plan, facturación, alumnos activos y métodos de pago.">
-                <div className="rounded-card border border-subtle bg-surface-card p-5 shadow-[var(--shadow-sm)]">
-                    <div className="flex items-center gap-3.5">
-                        <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-control" style={{ background: 'var(--sport-100)', color: 'var(--sport-600)' }}>
-                            <CreditCard className="h-[22px] w-[22px]" />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                            <p className="text-[15px] font-bold text-strong">Plan {TIER_LABEL[tier] ?? 'Starter'}</p>
-                            <p className="mt-0.5 text-[12.5px] text-muted">Gestioná tu suscripción, facturación y métodos de pago.</p>
-                        </div>
-                    </div>
-                    <Link
-                        href="/coach/subscription"
-                        className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-control px-5 text-sm font-bold transition-[filter] bg-[var(--cta-fill)] text-[var(--text-on-sport)] hover:brightness-[1.06]"
-                    >
-                        Abrir suscripción
-                        <ArrowRight className="h-4 w-4" />
-                    </Link>
-                </div>
+                <Suspense fallback={<p className="text-sm text-muted">Cargando estado de suscripción…</p>}>
+                    <SubscriptionContent embedded />
+                </Suspense>
             </PaneBody>
         ),
         apariencia: (

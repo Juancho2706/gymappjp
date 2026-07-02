@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { SearchX, UserPlus } from 'lucide-react'
+import { ChevronRight, LayoutGrid, SearchX, UserPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DirectoryActionBar } from './DirectoryActionBar'
 import { DesktopRosterTable } from './DesktopRosterTable'
@@ -215,6 +216,23 @@ export function ClientsDirectoryClient({
         <div className="min-w-0 max-w-full">
             {/* El toggle Tabla / Ficha vive ahora en el topbar (CoachTopBar), junto a la
                 búsqueda global — controlado vía RosterViewContext. */}
+
+            {/* Herramientas (Cardio · Movimiento · Composición) — acceso destacado del directorio
+                DESKTOP (en móvil la card ya vive en CoachWarRoom, no se duplica). */}
+            <div className="hidden items-center justify-end px-6 py-3 md:flex">
+                <Link
+                    href="/coach/tools"
+                    prefetch={false}
+                    title="Cardio · Movimiento · Composición"
+                    className="group inline-flex items-center gap-2.5 rounded-card border border-[color-mix(in_srgb,var(--sport-500)_28%,transparent)] bg-gradient-to-br from-sport-100 to-[color-mix(in_srgb,var(--sport-200)_60%,var(--surface-card))] py-2 pl-2 pr-3.5 text-left shadow-[var(--shadow-xs)] transition-all hover:-translate-y-px hover:border-[color-mix(in_srgb,var(--sport-500)_45%,transparent)] hover:shadow-[var(--shadow-sm)]"
+                >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[var(--cta-fill)] text-on-sport shadow-[var(--shadow-xs)] transition-transform group-hover:scale-105">
+                        <LayoutGrid className="h-[18px] w-[18px]" />
+                    </span>
+                    <span className="text-sm font-extrabold text-sport-700">Herramientas</span>
+                    <ChevronRight className="h-[17px] w-[17px] shrink-0 text-sport-600 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+            </div>
 
             {/* Master-detail (Ficha) — solo desktop + modo ficha */}
             {rosterMode === 'ficha' && (

@@ -132,6 +132,15 @@ async function ProfileContent({ clientId }: { clientId: string }) {
 
     const firstPlan = nutritionPlans[0]
 
+    const coachesRel = (client as { coaches?: { slug?: string } | { slug?: string }[] | null })
+        .coaches
+    const heroCoachSlug =
+        coachesRel == null
+            ? undefined
+            : Array.isArray(coachesRel)
+              ? coachesRel[0]?.slug
+              : coachesRel.slug
+
     return (
         <div id="coach-client-profile-print" className="space-y-8 print:space-y-4">
             <ClientProfileHero
@@ -143,7 +152,9 @@ async function ProfileContent({ clientId }: { clientId: string }) {
                     subscription_start_date: client.subscription_start_date,
                     created_at: client.created_at,
                     is_active: client.is_active,
+                    is_archived: (client as { is_archived?: boolean | null }).is_archived ?? null,
                 }}
+                coachSlug={heroCoachSlug}
                 compliance={compliance}
                 profileLastActivityAt={data.profileLastActivityAt}
                 attentionScore={data.attentionScore}

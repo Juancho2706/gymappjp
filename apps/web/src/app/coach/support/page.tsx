@@ -1,8 +1,8 @@
 import { Metadata } from 'next'
 import { SupportForm } from './SupportForm'
+import { HelpCenter } from './_components/HelpCenter'
 import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { LifeBuoy, MessageCircle, Mail, BookOpen, ChevronRight } from 'lucide-react'
+import { LifeBuoy, Mail, ChevronRight } from 'lucide-react'
 
 export const metadata: Metadata = {
   title: 'Centro de Ayuda | EVA',
@@ -35,23 +35,6 @@ export default function CoachSupportPage() {
         Canales
       </h2>
       <Card padding="none" className="mb-[18px]">
-        {/* Chat en vivo */}
-        <div className="flex items-center gap-3 px-3.5 py-3">
-          <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-control bg-surface-sunken text-[var(--ink-700)]">
-            <MessageCircle className="h-[18px] w-[18px]" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[15px] font-bold text-strong">Chat en vivo</div>
-            <div className="mt-px truncate text-[13px] text-muted">En línea</div>
-          </div>
-          <Badge tone="success" dot size="sm">
-            En línea
-          </Badge>
-          <ChevronRight aria-hidden strokeWidth={2.25} className="size-[18px] shrink-0 text-[var(--ink-300)]" />
-        </div>
-
-        <div className="mx-3.5 h-px bg-[var(--border-subtle)]" />
-
         {/* Email */}
         <a
           href={`mailto:${SUPPORT_EMAIL}`}
@@ -66,21 +49,15 @@ export default function CoachSupportPage() {
           </div>
           <ChevronRight aria-hidden strokeWidth={2.25} className="size-[18px] shrink-0 text-[var(--ink-300)]" />
         </a>
-
-        <div className="mx-3.5 h-px bg-[var(--border-subtle)]" />
-
-        {/* Centro de ayuda */}
-        <div className="flex items-center gap-3 px-3.5 py-3">
-          <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-control bg-surface-sunken text-[var(--ink-700)]">
-            <BookOpen className="h-[18px] w-[18px]" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[15px] font-bold text-strong">Centro de ayuda</div>
-            <div className="mt-px truncate text-[13px] text-muted">Guías y FAQ</div>
-          </div>
-          <ChevronRight aria-hidden strokeWidth={2.25} className="size-[18px] shrink-0 text-[var(--ink-300)]" />
-        </div>
       </Card>
+
+      {/* Centro de ayuda — Guías y FAQ (colapsable, sin navegación) */}
+      <h2 className="mb-2.5 mt-1 font-display text-[17px] font-extrabold tracking-[-0.02em] text-strong">
+        Centro de ayuda
+      </h2>
+      <div className="mb-[18px]">
+        <HelpCenter />
+      </div>
 
       {/* Enviar un mensaje */}
       <h2 className="mb-2.5 mt-1 font-display text-[17px] font-extrabold tracking-[-0.02em] text-strong">

@@ -19,14 +19,14 @@ export function ProgramConfigSheet({ open, onClose, isMobile, ...fields }: Progr
                 side={isMobile ? 'bottom' : 'right'}
                 showCloseButton={false}
                 className={isMobile
-                    ? 'max-h-[90dvh] rounded-t-2xl'
+                    ? 'max-h-[88dvh] data-[side=bottom]:h-[88dvh] rounded-t-2xl'
                     : '!w-[420px] !max-w-[86vw]'}
             >
                 {/* Grabber — solo mobile */}
                 {isMobile && <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-muted-foreground/30" />}
 
-                {/* Header */}
-                <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-muted/25 px-5 py-4 dark:border-white/5 dark:bg-white/[0.02]">
+                {/* Header — fijo mientras el cuerpo scrollea */}
+                <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between gap-3 border-b border-border bg-muted/25 px-5 py-4 dark:border-white/5 dark:bg-white/[0.02]">
                     <SheetTitle>Configurar programa</SheetTitle>
                     {!isMobile && (
                         <Button
@@ -42,7 +42,7 @@ export function ProgramConfigSheet({ open, onClose, isMobile, ...fields }: Progr
                 </div>
 
                 {/* Cuerpo scrollable */}
-                <div className="flex-1 min-h-0 overflow-y-auto px-5 py-5">
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-5 pb-safe">
                     <ProgramConfigForm isMobile={isMobile} {...fields} />
                 </div>
 

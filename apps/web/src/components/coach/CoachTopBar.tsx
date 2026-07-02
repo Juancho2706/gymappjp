@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Search, ChevronRight, ArrowLeft, X, Table2, PanelLeft } from 'lucide-react'
+import { Search, ChevronRight, ArrowLeft, X, Table2, PanelLeft, ChevronsUpDown } from 'lucide-react'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
 import { useRosterView } from '@/components/coach/RosterViewContext'
 import { Avatar } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
+import type { WorkspaceSummary } from '@/domain/auth/types'
 
 /**
  * CoachTopBar — barra superior de escritorio del panel /coach (.dt-topbar del diseño Claude).
@@ -28,6 +29,12 @@ export interface CoachTopBarProps {
     coachName: string
     coachBrand: string
     primaryColor?: string
+    /** Logo de marca del coach — imagen del avatar de cuenta (fallback iniciales). */
+    logoUrl?: string | null
+    /** Workspaces del usuario. Con más de uno se muestra el chevron ↕ → /workspace/select. */
+    workspaces?: WorkspaceSummary[]
+    /** Etiqueta del workspace activo (tooltip del avatar cuando hay multi-workspace). */
+    currentWorkspaceLabel?: string
 }
 
 /**
@@ -111,7 +118,7 @@ function RosterViewToggle({
     )
 }
 
-export function CoachTopBar({ coachName, coachBrand }: CoachTopBarProps) {
+export function CoachTopBar({ coachName, coachBrand, logoUrl, workspaces, currentWorkspaceLabel }: CoachTopBarProps) {
     const pathname = usePathname()
     const inputRef = useRef<HTMLInputElement>(null)
     const [query, setQuery] = useState('')
@@ -142,6 +149,9 @@ export function CoachTopBar({ coachName, coachBrand }: CoachTopBarProps) {
     const inStack = detailLabel != null
     // Avatar de cuenta = el coach (no la marca): el panel es la cara de EVA.
     const avatarName = coachName?.trim() || coachBrand?.trim() || 'Coach'
+    // Multi-workspace ⇒ el avatar lleva chevron ↕ y navega al selector (misma condición y
+    // destino que post-login-redirect: workspaces.length > 1 → /workspace/select).
+    const hasMultiWorkspace = (workspaces?.length ?? 0) > 1
 
     return (
         <header className="z-[4] hidden h-[60px] flex-shrink-0 items-center gap-4 border-b border-[var(--border-subtle)] bg-[var(--surface-card)] px-[22px] font-ui md:flex">
@@ -227,13 +237,28 @@ export function CoachTopBar({ coachName, coachBrand }: CoachTopBarProps) {
                     <NewsBellButton />
                 </div>
                 <Link
-                    href="/coach/settings"
+                    href={hasMultiWorkspace ? '/workspace/select' : '/coach/settings'}
                     prefetch={false}
-                    aria-label="Tu cuenta"
-                    title={coachBrand || coachName}
-                    className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-sunken)]"
+                    aria-label={hasMultiWorkspace ? 'Cambiar workspace' : 'Tu cuenta'}
+                    title={
+                        hasMultiWorkspace
+                            ? (currentWorkspaceLabel || coachBrand || coachName)
+                            : (coachBrand || coachName)
+                    }
+                    className={cn(
+                        'flex h-10 items-center rounded-full transition-colors hover:bg-[var(--surface-sunken)]',
+                        hasMultiWorkspace
+                            ? 'gap-1 rounded-[var(--radius-md)] pl-1 pr-1.5'
+                            : 'w-10 justify-center'
+                    )}
                 >
-                    <Avatar name={avatarName} size="sm" />
+                    <Avatar name={avatarName} src={logoUrl ?? undefined} size="sm" />
+                    {hasMultiWorkspace && (
+                        <ChevronsUpDown
+                            className="h-3.5 w-3.5 flex-shrink-0 text-[var(--text-subtle)]"
+                            aria-hidden="true"
+                        />
+                    )}
                 </Link>
             </div>
         </header>

@@ -28,7 +28,6 @@ import {
 import { Card } from '@/components/ui/card'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { ProgressRing } from '@/components/ui/progress-ring'
-import { AppOnlyBadge } from '@/components/AppOnlyBadge'
 import {
     Dialog,
     DialogContent,
@@ -416,11 +415,6 @@ export function ProfileOverviewB3({
             {/* ===== Evolución visual ===== */}
             <Card padding="md">
                 <SectionTitle>Evolución visual</SectionTitle>
-                <div className="mb-4">
-                    <AppOnlyBadge>
-                        Mirá las fotos con zoom y deslizá entre ellas en la app de EVA
-                    </AppOnlyBadge>
-                </div>
                 {checkInsWithPhotos.length > 0 ? (
                     <div className="grid grid-cols-3 gap-2">
                         {checkInsWithPhotos.map((c, i) => {

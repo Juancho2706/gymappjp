@@ -83,7 +83,7 @@ export function ProfileTabNav({ activeTab, onChange, badges }: ProfileTabNavProp
                     ? 'border-default shadow-[0_6px_16px_-10px_rgba(0,0,0,0.28)]'
                     : 'border-subtle',
                 'bg-[color-mix(in_srgb,var(--surface-app)_80%,transparent)] [backdrop-filter:saturate(180%)_blur(12px)] [-webkit-backdrop-filter:saturate(180%)_blur(12px)]',
-                'top-[var(--coach-mobile-content-top-offset)] md:top-0 print:static print:border-0 print:bg-transparent'
+                'top-[var(--safe-area-inset-top)] md:top-0 print:static print:border-0 print:bg-transparent'
             )}
         >
             <div className="relative min-w-0">

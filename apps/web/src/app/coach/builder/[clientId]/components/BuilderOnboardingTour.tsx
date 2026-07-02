@@ -82,7 +82,9 @@ export function BuilderOnboardingTour({
 
         function updateRect() {
             const el = document.querySelector(`[data-tour-id="${activeStep.id}"]`) as HTMLElement | null
-            if (!el) {
+            // getClientRects() está vacío para elementos display:none (p.ej. botones de toolbar
+            // colapsados en anchos intermedios) → tratarlos como ausentes evita spotlights 0×0.
+            if (!el || el.getClientRects().length === 0) {
                 setSpotlightRect(null)
                 return
             }
@@ -110,8 +112,9 @@ export function BuilderOnboardingTour({
         if (!activeStep) return
         if (deferAutoSkipIfTargetMissing?.has(activeStep.id)) return
         // Skip unavailable targets to keep flow smooth on responsive layouts.
-        const el = document.querySelector(`[data-tour-id="${activeStep.id}"]`)
-        if (el) return
+        // Un botón colapsado (display:none) sigue en el DOM pero sin client rects → se salta igual.
+        const el = document.querySelector(`[data-tour-id="${activeStep.id}"]`) as HTMLElement | null
+        if (el && el.getClientRects().length > 0) return
         const timer = setTimeout(() => {
             setCurrentIdx((idx) => {
                 if (idx >= total - 1) {

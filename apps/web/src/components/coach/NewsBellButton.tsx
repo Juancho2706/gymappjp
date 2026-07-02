@@ -245,7 +245,7 @@ export function NewsBellButton() {
       <div className="hidden md:block">
         <Popover open={isDesktopOpen} onOpenChange={handleDesktopOpen}>
           <PopoverTrigger
-            className="relative text-muted transition-colors hover:text-strong"
+            className="relative inline-flex items-center justify-center text-muted transition-colors hover:text-strong"
             aria-label="Novedades"
           >
             <BellIconWithBadge unreadCount={unreadCount} />

@@ -239,7 +239,7 @@ export function ClientProfileDashboard({
     }
 
     return (
-        <div className="@container/ficha min-w-0 max-w-full space-y-6">
+        <div className="@container/ficha min-w-0 max-w-full space-y-6 pb-[calc(9rem+env(safe-area-inset-bottom))] md:pb-0">
             <ProfileTabNav activeTab={activeTab} onChange={handleTabChange} badges={tabBadges} />
 
             {isPending && (

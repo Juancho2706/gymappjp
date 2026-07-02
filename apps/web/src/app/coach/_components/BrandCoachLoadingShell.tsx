@@ -1,6 +1,12 @@
 import { getCoach } from '@/lib/coach/get-coach'
-import { CoachLoadingShell } from '@/components/ui/EvaRouteLoader'
+import { EvaRouteLoader } from '@/components/ui/EvaRouteLoader'
+import { EvaTreefrogLoader } from '@/components/loaders/EvaTreefrogLoader'
 
+/**
+ * Loader del panel /coach. Se centra en el ESCENARIO visible (viewport menos el topbar y el
+ * padding del contenido) con `grid place-items-center` — antes quedaba anclado arriba porque el
+ * `min-h-dvh` desbordaba la región de scroll bajo el topbar fijo.
+ */
 export async function BrandCoachLoadingShell({
     children,
 }: {
@@ -10,16 +16,24 @@ export async function BrandCoachLoadingShell({
     const useCustomStyles = coach?.use_brand_colors_coach !== false
 
     return (
-        <CoachLoadingShell
-            top={useCustomStyles ? 'route' : 'treefrog'}
-            customText={useCustomStyles ? (coach?.loader_text ?? undefined) : undefined}
-            useCustom={useCustomStyles ? (coach?.use_custom_loader ?? false) : false}
-            textColor={useCustomStyles ? (coach?.loader_text_color ?? undefined) : undefined}
-            primaryColor={useCustomStyles && !coach?.loader_text_color ? (coach?.primary_color ?? undefined) : undefined}
-            iconMode={useCustomStyles ? ((coach?.loader_icon_mode ?? 'eva') as 'eva' | 'coach' | 'none') : 'eva'}
-            coachLogoUrl={useCustomStyles ? (coach?.logo_url ?? undefined) : undefined}
-        >
+        <div className="grid w-full animate-in fade-in duration-300 place-items-center px-4 min-h-[calc(100dvh-var(--mobile-content-top-offset)-var(--mobile-content-bottom-offset)-3rem)] md:min-h-[calc(100dvh-60px-5rem)]">
+            <div className="flex flex-col items-center justify-center py-2">
+                {useCustomStyles ? (
+                    <EvaRouteLoader
+                        size="lg"
+                        className="py-1"
+                        customText={coach?.loader_text ?? undefined}
+                        useCustom={coach?.use_custom_loader ?? false}
+                        textColor={coach?.loader_text_color ?? undefined}
+                        primaryColor={!coach?.loader_text_color ? (coach?.primary_color ?? undefined) : undefined}
+                        iconMode={(coach?.loader_icon_mode ?? 'eva') as 'eva' | 'coach' | 'none'}
+                        coachLogoUrl={coach?.logo_url ?? undefined}
+                    />
+                ) : (
+                    <EvaTreefrogLoader compact className="py-1" />
+                )}
+            </div>
             {children}
-        </CoachLoadingShell>
+        </div>
     )
 }

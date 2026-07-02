@@ -1,6 +1,7 @@
 'use client'
 
 import type { ReactNode, SVGProps } from 'react'
+import { useState } from 'react'
 
 function WhatsAppIcon(props: SVGProps<SVGSVGElement>) {
     return (
@@ -33,6 +34,8 @@ import {
     type ClientStatus,
     type ClientStatusLevel,
 } from './clientStatusUtils'
+import { ClientActionsSheet } from '../ClientActionsSheet'
+import { EditClientDataModal } from '../EditClientDataModal'
 
 type HeroCompliance = {
     workoutsThisWeek?: number
@@ -63,7 +66,10 @@ type ClientProfileHeroProps = {
         subscription_start_date: string | null
         created_at: string
         is_active: boolean | null
+        is_archived?: boolean | null
     }
+    /** Slug/código público del coach — arma el link de login del alumno (menú de acciones). */
+    coachSlug?: string | null
     compliance: HeroCompliance
     profileLastActivityAt: string | null
     attentionScore: number
@@ -86,6 +92,7 @@ type ClientProfileHeroProps = {
 export function ClientProfileHero({
     clientId,
     client,
+    coachSlug,
     compliance,
     profileLastActivityAt,
     attentionScore,
@@ -95,6 +102,8 @@ export function ClientProfileHero({
     moduleFlags,
     status: statusProp,
 }: ClientProfileHeroProps) {
+    const [actionsOpen, setActionsOpen] = useState(false)
+    const [editingClient, setEditingClient] = useState<{ id: string; name: string } | null>(null)
     const streakDays = compliance.currentStreak ?? 0
     const trainingAge = formatTrainingAgeLabel(
         client.subscription_start_date,
@@ -189,6 +198,7 @@ export function ClientProfileHero({
                     </button>
                     <button
                         type="button"
+                        onClick={() => setActionsOpen(true)}
                         aria-label="Más opciones"
                         title="Más opciones"
                         className="flex h-10 w-10 items-center justify-center rounded-control border border-default bg-surface-card text-strong shadow-[var(--shadow-sm)] transition-colors hover:bg-surface-sunken"
@@ -299,6 +309,36 @@ export function ClientProfileHero({
             {/* WhatsApp + accesos a módulos: MOVIDOS (rediseño CD nuevo) — WhatsApp + check-in +
                 builder viven en la barra de acciones FLOTANTE (ProfileFloatingActions) y los módulos
                 en la sección "Módulos" al final del Resumen. El hero ya no los duplica. */}
+
+            {/* Menú de acciones del alumno (⋮): reusa el sheet del directorio (editar datos,
+                WhatsApp, resetear contraseña, pausar, archivar, eliminar) — sin duplicar handlers. */}
+            {actionsOpen && (
+                <ClientActionsSheet
+                    client={{
+                        id: clientId,
+                        full_name: client.full_name,
+                        email: client.email,
+                        phone: client.phone,
+                        is_active: client.is_active,
+                        is_archived: client.is_archived ?? false,
+                    }}
+                    loginUrl={
+                        coachSlug && typeof window !== 'undefined'
+                            ? `${window.location.origin}/c/${coachSlug}/login`
+                            : ''
+                    }
+                    onClose={() => setActionsOpen(false)}
+                    onEdit={setEditingClient}
+                />
+            )}
+            {editingClient && (
+                <EditClientDataModal
+                    clientId={editingClient.id}
+                    clientName={editingClient.name}
+                    open={!!editingClient}
+                    onClose={() => setEditingClient(null)}
+                />
+            )}
         </div>
     )
 }

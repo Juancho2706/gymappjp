@@ -48,7 +48,9 @@ export function CoachMainWrapper({ children }: { children: React.ReactNode }) {
             id="coach-main"
             ref={mainRef}
             className={cn(
-                'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-auto pb-[var(--mobile-content-bottom-offset)] md:pb-0',
+                // Móvil: el scroll vive en window (overflow-y-visible) → sticky de las pantallas
+                // (tabs de ficha, action-bars) pega contra el viewport. Desktop: scroll interno (chrome fijo).
+                'relative flex min-h-0 min-w-0 flex-1 flex-col overflow-x-clip overflow-y-visible md:overflow-y-auto pb-[var(--mobile-content-bottom-offset)] md:pb-0',
                 COACH_MOBILE_TOP_CHROME_PT,
                 'md:pt-0'
             )}

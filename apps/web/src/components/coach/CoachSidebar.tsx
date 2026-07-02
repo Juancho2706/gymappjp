@@ -35,6 +35,8 @@ interface CoachSidebarProps {
     } | null
     workspaces?: WorkspaceSummary[]
     currentWorkspaceLabel?: string
+    /** Logo de marca del coach — usado como imagen del avatar del pie (fallback iniciales). */
+    logoUrl?: string | null
     /** Workspace ACTIVO — gobierna qué módulos del nav se muestran (separación de flujos). */
     activeWorkspaceType?: WorkspaceType | null
     /** Módulos toggleables habilitados para el contexto activo (resuelto server-side en el layout). */
@@ -84,7 +86,7 @@ const navIcon = (item: NavModule): LucideIcon => ICON_OVERRIDE[item.key] ?? item
 /** Capsula flotante movil — claves de los tabs PRIMARIOS (espejo del coachTabs del diseño eva-app). */
 const MOBILE_TAB_KEYS = ['dashboard', 'clients', 'programs', 'nutrition', 'options', 'settings_team', 'team', 'reactivate'] as const
 
-export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains }: CoachSidebarProps) {
+export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains, logoUrl }: CoachSidebarProps) {
     const pathname = usePathname()
     const [manualCollapsed, setManualCollapsed] = useState(false)
     // Modo "compact" del diseño (760 ≤ vw < 1080): el sidebar SIEMPRE es el rail de 76px;
@@ -145,8 +147,7 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
 
     const disabledDomainSet = disabledDomains && disabledDomains.length > 0 ? new Set(disabledDomains) : null
     const visibleNavItems = getVisibleNavItems({ activeWorkspaceType, subscriptionStatus, enabledModules, disabledDomains: disabledDomainSet })
-    const { primary: primaryNavItems, secondary: secondaryNavItems } = splitForSidebar(visibleNavItems)
-    const hasSecondaryGroup = secondaryNavItems.length > 0
+    const { primary: primaryNavItems } = splitForSidebar(visibleNavItems)
 
     // MOBILE — cápsula flotante (eva-app coachTabs): hasta 5 tabs full-label, sin "Más".
     const mobileTabs = MOBILE_TAB_KEYS
@@ -262,28 +263,10 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                     {primaryNavItems.map((item) => renderNavLink(item))}
                 </nav>
 
-                {/* .dt-nav2 — grupo "Más" (Soporte + módulos comprados) */}
-                {hasSecondaryGroup && (
-                    <nav
-                        aria-label="Más"
-                        className="mt-1 flex flex-shrink-0 flex-col gap-[3px] border-t border-[var(--border-subtle)] pt-2"
-                    >
-                        {!isCollapsed && (
-                            <div
-                                data-testid="nav-modules-divider"
-                                className="select-none px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.07em] text-[var(--text-subtle)]"
-                            >
-                                Más
-                            </div>
-                        )}
-                        {secondaryNavItems.map((item) => renderNavLink(item, true))}
-                    </nav>
-                )}
-
                 {/* .dt-side-foot — bloque COACH / {nombre} + Colapsar menú */}
                 <div className="mt-3 flex flex-col gap-1.5 border-t border-[var(--border-subtle)] pt-3">
                     <div className={cn('flex min-w-0 items-center gap-2.5 rounded-[var(--radius-md)] p-1.5', isCollapsed && 'justify-center p-0')}>
-                        <Avatar name={avatarName} size="sm" />
+                        <Avatar name={avatarName} src={logoUrl ?? undefined} size="sm" />
 
                         {!isCollapsed && (
                             <span className="flex min-w-0 flex-col gap-px">

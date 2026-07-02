@@ -1,7 +1,6 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import Image from 'next/image'
 import { useState, useCallback, useMemo, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -9,12 +8,12 @@ import {
     useSensor, useSensors, type DragEndEvent, type DragOverEvent, DragStartEvent, DragOverlay,
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
-import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight, CircleHelp, Maximize2, Sparkles, Pencil, Moon, SlidersHorizontal, History, X, Check, type LucideIcon } from 'lucide-react'
+import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, RefreshCw, MoreVertical, ChevronLeft, ChevronRight, CircleHelp, Pencil, Moon, SlidersHorizontal, History, X, Check, type LucideIcon } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { AppOnlyPopup } from '@/components/AppOnlyPopup'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { EditedByBadge } from '@/components/coach/EditedByBadge'
 import { saveWorkoutProgramAction, syncProgramFromTemplateAction, type WorkoutProgramInput } from './_actions/builder.actions'
 import type { Tables } from '@/lib/database.types'
@@ -47,7 +46,6 @@ import type { BuilderBlock, BuilderCardioContext, DayState, ProgramPhase } from 
 import type { WorkoutArea } from '@/domain/workout/types'
 import { effectiveExerciseType, legacyRepsSummaryFor } from '@/lib/workout-exercise-type'
 import { buildAreaVMs } from './area-ui'
-import { getMuscleColor } from './muscle-colors'
 import { parseProgramPhases, mapDbBlockToBuilderBlock, enrichDaysWithExerciseMedia, createDefaultBlock } from './program-read-mappers'
 
 type Client = Tables<'clients'>
@@ -224,8 +222,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     const [isCatalogOpen, setIsCatalogOpen] = useState(false)
     /** Filtro muscular compartido: chips del sheet móvil + Select del catálogo (sidebar y sheet expandido). */
     const [catalogMuscleFilter, setCatalogMuscleFilter] = useState('Todos')
-    const [sheetHeight, setSheetHeight] = useState(12)
-    const [isDraggingSheet, setIsDraggingSheet] = useState(false)
     const [isPending, startTransition] = useTransition()
     const [isMobile, setIsMobile] = useState<boolean>(false)
     const [mounted, setMounted] = useState(false)
@@ -237,7 +233,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     const [hasSeenShortTour, setHasSeenShortTour] = useState(true)
     const [activeTourStepId, setActiveTourStepId] = useState<string | null>(null)
     const [activeMobileDayIndex, setActiveMobileDayIndex] = useState(0)
-    const [isSimpleMode, setIsSimpleMode] = useState(false)
     // Clamp del día activo en mobile cuando se achican los días (cycle→weekly o ciclo más corto):
     // sin esto activeMobileDayIndex apunta a un día inexistente → days[idx] undefined → rompe tap-to-add.
     useEffect(() => {
@@ -245,27 +240,12 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
             setActiveMobileDayIndex(Math.max(0, days.length - 1))
         }
     }, [days.length, activeMobileDayIndex])
-    const [showSwipeHint, setShowSwipeHint] = useState(false)
-    const [modeTransitionLabel, setModeTransitionLabel] = useState<string | null>(null)
-    const preTourSimpleModeRef = useRef(false)
 
-    const toggleSimpleMode = useCallback(() => {
-        const nextLabel = isSimpleMode ? 'Modo Normal' : 'Modo Simple'
-        setModeTransitionLabel(nextLabel)
-        // Swap UI once black covers full screen (~20% of 2.4s = 480ms)
-        const tSwap = setTimeout(() => setIsSimpleMode(v => !v), 480)
-        const tEnd = setTimeout(() => setModeTransitionLabel(null), 2400)
-        return () => { clearTimeout(tSwap); clearTimeout(tEnd) }
-    }, [isSimpleMode])
-
-    const touchStartY = useRef(0)
-    const initialSheetHeight = useRef(60)
     const swipeTouchStartX = useRef(0)
     const swipeTouchStartY = useRef(0)
     const boardScrollRef = useRef<HTMLDivElement>(null)
     const preTourShowConfigRef = useRef(false)
     const preTourCatalogOpenRef = useRef(false)
-    const preTourSheetHeightRef = useRef(12)
     const onboardingShortKey = 'builder_onboarding_seen_short_v1'
     const onboardingHelpKey = 'builder_onboarding_seen_help_v1'
 
@@ -278,12 +258,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     const openTour = useCallback((mode: 'short' | 'full') => {
         preTourShowConfigRef.current = showConfig
         preTourCatalogOpenRef.current = isCatalogOpen
-        preTourSheetHeightRef.current = sheetHeight
-        preTourSimpleModeRef.current = isSimpleMode
-        if (isSimpleMode) setIsSimpleMode(false)
         setTourMode(mode)
         setTourOpen(true)
-    }, [showConfig, isCatalogOpen, sheetHeight, isSimpleMode])
+    }, [showConfig, isCatalogOpen])
 
     useEffect(() => {
         setMounted(true)
@@ -322,25 +299,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     }, [initialProgram])
 
     useEffect(() => {
-        try {
-            const saved = sessionStorage.getItem('builder:simpleMode')
-            if (saved === '1') setIsSimpleMode(true)
-        } catch {}
-    }, [])
-
-    useEffect(() => {
-        try { sessionStorage.setItem('builder:simpleMode', isSimpleMode ? '1' : '0') } catch {}
-    }, [isSimpleMode])
-
-    // Swipe hint: show on Simple Mode entry and on day change, auto-hide after 2.5s.
-    useEffect(() => {
-        if (!isMobile || !isSimpleMode) { setShowSwipeHint(false); return }
-        setShowSwipeHint(true)
-        const t = setTimeout(() => setShowSwipeHint(false), 2500)
-        return () => clearTimeout(t)
-    }, [isMobile, isSimpleMode, activeMobileDayIndex])
-
-    useEffect(() => {
         if (isFirstRender.current) { isFirstRender.current = false; return }
         setHasUnsavedChanges(true)
     }, [days, builderB.days, programName, weeksToRepeat, durationType, durationDays, startDateFlexible, startDate, programNotes, isABMode, programPhases, sourceTemplateId])
@@ -371,27 +329,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         window.addEventListener('keydown', handleKeyDown)
         return () => window.removeEventListener('keydown', handleKeyDown)
     }, [undo, redo])
-
-    const handleTouchStart = (e: React.TouchEvent) => {
-        touchStartY.current = e.touches[0].clientY
-        initialSheetHeight.current = sheetHeight
-        setIsDraggingSheet(true)
-    }
-
-    const handleTouchMove = (e: React.TouchEvent) => {
-        if (!isDraggingSheet) return
-        const deltaY = e.touches[0].clientY - touchStartY.current
-        const deltaVh = (deltaY / window.innerHeight) * 100
-        const newHeight = Math.max(30, Math.min(85, initialSheetHeight.current - deltaVh))
-        setSheetHeight(newHeight)
-    }
-
-    const handleTouchEnd = () => {
-        setIsDraggingSheet(false)
-        if (sheetHeight > 60) { setIsCatalogOpen(true); setSheetHeight(80) }
-        else if (sheetHeight > 28) { setIsCatalogOpen(true); setSheetHeight(40) }
-        else { setIsCatalogOpen(false); setSheetHeight(12) }
-    }
 
     const handleSwipeTouchStart = (e: React.TouchEvent) => {
         swipeTouchStartX.current = e.touches[0].clientX
@@ -625,10 +562,10 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
             ...(isMobile
                 ? [
                     {
-                        id: 'exercise-sheet-handle',
-                        title: 'Abre el menú de ejercicios',
+                        id: 'exercise-fab',
+                        title: 'Abre el catálogo',
                         description:
-                            'Desliza esta barra hacia arriba (o tócala y desliza) para desplegar el catálogo en móvil.',
+                            'Toca el botón + para desplegar el catálogo de ejercicios en pantalla completa.',
                         placement: 'top' as const,
                     },
                 ]
@@ -770,20 +707,15 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         const isConfigInternal = TOUR_CONFIG_INTERNAL_STEP_IDS.has(activeTourStepId)
         if (isConfigInternal) {
             if (!showConfig) setShowConfig(true)
-            if (isMobile) {
-                setIsCatalogOpen(false)
-                setSheetHeight(12)
-            }
+            if (isMobile) setIsCatalogOpen(false)
         } else if (showConfig) {
             setShowConfig(false)
         }
         if (activeTourStepId === 'exercise-catalog-mobile') {
             setIsCatalogOpen(true)
-            setSheetHeight(80)
         }
-        if (activeTourStepId === 'exercise-sheet-handle') {
+        if (activeTourStepId === 'exercise-fab') {
             setIsCatalogOpen(false)
-            setSheetHeight(12)
         }
     }, [tourOpen, activeTourStepId, showConfig, isMobile])
 
@@ -793,8 +725,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         setShowConfig(preTourShowConfigRef.current)
         if (isMobile) {
             setIsCatalogOpen(preTourCatalogOpenRef.current)
-            setSheetHeight(preTourSheetHeightRef.current)
-            setIsSimpleMode(preTourSimpleModeRef.current)
         }
         if (tourMode === 'short') {
             setHasSeenShortTour(true)
@@ -993,11 +923,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
 
     return (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-app">
-            <AppOnlyPopup storageKey="builder" title="Arma rutinas mejor en la app">
-                Reordena con gestos, arma offline y revisa el progreso con gráficas táctiles en la app de EVA.
-            </AppOnlyPopup>
             <header className="z-20 flex-shrink-0 border-b border-subtle bg-surface-app/50 pt-safe pl-safe pr-safe backdrop-blur-xl">
-                <div className={`mx-auto flex max-w-[2000px] items-center justify-between gap-3 px-4 md:gap-4 md:px-6 ${isMobile && isSimpleMode ? 'h-12' : 'h-16'}`}>
+                <div className="mx-auto flex h-16 max-w-[2000px] items-center justify-between gap-3 px-4 md:gap-4 md:px-6">
                     <div className="flex min-w-0 items-center gap-3 md:gap-4">
                         <Link href={client ? `/coach/clients/${client.id}` : '/coach/templates'}>
                             <Button variant="ghost" size="icon" className="shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
@@ -1070,41 +997,41 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             <Search className="w-4 h-4" />
                         </Button>
 
-                        {/* Secondary actions — desktop only */}
+                        {/* Secondary actions — inline en desktop (icon-only lg→xl, con texto xl+); en tablet (md→lg) van al overflow ⋮ */}
                         <Button
                             variant="ghost"
                             size="sm"
                             data-tour-id="templates-button"
-                            className="hidden md:flex h-10 w-auto px-3 text-[13px] font-bold text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
+                            className="hidden lg:flex h-10 w-10 items-center justify-center gap-2 px-0 text-[13px] font-bold text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5 xl:w-auto xl:px-3"
                             onClick={() => setShowTemplatePicker(true)}
                             title="Cargar plantilla"
                         >
-                            <LayoutTemplate className="w-4 h-4 mr-2" />
-                            Plantillas
+                            <LayoutTemplate className="w-4 h-4" />
+                            <span className="hidden xl:inline">Plantillas</span>
                         </Button>
 
                         <Button
                             variant="outline"
                             size="sm"
                             data-tour-id="preview-button"
-                            className="eva-press hidden md:flex h-10 w-auto gap-2 rounded-pill border-subtle px-4 text-[13px] font-bold text-muted hover:text-strong"
+                            className="eva-press hidden lg:flex h-10 w-10 items-center justify-center gap-2 rounded-pill border-subtle px-0 text-[13px] font-bold text-muted hover:text-strong xl:w-auto xl:px-4"
                             onClick={() => setShowPreview(true)}
                             title="Vista previa"
                         >
                             <Eye className="w-4 h-4" />
-                            Vista previa
+                            <span className="hidden xl:inline">Vista previa</span>
                         </Button>
 
                         {!client && initialProgram?.id && (
                             <Button
                                 variant="ghost"
                                 size="sm"
-                                className="hidden md:flex h-10 w-auto px-3 text-[13px] font-bold text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
+                                className="hidden lg:flex h-10 w-10 items-center justify-center gap-2 px-0 text-[13px] font-bold text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5 xl:w-auto xl:px-3"
                                 onClick={() => setShowAssign(true)}
                                 title="Asignar a clientes"
                             >
-                                <Users className="w-4 h-4 mr-2" />
-                                Asignar
+                                <Users className="w-4 h-4" />
+                                <span className="hidden xl:inline">Asignar</span>
                             </Button>
                         )}
 
@@ -1112,27 +1039,27 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             variant="outline"
                             size="sm"
                             data-tour-id="balance-button"
-                            className="eva-press hidden md:flex h-10 w-auto gap-2 rounded-pill border-subtle px-4 text-[13px] font-bold text-muted hover:text-strong"
+                            className="eva-press hidden lg:flex h-10 w-10 items-center justify-center gap-2 rounded-pill border-subtle px-0 text-[13px] font-bold text-muted hover:text-strong xl:w-auto xl:px-4"
                             onClick={() => setShowBalance(true)}
                             title="Balance muscular"
                         >
                             <BarChart3 className="w-4 h-4" />
-                            Balance
+                            <span className="hidden xl:inline">Balance</span>
                         </Button>
 
                         <Button
                             variant="ghost"
                             size="sm"
                             data-tour-id="print-button"
-                            className="hidden md:flex h-10 w-auto px-3 text-[13px] font-bold text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5"
+                            className="hidden lg:flex h-10 w-10 items-center justify-center gap-2 px-0 text-[13px] font-bold text-muted hover:text-strong hover:bg-black/5 dark:hover:bg-white/5 xl:w-auto xl:px-3"
                             onClick={() => setShowPrint(true)}
                             title="Imprimir / Exportar PDF"
                         >
-                            <Printer className="w-4 h-4 mr-2" />
-                            Imprimir
+                            <Printer className="w-4 h-4" />
+                            <span className="hidden xl:inline">Imprimir</span>
                         </Button>
 
-                        <div className="hidden md:flex items-center gap-1">
+                        <div className="hidden lg:flex items-center gap-1">
                             <Button
                                 variant="ghost"
                                 size="sm"
@@ -1155,6 +1082,60 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             >
                                 <Redo2 className="w-4 h-4" />
                             </Button>
+                        </div>
+
+                        {/* Desktop overflow ⋮ — tablet (md→lg): acciones secundarias en dropdown */}
+                        <div className="hidden md:max-lg:block">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger
+                                    className="h-10 w-10 min-w-0 rounded-full border-0 bg-transparent p-0 text-muted normal-case tracking-normal hover:bg-black/5 hover:text-strong dark:bg-transparent dark:hover:bg-white/5"
+                                    aria-label="Más opciones"
+                                    title="Más opciones"
+                                >
+                                    <MoreVertical className="w-5 h-5" />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="min-w-[13rem]">
+                                    <DropdownMenuItem onClick={() => setShowTemplatePicker(true)}>
+                                        <LayoutTemplate className="w-4 h-4" /> Plantillas
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setShowPreview(true)}>
+                                        <Eye className="w-4 h-4" /> Vista previa
+                                    </DropdownMenuItem>
+                                    {!client && initialProgram?.id && (
+                                        <DropdownMenuItem onClick={() => setShowAssign(true)}>
+                                            <Users className="w-4 h-4" /> Asignar a clientes
+                                        </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuItem onClick={() => setShowBalance(true)}>
+                                        <BarChart3 className="w-4 h-4" /> Balance muscular
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setShowPrint(true)}>
+                                        <Printer className="w-4 h-4" /> Imprimir / PDF
+                                    </DropdownMenuItem>
+                                    {client && initialProgram?.id && sourceTemplateId && (
+                                        <DropdownMenuItem
+                                            disabled={isPending}
+                                            onClick={() => {
+                                                if (!initialProgram?.id) return
+                                                startTransition(async () => {
+                                                    const r = await syncProgramFromTemplateAction(initialProgram.id)
+                                                    if (r.error) toast.error(r.error)
+                                                    else { toast.success('Sincronizado con la plantilla base.'); router.refresh() }
+                                                })
+                                            }}
+                                        >
+                                            <RefreshCw className="w-4 h-4" /> Sync plantilla
+                                        </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={undo} disabled={!canUndo}>
+                                        <Undo2 className="w-4 h-4" /> Deshacer
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={redo} disabled={!canRedo}>
+                                        <Redo2 className="w-4 h-4" /> Rehacer
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
 
                         {/* Mobile overflow menu — hidden on md+ */}
@@ -1195,7 +1176,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 variant="outline"
                                 size="sm"
                                 data-tour-id="top-config-button"
-                                className={`eva-press relative h-8 w-8 gap-2 rounded-pill px-0 transition-all md:h-10 md:w-auto md:px-4 ${
+                                className={`eva-press relative h-8 w-8 gap-2 rounded-pill px-0 transition-all md:h-10 md:w-10 md:px-0 xl:w-auto xl:px-4 ${
                                     showConfig
                                         ? 'border-[var(--warning-500)]/60 bg-[var(--warning-500)]/10 text-[var(--warning-600)]'
                                         : 'border-[var(--warning-500)]/40 text-[var(--warning-600)] hover:bg-[var(--warning-500)]/10 hover:border-[var(--warning-500)]/60 shadow-[0_0_10px_rgba(251,191,36,0.25)]'
@@ -1207,7 +1188,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 title="Configurar programa"
                             >
                                 <SlidersHorizontal className="w-4 h-4" />
-                                <span className="hidden md:inline text-[13px] font-bold">Configurar</span>
+                                <span className="hidden xl:inline text-[13px] font-bold">Configurar</span>
                             </Button>
                         </div>
 
@@ -1215,7 +1196,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             <Button
                                 variant="outline"
                                 size="sm"
-                                className="hidden md:flex h-10 w-auto px-3 text-[13px] font-bold border-[var(--aqua-600)]/30 text-[var(--aqua-600)] hover:bg-[var(--aqua-500)]/10"
+                                className="hidden lg:flex h-10 w-10 items-center justify-center gap-2 px-0 text-[13px] font-bold border-[var(--aqua-600)]/30 text-[var(--aqua-600)] hover:bg-[var(--aqua-500)]/10 xl:w-auto xl:px-3"
                                 disabled={isPending}
                                 title="Copiar cambios de la plantilla base (no pisa bloques marcados Modif.)"
                                 onClick={() => {
@@ -1230,8 +1211,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                     })
                                 }}
                             >
-                                <RefreshCw className="w-4 h-4 mr-2" />
-                                <span className="hidden lg:inline">Sync plantilla</span>
+                                <RefreshCw className="w-4 h-4" />
+                                <span className="hidden xl:inline">Sync plantilla</span>
                             </Button>
                         )}
 
@@ -1266,7 +1247,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                     </div>
                 )}
 
-                {!(isMobile && isSimpleMode) && <ProgramPhasesBar phases={programPhases} />}
+                <ProgramPhasesBar phases={programPhases} />
             </header>
 
             {showDraftBanner && (
@@ -1330,7 +1311,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
 
                     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/5 via-surface-app to-surface-app">
                         {/* A/B Mode bar */}
-                        <div className={`flex items-center gap-3 px-4 py-2 border-b border-subtle bg-surface-app/50 flex-shrink-0 ${isMobile && isSimpleMode ? 'hidden' : ''}`}>
+                        <div className="flex items-center gap-3 px-4 py-2 border-b border-subtle bg-surface-app/50 flex-shrink-0">
                             <button
                                 onClick={() => setIsABMode(v => !v)}
                                 data-tour-id="ab-toggle"
@@ -1396,27 +1377,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                         <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar" ref={boardScrollRef} data-tour-id="days-board">
                         {isMobile ? (
                             <div className="h-full flex flex-col">
-                                {isSimpleMode && isABMode && (
-                                    <div className="flex justify-center mt-1 mb-0.5 mx-2">
-                                        <div className="flex bg-surface-sunken/50 p-0.5 rounded-md text-[9px] font-black uppercase tracking-widest">
-                                            {(['A', 'B'] as const).map(v => (
-                                                <button
-                                                    key={v}
-                                                    onClick={() => setActiveVariant(v)}
-                                                    className={`px-2.5 py-0.5 rounded-sm transition-colors ${
-                                                        activeVariant === v
-                                                            ? 'bg-surface-app text-strong shadow-sm'
-                                                            : 'text-muted'
-                                                    }`}
-                                                >
-                                                    {v}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                                {/* Mobile day selector — scroll chips (design 1:1) */}
-                                <div className="flex gap-2 overflow-x-auto px-4 pt-3.5 pb-1 mb-1 flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
+                                {/* Mobile day selector — scroll chips (design 1:1); centrado cuando caben sin scroll */}
+                                <div className="overflow-x-auto px-4 pt-3.5 pb-1 mb-1 flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
+                                    <div className="mx-auto flex w-max gap-2">
                                     {days.map((d, idx) => {
                                         const isActive = activeMobileDayIndex === idx
                                         const has = d.blocks.length > 0
@@ -1439,6 +1402,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                             </button>
                                         )
                                     })}
+                                    </div>
                                 </div>
 
                                 {/* Carousel swipeable area */}
@@ -1447,26 +1411,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                     onTouchStart={handleSwipeTouchStart}
                                     onTouchEnd={handleSwipeTouchEnd}
                                 >
-                                    {isSimpleMode && (
-                                        <>
-                                            {activeMobileDayIndex > 0 && (
-                                                <div
-                                                    className={`pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 z-10 transition-opacity duration-500 ${showSwipeHint ? 'opacity-100' : 'opacity-0'}`}
-                                                    aria-hidden="true"
-                                                >
-                                                    <ChevronLeft className="w-9 h-9 text-primary/70 drop-shadow-md animate-swipe-hint-left" strokeWidth={2.5} />
-                                                </div>
-                                            )}
-                                            {activeMobileDayIndex < days.length - 1 && (
-                                                <div
-                                                    className={`pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 z-10 transition-opacity duration-500 ${showSwipeHint ? 'opacity-100' : 'opacity-0'}`}
-                                                    aria-hidden="true"
-                                                >
-                                                    <ChevronRight className="w-9 h-9 text-primary/70 drop-shadow-md animate-swipe-hint-right" strokeWidth={2.5} />
-                                                </div>
-                                            )}
-                                        </>
-                                    )}
                                     <div
                                         className="flex h-full"
                                         style={{
@@ -1481,10 +1425,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                                 className="h-full overflow-y-auto"
                                                 style={{
                                                     width: `${100 / days.length}%`,
-                                                    /* Altura del sheet + save-bar fija inferior (72px + safe-area) */
-                                                    paddingBottom: isSimpleMode
-                                                        ? `calc(env(safe-area-inset-bottom, 0px) + 112px)`
-                                                        : `calc(${sheetHeight}vh + env(safe-area-inset-bottom, 0px) + 78px)`,
+                                                    /* Espacio para el stack de FAB + guardar fijo abajo-derecha */
+                                                    paddingBottom: `calc(env(safe-area-inset-bottom, 0px) + 96px)`,
                                                     WebkitOverflowScrolling: 'touch',
                                                 } as React.CSSProperties}
                                             >
@@ -1495,7 +1437,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                                     isCycleMode={programStructureType === 'cycle'}
                                                     isDragPending={isDragPending}
                                                     narrowLayout={isMobile}
-                                                    compact={isMobile && isSimpleMode}
                                                     areas={areas}
                                                     onMoveBlock={handleMoveBlock}
                                                     onAddExercise={handleAddExercise}
@@ -1547,100 +1488,8 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                         </div>
                     </div>
 
-                    {isMobile && !isSimpleMode && (
-                        <>
-                            {isCatalogOpen && sheetHeight >= 40 && (
-                                <div
-                                    className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 transition-opacity"
-                                    onClick={() => { setIsCatalogOpen(false); setSheetHeight(12) }}
-                                />
-                            )}
-                            <div
-                                className="fixed left-0 right-0 bg-surface-app border-t border-subtle shadow-2xl z-40 select-none rounded-t-3xl overflow-hidden"
-                                data-tour-id="exercise-sheet-handle"
-                                style={{ height: `${sheetHeight}vh`, bottom: 'calc(env(safe-area-inset-bottom, 0px) + 72px)', transition: isDraggingSheet ? 'none' : 'height 0.3s cubic-bezier(0.32, 0.72, 0, 1)' }}
-                            >
-                                {/* Drag handle — always visible */}
-                                <div
-                                    className="w-full flex flex-col items-center pt-3 pb-1 cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
-                                    onTouchStart={handleTouchStart}
-                                    onTouchMove={handleTouchMove}
-                                    onTouchEnd={handleTouchEnd}
-                                    onClick={() => {
-                                        if (!isCatalogOpen) { setIsCatalogOpen(true); setSheetHeight(80) }
-                                    }}
-                                >
-                                    <div className="w-10 h-1 bg-[var(--text-muted)]/25 rounded-full mb-2" />
-                                    {/* Collapsed label */}
-                                    {sheetHeight < 28 && (
-                                        <div className="flex items-center gap-2 pb-1">
-                                            <Plus className="w-3.5 h-3.5 text-primary" />
-                                            <span className="text-[11px] font-bold text-strong">Añadir ejercicio</span>
-                                            <span className="text-[10px] text-muted ml-1">
-                                                · {days[activeMobileDayIndex]?.blocks.length || 0} en este día
-                                            </span>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Compact state (40vh): search + muscle group chips */}
-                                {sheetHeight >= 28 && sheetHeight < 60 && (
-                                    <div className="flex flex-col h-[calc(100%-48px)] px-4 pb-4 gap-3">
-                                        <div className="relative">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-                                            <input
-                                                type="text"
-                                                placeholder="Buscar ejercicio..."
-                                                className="w-full pl-9 pr-4 py-2.5 text-[16px] bg-surface-sunken/50 border border-subtle rounded-control focus:outline-none focus:border-primary"
-                                                onFocus={() => { setIsCatalogOpen(true); setSheetHeight(80) }}
-                                            />
-                                        </div>
-                                        <div className="overflow-x-auto flex gap-2 pb-1 -mx-1 px-1">
-                                            {['Pectorales','Dorsales','Hombros','Bíceps','Tríceps','Cuádriceps','Glúteos','Abdominales'].map(m => (
-                                                <button
-                                                    key={m}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setCatalogMuscleFilter(m)
-                                                        setIsCatalogOpen(true)
-                                                        setSheetHeight(80)
-                                                    }}
-                                                    className="flex-shrink-0 text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border border-subtle bg-surface-app hover:border-primary/50 transition-colors"
-                                                    style={{ color: getMuscleColor(m) }}
-                                                >
-                                                    {m}
-                                                </button>
-                                            ))}
-                                        </div>
-                                        <p className="text-[10px] text-muted text-center">
-                                            Toca un grupo muscular para ver todos los ejercicios
-                                        </p>
-                                    </div>
-                                )}
-
-                                {/* Full catalog (80vh) */}
-                                {sheetHeight >= 60 && (
-                                    <div data-tour-id="exercise-catalog-mobile" className="h-[calc(100%-48px)] overflow-hidden px-4 pb-4">
-                                        <DraggableExerciseCatalog
-                                            exercises={exercises}
-                                            selectedMuscleGroup={catalogMuscleFilter}
-                                            onSelectedMuscleGroupChange={setCatalogMuscleFilter}
-                                            onTapAdd={(exercise) => {
-                                                const dayId = days[activeMobileDayIndex]?.id
-                                                if (dayId != null) {
-                                                    handleAddExercise(dayId, exercise)
-                                                    toast.success(`${exercise.name} añadido`)
-                                                }
-                                            }}
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        </>
-                    )}
-
-                    {/* Simple Mode: catalog overlay (80vh) — no handle, no compact states */}
-                    {isMobile && isSimpleMode && isCatalogOpen && (
+                    {/* Catálogo — bottom-sheet completo (única entrada = FAB +) */}
+                    {isMobile && isCatalogOpen && (
                         <>
                             <div
                                 className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 transition-opacity"
@@ -1648,7 +1497,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             />
                             <div
                                 className="fixed left-0 right-0 bg-surface-app border-t border-subtle shadow-2xl z-40 select-none rounded-t-3xl overflow-hidden animate-in slide-in-from-bottom"
-                                style={{ height: '80vh', bottom: 'calc(env(safe-area-inset-bottom, 0px) + 72px)' }}
+                                style={{ height: '80dvh', bottom: 'env(safe-area-inset-bottom, 0px)' }}
                             >
                                 <div className="flex items-center justify-between px-4 pt-3 pb-2 border-b border-subtle">
                                     <span className="text-[11px] font-bold uppercase tracking-widest text-strong">Añadir ejercicio</span>
@@ -1679,35 +1528,35 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                         </>
                     )}
 
-                    {/* FAB stack — mobile only */}
-                    {isMobile && (
+                    {/* FAB + guardar — stack abajo-derecha (mobile) */}
+                    {isMobile && !isCatalogOpen && (
                         <div
                             className="fixed right-4 z-40 flex flex-row items-center gap-3"
-                            style={{
-                                bottom: isSimpleMode
-                                    ? `calc(env(safe-area-inset-bottom, 0px) + 88px)`
-                                    : `calc(${sheetHeight}vh + env(safe-area-inset-bottom, 0px) + 84px)`,
-                                transition: 'bottom 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
-                            }}
+                            style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }}
                         >
-                            {isSimpleMode && (
+                            {/* Guardar — pill compacto (mismo handler/estado que desktop) */}
+                            <button
+                                type="button"
+                                onClick={() => handleSave()}
+                                disabled={isPending || !programName.trim()}
+                                data-tour-id="save-button"
+                                aria-label={client ? 'Guardar y enviar' : 'Guardar plantilla'}
+                                className="eva-press flex h-14 items-center gap-2 rounded-full px-5 text-[14px] font-bold text-primary-foreground shadow-xl transition-transform active:scale-95 disabled:opacity-50 disabled:shadow-none"
+                                style={{
+                                    backgroundColor: 'var(--theme-primary, #007AFF)',
+                                    boxShadow: '0 6px 20px rgba(var(--theme-primary-rgb, 0, 122, 255), 0.42)',
+                                }}
+                            >
+                                {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" strokeWidth={2.5} />}
+                                <span>{isPending ? 'Guardando...' : 'Guardar'}</span>
+                            </button>
+
+                            {/* + FAB — única entrada al catálogo */}
+                            {!days[activeMobileDayIndex]?.is_rest && (
                                 <button
                                     type="button"
+                                    data-tour-id="exercise-fab"
                                     onClick={() => setIsCatalogOpen(true)}
-                                    aria-label="Añadir ejercicio"
-                                    className="w-14 h-14 rounded-full text-primary-foreground shadow-xl flex items-center justify-center transition-transform active:scale-95"
-                                    style={{
-                                        backgroundColor: 'var(--theme-primary, #2680FF)',
-                                        boxShadow: '0 6px 20px rgba(var(--theme-primary-rgb, 38, 128, 255), 0.42)',
-                                    }}
-                                >
-                                    <Plus className="w-6 h-6" strokeWidth={3} />
-                                </button>
-                            )}
-                            {!isSimpleMode && !days[activeMobileDayIndex]?.is_rest && (
-                                <button
-                                    type="button"
-                                    onClick={() => { setIsCatalogOpen(true); setSheetHeight(80) }}
                                     aria-label="Agregar ejercicio"
                                     className="w-14 h-14 rounded-full text-primary-foreground shadow-xl flex items-center justify-center transition-transform active:scale-95"
                                     style={{
@@ -1718,32 +1567,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                     <Plus className="w-6 h-6" strokeWidth={3} />
                                 </button>
                             )}
-
-                            {/* Toggle button */}
-                            <div className="relative flex flex-col items-center">
-                                <button
-                                    type="button"
-                                    onClick={toggleSimpleMode}
-                                    aria-label={isSimpleMode ? 'Modo normal' : 'Modo simple'}
-                                    title={isSimpleMode ? 'Modo normal' : 'Modo simple'}
-                                    className={`relative flex items-center justify-center transition-all active:scale-95 ${
-                                        isSimpleMode
-                                            ? 'w-12 h-12 rounded-full bg-surface-app/90 border border-[var(--border-subtle)]/80 text-muted hover:bg-surface-sunken backdrop-blur-sm shadow-lg'
-                                            : 'w-12 h-12 rounded-2xl text-white shadow-2xl'
-                                    }`}
-                                    style={!isSimpleMode ? {
-                                        background: 'linear-gradient(135deg, var(--surface-inverse) 0%, var(--surface-inverse-2) 100%)',
-                                        boxShadow: 'var(--shadow-lg)',
-                                    } : undefined}
-                                >
-                                    <Sparkles className="w-5 h-5" />
-                                    {!isSimpleMode && (
-                                        <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[8px] font-black uppercase tracking-[0.18em] text-[var(--success-500)] animate-nuevo-glow pointer-events-none select-none">
-                                            NUEVO
-                                        </span>
-                                    )}
-                                </button>
-                            </div>
                         </div>
                     )}
 
@@ -1779,29 +1602,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                     </DragOverlay>
                 </div>
             </DndContext>
-
-            {/* Save-bar fija inferior — mobile (kit: CTA primario domina el pie de pantalla) */}
-            {isMobile && (
-                <div
-                    className="fixed inset-x-0 bottom-0 z-[45] border-t border-subtle px-4 pt-3 backdrop-blur-xl"
-                    style={{
-                        paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
-                        background: 'color-mix(in srgb, var(--surface-card) 88%, transparent)',
-                    }}
-                >
-                    <button
-                        type="button"
-                        onClick={() => handleSave()}
-                        disabled={isPending || !programName.trim()}
-                        data-tour-id="save-button"
-                        className="eva-press flex h-12 w-full items-center justify-center gap-2 rounded-control text-[15px] font-bold text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] transition-all hover:opacity-90 disabled:opacity-50 disabled:shadow-none"
-                        style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
-                    >
-                        {isPending ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Check className="h-[18px] w-[18px]" strokeWidth={2.5} />}
-                        {isPending ? 'Guardando...' : client ? 'Guardar y enviar' : 'Guardar plantilla'}
-                    </button>
-                </div>
-            )}
 
             {/* Overflow "Más" — bottom-sheet mobile (kit: filas ícono-tile + label) */}
             <Sheet open={showOverflow} onOpenChange={setShowOverflow}>
@@ -1842,27 +1642,6 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                     </div>
                 </SheetContent>
             </Sheet>
-
-            {modeTransitionLabel && (
-                <div
-                    className="fixed inset-0 z-[100] bg-black flex items-center justify-center pointer-events-none animate-mode-transition"
-                    aria-hidden="true"
-                >
-                    <div className="flex flex-col items-center gap-6 animate-mode-transition-text">
-                        <Image
-                            src="/LOGOS/eva-icon.png"
-                            alt=""
-                            width={80}
-                            height={80}
-                            className="w-20 h-20 object-contain"
-                            style={{ width: 80, height: 80, filter: 'brightness(0) invert(1)' }}
-                        />
-                        <span className="text-white text-3xl font-display uppercase tracking-[0.3em]">
-                            {modeTransitionLabel}
-                        </span>
-                    </div>
-                </div>
-            )}
 
             <BlockEditSheet
                 block={editingBlock}
@@ -1979,7 +1758,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                 onStepChange={handleStepChange}
                 getFooterHint={tourFooterHint}
                 deferAutoSkipIfTargetMissing={TOUR_CONFIG_INTERNAL_STEP_IDS}
-                spotlightRemeasureSignal={`${showConfig}-${sheetHeight}`}
+                spotlightRemeasureSignal={`${showConfig}-${isCatalogOpen}`}
             />
         </div>
     )
