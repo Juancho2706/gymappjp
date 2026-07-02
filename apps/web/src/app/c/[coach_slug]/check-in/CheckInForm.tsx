@@ -174,23 +174,54 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
             // Compresión BEST-EFFORT: normaliza a JPEG (encode universal, incl. iOS viejos) — esto
             // CONVIERTE las fotos HEIC de iPhone, que el bucket rechaza y hacían fallar el check-in
             // ENTERO. El server igual las re-comprime a WebP para el storage. NUNCA bloquea: si la
-            // conversión falla, sube el original. useWebWorker=false (hilo principal): el worker podía
-            // fallar y dejaba el check-in bloqueado en silencio (el catch de abajo se lo tragaba).
-            const compressForUpload = async (file: File): Promise<File | Blob> => {
+            // conversión falla O SE CUELGA (incidente 2026-07-02: con ciertas fotos la promesa de
+            // browser-image-compression jamás resuelve → spinner infinito, el POST nunca salía),
+            // seguimos sin ella a los 15s. useWebWorker=false (hilo principal): el worker podía
+            // fallar y dejaba el check-in bloqueado en silencio.
+            const compressForUpload = async (file: File): Promise<File | Blob | null> => {
                 try {
-                    return await imageCompression(file, {
-                        maxSizeMB: 2,
-                        maxWidthOrHeight: 1920,
-                        useWebWorker: false,
-                        fileType: 'image/jpeg',
-                    })
+                    const compressed = await Promise.race([
+                        imageCompression(file, {
+                            maxSizeMB: 2,
+                            maxWidthOrHeight: 1920,
+                            useWebWorker: false,
+                            fileType: 'image/jpeg',
+                        }),
+                        new Promise<null>((resolve) => setTimeout(() => resolve(null), 15_000)),
+                    ])
+                    if (compressed) return compressed
+                    console.warn('[checkin] compresión client colgada (timeout 15s), intentando original')
                 } catch (err) {
-                    console.warn('[checkin] compresión client falló, subiendo original:', err)
-                    return file
+                    console.warn('[checkin] compresión client falló, intentando original:', err)
                 }
+                // Fallback al ORIGINAL — salvo que pese tanto que rompería el bodySizeLimit (10MB)
+                // del server action con las dos fotos: ahí es mejor soltar la foto que colgar o
+                // reventar el submit entero. El check-in SIEMPRE sale.
+                if (file.size > 4.5 * 1024 * 1024) {
+                    console.warn('[checkin] original muy pesado tras fallo de compresión, foto descartada')
+                    return null
+                }
+                return file
             }
-            if (frontFile) formData.set('photo', await compressForUpload(frontFile), frontFile.name)
-            if (backFile) formData.set('back_photo', await compressForUpload(backFile), backFile.name)
+            let fotosDescartadas = 0
+            if (frontFile) {
+                const body = await compressForUpload(frontFile)
+                if (body) formData.set('photo', body, frontFile.name)
+                else fotosDescartadas++
+            }
+            if (backFile) {
+                const body = await compressForUpload(backFile)
+                if (body) formData.set('back_photo', body, backFile.name)
+                else fotosDescartadas++
+            }
+            if (fotosDescartadas > 0) {
+                toast.warning(
+                    fotosDescartadas === 1
+                        ? 'Una foto no pudo procesarse y va a omitirse; tu check-in se envía igual.'
+                        : 'Las fotos no pudieron procesarse y van a omitirse; tu check-in se envía igual.',
+                    { id: 'client-checkin-warn', duration: 8000 }
+                )
+            }
             startTransition(() => formAction(formData))
         } catch {
             // Nunca morir en silencio: el alumno necesita saber que NO se envió (incidente jun-2026:
