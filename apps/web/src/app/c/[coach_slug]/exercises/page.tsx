@@ -11,25 +11,19 @@ export const metadata: Metadata = {
 
 interface Props {
   params: Promise<{ coach_slug: string }>;
+  searchParams: Promise<{ q?: string | string[] }>;
 }
 
-export default async function ClientExercisesPage({ params }: Props) {
+export default async function ClientExercisesPage({ params, searchParams }: Props) {
   const { coach_slug } = await params;
+  const sp = await searchParams;
+  // Deep-link ?q= (desde los PRs del dashboard) → precarga la búsqueda server-side.
+  const initialSearch = (Array.isArray(sp.q) ? sp.q[0] : sp.q)?.trim() ?? "";
+
   const base = await getClientBasePath(coach_slug);
-  const { user, client, exercises } = await getClientExerciseCatalogData();
+  const { user, coachBranding, exercises, muscleGroups, hasMore, total } =
+    await getClientExerciseCatalogData(initialSearch);
   if (!user) redirect(`${base}/login`);
-  if (!client) redirect(`${base}/login`);
-
-  const coachBranding = Array.isArray(client.coaches)
-    ? client.coaches[0]
-    : client.coaches;
-
-  // Group by muscle
-  const byMuscle = exercises.reduce((acc: any, ex: any) => {
-    if (!acc[ex.muscle_group]) acc[ex.muscle_group] = [];
-    acc[ex.muscle_group].push(ex);
-    return acc;
-  }, {} as Record<string, any[]>);
 
   return (
     <div className="min-h-dvh bg-surface-app pb-32 md:pb-0">
@@ -60,7 +54,11 @@ export default async function ClientExercisesPage({ params }: Props) {
         </div>
 
         <ClientExerciseCatalog
-          byMuscle={byMuscle}
+          initialExercises={exercises}
+          initialHasMore={hasMore}
+          initialTotal={total}
+          muscleGroups={muscleGroups}
+          initialSearch={initialSearch}
           primaryColor={coachBranding?.primary_color || "var(--theme-primary)"}
         />
       </main>

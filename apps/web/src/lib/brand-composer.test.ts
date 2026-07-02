@@ -5,6 +5,7 @@ import {
     parseLoaderConfig,
     serializeLoaderConfig,
     LOADER_TEXT_MAX,
+    DEFAULT_LOADER_COMPOSITE,
 } from './brand-composer'
 
 describe('login layout guards', () => {
@@ -62,6 +63,18 @@ describe('parseLoaderConfig (fail-closed)', () => {
         expect(parseLoaderConfig('[]')).toBeNull()
         expect(parseLoaderConfig(42)).toBeNull()
         expect(parseLoaderConfig(['symbol'])).toBeNull()
+    })
+})
+
+describe('DEFAULT_LOADER_COMPOSITE', () => {
+    it('is a valid, parseable composite (survives the fail-closed guard)', () => {
+        expect(parseLoaderConfig(DEFAULT_LOADER_COMPOSITE)).toEqual(DEFAULT_LOADER_COMPOSITE)
+    })
+    it('starts on the marca initial + pulso (neutral arranque)', () => {
+        expect(DEFAULT_LOADER_COMPOSITE).toEqual({ symbol: 'initial', animation: 'pulso' })
+    })
+    it('has no preset text so the render falls back to the brand name', () => {
+        expect(DEFAULT_LOADER_COMPOSITE.text).toBeUndefined()
     })
 })
 

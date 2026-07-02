@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useTransition } from "react";
+import { useState, useEffect, useRef, useCallback, useTransition } from "react";
 import Image from "next/image";
 import {
   Dialog,
@@ -11,39 +11,33 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Dumbbell, Search, X, Play, Loader2, ChevronDown } from "lucide-react";
-import type { Tables } from "@/lib/database.types";
-import { filterExercises } from "@/lib/utils";
 import { extractYoutubeVideoId } from "@/lib/youtube";
 import { ExerciseVideo } from "@/components/exercise/ExerciseVideo";
-import { getExerciseInstructions } from "./_actions/exercises.actions";
+import {
+  exerciseGridThumb,
+  type CatalogExercise,
+} from "@/lib/exercises/exercise-thumb";
+import {
+  getExerciseInstructions,
+  loadClientExercisesAction,
+} from "./_actions/exercises.actions";
 
-type Exercise = Tables<"exercises">;
+type Exercise = CatalogExercise;
 
 interface Props {
-  byMuscle: Record<string, Exercise[]>;
+  /** Primera página (paginada server-side); el resto llega vía loadClientExercisesAction. */
+  initialExercises: Exercise[];
+  initialHasMore: boolean;
+  initialTotal: number;
+  /** Grupos musculares del scope (sin "Todos"), ya ordenados. */
+  muscleGroups: string[];
+  /** Deep-link ?q= — la primera página ya viene filtrada por este término. */
+  initialSearch: string;
   primaryColor: string;
 }
 
-/** Cuántas tarjetas se montan por tanda (evita renderizar 800+ <Image> de golpe). */
-const PAGE_SIZE = 48;
-
-/**
- * Best-effort thumbnail URL for an exercise, or `null` when it has no usable
- * media. Mirrors the priority order of `ExerciseCard.renderThumb`:
- * gif → YouTube poster → direct image/video URL.
- */
-function getThumbSrc(ex: Exercise): string | null {
-  if (ex.gif_url) return ex.gif_url;
-
-  const url = ex.video_url;
-  const ytId = url ? extractYoutubeVideoId(url) : null;
-  if (ytId) return `https://img.youtube.com/vi/${ytId}/mqdefault.jpg`;
-
-  const isYouTube = url?.includes("youtube.com") || url?.includes("youtu.be");
-  if (url && !isYouTube) return url;
-
-  return null;
-}
+/** Debounce de la búsqueda para no disparar un fetch por tecla. */
+const SEARCH_DEBOUNCE_MS = 250;
 
 /**
  * Hero "Destacado" card (CD parity — Aprender.jsx). Bigger media banner + name
@@ -58,7 +52,7 @@ function FeaturedExerciseCard({
   primaryColor: string;
   onSelect: () => void;
 }) {
-  const thumb = getThumbSrc(ex);
+  const thumb = exerciseGridThumb(ex, 640);
   return (
     <div
       onClick={onSelect}
@@ -72,6 +66,7 @@ function FeaturedExerciseCard({
               alt={ex.name}
               fill
               sizes="(max-width: 768px) 100vw, 640px"
+              loading="lazy"
               className="object-cover transition-transform duration-500 group-hover/feat:scale-105"
               unoptimized
             />
@@ -104,7 +99,7 @@ function FeaturedExerciseCard({
   );
 }
 
-/** Image that fades in once the GIF / next-image has finished loading. */
+/** Image that fades in once the next-image thumbnail has finished loading. */
 function FadeImage({ src, alt }: { src: string; alt: string }) {
   const [loaded, setLoaded] = useState(false);
   return (
@@ -125,42 +120,20 @@ function FadeImage({ src, alt }: { src: string; alt: string }) {
 
 /** A single exercise card: media banner + muscle badge + name + equipment. */
 function ExerciseCard({ ex, onSelect }: { ex: Exercise; onSelect: () => void }) {
-  const renderThumb = () => {
-    if (ex.gif_url) {
-      return <FadeImage src={ex.gif_url} alt={ex.name} />;
-    }
-
-    const url = ex.video_url;
-    const ytId = url ? extractYoutubeVideoId(url) : null;
-
-    if (ytId) {
-      return (
-        <FadeImage
-          src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
-          alt={ex.name}
-        />
-      );
-    }
-
-    const isYouTube = url?.includes("youtube.com") || url?.includes("youtu.be");
-    if (url && !isYouTube) {
-      return <FadeImage src={url} alt={ex.name} />;
-    }
-
-    return (
-      <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-white/10 text-white transition-colors group-hover/card:bg-sport-500 md:h-[42px] md:w-[42px]">
-        <Play className="h-[17px] w-[17px]" />
-      </span>
-    );
-  };
-
+  const thumb = exerciseGridThumb(ex, 256);
   return (
     <div
       onClick={onSelect}
       className="group/card cursor-pointer overflow-hidden rounded-card border border-subtle bg-surface-card shadow-sm transition-[transform,box-shadow] duration-150 ease-[cubic-bezier(.22,1,.36,1)] hover:-translate-y-px hover:shadow-md active:scale-[0.98]"
     >
       <div className="relative flex h-24 items-center justify-center overflow-hidden bg-gradient-to-br from-[#1B2129] to-[#0B0E13] md:h-[116px]">
-        {renderThumb()}
+        {thumb ? (
+          <FadeImage src={thumb} alt={ex.name} />
+        ) : (
+          <span className="flex h-[38px] w-[38px] items-center justify-center rounded-full bg-white/10 text-white transition-colors group-hover/card:bg-sport-500 md:h-[42px] md:w-[42px]">
+            <Play className="h-[17px] w-[17px]" />
+          </span>
+        )}
         <span className="absolute bottom-1.5 left-1.5 rounded-[5px] bg-black/40 px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.05em] text-sport-300 md:bottom-2 md:left-2 md:px-[7px]">
           {ex.muscle_group}
         </span>
@@ -177,53 +150,101 @@ function ExerciseCard({ ex, onSelect }: { ex: Exercise; onSelect: () => void }) 
   );
 }
 
-export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
-  const [search, setSearch] = useState("");
+export function ClientExerciseCatalog({
+  initialExercises,
+  initialHasMore,
+  initialTotal,
+  muscleGroups,
+  initialSearch,
+  primaryColor,
+}: Props) {
+  const [search, setSearch] = useState(initialSearch);
   const [selectedMuscle, setSelectedMuscle] = useState<string>("Todos");
+  const [exercises, setExercises] = useState<Exercise[]>(initialExercises);
+  const [hasMore, setHasMore] = useState(initialHasMore);
+  const [total, setTotal] = useState(initialTotal);
+  const [isLoading, startLoad] = useTransition();
+
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(
     null,
   );
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-
   // Detalle on-demand (instrucciones) — el listado no las trae para no inflar el payload.
   const [instructions, setInstructions] = useState<string[] | null>(null);
   const [loadingDetail, startDetail] = useTransition();
 
-  const muscleGroups = ["Todos", ...Object.keys(byMuscle).sort()];
-  const allExercises = Object.values(byMuscle).flat();
-  const filteredExercises = filterExercises(allExercises, search, selectedMuscle);
-  const displayed = filteredExercises.slice(0, visibleCount);
-  const hasMore = visibleCount < filteredExercises.length;
+  const muscleChips = ["Todos", ...muscleGroups];
 
-  // Ejercicio "Destacado": el primero con media utilizable. Solo se muestra en
-  // la vista por defecto (sin búsqueda ni filtro de músculo) y degrada a null si
-  // ningún ejercicio tiene gif/video.
-  const featured =
-    !search.trim() && selectedMuscle === "Todos"
-      ? (allExercises.find((e) => getThumbSrc(e) !== null) ?? null)
-      : null;
+  // Ejercicio "Destacado": el primero con media utilizable de la página cargada. Solo se muestra
+  // en la vista por defecto (sin búsqueda ni filtro de músculo).
+  const isDefaultView = !search.trim() && selectedMuscle === "Todos";
+  const featured = isDefaultView
+    ? (exercises.find((e) => exerciseGridThumb(e) !== null) ?? null)
+    : null;
 
-  // Reset de la paginación cuando cambia el filtro/búsqueda.
+  // Secuencia de requests: descarta respuestas viejas cuando cambia el filtro. `exercisesRef`
+  // da el offset actual sin recrear el callback de load-more en cada append.
+  const reqSeq = useRef(0);
+  const exercisesRef = useRef(initialExercises);
   useEffect(() => {
-    setVisibleCount(PAGE_SIZE);
+    exercisesRef.current = exercises;
+  }, [exercises]);
+
+  // Refetch server-side al cambiar búsqueda (debounced) o músculo (offset 0, reemplaza la lista).
+  // Se salta el primer render: la página inicial ya viene filtrada por `initialSearch`/"Todos".
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
+    const seq = ++reqSeq.current;
+    const timer = setTimeout(() => {
+      startLoad(async () => {
+        const res = await loadClientExercisesAction({
+          search,
+          muscle: selectedMuscle,
+          offset: 0,
+        });
+        if (seq !== reqSeq.current) return; // respuesta vieja
+        setExercises(res.exercises);
+        setHasMore(res.hasMore);
+        setTotal(res.total);
+      });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
   }, [search, selectedMuscle]);
 
-  // Infinite scroll: carga otra tanda cuando el sentinel entra en viewport.
+  const loadMore = useCallback(() => {
+    if (isLoading || !hasMore) return;
+    const seq = reqSeq.current;
+    startLoad(async () => {
+      const res = await loadClientExercisesAction({
+        search,
+        muscle: selectedMuscle,
+        offset: exercisesRef.current.length,
+      });
+      if (seq !== reqSeq.current) return; // cambió el filtro mientras cargaba
+      setExercises((prev) => [...prev, ...res.exercises]);
+      setHasMore(res.hasMore);
+      setTotal(res.total);
+    });
+  }, [isLoading, hasMore, search, selectedMuscle]);
+
+  // Infinite scroll REAL: pide la siguiente página cuando el sentinel entra en viewport.
+  // Mientras `isLoading`, el observer se desconecta (evita disparos duplicados).
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const node = sentinelRef.current;
-    if (!node || !hasMore) return;
+    if (!node || !hasMore || isLoading) return;
     const obs = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setVisibleCount((c) => c + PAGE_SIZE);
-        }
+        if (entries[0]?.isIntersecting) loadMore();
       },
       { rootMargin: "600px 0px" },
     );
     obs.observe(node);
     return () => obs.disconnect();
-  }, [hasMore, displayed.length]);
+  }, [hasMore, isLoading, loadMore]);
 
   const openExercise = (ex: Exercise) => {
     setSelectedExercise(ex);
@@ -233,6 +254,8 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
       setInstructions(detail?.instructions ?? []);
     });
   };
+
+  const remaining = Math.max(total - exercises.length, 0);
 
   return (
     <div className="space-y-5">
@@ -256,7 +279,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
         </div>
 
         <div className="hide-scrollbar flex snap-x gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
-          {muscleGroups.map((m) => {
+          {muscleChips.map((m) => {
             const on = selectedMuscle === m;
             return (
               <button
@@ -277,13 +300,19 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
       </div>
 
       {/* Results Grid */}
-      {filteredExercises.length === 0 ? (
-        <div className="py-12 text-center text-subtle">
-          <Dumbbell className="mx-auto mb-3 h-9 w-9 opacity-40" />
-          <p className="text-sm">
-            No encontramos ejercicios que coincidan con tu búsqueda.
-          </p>
-        </div>
+      {exercises.length === 0 ? (
+        isLoading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-6 w-6 animate-spin text-muted opacity-60" />
+          </div>
+        ) : (
+          <div className="py-12 text-center text-subtle">
+            <Dumbbell className="mx-auto mb-3 h-9 w-9 opacity-40" />
+            <p className="text-sm">
+              No encontramos ejercicios que coincidan con tu búsqueda.
+            </p>
+          </div>
+        )
       ) : (
         <>
           {featured && (
@@ -300,8 +329,13 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
             </h2>
           )}
 
-          <div className="grid grid-cols-2 gap-3 md:gap-4 md:[grid-template-columns:repeat(auto-fill,minmax(200px,1fr))]">
-            {displayed.map((ex) => (
+          <div
+            className={`grid grid-cols-2 gap-3 transition-opacity md:gap-4 md:[grid-template-columns:repeat(auto-fill,minmax(200px,1fr))] ${
+              isLoading ? "opacity-70" : ""
+            }`}
+            aria-busy={isLoading}
+          >
+            {exercises.map((ex) => (
               <ExerciseCard
                 key={ex.id}
                 ex={ex}
@@ -317,11 +351,12 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
         <div ref={sentinelRef} className="flex flex-col items-center gap-3 py-4">
           <Loader2 className="h-5 w-5 animate-spin text-muted opacity-60" />
           <button
-            onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-control border-[1.5px] border-default bg-surface-card text-[13.5px] font-bold text-strong transition-colors hover:bg-surface-sunken"
+            onClick={loadMore}
+            disabled={isLoading}
+            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-control border-[1.5px] border-default bg-surface-card text-[13.5px] font-bold text-strong transition-colors hover:bg-surface-sunken disabled:opacity-60"
           >
             <ChevronDown className="h-4 w-4" />
-            Ver más ({filteredExercises.length - displayed.length} restantes)
+            Ver más{remaining > 0 ? ` (${remaining} restantes)` : ""}
           </button>
         </div>
       )}
@@ -360,14 +395,14 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                     url?.includes("youtube.com") || url?.includes("youtu.be");
                   if (isYouTube) {
                     const ytId = extractYoutubeVideoId(url!);
-                    const ex = selectedExercise as any;
+                    const ex = selectedExercise;
                     if (ytId) {
                       return (
                         <div className="flex h-full w-full items-center justify-center border-b border-subtle bg-gradient-to-br from-[#1B2129] to-[#0B0E13]">
                           <ExerciseVideo
                             videoId={ytId}
-                            start={ex.video_start_time}
-                            end={ex.video_end_time}
+                            start={ex.video_start_time ?? undefined}
+                            end={ex.video_end_time ?? undefined}
                             className="h-full w-full"
                             title={selectedExercise.name}
                           />

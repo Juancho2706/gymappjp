@@ -183,7 +183,7 @@ export function ProgramPreviewBody({ program, areas = [] }: { program: ProgramLi
     const phases = program.program_phases ?? []
 
     return (
-        <div className="flex max-h-[min(70vh,560px)] flex-col overflow-y-auto pb-4 sm:max-h-[min(75vh,640px)]">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
             {/* Phases bar */}
             {phases.length > 0 && (
                 <div className="space-y-1.5 border-b border-subtle px-4 py-3 sm:px-6">
@@ -440,7 +440,7 @@ export function ProgramPreviewPanel({
     const clientName = program.client?.full_name
 
     const header = (
-        <div className="space-y-3.5 border-b border-subtle px-4 py-4 sm:px-6">
+        <div className="shrink-0 space-y-3.5 border-b border-subtle px-4 py-4 sm:px-6">
             {/* Identidad — tile 52px + nombre display + badge de estado + cliente (kit ProgramPreviewSheet) */}
             <div className="flex items-center gap-3">
                 <div className="flex size-[52px] shrink-0 items-center justify-center rounded-card bg-[var(--sport-100)] text-[var(--sport-600)]">
@@ -511,11 +511,16 @@ export function ProgramPreviewPanel({
                     <DialogHeader className="sr-only">
                         <DialogTitle>Vista previa de {program.name}</DialogTitle>
                     </DialogHeader>
-                    {header}
-                    <ProgramPreviewBody program={program} areas={areas} />
-                    <DialogFooter className="border-t border-subtle bg-surface-sunken/30 px-4 py-3 sm:px-6">
-                        {footer}
-                    </DialogFooter>
+                    {/* Columna acotada: header fijo arriba, cuerpo scrolleable, footer fijo.
+                        El wrapper interno de DialogContent es un `block` sin altura, así que
+                        el layout de scroll se controla acá con max-h propio. */}
+                    <div className="flex min-h-0 max-h-[min(92vh,800px)] flex-1 flex-col overflow-hidden">
+                        {header}
+                        <ProgramPreviewBody program={program} areas={areas} />
+                        <DialogFooter className="m-0 shrink-0 border-t border-subtle bg-surface-sunken/30 px-4 py-3 sm:px-6">
+                            {footer}
+                        </DialogFooter>
+                    </div>
                 </DialogContent>
             </Dialog>
         )
@@ -528,12 +533,12 @@ export function ProgramPreviewPanel({
                     className="mx-auto mt-3 h-1 w-9 shrink-0 rounded-full bg-[var(--border-strong)]"
                     aria-hidden="true"
                 />
-                <SheetHeader className="border-0 bg-surface-app p-0">
+                <SheetHeader className="shrink-0 border-0 bg-surface-app p-0">
                     <SheetTitle className="sr-only">Vista previa de {program.name}</SheetTitle>
                     {header}
                 </SheetHeader>
                 <ProgramPreviewBody program={program} areas={areas} />
-                <SheetFooter className="border-subtle bg-surface-sunken/30">{footer}</SheetFooter>
+                <SheetFooter className="shrink-0 border-subtle bg-surface-sunken/30">{footer}</SheetFooter>
             </SheetContent>
         </Sheet>
     )

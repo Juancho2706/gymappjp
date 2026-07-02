@@ -61,6 +61,13 @@ export type LoaderComposite = {
     text?: string
 }
 
+/**
+ * Config inicial cuando el coach activa la ruta "Crear el mío" de la Pantalla de carga.
+ * Símbolo = inicial de la marca, animación = pulso (la más neutra). El compositor es controlado
+ * por el form padre (loader_config) → esta constante es el punto de arranque compartido.
+ */
+export const DEFAULT_LOADER_COMPOSITE: LoaderComposite = { symbol: 'initial', animation: 'pulso' }
+
 export function isLoaderSymbol(v: unknown): v is LoaderSymbol {
     return typeof v === 'string' && (LOADER_SYMBOL_KEYS as readonly string[]).includes(v)
 }

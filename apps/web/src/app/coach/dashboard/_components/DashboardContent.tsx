@@ -12,6 +12,7 @@ export async function DashboardContent({
     initialOnboardingGuide,
     subscriptionTier,
     hasCoachLogo,
+    coachLogoUrl,
 }: {
     userId: string
     coachName: string
@@ -20,6 +21,7 @@ export async function DashboardContent({
     initialOnboardingGuide: Json
     subscriptionTier: SubscriptionTier
     hasCoachLogo: boolean
+    coachLogoUrl?: string | null
 }) {
     // workspaces: React.cache-memoizado por userId (ya lo resuelve el layout en el mismo
     // request → dedup, sin costo extra de DB). Habilita el switcher de espacio del header móvil.
@@ -37,6 +39,7 @@ export async function DashboardContent({
             initialOnboardingGuide={initialOnboardingGuide}
             subscriptionTier={subscriptionTier}
             hasCoachLogo={hasCoachLogo}
+            coachLogoUrl={coachLogoUrl}
             workspaces={workspaces}
         />
     )

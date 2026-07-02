@@ -36,6 +36,7 @@ export default async function CoachDashboardPage() {
                 initialOnboardingGuide={coach.onboarding_guide ?? DEFAULT_COACH_ONBOARDING_GUIDE}
                 subscriptionTier={subscriptionTier}
                 hasCoachLogo={Boolean(coach.logo_url?.trim())}
+                coachLogoUrl={coach.logo_url}
             />
         </Suspense>
     )

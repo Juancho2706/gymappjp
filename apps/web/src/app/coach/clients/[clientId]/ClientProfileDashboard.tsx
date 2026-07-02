@@ -18,6 +18,7 @@ import { ProgramTabB7 } from './ProgramTabB7'
 // BillingTabB8 desconectado del chrome de la ficha (rediseño dark-only: 5 pestañas
 // sin Facturación). El archivo se conserva; solo se quita del switch de pestañas.
 import { ProfileFloatingActions } from './ProfileFloatingActions'
+import { SharePRButton } from '@/components/shared/SharePRButton'
 import {
     resolveEffectiveWeekVariant,
     workoutPlanMatchesVariant,
@@ -399,12 +400,21 @@ export function ClientProfileDashboard({
                                                             {pr.muscleGroup}
                                                         </p>
                                                     </div>
-                                                    <span className="shrink-0 font-black tabular-nums text-sport-600">
-                                                        {pr.maxWeightKg} kg
-                                                        <span className="ml-1 text-[10px] font-bold text-muted">
-                                                            ×{pr.repsAtMax}
+                                                    <div className="flex shrink-0 items-center gap-1.5">
+                                                        <span className="font-black tabular-nums text-sport-600">
+                                                            {pr.maxWeightKg} kg
+                                                            <span className="ml-1 text-[10px] font-bold text-muted">
+                                                                ×{pr.repsAtMax}
+                                                            </span>
                                                         </span>
-                                                    </span>
+                                                        <SharePRButton
+                                                            clientId={client.id}
+                                                            exerciseId={pr.exerciseId}
+                                                            exerciseName={pr.exerciseName}
+                                                            variant="ghost"
+                                                            label={`Compartir logro${client.full_name ? ` de ${String(client.full_name).split(' ')[0]}` : ''}`}
+                                                        />
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>

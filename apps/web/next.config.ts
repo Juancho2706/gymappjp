@@ -61,6 +61,13 @@ const nextConfig: NextConfig = {
         pathname: '/storage/v1/object/**',
       },
       {
+        // Endpoint de TRANSFORMACIÓN de imagen (render/image): miniaturas WebP redimensionadas del
+        // catálogo de ejercicios (grid "Aprender") — el gif crudo full-res se sirve solo en el modal.
+        protocol: 'https',
+        hostname: 'jikjeokundmaafuytdcx.supabase.co',
+        pathname: '/storage/v1/render/image/**',
+      },
+      {
         protocol: 'http',
         hostname: '127.0.0.1',
         port: '54321',
@@ -68,9 +75,21 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'http',
+        hostname: '127.0.0.1',
+        port: '54321',
+        pathname: '/storage/v1/render/image/**',
+      },
+      {
+        protocol: 'http',
         hostname: 'localhost',
         port: '54321',
         pathname: '/storage/v1/object/**',
+      },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '54321',
+        pathname: '/storage/v1/render/image/**',
       },
       {
         protocol: 'https',

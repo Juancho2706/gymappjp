@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Sparkles, Bell, ChevronDown } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { BillingBanners } from './banners/BillingBanners'
@@ -32,6 +33,8 @@ interface Props {
     initialOnboardingGuide: Json
     subscriptionTier: SubscriptionTier
     hasCoachLogo: boolean
+    /** Logo de marca del coach — usado como tile del avatar del header móvil (fallback iniciales). */
+    coachLogoUrl?: string | null
     workspaces: WorkspaceSummary[]
 }
 
@@ -44,6 +47,7 @@ export function DashboardShell({
     initialOnboardingGuide,
     subscriptionTier,
     hasCoachLogo,
+    coachLogoUrl,
     workspaces,
 }: Props) {
     const [statsSheetOpen, setStatsSheetOpen] = useState(false)
@@ -62,10 +66,19 @@ export function DashboardShell({
             </Suspense>
 
             {/* Sin px propio: el gutter lateral lo da CoachMainWrapper (px-4/md:px-8) — evita el
-                doble padding (36px) que estrechaba todo en móvil vs el diseño (~20px). */}
-            <div className="relative z-10 mx-auto w-full pb-10 pt-2">
-                {/* Billing / tier banners (functional — not part of the design tree) */}
-                <div className="mb-4">
+                doble padding (36px) que estrechaba todo en móvil vs el diseño (~20px).
+                Móvil: `-mt-6` cancela el `py-6` (24px) top del contenedor de CoachMainWrapper
+                (que NO se toca) para que el saludo arranque cerca del top; el único aire que queda
+                es el `--mobile-content-top-offset` (safe-area del notch + 1rem) que aplica el
+                wrapper. Desktop conserva su spacing (`md:mt-0` + el `md:py-10` del wrapper).
+                Estructural: la fuente real del gap vive en CoachMainWrapper.tsx:54 (pt-offset) +
+                CoachMainWrapper.tsx:72 (py-6) — al ser compartido con /c del alumno se neutraliza
+                acá en vez de tocar el wrapper. */}
+            <div className="relative z-10 mx-auto -mt-6 w-full pb-10 md:mt-0 md:pt-2">
+                {/* Billing / tier banners (functional — not part of the design tree). `empty:hidden`
+                    colapsa el bloque (y su margen) cuando no hay ningún banner que mostrar → sin
+                    aire muerto extra bajo el notch para coaches sin avisos. */}
+                <div className="mb-4 empty:hidden">
                     <BillingBanners
                         subscriptionStatus={data.subscriptionStatus}
                         currentPeriodEnd={data.currentPeriodEnd}
@@ -82,7 +95,7 @@ export function DashboardShell({
 
                 {/* ───────── Mobile (eva-app structure, <md) ───────── */}
                 <div className="md:hidden">
-                    <header className="flex items-center justify-between pb-3.5 pt-1.5">
+                    <header className="flex items-center justify-between pb-3.5">
                         <div>
                             <div className="text-[13px] font-semibold text-[var(--text-muted)]">
                                 {todayLabel()}
@@ -118,7 +131,7 @@ export function DashboardShell({
                                     aria-label="Cambiar de espacio"
                                     className="relative shrink-0"
                                 >
-                                    <Avatar name={coachName} size="md" ring="sport" />
+                                    <HeaderBrandTile logoUrl={coachLogoUrl} name={coachName} />
                                     <span className="absolute -bottom-0.5 -right-0.5 flex size-[18px] items-center justify-center rounded-full border-2 border-[var(--surface-app)] bg-surface-card text-[var(--text-muted)] shadow-[var(--shadow-sm)]">
                                         <ChevronDown className="size-3" />
                                     </span>
@@ -129,7 +142,7 @@ export function DashboardShell({
                                     aria-label="Tu cuenta"
                                     className="relative shrink-0"
                                 >
-                                    <Avatar name={coachName} size="md" ring="sport" />
+                                    <HeaderBrandTile logoUrl={coachLogoUrl} name={coachName} />
                                 </Link>
                             )}
                         </div>
@@ -200,6 +213,23 @@ export function DashboardShell({
             )}
         </>
     )
+}
+
+/**
+ * Tile de marca del header móvil — espejo del avatar de cuenta del topbar desktop
+ * (CoachTopBar): si el coach tiene logo, tile circular con `object-contain` sobre fondo
+ * (blanco en light / superficie hundida en dark); si no, cae a las iniciales con anillo sport.
+ * Tamaño `md` (40px) para igualar la huella del avatar previo del header.
+ */
+function HeaderBrandTile({ logoUrl, name }: { logoUrl?: string | null; name: string }) {
+    if (logoUrl) {
+        return (
+            <span className="relative size-10 shrink-0 overflow-hidden rounded-full border border-subtle bg-white dark:bg-[var(--surface-sunken)]">
+                <Image src={logoUrl} alt={name} fill sizes="40px" className="object-contain p-1.5" />
+            </span>
+        )
+    }
+    return <Avatar name={name} size="md" ring="sport" />
 }
 
 function FreeTierBanner({ totalClients }: { totalClients: number }) {

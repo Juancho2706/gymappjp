@@ -817,14 +817,14 @@ export function WorkoutProgramsClient({
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             placeholder="Buscar programa o alumno…"
-                            className="h-[42px] w-full rounded-control border-[1.5px] border-default bg-surface-card px-9 text-sm text-strong outline-none placeholder:text-muted"
+                            className="h-[42px] w-full rounded-control border-[1.5px] border-default bg-surface-sunken px-9 text-sm text-strong outline-none placeholder:text-muted"
                         />
                         {search && (
                             <button
                                 type="button"
                                 onClick={() => setSearch('')}
                                 aria-label="Limpiar búsqueda"
-                                className="absolute right-2 flex size-6 items-center justify-center rounded-full bg-surface-sunken text-muted"
+                                className="absolute right-2 flex size-6 items-center justify-center rounded-full bg-surface-card text-muted"
                             >
                                 <X className="size-3" />
                             </button>

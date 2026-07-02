@@ -17,6 +17,13 @@ interface Props {
     primaryColor: string
     brandName: string
     logoUrl: string | null
+    /**
+     * Prefijo para los `id`/`htmlFor` de los campos. El login renderiza DOS árboles
+     * (móvil <760 + desktop ≥760) simultáneos en el DOM (uno oculto por CSS), así que
+     * los ids deben ser únicos por instancia — si no, el `htmlFor` de un label enfoca
+     * el input del árbol oculto. Default '' preserva los ids móviles históricos.
+     */
+    idPrefix?: string
 }
 
 function SubmitButton({ primaryColor, brandName }: { primaryColor: string; brandName: string }) {
@@ -43,9 +50,11 @@ function SubmitButton({ primaryColor, brandName }: { primaryColor: string; brand
     )
 }
 
-export default function ClientLoginForm({ coachSlug, primaryColor, brandName, logoUrl }: Props) {
+export default function ClientLoginForm({ coachSlug, primaryColor, brandName, logoUrl, idPrefix = '' }: Props) {
     const [state, formAction] = useActionState(clientLoginAction, initialState)
     const router = useRouter()
+    const emailId = `${idPrefix}client-email`
+    const passwordId = `${idPrefix}client-password`
 
     useEffect(() => {
         if (state.success && state.redirectUrl) {
@@ -68,13 +77,13 @@ export default function ClientLoginForm({ coachSlug, primaryColor, brandName, lo
                 <input type="hidden" name="coach_slug" value={coachSlug} />
 
                 <div className="space-y-2">
-                    <Label htmlFor="client-email" className="text-text-strong text-[13px] font-semibold">
+                    <Label htmlFor={emailId} className="text-text-strong text-[13px] font-semibold">
                         Email
                     </Label>
                     <div className="relative">
                         <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none z-10" />
                         <Input
-                            id="client-email"
+                            id={emailId}
                             name="email"
                             type="email"
                             placeholder="tu@email.com"
@@ -90,7 +99,7 @@ export default function ClientLoginForm({ coachSlug, primaryColor, brandName, lo
 
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                        <Label htmlFor="client-password" className="text-text-strong text-[13px] font-semibold">
+                        <Label htmlFor={passwordId} className="text-text-strong text-[13px] font-semibold">
                             Contraseña
                         </Label>
                         <Link
@@ -104,7 +113,7 @@ export default function ClientLoginForm({ coachSlug, primaryColor, brandName, lo
                     <div className="relative">
                         <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none z-10" />
                         <Input
-                            id="client-password"
+                            id={passwordId}
                             name="password"
                             type="password"
                             placeholder="••••••••"

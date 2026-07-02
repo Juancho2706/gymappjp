@@ -741,6 +741,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         loaderIconMode={loaderIconMode}
                         fontFamily={previewFontFamily}
                         loaderVariant={loaderVariant}
+                        loaderConfig={loaderConfig}
                         isDark={previewDark}
                         onToggleDark={() => setPreviewDark((v) => !v)}
                         activeTab={previewTab}
@@ -826,6 +827,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                             loaderIconMode={loaderIconMode}
                             fontFamily={previewFontFamily}
                             loaderVariant={loaderVariant}
+                            loaderConfig={loaderConfig}
                             isDark={previewDark}
                             onToggleDark={() => setPreviewDark((v) => !v)}
                             activeTab={previewTab}

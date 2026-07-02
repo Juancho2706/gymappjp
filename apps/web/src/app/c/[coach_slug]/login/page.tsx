@@ -165,11 +165,111 @@ export default async function ClientLoginPage({ params }: Props) {
         />
     )
 
+    // Instancia de form para el árbol DESKTOP — ids prefijados: móvil y desktop coexisten
+    // en el DOM (uno oculto por CSS) y los `htmlFor` deben resolver a su propio input.
+    const desktopLoginForm = (
+        <ClientLoginForm
+            coachSlug={coach_slug}
+            primaryColor={theme.light.accent}
+            brandName={coach.brand_name}
+            logoUrl={logoUrl}
+            idPrefix="d-"
+        />
+    )
+
+    // ── DESKTOP (≥760): pane del form, compartido por clasico/hero/energia ──
+    // Panel elevado (surface-card) con el form centrado a ancho cómodo (~420px).
+    const desktopFormPane = (
+        <LoginEntranceItem className="flex w-[clamp(380px,38%,560px)] flex-shrink-0 flex-col justify-center border-l border-subtle bg-surface-card px-10 py-14 shadow-[var(--shadow-xl)]">
+            <div className="mx-auto w-full max-w-[420px]">
+                <h2
+                    className="font-display text-[26px] font-black leading-tight tracking-[-0.02em] text-text-strong"
+                    style={{ fontFamily: 'var(--login-font)' }}
+                >
+                    Iniciá sesión
+                </h2>
+                <p className="mt-2 text-[15px] leading-relaxed text-text-muted">
+                    Entrená con <b className="text-text-strong">{coach.brand_name}</b>
+                </p>
+                <div className="mt-8">{desktopLoginForm}</div>
+                {poweredBy}
+            </div>
+        </LoginEntranceItem>
+    )
+
+    // Pane izquierdo (hero de marca GRANDE) — una expresión por variante.
+    const desktopLeftClasico = (
+        <LoginEntranceItem className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-12 py-16 text-center">
+            <div
+                aria-hidden
+                className="absolute inset-0"
+                style={{
+                    background:
+                        'radial-gradient(120% 100% at 50% 0%, var(--login-accent) 0%, color-mix(in oklab, var(--login-accent) 78%, black) 55%, color-mix(in oklab, var(--login-accent) 55%, black) 100%)',
+                }}
+            />
+            <div
+                aria-hidden
+                className="absolute inset-0 opacity-50"
+                style={{ background: 'radial-gradient(70% 55% at 20% 0%, rgba(255,255,255,0.18), transparent 60%)' }}
+            />
+            <div className="relative flex flex-col items-center">
+                <div className="inline-flex">{brandMark(112, true)}</div>
+                <h1
+                    className="mt-7 font-display text-[42px] font-black leading-[1.04] tracking-[-0.02em] text-white"
+                    style={{ fontFamily: 'var(--login-font)' }}
+                >
+                    {coach.brand_name}
+                </h1>
+                <p className="mx-auto mt-3 max-w-[400px] text-[17px] leading-relaxed text-white/85">{tagline}</p>
+            </div>
+        </LoginEntranceItem>
+    )
+
+    const desktopLeftHero = (
+        <LoginEntranceItem className="relative flex flex-1 flex-col items-center justify-center overflow-hidden bg-surface-app px-12 py-16 text-center">
+            <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0"
+                style={{ background: 'radial-gradient(90% 60% at 50% 35%, color-mix(in oklab, var(--login-accent) 22%, transparent), transparent 72%)' }}
+            />
+            <div className="relative flex flex-col items-center">
+                <div className="inline-flex">{brandMark(208, false)}</div>
+                <h1
+                    className="mt-9 font-display text-[40px] font-black tracking-[-0.02em] text-text-strong"
+                    style={{ fontFamily: 'var(--login-font)' }}
+                >
+                    {coach.brand_name}
+                </h1>
+                <p className="mx-auto mt-3 max-w-[380px] text-[16px] leading-relaxed text-text-muted">{tagline}</p>
+            </div>
+        </LoginEntranceItem>
+    )
+
+    const desktopLeftEnergia = (
+        <LoginEntranceItem className="relative flex flex-1 flex-col items-center justify-center overflow-hidden bg-surface-app px-12 py-16 text-center">
+            <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0"
+                style={{ background: 'radial-gradient(85% 55% at 50% 40%, color-mix(in oklab, var(--login-accent) 18%, transparent), transparent 72%)' }}
+            />
+            <div className="relative flex flex-col items-center" style={accentVars}>
+                {coachLoaderNode}
+                <p className="mx-auto mt-9 max-w-[380px] text-[16px] leading-relaxed text-text-muted">{tagline}</p>
+            </div>
+        </LoginEntranceItem>
+    )
+
+    const desktopLeftPane =
+        layout === 'hero' ? desktopLeftHero : layout === 'energia' ? desktopLeftEnergia : desktopLeftClasico
+
     return (
-        <div className="login-brand relative mx-auto flex min-h-dvh w-full max-w-md flex-col overflow-hidden bg-surface-app">
+        <div className="login-brand relative min-h-dvh w-full overflow-hidden bg-surface-app">
             {/* Acento por-modo + fuente: scoped a .login-brand para no tocar el resto del árbol. */}
             <style dangerouslySetInnerHTML={{ __html: `.login-brand{--login-accent:${theme.light.accent};--login-accent-rgb:${accentRgb};--login-font:${brandFontStack};}.dark .login-brand{--login-accent:${theme.dark.accent};}` }} />
 
+            {/* ════════ MÓVIL (<760) — layout aprobado, intacto. Capado a max-w-md y centrado. ════════ */}
+            <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col overflow-hidden md:hidden">
             {/* ── LAYOUT: minimal — tipografía pura sobre fondo sólido ── */}
             {layout === 'minimal' ? (
                 <LoginEntrance className="flex flex-1 flex-col justify-center px-7 pb-8 pt-[max(3.5rem,env(safe-area-inset-top))]">
@@ -277,6 +377,37 @@ export default async function ClientLoginPage({ params }: Props) {
                         {loginForm}
                         {poweredBy}
                     </LoginEntranceItem>
+                </LoginEntrance>
+            )}
+            </div>
+
+            {/* ════════ DESKTOP (≥760) — split de 2 panes (hero de marca + form). minimal = columna ancha. ════════ */}
+            {layout === 'minimal' ? (
+                /* minimal desktop — una sola columna centrada, ANCHA y tipográfica (sin pane) */
+                <LoginEntrance className="hidden min-h-dvh w-full flex-1 items-center justify-center px-8 py-16 md:flex">
+                    <div className="w-full max-w-[520px]">
+                        <LoginEntranceItem className="mb-11">
+                            {logoUrl && <div className="mb-8">{brandMark(76, false)}</div>}
+                            <h1
+                                className="font-display text-[54px] font-black leading-[1.02] tracking-[-0.03em] text-text-strong"
+                                style={{ fontFamily: 'var(--login-font)' }}
+                            >
+                                {coach.brand_name}
+                            </h1>
+                            <p className="mt-4 max-w-[440px] text-[18px] leading-relaxed text-text-muted">{tagline}</p>
+                        </LoginEntranceItem>
+                        <LoginEntranceItem>
+                            <div className="max-w-[440px]">
+                                {desktopLoginForm}
+                                {poweredBy}
+                            </div>
+                        </LoginEntranceItem>
+                    </div>
+                </LoginEntrance>
+            ) : (
+                <LoginEntrance className="hidden min-h-dvh w-full md:flex">
+                    {desktopLeftPane}
+                    {desktopFormPane}
                 </LoginEntrance>
             )}
 

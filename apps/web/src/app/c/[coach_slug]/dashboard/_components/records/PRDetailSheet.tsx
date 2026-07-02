@@ -5,6 +5,7 @@ import { Trophy, ArrowUpRight, TrendingUp } from 'lucide-react'
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
+import { SharePRButton } from '@/components/shared/SharePRButton'
 import { WeightSparkline } from '../weight/WeightSparkline'
 import type { ExercisePRDetail, PersonalRecordItem } from '../../_data/dashboard.queries'
 
@@ -44,6 +45,7 @@ export function PRDetailSheet({ open, onOpenChange, pr, detail, loading, exercis
     const name = detail?.exerciseName ?? pr?.exerciseName ?? 'Ejercicio'
     const currentWeight = detail?.currentPr.weightKg ?? pr?.weightKg ?? null
     const currentAt = detail?.currentPr.achievedAt ?? pr?.achievedAt ?? null
+    const exerciseId = detail?.exerciseId ?? pr?.exerciseId ?? null
 
     // Sparkline: reusa el patrón del dashboard mapeando la progresión a {iso, weight}.
     const sparkData = (detail?.history ?? []).map((p) => ({ iso: p.date, weight: p.topWeightKg }))
@@ -137,10 +139,20 @@ export function PRDetailSheet({ open, onOpenChange, pr, detail, loading, exercis
                         </div>
                     ) : null}
 
+                    {/* Compartir logro — genera la share-card de record y la comparte como imagen */}
+                    {exerciseId ? (
+                        <SharePRButton
+                            exerciseId={exerciseId}
+                            exerciseName={name}
+                            label="Compartir mi récord"
+                            className="mt-1 w-full"
+                        />
+                    ) : null}
+
                     {/* CTA técnica */}
                     <Link
                         href={exercisesHref}
-                        className="mt-1 flex min-h-11 items-center justify-center gap-1.5 rounded-control border border-border bg-muted/40 px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted dark:border-white/10 dark:bg-white/[0.05] dark:hover:bg-white/[0.1]"
+                        className="flex min-h-11 items-center justify-center gap-1.5 rounded-control border border-border bg-muted/40 px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted dark:border-white/10 dark:bg-white/[0.05] dark:hover:bg-white/[0.1]"
                     >
                         Ver técnica <ArrowUpRight className="h-4 w-4" />
                     </Link>
