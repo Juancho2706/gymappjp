@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import * as FileSystem from 'expo-file-system'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
+import { decode } from 'base64-arraybuffer'
 import { ArrowLeft, ArrowRight, Camera, Check, Scale, Zap } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
@@ -25,7 +26,6 @@ import { Button, ScreenHeader } from '../../../components'
 import { AppBackground } from '../../../components/AppBackground'
 
 const MAX_BYTES = 5 * 1024 * 1024
-const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp']
 
 interface LastCheckIn {
   weight: number | null
@@ -71,9 +71,11 @@ export default function CheckInScreen() {
 
   // Comprime + valida tamaño + setea (se re-encoda a JPEG, así que la fuente puede ser cámara o galería).
   async function processAsset(asset: ImagePicker.ImagePickerAsset, type: 'front' | 'back') {
-    const mime = asset.mimeType ?? 'image/jpeg'
-    if (!ALLOWED_MIME.includes(mime)) {
-      Alert.alert('Formato no soportado', 'Solo JPG, PNG o WebP.')
+    // NO pre-filtramos por mime: el re-encode a JPEG de abajo normaliza cualquier formato,
+    // incluido HEIC de iPhone (bloquearlo antes rompía a los alumnos con cámara Apple). Solo
+    // rechazamos algo declarado que NO sea imagen.
+    if (asset.mimeType && !asset.mimeType.startsWith('image/')) {
+      Alert.alert('Archivo no soportado', 'Seleccioná una imagen.')
       return
     }
     const compressed = await ImageManipulator.manipulateAsync(
@@ -121,19 +123,36 @@ export default function CheckInScreen() {
     ])
   }
 
+  // Sube la foto al bucket privado `checkins` y devuelve el PATH del objeto (no la URL
+  // pública: el bucket es privado desde jun-2026 → getPublicUrl daría 403; las vistas del
+  // coach resuelven signed URLs). Best-effort: si falla loguea y devuelve null, el check-in
+  // se guarda igual sin la foto (perder el reporte one-shot es peor que perder una foto).
   async function uploadPhoto(uri: string, clientId: string, suffix: string): Promise<string | null> {
     const path = `${clientId}/${Date.now()}_${suffix}.jpg`
-    const response = await fetch(uri)
-    const blob = await response.blob()
-    const arrayBuffer = await blob.arrayBuffer()
-
-    const { error } = await supabase.storage
-      .from('checkins')
-      .upload(path, arrayBuffer, { contentType: 'image/jpeg', upsert: false })
-
-    if (error) return null
-    const { data } = supabase.storage.from('checkins').getPublicUrl(path)
-    return data?.publicUrl ?? null
+    try {
+      // Blob.arrayBuffer() NO es confiable en RN (sube 0 bytes / lanza). Patrón canónico del
+      // repo (coach-brand / exercises): ImageManipulator con base64 + decode() a ArrayBuffer.
+      const manipulated = await ImageManipulator.manipulateAsync(
+        uri,
+        [],
+        { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      )
+      if (!manipulated.base64) {
+        console.warn('[checkin] no se pudo procesar la foto, guardando check-in sin ella:', suffix)
+        return null
+      }
+      const { error } = await supabase.storage
+        .from('checkins')
+        .upload(path, decode(manipulated.base64), { contentType: 'image/jpeg', upsert: false })
+      if (error) {
+        console.warn('[checkin] fallo al subir la foto, guardando check-in sin ella:', error.message)
+        return null
+      }
+      return path
+    } catch (e: any) {
+      console.warn('[checkin] error al subir la foto, guardando check-in sin ella:', e?.message ?? e)
+      return null
+    }
   }
 
   async function submit() {
@@ -154,19 +173,28 @@ export default function CheckInScreen() {
       return
     }
 
-    let frontPhotoUrl: string | null = null
-    let backPhotoUrl: string | null = null
+    // Se guardan los PATH de storage (bucket privado); front_photo_url/back_photo_url son
+    // la columna, no una URL. Best-effort: si una foto no sube, se cuenta y se avisa al final.
+    let frontPhotoPath: string | null = null
+    let backPhotoPath: string | null = null
+    let droppedPhotos = 0
 
-    if (frontPhotoUri) frontPhotoUrl = await uploadPhoto(frontPhotoUri, client.id, 'front')
-    if (backPhotoUri) backPhotoUrl = await uploadPhoto(backPhotoUri, client.id, 'back')
+    if (frontPhotoUri) {
+      frontPhotoPath = await uploadPhoto(frontPhotoUri, client.id, 'front')
+      if (!frontPhotoPath) droppedPhotos++
+    }
+    if (backPhotoUri) {
+      backPhotoPath = await uploadPhoto(backPhotoUri, client.id, 'back')
+      if (!backPhotoPath) droppedPhotos++
+    }
 
     const { error } = await supabase.from('check_ins').insert({
       client_id: client.id,
-      date: new Date().toISOString(),
+      date: getTodayInSantiago().iso,
       weight: weight ? parseFloat(weight) : null,
       energy_level: energyLevel,
-      front_photo_url: frontPhotoUrl,
-      back_photo_url: backPhotoUrl,
+      front_photo_url: frontPhotoPath,
+      back_photo_url: backPhotoPath,
       notes: notes.trim() || null,
     })
 
@@ -183,6 +211,15 @@ export default function CheckInScreen() {
       setBackPhotoUri(null)
       setNotes('')
       loadLastCheckIn()
+      // El check-in NUNCA se aborta por una foto, pero sí avisamos si alguna no subió.
+      if (droppedPhotos > 0) {
+        Alert.alert(
+          'Check-in guardado',
+          droppedPhotos === 1
+            ? 'Tu check-in se guardó, pero una foto no pudo subirse. Podés volver a intentarlo en el próximo check-in.'
+            : 'Tu check-in se guardó, pero las fotos no pudieron subirse. Podés volver a intentarlo en el próximo check-in.'
+        )
+      }
     }
   }
 
