@@ -178,26 +178,32 @@ export function ProgramPreviewDialog({
                                                             className={cn(
                                                                 'rounded-lg border border-transparent',
                                                                 group.type === 'superset' &&
-                                                                    'border-primary/25 bg-primary/[0.06] p-2 space-y-1',
+                                                                    'border-[var(--sport-300)]/45 border-l-[3px] border-l-[var(--sport-500)] bg-[var(--sport-100)]/50 p-2 space-y-1',
                                                             )}
                                                         >
                                                             {group.type === 'superset' && (
-                                                                <div className="text-[8px] font-black uppercase tracking-widest text-primary/80 px-0.5">
-                                                                    Superserie · grupo {group.supersetLetter ?? '?'}
+                                                                <div className="text-[8px] font-black uppercase tracking-widest text-[var(--sport-700)] px-0.5">
+                                                                    Superserie {group.supersetLetter ?? '?'} · {group.blocks.length} ejercicios
                                                                 </div>
                                                             )}
                                                             <div className={cn('space-y-1', group.type === 'superset' && 'pl-1')}>
-                                                                {group.blocks.map((block) => (
+                                                                {group.blocks.map((block, bi) => (
                                                                     <div
                                                                         key={block.uid}
                                                                         className="flex items-center gap-2 text-[10px] text-muted-foreground"
                                                                     >
-                                                                        <div
-                                                                            className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                                                            style={{
-                                                                                backgroundColor: getMuscleColor(block.muscle_group),
-                                                                            }}
-                                                                        />
+                                                                        {group.type === 'superset' ? (
+                                                                            <span className="inline-flex h-4 min-w-[18px] shrink-0 items-center justify-center rounded px-1 text-[9px] font-black tabular-nums text-[var(--sport-700)] bg-[var(--sport-100)]">
+                                                                                {group.supersetLetter ?? '?'}{bi + 1}
+                                                                            </span>
+                                                                        ) : (
+                                                                            <div
+                                                                                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                                                                style={{
+                                                                                    backgroundColor: getMuscleColor(block.muscle_group),
+                                                                                }}
+                                                                            />
+                                                                        )}
                                                                         <span className="font-bold text-foreground/80 truncate">
                                                                             {block.exercise_name}
                                                                         </span>

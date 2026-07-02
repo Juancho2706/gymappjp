@@ -1,14 +1,15 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, useReducedMotion } from 'framer-motion'
+import { toast } from 'sonner'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, Play } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { LogSetForm } from './LogSetForm'
-import { WorkoutTimerProvider, useWorkoutTimer } from './WorkoutTimerProvider'
+import { WorkoutTimerProvider, useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import Image from 'next/image'
 import { WorkoutSummaryOverlay } from './WorkoutSummaryOverlay'
@@ -378,6 +379,359 @@ const SYSTEM_AREA_SUBTITLE: Record<string, string> = {
     conditioning: 'Acondicionamiento metabólico: mantén el ritmo que te indique tu coach.',
 }
 
+// ─── Superserie: ejecución intercalada por rondas (F2) ───────────────────────
+
+const SUPERSET_MEMBER_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+type SessionLog = { block_id: string; set_number: number }
+
+/** Info compartida de una superserie (una instancia por grupo, referenciada por cada miembro). */
+interface SupersetInfo {
+    members: BlockType[]
+    /** Letra visible por bloque (A, B, C… por posición dentro del grupo). */
+    letterByBlock: Map<string, string>
+    /** Descanso completo del grupo = max de rest_seconds de los miembros. */
+    groupRestSeconds: number
+    /** Rondas = max de series entre los miembros. */
+    maxSets: number
+}
+
+/** Aplica un log optimista (dedup por block+set) — misma forma que empuja `handleLogged`. */
+function applyOptimisticLog<T extends SessionLog>(
+    prev: T[],
+    payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null },
+): T[] {
+    const next = prev.filter((log) => !(log.block_id === payload.blockId && log.set_number === payload.setNumber))
+    next.push({
+        block_id: payload.blockId,
+        set_number: payload.setNumber,
+        weight_kg: payload.weightKg,
+        reps_done: payload.repsDone,
+        rpe: payload.rpe,
+        rir: payload.rir,
+    } as unknown as T)
+    return next
+}
+
+/** Orden de presentación intercalado: ronda 1 (A,B,C…), ronda 2 (A,B,C…)… saltando miembros sin serie. */
+function buildRoundOrder(members: BlockType[]): { blockId: string; set: number }[] {
+    const maxSets = members.reduce((mx, m) => Math.max(mx, m.sets), 0)
+    const order: { blockId: string; set: number }[] = []
+    for (let r = 1; r <= maxSets; r += 1) {
+        for (const m of members) {
+            if (m.sets >= r) order.push({ blockId: m.id, set: r })
+        }
+    }
+    return order
+}
+
+/** ¿Está completa la ronda `round`? Todos los miembros con serie en esa ronda deben tener log. */
+function isRoundComplete(
+    members: BlockType[],
+    round: number,
+    logs: SessionLog[],
+    extraLoggedBlockId?: string,
+): boolean {
+    for (const m of members) {
+        if (m.sets < round) continue
+        const logged =
+            (extraLoggedBlockId != null && m.id === extraLoggedBlockId) ||
+            logs.some((l) => l.block_id === m.id && l.set_number === round)
+        if (!logged) return false
+    }
+    return true
+}
+
+/** Siguiente serie incompleta en orden intercalado (tras la recién logueada; envuelve si hace falta). */
+function findNextIncompleteInRounds(
+    order: { blockId: string; set: number }[],
+    logs: SessionLog[],
+    justLogged: { blockId: string; setNumber: number },
+): { blockId: string; set: number } | null {
+    const isLogged = (p: { blockId: string; set: number }) =>
+        logs.some((l) => l.block_id === p.blockId && l.set_number === p.set)
+    const idx = order.findIndex((p) => p.blockId === justLogged.blockId && p.set === justLogged.setNumber)
+    for (let i = idx + 1; i < order.length; i += 1) if (!isLogged(order[i])) return order[i]
+    for (let i = 0; i <= idx && i < order.length; i += 1) if (!isLogged(order[i])) return order[i]
+    return null
+}
+
+/** Texto compacto de sobrecarga progresiva para la leyenda de un miembro de la superserie. */
+function progressionCompactText(
+    block: BlockType,
+    eff: ReturnType<typeof computeEffectiveTarget> | null,
+    currentWeek: number | null | undefined,
+): string {
+    const v = block.progression_value
+    if (block.progression_type !== 'weight' || !eff?.modeImplemented) {
+        return `Sobrecarga: +${v} ${block.progression_type === 'weight' ? 'kg/sem' : 'rep/sesión'}`
+    }
+    if (eff.mode === 'double') {
+        return eff.status === 'holding'
+            ? `Doble progresión: mantené ${eff.weightKg} kg`
+            : `Doble progresión: objetivo ${eff.weightKg} kg`
+    }
+    if (eff.isProgressed && currentWeek != null) return `Semana ${currentWeek}: objetivo ${eff.weightKg} kg`
+    return `Sobrecarga: +${v} kg/sem`
+}
+
+interface SupersetGroupCardProps {
+    info: SupersetInfo
+    sessionLogs: Props['logs']
+    currentWeek: number | null
+    weeksToRepeat?: number
+    previousHistory: Record<string, { weight_kg: number | null; reps_done: number | null; date: string }[]>
+    lastSessionByBlock: Record<string, { date: string; sets: Array<{ weight_kg: number | null; reps_done: number | null }> }>
+    cardio?: ClientCardioView
+    autoTimerEnabled: boolean
+    nextCue: { blockId: string; set: number } | null
+    onLogged: (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null }) => void
+    openTechnique: (exercise: ExerciseType | null) => void
+    registerRowRef: (blockId: string, setNumber: number, el: HTMLDivElement | null) => void
+    getExercise: (block: BlockType) => ExerciseType | null
+}
+
+/**
+ * Card de superserie con ejecución HONESTA por rondas (F2): A1 → B1 → A2 → B2…
+ * Cada fila es el MISMO LogSetForm (identidad bloque+set intacta); solo cambia el ORDEN de
+ * presentación (rondas) y la guía visual (divisor por ronda + etiqueta A1/B1 + fila "sigue").
+ * El descanso completo del grupo se dispara al cerrar la ronda (via `supersetRest`).
+ */
+function SupersetGroupCard({
+    info,
+    sessionLogs,
+    currentWeek,
+    weeksToRepeat,
+    previousHistory,
+    lastSessionByBlock,
+    cardio,
+    autoTimerEnabled,
+    nextCue,
+    onLogged,
+    openTechnique,
+    registerRowRef,
+    getExercise,
+}: SupersetGroupCardProps) {
+    const { members, letterByBlock, groupRestSeconds, maxSets } = info
+
+    const memberVMs = members
+        .map((block) => {
+            const exercise = getExercise(block)
+            if (!exercise) return null
+            const effType = effectiveExerciseType(block, exercise)
+            const lastSession = (() => {
+                const ls = lastSessionByBlock[block.id]
+                if (!ls || ls.sets.length === 0) return null
+                const weightKg = ls.sets.reduce<number | null>(
+                    (m, s) => (s.weight_kg != null && (m == null || s.weight_kg > m) ? s.weight_kg : m),
+                    null,
+                )
+                return { weightKg, repsDone: ls.sets.map((s) => s.reps_done) }
+            })()
+            const eff = effType === 'strength'
+                ? computeEffectiveTarget(block, { currentWeek, weeksToRepeat, lastSession })
+                : null
+            const suggestedWeightKg = eff?.weightKg ?? block.target_weight_kg
+            return {
+                block,
+                exercise,
+                effType,
+                eff,
+                suggestedWeightKg,
+                complete: isBlockComplete(block, sessionLogs),
+                letter: letterByBlock.get(block.id) ?? '?',
+            }
+        })
+        .filter((m): m is NonNullable<typeof m> => m != null)
+
+    if (memberVMs.length < 2) return null
+
+    const firstLabel = `${memberVMs[0].letter}1`
+    const secondLabel = `${memberVMs[1].letter}1`
+
+    return (
+        <div className="rounded-card border border-primary/30 bg-primary/[0.08] p-4 space-y-3">
+            <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <p className="font-display text-sm font-bold text-on-dark">Superserie</p>
+                    <span className="text-[11px] font-semibold text-on-dark-muted">
+                        {memberVMs.length} ejercicios · {maxSets} ronda{maxSets === 1 ? '' : 's'}
+                    </span>
+                </div>
+                <div className="rounded-sm border border-primary/20 bg-primary/[0.10] p-3 text-xs leading-relaxed text-on-dark/90">
+                    <p className="font-semibold text-[var(--sport-300)] mb-1">Cómo hacerla</p>
+                    <p>
+                        Trabajá por rondas: hacé <strong>{firstLabel}</strong>, seguí con <strong>{secondLabel}</strong> sin
+                        descanso, y descansá al <strong>cerrar la ronda</strong>. Repetí hasta completar todas las series.
+                    </p>
+                </div>
+            </div>
+
+            {/* Leyenda: referencia rápida de cada ejercicio (objetivo, técnica, notas). */}
+            <div className="space-y-2">
+                {memberVMs.map((m) => (
+                    <div
+                        key={m.block.id}
+                        className="rounded-card border border-[var(--border-inverse)] bg-white/[0.03] p-3 space-y-2"
+                    >
+                        <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-2 min-w-0">
+                                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[12px] font-black text-primary">
+                                    {m.letter}
+                                </span>
+                                <div className="min-w-0">
+                                    <h3 className="font-display text-[17px] font-black leading-[1.15] tracking-[-0.02em] text-on-dark">
+                                        {m.exercise.name}
+                                    </h3>
+                                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2 py-0.5 text-[10.5px] font-bold text-on-dark">
+                                            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: RUT_TYPE_META[m.effType].color }} />
+                                            {m.exercise.muscle_group}
+                                        </span>
+                                        {(m.exercise.gif_url || m.exercise.video_url) && (
+                                            <button
+                                                onClick={() => openTechnique(m.exercise)}
+                                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-on-dark-muted transition-colors hover:text-on-dark"
+                                            >
+                                                <Info className="w-3.5 h-3.5" /> Ver técnica
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            {m.complete && (
+                                <CheckCircle2 className="w-6 h-6 shrink-0 text-[var(--sport-400)]" />
+                            )}
+                        </div>
+
+                        {m.effType === 'strength' ? (
+                            <div className="flex flex-wrap gap-1.5 text-[11px]">
+                                <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2 py-0.5 font-mono font-semibold text-on-dark">
+                                    {m.block.sets} × {m.block.reps}
+                                </span>
+                                {m.block.target_weight_kg != null && (
+                                    <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2 py-0.5 font-mono font-semibold text-on-dark">
+                                        {m.suggestedWeightKg ?? m.block.target_weight_kg}kg
+                                    </span>
+                                )}
+                                {m.block.rest_time && (
+                                    <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2 py-0.5 font-mono font-semibold text-on-dark-muted">
+                                        Descanso {m.block.rest_time}
+                                    </span>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                <TypedTargetGrid block={m.block} kind={m.effType} cardio={cardio} />
+                                <div className="flex justify-end">
+                                    <TypedBlockTimerButton block={m.block} kind={m.effType} />
+                                </div>
+                            </div>
+                        )}
+
+                        {m.effType === 'strength' && m.block.progression_type && m.block.progression_value != null && (m.block.progression_type !== 'weight' || m.block.target_weight_kg != null) && (
+                            <div className="flex items-center gap-1.5 rounded-sm border border-emerald-500/25 bg-emerald-500/[0.10] px-2 py-1 text-[11px] text-emerald-100/95">
+                                <TrendingUp className="w-3 h-3 shrink-0 text-emerald-300" />
+                                <span>{progressionCompactText(m.block, m.eff, currentWeek)}</span>
+                            </div>
+                        )}
+
+                        {m.effType !== 'strength' && m.block.instructions && (
+                            <div className="flex gap-2 rounded-sm border border-primary/20 bg-primary/[0.10] px-2.5 py-1.5 text-[11px]">
+                                <Info className="w-3.5 h-3.5 shrink-0 text-[var(--sport-300)] mt-0.5" />
+                                <p className="text-on-dark/90">{m.block.instructions}</p>
+                            </div>
+                        )}
+
+                        {m.block.notes && (
+                            <div className="flex gap-2 rounded-sm border border-amber-400/30 bg-amber-400/10 px-2.5 py-1.5 text-[11px]">
+                                <Quote className="w-3.5 h-3.5 shrink-0 text-amber-300 mt-0.5" />
+                                <p className="text-amber-100/90">{m.block.notes}</p>
+                            </div>
+                        )}
+
+                        {m.effType === 'strength' && previousHistory[m.exercise.id] && previousHistory[m.exercise.id].length > 0 && (() => {
+                            const prev = previousHistory[m.exercise.id]
+                            const best = prev.reduce((mx, s) => ((s.weight_kg ?? 0) > (mx.weight_kg ?? 0) ? s : mx), prev[0])
+                            return (
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-sm bg-white/[0.04] px-2.5 py-1.5">
+                                    <History className="w-3.5 h-3.5 shrink-0 text-on-dark-muted" />
+                                    <span className="text-[10.5px] font-semibold text-on-dark-muted">
+                                        Sesión anterior · {formatRelativeDate(prev[0].date)}:
+                                    </span>
+                                    <span className="font-mono text-[11px] font-bold text-on-dark">
+                                        {best.weight_kg ? `${best.weight_kg}kg` : '-'} × {best.reps_done || '-'}
+                                    </span>
+                                </div>
+                            )
+                        })()}
+                    </div>
+                ))}
+            </div>
+
+            {/* Rondas: series intercaladas A1 → B1 → A2 → B2… */}
+            <div className="rounded-card border border-[var(--border-inverse)] bg-white/[0.02] p-2 space-y-3">
+                {Array.from({ length: maxSets }).map((_, ri) => {
+                    const round = ri + 1
+                    const roundMembers = memberVMs.filter((m) => m.block.sets >= round)
+                    return (
+                        <div key={round} className="space-y-1.5">
+                            <div className="flex items-center justify-center gap-2 pt-1 text-[10px] font-bold uppercase tracking-widest text-on-dark-muted">
+                                <span className="h-px max-w-[72px] flex-1 bg-white/10" />
+                                <span>Ronda {round}</span>
+                                <span className="h-px max-w-[72px] flex-1 bg-white/10" />
+                            </div>
+                            {roundMembers.map((m) => {
+                                const label = `${m.letter}${round}`
+                                const setLogged = sessionLogs.some((l) => l.block_id === m.block.id && l.set_number === round)
+                                const isNext = !setLogged && nextCue?.blockId === m.block.id && nextCue?.set === round
+                                const existing = sessionLogs.find((l) => l.block_id === m.block.id && l.set_number === round)
+                                return (
+                                    <div
+                                        key={m.block.id}
+                                        ref={(el) => registerRowRef(m.block.id, round, el)}
+                                        className={cn(
+                                            'rounded-control border p-1 transition-colors',
+                                            isNext ? 'border-primary/60 bg-primary/[0.06]' : 'border-transparent',
+                                        )}
+                                    >
+                                        <div className="flex items-center gap-2 px-1.5 pb-0.5">
+                                            <span className="inline-flex items-center rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-black tabular-nums text-primary">
+                                                {label}
+                                            </span>
+                                            <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-on-dark">
+                                                {m.exercise.name}
+                                            </span>
+                                            {isNext && (
+                                                <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-primary">Sigue</span>
+                                            )}
+                                        </div>
+                                        <LogSetForm
+                                            key={`${m.block.id}-${round}`}
+                                            blockId={m.block.id}
+                                            setNumber={round}
+                                            restTimeStr={m.block.rest_time}
+                                            existingLog={existing}
+                                            suggestedWeightKg={m.suggestedWeightKg}
+                                            autoTimerEnabled={autoTimerEnabled}
+                                            mode={m.effType}
+                                            supersetRest={{
+                                                groupRestSeconds,
+                                                closesRound: () => isRoundComplete(members, round, sessionLogs, m.block.id),
+                                            }}
+                                            onLogged={onLogged}
+                                        />
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )
+                })}
+            </div>
+        </div>
+    )
+}
+
 export function WorkoutExecutionClient({
     plan,
     program,
@@ -395,6 +749,9 @@ export function WorkoutExecutionClient({
     const base = useBasePath(`/c/${coachSlug}`)
     const reducedMotion = useReducedMotion()
     const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+    // Superserie (F2): refs por fila de serie (block:set) para el auto-scroll intercalado.
+    const setRowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+    const [nextCue, setNextCue] = useState<{ blockId: string; set: number } | null>(null)
     const blocks = useMemo(() => [...plan.workout_blocks].sort((a, b) => a.order_index - b.order_index), [plan.workout_blocks])
     const [showTechnique, setShowTechnique] = useState(false)
     const [autoTimerEnabled, setAutoTimerEnabled] = useState(true)
@@ -443,6 +800,31 @@ export function WorkoutExecutionClient({
             .filter((section) => section.groups.length > 0)
     }, [blocks, areas])
 
+    // Superserie (F2): mapa blockId → info del grupo (miembros, letras, descanso del grupo).
+    // Una sola fuente para el card (leyenda + rondas) y para el auto-scroll/guía de `handleLogged`.
+    const supersetInfo = useMemo(() => {
+        const map = new Map<string, SupersetInfo>()
+        for (const section of sectioned) {
+            for (const group of section.groups) {
+                if (group.type !== 'superset') continue
+                const members = [...group.blocks].sort((a, b) => a.order_index - b.order_index)
+                const letterByBlock = new Map<string, string>()
+                members.forEach((m, i) => letterByBlock.set(m.id, SUPERSET_MEMBER_LETTERS[i] ?? '?'))
+                const groupRestSeconds = members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0)
+                const maxSets = members.reduce((mx, m) => Math.max(mx, m.sets), 0)
+                const info: SupersetInfo = { members, letterByBlock, groupRestSeconds, maxSets }
+                for (const m of members) map.set(m.id, info)
+            }
+        }
+        return map
+    }, [sectioned])
+
+    const registerRowRef = useCallback((blockId: string, setNumber: number, el: HTMLDivElement | null) => {
+        const key = `${blockId}:${setNumber}`
+        if (el) setRowRefs.current.set(key, el)
+        else setRowRefs.current.delete(key)
+    }, [])
+
     if (!blocks.length) {
         return (
             <div className="is-workout-page min-h-dvh bg-[var(--ink-950)] text-on-dark flex flex-col items-center justify-center p-6 text-center">
@@ -475,31 +857,64 @@ export function WorkoutExecutionClient({
         setSelectedExercise(exercise)
         setShowTechnique(true)
     }
-    const handleLogged = (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null }) => {
-        setSessionLogs((prev) => {
-            const wasComplete = blocks.some((b) => b.id === payload.blockId && isBlockComplete(b, prev))
-            const next = prev.filter((log) => !(log.block_id === payload.blockId && log.set_number === payload.setNumber))
-            next.push({
-                block_id: payload.blockId,
-                set_number: payload.setNumber,
-                weight_kg: payload.weightKg,
-                reps_done: payload.repsDone,
-                rpe: payload.rpe,
-                rir: payload.rir,
-            })
-            const nowComplete = blocks.some((b) => b.id === payload.blockId && isBlockComplete(b, next))
-            if (!wasComplete && nowComplete) {
-                setTimeout(() => {
-                    const nextIncomplete = blocks.find((b) => !isBlockComplete(b, next))
-                    if (nextIncomplete) {
-                        blockRefs.current
-                            .get(nextIncomplete.id)
-                            ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    }
-                }, 350)
+    /** Scroll a la siguiente serie incompleta (superserie) o al siguiente bloque incompleto. */
+    const scrollToNextIncomplete = (fromLogs: Props['logs']) => {
+        const nextIncomplete = blocks.find((b) => !isBlockComplete(b, fromLogs))
+        if (!nextIncomplete) return
+        const info = supersetInfo.get(nextIncomplete.id)
+        if (info) {
+            const order = buildRoundOrder(info.members)
+            const pos = order.find((p) => !fromLogs.some((l) => l.block_id === p.blockId && l.set_number === p.set))
+            if (pos) {
+                setRowRefs.current.get(`${pos.blockId}:${pos.set}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                return
             }
-            return next
-        })
+        }
+        blockRefs.current.get(nextIncomplete.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+
+    const handleLogged = (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null }) => {
+        // Estado (puro) — dedup por block+set, misma forma de siempre.
+        setSessionLogs((prev) => applyOptimisticLog(prev, payload))
+
+        // Guía/scroll (efectos) — calculados fuera del updater para no duplicarse en StrictMode.
+        const prev = sessionLogs
+        const nextLogs = applyOptimisticLog(prev, payload)
+        const info = supersetInfo.get(payload.blockId)
+
+        if (info) {
+            // Superserie: la "siguiente" respeta el orden intercalado (tras A1 apunta a B1).
+            const order = buildRoundOrder(info.members)
+            const nextPos = findNextIncompleteInRounds(order, nextLogs, payload)
+            setNextCue(nextPos)
+            const round = payload.setNumber
+            const roundClosed = isRoundComplete(info.members, round, nextLogs)
+            if (nextPos) {
+                if (!roundClosed) {
+                    const label = `${info.letterByBlock.get(nextPos.blockId) ?? ''}${nextPos.set}`
+                    toast.info(`Sin descanso — seguí con ${label}`)
+                }
+                setTimeout(() => {
+                    setRowRefs.current
+                        .get(`${nextPos.blockId}:${nextPos.set}`)
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }, 350)
+            } else {
+                // Grupo completo → saltar al siguiente bloque/serie incompleto del plan.
+                setTimeout(() => scrollToNextIncomplete(nextLogs), 350)
+            }
+            return
+        }
+
+        // Bloque suelto: comportamiento histórico (scroll solo al completar el bloque).
+        setNextCue(null)
+        const block = blocks.find((b) => b.id === payload.blockId)
+        if (!block) return
+        const wasComplete = isBlockComplete(block, prev)
+        const nowComplete = isBlockComplete(block, nextLogs)
+        if (!wasComplete && nowComplete) {
+            setTimeout(() => scrollToNextIncomplete(nextLogs), 350)
+        }
     }
     const handleFinish = () => {
         setShowCompleted(true)
@@ -612,35 +1027,29 @@ export function WorkoutExecutionClient({
                                     )}
                                 </div>
                                 <div className="space-y-3">
-                                    {section.groups.map((group, groupIndex) => (
-                                        <div key={group.key} className={cn("rounded-card border border-[var(--border-inverse)] bg-[var(--ink-900)] p-4", group.type === 'superset' && "border-primary/30 bg-primary/[0.08]")}>
+                                    {section.groups.map((group, groupIndex) => group.type === 'superset' ? (
+                                        <SupersetGroupCard
+                                            key={group.key}
+                                            info={supersetInfo.get(group.blocks[0].id)!}
+                                            sessionLogs={sessionLogs}
+                                            currentWeek={currentWeek}
+                                            weeksToRepeat={program?.weeks_to_repeat}
+                                            previousHistory={previousHistory}
+                                            lastSessionByBlock={lastSessionByBlock}
+                                            cardio={cardio}
+                                            autoTimerEnabled={autoTimerEnabled}
+                                            nextCue={nextCue}
+                                            onLogged={handleLogged}
+                                            openTechnique={openTechnique}
+                                            registerRowRef={registerRowRef}
+                                            getExercise={getExercise}
+                                        />
+                                    ) : (
+                                        <div key={group.key} className="rounded-card border border-[var(--border-inverse)] bg-[var(--ink-900)] p-4">
                                             <div className="mb-3 space-y-2">
                                                 <p className="font-display text-sm font-bold text-on-dark">
-                                                    {group.type === 'superset'
-                                                        ? `Superserie (grupo ${group.supersetLetter ?? group.key})`
-                                                        : `Ejercicio ${groupIndex + 1}`}
+                                                    {`Ejercicio ${groupIndex + 1}`}
                                                 </p>
-                                                {group.type === 'superset' && (
-                                                    <div className="rounded-sm border border-primary/20 bg-primary/[0.10] p-3 text-xs leading-relaxed text-on-dark/90 space-y-2.5">
-                                                        <p className="font-semibold text-[var(--sport-300)]">Cómo hacerla</p>
-                                                        <ol className="list-decimal space-y-1.5 pl-4 marker:font-semibold">
-                                                            <li>
-                                                                Completa <strong>una serie</strong> del primer ejercicio y regístrala abajo.
-                                                            </li>
-                                                            <li>
-                                                                Completa <strong>una serie</strong> del siguiente ejercicio y regístrala.
-                                                            </li>
-                                                            <li>
-                                                                Respeta los descansos que indique cada ejercicio; <strong>repite</strong> hasta
-                                                                terminar todas las series de <strong>cada</strong> ejercicio.
-                                                            </li>
-                                                        </ol>
-                                                        <p className="border-t border-white/10 pt-2 text-on-dark-muted">
-                                                            Cada ejercicio tiene sus propias series: el contador superior suma todas las
-                                                            series de la rutina.
-                                                        </p>
-                                                    </div>
-                                                )}
                                             </div>
                                             <div className="space-y-4">
                                                 {group.blocks.sort((a, b) => a.order_index - b.order_index).map((block, blockIndex) => {
@@ -668,13 +1077,6 @@ export function WorkoutExecutionClient({
                                                     const suggestedWeightKg = eff?.weightKg ?? block.target_weight_kg
                                                     return (
                                                         <Fragment key={block.id}>
-                                                            {blockIndex > 0 && group.type === 'superset' && (
-                                                                <div className="flex items-center justify-center gap-2 py-1 text-[10px] font-bold uppercase tracking-widest text-on-dark-muted">
-                                                                    <span className="h-px max-w-[72px] flex-1 bg-white/10" />
-                                                                    <span>Luego</span>
-                                                                    <span className="h-px max-w-[72px] flex-1 bg-white/10" />
-                                                                </div>
-                                                            )}
                                                         <motion.div
                                                             layout
                                                             ref={(el) => {

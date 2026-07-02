@@ -45,6 +45,8 @@ import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
 import type { BuilderBlock, BuilderCardioContext, DayState, ProgramPhase } from './types'
 import type { WorkoutArea } from '@/domain/workout/types'
 import { effectiveExerciseType, legacyRepsSummaryFor } from '@/lib/workout-exercise-type'
+import { effectiveAreaKey, orderedAreaIds } from '@/lib/workout-areas'
+import { sanitizeSupersets } from '@/lib/workout-block-grouping'
 import { buildAreaVMs } from './area-ui'
 import { parseProgramPhases, mapDbBlockToBuilderBlock, enrichDaysWithExerciseMedia, createDefaultBlock } from './program-read-mappers'
 
@@ -807,12 +809,17 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
             }
         }
 
+        // Red de seguridad server-side (idempotente): renormaliza superseries antes de
+        // serializar. Repara también programas legacy corruptos (huérfanos / letras no
+        // contiguas de imports o drags viejos) al re-guardarlos, sin reordenar bloques
+        // (no toca order_index). Usa la MISMA resolución de área que el reducer.
+        const knownAreaIds = new Set(orderedAreaIds(areas))
         const mapDays = (dayList: DayState[], variant: 'A' | 'B') =>
             dayList.filter(d => d.blocks.length > 0).map(d => ({
                 day_of_week: d.id,
                 title: d.title.trim(),
                 week_variant: variant,
-                blocks: d.blocks.map((b, idx) => {
+                blocks: sanitizeSupersets(d.blocks, b => effectiveAreaKey(b, knownAreaIds)).map((b, idx) => {
                     const type = effectiveExerciseType(b, { exercise_type: b.exercise_type })
                     const distanceValue = parseOptionalKg(b.distance_value)
                     const loadValue = parseOptionalKg(b.load_value)

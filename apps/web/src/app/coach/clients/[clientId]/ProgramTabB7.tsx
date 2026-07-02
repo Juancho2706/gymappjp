@@ -30,6 +30,7 @@ import {
     uniqueMuscleGroupsFromBlocks,
 } from './profileProgramStructureUtils'
 import { resolveEffectiveWeekVariant } from '@/lib/workout/programWeekVariant'
+import { groupContiguousSupersetRuns } from '@/lib/workout-block-grouping'
 import { cn } from '@/lib/utils'
 import { SectionTitle } from './_components/SectionTitle'
 
@@ -185,6 +186,49 @@ export function ProgramTabB7({
         setSheetOpen(true)
     }
 
+    // Fila de ejercicio (compartida por bloques sueltos y miembros de superserie).
+    // `ordinal` (ej. "A1") reemplaza el punto muscular en los miembros → deja claro el
+    // orden de ejecución dentro de la superserie.
+    const renderExerciseRow = (block: any, opts: { topBorder: string; ordinal?: string }) => {
+        const name = block.exercises?.name || 'Ejercicio'
+        const setsReps =
+            block.sets != null || block.reps != null
+                ? `${block.sets ?? '—'}${block.reps != null ? '×' + block.reps : ''}`
+                : ''
+        return (
+            <button
+                key={block.id ?? `${opts.ordinal ?? 'row'}-${name}`}
+                type="button"
+                onClick={() => openBlock(block)}
+                className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left"
+                style={{ borderTop: opts.topBorder }}
+            >
+                {opts.ordinal ? (
+                    <span
+                        className="inline-flex h-5 min-w-[22px] shrink-0 items-center justify-center rounded px-1 text-[10px] font-black tabular-nums"
+                        style={{ background: 'var(--sport-100)', color: 'var(--sport-700)' }}
+                    >
+                        {opts.ordinal}
+                    </span>
+                ) : (
+                    <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: muscleDotColor(block.exercises?.muscle_group) }}
+                    />
+                )}
+                <span className="min-w-0 flex-1 truncate text-sm" style={{ color: TXT }}>
+                    {name}
+                </span>
+                {setsReps && (
+                    <span className="font-mono text-xs tabular-nums" style={{ color: TXT_MUTED }}>
+                        {setsReps}
+                    </span>
+                )}
+                <ChevronRight className="h-[15px] w-[15px] shrink-0" style={{ color: 'var(--ink-300)' }} />
+            </button>
+        )
+    }
+
     // ---------- Empty state ----------
     if (!activeProgram) {
         return (
@@ -303,36 +347,39 @@ export function ProgramTabB7({
                 </button>
                 {isOpen && (
                     <div style={{ borderTop: `1px solid ${CARD_BORDER}` }}>
-                        {blocks.map((block: any, i: number) => {
-                            const name = block.exercises?.name || 'Ejercicio'
-                            const setsReps =
-                                block.sets != null || block.reps != null
-                                    ? `${block.sets ?? '—'}${block.reps != null ? '×' + block.reps : ''}`
-                                    : ''
-                            return (
-                                <button
-                                    key={block.id ?? i}
-                                    type="button"
-                                    onClick={() => openBlock(block)}
-                                    className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left"
-                                    style={{ borderTop: i > 0 ? `1px solid ${CARD_BORDER}` : 'none' }}
-                                >
-                                    <span
-                                        className="h-2 w-2 shrink-0 rounded-full"
-                                        style={{ background: muscleDotColor(block.exercises?.muscle_group) }}
-                                    />
-                                    <span className="min-w-0 flex-1 truncate text-sm" style={{ color: TXT }}>
-                                        {name}
-                                    </span>
-                                    {setsReps && (
-                                        <span className="font-mono text-xs tabular-nums" style={{ color: TXT_MUTED }}>
-                                            {setsReps}
-                                        </span>
-                                    )}
-                                    <ChevronRight className="h-[15px] w-[15px] shrink-0" style={{ color: 'var(--ink-300)' }} />
-                                </button>
+                        {(() => {
+                            // Misma agrupación que el preview y la ejecución del alumno (helper canónico
+                            // con singleton guard: una letra huérfana cae a `single` y se pinta como
+                            // bloque suelto normal). Bloques sueltos = como estaban.
+                            const groups = groupContiguousSupersetRuns(
+                                blocks.map((b: any) => ({ ...b, order_index: Number(b.order_index ?? 0) }))
                             )
-                        })}
+                            let first = true
+                            return groups.map((group) => {
+                                const topBorder = first ? 'none' : `1px solid ${CARD_BORDER}`
+                                first = false
+                                if (group.type !== 'superset') {
+                                    return renderExerciseRow(group.blocks[0], { topBorder })
+                                }
+                                const letter = group.supersetLetter ?? '?'
+                                return (
+                                    <div key={group.key} style={{ borderTop: topBorder }} className="px-2 py-2">
+                                        {/* Bracket EVA DS: borde izquierdo sport + tinte + label (mismo lenguaje visual que el preview y el print) */}
+                                        <div className="overflow-hidden rounded-[var(--radius-sm)] border border-[var(--sport-300)]/45 border-l-[3px] border-l-[var(--sport-500)] bg-[var(--sport-100)]/50">
+                                            <div className="px-2.5 pt-2 pb-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--sport-700)]">
+                                                Superserie {letter} · {group.blocks.length} ejercicios
+                                            </div>
+                                            {group.blocks.map((block: any, bi: number) =>
+                                                renderExerciseRow(block, {
+                                                    topBorder: bi > 0 ? `1px solid ${CARD_BORDER}` : 'none',
+                                                    ordinal: `${letter}${bi + 1}`,
+                                                })
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+                            })
+                        })()}
                     </div>
                 )}
             </div>

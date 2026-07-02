@@ -436,3 +436,88 @@ describe('builderReducer — COPY_DAY aísla superseries (bug 2)', () => {
         expect(day3.blocks[0].superset_group).not.toBe(day3.blocks[2].superset_group)
     })
 })
+
+// ─── F1: renormalización de superseries tras MOVE_BLOCK / TRANSFER_BLOCK ──────
+// El reducer sanea (sanitizeSupersets) como parte de la MISMA transición: mover/arrastrar
+// no puede persistir grupos huérfanos ni letras no contiguas (H1/H2).
+
+describe('builderReducer — MOVE_BLOCK renormaliza superseries', () => {
+    const byUid = (day: DayState) => Object.fromEntries(day.blocks.map(b => [b.uid, b.superset_group]))
+
+    it('arrastrar un bloque suelto al MEDIO de una superserie de 2 la parte → ambos se limpian', () => {
+        const state = [mkDay(1, [
+            mkBlock({ uid: 'm1', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm2', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'x', section: 'main', superset_group: null }),
+        ])]
+        // arrayMove: llevar x (idx 2) al medio (idx 1) → [m1, x, m2]
+        const next = builderReducer(state, {
+            type: 'MOVE_BLOCK',
+            payload: { dayId: 1, oldIndex: 2, newIndex: 1 },
+        })
+        expect(uids(next[0])).toEqual(['m1', 'x', 'm2'])
+        expect(byUid(next[0])).toEqual({ m1: null, x: null, m2: null })
+    })
+
+    it('un drag que parte un grupo de 4 en dos mitades válidas RE-LETRA la segunda', () => {
+        const state = [mkDay(1, [
+            mkBlock({ uid: 'm1', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm2', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm3', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm4', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'x', section: 'main', superset_group: null }),
+        ])]
+        // arrayMove: llevar x (idx 4) al medio (idx 2) → [m1, m2, x, m3, m4]
+        const next = builderReducer(state, {
+            type: 'MOVE_BLOCK',
+            payload: { dayId: 1, oldIndex: 4, newIndex: 2 },
+        })
+        expect(uids(next[0])).toEqual(['m1', 'm2', 'x', 'm3', 'm4'])
+        // primer tramo conserva 'A'; el segundo (perdedor) toma la próxima letra libre 'B'
+        expect(byUid(next[0])).toEqual({ m1: 'A', m2: 'A', x: null, m3: 'B', m4: 'B' })
+    })
+
+    it('undo restaura letras: el reducer NO muta el estado previo (snapshot pre-dispatch intacto)', () => {
+        const state = [mkDay(1, [
+            mkBlock({ uid: 'm1', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'm2', section: 'main', superset_group: 'A' }),
+            mkBlock({ uid: 'x', section: 'main', superset_group: null }),
+        ])]
+        const next = builderReducer(state, {
+            type: 'MOVE_BLOCK',
+            payload: { dayId: 1, oldIndex: 2, newIndex: 1 },
+        })
+        // el resultado quedó saneado…
+        expect(byUid(next[0])).toEqual({ m1: null, x: null, m2: null })
+        // …pero el estado previo (lo que undo restaura vía SET_DAYS) conserva las letras.
+        expect(state[0].blocks.map(b => b.superset_group)).toEqual(['A', 'A', null])
+    })
+})
+
+describe('builderReducer — TRANSFER_BLOCK limpia la letra y renormaliza (H1)', () => {
+    it('mover un miembro de superserie a otro día NO fusiona con un grupo ajeno de igual letra', () => {
+        const state = [
+            mkDay(1, [
+                mkBlock({ uid: 'a1', section: 'main', superset_group: 'A' }),
+                mkBlock({ uid: 'a2', section: 'main', superset_group: 'A' }),
+            ]),
+            mkDay(2, [
+                mkBlock({ uid: 'b1', section: 'main', superset_group: 'A' }),
+                mkBlock({ uid: 'b2', section: 'main', superset_group: 'A' }),
+            ]),
+        ]
+        const next = builderReducer(state, {
+            type: 'TRANSFER_BLOCK',
+            payload: { activeId: 'a2', activeDayId: 1, overDayId: 2 },
+        })
+        const day1 = next.find(d => d.id === 1)!
+        const day2 = next.find(d => d.id === 2)!
+        // Origen: a1 quedó singleton → se limpia.
+        expect(day1.blocks.map(b => b.uid)).toEqual(['a1'])
+        expect(day1.blocks[0].superset_group).toBeNull()
+        // Destino: a2 aterriza SUELTO (no arrastra 'A', no se fusiona con el grupo A de b1/b2).
+        expect(day2.blocks.map(b => b.uid)).toEqual(['b1', 'b2', 'a2'])
+        const d2 = Object.fromEntries(day2.blocks.map(b => [b.uid, b.superset_group]))
+        expect(d2).toEqual({ b1: 'A', b2: 'A', a2: null })
+    })
+})

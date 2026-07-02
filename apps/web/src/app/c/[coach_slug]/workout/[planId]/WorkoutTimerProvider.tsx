@@ -38,7 +38,7 @@ export function useWorkoutTimer() {
 }
 
 // Convert "01:30" or "90" or "1 min" to seconds safely
-function parseRestTime(restStr: string | null): number {
+export function parseRestTime(restStr: string | null): number {
     if (!restStr) return 0
     const str = restStr.toLowerCase().trim()
 

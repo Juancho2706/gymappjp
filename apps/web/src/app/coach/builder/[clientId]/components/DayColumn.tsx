@@ -14,6 +14,7 @@ import { ExerciseBlock } from './ExerciseBlock'
 import { DAYS_OF_WEEK } from '../hooks/usePlanBuilder'
 import { buildAreaVMs, type BuilderAreaVM } from '../area-ui'
 import { effectiveAreaKey } from '@/lib/workout-areas'
+import { groupContiguousSupersetRuns } from '@/lib/workout-block-grouping'
 import type { DayState } from '../types'
 import type { WorkoutArea } from '@/domain/workout/types'
 import type { BuilderBlock } from '../types'
@@ -133,6 +134,31 @@ function DayColumnInner({
     const areaById = useMemo(() => new Map(areaVMs.map(a => [a.id, a])), [areaVMs])
     const knownAreaIds = useMemo(() => new Set(areaVMs.map(a => a.id)), [areaVMs])
     const areaKeyOf = (b: BuilderBlock) => effectiveAreaKey(b, knownAreaIds)
+
+    // uids de bloques que pertenecen a una superserie VÁLIDA (≥2 contiguas en la misma
+    // área). Usamos el helper canónico (con su singleton guard) para no pintar el badge
+    // SS·A sobre un bloque suelto (dato legacy/importado o estado transitorio). El
+    // order_index sintético = posición en el array (lo que persiste el save) y filtramos
+    // por área porque una superserie nunca cruza áreas — espeja la ejecución del alumno.
+    const validSupersetUids = useMemo(() => {
+        const byArea = new Map<string, { id: string; order_index: number; superset_group: string | null | undefined }[]>()
+        blocks.forEach((b, i) => {
+            const key = effectiveAreaKey(b, knownAreaIds)
+            const row = { id: b.uid, order_index: i, superset_group: b.superset_group }
+            const arr = byArea.get(key)
+            if (arr) arr.push(row)
+            else byArea.set(key, [row])
+        })
+        const valid = new Set<string>()
+        for (const rows of byArea.values()) {
+            for (const run of groupContiguousSupersetRuns(rows)) {
+                if (run.type === 'superset') {
+                    for (const r of run.blocks) valid.add(r.id)
+                }
+            }
+        }
+        return valid
+    }, [blocks, knownAreaIds])
 
     const totalSets = useMemo(() => blocks.reduce((sum, b) => sum + (b.sets || 0), 0), [blocks])
     const uniqueMuscles = useMemo(
@@ -407,10 +433,27 @@ function DayColumnInner({
                     >
                         {blocks.map((block, idx) => {
                             const nextBlock = blocks[idx + 1]
-                            const linkedToNext = !!block.superset_group && block.superset_group === nextBlock?.superset_group
+                            const sameAreaAsNext = !!nextBlock && areaKeyOf(block) === areaKeyOf(nextBlock)
+                            // linkedToNext exige misma área además de misma letra: dos letras
+                            // iguales en áreas distintas (dato transitorio) no dibujan "enlazado".
+                            const linkedToNext =
+                                !!block.superset_group && block.superset_group === nextBlock?.superset_group && sameAreaAsNext
                             const isLastBlock = idx === blocks.length - 1
-                            const canLinkSuperset =
-                                !isLastBlock && !!nextBlock && areaKeyOf(block) === areaKeyOf(nextBlock)
+                            const canLinkSuperset = !isLastBlock && !!nextBlock && sameAreaAsNext
+                            // Ambos lados ya son superseries (distintas, si no serían linkedToNext):
+                            // enlazar destruiría/fusionaría una (H3) → deshabilitado, no merge auto.
+                            const bothGrouped = !!block.superset_group && !!nextBlock?.superset_group
+                            const linkApplicable = canLinkSuperset && !bothGrouped
+                            const linkTooltip = bothGrouped
+                                ? 'Ya están en superseries — desagrupá primero'
+                                : !sameAreaAsNext
+                                    ? 'Solo puedes enlazar con el siguiente ejercicio de la misma área'
+                                    : 'Agrupar como superserie con el siguiente ejercicio'
+                            const linkAriaLabel = bothGrouped
+                                ? 'Superserie no disponible: ambos ejercicios ya están en superseries'
+                                : !sameAreaAsNext
+                                    ? 'Superserie no disponible: el siguiente ejercicio es de otra área'
+                                    : 'Agrupar como superserie con el siguiente ejercicio'
                             const prevKey = idx > 0 ? areaKeyOf(blocks[idx - 1]) : null
                             const thisKey = areaKeyOf(block)
                             const headerVM = thisKey !== prevKey ? areaById.get(thisKey) : undefined
@@ -452,6 +495,7 @@ function DayColumnInner({
                                                 : undefined
                                         }
                                         supersetEnabled={!!block.superset_group || canLinkSuperset}
+                                        supersetValid={validSupersetUids.has(block.uid)}
                                         onToggleSuperset={
                                             block.superset_group
                                                 ? () => onToggleSuperset(dayId, block.uid, 'unlink')
@@ -494,26 +538,32 @@ function DayColumnInner({
                                                 </button>
                                             </div>
                                         ) : (
-                                            <div className="flex items-center justify-center min-h-[40px] max-md:min-h-[44px] max-md:opacity-100 opacity-0 md:hover:opacity-100 transition-opacity group/link">
+                                            <div
+                                                className={cn(
+                                                    'flex items-center justify-center min-h-[40px] max-md:min-h-[44px] transition-opacity group/link max-md:opacity-100',
+                                                    // Descubribilidad desktop: cuando SÍ se puede enlazar el
+                                                    // conector queda persistente a baja opacidad (no invisible);
+                                                    // cuando no aplica se oculta hasta hover (tooltip explica por qué).
+                                                    linkApplicable
+                                                        ? 'opacity-40 md:hover:opacity-100'
+                                                        : 'opacity-0 md:hover:opacity-100',
+                                                )}
+                                            >
                                                 <button
                                                     type="button"
-                                                    disabled={!canLinkSuperset}
+                                                    disabled={!linkApplicable}
+                                                    // Fuera del tab-order (y del árbol a11y) cuando no aplica:
+                                                    // no añade ruido de teclado/lector entre cada par de bloques.
+                                                    tabIndex={linkApplicable ? undefined : -1}
+                                                    aria-hidden={linkApplicable ? undefined : true}
                                                     onClick={() => {
-                                                        if (canLinkSuperset) onToggleSuperset(dayId, block.uid, 'link')
+                                                        if (linkApplicable) onToggleSuperset(dayId, block.uid, 'link')
                                                     }}
-                                                    title={
-                                                        canLinkSuperset
-                                                            ? 'Agrupar como superserie con el siguiente ejercicio'
-                                                            : 'Solo puedes enlazar con el siguiente ejercicio de la misma área'
-                                                    }
-                                                    aria-label={
-                                                        canLinkSuperset
-                                                            ? 'Agrupar como superserie con el siguiente ejercicio'
-                                                            : 'Superserie no disponible: el siguiente ejercicio es de otra área'
-                                                    }
+                                                    title={linkTooltip}
+                                                    aria-label={linkAriaLabel}
                                                     className={cn(
                                                         'flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest px-3 py-2 max-md:py-2.5 rounded-full border border-dashed transition-colors',
-                                                        canLinkSuperset
+                                                        linkApplicable
                                                             ? 'text-muted-foreground max-md:text-foreground/80 border-border/70 max-md:border-primary/30 hover:text-primary hover:bg-primary/5 max-md:bg-primary/5'
                                                             : 'text-muted-foreground/50 border-border/40 cursor-not-allowed opacity-60',
                                                     )}

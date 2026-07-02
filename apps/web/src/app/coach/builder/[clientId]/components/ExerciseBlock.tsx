@@ -41,12 +41,19 @@ interface ExerciseBlockProps {
     /** Mini-fila de acciones (mobile): toggle de superserie con el siguiente bloque */
     onTapSuperset?: () => void
     supersetEnabled?: boolean
+    /**
+     * El bloque pertenece a una superserie VÁLIDA (≥2 contiguas). DayColumn lo calcula con
+     * el helper canónico; el badge SS·letra solo se pinta si es true. Default true para el
+     * DragOverlay (standalone, sin contexto del día) → mantiene el badge del bloque arrastrado.
+     */
+    supersetValid?: boolean
 }
 
 function ExerciseBlockInner({
     block, dayId, areaVMs, currentAreaId, onEdit, onRemove, onUpdate, onToggleSuperset,
     onSetArea, onToggleOverride, showTemplateLink, isDragPending, narrowLayout = false,
     onMoveUp, onMoveDown, canMoveUp = false, canMoveDown = false, onTapSuperset, supersetEnabled = false,
+    supersetValid = true,
 }: ExerciseBlockProps) {
     const {
         attributes,
@@ -275,7 +282,7 @@ function ExerciseBlockInner({
                                         ⏱ {block.rest_time}
                                     </div>
                                 )}
-                                {block.superset_group && (
+                                {block.superset_group && supersetValid && (
                                     <div
                                         className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border cursor-pointer"
                                         style={{

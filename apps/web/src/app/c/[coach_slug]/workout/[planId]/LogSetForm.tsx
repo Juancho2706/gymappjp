@@ -36,6 +36,17 @@ interface Props {
     autoTimerEnabled?: boolean
     /** default 'strength' ⇒ render EXACTAMENTE el de siempre (anti-regresión). */
     mode?: LogSetMode
+    /**
+     * Superserie (F2): la fila vive dentro de una ronda intercalada. Cambia SOLO el disparo
+     * del descanso automático: no arranca el descanso del bloque por serie; arranca el descanso
+     * COMPLETO del grupo (`groupRestSeconds`) recién cuando la serie CIERRA la ronda
+     * (`closesRound()` → true). Si no cierra, no dispara descanso (el padre muestra la guía
+     * "seguí con B1"). Sin esta prop, el comportamiento del descanso es el de siempre.
+     */
+    supersetRest?: {
+        groupRestSeconds: number
+        closesRound: () => boolean
+    }
     onLogged?: (payload: {
         blockId: string
         setNumber: number
@@ -62,6 +73,7 @@ function StrengthLogSetForm({
     suggestedWeightKg,
     existingLog,
     autoTimerEnabled = true,
+    supersetRest,
     onLogged,
 }: Props) {
     const { t } = useTranslation()
@@ -111,7 +123,12 @@ function StrengthLogSetForm({
             if (typeof navigator !== 'undefined' && navigator.vibrate) {
                 navigator.vibrate(50)
             }
-            startRest(restTimeStr)
+            if (supersetRest) {
+                // Superserie: descanso completo del grupo SOLO al cerrar la ronda.
+                if (supersetRest.closesRound()) startRest(String(supersetRest.groupRestSeconds))
+            } else {
+                startRest(restTimeStr)
+            }
         }
 
         // Normalize decimal comma → dot (es/pt locales)
@@ -311,6 +328,7 @@ function TypedLogSetRow({
     existingLog,
     autoTimerEnabled = true,
     mode,
+    supersetRest,
     onLogged,
 }: Props & { mode: Exclude<LogSetMode, 'strength'> }) {
     const params = useParams<{ coach_slug: string; planId: string }>()
@@ -377,9 +395,15 @@ function TypedLogSetRow({
         }
 
         addOptimisticLogged(true)
-        if (autoTimerEnabled && !isLogged && restTimeStr) {
-            if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(50)
-            startRest(restTimeStr)
+        if (autoTimerEnabled && !isLogged) {
+            if (supersetRest) {
+                // Superserie: descanso completo del grupo SOLO al cerrar la ronda.
+                if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(50)
+                if (supersetRest.closesRound()) startRest(String(supersetRest.groupRestSeconds))
+            } else if (restTimeStr) {
+                if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(50)
+                startRest(restTimeStr)
+            }
         }
         onLogged?.({
             blockId,

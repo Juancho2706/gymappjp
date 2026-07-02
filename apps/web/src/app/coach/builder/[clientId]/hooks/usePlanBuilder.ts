@@ -10,6 +10,7 @@ import {
     legacyBucketFor,
     orderedAreaIds,
 } from '@/lib/workout-areas'
+import { sanitizeSupersets } from '@/lib/workout-block-grouping'
 import { arrayMove } from '@dnd-kit/sortable'
 
 export const DAYS_OF_WEEK = [
@@ -47,6 +48,17 @@ function nextFreeSupersetLetter(used: ReadonlySet<string>): string {
     return 'A'
 }
 
+/**
+ * Normaliza las superseries de un día (colapsa huérfanos, re-letra tramos partidos)
+ * usando la MISMA resolución de área que el reducer (`effectiveAreaKey` con las áreas
+ * conocidas). Idempotente: devuelve el MISMO array por referencia si no hay nada que
+ * reparar, por lo que aplicarlo tras un MOVE/TRANSFER no ensucia diffs ni undo/redo.
+ */
+function sanitizeDayBlocks(blocks: BuilderBlock[], areas: readonly WorkoutArea[]): BuilderBlock[] {
+    const knownAreaIds = new Set(orderedAreaIds(areas))
+    return sanitizeSupersets(blocks, b => effectiveAreaKey(b, knownAreaIds))
+}
+
 export function builderReducer(
     state: DayState[],
     action: BuilderAction,
@@ -81,7 +93,10 @@ export function builderReducer(
         case 'MOVE_BLOCK':
             return state.map(d => {
                 if (d.id === action.payload.dayId) {
-                    return { ...d, blocks: arrayMove(d.blocks, action.payload.oldIndex, action.payload.newIndex) }
+                    // Reordenar por drag/rail puede partir un grupo (bloque suelto al medio) o
+                    // dejar un miembro huérfano: renormalizamos como parte de la MISMA transición.
+                    const moved = arrayMove(d.blocks, action.payload.oldIndex, action.payload.newIndex)
+                    return { ...d, blocks: sanitizeDayBlocks(moved, areas) }
                 }
                 return d
             })
@@ -100,10 +115,16 @@ export function builderReducer(
 
             return state.map(d => {
                 if (d.id === activeDayId) {
-                    return { ...d, blocks: d.blocks.filter((_, i) => i !== activeBlockIndex) }
+                    // Origen: quitar el bloque puede dejar el grupo no contiguo/huérfano → renormalizar.
+                    const remaining = d.blocks.filter((_, i) => i !== activeBlockIndex)
+                    return { ...d, blocks: sanitizeDayBlocks(remaining, areas) }
                 }
                 if (d.id === overDayId) {
-                    return { ...d, blocks: [...d.blocks, { ...activeBlock, dayId: overDayId }] }
+                    // El bloque movido LIMPIA su superset_group antes de aterrizar (mismo criterio
+                    // que SET_BLOCK_AREA): llega suelto, nunca arrastra su letra ni fusiona un
+                    // grupo ajeno del destino que casualmente termine con la misma letra (H1).
+                    const appended = [...d.blocks, { ...activeBlock, dayId: overDayId, superset_group: null }]
+                    return { ...d, blocks: sanitizeDayBlocks(appended, areas) }
                 }
                 return d
             })

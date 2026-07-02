@@ -90,7 +90,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
                 id, title, day_of_week, week_variant,
                 workout_blocks (
                     id, exercise_id, order_index, sets, reps, rest_time, notes, target_weight_kg,
-                    tempo, rir,
+                    tempo, rir, superset_group,
                     exercises ( id, name, muscle_group, gif_url, video_url )
                 )
             )

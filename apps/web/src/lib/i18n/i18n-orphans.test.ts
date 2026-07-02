@@ -241,7 +241,9 @@ describe('i18n orphans (keys sin call site)', () => {
         expect(isReferencedLiteral('landing.nav.teams')).toBe(true)
     })
 
-    it('no hay keys huerfanas NUEVAS (fuera de allowlist dinamica / legacy documentada)', () => {
+    // Timeout amplio: escanea TODO apps/web/src (miles de archivos) — bajo carga de la
+    // suite completa el default de 5s se queda corto (falso rojo por timeout, no por keys).
+    it('no hay keys huerfanas NUEVAS (fuera de allowlist dinamica / legacy documentada)', { timeout: 30_000 }, () => {
         const orphans = allKeys.filter((key) => {
             if (isReferencedLiteral(key)) return false
             if (isDynamicFamily(key)) return false
@@ -256,7 +258,7 @@ describe('i18n orphans (keys sin call site)', () => {
         ).toEqual([])
     })
 
-    it('la allowlist legacy no tiene entradas obsoletas (keys ya re-cableadas o eliminadas)', () => {
+    it('la allowlist legacy no tiene entradas obsoletas (keys ya re-cableadas o eliminadas)', { timeout: 30_000 }, () => {
         // Higiene: si una key legacy volvio a usarse o se borro del json, sacarla de la lista.
         const stale = KNOWN_LEGACY_ORPHANS.filter(
             (key) => isReferencedLiteral(key) || !(key in (es as Record<string, string>)) || isDynamicFamily(key)

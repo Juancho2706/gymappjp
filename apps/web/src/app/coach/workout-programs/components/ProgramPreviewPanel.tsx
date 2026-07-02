@@ -128,7 +128,7 @@ export function buildLibrarySections<
     })
 }
 
-function renderLibraryExerciseRow(block: LibraryPlanBlock) {
+function renderLibraryExerciseRow(block: LibraryPlanBlock, ordinal?: string) {
     const chips = [
         block.tempo && `Tempo ${block.tempo}`,
         block.rir && `${block.rir} RIR`,
@@ -137,14 +137,21 @@ function renderLibraryExerciseRow(block: LibraryPlanBlock) {
 
     return (
         <div className="flex items-start justify-between gap-3 px-3 py-2.5 sm:px-4">
-            <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-strong">{block.exercise.name}</p>
-                {chips.length > 0 && (
-                    <p className="mt-0.5 text-[11px] text-muted">{chips.join(' · ')}</p>
+            <div className="flex min-w-0 flex-1 items-start gap-2">
+                {ordinal && (
+                    <span className="mt-0.5 inline-flex h-5 min-w-[22px] shrink-0 items-center justify-center rounded px-1 text-[10px] font-black tabular-nums text-[var(--sport-700)] bg-[var(--sport-100)]">
+                        {ordinal}
+                    </span>
                 )}
-                {block.notes && (
-                    <p className="mt-0.5 truncate text-[11px] italic text-muted">{block.notes}</p>
-                )}
+                <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-strong">{block.exercise.name}</p>
+                    {chips.length > 0 && (
+                        <p className="mt-0.5 text-[11px] text-muted">{chips.join(' · ')}</p>
+                    )}
+                    {block.notes && (
+                        <p className="mt-0.5 truncate text-[11px] italic text-muted">{block.notes}</p>
+                    )}
+                </div>
             </div>
             <div className="shrink-0 rounded-control border border-subtle bg-surface-sunken px-2.5 py-1 text-xs font-semibold tabular-nums text-strong">
                 {block.sets}×{block.reps}
@@ -267,12 +274,12 @@ export function ProgramPreviewBody({ program, areas = [] }: { program: ProgramLi
                                                             className={cn(
                                                                 'overflow-hidden rounded-card border border-transparent',
                                                                 group.type === 'superset' &&
-                                                                    'border-[var(--sport-300)]/40 bg-[var(--sport-100)]/50',
+                                                                    'border-[var(--sport-300)]/45 border-l-[3px] border-l-[var(--sport-500)] bg-[var(--sport-100)]/50',
                                                             )}
                                                         >
                                                             {group.type === 'superset' && (
                                                                 <div className="border-b border-[var(--sport-300)]/30 bg-[var(--sport-100)]/40 px-3 py-1 text-[9px] font-black uppercase tracking-widest text-[var(--sport-700)]">
-                                                                    Superserie · grupo {group.supersetLetter ?? '?'}
+                                                                    Superserie {group.supersetLetter ?? '?'} · {group.blocks.length} ejercicios
                                                                 </div>
                                                             )}
                                                             <div
@@ -281,8 +288,15 @@ export function ProgramPreviewBody({ program, areas = [] }: { program: ProgramLi
                                                                     group.type === 'superset' && 'rounded-b-card',
                                                                 )}
                                                             >
-                                                                {group.blocks.map((block) => (
-                                                                    <div key={block.id}>{renderLibraryExerciseRow(block)}</div>
+                                                                {group.blocks.map((block, bi) => (
+                                                                    <div key={block.id}>
+                                                                        {renderLibraryExerciseRow(
+                                                                            block,
+                                                                            group.type === 'superset'
+                                                                                ? `${group.supersetLetter ?? '?'}${bi + 1}`
+                                                                                : undefined,
+                                                                        )}
+                                                                    </div>
                                                                 ))}
                                                             </div>
                                                         </div>

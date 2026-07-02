@@ -3,6 +3,7 @@
 import { useRef } from 'react'
 import { X, Printer } from 'lucide-react'
 import { getMuscleColor } from '../muscle-colors'
+import { groupContiguousSupersetRuns } from '@/lib/workout-block-grouping'
 import type { DayState, BuilderBlock } from '../types'
 
 interface PrintProgramDialogProps {
@@ -66,8 +67,17 @@ body {
 .block-meta { font-size: 10px; color: #555; margin-top: 3px; font-weight: 500; }
 .block-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .tag { font-size: 8px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; padding: 2px 6px; border-radius: 3px; }
-.tag-superset { background: #dbeafe; color: #1d4ed8; }
 .tag-progression { background: #dcfce7; color: #15803d; }
+/* Superserie: bracket con borde/negrita (no depende de que impriman fondos) + tinta sport (#1462DC) */
+.superset {
+    border: 1.5px solid #1462DC; border-left-width: 4px; border-radius: 6px;
+    background: #F0F6FF; margin: 8px 0; padding-bottom: 2px;
+    break-inside: avoid; page-break-inside: avoid;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.superset-head { font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #0B47B0; padding: 6px 14px 0; }
+.superset-note { font-size: 8px; font-weight: 700; color: #1462DC; padding: 1px 14px 4px; }
+.superset .blocks { padding: 0 14px; }
 .block-notes { font-size: 9px; color: #888; margin-top: 3px; font-style: italic; line-height: 1.4; }
 .rest-day { padding: 14px 16px; text-align: center; color: #bbb; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.2em; }
 @media print {
@@ -92,7 +102,11 @@ export function PrintProgramDialog({ open, onClose, programName, clientName, coa
         setTimeout(() => { printWindow.print(); printWindow.close() }, 350)
     }
 
-    function renderBlock(block: BuilderBlock, idx: number) {
+    // `ordinal` (ej. "A1") = posición del ejercicio dentro de una superserie; cuando viene,
+    // reemplaza el número correlativo en tinta sport → deja claro el orden de ejecución.
+    // La pertenencia a superserie NO se marca por bloque: la comunica el bracket (singleton
+    // guard: una letra huérfana se imprime como bloque suelto normal, sin tag engañoso).
+    function renderBlock(block: BuilderBlock, idx: number, ordinal?: string) {
         const color = getMuscleColor(block.muscle_group)
         const metaParts: string[] = []
         if (block.sets && block.reps) metaParts.push(`${block.sets} series × ${block.reps} reps`)
@@ -101,7 +115,7 @@ export function PrintProgramDialog({ open, onClose, programName, clientName, coa
         if (block.rir != null && block.rir !== '' && block.rir !== '0') metaParts.push(`RIR ${block.rir}`)
         if (block.tempo) metaParts.push(`Tempo ${block.tempo}`)
 
-        const hasTags = block.superset_group || block.progression_type
+        const hasTags = !!block.progression_type
 
         return (
             <div
@@ -115,8 +129,11 @@ export function PrintProgramDialog({ open, onClose, programName, clientName, coa
                 }}
             >
                 <div style={{ width: '3px', borderRadius: '2px', alignSelf: 'stretch', flexShrink: 0, minHeight: '32px', backgroundColor: color }} />
-                <div className="block-num" style={{ fontSize: '9px', fontWeight: 900, color: '#ccc', width: '18px', flexShrink: 0, paddingTop: '1px' }}>
-                    {String(idx + 1).padStart(2, '0')}
+                <div
+                    className="block-num"
+                    style={{ fontSize: ordinal ? '10px' : '9px', fontWeight: 900, color: ordinal ? '#1462DC' : '#ccc', width: '18px', flexShrink: 0, paddingTop: '1px' }}
+                >
+                    {ordinal ?? String(idx + 1).padStart(2, '0')}
                 </div>
                 <div className="block-body" style={{ flex: 1, minWidth: 0 }}>
                     <div className="block-name" style={{ fontSize: '12px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#111', lineHeight: 1.25 }}>
@@ -129,11 +146,6 @@ export function PrintProgramDialog({ open, onClose, programName, clientName, coa
                     )}
                     {hasTags && (
                         <div className="block-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
-                            {block.superset_group && (
-                                <span className="tag tag-superset" style={{ fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: '3px', background: '#dbeafe', color: '#1d4ed8' }}>
-                                    Superset {block.superset_group}
-                                </span>
-                            )}
                             {block.progression_type && (
                                 <span className="tag tag-progression" style={{ fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: '3px', background: '#dcfce7', color: '#15803d' }}>
                                     Progresión: +{block.progression_value ?? '?'}{block.progression_type === 'weight' ? ' kg/sem' : ' rep/ses'}
@@ -204,7 +216,49 @@ export function PrintProgramDialog({ open, onClose, programName, clientName, coa
                                     Día de Descanso
                                 </div>
                             ) : (
-                                day.blocks.map((block, idx) => renderBlock(block, idx))
+                                (() => {
+                                    // Mismo agrupador canónico que preview/ficha (singleton guard incluido):
+                                    // superserie ⇒ bracket con nota de orden; bloque suelto ⇒ como siempre.
+                                    const rows = day.blocks.map((b, i) => ({ ...b, id: b.uid, order_index: i }))
+                                    const groups = groupContiguousSupersetRuns(rows)
+                                    let runningIdx = 0
+                                    return groups.map((group) => {
+                                        if (group.type !== 'superset') {
+                                            const el = renderBlock(group.blocks[0], runningIdx)
+                                            runningIdx += 1
+                                            return el
+                                        }
+                                        const letter = group.supersetLetter ?? '?'
+                                        const startIdx = runningIdx
+                                        const order = group.blocks.map((_, bi) => `${letter}${bi + 1}`).join(' → ')
+                                        const members = group.blocks.map((block, bi) =>
+                                            renderBlock(block, startIdx + bi, `${letter}${bi + 1}`)
+                                        )
+                                        runningIdx += group.blocks.length
+                                        return (
+                                            <div
+                                                key={group.key}
+                                                className="superset"
+                                                style={{
+                                                    border: '1.5px solid #1462DC', borderLeftWidth: '4px', borderRadius: '6px',
+                                                    background: '#F0F6FF', margin: '8px 0', paddingBottom: '2px',
+                                                    breakInside: 'avoid', pageBreakInside: 'avoid',
+                                                    WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact',
+                                                }}
+                                            >
+                                                <div className="superset-head" style={{ fontSize: '9px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#0B47B0', padding: '6px 14px 0' }}>
+                                                    Superserie {letter} · {group.blocks.length} ejercicios
+                                                </div>
+                                                <div className="superset-note" style={{ fontSize: '8px', fontWeight: 700, color: '#1462DC', padding: '1px 14px 4px' }}>
+                                                    Alterná los ejercicios ({order}) en cada ronda
+                                                </div>
+                                                <div className="blocks" style={{ padding: '0 14px' }}>
+                                                    {members}
+                                                </div>
+                                            </div>
+                                        )
+                                    })
+                                })()
                             )}
                         </div>
                     </div>
