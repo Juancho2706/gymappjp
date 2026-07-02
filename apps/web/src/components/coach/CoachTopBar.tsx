@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { Search, ChevronRight, ArrowLeft, X, Table2, PanelLeft, ChevronsUpDown } from 'lucide-react'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
@@ -252,7 +253,13 @@ export function CoachTopBar({ coachName, coachBrand, logoUrl, workspaces, curren
                             : 'w-10 justify-center'
                     )}
                 >
-                    <Avatar name={avatarName} src={logoUrl ?? undefined} size="sm" />
+                    {logoUrl ? (
+                        <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full border border-subtle bg-white dark:bg-[var(--surface-sunken)]">
+                            <Image src={logoUrl} alt={avatarName} fill sizes="32px" className="object-contain p-1" />
+                        </span>
+                    ) : (
+                        <Avatar name={avatarName} size="sm" />
+                    )}
                     {hasMultiWorkspace && (
                         <ChevronsUpDown
                             className="h-3.5 w-3.5 flex-shrink-0 text-[var(--text-subtle)]"

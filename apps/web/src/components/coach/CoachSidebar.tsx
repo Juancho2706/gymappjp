@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
     House,
@@ -266,7 +267,13 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                 {/* .dt-side-foot — bloque COACH / {nombre} + Colapsar menú */}
                 <div className="mt-3 flex flex-col gap-1.5 border-t border-[var(--border-subtle)] pt-3">
                     <div className={cn('flex min-w-0 items-center gap-2.5 rounded-[var(--radius-md)] p-1.5', isCollapsed && 'justify-center p-0')}>
-                        <Avatar name={avatarName} src={logoUrl ?? undefined} size="sm" />
+                        {logoUrl ? (
+                            <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full border border-subtle bg-white dark:bg-[var(--surface-sunken)]">
+                                <Image src={logoUrl} alt={avatarName} fill sizes="32px" className="object-contain p-1" />
+                            </span>
+                        ) : (
+                            <Avatar name={avatarName} size="sm" />
+                        )}
 
                         {!isCollapsed && (
                             <span className="flex min-w-0 flex-col gap-px">
