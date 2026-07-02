@@ -18,6 +18,68 @@ export type CheckinState = {
 // re-comprime a WebP <1MB antes de subir.
 const MAX_UPLOAD_BYTES = 12 * 1024 * 1024
 
+export type CheckinUploadTicket = { variant: 'front' | 'back'; signedUrl: string; path: string }
+
+const TICKET_EXT_BY_TYPE: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+}
+
+/**
+ * Firma URLs de subida DIRECTA al bucket `checkins` (patrón espejo de exercise-media): el
+ * navegador hace PUT a Supabase Storage y el submit del check-in viaja solo con los PATHs.
+ * Motivo (incidente 2026-07-02): un POST multipart con fotos hacia eva-app.cl puede morir en
+ * capas intermedias (WAF de Cloudflare 403, límite de 4.5MB de Vercel) — sacando los bytes del
+ * POST, esa clase de falla desaparece. El bucket igual impone mime allowlist + 5MB en el PUT
+ * firmado, y el path queda scoped al usuario autenticado (el cliente no elige la ruta).
+ */
+export async function createCheckinUploadUrlsAction(
+    requests: { variant: 'front' | 'back'; contentType: string }[]
+): Promise<{ tickets?: CheckinUploadTicket[]; error?: string }> {
+    if (!Array.isArray(requests) || requests.length === 0 || requests.length > 2) {
+        return { error: 'Solicitud inválida.' }
+    }
+    const supabase = await createClient()
+    const {
+        data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: 'No autenticado.' }
+
+    const adminDb = createServiceRoleClient()
+    const tickets: CheckinUploadTicket[] = []
+    for (const req of requests) {
+        if (req?.variant !== 'front' && req?.variant !== 'back') return { error: 'Solicitud inválida.' }
+        const ext = TICKET_EXT_BY_TYPE[req.contentType] ?? 'jpg'
+        const rand = Math.random().toString(36).substring(7)
+        const path =
+            req.variant === 'back'
+                ? `${user.id}/${Date.now()}-back-${rand}.${ext}`
+                : `${user.id}/${Date.now()}-${rand}.${ext}`
+        const { data, error } = await adminDb.storage.from('checkins').createSignedUploadUrl(path)
+        if (error || !data) {
+            console.warn('[checkin] createSignedUploadUrl fallo:', error?.message)
+            return { error: 'No se pudo preparar la subida de fotos.' }
+        }
+        tickets.push({ variant: req.variant, signedUrl: data.signedUrl, path: data.path })
+    }
+    return { tickets }
+}
+
+/**
+ * Path de foto venido del cliente (flujo de subida directa). Solo se acepta un objeto DENTRO
+ * de la carpeta del propio usuario — cualquier otra cosa se descarta sin abortar el check-in.
+ */
+function ownCheckinPath(userId: string, value: FormDataEntryValue | null): string | null {
+    if (typeof value !== 'string' || !value) return null
+    if (!value.startsWith(`${userId}/`) || value.includes('..')) {
+        console.warn('[checkin] photo_path fuera del scope del usuario, descartado')
+        return null
+    }
+    return value
+}
+
 async function uploadToCheckinsBucket(
     adminDb: ReturnType<typeof createServiceRoleClient>,
     userId: string,
@@ -94,30 +156,37 @@ export async function submitCheckinAction(
 
     const adminDb = createServiceRoleClient()
 
-    let photoPath: string | null = null
-    let backPhotoPath: string | null = null
+    // Flujo NUEVO (subida directa): el cliente ya subió a Storage vía URL firmada y acá solo
+    // llegan los PATHs (scoped al usuario). Los bytes jamás pasan por este POST.
+    let photoPath: string | null = ownCheckinPath(user.id, formData.get('photo_path'))
+    let backPhotoPath: string | null = ownCheckinPath(user.id, formData.get('back_photo_path'))
     let droppedPhotos = 0
 
-    // BEST-EFFORT (🛡️ misma filosofía que compressImageToWebp): si una foto NO se puede subir
-    // (tipo no soportado tras fallback, red), el check-in se guarda IGUAL sin esa foto — perder
-    // todo el reporte del alumno (one-shot) es peor que perder una foto. Se loguea para observar.
-    const frontFile = getBestEffortPhoto(formData, 'photo')
-    if (frontFile) {
-        const up = await uploadToCheckinsBucket(adminDb, user.id, frontFile, 'front')
-        if (up.ok) photoPath = up.path
-        else {
-            droppedPhotos++
-            console.warn('[checkin] front photo upload fallo, guardando check-in sin ella:', up.message)
+    // Flujo LEGACY (bundles viejos cacheados por el SW: el File viaja en el POST) — BEST-EFFORT
+    // (🛡️ misma filosofía que compressImageToWebp): si una foto NO se puede subir (tipo no
+    // soportado tras fallback, red), el check-in se guarda IGUAL sin esa foto — perder todo el
+    // reporte del alumno (one-shot) es peor que perder una foto. Se loguea para observar.
+    if (!photoPath) {
+        const frontFile = getBestEffortPhoto(formData, 'photo')
+        if (frontFile) {
+            const up = await uploadToCheckinsBucket(adminDb, user.id, frontFile, 'front')
+            if (up.ok) photoPath = up.path
+            else {
+                droppedPhotos++
+                console.warn('[checkin] front photo upload fallo, guardando check-in sin ella:', up.message)
+            }
         }
     }
 
-    const backFile = getBestEffortPhoto(formData, 'back_photo')
-    if (backFile) {
-        const up = await uploadToCheckinsBucket(adminDb, user.id, backFile, 'back')
-        if (up.ok) backPhotoPath = up.path
-        else {
-            droppedPhotos++
-            console.warn('[checkin] back photo upload fallo, guardando check-in sin ella:', up.message)
+    if (!backPhotoPath) {
+        const backFile = getBestEffortPhoto(formData, 'back_photo')
+        if (backFile) {
+            const up = await uploadToCheckinsBucket(adminDb, user.id, backFile, 'back')
+            if (up.ok) backPhotoPath = up.path
+            else {
+                droppedPhotos++
+                console.warn('[checkin] back photo upload fallo, guardando check-in sin ella:', up.message)
+            }
         }
     }
 

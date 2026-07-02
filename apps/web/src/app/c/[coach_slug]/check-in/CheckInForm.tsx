@@ -7,7 +7,11 @@ import { Camera, CheckCircle2, ChevronLeft, ChevronRight, Loader2, X } from 'luc
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import imageCompression from 'browser-image-compression'
-import { submitCheckinAction, type CheckinState } from './_actions/check-in.actions'
+import {
+    createCheckinUploadUrlsAction,
+    submitCheckinAction,
+    type CheckinState,
+} from './_actions/check-in.actions'
 import { formatRelativeDate } from '@/lib/date-utils'
 import { springs } from '@/lib/animation-presets'
 import { useBasePath } from '@/components/client/BasePathProvider'
@@ -53,6 +57,12 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
     const [fileErrors, setFileErrors] = useState<{ front?: string; back?: string }>({})
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [showCelebration, setShowCelebration] = useState(false)
+    // La foto se comprime apenas se ELIGE (no al enviar): el problema se ve al seleccionar y el
+    // submit queda liviano. preparedRef guarda la promesa del blob listo; jobSeq invalida
+    // preparaciones viejas si el alumno re-elige rápido.
+    const [optimizing, setOptimizing] = useState<{ front?: boolean; back?: boolean }>({})
+    const preparedRef = useRef<{ front?: Promise<Blob | File | null>; back?: Promise<Blob | File | null> }>({})
+    const jobSeq = useRef({ front: 0, back: 0 })
 
     useEffect(() => {
         if (state.error != null || state.success) {
@@ -109,6 +119,33 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
         setCurrentStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3) : s))
     }
 
+    // Compresión BEST-EFFORT a JPEG (encode universal — convierte el HEIC de iPhone). Con
+    // timeout: con ciertas fotos la promesa de browser-image-compression jamás resuelve
+    // (incidente 2026-07-02) → a los 15s seguimos con el original. Devuelve null solo si el
+    // original tampoco sirve (>5MB = límite duro del bucket).
+    async function prepareForUpload(file: File): Promise<Blob | File | null> {
+        try {
+            const compressed = await Promise.race([
+                imageCompression(file, {
+                    maxSizeMB: 2,
+                    maxWidthOrHeight: 1920,
+                    useWebWorker: false,
+                    fileType: 'image/jpeg',
+                }),
+                new Promise<null>((resolve) => setTimeout(() => resolve(null), 15_000)),
+            ])
+            if (compressed) return compressed
+            console.warn('[checkin] compresión colgada (timeout 15s), usando original')
+        } catch (err) {
+            console.warn('[checkin] compresión falló, usando original:', err)
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            console.warn('[checkin] original >5MB tras fallo de compresión, foto no utilizable')
+            return null
+        }
+        return file
+    }
+
     function validateAndSetFile(
         file: File | undefined,
         side: 'front' | 'back',
@@ -119,9 +156,9 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
         if (!file) return
         // Gate LAXO a propósito: solo bloquea no-imágenes evidentes. El HEIC de iPhone
         // ('image/heic'/'image/heif') y los picks con type VACÍO (iOS Files/algunos WebView no
-        // reportan mime) DEBEN pasar — handleAction los normaliza a JPEG y el server decide por
-        // bytes (sharp). El allowlist estricto acá era el bloqueo real del incidente jul-2026:
-        // rechazaba la foto ANTES de que la conversión a JPEG pudiera correr.
+        // reportan mime) DEBEN pasar — prepareForUpload los normaliza a JPEG. El allowlist
+        // estricto acá era el bloqueo real del incidente jul-2026: rechazaba la foto ANTES de
+        // que la conversión a JPEG pudiera correr.
         if (file.type && !file.type.startsWith('image/')) {
             setFileErrors((e) => ({
                 ...e,
@@ -135,6 +172,38 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
         }
         setFile(file)
         setPreview(URL.createObjectURL(file))
+        // Optimización EN LA SELECCIÓN: si la foto no sirve, el alumno lo ve acá mismo — no
+        // recién al enviar. jobSeq descarta el resultado si eligió otra foto en el intertanto.
+        const myJob = ++jobSeq.current[side]
+        setOptimizing((o) => ({ ...o, [side]: true }))
+        preparedRef.current[side] = prepareForUpload(file).then((res) => {
+            if (jobSeq.current[side] !== myJob) return res
+            setOptimizing((o) => ({ ...o, [side]: false }))
+            if (!res) {
+                setFile(null)
+                setPreview(null)
+                setFileErrors((e) => ({
+                    ...e,
+                    [side]: 'No pudimos optimizar esta imagen y pesa más de 5MB. Prueba con otra.',
+                }))
+            }
+            return res
+        })
+    }
+
+    function clearPhoto(
+        side: 'front' | 'back',
+        setPreview: (u: string | null) => void,
+        setFile: (f: File | null) => void,
+        inputRef: React.RefObject<HTMLInputElement | null>
+    ) {
+        jobSeq.current[side]++
+        preparedRef.current[side] = undefined
+        setOptimizing((o) => ({ ...o, [side]: false }))
+        setFileErrors((e) => ({ ...e, [side]: undefined }))
+        setPreview(null)
+        setFile(null)
+        if (inputRef.current) inputRef.current.value = ''
     }
 
     const handleInputFocus = (e: React.FocusEvent<HTMLElement>) => {
@@ -148,54 +217,65 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
             formData.set('weight', weight)
             formData.set('energy_level', String(energyLevel))
             formData.set('notes', notes)
-            // Compresión BEST-EFFORT: normaliza a JPEG (encode universal, incl. iOS viejos) — esto
-            // CONVIERTE las fotos HEIC de iPhone, que el bucket rechaza y hacían fallar el check-in
-            // ENTERO. El server igual las re-comprime a WebP para el storage. NUNCA bloquea: si la
-            // conversión falla O SE CUELGA (incidente 2026-07-02: con ciertas fotos la promesa de
-            // browser-image-compression jamás resuelve → spinner infinito, el POST nunca salía),
-            // seguimos sin ella a los 15s. useWebWorker=false (hilo principal): el worker podía
-            // fallar y dejaba el check-in bloqueado en silencio.
-            const compressForUpload = async (file: File): Promise<File | Blob | null> => {
-                try {
-                    const compressed = await Promise.race([
-                        imageCompression(file, {
-                            maxSizeMB: 2,
-                            maxWidthOrHeight: 1920,
-                            useWebWorker: false,
-                            fileType: 'image/jpeg',
-                        }),
-                        new Promise<null>((resolve) => setTimeout(() => resolve(null), 15_000)),
-                    ])
-                    if (compressed) return compressed
-                    console.warn('[checkin] compresión client colgada (timeout 15s), intentando original')
-                } catch (err) {
-                    console.warn('[checkin] compresión client falló, intentando original:', err)
-                }
-                // Fallback al ORIGINAL — salvo que pese tanto que rompería el bodySizeLimit (10MB)
-                // del server action con las dos fotos: ahí es mejor soltar la foto que colgar o
-                // reventar el submit entero. El check-in SIEMPRE sale.
-                if (file.size > 4.5 * 1024 * 1024) {
-                    console.warn('[checkin] original muy pesado tras fallo de compresión, foto descartada')
-                    return null
-                }
-                return file
-            }
+            // Las fotos ya vienen comprimidas desde la SELECCIÓN. Acá se suben DIRECTO al bucket
+            // (URL firmada, patrón espejo de exercise-media) y el POST del check-in viaja solo
+            // con los PATHs: los bytes nunca pasan por eva-app.cl → inmune al WAF de Cloudflare
+            // (403, incidente 2026-07-02) y al límite de 4.5MB de Vercel. Best-effort: la foto
+            // que no sube se suelta con aviso; el check-in SIEMPRE sale.
+            const slots: { side: 'front' | 'back'; field: 'photo_path' | 'back_photo_path'; blob: Blob | File }[] = []
             let fotosDescartadas = 0
             if (frontFile) {
-                const body = await compressForUpload(frontFile)
-                if (body) formData.set('photo', body, frontFile.name)
+                const blob = await preparedRef.current.front
+                if (blob) slots.push({ side: 'front', field: 'photo_path', blob })
                 else fotosDescartadas++
             }
             if (backFile) {
-                const body = await compressForUpload(backFile)
-                if (body) formData.set('back_photo', body, backFile.name)
+                const blob = await preparedRef.current.back
+                if (blob) slots.push({ side: 'back', field: 'back_photo_path', blob })
                 else fotosDescartadas++
             }
+
+            if (slots.length > 0) {
+                const res = await createCheckinUploadUrlsAction(
+                    slots.map((s) => ({ variant: s.side, contentType: s.blob.type || 'image/jpeg' }))
+                )
+                if (res.tickets) {
+                    for (const s of slots) {
+                        const ticket = res.tickets.find((t) => t.variant === s.side)
+                        if (!ticket) {
+                            fotosDescartadas++
+                            continue
+                        }
+                        try {
+                            const up = await fetch(ticket.signedUrl, {
+                                method: 'PUT',
+                                body: s.blob,
+                                headers: { 'Content-Type': s.blob.type || 'image/jpeg' },
+                                ...(typeof AbortSignal.timeout === 'function'
+                                    ? { signal: AbortSignal.timeout(45_000) }
+                                    : {}),
+                            })
+                            if (up.ok) formData.set(s.field, ticket.path)
+                            else {
+                                fotosDescartadas++
+                                console.warn(`[checkin] upload directo ${s.side} rechazado:`, up.status)
+                            }
+                        } catch (err) {
+                            fotosDescartadas++
+                            console.warn(`[checkin] upload directo ${s.side} falló:`, err)
+                        }
+                    }
+                } else {
+                    fotosDescartadas += slots.length
+                    console.warn('[checkin] no se pudieron firmar URLs de subida:', res.error)
+                }
+            }
+
             if (fotosDescartadas > 0) {
                 toast.warning(
                     fotosDescartadas === 1
-                        ? 'Una foto no pudo procesarse y va a omitirse; tu check-in se envía igual.'
-                        : 'Las fotos no pudieron procesarse y van a omitirse; tu check-in se envía igual.',
+                        ? 'Una foto no pudo subirse y va a omitirse; tu check-in se envía igual.'
+                        : 'Las fotos no pudieron subirse y van a omitirse; tu check-in se envía igual.',
                     { id: 'client-checkin-warn', duration: 8000 }
                 )
             }
@@ -385,13 +465,14 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                                 {frontPreview ? (
                                     <div className="relative w-full aspect-[3/4] max-h-72 rounded-xl overflow-hidden border border-border">
                                         <Image src={frontPreview} alt="Frontal" fill sizes="(max-width: 768px) 100vw, 400px" className="object-cover" />
+                                        {optimizing.front && (
+                                            <div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-xs text-white">
+                                                <Loader2 className="w-3 h-3 animate-spin" /> Optimizando…
+                                            </div>
+                                        )}
                                         <button
                                             type="button"
-                                            onClick={() => {
-                                                setFrontPreview(null)
-                                                setFrontFile(null)
-                                                if (frontInputRef.current) frontInputRef.current.value = ''
-                                            }}
+                                            onClick={() => clearPhoto('front', setFrontPreview, setFrontFile, frontInputRef)}
                                             className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full"
                                         >
                                             <X className="w-4 h-4" />
@@ -422,13 +503,14 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                                 {backPreview ? (
                                     <div className="relative w-full aspect-[3/4] max-h-72 rounded-xl overflow-hidden border border-border">
                                         <Image src={backPreview} alt="Espalda" fill sizes="(max-width: 768px) 100vw, 400px" className="object-cover" />
+                                        {optimizing.back && (
+                                            <div className="absolute bottom-2 left-2 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-xs text-white">
+                                                <Loader2 className="w-3 h-3 animate-spin" /> Optimizando…
+                                            </div>
+                                        )}
                                         <button
                                             type="button"
-                                            onClick={() => {
-                                                setBackPreview(null)
-                                                setBackFile(null)
-                                                if (backInputRef.current) backInputRef.current.value = ''
-                                            }}
+                                            onClick={() => clearPhoto('back', setBackPreview, setBackFile, backInputRef)}
                                             className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full"
                                         >
                                             <X className="w-4 h-4" />
