@@ -30,8 +30,10 @@ interface Props {
     lastCheckIn: LastCheckInRow
 }
 
-const MAX_SIZE = 5 * 1024 * 1024
-const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+// 12MB: una foto de cámara moderna (HEIC/JPEG 12-48MP) pesa 3-8MB ANTES de comprimir; el gate
+// del bucket (5MB) aplica solo al fallback sin comprimir — la conversión a JPEG de handleAction
+// deja ~2MB. Rechazar acá al ELEGIR = el alumno nunca puede adjuntar (incidente jul-2026).
+const MAX_SIZE = 12 * 1024 * 1024
 
 export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props) {
     const router = useRouter()
@@ -60,7 +62,13 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
 
     useEffect(() => {
         if (state.success) {
-            toast.success('Check-in enviado', { id: 'client-checkin-ok' })
+            // El check-in NUNCA se pierde por una foto: si alguna no pudo subirse, se guarda igual
+            // y acá se le dice al alumno (antes fallaba todo en silencio o abortaba el reporte).
+            if (state.warning) {
+                toast.warning(state.warning, { id: 'client-checkin-warn', duration: 8000 })
+            } else {
+                toast.success('Check-in enviado', { id: 'client-checkin-ok' })
+            }
             // Delight: brand-themed wave overlay + confetti burst on a successful check-in.
             setShowCelebration(true)
             if (!reducedMotion) {
@@ -70,7 +78,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
         if (state.error) {
             toast.error(state.error, { id: 'client-checkin-err' })
         }
-    }, [state.success, state.error, reducedMotion])
+    }, [state.success, state.error, state.warning, reducedMotion])
 
     const frontInputRef = useRef<HTMLInputElement>(null)
     const backInputRef = useRef<HTMLInputElement>(null)
@@ -109,15 +117,20 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
     ) {
         setFileErrors((e) => ({ ...e, [side]: undefined }))
         if (!file) return
-        if (!ALLOWED_TYPES.includes(file.type)) {
+        // Gate LAXO a propósito: solo bloquea no-imágenes evidentes. El HEIC de iPhone
+        // ('image/heic'/'image/heif') y los picks con type VACÍO (iOS Files/algunos WebView no
+        // reportan mime) DEBEN pasar — handleAction los normaliza a JPEG y el server decide por
+        // bytes (sharp). El allowlist estricto acá era el bloqueo real del incidente jul-2026:
+        // rechazaba la foto ANTES de que la conversión a JPEG pudiera correr.
+        if (file.type && !file.type.startsWith('image/')) {
             setFileErrors((e) => ({
                 ...e,
-                [side]: 'Formato no permitido. Solo JPG, PNG o WEBP.',
+                [side]: 'El archivo no es una imagen. Usa una foto (JPG, PNG, HEIC…).',
             }))
             return
         }
         if (file.size > MAX_SIZE) {
-            setFileErrors((e) => ({ ...e, [side]: 'La imagen pesa más de 5MB.' }))
+            setFileErrors((e) => ({ ...e, [side]: 'La imagen pesa más de 12MB.' }))
             return
         }
         setFile(file)
@@ -157,6 +170,9 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
             if (backFile) formData.set('back_photo', await compressForUpload(backFile), backFile.name)
             startTransition(() => formAction(formData))
         } catch {
+            // Nunca morir en silencio: el alumno necesita saber que NO se envió (incidente jun-2026:
+            // el catch mudo dejaba el check-in bloqueado sin señal alguna).
+            toast.error('No se pudo enviar el check-in. Intenta de nuevo.', { id: 'client-checkin-err' })
             setIsSubmitting(false)
         }
     }

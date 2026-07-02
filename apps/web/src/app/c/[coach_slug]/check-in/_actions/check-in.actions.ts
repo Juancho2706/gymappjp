@@ -9,7 +9,14 @@ import { compressImageToWebp } from '@/lib/storage/image-compress'
 export type CheckinState = {
     error?: string
     success?: boolean
+    /** El check-in se guardó, pero alguna foto no pudo subirse (best-effort). */
+    warning?: string
 }
+
+// Techo generoso pre-compresión (una HEIC/JPEG de cámara puede venir de 3-8MB si la conversión
+// client-side falló). El límite duro real del bucket es 5MB, pero el server casi siempre
+// re-comprime a WebP <1MB antes de subir.
+const MAX_UPLOAD_BYTES = 12 * 1024 * 1024
 
 async function uploadToCheckinsBucket(
     adminDb: ReturnType<typeof createServiceRoleClient>,
@@ -20,8 +27,9 @@ async function uploadToCheckinsBucket(
     const timestamp = Date.now()
     const rand = Math.random().toString(36).substring(7)
 
-    // Compresión best-effort a WebP 1080px. Si falla (HEIC/corrupto/OOM) -> sube el original,
-    // NUNCA aborta el check-in (UX one-shot del alumno). Las filas viejas (.jpg/.png) no se tocan.
+    // Compresión best-effort a WebP 1080px. Sharp decide por BYTES (no por file.type ni extensión),
+    // así que un JPEG renombrado o con mime vacío igual se convierte. Si falla (HEIC sin libheif,
+    // corrupto, OOM) -> sube el original, NUNCA aborta el check-in (UX one-shot del alumno).
     const compressed = await compressImageToWebp(file)
     const extension = compressed ? compressed.ext : (file.name.split('.').pop() || 'jpg')
     const body: Buffer | File = compressed ? compressed.buffer : file
@@ -40,7 +48,7 @@ async function uploadToCheckinsBucket(
         })
 
     if (uploadError) {
-        return { ok: false, message: 'Error al subir la imagen de progreso.' }
+        return { ok: false, message: uploadError.message }
     }
 
     // P2: store the PATH, not the public URL. Display layers resolve a signed URL via
@@ -48,19 +56,32 @@ async function uploadToCheckinsBucket(
     return { ok: true, path: uploadData.path }
 }
 
+/**
+ * Extrae una foto del FormData sin que JAMÁS invalide el submit: las fotos son opcionales y
+ * best-effort de punta a punta (incidente jun/jul-2026: validarlas duro — Zod fileField o el
+ * allowlist de mime — abortaba el check-in ENTERO para todo iPhone). Devuelve null si no hay
+ * archivo utilizable; el motivo se loguea para observabilidad.
+ */
+function getBestEffortPhoto(formData: FormData, key: string): File | null {
+    const value = formData.get(key)
+    if (!(value instanceof File) || value.size === 0) return null
+    if (value.size > MAX_UPLOAD_BYTES) {
+        console.warn(`[checkin] foto '${key}' descartada: ${value.size} bytes > ${MAX_UPLOAD_BYTES}`)
+        return null
+    }
+    return value
+}
+
 export async function submitCheckinAction(
     _prev: CheckinState,
     formData: FormData
 ): Promise<CheckinState> {
-    const raw = {
+    // Las FOTOS quedan FUERA del parse: solo los datos del reporte pueden invalidar el submit.
+    const parsed = CheckInSchema.safeParse({
         weight: String(formData.get('weight') ?? '').replace(',', '.'),
         energy_level: formData.get('energy_level'),
         notes: formData.get('notes'),
-        photo: formData.get('photo'),
-        back_photo: formData.get('back_photo'),
-    }
-
-    const parsed = CheckInSchema.safeParse(raw)
+    })
     if (!parsed.success) {
         return { error: parsed.error.issues[0].message }
     }
@@ -75,22 +96,29 @@ export async function submitCheckinAction(
 
     let photoPath: string | null = null
     let backPhotoPath: string | null = null
+    let droppedPhotos = 0
 
     // BEST-EFFORT (🛡️ misma filosofía que compressImageToWebp): si una foto NO se puede subir
     // (tipo no soportado tras fallback, red), el check-in se guarda IGUAL sin esa foto — perder
     // todo el reporte del alumno (one-shot) es peor que perder una foto. Se loguea para observar.
-    const frontFile = parsed.data.photo as File | null | undefined
-    if (frontFile && frontFile.size > 0) {
+    const frontFile = getBestEffortPhoto(formData, 'photo')
+    if (frontFile) {
         const up = await uploadToCheckinsBucket(adminDb, user.id, frontFile, 'front')
         if (up.ok) photoPath = up.path
-        else console.warn('[checkin] front photo upload fallo, guardando check-in sin ella:', up.message)
+        else {
+            droppedPhotos++
+            console.warn('[checkin] front photo upload fallo, guardando check-in sin ella:', up.message)
+        }
     }
 
-    const backFile = parsed.data.back_photo as File | null | undefined
-    if (backFile && backFile.size > 0) {
+    const backFile = getBestEffortPhoto(formData, 'back_photo')
+    if (backFile) {
         const up = await uploadToCheckinsBucket(adminDb, user.id, backFile, 'back')
         if (up.ok) backPhotoPath = up.path
-        else console.warn('[checkin] back photo upload fallo, guardando check-in sin ella:', up.message)
+        else {
+            droppedPhotos++
+            console.warn('[checkin] back photo upload fallo, guardando check-in sin ella:', up.message)
+        }
     }
 
     const { error: insertError } = await adminDb.from('check_ins').insert({
@@ -109,5 +137,15 @@ export async function submitCheckinAction(
     revalidatePath('/c', 'layout')
     revalidatePath(`/coach/clients/${user.id}`)
 
-    return { success: true }
+    return {
+        success: true,
+        ...(droppedPhotos > 0
+            ? {
+                  warning:
+                      droppedPhotos === 1
+                          ? 'Tu check-in se guardó, pero una foto no pudo subirse. Puedes reenviarla a tu coach por otro medio.'
+                          : 'Tu check-in se guardó, pero las fotos no pudieron subirse. Puedes reenviarlas a tu coach por otro medio.',
+              }
+            : {}),
+    }
 }

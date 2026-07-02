@@ -87,3 +87,18 @@ export function registerCoachFree(payload: RegisterCoachFreePayload) {
     body: payload,
   })
 }
+
+// P2: firmar (signed URLs) las fotos de check-in de un alumno. El bucket `checkins` es
+// privado y el coach no tiene policy de storage → la firma se hace server-side. `refs` acepta
+// tanto paths nuevos como URLs públicas legacy (el route normaliza con toCheckinPath).
+export interface SignCheckinPhotosResponse {
+  urls: Record<string, string | null>
+}
+
+export function signCheckinPhotos(clientId: string, refs: string[]) {
+  return apiFetch<SignCheckinPhotosResponse>('/api/mobile/coach/checkin-photos', {
+    method: 'POST',
+    authenticated: true,
+    body: { clientId, refs },
+  })
+}
