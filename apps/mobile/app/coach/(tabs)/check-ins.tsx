@@ -14,6 +14,7 @@ import { Activity, Calendar, Camera, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
+import { signCheckinPhotos } from '../../../lib/api'
 import { useTheme } from '../../../context/ThemeContext'
 import { EmptyState, ScreenHeader } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -78,7 +79,34 @@ export default function CheckInsScreen() {
       ...row,
       clients: Array.isArray(row.clients) ? row.clients[0] ?? null : row.clients,
     }))
-    setCheckIns(rows as CheckIn[])
+
+    // Las columnas front/back_photo_url guardan el PATH del objeto (bucket privado). Se
+    // resuelven a signed URLs server-side agrupando por alumno. Best-effort: si la firma
+    // falla, la foto se omite (queda null) pero el resto del check-in se muestra igual.
+    const refsByClient = new Map<string, Set<string>>()
+    for (const r of rows) {
+      const refs = [r.front_photo_url, r.back_photo_url].filter(Boolean) as string[]
+      if (!refs.length) continue
+      const set = refsByClient.get(r.client_id) ?? new Set<string>()
+      refs.forEach((ref) => set.add(ref))
+      refsByClient.set(r.client_id, set)
+    }
+    const signedByRef = new Map<string, string>()
+    await Promise.all(
+      [...refsByClient.entries()].map(async ([clientId, refs]) => {
+        try {
+          const { urls } = await signCheckinPhotos(clientId, [...refs])
+          for (const [ref, url] of Object.entries(urls)) if (url) signedByRef.set(ref, url)
+        } catch { /* best-effort: sin URL firmada la foto se omite */ }
+      })
+    )
+    const resolved = rows.map((r) => ({
+      ...r,
+      front_photo_url: r.front_photo_url ? signedByRef.get(r.front_photo_url) ?? null : null,
+      back_photo_url: r.back_photo_url ? signedByRef.get(r.back_photo_url) ?? null : null,
+    }))
+
+    setCheckIns(resolved as CheckIn[])
     setLoading(false)
   }
 
