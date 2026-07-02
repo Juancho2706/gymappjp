@@ -85,19 +85,18 @@ function useSheetSide(): 'bottom' | 'right' {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
     return (
-        <div
+        <h3
             className="font-display"
             style={{
-                fontSize: 11,
+                fontSize: 17,
                 fontWeight: 800,
-                letterSpacing: '0.09em',
-                textTransform: 'uppercase',
-                color: TXT_MUTED,
+                letterSpacing: '-0.02em',
+                color: TXT,
                 margin: '0 0 10px',
             }}
         >
             {children}
-        </div>
+        </h3>
     )
 }
 

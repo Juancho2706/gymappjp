@@ -176,15 +176,15 @@ export function NutritionCycleHistorySection({
 
   return (
     <>
-      <Card className="border-border/40 p-4">
+      <Card className="p-4">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <div className="flex items-center gap-1.5">
-              <Calendar className="h-4 w-4 text-primary" />
-              <h3 className="text-xs font-black uppercase tracking-widest text-foreground">Ciclo de dieta</h3>
+              <Calendar className="h-4 w-4 text-sport-600" />
+              <h3 className="font-display text-[17px] font-extrabold tracking-[-0.02em] text-strong">Ciclo de dieta</h3>
               <InfoTooltip content="Organiza el plan de tu alumno en fases semanales, cada una con su propia plantilla de alimentación. El sistema calcula automáticamente en qué fase está el alumno hoy según la fecha de inicio que definas." />
             </div>
-            <p className="text-[11px] text-muted-foreground max-w-xl">
+            <p className="text-[11px] text-muted max-w-xl">
               Vista previa de en qué bloque va el alumno según la fecha de inicio del ciclo y el calendario.
             </p>
           </div>
@@ -200,39 +200,39 @@ export function NutritionCycleHistorySection({
           </Button>
         </div>
         {templates.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Crea una plantilla en Nutrición para poder definir ciclos.</p>
+          <p className="text-sm text-muted">Crea una plantilla en Nutrición para poder definir ciclos.</p>
         ) : activeCycle ? (
-          <div className="rounded-xl border border-border/50 bg-muted/20 p-3 text-sm">
-            <p className="font-bold text-foreground">{activeCycle.name}</p>
-            <p className="text-xs text-muted-foreground mt-1">
+          <div className="rounded-control border border-subtle bg-surface-sunken p-3 text-sm">
+            <p className="font-bold text-strong">{activeCycle.name}</p>
+            <p className="text-xs text-muted mt-1">
               Inicio: {activeCycle.start_date}
               {cyclePreview && cyclePreview.weekIndex > 0 ? (
                 <>
                   {' · '}
                   Semana {cyclePreview.weekIndex} del ciclo
                   {cyclePreview.block ? (
-                    <span className="text-foreground font-semibold">
+                    <span className="text-strong font-semibold">
                       {' '}
                       → {cyclePreview.block.label} (plantilla en bloque)
                     </span>
                   ) : (
-                    <span className="text-amber-600 font-medium"> → sin bloque para esta semana (revisa rangos)</span>
+                    <span className="text-[var(--warning-600)] font-medium"> → sin bloque para esta semana (revisa rangos)</span>
                   )}
                 </>
               ) : null}
             </p>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">
-            Sin ciclo activo. Usa <strong className="font-semibold text-foreground">Definir ciclo</strong> para organizar el plan de tu alumno por fases semanales con diferentes plantillas de alimentación.
+          <p className="text-sm text-muted">
+            Sin ciclo activo. Usa <strong className="font-semibold text-strong">Definir ciclo</strong> para organizar el plan de tu alumno por fases semanales con diferentes plantillas de alimentación.
           </p>
         )}
 
         {historyEntries.length > 0 && (
-          <div className="mt-5 border-t border-border/40 pt-4">
+          <div className="mt-5 border-t border-subtle pt-4">
             <div className="mb-2 flex items-center gap-1.5">
-              <History className="h-4 w-4 text-muted-foreground" />
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+              <History className="h-4 w-4 text-muted" />
+              <h4 className="text-[10px] font-black uppercase tracking-widest text-muted">
                 Historial del plan (autosave)
               </h4>
               <InfoTooltip content="Cada vez que guardas el plan del alumno, se guarda una copia antes del cambio. Restaurar reaplica comidas y metas; los logs de adherencia existentes se conservan." />
@@ -241,9 +241,9 @@ export function NutritionCycleHistorySection({
               {historyEntries.map((h) => (
                 <li
                   key={h.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/30 bg-background/60 px-2 py-1.5"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-subtle bg-surface-sunken px-2 py-1.5"
                 >
-                  <span className="tabular-nums text-muted-foreground">
+                  <span className="tabular-nums text-muted">
                     {h.label ?? new Date(h.created_at).toLocaleString('es-CL')}
                   </span>
                   <Button

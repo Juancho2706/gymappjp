@@ -272,7 +272,7 @@ function DomainFuncionesGroup({
                                                 className={cn(
                                                     'flex min-h-[44px] flex-col items-center justify-center rounded-xl border px-2 py-2.5 text-center transition-all',
                                                     selected
-                                                        ? 'border-primary bg-primary/10 text-foreground shadow-sm'
+                                                        ? 'border-transparent bg-[var(--sport-500)] text-[var(--text-on-sport)] shadow-sm'
                                                         : 'border-border bg-card text-muted-foreground hover:border-primary/30 hover:text-foreground',
                                                 )}
                                             >

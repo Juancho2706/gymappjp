@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
     UserPlus,
@@ -10,9 +11,12 @@ import {
     AlertOctagon,
     RefreshCw,
     ChevronDown,
+    ChevronRight,
     ArrowRight,
+    FileUp,
     KeyRound,
     Apple,
+    LayoutGrid,
     Link as LinkIcon,
 } from 'lucide-react'
 import { motion, useMotionValue, useSpring, useMotionValueEvent } from 'framer-motion'
@@ -332,13 +336,30 @@ export function CoachWarRoom({
                         )}
                         <IconButton
                             size="sm"
-                            variant="sport"
-                            aria-label="Nuevo alumno"
-                            icon={<UserPlus />}
-                            onClick={() => setOpen(true)}
+                            variant="soft"
+                            aria-label="Importar alumnos"
+                            icon={<FileUp />}
+                            onClick={() => router.push('/coach/clients/import')}
                         />
                     </div>
                 </div>
+
+                {/* ===== Herramientas / Módulos (entrada tool-first, arriba del directorio) ===== */}
+                <Link
+                    href="/coach/tools"
+                    className="eva-press flex w-full items-center gap-3 rounded-card border border-subtle bg-surface-card px-[13px] py-[11px] text-left shadow-[var(--shadow-xs)]"
+                >
+                    <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[11px] bg-sport-100 text-sport-600">
+                        <LayoutGrid className="h-[19px] w-[19px]" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold text-strong">Herramientas</span>
+                        <span className="block truncate text-[11.5px] text-muted">
+                            Cardio · Movimiento · Composición
+                        </span>
+                    </span>
+                    <ChevronRight className="h-[18px] w-[18px] shrink-0 text-[var(--ink-300)]" />
+                </Link>
 
                 {/* ===== Resumen · hoy — pulso colapsable ===== */}
                 <div className="relative z-10">

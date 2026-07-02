@@ -1,6 +1,6 @@
 'use client'
 
-import { Copy, Dumbbell, Eye, Flame, GitMerge, Layers, Pencil, Trash2, UserPlus, Wind } from 'lucide-react'
+import { Copy, Dumbbell, Flame, GitMerge, Layers, Pencil, Trash2, UserPlus, Wind } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,6 +28,8 @@ import { buildAreaVMs } from '@/app/coach/builder/[clientId]/area-ui'
 import type { WorkoutArea } from '@/domain/workout/types'
 import { useSyncExternalStore } from 'react'
 import type { ProgramListModel } from '../libraryStats'
+import { getProgramStats } from '../libraryStats'
+import { StatusBadge, assignedProgress } from './ProgramRow'
 
 type BlockSection = 'warmup' | 'main' | 'cooldown'
 
@@ -303,7 +305,17 @@ const shellDialogClass =
     'flex w-full max-w-none flex-col gap-0 overflow-hidden border-subtle bg-surface-app p-0 text-body shadow-xl sm:max-w-2xl md:max-h-[min(92vh,800px)] max-md:fixed max-md:inset-0 max-md:h-[100dvh] max-md:max-h-[100dvh] max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0'
 
 const shellSheetClass =
-    'flex h-[min(92dvh,720px)] max-h-[92dvh] flex-col gap-0 overflow-hidden rounded-t-sheet border-subtle bg-surface-app p-0 text-body shadow-lg [&_[data-slot=sheet-close]]:border-subtle [&_[data-slot=sheet-close]]:bg-surface-sunken [&_[data-slot=sheet-close]]:text-strong'
+    'flex h-[min(92dvh,720px)] max-h-[92dvh] flex-col gap-0 overflow-hidden rounded-t-sheet border-subtle bg-surface-app p-0 text-body shadow-lg'
+
+/** Stat-tile sunken del preview (eva-app ProgramPreviewSheet · stat). */
+function PreviewStat({ value, label }: { value: number; label: string }) {
+    return (
+        <div className="flex-1 rounded-control bg-surface-sunken px-2 py-2.5 text-center">
+            <div className="eva-metric text-lg leading-tight text-strong">{value}</div>
+            <div className="mt-px text-[10.5px] font-semibold text-muted">{label}</div>
+        </div>
+    )
+}
 
 export interface ProgramPreviewPanelProps {
     program: ProgramListModel | null
@@ -409,15 +421,57 @@ export function ProgramPreviewPanel({
 
     const hasActions = !!(onEdit || onAssign || onDuplicate || onSync || onDelete)
 
+    const stats = getProgramStats(program)
+    const progress = program.client_id ? assignedProgress(program) : null
+    const clientName = program.client?.full_name
+
     const header = (
-        <div className="flex items-start gap-3 border-b border-subtle px-4 py-4 sm:px-6">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-control bg-[var(--sport-100)] text-[var(--sport-600)]">
-                <Eye className="size-5" />
+        <div className="space-y-3.5 border-b border-subtle px-4 py-4 sm:px-6">
+            {/* Identidad — tile 52px + nombre display + badge de estado + cliente (kit ProgramPreviewSheet) */}
+            <div className="flex items-center gap-3">
+                <div className="flex size-[52px] shrink-0 items-center justify-center rounded-card bg-[var(--sport-100)] text-[var(--sport-600)]">
+                    <Dumbbell className="size-[25px]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <p className="truncate font-display text-[19px] font-extrabold leading-[1.15] tracking-[-0.01em] text-strong">
+                        {program.name}
+                    </p>
+                    <div className="mt-1 flex min-w-0 items-center gap-2">
+                        <StatusBadge program={program} />
+                        {clientName && (
+                            <span className="truncate text-[12.5px] text-muted">· {clientName}</span>
+                        )}
+                    </div>
+                </div>
             </div>
-            <div className="min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted">Vista previa</p>
-                <p className="truncate font-display text-lg font-extrabold tracking-[-0.01em] text-strong">{program.name}</p>
+            {/* Strip de stats sunken */}
+            <div className="flex gap-2">
+                <PreviewStat value={stats.daysWithWork} label="días" />
+                <PreviewStat value={program.weeks_to_repeat} label="semanas" />
+                {progress ? (
+                    <PreviewStat value={progress.curWeek} label="sem. actual" />
+                ) : (
+                    <PreviewStat value={stats.blockCount} label="bloques" />
+                )}
             </div>
+            {/* Progreso del plan (solo asignados con fecha de inicio) */}
+            {progress && (
+                <div>
+                    <div className="mb-1 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-muted">Progreso del plan</span>
+                        <span className="eva-mono text-xs font-bold text-strong">{progress.pct}%</span>
+                    </div>
+                    <div className="h-[7px] overflow-hidden rounded-full bg-surface-sunken">
+                        <div
+                            className={cn(
+                                'h-full rounded-full',
+                                program.is_active ? 'bg-[var(--success-500)]' : 'bg-[var(--ink-300)]'
+                            )}
+                            style={{ width: `${progress.pct}%` }}
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     )
 
@@ -455,7 +509,11 @@ export function ProgramPreviewPanel({
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent side="bottom" showCloseButton className={shellSheetClass}>
+            <SheetContent side="bottom" showCloseButton={false} className={shellSheetClass}>
+                <div
+                    className="mx-auto mt-3 h-1 w-9 shrink-0 rounded-full bg-[var(--border-strong)]"
+                    aria-hidden="true"
+                />
                 <SheetHeader className="border-0 bg-surface-app p-0">
                     <SheetTitle className="sr-only">Vista previa de {program.name}</SheetTitle>
                     {header}

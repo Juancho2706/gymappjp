@@ -311,8 +311,8 @@ export function CoachRosterMasterDetail({
 function DetailEmpty() {
     return (
         <div className="flex min-h-[400px] flex-col items-center justify-center gap-3 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-card border border-subtle bg-surface-sunken">
-                <Users className="h-7 w-7 text-muted opacity-50" />
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-sunken">
+                <Users className="h-7 w-7 text-subtle" />
             </div>
             <div className="font-display text-lg font-black tracking-tight text-strong">
                 Selecciona un alumno
@@ -327,7 +327,7 @@ function DetailEmpty() {
 function DetailError({ clientId, onRetry }: { clientId: string; onRetry: () => void }) {
     return (
         <div className="flex min-h-[400px] flex-col items-center justify-center gap-3 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-card border border-subtle bg-surface-sunken">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-surface-sunken">
                 <AlertCircle className="h-7 w-7 text-[var(--danger-500)]" />
             </div>
             <div className="font-display text-lg font-black tracking-tight text-strong">

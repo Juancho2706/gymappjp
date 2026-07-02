@@ -17,6 +17,7 @@ import {
     type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Avatar } from '@/components/ui/avatar'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
 import { getVisibleNavItems, splitForSidebar, type NavModule } from '@/components/coach/coach-nav'
 import type { WorkspaceSummary, WorkspaceType } from '@/domain/auth/types'
@@ -85,7 +86,11 @@ const MOBILE_TAB_KEYS = ['dashboard', 'clients', 'programs', 'nutrition', 'optio
 
 export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains }: CoachSidebarProps) {
     const pathname = usePathname()
-    const [isCollapsed, setIsCollapsed] = useState(false)
+    const [manualCollapsed, setManualCollapsed] = useState(false)
+    // Modo "compact" del diseño (760 ≤ vw < 1080): el sidebar SIEMPRE es el rail de 76px;
+    // el toggle manual solo manda en "wide" (≥1080). Espejo de eva-desktop
+    // `collapsed = mode === 'compact' || (mode === 'wide' && sidebarCollapsed)`.
+    const [isWide, setIsWide] = useState(true)
     // Cápsula móvil: hide-on-scroll-down / reveal-on-scroll-up → colapsa a pill icon-only
     // (TabBar.jsx `minimized`: insets 14→72, labels fade). El scroll vive en <main>
     // (overflow-y-auto), no en window.
@@ -93,8 +98,18 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
 
     useEffect(() => {
         const saved = localStorage.getItem('sidebar-collapsed')
-        if (saved === 'true') setIsCollapsed(true)
+        if (saved === 'true') setManualCollapsed(true)
     }, [])
+
+    useEffect(() => {
+        const mq = window.matchMedia('(min-width: 1080px)')
+        const apply = () => setIsWide(mq.matches)
+        apply()
+        mq.addEventListener('change', apply)
+        return () => mq.removeEventListener('change', apply)
+    }, [])
+
+    const isCollapsed = !isWide || manualCollapsed
 
     useEffect(() => {
         // El scroll móvil ocurre en el documento (window), no en <main> (su alto no está
@@ -120,8 +135,8 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
     }, [pathname])
 
     const toggleSidebar = () => {
-        const newState = !isCollapsed
-        setIsCollapsed(newState)
+        const newState = !manualCollapsed
+        setManualCollapsed(newState)
         localStorage.setItem('sidebar-collapsed', String(newState))
     }
 
@@ -186,7 +201,7 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
     }
 
     // Avatar del pie = el coach (no la marca): el panel /coach es la cara de EVA.
-    const initial = (coachName?.trim() || coachBrand?.trim() || 'C').charAt(0).toUpperCase()
+    const avatarName = coachName?.trim() || coachBrand?.trim() || 'Coach'
 
     return (
         <>
@@ -268,11 +283,8 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                 {/* .dt-side-foot — bloque COACH / {nombre} + Colapsar menú */}
                 <div className="mt-3 flex flex-col gap-1.5 border-t border-[var(--border-subtle)] pt-3">
                     <div className={cn('flex min-w-0 items-center gap-2.5 rounded-[var(--radius-md)] p-1.5', isCollapsed && 'justify-center p-0')}>
-                        <span
-                            className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-full bg-[var(--sport-500)] font-display text-sm font-bold text-[var(--text-on-sport,#fff)]"
-                        >
-                            {initial}
-                        </span>
+                        <Avatar name={avatarName} size="sm" />
+
                         {!isCollapsed && (
                             <span className="flex min-w-0 flex-col gap-px">
                                 <span className="truncate text-[10px] font-bold uppercase leading-[1.2] tracking-[0.07em] text-[var(--text-subtle)]">

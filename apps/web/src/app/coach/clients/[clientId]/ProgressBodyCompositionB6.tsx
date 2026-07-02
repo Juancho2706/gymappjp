@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { format, subDays } from 'date-fns'
@@ -26,6 +26,7 @@ import { Scale, Star, Images, Ruler } from 'lucide-react'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
 import { BiaTrendPanel } from './bodycomp/_components/BiaTrendPanel'
 import { IsakTrendPanel } from './bodycomp/_components/IsakTrendPanel'
+import { SectionTitle } from './_components/SectionTitle'
 
 export type BodyCompCheckInRow = {
     id: string
@@ -58,18 +59,6 @@ type ProgressBodyCompositionB6Props = {
     tooltipBgColor: string
     tooltipBorderColor: string
     tooltipTextColor: string
-}
-
-/* ---- Section heading (diseño nuevo: font-display 800 · 17px · -0.02em) ---- */
-function SectionTitle({ children, style }: { children: ReactNode; style?: CSSProperties }) {
-    return (
-        <h3
-            className="font-display font-extrabold tracking-[-0.02em] text-strong"
-            style={{ fontSize: 17, margin: '4px 0 10px', ...style }}
-        >
-            {children}
-        </h3>
-    )
 }
 
 /* ---- Estrellas de energía (ember rellenas / ink-200 vacías) ---- */

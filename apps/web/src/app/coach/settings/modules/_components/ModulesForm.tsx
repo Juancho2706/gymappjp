@@ -1,10 +1,21 @@
 'use client'
 
 import Link from 'next/link'
-import { CheckCircle2, Lock, Mail, Wrench, Eye, EyeOff } from 'lucide-react'
+import { CheckCircle2, ClipboardList, HeartPulse, Info, Lock, Mail, PersonStanding, Scale, UserRound, Utensils, Wrench, Eye, EyeOff, type LucideIcon } from 'lucide-react'
 import { SELF_SERVICE_ADDONS_ENABLED, type SubscriptionTier } from '@/lib/constants'
 import { useCaptureModuleInterest } from '@/lib/posthog/events'
 import { MODULE_CATALOG_KEYS, MODULE_CATALOG, type ModuleKey } from '@eva/module-catalog'
+
+/** Ícono por módulo — espejo del `moduleCatalog` del kit (heart-pulse / person-standing / scale / utensils). */
+const MODULE_ICONS: Record<ModuleKey, LucideIcon> = {
+    cardio: HeartPulse,
+    movement_assessment: PersonStanding,
+    body_composition: Scale,
+    nutrition_exchanges: Utensils,
+}
+
+/** Alcance de uso (kit: chip "Se configura en el plan" vs "Se usa con un alumno"). */
+const PLAN_SCOPED_MODULES: ReadonlySet<ModuleKey> = new Set(['nutrition_exchanges'])
 
 /** Precio de lista en CLP (es-CL: punto como separador de miles, sin decimales). */
 const clpFormatter = new Intl.NumberFormat('es-CL', {
@@ -46,45 +57,84 @@ export function ModulesForm({
 
     return (
         <div className="space-y-4">
+            {/* Comprar ≠ usar — banner info del kit */}
+            <div className="flex items-start gap-2.5 rounded-control px-3.5 py-[11px]" style={{ background: 'var(--sport-100)' }}>
+                <Info className="mt-0.5 h-[17px] w-[17px] shrink-0" style={{ color: 'var(--sport-600)' }} />
+                <p className="text-[12.5px] font-semibold leading-normal" style={{ color: 'var(--sport-700)' }}>
+                    Activá un módulo acá; usalo desde <b>Alumnos › Herramientas</b>. Cada uno se cobra aparte de tu plan.
+                </p>
+            </div>
+
             <ul className="space-y-3">
                 {MODULE_CATALOG_KEYS.map((key) => {
                     const entry = MODULE_CATALOG[key]
                     const active = modules[key] === true
                     const inMaintenance = active && killedByOperator[key] === true
+                    const ModuleIcon = MODULE_ICONS[key]
+                    const planScoped = PLAN_SCOPED_MODULES.has(key)
 
                     return (
                         <li
                             key={key}
                             className="overflow-hidden rounded-card border border-subtle bg-surface-card p-4"
                         >
-                            <div className="flex items-start justify-between gap-3">
-                                <p className="font-bold text-strong">{entry.label}</p>
-                                {active ? (
-                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-pill px-2.5 py-1 text-xs font-bold" style={{ background: 'var(--success-100)', color: 'var(--success-700)' }}>
-                                        <CheckCircle2 className="h-3.5 w-3.5" /> Activo
-                                    </span>
-                                ) : (
-                                    <span className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-surface-sunken px-2.5 py-1 text-xs font-bold text-muted">
-                                        <Lock className="h-3.5 w-3.5" /> De pago
-                                    </span>
-                                )}
+                            <div className="flex items-start gap-[13px]">
+                                <span
+                                    className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[13px]"
+                                    style={
+                                        active
+                                            ? { background: 'var(--sport-100)', color: 'var(--sport-600)' }
+                                            : { background: 'var(--surface-sunken)', color: 'var(--text-subtle)' }
+                                    }
+                                >
+                                    <ModuleIcon className="h-[22px] w-[22px]" />
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <p className="text-base font-bold text-strong">{entry.label}</p>
+                                        {active ? (
+                                            <span className="inline-flex shrink-0 items-center gap-1 rounded-pill px-2.5 py-1 text-xs font-bold" style={{ background: 'var(--success-100)', color: 'var(--success-700)' }}>
+                                                <CheckCircle2 className="h-3.5 w-3.5" /> Activo
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex shrink-0 items-center gap-1 rounded-pill bg-surface-sunken px-2.5 py-1 text-xs font-bold text-muted">
+                                                <Lock className="h-3.5 w-3.5" /> De pago
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <p className="mt-1 text-[13px] leading-relaxed text-muted">
+                                        {entry.pitch}
+                                    </p>
+                                </div>
                             </div>
 
-                            <p className="mt-2 text-sm leading-relaxed text-muted">
-                                {entry.pitch}
-                            </p>
-
-                            <ul className="mt-3 space-y-1">
+                            {/* Superficies + alcance — chips pill del kit */}
+                            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                                <span className="inline-flex items-center gap-1.5 rounded-pill bg-surface-sunken px-2 py-[3px] text-[10.5px] font-bold text-muted">
+                                    {planScoped ? (
+                                        <ClipboardList className="h-[11px] w-[11px] shrink-0" />
+                                    ) : (
+                                        <UserRound className="h-[11px] w-[11px] shrink-0" />
+                                    )}
+                                    {planScoped ? 'Se configura en el plan' : 'Se usa con un alumno'}
+                                </span>
                                 {entry.surfaces.map((surface) => (
-                                    <li
+                                    <span
                                         key={surface}
-                                        className="flex items-start gap-2 text-xs text-muted"
+                                        className="rounded-pill border border-subtle px-2 py-[3px] text-[10.5px] font-semibold text-subtle"
                                     >
-                                        <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full" style={{ background: 'var(--text-subtle)' }} />
-                                        <span>{surface}</span>
-                                    </li>
+                                        {surface}
+                                    </span>
                                 ))}
-                            </ul>
+                            </div>
+
+                            {active && (
+                                <p className="mt-3 flex items-center gap-1.5 text-[12.5px] font-semibold" style={{ color: 'var(--success-700)' }}>
+                                    <CheckCircle2 className="h-[15px] w-[15px] shrink-0" />
+                                    Incluido en tu cuenta
+                                </p>
+                            )}
 
                             {inMaintenance && (
                                 <p className="mt-3 flex items-center gap-1.5 text-xs font-semibold" style={{ color: 'var(--warning-600)' }}>
@@ -115,13 +165,7 @@ export function ModulesForm({
                             )}
 
                             {!active && (
-                                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-                                    {scope === 'standalone' && (
-                                        <span className="font-display text-sm font-black tabular-nums text-strong">
-                                            {clpFormatter.format(entry.priceClp)}
-                                            <span className="text-xs font-normal text-muted"> / mes</span>
-                                        </span>
-                                    )}
+                                <div className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-2">
                                     <ModuleCta
                                         moduleKey={key}
                                         scope={scope}
@@ -129,12 +173,26 @@ export function ModulesForm({
                                         tier={tier}
                                         onCapture={captureInterest}
                                     />
+                                    {scope === 'standalone' && (
+                                        <span className="ml-auto shrink-0 text-right">
+                                            <span className="eva-metric block text-base text-strong">
+                                                {clpFormatter.format(entry.priceClp)}
+                                            </span>
+                                            <span className="-mt-0.5 block text-[11px] text-subtle">/ mes</span>
+                                        </span>
+                                    )}
                                 </div>
                             )}
                         </li>
                     )
                 })}
             </ul>
+
+            {scope === 'standalone' && (
+                <p className="pt-1 text-center text-[11.5px] leading-relaxed text-subtle">
+                    El cobro se prorratea al período. Gestioná bajas desde Suscripción.
+                </p>
+            )}
         </div>
     )
 }

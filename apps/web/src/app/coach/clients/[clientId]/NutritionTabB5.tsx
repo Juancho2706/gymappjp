@@ -166,19 +166,19 @@ const MACRO_COLORS = {
 
 // ── Presentational helpers (EVA DS dark — transcripción del kit ficha-nutrition) ──
 
-/** Separador de zona (kit `SectionTitle`): título fuerte en mayúsculas. */
+/** Separador de zona (kit `SectionTitle`: font-display 800 · 17px · -0.02em · text-strong). */
 function SectionTitle({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <h2 className={cn('text-sm font-black uppercase tracking-widest text-strong', className)}>
+    <h2 className={cn('font-display text-[17px] font-extrabold tracking-[-0.02em] text-strong', className)}>
       {children}
     </h2>
   )
 }
 
-/** Título de card (acento sport, como las hermanas redesign de la ficha). */
+/** Título de card (mismo heading display del kit, tamaño de card). */
 function CardHeading({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <h3 className={cn('flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600', className)}>
+    <h3 className={cn('flex items-center gap-2 font-display text-[17px] font-extrabold tracking-[-0.02em] text-strong', className)}>
       {children}
     </h3>
   )

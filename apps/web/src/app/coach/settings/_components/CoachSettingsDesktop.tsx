@@ -5,7 +5,7 @@ import { useState, type ReactNode } from 'react'
 import {
     Palette,
     CreditCard,
-    Package,
+    LayoutGrid,
     SlidersHorizontal,
     LayoutList,
     Upload,
@@ -33,10 +33,11 @@ export type SettingsSectionId =
     | 'funciones'
     | 'areas'
     | 'apariencia'
+    | 'soporte'
     | 'eliminar'
 
 interface Cat {
-    id: SettingsSectionId | 'importar' | 'soporte'
+    id: SettingsSectionId | 'importar'
     label: string
     icon: LucideIcon
     group: string
@@ -51,12 +52,12 @@ interface Cat {
 const CATS: Cat[] = [
     { id: 'marca', label: 'Mi Marca', icon: Palette, group: 'Cuenta' },
     { id: 'suscripcion', label: 'Suscripción', icon: CreditCard, group: 'Cuenta' },
-    { id: 'modulos', label: 'Módulos', icon: Package, group: 'Entrenamiento' },
+    { id: 'modulos', label: 'Módulos', icon: LayoutGrid, group: 'Entrenamiento' },
     { id: 'funciones', label: 'Funciones', icon: SlidersHorizontal, group: 'Entrenamiento' },
     { id: 'areas', label: 'Áreas del builder', icon: LayoutList, group: 'Entrenamiento' },
     { id: 'importar', label: 'Importar alumnos', icon: Upload, group: 'Entrenamiento', href: '/coach/clients/import' },
     { id: 'apariencia', label: 'Apariencia', icon: Moon, group: 'Preferencias' },
-    { id: 'soporte', label: 'Soporte', icon: LifeBuoy, group: 'Ayuda', href: '/coach/support' },
+    { id: 'soporte', label: 'Soporte', icon: LifeBuoy, group: 'Ayuda' },
     { id: 'eliminar', label: 'Eliminar cuenta', icon: Trash2, group: 'Ayuda', danger: true },
 ]
 

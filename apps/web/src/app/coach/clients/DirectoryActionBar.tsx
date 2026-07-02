@@ -1,27 +1,19 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useState } from 'react'
 import {
     Search,
     SlidersHorizontal,
     ArrowUpDown,
     LayoutGrid,
     Table2,
+    Check,
     X,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { buttonVariants } from '@/components/ui/button'
-import { SegmentedControl } from '@/components/ui/segmented-control'
+import { Button } from '@/components/ui/button'
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuGroup,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import type {
     DirectoryRiskFilter,
     DirectorySortKey,
@@ -35,11 +27,85 @@ function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }
         <button
             type="button"
             onClick={onRemove}
-            className="inline-flex h-7 items-center gap-1.5 rounded-pill bg-[var(--ink-950)] px-3 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+            className="inline-flex h-[30px] items-center gap-1.5 rounded-pill bg-[var(--ink-950)] pl-3 pr-2 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
         >
             {label}
-            <X className="h-3 w-3 opacity-70" />
+            <X className="h-[13px] w-[13px] opacity-70" />
         </button>
+    )
+}
+
+// dirBarBtn del diseño: botón cuadrado 48px icon-only, borde 1.5, activo = relleno ink.
+function BarButton({
+    active,
+    label,
+    onClick,
+    children,
+}: {
+    active?: boolean
+    label: string
+    onClick: () => void
+    children: React.ReactNode
+}) {
+    return (
+        <button
+            type="button"
+            aria-label={label}
+            onClick={onClick}
+            className={cn(
+                'eva-press relative inline-flex size-12 shrink-0 items-center justify-center rounded-control border-[1.5px]',
+                active
+                    ? 'border-[var(--text-strong)] bg-[var(--text-strong)] text-[var(--surface-card)]'
+                    : 'border-default bg-surface-card text-strong'
+            )}
+        >
+            {children}
+        </button>
+    )
+}
+
+// Fila de check del sheet de filtros (DirFiltersMenu del diseño): check sport-600 +
+// fondo sunken en la opción activa.
+function SheetCheckRow({
+    label,
+    active,
+    badge,
+    onClick,
+}: {
+    label: string
+    active: boolean
+    badge?: number
+    onClick: () => void
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={cn(
+                'flex min-h-[44px] w-full items-center gap-2.5 rounded-[var(--radius-sm)] px-3 py-2 text-left',
+                active ? 'bg-surface-sunken' : 'bg-transparent'
+            )}
+        >
+            <span className="inline-flex w-4 shrink-0 text-sport-600">
+                {active && <Check className="h-[15px] w-[15px]" />}
+            </span>
+            <span className={cn('flex-1 text-[13.5px] text-strong', active ? 'font-bold' : 'font-medium')}>
+                {label}
+            </span>
+            {badge != null && badge > 0 && (
+                <span className="rounded-pill bg-surface-sunken px-[7px] py-px text-[11px] font-bold text-subtle">
+                    {badge}
+                </span>
+            )}
+        </button>
+    )
+}
+
+function SheetGroupLabel({ children }: { children: React.ReactNode }) {
+    return (
+        <div className="px-3 pb-1 pt-1.5 text-[10.5px] font-bold uppercase tracking-[0.06em] text-subtle">
+            {children}
+        </div>
     )
 }
 
@@ -49,8 +115,8 @@ interface DirectoryActionBarProps {
     onSearchChange: (v: string) => void
     sortKey: DirectorySortKey
     onSortChange: (v: DirectorySortKey) => void
-    view: 'grid' | 'table'
-    onViewChange: (v: 'grid' | 'table') => void
+    view: 'cards' | 'table'
+    onViewChange: (v: 'cards' | 'table') => void
     statusFilter: StatusDirectoryFilter
     onStatusFilterChange: (v: StatusDirectoryFilter) => void
     programFilter: ProgramDirectoryFilter
@@ -58,6 +124,7 @@ interface DirectoryActionBarProps {
     riskFilter: DirectoryRiskFilter
     onRiskFilterChange: (v: DirectoryRiskFilter) => void
     archivedCount?: number
+    resultCount: number
 }
 
 export function DirectoryActionBar({
@@ -75,266 +142,229 @@ export function DirectoryActionBar({
     riskFilter,
     onRiskFilterChange,
     archivedCount = 0,
+    resultCount,
 }: DirectoryActionBarProps) {
-    const inputRef = useRef<HTMLInputElement>(null)
+    const [filtersOpen, setFiltersOpen] = useState(false)
+    const [sortOpen, setSortOpen] = useState(false)
 
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-                e.preventDefault()
-                inputRef.current?.focus()
-            }
-        }
-        window.addEventListener('keydown', onKey)
-        return () => window.removeEventListener('keydown', onKey)
-    }, [])
+    const riskLabels: Partial<Record<DirectoryRiskFilter, string>> = {
+        urgent: 'Atención urgente',
+        review: 'En riesgo',
+        on_track: 'On track',
+        expired_program: 'Programa vencido',
+        password_reset: 'Pendiente sync',
+        nutrition_low: 'Nutrición baja',
+    }
+    const statusLabels: Partial<Record<StatusDirectoryFilter, string>> = {
+        active: 'Activo',
+        paused: 'Pausado',
+        pending_sync: 'Pendiente sync',
+        archived: 'Archivados',
+    }
+    const programLabels: Partial<Record<ProgramDirectoryFilter, string>> = {
+        with_program: 'Con programa',
+        no_program: 'Sin programa',
+        expired: 'Programa vencido',
+    }
 
     const chips: { key: string; label: string; onRemove: () => void }[] = []
-
-    if (riskFilter === 'urgent') {
+    if (riskFilter !== 'all') {
         chips.push({
-            key: 'risk-urgent',
-            label: 'Atención urgente',
-            onRemove: () => onRiskFilterChange('all'),
-        })
-    } else if (riskFilter === 'review') {
-        chips.push({
-            key: 'risk-review',
-            label: 'En revisión',
-            onRemove: () => onRiskFilterChange('all'),
-        })
-    } else if (riskFilter === 'on_track') {
-        chips.push({
-            key: 'risk-ontrack',
-            label: 'On track',
-            onRemove: () => onRiskFilterChange('all'),
-        })
-    } else if (riskFilter === 'expired_program') {
-        chips.push({
-            key: 'risk-exp',
-            label: 'Programa vencido',
-            onRemove: () => onRiskFilterChange('all'),
-        })
-    } else if (riskFilter === 'password_reset') {
-        chips.push({
-            key: 'risk-pw',
-            label: 'Pendiente sync',
-            onRemove: () => onRiskFilterChange('all'),
-        })
-    } else if (riskFilter === 'nutrition_low') {
-        chips.push({
-            key: 'risk-nutri',
-            label: 'Nutrición baja',
+            key: `risk-${riskFilter}`,
+            label: riskLabels[riskFilter] ?? riskFilter,
             onRemove: () => onRiskFilterChange('all'),
         })
     }
-
-    if (statusFilter === 'active') {
+    if (statusFilter !== 'any') {
         chips.push({
-            key: 'st-active',
-            label: 'Activo',
-            onRemove: () => onStatusFilterChange('any'),
-        })
-    } else if (statusFilter === 'paused') {
-        chips.push({
-            key: 'st-paused',
-            label: 'Pausado',
-            onRemove: () => onStatusFilterChange('any'),
-        })
-    } else if (statusFilter === 'pending_sync') {
-        chips.push({
-            key: 'st-sync',
-            label: 'Pendiente sync',
-            onRemove: () => onStatusFilterChange('any'),
-        })
-    } else if (statusFilter === 'archived') {
-        chips.push({
-            key: 'st-archived',
-            label: 'Archivados',
+            key: `st-${statusFilter}`,
+            label: statusLabels[statusFilter] ?? statusFilter,
             onRemove: () => onStatusFilterChange('any'),
         })
     }
+    if (programFilter !== 'any') {
+        chips.push({
+            key: `pr-${programFilter}`,
+            label: programLabels[programFilter] ?? programFilter,
+            onRemove: () => onProgramFilterChange('any'),
+        })
+    }
+    if (search) {
+        chips.push({
+            key: 'q',
+            label: `“${search}”`,
+            onRemove: () => onSearchChange(''),
+        })
+    }
 
-    if (programFilter === 'with_program') {
-        chips.push({
-            key: 'pr-with',
-            label: 'Con programa',
-            onRemove: () => onProgramFilterChange('any'),
-        })
-    } else if (programFilter === 'no_program') {
-        chips.push({
-            key: 'pr-no',
-            label: 'Sin programa',
-            onRemove: () => onProgramFilterChange('any'),
-        })
-    } else if (programFilter === 'expired') {
-        chips.push({
-            key: 'pr-ex',
-            label: 'Programa vencido',
-            onRemove: () => onProgramFilterChange('any'),
-        })
+    const clearAll = () => {
+        onRiskFilterChange('all')
+        onStatusFilterChange('any')
+        onProgramFilterChange('any')
+        onSearchChange('')
     }
 
     const currentSortLabel = SORT_OPTIONS.find((o) => o.value === sortKey)?.label ?? sortKey
 
-    const triggerClass = cn(
-        buttonVariants({ variant: 'secondary', size: 'default' }),
-        'h-12 gap-2 px-4 text-[10px] font-black tracking-widest uppercase'
-    )
-
     return (
-        <div
-            className={cn(
-                'sticky top-0 z-10 mx-0 w-full max-w-full min-w-0 rounded-card border border-subtle bg-surface-app/80 px-3 py-3 backdrop-blur-xl sm:px-4',
-                className
-            )}
-        >
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+        <div className={cn('min-w-0 max-w-full space-y-2.5', className)}>
+            {/* Action bar: búsqueda + Filtros · Orden · Vista (fila sin contenedor, diseño) */}
+            <div className="flex gap-2">
                 <div className="relative min-w-0 flex-1">
-                    <Search className="absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted" />
+                    <Search className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted" />
                     <Input
-                        ref={inputRef}
-                        placeholder="Buscar alumno... (⌘K)"
+                        placeholder="Buscar alumno…"
                         value={search}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        className="pl-10 pr-14"
-                    />
-                    <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded border border-subtle bg-surface-sunken px-1.5 py-0.5 text-[10px] font-bold text-muted sm:inline">
-                        ⌘K
-                    </kbd>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                    <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger type="button" className={triggerClass}>
-                            <SlidersHorizontal className="h-4 w-4" />
-                            Filtros
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                            className="min-w-[14rem] w-[min(100vw-2rem,20rem)] rounded-card"
-                            align="start"
-                        >
-                            <DropdownMenuGroup>
-                                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest">
-                                    Estado
-                                </DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => onStatusFilterChange('active')}>
-                                    Activo
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => onStatusFilterChange('paused')}>
-                                    Pausado
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => onStatusFilterChange('pending_sync')}>
-                                    Pendiente Sync
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => onStatusFilterChange('archived')}>
-                                    Archivados
-                                    {archivedCount > 0 && (
-                                        <span className="ml-auto rounded-full bg-surface-sunken px-1.5 py-0.5 text-[10px] font-bold text-muted">
-                                            {archivedCount}
-                                        </span>
-                                    )}
-                                </DropdownMenuItem>
-                            </DropdownMenuGroup>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuGroup>
-                                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest">
-                                    Riesgo
-                                </DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => onRiskFilterChange('urgent')}>
-                                    Atención Urgente
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => onRiskFilterChange('review')}>
-                                    En Riesgo
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => onRiskFilterChange('on_track')}>
-                                    On Track
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => onRiskFilterChange('nutrition_low')}>
-                                    {'Nutrición baja (<60%)'}
-                                </DropdownMenuItem>
-                            </DropdownMenuGroup>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuGroup>
-                                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest">
-                                    Programa
-                                </DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => onProgramFilterChange('with_program')}>
-                                    Con Programa
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => onProgramFilterChange('no_program')}>
-                                    Sin Programa
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => onProgramFilterChange('expired')}>
-                                    Vencido
-                                </DropdownMenuItem>
-                            </DropdownMenuGroup>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-
-                    <DropdownMenu modal={false}>
-                        <DropdownMenuTrigger
-                            type="button"
-                            className={cn(triggerClass, 'max-w-[220px] truncate')}
-                        >
-                            <ArrowUpDown className="h-4 w-4 shrink-0" />
-                            <span className="truncate">{currentSortLabel}</span>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                            className="min-w-[14rem] w-[min(100vw-2rem,20rem)] rounded-card"
-                            align="start"
-                        >
-                            <DropdownMenuGroup>
-                                <DropdownMenuLabel className="text-[10px] font-black uppercase tracking-widest">
-                                    Ordenar
-                                </DropdownMenuLabel>
-                                {SORT_OPTIONS.map((opt) => (
-                                    <DropdownMenuItem
-                                        key={opt.value}
-                                        onClick={() => onSortChange(opt.value)}
-                                        className={sortKey === opt.value ? 'bg-sport-500/10' : ''}
-                                    >
-                                        {opt.label}
-                                    </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuGroup>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-
-                    <SegmentedControl
-                        size="sm"
-                        className="w-[92px] shrink-0"
-                        value={view}
-                        onChange={(v) => onViewChange(v as 'grid' | 'table')}
-                        options={[
-                            {
-                                value: 'table',
-                                label: (
-                                    <span className="flex items-center justify-center" aria-label="Vista tabla">
-                                        <Table2 className="h-4 w-4" />
-                                    </span>
-                                ),
-                            },
-                            {
-                                value: 'grid',
-                                label: (
-                                    <span className="flex items-center justify-center" aria-label="Vista cuadrícula">
-                                        <LayoutGrid className="h-4 w-4" />
-                                    </span>
-                                ),
-                            },
-                        ]}
+                        className="pl-10"
                     />
                 </div>
+                <BarButton active={chips.length > 0} label="Filtros" onClick={() => setFiltersOpen(true)}>
+                    <SlidersHorizontal className="h-4 w-4" />
+                    {chips.length > 0 && (
+                        <span className="absolute -right-[5px] -top-[5px] inline-flex h-[17px] min-w-[17px] items-center justify-center rounded-pill border-2 border-[var(--surface-card)] bg-sport-500 px-1 text-[10px] font-extrabold text-white">
+                            {chips.length}
+                        </span>
+                    )}
+                </BarButton>
+                <BarButton label="Ordenar" onClick={() => setSortOpen(true)}>
+                    <ArrowUpDown className="h-4 w-4" />
+                </BarButton>
+                <BarButton
+                    label={view === 'cards' ? 'Ver como tabla' : 'Ver como tarjetas'}
+                    onClick={() => onViewChange(view === 'cards' ? 'table' : 'cards')}
+                >
+                    {view === 'cards' ? <Table2 className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
+                </BarButton>
             </div>
 
+            {/* Chips de filtros activos (removibles) + Limpiar global */}
             {chips.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2 border-t border-subtle pt-3">
+                <div className="flex flex-wrap items-center gap-[7px]">
                     {chips.map((c) => (
                         <FilterChip key={c.key} label={c.label} onRemove={c.onRemove} />
                     ))}
+                    <button
+                        type="button"
+                        onClick={clearAll}
+                        className="text-[12.5px] font-bold text-muted underline"
+                    >
+                        Limpiar
+                    </button>
                 </div>
             )}
+
+            {/* Conteo de resultados · orden activo */}
+            <div className="pl-0.5 text-xs text-muted">
+                {resultCount} {resultCount === 1 ? 'alumno' : 'alumnos'}
+                {statusFilter === 'archived' ? ' archivados' : ''}{' '}
+                <span className="text-[var(--border-strong)]">·</span>{' '}
+                <span className="text-subtle">{currentSortLabel}</span>
+            </div>
+
+            {/* Bottom-sheet de filtros — patrón filter-sheet de Nutrición */}
+            <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+                <SheetContent
+                    side="bottom"
+                    showCloseButton
+                    className="max-h-[min(85dvh,620px)] rounded-t-sheet border-subtle bg-surface-card text-body shadow-lg"
+                >
+                    <SheetHeader className="flex-row items-center justify-between border-0 bg-surface-card px-6 pt-2">
+                        <SheetTitle className="font-display font-extrabold normal-case tracking-[-0.02em] text-strong">
+                            Filtros
+                        </SheetTitle>
+                    </SheetHeader>
+                    <div className="flex-1 overflow-y-auto px-4 pb-2">
+                        <SheetGroupLabel>Estado</SheetGroupLabel>
+                        {(
+                            [
+                                { v: 'active', l: 'Activo' },
+                                { v: 'paused', l: 'Pausado' },
+                                { v: 'pending_sync', l: 'Pendiente sync' },
+                                { v: 'archived', l: 'Archivados', badge: archivedCount },
+                            ] as { v: StatusDirectoryFilter; l: string; badge?: number }[]
+                        ).map((it) => (
+                            <SheetCheckRow
+                                key={it.v}
+                                label={it.l}
+                                badge={it.badge}
+                                active={statusFilter === it.v}
+                                onClick={() =>
+                                    onStatusFilterChange(statusFilter === it.v ? 'any' : it.v)
+                                }
+                            />
+                        ))}
+                        <div className="my-1 h-px bg-[var(--border-subtle)]" />
+                        <SheetGroupLabel>Riesgo</SheetGroupLabel>
+                        {(
+                            [
+                                { v: 'urgent', l: 'Atención urgente' },
+                                { v: 'review', l: 'En riesgo' },
+                                { v: 'on_track', l: 'On track' },
+                                { v: 'nutrition_low', l: 'Nutrición baja (<60%)' },
+                            ] as { v: DirectoryRiskFilter; l: string }[]
+                        ).map((it) => (
+                            <SheetCheckRow
+                                key={it.v}
+                                label={it.l}
+                                active={riskFilter === it.v}
+                                onClick={() => onRiskFilterChange(riskFilter === it.v ? 'all' : it.v)}
+                            />
+                        ))}
+                        <div className="my-1 h-px bg-[var(--border-subtle)]" />
+                        <SheetGroupLabel>Programa</SheetGroupLabel>
+                        {(
+                            [
+                                { v: 'with_program', l: 'Con programa' },
+                                { v: 'no_program', l: 'Sin programa' },
+                                { v: 'expired', l: 'Vencido' },
+                            ] as { v: ProgramDirectoryFilter; l: string }[]
+                        ).map((it) => (
+                            <SheetCheckRow
+                                key={it.v}
+                                label={it.l}
+                                active={programFilter === it.v}
+                                onClick={() =>
+                                    onProgramFilterChange(programFilter === it.v ? 'any' : it.v)
+                                }
+                            />
+                        ))}
+                    </div>
+                    <SheetFooter className="border-subtle bg-surface-card">
+                        <Button type="button" variant="sport" className="w-full" onClick={() => setFiltersOpen(false)}>
+                            Ver resultados
+                        </Button>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
+
+            {/* Bottom-sheet de orden */}
+            <Sheet open={sortOpen} onOpenChange={setSortOpen}>
+                <SheetContent
+                    side="bottom"
+                    showCloseButton
+                    className="max-h-[min(85dvh,520px)] rounded-t-sheet border-subtle bg-surface-card text-body shadow-lg"
+                >
+                    <SheetHeader className="flex-row items-center justify-between border-0 bg-surface-card px-6 pt-2">
+                        <SheetTitle className="font-display font-extrabold normal-case tracking-[-0.02em] text-strong">
+                            Ordenar por
+                        </SheetTitle>
+                    </SheetHeader>
+                    <div className="flex-1 overflow-y-auto px-4 pb-6">
+                        {SORT_OPTIONS.map((opt) => (
+                            <SheetCheckRow
+                                key={opt.value}
+                                label={opt.label}
+                                active={sortKey === opt.value}
+                                onClick={() => {
+                                    onSortChange(opt.value)
+                                    setSortOpen(false)
+                                }}
+                            />
+                        ))}
+                    </div>
+                </SheetContent>
+            </Sheet>
         </div>
     )
 }

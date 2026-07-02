@@ -5,6 +5,7 @@ import type { Metadata } from 'next'
 import { BrandSettingsForm } from '../BrandSettingsForm'
 import { LogoUploadForm } from '../LogoUploadForm'
 import { BrandSettingsTourClient } from '../_components/BrandSettingsTourClient'
+import { BrandUpsell } from '../_components/BrandUpsell'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
 import { getCoachSettingsForUser } from '../_data/settings.queries'
 
@@ -23,8 +24,21 @@ export default async function CoachBrandPage() {
     const tier = (coach.subscription_tier ?? 'starter') as SubscriptionTier
     const capabilities = getTierCapabilities(tier)
 
-    // Sin branding (free tier): el hub /coach/settings ya muestra el upsell. Volver allí.
-    if (!capabilities.canUseBranding) redirect('/coach/settings')
+    // Sin branding (free tier): esta ruta ES el upsell (kit: card Mi Marca badge Pro → miMarcaUpsell).
+    if (!capabilities.canUseBranding) {
+        return (
+            <div className="mx-auto max-w-3xl animate-fade-in space-y-4 px-4 py-6 md:px-8">
+                <Link
+                    href="/coach/settings"
+                    className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-strong"
+                >
+                    <ArrowLeft className="h-4 w-4" />
+                    Opciones
+                </Link>
+                <BrandUpsell tier={tier} />
+            </div>
+        )
+    }
 
     return (
         <div className="mx-auto max-w-3xl animate-fade-in px-4 py-6 md:px-8 lg:max-w-6xl" data-tour-id="brand-header">

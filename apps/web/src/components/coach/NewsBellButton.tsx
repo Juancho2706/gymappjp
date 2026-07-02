@@ -2,7 +2,7 @@
 
 import React, { useCallback, useState } from 'react'
 import Image from 'next/image'
-import { Bell, Newspaper, Pin } from 'lucide-react'
+import { Bell, Bug, Megaphone, Pin, Sparkles, Wrench, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useNewsFeed } from './NewsFeedProvider'
 import {
@@ -17,12 +17,14 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 
-const TYPE_ICON: Record<string, string> = {
-  feature: '🟢',
-  improvement: '🔧',
-  fix: '🐛',
-  announcement: '📢',
+// Icono tonal redondo por tipo (.dt-notif-ico del kit: círculo 34px --tone-100/--tone-600).
+const TYPE_META: Record<string, { icon: LucideIcon; bg: string; fg: string }> = {
+  feature: { icon: Sparkles, bg: 'var(--sport-100)', fg: 'var(--sport-600)' },
+  improvement: { icon: Wrench, bg: 'var(--success-100)', fg: 'var(--success-700)' },
+  fix: { icon: Bug, bg: 'var(--ember-100)', fg: 'var(--ember-700)' },
+  announcement: { icon: Megaphone, bg: 'var(--surface-sunken)', fg: 'var(--ink-700)' },
 }
+const TYPE_META_FALLBACK = TYPE_META.announcement
 
 const TYPE_LABEL: Record<string, string> = {
   feature: 'Nueva función',
@@ -38,7 +40,7 @@ function inlineMd(text: string): React.ReactNode {
   if (parts.length === 1) return text
   return parts.map((part, i) =>
     part.startsWith('**') && part.endsWith('**')
-      ? <strong key={i} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>
+      ? <strong key={i} className="font-bold text-strong">{part.slice(2, -2)}</strong>
       : part
   )
 }
@@ -54,7 +56,7 @@ function MarkdownContent({ text }: { text: string }) {
     nodes.push(
       <ul key={k++} className="my-1 ml-4 space-y-0.5 list-disc">
         {bullets.map((b, i) => (
-          <li key={i} className="text-xs text-muted-foreground">{inlineMd(b)}</li>
+          <li key={i} className="text-[12px] leading-[1.35] text-muted">{inlineMd(b)}</li>
         ))}
       </ul>
     )
@@ -67,15 +69,15 @@ function MarkdownContent({ text }: { text: string }) {
     } else {
       flushBullets()
       if (line.startsWith('## ')) {
-        nodes.push(<h2 key={k++} className="text-sm font-bold text-foreground mt-3 mb-1">{inlineMd(line.slice(3))}</h2>)
+        nodes.push(<h2 key={k++} className="mt-3 mb-1 text-[13px] font-bold text-strong">{inlineMd(line.slice(3))}</h2>)
       } else if (line.startsWith('### ')) {
-        nodes.push(<h3 key={k++} className="text-[11px] font-bold text-foreground mt-2 mb-0.5 uppercase tracking-wide">{inlineMd(line.slice(4))}</h3>)
+        nodes.push(<h3 key={k++} className="mt-2 mb-0.5 text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-subtle">{inlineMd(line.slice(4))}</h3>)
       } else if (line === '---') {
-        nodes.push(<hr key={k++} className="border-border my-3" />)
+        nodes.push(<hr key={k++} className="my-3 border-subtle" />)
       } else if (line.trim() === '') {
         nodes.push(<div key={k++} className="h-1" />)
       } else {
-        nodes.push(<p key={k++} className="text-xs text-muted-foreground leading-relaxed">{inlineMd(line)}</p>)
+        nodes.push(<p key={k++} className="text-[12px] leading-[1.35] text-muted">{inlineMd(line)}</p>)
       }
     }
   }
@@ -102,64 +104,76 @@ function NewsFeedList({ onNavigate }: { onNavigate?: () => void }) {
 
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-10 text-center">
-        <Newspaper className="h-10 w-10 text-muted-foreground/40 mb-3" />
-        <p className="text-sm text-muted-foreground">No hay novedades por ahora.</p>
+      <div className="flex flex-col items-center gap-2 p-10 text-center text-[13px] text-subtle">
+        <Bell size={28} />
+        <span>No hay novedades por ahora.</span>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      {items.map((item) => (
-        <div
-          key={item.id}
-          className={cn(
-            'relative rounded-xl border p-4 transition-colors',
-            item.is_pinned
-              ? 'border-primary/20 bg-primary/[0.04]'
-              : 'border-border bg-card'
-          )}
-        >
-          {item.is_pinned && (
-            <div className="absolute top-2 right-2 text-primary">
-              <Pin className="h-3.5 w-3.5" />
-            </div>
-          )}
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-xs">{TYPE_ICON[item.type] || '•'}</span>
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {TYPE_LABEL[item.type] || item.type}
+    <div className="flex flex-col">
+      {items.map((item) => {
+        const meta = TYPE_META[item.type] ?? TYPE_META_FALLBACK
+        const TypeIcon = meta.icon
+        return (
+          <div
+            key={item.id}
+            className={cn(
+              'relative flex items-start gap-[11px] rounded-[var(--radius-md)] py-2.5 pl-3.5 pr-3 transition-colors hover:bg-[var(--surface-sunken)]',
+              item.is_pinned && 'bg-[color-mix(in_srgb,var(--sport-100)_40%,transparent)]'
+            )}
+          >
+            {/* rail sport del ítem fijado (espejo del rail unread del kit) */}
+            {item.is_pinned && (
+              <span
+                aria-hidden="true"
+                className="absolute bottom-3 left-0.5 top-3 w-[3px] rounded-full bg-[var(--sport-500)]"
+              />
+            )}
+            <span
+              className="flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-full"
+              style={{ background: meta.bg, color: meta.fg }}
+            >
+              <TypeIcon size={16} />
             </span>
-            <span className="text-[10px] text-muted-foreground ml-auto">
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10.5px] font-extrabold uppercase tracking-[0.06em] text-subtle">
+                  {TYPE_LABEL[item.type] || item.type}
+                </span>
+                {item.is_pinned && <Pin className="h-3 w-3 text-sport-600" />}
+              </div>
+              <h3 className="text-[13px] font-bold leading-[1.35] text-strong">
+                {item.title}
+              </h3>
+              <MarkdownContent text={item.content} />
+              {item.image_url && (
+                <Image
+                  src={item.image_url}
+                  alt={item.title}
+                  width={800}
+                  height={400}
+                  className="mt-1.5 h-auto max-h-40 w-full rounded-[var(--radius-md)] object-cover"
+                  sizes="(max-width: 768px) 100vw, 400px"
+                />
+              )}
+              {item.cta_url && (
+                <a
+                  href={item.cta_url}
+                  onClick={onNavigate}
+                  className="mt-1 inline-flex items-center text-[12.5px] font-bold text-sport-600 hover:underline"
+                >
+                  {item.cta_label || 'Ver más'} →
+                </a>
+              )}
+            </div>
+            <span className="mt-px flex-shrink-0 whitespace-nowrap text-[11px] text-subtle">
               {relativeDate(item.published_at)}
             </span>
           </div>
-          <h3 className="text-sm font-bold text-foreground leading-snug mb-1">
-            {item.title}
-          </h3>
-          <MarkdownContent text={item.content} />
-          {item.image_url && (
-            <Image
-              src={item.image_url}
-              alt={item.title}
-              width={800}
-              height={400}
-              className="mt-2 rounded-lg w-full h-auto object-cover max-h-40"
-              sizes="(max-width: 768px) 100vw, 400px"
-            />
-          )}
-          {item.cta_url && (
-            <a
-              href={item.cta_url}
-              onClick={onNavigate}
-              className="mt-2 inline-flex items-center text-xs font-semibold text-primary hover:underline"
-            >
-              {item.cta_label || 'Ver más'} →
-            </a>
-          )}
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -170,7 +184,7 @@ function BellIconWithBadge({ unreadCount }: { unreadCount: number }) {
     <>
       <Bell className="h-5 w-5" />
       {badgeContent && (
-        <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-white">
+        <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-ember-500 px-1 text-[10px] font-extrabold text-white shadow-[0_0_0_2px_var(--surface-card)]">
           {badgeContent}
         </span>
       )}
@@ -211,14 +225,14 @@ export function NewsBellButton() {
           <button
             type="button"
             onClick={() => handleMobileOpen(true)}
-            className="relative flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            className="relative flex items-center justify-center text-muted transition-colors hover:text-strong"
             aria-label="Novedades"
           >
             <BellIconWithBadge unreadCount={unreadCount} />
           </button>
           <SheetContent side="bottom" className="max-h-[80dvh] rounded-t-2xl">
             <SheetHeader className="pb-4">
-              <SheetTitle>Novedades</SheetTitle>
+              <SheetTitle className="font-display text-[17px] font-extrabold text-strong">Novedades</SheetTitle>
             </SheetHeader>
             <div className="overflow-y-auto pb-safe">
               <NewsFeedList onNavigate={() => setIsMobileOpen(false)} />
@@ -231,7 +245,7 @@ export function NewsBellButton() {
       <div className="hidden md:block">
         <Popover open={isDesktopOpen} onOpenChange={handleDesktopOpen}>
           <PopoverTrigger
-            className="relative text-muted-foreground hover:text-foreground transition-colors"
+            className="relative text-muted transition-colors hover:text-strong"
             aria-label="Novedades"
           >
             <BellIconWithBadge unreadCount={unreadCount} />
@@ -240,12 +254,16 @@ export function NewsBellButton() {
             align="end"
             side="bottom"
             sideOffset={8}
-            className="w-80 max-h-[70vh] overflow-y-auto"
+            className="flex max-h-[520px] w-[400px] max-w-[calc(100vw-32px)] flex-col gap-0 overflow-hidden rounded-[var(--radius-lg)] border border-subtle bg-surface-card p-0 shadow-[var(--shadow-xl)] ring-0"
           >
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold">Novedades</h3>
+            {/* .dt-notif-hd */}
+            <div className="flex flex-shrink-0 items-center justify-between border-b border-subtle px-4 py-[13px] font-display text-[15px] font-extrabold text-strong">
+              <span>Novedades</span>
             </div>
-            <NewsFeedList onNavigate={() => setIsDesktopOpen(false)} />
+            {/* .dt-notif-list */}
+            <div className="min-h-0 flex-1 overflow-y-auto p-1">
+              <NewsFeedList onNavigate={() => setIsDesktopOpen(false)} />
+            </div>
           </PopoverContent>
         </Popover>
       </div>

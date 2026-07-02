@@ -2,13 +2,14 @@
 
 import { useMemo, useRef, useState, useTransition } from 'react'
 import {
-    Palette, Loader2, Check, Sun, Moon, Sparkles, ImageIcon, Type,
-    AlertTriangle, ShieldCheck, Dumbbell, Apple, House, UserRound,
+    Palette, Loader, Loader2, Check, CheckCircle2, Sun, Moon, Plus, ImagePlus, X, Pipette,
+    ChevronDown, AlertTriangle, ShieldCheck, Dumbbell, House, UserRound, Utensils,
 } from 'lucide-react'
-import { isThemeReadable } from '@eva/brand-kit'
+import { isThemeReadable, pickOnColor } from '@eva/brand-kit'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { BRAND_APP_ICON } from '@/lib/brand-assets'
 import { cn } from '@/lib/utils'
 import { updateTeamBrandAction } from '../_actions/team.actions'
 
@@ -44,6 +45,18 @@ const ICON_MODES = [
     { value: 'none', label: 'Nada' },
 ] as const
 
+const HEX_RE = /^#[0-9a-fA-F]{6}$/
+
+function hexA(hex: string, a: number): string {
+    if (!HEX_RE.test(hex)) return `rgba(0,0,0,${a})`
+    const c = hex.replace('#', '')
+    return `rgba(${parseInt(c.slice(0, 2), 16)},${parseInt(c.slice(2, 4), 16)},${parseInt(c.slice(4, 6), 16)},${a})`
+}
+
+function teamInitials(name: string): string {
+    return (name || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
+}
+
 type Draft = {
     name: string
     primary_color: string
@@ -72,6 +85,7 @@ function toDraft(b: TeamBrandValues): Draft {
     }
 }
 
+/** Swatch + hex + limpiar — TeamColorInput del kit (teams-equipo.jsx:43-60). */
 function ColorInput({ label, value, onChange, fallback, disabled, hint }: {
     label: string
     value: string
@@ -80,17 +94,34 @@ function ColorInput({ label, value, onChange, fallback, disabled, hint }: {
     disabled: boolean
     hint?: string
 }) {
+    const valid = HEX_RE.test(value)
     return (
-        <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted">{label}</Label>
+        <div>
+            <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-xs font-bold text-strong">{label}</span>
+                {value && (
+                    <button
+                        type="button"
+                        onClick={() => onChange('')}
+                        disabled={disabled}
+                        className="text-[11px] font-semibold text-subtle"
+                    >
+                        Limpiar
+                    </button>
+                )}
+            </div>
             <div className="flex items-center gap-2">
                 <label
-                    className="relative h-9 w-9 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-subtle shadow-sm transition-transform active:scale-95"
-                    style={{ backgroundColor: value || fallback }}
+                    className={cn(
+                        'relative flex h-[38px] w-[38px] shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-sm border-[1.5px] border-default',
+                        !valid && 'bg-surface-sunken'
+                    )}
+                    style={valid ? { backgroundColor: value } : undefined}
                 >
+                    {!valid && <Pipette className="h-[15px] w-[15px] text-subtle" />}
                     <input
                         type="color"
-                        value={value || fallback}
+                        value={valid ? value : fallback}
                         onChange={(e) => onChange(e.target.value)}
                         disabled={disabled}
                         className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
@@ -103,26 +134,18 @@ function ColorInput({ label, value, onChange, fallback, disabled, hint }: {
                     disabled={disabled}
                     maxLength={7}
                     placeholder={fallback}
-                    className="h-9 w-24 font-mono text-xs"
+                    className="h-[38px] min-w-0 flex-1 font-mono text-[13.5px] font-semibold"
                 />
-                {value && (
-                    <button
-                        type="button"
-                        onClick={() => onChange('')}
-                        disabled={disabled}
-                        className="text-[11px] text-muted underline-offset-2 hover:underline"
-                    >
-                        limpiar
-                    </button>
-                )}
             </div>
-            {hint && <p className="text-[11px] leading-snug text-muted/70">{hint}</p>}
+            {hint && <p className="mt-[5px] text-[10.5px] leading-snug text-subtle">{hint}</p>}
         </div>
     )
 }
 
-function LogoDrop({ label, currentUrl, previewUrl, onFile, disabled, dark, inputName }: {
+/** Dropzone de logo del kit (teams-equipo.jsx:24-40): 76px, logo centrado + "x" para quitar el pick local. */
+function LogoDrop({ label, hint, currentUrl, previewUrl, onFile, disabled, dark, inputName }: {
     label: string
+    hint?: string
     currentUrl: string | null
     previewUrl: string | null
     onFile: (f: File | null) => void
@@ -133,38 +156,42 @@ function LogoDrop({ label, currentUrl, previewUrl, onFile, disabled, dark, input
     const ref = useRef<HTMLInputElement>(null)
     const shown = previewUrl ?? currentUrl
     return (
-        <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted">{label}</Label>
+        <div className="min-w-0 flex-1">
+            <div className="mb-1.5 text-[11px] font-bold text-muted">{label}</div>
             <button
                 type="button"
                 onClick={() => ref.current?.click()}
                 disabled={disabled}
                 className={cn(
-                    'group flex w-full items-center gap-3 rounded-xl border border-dashed p-3 text-left transition-colors',
-                    dark ? 'border-neutral-700 bg-neutral-950' : 'border-subtle bg-surface-sunken/40',
-                    !disabled && 'hover:border-primary/50'
+                    'relative flex h-[76px] w-full items-center justify-center overflow-hidden rounded-control p-2',
+                    shown
+                        ? cn('border-[1.5px] border-default', dark ? 'bg-[var(--ink-900)]' : 'bg-surface-sunken')
+                        : 'border-[1.5px] border-dashed border-strong bg-transparent'
                 )}
             >
-                <span className={cn(
-                    'relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border',
-                    dark ? 'border-neutral-700 bg-neutral-900' : 'border-subtle bg-white'
-                )}>
-                    {shown ? (
-                        // Preview local (object URL) o remoto — img plano evita el dominio whitelist de next/image para blobs.
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={shown} alt={label} className="h-full w-full object-contain p-1.5" />
-                    ) : (
-                        <ImageIcon className={cn('h-5 w-5', dark ? 'text-neutral-600' : 'text-muted/50')} />
-                    )}
-                </span>
-                <span className="min-w-0">
-                    <span className={cn('block text-xs font-medium', dark ? 'text-neutral-200' : 'text-strong')}>
-                        {shown ? 'Cambiar imagen' : 'Subir imagen'}
+                {shown ? (
+                    // Preview local (object URL) o remoto — img plano evita el dominio whitelist de next/image para blobs.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={shown} alt={label} className="block h-auto max-h-14 w-auto max-w-full object-contain" />
+                ) : (
+                    <span className="flex flex-col items-center gap-1 text-subtle">
+                        <ImagePlus className="h-5 w-5" />
+                        <span className="text-[10.5px] font-semibold">Subir</span>
                     </span>
-                    <span className={cn('block text-[11px]', dark ? 'text-neutral-500' : 'text-muted')}>
-                        PNG/JPEG · ideal 512×512 · ≤2 MB
+                )}
+                {previewUrl && !disabled && (
+                    <span
+                        aria-label="Quitar imagen"
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            if (ref.current) ref.current.value = ''
+                            onFile(null)
+                        }}
+                        className="absolute right-[5px] top-[5px] flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-surface-card text-muted shadow-sm"
+                    >
+                        <X className="h-3 w-3" />
                     </span>
-                </span>
+                )}
             </button>
             <input
                 ref={ref}
@@ -175,25 +202,36 @@ function LogoDrop({ label, currentUrl, previewUrl, onFile, disabled, dark, input
                 onChange={(e) => onFile(e.target.files?.[0] ?? null)}
                 className="hidden"
             />
+            {hint && <div className="mt-[5px] text-[10.5px] text-subtle">{hint}</div>}
         </div>
     )
 }
 
-function Section({ icon: Icon, title, children }: {
+/** Sección plegable del kit (TeamCollapsible, teams-equipo.jsx:63-78). */
+function Collapsible({ icon: Icon, title, sub, defaultOpen, children }: {
     icon: typeof Palette
     title: string
+    sub?: string
+    defaultOpen?: boolean
     children: React.ReactNode
 }) {
+    const [open, setOpen] = useState(!!defaultOpen)
     return (
-        <section className="rounded-card border border-subtle bg-surface-card p-4 sm:p-5">
-            <h4 className="mb-4 flex items-center gap-2 font-display text-sm font-bold tracking-tight text-strong">
-                <span className="flex h-7 w-7 items-center justify-center rounded-control bg-primary/10">
-                    <Icon className="h-3.5 w-3.5 text-primary" />
+        <div className="mt-3 overflow-hidden rounded-control border border-subtle">
+            <button
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                className="flex w-full items-center gap-2.5 px-3.5 py-3 text-left"
+            >
+                <Icon className="h-[17px] w-[17px] shrink-0 text-muted" />
+                <span className="min-w-0 flex-1">
+                    <span className="block text-[13.5px] font-bold text-strong">{title}</span>
+                    {sub && <span className="block text-[11.5px] text-muted">{sub}</span>}
                 </span>
-                {title}
-            </h4>
-            {children}
-        </section>
+                <ChevronDown className={cn('h-[17px] w-[17px] shrink-0 text-subtle transition-transform', open && 'rotate-180')} />
+            </button>
+            {open && <div className="px-3.5 pb-4 pt-1">{children}</div>}
+        </div>
     )
 }
 
@@ -208,7 +246,8 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
     const [saved, setSaved] = useState<Draft>(() => toDraft(brand))
     const [logoPreview, setLogoPreview] = useState<string | null>(null)
     const [logoDarkPreview, setLogoDarkPreview] = useState<string | null>(null)
-    const [logoFilePicked, setLogoFilePicked] = useState(false)
+    const [logoPicked, setLogoPicked] = useState(false)
+    const [logoDarkPicked, setLogoDarkPicked] = useState(false)
     const [previewMode, setPreviewMode] = useState<'light' | 'dark'>('light')
     const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; msg: string } | null>(null)
     const formRef = useRef<HTMLFormElement>(null)
@@ -216,21 +255,23 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
     const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }))
 
     const dirty = useMemo(
-        () => logoFilePicked || JSON.stringify(draft) !== JSON.stringify(saved),
-        [draft, saved, logoFilePicked]
+        () => logoPicked || logoDarkPicked || JSON.stringify(draft) !== JSON.stringify(saved),
+        [draft, saved, logoPicked, logoDarkPicked]
     )
 
-    const primary = /^#[0-9a-fA-F]{6}$/.test(draft.primary_color) ? draft.primary_color : '#10B981'
+    const primary = HEX_RE.test(draft.primary_color) ? draft.primary_color : '#10B981'
     const accentForMode = previewMode === 'light'
-        ? (/^#[0-9a-fA-F]{6}$/.test(draft.accent_light) ? draft.accent_light : primary)
-        : (/^#[0-9a-fA-F]{6}$/.test(draft.accent_dark) ? draft.accent_dark : primary)
+        ? (HEX_RE.test(draft.accent_light) ? draft.accent_light : primary)
+        : (HEX_RE.test(draft.accent_dark) ? draft.accent_dark : primary)
+    const onAccent = pickOnColor(accentForMode)
+    const initials = teamInitials(draft.name)
 
     const readable = useMemo(() => {
         try {
             return isThemeReadable({
                 brandColor: primary,
-                accentLight: /^#[0-9a-fA-F]{6}$/.test(draft.accent_light) ? draft.accent_light : null,
-                accentDark: /^#[0-9a-fA-F]{6}$/.test(draft.accent_dark) ? draft.accent_dark : null,
+                accentLight: HEX_RE.test(draft.accent_light) ? draft.accent_light : null,
+                accentDark: HEX_RE.test(draft.accent_dark) ? draft.accent_dark : null,
                 neutralTint: draft.neutral_tint,
             })
         } catch {
@@ -238,16 +279,24 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
         }
     }, [primary, draft.accent_light, draft.accent_dark, draft.neutral_tint])
 
-    const splash = /^#[0-9a-fA-F]{6}$/.test(draft.splash_bg_color) ? draft.splash_bg_color : primary
+    const splash = HEX_RE.test(draft.splash_bg_color) ? draft.splash_bg_color : primary
     const shownLogo = previewMode === 'dark'
         ? (logoDarkPreview ?? brand.logo_url_dark ?? logoPreview ?? brand.logo_url)
         : (logoPreview ?? brand.logo_url)
+    const lightLogo = logoPreview ?? brand.logo_url
 
-    const previewBg = previewMode === 'light' ? '#FAFAFA' : '#0A0A0A'
-    const previewSurface = previewMode === 'light' ? '#FFFFFF' : '#171717'
-    const previewText = previewMode === 'light' ? '#171717' : '#FAFAFA'
-    const previewMuted = previewMode === 'light' ? '#737373' : '#A3A3A3'
-    const previewBorder = previewMode === 'light' ? '#E5E5E5' : '#262626'
+    // Neutrales del mock = familia ink del kit (BrandPreview, teams-equipo.jsx:85-88).
+    const N = previewMode === 'dark'
+        ? { bg: '#0F1729', surf: '#1A2233', text: '#F4F6FB', muted: '#93A0B8', border: '#2A3447' }
+        : { bg: '#F6F8FB', surf: '#FFFFFF', text: '#0F1729', muted: '#64748B', border: '#E6EAF1' }
+    if (draft.neutral_tint) {
+        N.border = hexA(primary, previewMode === 'dark' ? 0.34 : 0.2)
+        if (previewMode === 'light') N.surf = hexA(primary, 0.03)
+    }
+
+    const splashText = HEX_RE.test(draft.loader_text_color) ? draft.loader_text_color : '#FFFFFF'
+    const showSplashText = draft.use_custom_loader && (!!draft.loader_text || draft.loader_icon_mode === 'text')
+    const splashLabel = (draft.loader_text || (draft.name || 'EVA')).toUpperCase().slice(0, 12)
 
     function submit(fd: FormData) {
         setFeedback(null)
@@ -255,15 +304,17 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
             const res = await updateTeamBrandAction(teamId, fd)
             if (res?.error) { setFeedback({ type: 'error', msg: res.error }); return }
             setSaved(draft)
-            setLogoFilePicked(false)
-            setFeedback({ type: 'success', msg: 'Marca publicada. El equipo y los alumnos ya la ven.' })
+            setLogoPicked(false)
+            setLogoDarkPicked(false)
+            setFeedback({ type: 'success', msg: 'Marca publicada · el equipo y los alumnos ya la ven' })
+            window.setTimeout(() => setFeedback((f) => (f?.type === 'success' ? null : f)), 2600)
         })
     }
 
     const dis = !canEdit || pending
 
     return (
-        <form ref={formRef} action={submit} className="space-y-4">
+        <form ref={formRef} action={submit}>
             {/* name/colores van como inputs hidden controlados para que el form mande el draft */}
             <input type="hidden" name="name" value={draft.name} />
             <input type="hidden" name="primary_color" value={draft.primary_color} />
@@ -276,310 +327,336 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
             <input type="hidden" name="use_custom_loader" value={draft.use_custom_loader ? 'true' : 'false'} />
             <input type="hidden" name="neutral_tint" value={draft.neutral_tint ? 'true' : 'false'} />
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_minmax(260px,300px)]">
-                {/* ── Controles ─────────────────────────────────────── */}
-                <div className="order-2 min-w-0 space-y-4 lg:order-1">
-                    <Section icon={Type} title="Identidad">
-                        <div className="space-y-4">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="tbs-name" className="text-xs font-medium text-muted">Nombre del equipo</Label>
-                                <Input
-                                    id="tbs-name"
-                                    value={draft.name}
-                                    onChange={(e) => set('name', e.target.value)}
-                                    disabled={dis}
-                                    minLength={2}
-                                    maxLength={80}
-                                />
-                            </div>
-                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                <LogoDrop
-                                    label="Logo · modo claro"
-                                    currentUrl={brand.logo_url}
-                                    previewUrl={logoPreview}
-                                    inputName="logo"
-                                    disabled={dis}
-                                    onFile={(f) => {
-                                        setLogoPreview(f ? URL.createObjectURL(f) : null)
-                                        setLogoFilePicked(true)
-                                    }}
-                                />
-                                <LogoDrop
-                                    label="Logo · modo oscuro"
-                                    currentUrl={brand.logo_url_dark}
-                                    previewUrl={logoDarkPreview}
-                                    inputName="logo_dark"
-                                    disabled={dis}
-                                    dark
-                                    onFile={(f) => {
-                                        setLogoDarkPreview(f ? URL.createObjectURL(f) : null)
-                                        setLogoFilePicked(true)
-                                    }}
-                                />
-                            </div>
+            {/* ── Live preview con toggle claro/oscuro ─────────────────── */}
+            <div className="mb-2.5 flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-muted">Vista previa del alumno</span>
+                <div className="flex gap-0.5 rounded-pill bg-surface-sunken p-[3px]">
+                    {([['light', Sun], ['dark', Moon]] as const).map(([m, MIcon]) => (
+                        <button
+                            key={m}
+                            type="button"
+                            aria-label={m}
+                            onClick={() => setPreviewMode(m)}
+                            className={cn(
+                                'flex h-[26px] w-8 items-center justify-center rounded-pill',
+                                previewMode === m ? 'bg-surface-card text-strong shadow-sm' : 'text-subtle'
+                            )}
+                        >
+                            <MIcon className="h-3.5 w-3.5" />
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {/* Teléfono del alumno — BrandPreview del kit (sin bisel, card radius 20) */}
+            <div className="w-full overflow-hidden rounded-card shadow-sm" style={{ border: `1px solid ${N.border}`, background: N.bg }}>
+                <div className="flex items-center gap-2 px-[13px] pb-2.5 pt-3">
+                    {shownLogo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={shownLogo} alt="" className="block h-[22px] w-auto max-w-[90px] object-contain" />
+                    ) : (
+                        <>
+                            <span
+                                className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px] text-[11px] font-black"
+                                style={{ background: primary, color: pickOnColor(primary) }}
+                            >
+                                {initials || 'E'}
+                            </span>
+                            <span className="truncate font-display text-sm font-extrabold" style={{ color: N.text }}>
+                                {draft.name || 'Tu equipo'}
+                            </span>
+                        </>
+                    )}
+                    <span className="ml-auto h-[26px] w-[26px] shrink-0 rounded-full" style={{ background: N.surf, border: `1px solid ${N.border}` }} />
+                </div>
+                <div className="mx-[13px] mb-2.5 rounded-control p-3" style={{ background: N.surf, border: `1px solid ${N.border}` }}>
+                    <div className="mb-2 flex items-baseline justify-between">
+                        <span className="text-[10px] font-extrabold tracking-[0.08em]" style={{ color: N.muted }}>HOY</span>
+                        <span className="text-[10px] font-bold" style={{ color: accentForMode }}>4/6 series</span>
+                    </div>
+                    <div className="mb-[11px] h-[7px] overflow-hidden rounded" style={{ background: hexA(accentForMode, 0.16) }}>
+                        <div className="h-full w-[64%] rounded" style={{ background: accentForMode }} />
+                    </div>
+                    <div
+                        className="flex h-[34px] items-center justify-center rounded-sm text-xs font-extrabold"
+                        style={{ background: accentForMode, color: onAccent }}
+                    >
+                        Empezar entrenamiento
+                    </div>
+                </div>
+                <div className="mx-[13px] mb-3 flex items-center gap-2 rounded-control px-3 py-2.5" style={{ background: N.surf, border: `1px solid ${N.border}` }}>
+                    <span
+                        className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[8px]"
+                        style={{ background: hexA(accentForMode, 0.16), color: accentForMode }}
+                    >
+                        <Utensils className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="flex-1 text-[11.5px] font-bold" style={{ color: N.text }}>Nutrición</span>
+                    <span className="rounded-pill px-2 py-0.5 text-[10.5px] font-extrabold" style={{ background: accentForMode, color: onAccent }}>82%</span>
+                </div>
+                <div className="flex pb-2.5 pt-2" style={{ borderTop: `1px solid ${N.border}` }}>
+                    {[House, Dumbbell, Utensils, UserRound].map((TabIcon, i) => (
+                        <span key={i} className="flex flex-1 justify-center" style={{ color: i === 0 ? accentForMode : N.muted }}>
+                            <TabIcon className="h-[17px] w-[17px]" />
+                        </span>
+                    ))}
+                </div>
+            </div>
+
+            {/* Bloqueo de edición para miembros */}
+            <fieldset disabled={!canEdit} className={cn('min-w-0 border-0 p-0', !canEdit && 'opacity-60')}>
+                {/* Identidad: nombre + logos */}
+                <div className="mt-4">
+                    <Label htmlFor="tbs-name" className="mb-1.5 block text-xs font-bold text-strong">Nombre del equipo</Label>
+                    <Input
+                        id="tbs-name"
+                        value={draft.name}
+                        onChange={(e) => set('name', e.target.value)}
+                        disabled={dis}
+                        minLength={2}
+                        maxLength={80}
+                        placeholder="Tu equipo"
+                        className="h-11 font-display text-base font-bold"
+                    />
+                </div>
+                <div className="mt-3.5 flex gap-3">
+                    <LogoDrop
+                        label="Logo claro"
+                        hint="PNG/JPEG · 512×512 · ≤2 MB"
+                        currentUrl={brand.logo_url}
+                        previewUrl={logoPreview}
+                        inputName="logo"
+                        disabled={dis}
+                        onFile={(f) => {
+                            setLogoPreview(f ? URL.createObjectURL(f) : null)
+                            setLogoPicked(!!f)
+                        }}
+                    />
+                    <LogoDrop
+                        label="Logo oscuro"
+                        hint="Para fondos oscuros"
+                        currentUrl={brand.logo_url_dark}
+                        previewUrl={logoDarkPreview}
+                        inputName="logo_dark"
+                        disabled={dis}
+                        dark
+                        onFile={(f) => {
+                            setLogoDarkPreview(f ? URL.createObjectURL(f) : null)
+                            setLogoDarkPicked(!!f)
+                        }}
+                    />
+                </div>
+
+                {/* Color principal */}
+                <div className="mt-4">
+                    <Label className="mb-2 block text-xs font-bold text-strong">Color principal</Label>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {PRESET_COLORS.map((c) => (
+                            <button
+                                key={c}
+                                type="button"
+                                disabled={dis}
+                                onClick={() => set('primary_color', c)}
+                                className={cn(
+                                    'h-8 w-8 rounded-full transition-transform active:scale-90',
+                                    draft.primary_color.toLowerCase() === c.toLowerCase()
+                                        ? 'border-[2.5px] border-strong shadow-[inset_0_0_0_2px_var(--surface-card)]'
+                                        : 'border-2 border-subtle hover:scale-105'
+                                )}
+                                style={{ backgroundColor: c }}
+                                aria-label={`Color ${c}`}
+                            />
+                        ))}
+                        <label className="relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border-2 border-dashed border-strong text-subtle">
+                            <Plus className="h-[15px] w-[15px]" />
+                            <input
+                                type="color"
+                                value={primary}
+                                disabled={dis}
+                                onChange={(e) => set('primary_color', e.target.value)}
+                                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                aria-label="Color personalizado"
+                            />
+                        </label>
+                    </div>
+                </div>
+
+                {/* Banner AA */}
+                <div className={cn(
+                    'mt-3.5 flex items-center gap-2 rounded-sm px-3 py-[9px] text-xs font-semibold',
+                    readable
+                        ? 'bg-[var(--success-100)] text-[var(--success-700)]'
+                        : 'bg-[var(--warning-100)] text-[var(--warning-700)]'
+                )}>
+                    {readable
+                        ? <><ShieldCheck className="h-[15px] w-[15px] shrink-0" /> Legibilidad AA: los textos se leen bien.</>
+                        : <><AlertTriangle className="h-[15px] w-[15px] shrink-0" /> Contraste bajo — EVA lo ajustará automáticamente al publicar.</>}
+                </div>
+
+                {/* Avanzado: colores */}
+                <Collapsible icon={Palette} title="Ajustes avanzados de color" sub="Acentos y fondo del splash">
+                    <div className="flex flex-col gap-3.5">
+                        <ColorInput label="Acento · modo claro" value={draft.accent_light} onChange={(v) => set('accent_light', v)} fallback={primary} disabled={dis} hint="Vacío = usa el color principal" />
+                        <ColorInput label="Acento · modo oscuro" value={draft.accent_dark} onChange={(v) => set('accent_dark', v)} fallback={primary} disabled={dis} hint="Vacío = usa el color principal" />
+                        <ColorInput label="Fondo del splash" value={draft.splash_bg_color} onChange={(v) => set('splash_bg_color', v)} fallback={primary} disabled={dis} hint="Vacío = usa el color principal" />
+                        <button
+                            type="button"
+                            disabled={dis}
+                            onClick={() => set('neutral_tint', !draft.neutral_tint)}
+                            className="flex w-full items-center gap-[11px] rounded-sm bg-surface-sunken px-3 py-2.5 text-left"
+                        >
+                            <span
+                                className={cn(
+                                    'flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[6px]',
+                                    !draft.neutral_tint && 'border-2 border-strong'
+                                )}
+                                style={draft.neutral_tint ? { background: primary, color: pickOnColor(primary) } : undefined}
+                            >
+                                {draft.neutral_tint && <Check className="h-3.5 w-3.5" />}
+                            </span>
+                            <span className="flex-1 text-[13px] font-semibold text-strong">Teñir los grises con el color de marca</span>
+                        </button>
+                    </div>
+                </Collapsible>
+
+                {/* Avanzado: loader */}
+                <Collapsible icon={Loader} title="Pantalla de carga" sub="Lo que ven al abrir la app del equipo">
+                    <button
+                        type="button"
+                        disabled={dis}
+                        onClick={() => set('use_custom_loader', !draft.use_custom_loader)}
+                        className="mb-3.5 flex w-full items-center gap-2.5 rounded-sm bg-surface-sunken px-3 py-2.5 text-left"
+                    >
+                        <span className="flex-1 text-[13px] font-semibold text-strong">Loader personalizado</span>
+                        <span
+                            className="relative h-[22px] w-[38px] shrink-0 rounded-pill transition-colors"
+                            style={{ background: draft.use_custom_loader ? primary : 'var(--ink-200)' }}
+                        >
+                            <span className={cn(
+                                'absolute top-0.5 h-[18px] w-[18px] rounded-full bg-white transition-[left]',
+                                draft.use_custom_loader ? 'left-[18px]' : 'left-0.5'
+                            )} />
+                        </span>
+                    </button>
+                    <div className={cn('flex flex-col gap-3.5', !draft.use_custom_loader && 'pointer-events-none opacity-50')}>
+                        <div>
+                            <Label htmlFor="tbs-loader-text" className="mb-1.5 block text-xs font-bold text-strong">Texto del loader</Label>
+                            <Input
+                                id="tbs-loader-text"
+                                value={draft.loader_text}
+                                onChange={(e) => set('loader_text', e.target.value)}
+                                disabled={dis}
+                                maxLength={24}
+                                placeholder={draft.name.toUpperCase().slice(0, 12)}
+                                className="h-[42px] text-sm font-semibold"
+                            />
                         </div>
-                    </Section>
-
-                    <Section icon={Palette} title="Colores">
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                <Label className="text-xs font-medium text-muted">Color principal</Label>
-                                <div className="flex flex-wrap items-center gap-2">
-                                    {PRESET_COLORS.map((c) => (
-                                        <button
-                                            key={c}
-                                            type="button"
-                                            disabled={dis}
-                                            onClick={() => set('primary_color', c)}
-                                            className={cn(
-                                                'h-8 w-8 rounded-full border-2 transition-transform active:scale-90',
-                                                draft.primary_color.toLowerCase() === c.toLowerCase()
-                                                    ? 'border-strong scale-110 shadow-md'
-                                                    : 'border-transparent hover:scale-105'
-                                            )}
-                                            style={{ backgroundColor: c }}
-                                            aria-label={`Color ${c}`}
-                                        />
-                                    ))}
-                                    <label
-                                        className="relative flex h-8 items-center gap-1.5 cursor-pointer rounded-full border border-subtle px-2.5 text-[11px] font-medium text-muted hover:border-primary/50"
-                                    >
-                                        <span className="h-3.5 w-3.5 rounded-full border border-subtle" style={{ backgroundColor: primary }} />
-                                        {draft.primary_color.toUpperCase()}
-                                        <input
-                                            type="color"
-                                            value={primary}
-                                            disabled={dis}
-                                            onChange={(e) => set('primary_color', e.target.value)}
-                                            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                                            aria-label="Color personalizado"
-                                        />
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div className={cn(
-                                'flex items-start gap-2 rounded-xl border px-3 py-2.5 text-xs',
-                                readable
-                                    ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400'
-                                    : 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                            )}>
-                                {readable
-                                    ? <><ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Legibilidad AA: los textos sobre este color se leen bien en claro y oscuro.</>
-                                    : <><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> Contraste bajo: este color puede costar de leer. EVA lo ajustará automáticamente donde haga falta, pero considera un tono más oscuro.</>}
-                            </div>
-
-                            <details className="group">
-                                <summary className="cursor-pointer list-none text-xs font-medium text-muted hover:text-strong">
-                                    <span className="inline-flex items-center gap-1">Ajustes avanzados de color <span className="transition-transform group-open:rotate-90">›</span></span>
-                                </summary>
-                                <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                    <ColorInput label="Acento · modo claro" value={draft.accent_light} onChange={(v) => set('accent_light', v)} fallback={primary} disabled={dis} hint="Vacío = usa el color principal" />
-                                    <ColorInput label="Acento · modo oscuro" value={draft.accent_dark} onChange={(v) => set('accent_dark', v)} fallback={primary} disabled={dis} hint="Vacío = usa el color principal" />
-                                    <ColorInput label="Fondo del splash" value={draft.splash_bg_color} onChange={(v) => set('splash_bg_color', v)} fallback={primary} disabled={dis} />
-                                    <label className="flex items-center gap-2 self-end pb-1 text-sm">
-                                        <input
-                                            type="checkbox"
-                                            checked={draft.neutral_tint}
-                                            onChange={(e) => set('neutral_tint', e.target.checked)}
-                                            disabled={dis}
-                                            className="h-4 w-4 rounded border-subtle"
-                                        />
-                                        <span className="text-xs">Teñir grises con el color de marca</span>
-                                    </label>
-                                </div>
-                            </details>
-                        </div>
-                    </Section>
-
-                    <Section icon={Sparkles} title="Pantalla de carga">
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="tbs-loader-text" className="text-xs font-medium text-muted">Texto (≤24)</Label>
-                                <Input
-                                    id="tbs-loader-text"
-                                    value={draft.loader_text}
-                                    onChange={(e) => set('loader_text', e.target.value)}
-                                    disabled={dis}
-                                    maxLength={24}
-                                    placeholder={draft.name.toUpperCase().slice(0, 12)}
-                                />
-                            </div>
-                            <ColorInput label="Color del texto" value={draft.loader_text_color} onChange={(v) => set('loader_text_color', v)} fallback="#FFFFFF" disabled={dis} />
-                            <div className="space-y-1.5">
-                                <Label className="text-xs font-medium text-muted">Ícono</Label>
-                                <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-subtle text-xs font-medium" role="radiogroup" aria-label="Ícono del loader">
-                                    {ICON_MODES.map((m) => (
+                        <ColorInput label="Color del texto" value={draft.loader_text_color} onChange={(v) => set('loader_text_color', v)} fallback="#FFFFFF" disabled={dis} />
+                        <div>
+                            <Label className="mb-2 block text-xs font-bold text-strong">Ícono del loader</Label>
+                            <div className="flex gap-1.5" role="radiogroup" aria-label="Ícono del loader">
+                                {ICON_MODES.map((m) => {
+                                    const active = draft.loader_icon_mode === m.value
+                                    return (
                                         <button
                                             key={m.value}
                                             type="button"
                                             role="radio"
-                                            aria-checked={draft.loader_icon_mode === m.value}
+                                            aria-checked={active}
                                             disabled={dis}
                                             onClick={() => set('loader_icon_mode', m.value)}
                                             className={cn(
-                                                'min-h-[36px] px-2 transition-colors',
-                                                draft.loader_icon_mode === m.value
-                                                    ? 'bg-primary text-primary-foreground'
-                                                    : 'bg-surface-app text-muted hover:bg-surface-sunken'
+                                                'h-[38px] min-w-0 flex-1 rounded-sm text-[12.5px] font-bold transition-colors',
+                                                active ? 'text-strong' : 'border-[1.5px] border-default bg-surface-card text-muted'
                                             )}
+                                            style={active ? { border: `2px solid ${primary}`, background: hexA(primary, 0.08) } : undefined}
                                         >
                                             {m.label}
                                         </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <label className="flex items-center gap-2 self-end pb-1 text-sm">
-                                <input
-                                    type="checkbox"
-                                    checked={draft.use_custom_loader}
-                                    onChange={(e) => set('use_custom_loader', e.target.checked)}
-                                    disabled={dis}
-                                    className="h-4 w-4 rounded border-subtle"
-                                />
-                                <span className="text-xs">Activar loader personalizado</span>
-                            </label>
-                        </div>
-                    </Section>
-                </div>
-
-                {/* ── Live preview ──────────────────────────────────── */}
-                <div className="order-1 lg:order-2 lg:sticky lg:top-4 lg:self-start">
-                    <div className="rounded-card border border-subtle bg-surface-card p-4">
-                        <div className="mb-3 flex items-center justify-between">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Vista del alumno</p>
-                            <div className="flex overflow-hidden rounded-control border border-subtle" role="radiogroup" aria-label="Modo de la vista previa">
-                                <button
-                                    type="button"
-                                    role="radio"
-                                    aria-checked={previewMode === 'light'}
-                                    onClick={() => setPreviewMode('light')}
-                                    className={cn('flex min-h-[32px] items-center px-2.5', previewMode === 'light' ? 'bg-surface-sunken text-strong' : 'text-muted')}
-                                >
-                                    <Sun className="h-3.5 w-3.5" />
-                                </button>
-                                <button
-                                    type="button"
-                                    role="radio"
-                                    aria-checked={previewMode === 'dark'}
-                                    onClick={() => setPreviewMode('dark')}
-                                    className={cn('flex min-h-[32px] items-center px-2.5', previewMode === 'dark' ? 'bg-surface-sunken text-strong' : 'text-muted')}
-                                >
-                                    <Moon className="h-3.5 w-3.5" />
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Phone frame */}
-                        <div className="mx-auto w-full max-w-[230px] overflow-hidden rounded-[28px] border-[6px] border-neutral-900 shadow-xl dark:border-neutral-700">
-                            <div className="flex flex-col" style={{ backgroundColor: previewBg, minHeight: 360 }}>
-                                {/* Status + header */}
-                                <div className="px-3 pb-2 pt-3" style={{ backgroundColor: previewSurface, borderBottom: `1px solid ${previewBorder}` }}>
-                                    <div className="flex items-center gap-2">
-                                        <span className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg" style={{ backgroundColor: `${accentForMode}1f` }}>
-                                            {shownLogo ? (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img src={shownLogo} alt="" className="h-full w-full object-contain p-0.5" />
-                                            ) : (
-                                                <UserRound className="h-3.5 w-3.5" style={{ color: accentForMode }} />
-                                            )}
-                                        </span>
-                                        <div className="min-w-0">
-                                            <p className="truncate text-[11px] font-bold leading-tight" style={{ color: previewText }}>
-                                                {draft.name || 'Tu equipo'}
-                                            </p>
-                                            <p className="text-[9px] leading-tight" style={{ color: previewMuted }}>Hola, Alumna 👋</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Body mock */}
-                                <div className="flex-1 space-y-2 p-3">
-                                    <div className="rounded-xl p-2.5" style={{ backgroundColor: previewSurface, border: `1px solid ${previewBorder}` }}>
-                                        <p className="text-[9px] font-semibold" style={{ color: previewMuted }}>HOY</p>
-                                        <p className="text-[11px] font-bold" style={{ color: previewText }}>Tren superior · 45 min</p>
-                                        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: previewBorder }}>
-                                            <div className="h-full w-2/3 rounded-full" style={{ backgroundColor: accentForMode }} />
-                                        </div>
-                                    </div>
-                                    <button type="button" tabIndex={-1} className="w-full cursor-default rounded-xl py-2 text-[11px] font-bold text-white" style={{ backgroundColor: accentForMode }}>
-                                        Empezar entrenamiento
-                                    </button>
-                                    <div className="rounded-xl p-2.5" style={{ backgroundColor: previewSurface, border: `1px solid ${previewBorder}` }}>
-                                        <p className="text-[9px] font-semibold" style={{ color: previewMuted }}>NUTRICIÓN</p>
-                                        <div className="mt-1 flex items-center justify-between">
-                                            <p className="text-[10px]" style={{ color: previewText }}>1.450 / 2.200 kcal</p>
-                                            <span className="rounded-full px-1.5 py-0.5 text-[8px] font-bold" style={{ backgroundColor: `${accentForMode}22`, color: accentForMode }}>66%</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Tab bar */}
-                                <div className="flex items-center justify-around px-2 py-2" style={{ backgroundColor: previewSurface, borderTop: `1px solid ${previewBorder}` }}>
-                                    <House className="h-4 w-4" style={{ color: accentForMode }} />
-                                    <Dumbbell className="h-4 w-4" style={{ color: previewMuted }} />
-                                    <Apple className="h-4 w-4" style={{ color: previewMuted }} />
-                                    <UserRound className="h-4 w-4" style={{ color: previewMuted }} />
-                                </div>
+                                    )
+                                })}
                             </div>
                         </div>
 
                         {/* Splash preview */}
-                        <div className="mt-3">
-                            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">Pantalla de carga</p>
-                            <div className="flex h-20 flex-col items-center justify-center gap-1.5 rounded-xl" style={{ backgroundColor: splash }}>
-                                {draft.loader_icon_mode === 'logo' && shownLogo && (
+                        <div>
+                            <div className="flex h-[150px] flex-col items-center justify-center gap-2.5 overflow-hidden rounded-[16px]" style={{ backgroundColor: splash }}>
+                                {draft.use_custom_loader && draft.loader_icon_mode === 'logo' && (lightLogo ? (
                                     // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={shownLogo} alt="" className="h-7 w-7 object-contain" />
+                                    <img src={lightLogo} alt="" className="h-10 w-auto max-w-[140px] object-contain" />
+                                ) : (
+                                    <span
+                                        className="flex h-[46px] w-[46px] items-center justify-center rounded-[12px] font-display text-xl font-black"
+                                        style={{ background: hexA(splashText, 0.16), color: splashText }}
+                                    >
+                                        {initials || 'E'}
+                                    </span>
+                                ))}
+                                {draft.use_custom_loader && draft.loader_icon_mode === 'eva' && (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                        src={BRAND_APP_ICON}
+                                        alt="EVA"
+                                        className="h-[46px] w-auto object-contain"
+                                        style={{ filter: pickOnColor(splash) !== '#ffffff' ? 'invert(1)' : 'none' }}
+                                    />
                                 )}
-                                {draft.loader_icon_mode === 'logo' && !shownLogo && <Sparkles className="h-5 w-5 text-white/80" />}
-                                {draft.loader_icon_mode === 'eva' && <Sparkles className="h-5 w-5 text-white/80" />}
-                                {(draft.use_custom_loader && (draft.loader_text || draft.loader_icon_mode === 'text')) && (
-                                    <p className="text-[11px] font-black tracking-[0.2em]" style={{ color: draft.loader_text_color || '#FFFFFF' }}>
-                                        {(draft.loader_text || draft.name).toUpperCase().slice(0, 24)}
-                                    </p>
+                                {showSplashText && (
+                                    <span className="font-display text-[17px] font-extrabold tracking-[0.04em]" style={{ color: splashText }}>
+                                        {splashLabel}
+                                    </span>
+                                )}
+                                {(!draft.use_custom_loader || draft.loader_icon_mode === 'none') && !showSplashText && (
+                                    <span
+                                        className="h-[30px] w-[30px] animate-spin rounded-full border-[3px]"
+                                        style={{ borderColor: hexA(pickOnColor(splash), 0.3), borderTopColor: pickOnColor(splash) }}
+                                    />
                                 )}
                             </div>
+                            <div className="mt-2 text-center font-mono text-[11.5px] text-subtle">/t/{teamSlug}</div>
                         </div>
-
-                        <p className="mt-3 text-center font-mono text-[10px] text-muted/60">/t/{teamSlug}</p>
                     </div>
-                </div>
-            </div>
+                </Collapsible>
+            </fieldset>
 
-            {feedback && (
-                <div className={cn(
-                    'flex items-center gap-2 rounded-control border px-4 py-3 text-sm',
-                    feedback.type === 'error'
-                        ? 'border-red-500/20 bg-red-500/10 text-red-500 dark:text-red-400'
-                        : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-500'
-                )}>
-                    {feedback.type === 'success' && <Check className="h-4 w-4" />}
+            {feedback?.type === 'error' && (
+                <div className="mt-4 flex items-center gap-2 rounded-control bg-[var(--danger-100)] px-4 py-3 text-sm font-semibold text-[var(--danger-600)]">
                     {feedback.msg}
                 </div>
             )}
 
-            {/* Sticky save bar — aparece solo con cambios sin publicar */}
+            {/* Toast de publicación — pill flotante success del kit (teams-equipo.jsx:470-472) */}
+            {feedback?.type === 'success' && (
+                <div className="fixed bottom-[100px] left-1/2 z-[80] flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-pill bg-[var(--success-600)] px-[18px] py-3 text-[13px] font-bold text-white shadow-[var(--shadow-lg)] dark:text-[var(--ink-950)]">
+                    <CheckCircle2 className="h-4 w-4" /> {feedback.msg}
+                </div>
+            )}
+
+            {/* Sticky publish bar — barra oscura inverse del kit (teams-equipo.jsx:461-468) */}
             {canEdit && dirty && (
-                <div className="sticky bottom-2 z-20 flex items-center justify-between gap-3 rounded-card border border-subtle bg-surface-card/95 px-4 py-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-surface-card/80">
-                    <p className="text-xs text-muted">
-                        <span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-amber-500" />
-                        Cambios sin publicar
-                    </p>
-                    <div className="flex items-center gap-2">
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            disabled={pending}
-                            onClick={() => { setDraft(saved); setLogoPreview(null); setLogoDarkPreview(null); setLogoFilePicked(false); formRef.current?.reset() }}
-                        >
-                            Descartar
-                        </Button>
-                        <Button type="submit" size="sm" disabled={pending}>
-                            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Publicar marca'}
-                        </Button>
-                    </div>
+                <div className="sticky bottom-3 z-20 mt-4 flex items-center gap-3 rounded-card bg-[var(--surface-inverse)] px-4 py-3 shadow-[var(--shadow-xl)]">
+                    <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[var(--warning-500)]" />
+                    <span className="min-w-0 flex-1 text-[13px] font-semibold text-on-dark">Cambios sin publicar</span>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={pending}
+                        className="border border-[var(--border-inverse)] bg-transparent text-on-dark hover:bg-white/10 hover:text-on-dark"
+                        onClick={() => {
+                            setDraft(saved)
+                            setLogoPreview(null)
+                            setLogoDarkPreview(null)
+                            setLogoPicked(false)
+                            setLogoDarkPicked(false)
+                            formRef.current?.reset()
+                        }}
+                    >
+                        Descartar
+                    </Button>
+                    <Button type="submit" variant="sport" size="sm" disabled={pending}>
+                        {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Publicar'}
+                    </Button>
                 </div>
             )}
         </form>

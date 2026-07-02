@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, type ReactNode } from 'react'
+import { useState, useSyncExternalStore, useTransition, type ReactNode } from 'react'
 import Image from 'next/image'
 import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -12,10 +12,26 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from '@/components/ui/dialog'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import { markCheckInReviewed } from './_actions/client-detail.actions'
+import { SectionTitle } from './_components/SectionTitle'
+
+function subscribeMd(cb: () => void) {
+    const mq = window.matchMedia('(min-width: 768px)')
+    mq.addEventListener('change', cb)
+    return () => mq.removeEventListener('change', cb)
+}
+
+/** matchMedia md-up (mismo patrón que AssignModal): desktop → Dialog, móvil → bottom-sheet. */
+function useIsDesktopMd() {
+    return useSyncExternalStore(
+        subscribeMd,
+        () => window.matchMedia('(min-width: 768px)').matches,
+        () => true
+    )
+}
 
 type CheckInRow = {
     id?: string
@@ -78,6 +94,7 @@ type ProfileCheckInSnapshotProps = {
 
 export function ProfileCheckInSnapshot({ checkIn, clientId, onViewHistory }: ProfileCheckInSnapshotProps) {
     const [open, setOpen] = useState(false)
+    const isDesktop = useIsDesktopMd()
     const [reviewed, setReviewed] = useState(Boolean(checkIn?.reviewed_at))
     const [pending, startTransition] = useTransition()
     const photo =
@@ -120,23 +137,17 @@ export function ProfileCheckInSnapshot({ checkIn, clientId, onViewHistory }: Pro
 
     return (
         <Card padding="md" className="h-full gap-0">
-            <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
-                <Camera className="h-4 w-4" />
-                Último check-in
-            </h3>
+            <SectionTitle style={{ marginTop: 0 }}>Último check-in</SectionTitle>
             <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-muted">
                 {relative}
             </p>
 
             {photo && (
-                <Dialog open={open} onOpenChange={setOpen}>
-                    <DialogTrigger
-                        render={
-                            <button
-                                type="button"
-                                className="group relative z-10 mb-4 aspect-[4/3] max-h-44 w-full overflow-hidden rounded-control border border-subtle bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
-                            />
-                        }
+                <>
+                    <button
+                        type="button"
+                        onClick={() => setOpen(true)}
+                        className="group relative z-10 mb-4 aspect-[4/3] max-h-44 w-full overflow-hidden rounded-control border border-subtle bg-surface-sunken focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
                     >
                         <Image
                             src={photo}
@@ -148,18 +159,42 @@ export function ProfileCheckInSnapshot({ checkIn, clientId, onViewHistory }: Pro
                         <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent py-2 text-[9px] font-black uppercase tracking-widest text-white text-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                             Ampliar
                         </span>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-lg border-border/60">
-                        <DialogHeader>
-                            <DialogTitle className="uppercase font-black tracking-tight">
-                                Foto del check-in
-                            </DialogTitle>
-                        </DialogHeader>
-                        <div className="relative aspect-[3/4] w-full max-h-[70vh] rounded-lg overflow-hidden bg-black">
-                            <Image src={photo} alt="Check-in ampliado" fill sizes="(max-width: 768px) 100vw, 600px" className="object-contain" />
-                        </div>
-                    </DialogContent>
-                </Dialog>
+                    </button>
+                    {isDesktop ? (
+                        <Dialog open={open} onOpenChange={setOpen}>
+                            <DialogContent className="max-w-lg border-subtle bg-surface-card">
+                                <DialogHeader>
+                                    <DialogTitle className="font-display text-lg font-extrabold normal-case tracking-[-0.02em] text-strong">
+                                        Foto del check-in
+                                    </DialogTitle>
+                                </DialogHeader>
+                                <div className="relative aspect-[3/4] w-full max-h-[70vh] rounded-control overflow-hidden bg-black">
+                                    <Image src={photo} alt="Check-in ampliado" fill sizes="(max-width: 768px) 100vw, 600px" className="object-contain" />
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+                    ) : (
+                        <Sheet open={open} onOpenChange={setOpen}>
+                            <SheetContent
+                                side="bottom"
+                                showCloseButton={false}
+                                className="max-h-[min(88dvh,88svh)] gap-0 rounded-t-sheet border-subtle bg-surface-card p-0 text-body"
+                            >
+                                <div className="flex max-h-[min(88dvh,88svh)] flex-col overflow-y-auto overscroll-contain px-[max(1.25rem,env(safe-area-inset-left))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-3">
+                                    <div className="mx-auto mb-3 h-1 w-9 shrink-0 rounded-full bg-[var(--border-strong)]" aria-hidden="true" />
+                                    <SheetHeader className="border-0 bg-transparent p-0 pb-3">
+                                        <SheetTitle className="font-display text-lg font-extrabold normal-case tracking-[-0.02em] text-strong">
+                                            Foto del check-in
+                                        </SheetTitle>
+                                    </SheetHeader>
+                                    <div className="relative aspect-[3/4] w-full max-h-[70dvh] rounded-control overflow-hidden bg-black">
+                                        <Image src={photo} alt="Check-in ampliado" fill sizes="100vw" className="object-contain" />
+                                    </div>
+                                </div>
+                            </SheetContent>
+                        </Sheet>
+                    )}
+                </>
             )}
 
             <div className="relative z-10 flex-1 space-y-0">

@@ -38,27 +38,29 @@ export function ArchiveClientButton({ clientId, clientName, isArchived }: Archiv
     return (
         <AlertDialog>
             <AlertDialogTrigger>
-                <div className="p-2 rounded-lg text-muted-foreground hover:text-amber-600 hover:bg-amber-500/10 transition-all duration-150">
+                <div className="p-2 rounded-control text-muted hover:text-[var(--warning-600)] hover:bg-[var(--warning-100)] transition-all duration-150">
                     {isArchived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
                 </div>
             </AlertDialogTrigger>
-            <AlertDialogContent className="bg-card border border-border text-foreground rounded-2xl">
+            <AlertDialogContent className="bg-surface-card border border-subtle text-body rounded-card">
                 <AlertDialogHeader>
-                    <AlertDialogTitle className="flex items-center gap-2 text-foreground">
-                        <AlertTriangle className="w-5 h-5 text-amber-500" />
+                    <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-control bg-[var(--warning-100)] text-[var(--warning-700)]">
+                        <AlertTriangle className="h-[22px] w-[22px]" />
+                    </div>
+                    <AlertDialogTitle className="font-display font-extrabold normal-case tracking-[-0.01em] text-strong">
                         {isArchived ? 'Reactivar alumno' : 'Archivar alumno'}
                     </AlertDialogTitle>
-                    <AlertDialogDescription className="text-muted-foreground">
+                    <AlertDialogDescription className="text-muted">
                         {isArchived ? (
                             <>
                                 ¿Reactivar a{' '}
-                                <span className="text-foreground font-medium">{clientName}</span>?
+                                <span className="text-strong font-medium">{clientName}</span>?
                                 Recuperará acceso a la plataforma y recibirá un correo de notificación.
                             </>
                         ) : (
                             <>
                                 ¿Archivar a{' '}
-                                <span className="text-foreground font-medium">{clientName}</span>?
+                                <span className="text-strong font-medium">{clientName}</span>?
                                 Perderá acceso a la plataforma temporalmente. Sus datos se conservan.
                                 Recibirá un correo de notificación.
                             </>
@@ -66,16 +68,16 @@ export function ArchiveClientButton({ clientId, clientName, isArchived }: Archiv
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 {error && (
-                    <p className="text-sm text-destructive px-1">{error}</p>
+                    <p className="text-sm text-[var(--danger-600)] px-1">{error}</p>
                 )}
                 <AlertDialogFooter className="gap-3">
-                    <AlertDialogCancel className="bg-secondary border-border text-muted-foreground hover:bg-muted hover:text-foreground rounded-xl">
+                    <AlertDialogCancel className="rounded-control">
                         Cancelar
                     </AlertDialogCancel>
                     <AlertDialogAction
                         onClick={handleAction}
                         disabled={isPending}
-                        className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl disabled:opacity-60"
+                        className="bg-[var(--warning-500)] hover:bg-[var(--warning-600)] text-[var(--text-on-warning)] rounded-control disabled:opacity-60"
                     >
                         {isPending
                             ? isArchived ? 'Reactivando...' : 'Archivando...'

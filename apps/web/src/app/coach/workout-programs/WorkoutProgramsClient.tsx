@@ -2,18 +2,23 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from 'react'
 import {
+    ArrowRight,
     ArrowUpDown,
+    CalendarClock,
     Check,
-    ChevronsUpDown,
+    Dumbbell,
     LayoutGrid,
+    LayoutTemplate,
     List,
     Loader2,
     Plus,
     Search,
+    SearchX,
     X,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
     Dialog,
@@ -30,7 +35,6 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
     AlertDialog,
@@ -88,57 +92,84 @@ function defaultDuplicateProgramName(program: ProgramListModel): string {
     return `${program.name} (Copia)`
 }
 
+// Iniciales (hasta 2) — espejo VERBATIM del Avatar del DS.
+function initialsOf(name?: string | null): string {
+    return (
+        (name ?? '')
+            .split(' ')
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((w) => w[0])
+            .join('')
+            .toUpperCase() || '?'
+    )
+}
+
+/** Empty state contextual — tile 60px sport + título display + CTA (eva-app ProgramasHome). */
 function LibraryEmptyState({
     hasPrograms,
     filterType,
     search,
     onNewTemplate,
+    onClearSearch,
+    onShowTemplates,
 }: {
     hasPrograms: boolean
     filterType: LibraryFilters['filterType']
     search: string
     onNewTemplate: () => void
+    onClearSearch: () => void
+    onShowTemplates: () => void
 }) {
     const trimmed = search.trim()
-    if (hasPrograms && trimmed) {
-        return (
-            <div className={libraryEmptyCardClass}>
-                <p className="text-sm font-medium text-strong">Sin resultados para tu búsqueda</p>
-                <p className="mt-1 text-xs text-muted">Prueba con otro término o revisa los filtros.</p>
-            </div>
-        )
-    }
-    if (hasPrograms && filterType === 'templates') {
-        return (
-            <div className={libraryEmptyCardClass}>
-                <p className="text-sm font-medium text-strong">No hay plantillas con estos criterios</p>
-                <p className="mt-1 text-xs text-muted">Crea una plantilla nueva o cambia el filtro.</p>
-            </div>
-        )
-    }
-    if (hasPrograms && filterType === 'assigned') {
-        return (
-            <div className={libraryEmptyCardClass}>
-                <p className="text-sm font-medium text-strong">No hay programas en curso</p>
-                <p className="mt-1 text-xs text-muted">Asigna una plantilla a un alumno para verla aquí.</p>
-            </div>
-        )
-    }
-    if (hasPrograms) {
-        return (
-            <div className={libraryEmptyCardClass}>
-                <p className="text-sm font-medium text-strong">Nada que mostrar con estos filtros</p>
-                <p className="mt-1 text-xs text-muted">Ajusta filtros o la búsqueda.</p>
-            </div>
-        )
-    }
+    const cfg =
+        hasPrograms && trimmed
+            ? {
+                  icon: SearchX,
+                  title: 'Sin resultados',
+                  sub: `No encontramos programas para «${trimmed}». Prueba otro término o quita el filtro.`,
+                  cta: 'Limpiar búsqueda',
+                  ctaIcon: X,
+                  act: onClearSearch,
+              }
+            : hasPrograms && filterType === 'assigned'
+              ? {
+                    icon: CalendarClock,
+                    title: 'Nada en curso',
+                    sub: 'Cuando asignes una plantilla a un alumno, su programa activo aparece aquí.',
+                    cta: 'Ver plantillas',
+                    ctaIcon: LayoutTemplate,
+                    act: onShowTemplates,
+                }
+              : hasPrograms && filterType === 'templates'
+                ? {
+                      icon: LayoutTemplate,
+                      title: 'Sin plantillas todavía',
+                      sub: 'Crea una plantilla reutilizable y asígnala a tus alumnos en segundos.',
+                      cta: 'Crear plantilla',
+                      ctaIcon: Plus,
+                      act: onNewTemplate,
+                  }
+                : {
+                      icon: Dumbbell,
+                      title: 'Tu biblioteca está vacía',
+                      sub: 'Crea tu primera plantilla de entrenamiento para empezar a asignar.',
+                      cta: 'Crear plantilla',
+                      ctaIcon: Plus,
+                      act: onNewTemplate,
+                  }
+    const EmptyIcon = cfg.icon
+    const CtaIcon = cfg.ctaIcon
     return (
-        <div className={libraryEmptyCardClass}>
-            <p className="text-sm font-medium text-strong">Aún no tienes programas</p>
-            <p className="mt-1 text-xs text-muted">Crea tu primera plantilla para empezar.</p>
-            <Button type="button" variant="sport" className="mt-4 h-11 w-full gap-2 rounded-control shadow-sm sm:h-10 sm:w-auto" onClick={onNewTemplate}>
-                <Plus className="size-4" />
-                Nueva plantilla
+        <div className={cn(libraryEmptyCardClass, 'flex flex-col items-center')}>
+            <span className="mb-3.5 flex size-[60px] items-center justify-center rounded-card bg-[var(--sport-100)] text-[var(--sport-600)]">
+                <EmptyIcon className="size-[27px]" />
+            </span>
+            <p className="font-display text-[17px] font-extrabold text-strong">{cfg.title}</p>
+            <p className="mt-1.5 max-w-[252px] text-[13.5px] leading-[1.45] text-muted">{cfg.sub}</p>
+            <Button type="button" variant="sport" className="mt-4 gap-2" onClick={cfg.act}>
+                <CtaIcon className="size-4" />
+                {cfg.cta}
             </Button>
         </div>
     )
@@ -186,7 +217,6 @@ export function WorkoutProgramsClient({
     const [showConfirmOverwrite, setShowConfirmOverwrite] = useState(false)
     const [clientsWithExistingPlans, setClientsWithExistingPlans] = useState<Client[]>([])
 
-    const [openPopover, setOpenPopover] = useState(false)
     const [assignmentStartMode, setAssignmentStartMode] = useState<'today' | 'custom' | 'flexible'>('today')
     const [assignmentStartDate, setAssignmentStartDate] = useState(new Date().toISOString().split('T')[0])
     const [assignmentDurationWeeks, setAssignmentDurationWeeks] = useState('4')
@@ -447,9 +477,12 @@ export function WorkoutProgramsClient({
     // desktop); el cuerpo y la botonera se comparten entre ambos — solo cambia el shell.
     const handleAssignOpenChange = (open: boolean) => {
         setIsAssignOpen(open)
-        if (!open) setOpenPopover(false)
+        if (!open) setClientSearch('')
     }
     const assignDescription = 'Duplicas la plantilla en el alumno; ajusta inicio, semanas y días aquí.'
+    const filteredAssignClients = availableClients.filter((c) =>
+        c.full_name.toLowerCase().includes(clientSearch.toLowerCase())
+    )
     const assignBody = (
         <div className="space-y-3 py-3 sm:space-y-4 sm:py-4">
             <div className="space-y-2">
@@ -458,84 +491,84 @@ export function WorkoutProgramsClient({
                     <span className="font-semibold text-[var(--sport-600)]">{selectedProgram?.name}</span>
                 </p>
             </div>
-            <div className="space-y-3">
-                <p className="text-sm font-medium text-body">Alumnos ({selectedClients.length})</p>
-                <Popover open={openPopover} onOpenChange={setOpenPopover}>
-                    <PopoverTrigger
-                        className="flex h-auto min-h-11 w-full items-center justify-between rounded-control border-[1.5px] border-default bg-surface-card px-3 py-2 text-left text-sm text-strong focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring)]"
-                    >
-                        <span className="truncate">
-                            {selectedClients.length > 0
-                                ? `${selectedClients.length} seleccionados`
-                                : 'Seleccionar alumnos…'}
-                        </span>
-                        <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-                    </PopoverTrigger>
-                    <PopoverContent
-                        className="w-[var(--radix-popover-trigger-width)] p-0"
-                        align="start"
-                    >
-                        <div className="space-y-1 rounded-control border border-subtle bg-surface-card p-1 shadow-md">
-                            <div className="flex items-center gap-2 border-b border-subtle px-3 py-2">
-                                <Search className="size-4 shrink-0 opacity-50" />
-                                <input
-                                    className="h-8 w-full bg-transparent text-sm text-strong outline-none placeholder:text-muted"
-                                    placeholder="Buscar alumno…"
-                                    value={clientSearch}
-                                    onChange={(e) => setClientSearch(e.target.value)}
-                                />
-                            </div>
-                            <div className="max-h-[300px] overflow-y-auto">
-                                {availableClients.filter((c) =>
-                                    c.full_name.toLowerCase().includes(clientSearch.toLowerCase())
-                                ).length === 0 ? (
-                                    <div className="py-6 text-center text-sm text-muted">
-                                        No se encontraron alumnos.
-                                    </div>
-                                ) : (
-                                    availableClients
-                                        .filter((c) =>
-                                            c.full_name.toLowerCase().includes(clientSearch.toLowerCase())
-                                        )
-                                        .map((client) => (
-                                            <div
-                                                key={client.id}
-                                                role="button"
-                                                tabIndex={0}
-                                                onClick={() => toggleClient(client.id)}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter' || e.key === ' ') {
-                                                        e.preventDefault()
-                                                        toggleClient(client.id)
-                                                    }
-                                                }}
-                                                className="relative flex cursor-pointer select-none items-center rounded-[10px] px-2 py-1.5 text-sm text-strong outline-none transition-colors hover:bg-surface-sunken"
-                                            >
-                                                <div
-                                                    className={cn(
-                                                        'mr-2 flex size-4 items-center justify-center rounded-[6px] border border-sport-500',
-                                                        selectedClients.includes(client.id)
-                                                            ? 'bg-sport-500 text-[var(--text-on-sport)]'
-                                                            : 'opacity-50'
-                                                    )}
-                                                >
-                                                    {selectedClients.includes(client.id) && (
-                                                        <Check className="size-3" />
-                                                    )}
-                                                </div>
-                                                {client.full_name}
-                                                {client.workout_programs && client.workout_programs.length > 0 && (
-                                                    <span className="ml-2 shrink-0 rounded-full border border-[var(--warning-500)]/30 bg-[var(--warning-100)] px-1.5 py-0.5 text-[10px] text-[var(--warning-700)]">
-                                                        Plan: {client.workout_programs[0].name}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        ))
-                                )}
-                            </div>
+            <div className="space-y-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                    Alumnos
+                </p>
+                {availableClients.length > 5 && (
+                    <div className="relative flex items-center">
+                        <Search className="pointer-events-none absolute left-3 size-4 text-subtle" />
+                        <input
+                            value={clientSearch}
+                            onChange={(e) => setClientSearch(e.target.value)}
+                            placeholder="Buscar alumno…"
+                            className="h-10 w-full rounded-control border-[1.5px] border-default bg-surface-card px-9 text-sm text-strong outline-none placeholder:text-muted"
+                        />
+                        {clientSearch && (
+                            <button
+                                type="button"
+                                onClick={() => setClientSearch('')}
+                                aria-label="Limpiar búsqueda"
+                                className="absolute right-2 flex size-6 items-center justify-center rounded-full bg-surface-sunken text-muted"
+                            >
+                                <X className="size-3" />
+                            </button>
+                        )}
+                    </div>
+                )}
+                <div className="max-h-[264px] space-y-2 overflow-y-auto overscroll-contain">
+                    {filteredAssignClients.length === 0 ? (
+                        <div className="py-6 text-center text-sm text-muted">
+                            No se encontraron alumnos.
                         </div>
-                    </PopoverContent>
-                </Popover>
+                    ) : (
+                        filteredAssignClients.map((client) => {
+                            const on = selectedClients.includes(client.id)
+                            const hasPlan = !!client.workout_programs?.length
+                            return (
+                                <button
+                                    key={client.id}
+                                    type="button"
+                                    onClick={() => toggleClient(client.id)}
+                                    className={cn(
+                                        'flex min-h-12 w-full items-center gap-3 rounded-control px-2.5 py-2 text-left transition-colors',
+                                        on
+                                            ? 'border-[1.5px] border-[var(--sport-500)] bg-[var(--sport-100)]'
+                                            : 'border border-subtle bg-surface-card'
+                                    )}
+                                >
+                                    <span
+                                        className="flex size-8 shrink-0 items-center justify-center rounded-full font-display text-[11.5px] font-extrabold tracking-[-0.02em]"
+                                        style={{
+                                            background: 'var(--surface-inverse)',
+                                            color: 'var(--sport-400)',
+                                        }}
+                                    >
+                                        {initialsOf(client.full_name)}
+                                    </span>
+                                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-strong">
+                                        {client.full_name}
+                                    </span>
+                                    {hasPlan && (
+                                        <Badge tone="warning" variant="soft" size="sm" className="shrink-0">
+                                            Con plan
+                                        </Badge>
+                                    )}
+                                    <span
+                                        className={cn(
+                                            'flex size-[22px] shrink-0 items-center justify-center rounded-full',
+                                            on
+                                                ? 'bg-sport-500 text-[var(--text-on-sport)]'
+                                                : 'border-2 border-strong'
+                                        )}
+                                    >
+                                        {on && <Check className="size-[13px]" />}
+                                    </span>
+                                </button>
+                            )
+                        })
+                    )}
+                </div>
             </div>
             <div className="space-y-3 border-t border-subtle pt-3">
                 <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-strong">
@@ -545,56 +578,59 @@ export function WorkoutProgramsClient({
                         content="Ciclos, fases, tipo de duración y estructura del entrenamiento vienen siempre de la plantilla; no se editan aquí. Un alumno solo puede tener un programa activo: si ya tenía otro, se desactiva y se conserva el historial. Inicio: Hoy usa la fecha por defecto del servidor; Fecha específica fija el día y desactiva inicio flexible; Inicio flexible deja acomodar el calendario. Semanas: actualiza la ventana en semanas del plan asignado (no cambia las fases de la plantilla). Días Lun–Dom: filtran por día 1–7; sin marcar ninguno se copian todos los días. Si la plantilla usa días mayores que 7, edita en el builder o deja los días sin marcar."
                     />
                 </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="space-y-1">
-                        <label className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-                            Inicio
-                        </label>
-                        <Select
-                            value={assignmentStartMode}
-                            onValueChange={(v) =>
-                                setAssignmentStartMode(v as 'today' | 'custom' | 'flexible')
-                            }
-                        >
-                            <SelectTrigger className="h-11 min-h-11 w-full border-default bg-surface-card text-strong sm:h-10 sm:min-h-10">
-                                <SelectValue>
-                                    {assignmentStartMode === 'today'
-                                        ? 'Hoy'
-                                        : assignmentStartMode === 'custom'
-                                          ? 'Fecha específica'
-                                          : 'Flexible'}
-                                </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="today">Hoy (fecha por defecto)</SelectItem>
-                                <SelectItem value="custom">Fecha específica</SelectItem>
-                                <SelectItem value="flexible">Inicio flexible</SelectItem>
-                            </SelectContent>
-                        </Select>
+                <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                        Inicio
+                    </label>
+                    <div className="flex gap-2">
+                        {(
+                            [
+                                { value: 'today', label: 'Hoy' },
+                                { value: 'custom', label: 'Fecha' },
+                                { value: 'flexible', label: 'Flexible' },
+                            ] as const
+                        ).map((opt) => {
+                            const on = assignmentStartMode === opt.value
+                            return (
+                                <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => setAssignmentStartMode(opt.value)}
+                                    className={cn(
+                                        'h-11 min-h-11 flex-1 rounded-control text-[13px] font-bold transition-colors sm:h-10 sm:min-h-10',
+                                        on
+                                            ? 'bg-[var(--ink-950)] text-white'
+                                            : 'border-[1.5px] border-default bg-surface-card text-muted'
+                                    )}
+                                >
+                                    {opt.label}
+                                </button>
+                            )
+                        })}
                     </div>
-                    <div className="space-y-1">
-                        <label className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-                            Duración (semanas)
-                        </label>
+                    {assignmentStartMode === 'custom' && (
                         <Input
-                            type="number"
-                            min={1}
-                            max={52}
-                            value={assignmentDurationWeeks}
-                            onChange={(e) => setAssignmentDurationWeeks(e.target.value)}
-                            placeholder="Ej: 4"
-                            className="h-11 min-h-11 border-default bg-surface-card text-strong placeholder:text-muted sm:h-10 sm:min-h-10"
+                            type="date"
+                            value={assignmentStartDate}
+                            onChange={(e) => setAssignmentStartDate(e.target.value)}
+                            className="h-11 min-h-11 border-default bg-surface-card text-strong sm:h-10 sm:min-h-10"
                         />
-                    </div>
+                    )}
                 </div>
-                {assignmentStartMode === 'custom' && (
+                <div className="space-y-1">
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                        Duración (semanas)
+                    </label>
                     <Input
-                        type="date"
-                        value={assignmentStartDate}
-                        onChange={(e) => setAssignmentStartDate(e.target.value)}
-                        className="h-11 min-h-11 border-default bg-surface-card text-strong sm:h-10 sm:min-h-10"
+                        type="number"
+                        min={1}
+                        max={52}
+                        value={assignmentDurationWeeks}
+                        onChange={(e) => setAssignmentDurationWeeks(e.target.value)}
+                        placeholder="Ej: 4"
+                        className="h-11 min-h-11 border-default bg-surface-card text-strong placeholder:text-muted sm:h-10 sm:min-h-10"
                     />
-                )}
+                </div>
                 <div className="space-y-1.5">
                     <div className="flex flex-wrap items-center gap-1.5">
                         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
@@ -652,16 +688,19 @@ export function WorkoutProgramsClient({
             <Button
                 type="button"
                 variant="sport"
-                className="w-full sm:w-auto"
+                className="w-full gap-2 sm:w-auto"
                 onClick={() => handleAssign(false)}
                 disabled={
                     isPending || selectedClients.length === 0 || assignDaysMismatch
                 }
             >
-                {isPending ? <Loader2 className="mr-2 size-4 animate-spin" /> : null}
-                {selectedClients.length === 1
-                    ? 'Asignar a 1 alumno'
-                    : `Asignar a ${selectedClients.length} alumnos`}
+                {isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                {selectedClients.length === 0
+                    ? 'Selecciona alumnos'
+                    : selectedClients.length === 1
+                      ? 'Asignar a 1 alumno'
+                      : `Asignar a ${selectedClients.length} alumnos`}
+                <ArrowRight className="size-4" />
             </Button>
         </>
     )
@@ -733,10 +772,12 @@ export function WorkoutProgramsClient({
                 {/* Header */}
                 <div className="flex items-center justify-between gap-3 pb-3">
                     <div className="min-w-0">
-                        <h1 className="font-display text-2xl font-extrabold leading-tight tracking-[-0.02em] text-strong">
+                        <div className="text-[12px] font-bold uppercase tracking-[0.08em] text-muted">
+                            Biblioteca
+                        </div>
+                        <h1 className="font-display text-[26px] font-black leading-[1.1] tracking-[-0.03em] text-strong">
                             Programas
                         </h1>
-                        <p className="text-sm text-muted">Biblioteca</p>
                     </div>
                     <Button
                         type="button"
@@ -839,13 +880,13 @@ export function WorkoutProgramsClient({
                                 type="button"
                                 onClick={() => setFilterType(t)}
                                 className={cn(
-                                    'flex h-11 flex-1 flex-col items-center justify-center rounded-[calc(var(--radius-control)-3px)]',
+                                    'flex h-[46px] flex-1 flex-col items-center justify-center rounded-[calc(var(--radius-control)-3px)]',
                                     on ? 'bg-surface-card shadow-sm' : ''
                                 )}
                             >
                                 <span
                                     className={cn(
-                                        'font-mono text-[17px] font-bold leading-none',
+                                        'eva-metric text-[17px] leading-[1.1]',
                                         on ? 'text-strong' : 'text-muted'
                                     )}
                                 >
@@ -882,6 +923,8 @@ export function WorkoutProgramsClient({
                         filterType={filterType}
                         search={search}
                         onNewTemplate={() => router.push('/coach/workout-programs/builder')}
+                        onClearSearch={() => setSearch('')}
+                        onShowTemplates={() => setFilterType('templates')}
                     />
                 ) : (
                     <motion.div
@@ -968,6 +1011,8 @@ export function WorkoutProgramsClient({
                         filterType={filterType}
                         search={search}
                         onNewTemplate={() => router.push('/coach/workout-programs/builder')}
+                        onClearSearch={() => setSearch('')}
+                        onShowTemplates={() => setFilterType('templates')}
                     />
                 ) : (
                     <motion.div
@@ -988,7 +1033,7 @@ export function WorkoutProgramsClient({
                 <Dialog open={isAssignOpen} onOpenChange={handleAssignOpenChange}>
                     <DialogContent className="max-h-[min(88dvh,88svh)] overflow-y-auto overscroll-contain border-subtle bg-surface-card px-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))] text-body sm:max-w-[440px]">
                         <DialogHeader>
-                            <DialogTitle className="text-strong">Asignar programa</DialogTitle>
+                            <DialogTitle className="font-display text-[21px] font-black normal-case tracking-[-0.02em] text-strong">Asignar programa</DialogTitle>
                             <DialogDescription className="text-muted">{assignDescription}</DialogDescription>
                         </DialogHeader>
                         {assignBody}
@@ -1033,7 +1078,7 @@ export function WorkoutProgramsClient({
             >
                 <DialogContent className="border-subtle bg-surface-card text-body sm:max-w-[440px]">
                     <DialogHeader>
-                        <DialogTitle>Duplicar programa</DialogTitle>
+                        <DialogTitle className="font-display text-[21px] font-black normal-case tracking-[-0.02em] text-strong">Duplicar programa</DialogTitle>
                         <DialogDescription>
                             El nuevo programa será una plantilla. El nombre debe ser único entre tus plantillas (2–100
                             caracteres).

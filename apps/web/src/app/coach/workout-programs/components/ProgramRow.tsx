@@ -14,7 +14,7 @@ export interface ProgramRowProps {
 }
 
 /** Progreso real del plan asignado a partir de start_date + weeks_to_repeat. */
-function assignedProgress(p: ProgramListModel): { curWeek: number; weeks: number; pct: number } | null {
+export function assignedProgress(p: ProgramListModel): { curWeek: number; weeks: number; pct: number } | null {
     const weeks = p.weeks_to_repeat || 0
     if (!p.start_date || weeks <= 0) return null
     const start = new Date(p.start_date).getTime()
@@ -24,7 +24,7 @@ function assignedProgress(p: ProgramListModel): { curWeek: number; weeks: number
     return { curWeek, weeks, pct: Math.round((curWeek / weeks) * 100) }
 }
 
-function StatusBadge({ program }: { program: ProgramListModel }) {
+export function StatusBadge({ program }: { program: ProgramListModel }) {
     const isTemplate = !program.client_id
     if (isTemplate) {
         return (

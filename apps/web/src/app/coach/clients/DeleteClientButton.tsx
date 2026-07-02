@@ -34,33 +34,35 @@ export function DeleteClientButton({ clientId, clientName }: DeleteClientButtonP
     return (
         <AlertDialog>
             <AlertDialogTrigger>
-                <div className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all duration-150">
+                <div className="p-2 rounded-control text-muted hover:text-[var(--danger-600)] hover:bg-[var(--danger-100)] transition-all duration-150">
                     <Trash2 className="w-4 h-4" />
                 </div>
             </AlertDialogTrigger>
-            <AlertDialogContent className="bg-card border border-border text-foreground rounded-2xl">
+            <AlertDialogContent className="bg-surface-card border border-subtle text-body rounded-card">
                 <AlertDialogHeader>
-                    <AlertDialogTitle className="flex items-center gap-2 text-foreground">
-                        <AlertTriangle className="w-5 h-5 text-destructive" />
+                    <div className="mb-1 flex h-11 w-11 items-center justify-center rounded-control bg-[var(--danger-100)] text-[var(--danger-600)]">
+                        <AlertTriangle className="h-[22px] w-[22px]" />
+                    </div>
+                    <AlertDialogTitle className="font-display font-extrabold normal-case tracking-[-0.01em] text-strong">
                         Eliminar alumno
                     </AlertDialogTitle>
-                    <AlertDialogDescription className="text-muted-foreground">
+                    <AlertDialogDescription className="text-muted">
                         ¿Confirmas que deseas eliminar a{' '}
-                        <span className="text-foreground font-medium">{clientName}</span>?
+                        <span className="text-strong font-medium">{clientName}</span>?
                         Esta acción eliminará su cuenta y todos sus datos asociados. No se puede deshacer.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 {error && (
-                    <p className="text-sm text-destructive px-1">{error}</p>
+                    <p className="text-sm text-[var(--danger-600)] px-1">{error}</p>
                 )}
                 <AlertDialogFooter className="gap-3">
-                    <AlertDialogCancel className="bg-secondary border-border text-muted-foreground hover:bg-muted hover:text-foreground rounded-xl">
+                    <AlertDialogCancel className="rounded-control">
                         Cancelar
                     </AlertDialogCancel>
                     <AlertDialogAction
                         onClick={handleDelete}
                         disabled={isPending}
-                        className="bg-destructive hover:bg-destructive/90 text-white rounded-xl disabled:opacity-60"
+                        className="bg-[var(--cta-danger)] hover:opacity-90 text-white rounded-control disabled:opacity-60"
                     >
                         {isPending ? 'Eliminando...' : 'Sí, eliminar'}
                     </AlertDialogAction>

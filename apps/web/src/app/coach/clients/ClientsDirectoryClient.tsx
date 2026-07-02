@@ -1,16 +1,17 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
-import { Users } from 'lucide-react'
-import { Card } from '@/components/ui/card'
+import { useRouter } from 'next/navigation'
+import { SearchX, UserPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ClientCardV2 } from '@/components/coach/ClientCardV2'
 import { DirectoryActionBar } from './DirectoryActionBar'
 import { DesktopRosterTable } from './DesktopRosterTable'
 import { ClientsDirectoryEmpty } from './ClientsDirectoryEmpty'
 import { CoachRosterMasterDetail } from './CoachRosterMasterDetail'
 import { DirRowCard } from './DirRowCard'
+import { DirTableMobile } from './DirTableMobile'
+import { ClientActionsSheet } from './ClientActionsSheet'
+import { CreateClientModal } from './CreateClientModal'
 import { EditClientDataModal } from './EditClientDataModal'
 import type {
     DirectoryRiskFilter,
@@ -99,19 +100,6 @@ function matchesProgramFilter(
     return true
 }
 
-function useGridVariants(reduceMotion: boolean | null) {
-    if (reduceMotion) {
-        return {
-            hidden: { opacity: 1 },
-            show: { opacity: 1 },
-        }
-    }
-    return {
-        hidden: {},
-        show: { transition: { staggerChildren: 0.06 } },
-    }
-}
-
 export function ClientsDirectoryClient({
     clients,
     coach,
@@ -123,27 +111,44 @@ export function ClientsDirectoryClient({
     rosterMode,
     onRosterModeChange,
 }: ClientsDirectoryClientProps) {
-    const reduceMotion = useReducedMotion()
-    const gridContainer = useGridVariants(reduceMotion)
-
+    const router = useRouter()
     const [search, setSearch] = useState('')
     const [sortKey, setSortKey] = useState<DirectorySortKey>('attention_score')
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>(() =>
         defaultSortDir('attention_score')
     )
-    const [view, setView] = useState<'grid' | 'table'>('table')
+    const [view, setView] = useState<'cards' | 'table'>('cards')
     const [statusFilter, setStatusFilter] = useState<StatusDirectoryFilter>('any')
     const [programFilter, setProgramFilter] = useState<ProgramDirectoryFilter>('any')
-    const [gridVisibleCount, setGridVisibleCount] = useState(48)
+    const [visibleCount, setVisibleCount] = useState(48)
     const [editingClient, setEditingClient] = useState<{ id: string; name: string } | null>(null)
+    const [actionsClient, setActionsClient] = useState<any | null>(null)
+    const [createOpen, setCreateOpen] = useState(false)
 
     useEffect(() => {
-        setGridVisibleCount(48)
+        setVisibleCount(48)
     }, [search, riskFilter, statusFilter, programFilter, sortKey, sortDir, view])
 
     const handleSortFromBar = (k: DirectorySortKey) => {
         setSortKey(k)
         setSortDir(defaultSortDir(k))
+    }
+
+    // Headers de la tabla densa: mismo key = alterna dirección; nuevo key = dir default.
+    const handleHeaderSort = (k: DirectorySortKey) => {
+        if (sortKey === k) {
+            setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+        } else {
+            setSortKey(k)
+            setSortDir(defaultSortDir(k))
+        }
+    }
+
+    const clearFilters = () => {
+        setSearch('')
+        setStatusFilter('any')
+        setProgramFilter('any')
+        onRiskFilterChange('all')
     }
 
     const filteredClients = useMemo(() => {
@@ -174,9 +179,9 @@ export function ClientsDirectoryClient({
         [filteredClients, pulseByClientId, sortKey, sortDir]
     )
 
-    const gridClients = useMemo(
-        () => sortedClients.slice(0, gridVisibleCount),
-        [sortedClients, gridVisibleCount]
+    const visibleClients = useMemo(
+        () => sortedClients.slice(0, visibleCount),
+        [sortedClients, visibleCount]
     )
 
     const archivedCount = useMemo(
@@ -192,16 +197,16 @@ export function ClientsDirectoryClient({
     const loginUrl = coach && appUrl ? `${appUrl}/c/${publicIdentifier}/login` : ''
 
     const loadMoreButton =
-        sortedClients.length > gridVisibleCount ? (
+        sortedClients.length > visibleCount ? (
             <div className="flex justify-center px-4 pb-8 lg:px-0">
                 <button
                     type="button"
                     onClick={() =>
-                        setGridVisibleCount((n) => Math.min(n + 48, sortedClients.length))
+                        setVisibleCount((n) => Math.min(n + 48, sortedClients.length))
                     }
                     className="rounded-pill border border-default bg-surface-sunken px-6 py-2 text-sm font-semibold text-strong transition-colors hover:bg-surface-card"
                 >
-                    Cargar más ({sortedClients.length - gridVisibleCount} restantes)
+                    Cargar más ({sortedClients.length - visibleCount} restantes)
                 </button>
             </div>
         ) : null
@@ -223,7 +228,7 @@ export function ClientsDirectoryClient({
             )}
 
             {/* Directorio: DESKTOP (md+) = vista TABLA 1:1 (DesktopRosterTable, autocontenida);
-                MÓVIL (<md) = action bar + tarjetas. Oculto en desktop cuando el modo es Ficha. */}
+                MÓVIL (<md) = action bar + tarjetas/tabla densa. Oculto en desktop cuando el modo es Ficha. */}
             <div className={cn(rosterMode === 'ficha' && 'md:hidden')}>
             {/* DESKTOP — vista TABLA 1:1 con DesktopRosterTable del diseño */}
             <div className="hidden md:block">
@@ -235,8 +240,8 @@ export function ClientsDirectoryClient({
                 />
             </div>
 
-            {/* MÓVIL — action bar + tarjetas */}
-            <div className="space-y-6 md:hidden">
+            {/* MÓVIL — action bar + tarjetas / tabla densa */}
+            <div className="space-y-4 md:hidden">
             <DirectoryActionBar
                 search={search}
                 onSearchChange={setSearch}
@@ -251,91 +256,78 @@ export function ClientsDirectoryClient({
                 riskFilter={riskFilter}
                 onRiskFilterChange={onRiskFilterChange}
                 archivedCount={archivedCount}
+                resultCount={sortedClients.length}
             />
 
             {sortedClients.length === 0 ?
-                <Card className="mx-4 flex flex-col items-center justify-center py-20 text-center md:mx-0 md:py-28">
-                    <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-card border border-subtle bg-surface-sunken shadow-[var(--shadow-sm)]">
-                        <Users className="h-10 w-10 text-muted opacity-40" />
+                <div className="rounded-card border border-dashed border-default bg-surface-sunken px-4 py-9 text-center">
+                    <div className="mb-3 inline-flex h-[52px] w-[52px] items-center justify-center rounded-full bg-surface-card text-subtle">
+                        <SearchX className="h-6 w-6" />
                     </div>
-                    <h3 className="font-display text-lg font-black uppercase tracking-tighter text-strong md:text-xl">
+                    <div className="font-display text-base font-extrabold text-strong">
                         Sin resultados
-                    </h3>
-                    <p className="mt-3 max-w-md px-4 text-xs font-medium leading-relaxed text-muted md:text-sm">
-                        {search ?
-                            <>
-                                Prueba buscando por email o nombre completo. Término:{' '}
-                                <span className="font-bold text-strong">&quot;{search}&quot;</span>
-                            </>
-                        :   'Ningún alumno coincide con los filtros activos.'}
-                    </p>
-                </Card>
+                    </div>
+                    <div className="mt-1 text-[13px] text-muted">
+                        Ningún alumno coincide con estos filtros.
+                    </div>
+                    <button
+                        type="button"
+                        onClick={clearFilters}
+                        className="eva-press mt-3.5 rounded-control bg-[var(--text-strong)] px-[18px] py-[9px] font-ui text-[13px] font-bold text-[var(--surface-card)]"
+                    >
+                        Limpiar filtros
+                    </button>
+                </div>
             : view === 'table' ?
-                <div className="space-y-2 px-0 pb-6">
+                <div className="pb-24">
+                    <DirTableMobile
+                        clients={visibleClients}
+                        pulseByClientId={pulseByClientId}
+                        sortKey={sortKey}
+                        sortDir={sortDir}
+                        onHeaderSort={handleHeaderSort}
+                        onOpen={(id) => router.push(`/coach/clients/${id}`)}
+                        onActions={setActionsClient}
+                    />
+                    {loadMoreButton}
+                </div>
+            :   <div className="space-y-2 px-0 pb-24">
                     {/* row-cards · diseño coach-directory.jsx.
-                        pb extra para que la última tarjeta no quede bajo la cápsula flotante. */}
-                    {gridClients.map((client) => (
+                        pb extra para que la última tarjeta no quede bajo el FAB ni la cápsula. */}
+                    {visibleClients.map((client) => (
                         <DirRowCard
                             key={client.id}
                             client={client}
                             pulse={pulseByClientId[client.id]}
-                            loginUrl={loginUrl}
-                            onEdit={() =>
-                                setEditingClient({ id: client.id, name: client.full_name })
-                            }
+                            onActions={() => setActionsClient(client)}
                         />
                     ))}
                     {loadMoreButton}
                 </div>
-            :   <div className="space-y-4">
-                    <motion.div
-                    className="grid grid-cols-1 gap-4 px-4 sm:grid-cols-2 lg:grid-cols-2 lg:px-0 xl:grid-cols-3 xl:gap-8"
-                    variants={gridContainer}
-                    initial="hidden"
-                    animate="show"
-                >
-                    {gridClients.map((client) => {
-                        const pulse = pulseByClientId[client.id]
-                        let subscriptionDaysRemaining = null
-                        if (client.subscription_start_date) {
-                            const start = new Date(client.subscription_start_date)
-                            const end = new Date(start)
-                            end.setMonth(end.getMonth() + 1)
-                            const diff = Math.ceil(
-                                (end.getTime() - new Date().getTime()) / (1000 * 3600 * 24)
-                            )
-                            subscriptionDaysRemaining = diff
-                        }
-
-                        const whatsappLink =
-                            client.phone ?
-                                `https://wa.me/${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${client.full_name}, aquí tienes tu link de acceso a la app: ${loginUrl}`)}`
-                            :   '#'
-
-                        const activeProgram = client.workout_programs?.find(
-                            (p: any) => p.is_active
-                        )
-                        const programDaysRemaining = pulse?.planDaysRemaining ?? null
-
-                        return (
-                            <ClientCardV2
-                                key={client.id}
-                                client={client}
-                                loginUrl={loginUrl}
-                                whatsappLink={whatsappLink}
-                                subscriptionDaysRemaining={subscriptionDaysRemaining}
-                                remainingDays={programDaysRemaining}
-                                activeProgramName={activeProgram?.name || null}
-                                pulse={pulse}
-                            />
-                        )
-                    })}
-                </motion.div>
-                {loadMoreButton}
-                </div>
             }
+
+            {/* Nuevo alumno — acción primaria en la zona del pulgar (FAB pill, diseño L391-396) */}
+            <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                className="eva-press fixed right-5 z-40 inline-flex h-[50px] items-center gap-2 rounded-pill bg-sport-500 px-5 font-ui text-[15px] font-bold text-white shadow-[var(--shadow-lg)] md:hidden"
+                style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)' }}
+            >
+                <UserPlus className="h-[19px] w-[19px]" />
+                Nuevo alumno
+            </button>
+            <CreateClientModal open={createOpen} onClose={() => setCreateOpen(false)} />
             </div>
             </div>
+
+            {actionsClient && (
+                <ClientActionsSheet
+                    client={actionsClient}
+                    loginUrl={loginUrl}
+                    onClose={() => setActionsClient(null)}
+                    onEdit={setEditingClient}
+                />
+            )}
 
             {editingClient && (
                 <EditClientDataModal

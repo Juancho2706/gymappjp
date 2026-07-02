@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { Search, ChevronRight, ArrowLeft, X, Table2, PanelLeft } from 'lucide-react'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
 import { useRosterView } from '@/components/coach/RosterViewContext'
+import { Avatar } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 
 /**
@@ -140,7 +141,7 @@ export function CoachTopBar({ coachName, coachBrand }: CoachTopBarProps) {
     const { sectionLabel, sectionHref, detailLabel } = resolveCrumb(pathname)
     const inStack = detailLabel != null
     // Avatar de cuenta = el coach (no la marca): el panel es la cara de EVA.
-    const initial = (coachName?.trim() || coachBrand?.trim() || 'C').charAt(0).toUpperCase()
+    const avatarName = coachName?.trim() || coachBrand?.trim() || 'Coach'
 
     return (
         <header className="z-[4] hidden h-[60px] flex-shrink-0 items-center gap-4 border-b border-[var(--border-subtle)] bg-[var(--surface-card)] px-[22px] font-ui md:flex">
@@ -232,9 +233,7 @@ export function CoachTopBar({ coachName, coachBrand }: CoachTopBarProps) {
                     title={coachBrand || coachName}
                     className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-[var(--surface-sunken)]"
                 >
-                    <span className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-[var(--sport-500)] font-display text-sm font-bold text-[var(--text-on-sport,#fff)]">
-                        {initial}
-                    </span>
+                    <Avatar name={avatarName} size="sm" />
                 </Link>
             </div>
         </header>

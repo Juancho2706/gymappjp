@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useSyncExternalStore, useTransition } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -12,7 +12,6 @@ import {
     PieChart,
     Scale,
     CalendarRange,
-    Activity,
     ArrowUpRight,
     ArrowDownRight,
     Minus,
@@ -32,12 +31,11 @@ import { ProgressRing } from '@/components/ui/progress-ring'
 import { AppOnlyBadge } from '@/components/AppOnlyBadge'
 import {
     Dialog,
-    DialogClose,
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from '@/components/ui/dialog'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { MetricInfo, type MetricTerm } from '@/components/ui/metric-info'
@@ -50,6 +48,7 @@ import {
 } from './profileOverviewUtils'
 import { ProfileProgramSummaryCard } from './ProfileProgramSummaryCard'
 import { ProfileCheckInSnapshot } from './ProfileCheckInSnapshot'
+import { SectionTitle } from './_components/SectionTitle'
 import type { DailyHabitRow, DailyHabitsSummary } from './profileDataHelpers'
 import { subDays } from 'date-fns'
 
@@ -116,21 +115,6 @@ type ProfileOverviewB3Props = {
 }
 
 const ringSize = 84
-
-function SectionTitle({
-    children,
-    icon: Icon,
-}: {
-    children: React.ReactNode
-    icon?: typeof Activity
-}) {
-    return (
-        <h3 className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
-            {Icon ? <Icon className="h-4 w-4" /> : null}
-            {children}
-        </h3>
-    )
-}
 
 export function ProfileOverviewB3({
     workoutHistory,
@@ -373,7 +357,7 @@ export function ProfileOverviewB3({
 
             {/* ===== Métricas clave ===== */}
             <div>
-                <SectionTitle icon={Activity}>Métricas clave</SectionTitle>
+                <SectionTitle>Métricas clave</SectionTitle>
                 <Card padding="md">
                     <div className="flex items-start justify-between gap-3">
                         <div className="flex gap-6">
@@ -431,7 +415,7 @@ export function ProfileOverviewB3({
 
             {/* ===== Evolución visual ===== */}
             <Card padding="md">
-                <SectionTitle icon={Camera}>Evolución visual</SectionTitle>
+                <SectionTitle>Evolución visual</SectionTitle>
                 <div className="mb-4">
                     <AppOnlyBadge>
                         Mirá las fotos con zoom y deslizá entre ellas en la app de EVA
@@ -512,6 +496,21 @@ export function ProfileOverviewB3({
 
 type SexValue = 'male' | 'female' | 'other' | null
 
+function subscribeMd(cb: () => void) {
+    const mq = window.matchMedia('(min-width: 768px)')
+    mq.addEventListener('change', cb)
+    return () => mq.removeEventListener('change', cb)
+}
+
+/** matchMedia md-up (mismo patrón que AssignModal): desktop → Dialog, móvil → bottom-sheet. */
+function useIsDesktopMd() {
+    return useSyncExternalStore(
+        subscribeMd,
+        () => window.matchMedia('(min-width: 768px)').matches,
+        () => true
+    )
+}
+
 const SEX_OPTIONS: { value: SexValue; label: string }[] = [
     { value: 'male', label: 'Masculino' },
     { value: 'female', label: 'Femenino' },
@@ -539,6 +538,7 @@ function BiometricsEditDialog({
 }) {
     const router = useRouter()
     const [open, setOpen] = useState(false)
+    const isDesktop = useIsDesktopMd()
     const [isPending, startTransition] = useTransition()
     const [error, setError] = useState<string | null>(null)
 
@@ -587,141 +587,168 @@ function BiometricsEditDialog({
         })
     }
 
-    return (
-        <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogTrigger
-                render={
-                    <Button
-                        variant="secondary"
-                        size="icon-sm"
-                        aria-label="Editar biometría inicial"
+    const formBody = (
+        <>
+            <p className="flex flex-wrap items-center gap-1 text-[11px] font-medium leading-relaxed text-muted">
+                <span>Necesario para calcular IMC</span>
+                <MetricInfo term="imc" />
+                <span>y gasto energético (TDEE)</span>
+                <MetricInfo term="tdee" />
+            </p>
+
+            <div className="grid gap-4 py-2">
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label
+                        htmlFor="bio-height"
+                        className="text-right text-xs font-bold uppercase tracking-widest"
                     >
-                        <Pencil className="h-4 w-4" />
-                    </Button>
-                }
-            />
-            <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                    <DialogTitle className="font-display text-xl font-black uppercase tracking-tighter">
-                        Editar biometría inicial
-                    </DialogTitle>
-                </DialogHeader>
-
-                <p className="flex flex-wrap items-center gap-1 text-[11px] font-medium leading-relaxed text-muted">
-                    <span>Necesario para calcular IMC</span>
-                    <MetricInfo term="imc" />
-                    <span>y gasto energético (TDEE)</span>
-                    <MetricInfo term="tdee" />
-                </p>
-
-                <div className="grid gap-4 py-2">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label
-                            htmlFor="bio-height"
-                            className="text-right text-xs font-bold uppercase tracking-widest"
-                        >
-                            Altura
-                        </Label>
-                        <Input
-                            id="bio-height"
-                            type="number"
-                            inputMode="numeric"
-                            min={50}
-                            max={260}
-                            value={height}
-                            onChange={(e) => setHeight(e.target.value)}
-                            className="col-span-3"
-                            placeholder="cm"
-                        />
-                    </div>
-                    <div className="grid grid-cols-4 items-center gap-4">
-                        <Label
-                            htmlFor="bio-weight"
-                            className="text-right text-xs font-bold uppercase tracking-widest"
-                        >
-                            Peso inicial
-                        </Label>
-                        <Input
-                            id="bio-weight"
-                            type="number"
-                            inputMode="decimal"
-                            min={20}
-                            max={400}
-                            step="0.1"
-                            value={weight}
-                            onChange={(e) => setWeight(e.target.value)}
-                            className="col-span-3"
-                            placeholder="kg"
-                        />
-                    </div>
-                    <div className="grid grid-cols-4 items-start gap-4">
-                        <span
-                            id="bio-sex-label"
-                            className="pt-1.5 text-right text-xs font-bold uppercase tracking-widest"
-                        >
-                            Sexo
-                        </span>
-                        <div
-                            role="radiogroup"
-                            aria-labelledby="bio-sex-label"
-                            className="col-span-3 grid grid-cols-2 gap-1.5"
-                        >
-                            {SEX_OPTIONS.map((opt) => {
-                                const selected = sex === opt.value
-                                return (
-                                    <button
-                                        key={opt.label}
-                                        type="button"
-                                        role="radio"
-                                        aria-checked={selected}
-                                        onClick={() => setSex(opt.value)}
-                                        className={cn(
-                                            'rounded-control border px-2 py-1.5 text-[11px] font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]',
-                                            selected
-                                                ? 'border-sport-500 bg-sport-100 text-sport-600'
-                                                : 'border-subtle bg-surface-sunken text-body hover:bg-surface-card'
-                                        )}
-                                    >
-                                        {opt.label}
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    </div>
-                </div>
-
-                {error && (
-                    <p
-                        role="alert"
-                        className="text-[11px] font-bold text-[var(--danger-600)]"
-                    >
-                        {error}
-                    </p>
-                )}
-
-                <div className="flex justify-end gap-3">
-                    <DialogClose
-                        render={
-                            <Button
-                                variant="secondary"
-                                disabled={isPending}
-                                className="text-[10px] font-black uppercase tracking-widest"
-                            >
-                                Cancelar
-                            </Button>
-                        }
+                        Altura
+                    </Label>
+                    <Input
+                        id="bio-height"
+                        type="number"
+                        inputMode="numeric"
+                        min={50}
+                        max={260}
+                        value={height}
+                        onChange={(e) => setHeight(e.target.value)}
+                        className="col-span-3"
+                        placeholder="cm"
                     />
-                    <Button
-                        variant="sport"
-                        onClick={handleSave}
-                        disabled={isPending}
-                        className="text-[10px] font-black uppercase tracking-widest"
-                    >
-                        {isPending ? 'Guardando…' : 'Guardar'}
-                    </Button>
                 </div>
-            </DialogContent>
-        </Dialog>
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label
+                        htmlFor="bio-weight"
+                        className="text-right text-xs font-bold uppercase tracking-widest"
+                    >
+                        Peso inicial
+                    </Label>
+                    <Input
+                        id="bio-weight"
+                        type="number"
+                        inputMode="decimal"
+                        min={20}
+                        max={400}
+                        step="0.1"
+                        value={weight}
+                        onChange={(e) => setWeight(e.target.value)}
+                        className="col-span-3"
+                        placeholder="kg"
+                    />
+                </div>
+                <div className="grid grid-cols-4 items-start gap-4">
+                    <span
+                        id="bio-sex-label"
+                        className="pt-1.5 text-right text-xs font-bold uppercase tracking-widest"
+                    >
+                        Sexo
+                    </span>
+                    <div
+                        role="radiogroup"
+                        aria-labelledby="bio-sex-label"
+                        className="col-span-3 grid grid-cols-2 gap-1.5"
+                    >
+                        {SEX_OPTIONS.map((opt) => {
+                            const selected = sex === opt.value
+                            return (
+                                <button
+                                    key={opt.label}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={selected}
+                                    onClick={() => setSex(opt.value)}
+                                    className={cn(
+                                        'rounded-control border px-2 py-1.5 text-[11px] font-bold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]',
+                                        selected
+                                            ? 'border-sport-500 bg-sport-100 text-sport-600'
+                                            : 'border-subtle bg-surface-sunken text-body hover:bg-surface-card'
+                                    )}
+                                >
+                                    {opt.label}
+                                </button>
+                            )
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {error && (
+                <p
+                    role="alert"
+                    className="text-[11px] font-bold text-[var(--danger-600)]"
+                >
+                    {error}
+                </p>
+            )}
+        </>
+    )
+
+    const footer = (
+        <div className="flex gap-2.5">
+            <Button
+                variant="secondary"
+                size="lg"
+                className="w-full"
+                disabled={isPending}
+                onClick={() => handleOpenChange(false)}
+            >
+                Cancelar
+            </Button>
+            <Button
+                variant="sport"
+                size="lg"
+                className="w-full"
+                onClick={handleSave}
+                disabled={isPending}
+            >
+                {isPending ? 'Guardando…' : 'Guardar'}
+            </Button>
+        </div>
+    )
+
+    return (
+        <>
+            <Button
+                variant="secondary"
+                size="icon-sm"
+                aria-label="Editar biometría inicial"
+                onClick={() => handleOpenChange(true)}
+            >
+                <Pencil className="h-4 w-4" />
+            </Button>
+            {isDesktop ? (
+                <Dialog open={open} onOpenChange={handleOpenChange}>
+                    <DialogContent className="border-subtle bg-surface-card sm:max-w-[425px]">
+                        <DialogHeader>
+                            <DialogTitle className="font-display text-lg font-extrabold normal-case tracking-[-0.02em] text-strong">
+                                Editar biometría inicial
+                            </DialogTitle>
+                        </DialogHeader>
+                        {formBody}
+                        <div className="mt-1">{footer}</div>
+                    </DialogContent>
+                </Dialog>
+            ) : (
+                <Sheet open={open} onOpenChange={handleOpenChange}>
+                    <SheetContent
+                        side="bottom"
+                        showCloseButton={false}
+                        className="max-h-[min(88dvh,88svh)] gap-0 rounded-t-sheet border-subtle bg-surface-card p-0 text-body"
+                    >
+                        <div className="flex max-h-[min(88dvh,88svh)] flex-col overflow-y-auto overscroll-contain px-[max(1.25rem,env(safe-area-inset-left))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-3">
+                            <div className="mx-auto mb-3 h-1 w-9 shrink-0 rounded-full bg-[var(--border-strong)]" aria-hidden="true" />
+                            <SheetHeader className="border-0 bg-transparent p-0 pb-3">
+                                <SheetTitle className="font-display text-lg font-extrabold normal-case tracking-[-0.02em] text-strong">
+                                    Editar biometría inicial
+                                </SheetTitle>
+                            </SheetHeader>
+                            {formBody}
+                            <div className="mt-4">{footer}</div>
+                        </div>
+                    </SheetContent>
+                </Sheet>
+            )}
+        </>
     )
 }
 
@@ -853,7 +880,7 @@ function HabitsMiniWidget({
     return (
         <Card padding="md">
             <div className="mb-3 flex items-center justify-between gap-2">
-                <SectionTitle icon={Droplet}>Hábitos diarios</SectionTitle>
+                <SectionTitle style={{ margin: 0 }}>Hábitos diarios</SectionTitle>
                 <span className="text-[10px] font-medium uppercase tracking-widest text-subtle">
                     {hasToday && anyTodayValue ? 'Hoy' : 'prom. 7d'}
                 </span>

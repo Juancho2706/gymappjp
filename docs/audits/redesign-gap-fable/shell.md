@@ -102,3 +102,22 @@ App: `apps/web/src/components/coach/CoachSidebar.tsx`, `CoachTopBar.tsx`, `Coach
 - **Tokens shell:** `--dt-read-wide/mid/narrow/text` + `--dt-page-x` idénticos al kit (globals.css:570-574); CoachMainWrapper aplica columna de lectura 1240 + px 32 desktop / 16 móvil, y full-bleed para /coach/clients (espejo de `.dt-md`/`.dt-tbl-root` absolute inset 0).
 - **Builder full-screen sin chrome global** y **multi-día**: decisión CEO (#1) — no auditado como gap.
 - **Logo EVA (no marca del coach) en el panel** ✓ decisión #2; branding vía rebind `--sport-*` en el layout = mecanismo D2 del kit (brandRamps + dark overrides espejados en coach/layout.tsx:164-216).
+
+---
+
+## Fix log wave 2 (2026-07-01)
+
+- **[P1] Sidebar auto-colapsa a rail 760–1080px** → FIXED `apps/web/src/components/coach/CoachSidebar.tsx`: matchMedia `(min-width: 1080px)` + `isCollapsed = !isWide || manualCollapsed` (precedencia exacta del kit: compact fuerza rail, el toggle manual solo manda en wide y se sigue persistiendo en localStorage).
+- **[P1] Topbar desktop persistente** → FIXED `apps/web/src/app/coach/layout.tsx` (contenedor `md:h-dvh md:max-h-dvh md:overflow-hidden`, espejo de `.eva-desktop { overflow:hidden }`; reglas `has-[.coach-builder-shell]:*` intactas) + `CoachMainWrapper.tsx` (reset de scroll de `<main>` al navegar — el router solo restaura window). Alumnos full-bleed verificado: `h-[calc(100dvh-60px)]` de CoachRosterMasterDetail/DesktopRosterTable calza exacto con el alto de `<main>`; móvil sigue con scroll de window (cápsula intacta).
+- **[P1] Panel campana re-skin `.dt-notif`** → FIXED `apps/web/src/components/coach/NewsBellButton.tsx`: badge ember-500 con ring de surface-card (.dt-tb-badge), panel 400px radius-lg shadow-xl con header font-display 800 15px, filas `.dt-notif-row` (icono tonal redondo 34px por tipo con lucide — Sparkles/Wrench/Bug/Megaphone en sport/success/ember/neutral —, hover sunken, timestamp derecha, rail + tint sport para pinned), markdown y triggers re-tokenizados a DS (text-strong/muted/subtle, border-subtle, sport-600). Footer "Ver todas" NO agregado: no existe ruta `/coach/notifications` (P2 data-bound) — link muerto. Store/datos (news) intactos.
+- **[P1] Badge "en riesgo" en Alumnos del nav** → SKIPPED: el count solo existe dentro del payload pesado del dashboard (`getCoachDashboardDataV2` → directory pulse con `attentionScore`; grep services + `_data` sin query barata cacheada exportada con el count) — meter query nueva al layout hot-path está vetado. Requiere wiring externo (query count-only cacheada en services/_data).
+- **[P1] Avatares del shell → Avatar DS** → FIXED `CoachSidebar.tsx` (pie) + `CoachTopBar.tsx` (cuenta): `<Avatar name={coach} size="sm" />` de `components/ui/avatar.tsx` (surface-inverse + iniciales sport-400) en vez del círculo sport-500 con inicial blanca.
+- **Wiring wave 1 (a) link Herramientas** → SKIPPED: el kit NO la muestra — `secondaryNav` coach del shell = solo Soporte (index.html:1241-1243); modulesHub se alcanza desde DesktopRoster (`onModules`), no desde el sidebar.
+- **Wiring wave 1 (b) gutter móvil 20px** → FIXED `CoachMainWrapper.tsx`: `px-4` → `px-5` en ambas ramas móviles; `md:p-0` full-bleed de Alumnos y `md:px-[var(--dt-page-x)]` intactos.
+- **[P2] Canvas `bg-white`/`dark:bg-black`** → FIXED `layout.tsx`: `bg-[var(--surface-app)]` (dark lo resuelve el token).
+- **[P2] Skip-link** → FIXED `layout.tsx` (`.dt-skip` espejo: fixed, sport-600, aparece con foco, solo md como el kit) + `id="coach-main"` en `<main>` (CoachMainWrapper, ambas ramas).
+- **[P2] Breadcrumb labels por sub-ruta** → SKIPPED (estructural: tabla de labels nueva, no swap de clases).
+- **[P2] Página "Ver todas"** → SKIPPED (requiere feed real + ruta nueva; data/backend).
+- **[P2] Nav item activo en drill-down** → SKIPPED (nit discutible, patrón defendible).
+- **[P2] Cápsula TEAM pierde "Equipo"** → SKIPPED (reorden condicional por workspace = lógica, no swap de clases/tokens).
+- **[P2] Wordmark/asset dark del sidebar** → SKIPPED (cambio de asset; gotcha BRAND_APP_ICON tenue ya DIFERIDO en memoria SEO).

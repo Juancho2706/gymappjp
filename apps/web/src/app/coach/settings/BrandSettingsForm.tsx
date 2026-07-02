@@ -186,6 +186,20 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                 )}
             </div>
 
+            {/* Vista previa en vivo — <lg va ARRIBA, tras el Brand Score (kit MiMarca); en lg vive sticky a la derecha */}
+            <div className="lg:hidden">
+                <BrandThemePreview
+                    brandName={coach.brand_name}
+                    primaryColor={selectedColor}
+                    logoUrl={coach.logo_url}
+                    welcomeMessage={welcomeMessageInput}
+                    loaderText={loaderText}
+                    useCustomLoader={useCustomLoader}
+                    loaderTextColor={loaderTextColor}
+                    loaderIconMode={loaderIconMode}
+                />
+            </div>
+
             <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-8">
                 <div className="space-y-8">
             {/* Identity */}
@@ -724,8 +738,8 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
 
                 </div>
 
-                {/* Right column: Live preview (sticky on desktop) */}
-                <div className="mt-8 lg:mt-0 lg:sticky lg:top-6 lg:self-start space-y-6" data-tour-id="brand-preview">
+                {/* Right column: Live preview (sticky, solo lg — en <lg la instancia vive arriba tras el Brand Score) */}
+                <div className="hidden lg:sticky lg:top-6 lg:block lg:self-start space-y-6" data-tour-id="brand-preview">
                     <BrandThemePreview
                         brandName={coach.brand_name}
                         primaryColor={selectedColor}

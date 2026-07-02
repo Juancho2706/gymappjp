@@ -4,11 +4,10 @@ import { useRouter } from 'next/navigation'
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
 import { differenceInDays } from 'date-fns'
-import { AlertOctagon, AlertTriangle, Check, Apple, Pencil } from 'lucide-react'
+import { AlertOctagon, AlertTriangle, Check, Apple, MoreVertical } from 'lucide-react'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
+import { IconButton } from '@/components/ui/icon-button'
 import { cn } from '@/lib/utils'
-import { ArchiveClientButton } from './ArchiveClientButton'
-import { DeleteClientButton } from './DeleteClientButton'
 
 // ===== severidad / estado helpers (espejo del diseño coach-directory.jsx) =====
 function severityMeta(score: number) {
@@ -63,11 +62,10 @@ function statusMeta(client: any) {
 interface DirRowCardProps {
     client: any
     pulse: DirectoryPulseRow | null | undefined
-    loginUrl: string
-    onEdit: () => void
+    onActions: () => void
 }
 
-export function DirRowCard({ client, pulse, loginUrl, onEdit }: DirRowCardProps) {
+export function DirRowCard({ client, pulse, onActions }: DirRowCardProps) {
     const router = useRouter()
     const score = pulse?.attentionScore ?? 0
     const adherence = pulse?.percentage ?? 0
@@ -86,11 +84,6 @@ export function DirRowCard({ client, pulse, loginUrl, onEdit }: DirRowCardProps)
     const st = statusMeta(client)
 
     const profileHref = `/coach/clients/${client.id}`
-    const waMessage = `Hola ${client.full_name}! 👋 Soy tu coach. Aquí está tu link para acceder a tu plan: ${loginUrl}`
-    const whatsappLink =
-        client.phone && loginUrl
-            ? `https://wa.me/${client.phone.replace(/\D/g, '')}?text=${encodeURIComponent(waMessage)}`
-            : null
 
     return (
         <div
@@ -163,38 +156,17 @@ export function DirRowCard({ client, pulse, loginUrl, onEdit }: DirRowCardProps)
                 </div>
             </div>
 
-            {/* Acciones reales — stopPropagation para no abrir la ficha */}
-            <div
-                className="flex shrink-0 items-center gap-0.5"
-                onClick={(e) => e.stopPropagation()}
+            <IconButton
+                size="sm"
+                variant="ghost"
+                aria-label={`Acciones de ${client.full_name}`}
+                icon={<MoreVertical />}
+                onClick={(e) => {
+                    e.stopPropagation()
+                    onActions()
+                }}
                 onKeyDown={(e) => e.stopPropagation()}
-            >
-                {whatsappLink ? (
-                    <a
-                        href={whatsappLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="rounded-control bg-[#25D366] px-2 py-1.5 text-[10px] font-black uppercase tracking-wide text-white transition-colors hover:bg-[#1ebe5d]"
-                        aria-label="Enviar WhatsApp"
-                    >
-                        WA
-                    </a>
-                ) : null}
-                <button
-                    type="button"
-                    onClick={onEdit}
-                    className="rounded-control p-2 text-muted transition-colors hover:bg-surface-card hover:text-sport-600"
-                    aria-label="Editar datos"
-                >
-                    <Pencil className="h-4 w-4" />
-                </button>
-                <ArchiveClientButton
-                    clientId={client.id}
-                    clientName={client.full_name}
-                    isArchived={client.is_archived === true}
-                />
-                <DeleteClientButton clientId={client.id} clientName={client.full_name} />
-            </div>
+            />
         </div>
     )
 }

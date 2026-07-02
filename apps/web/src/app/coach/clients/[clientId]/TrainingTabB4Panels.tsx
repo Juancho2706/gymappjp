@@ -9,14 +9,11 @@ import { cn } from '@/lib/utils'
 import {
     Trophy,
     AlertTriangle,
-    BarChart3,
-    Target,
     CalendarSearch,
-    Clock,
-    Dumbbell,
     Moon,
 } from 'lucide-react'
 import { MetricInfo } from '@/components/ui/metric-info'
+import { SectionTitle } from './_components/SectionTitle'
 import type { MuscleVolumeRow } from './profileDataHelpers'
 import { getClientWorkoutForDate, getClientWorkoutActivityDates } from './_actions/client-detail.actions'
 import {
@@ -42,16 +39,6 @@ type TrainingTabB4PanelsProps = {
     tooltipBgColor: string
     tooltipBorderColor: string
     tooltipTextColor: string
-}
-
-// ── Título de sección (dark) ─────────────────────────────────────────────────
-function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
-    return (
-        <h3 className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
-            {icon}
-            {children}
-        </h3>
-    )
 }
 
 // ── Banner PR de la semana (gradient claro · acento celebratorio) ─────────────
@@ -360,7 +347,7 @@ export function TrainingTabB4Panels({
             {/* ── Fuerza — 1RM estimado (Epley) ── */}
             {hasStrength && (
                 <div>
-                    <SectionTitle icon={<Dumbbell className="h-4 w-4" />}>
+                    <SectionTitle className="flex items-center gap-2">
                         Fuerza — 1RM estimado (Epley)
                         <MetricInfo term="e1rm" iconClassName="h-3.5 w-3.5" />
                     </SectionTitle>
@@ -421,7 +408,7 @@ export function TrainingTabB4Panels({
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
                     {hasRadar && (
                         <Card padding="md">
-                            <SectionTitle icon={<Target className="h-4 w-4" />}>
+                            <SectionTitle className="flex items-center gap-2">
                                 Balance muscular · 30 días
                                 <MetricInfo term="volumen" iconClassName="h-3.5 w-3.5" />
                             </SectionTitle>
@@ -447,7 +434,7 @@ export function TrainingTabB4Panels({
 
                     {hasBars && (
                         <Card padding="md">
-                            <SectionTitle icon={<BarChart3 className="h-4 w-4" />}>
+                            <SectionTitle className="flex items-center gap-2">
                                 Tonelaje por sesión · 7 días
                                 <MetricInfo term="tonelaje" iconClassName="h-3.5 w-3.5" />
                             </SectionTitle>
@@ -499,7 +486,7 @@ export function TrainingTabB4Panels({
             {/* ── Historial de sesiones + navegador ── */}
             <div>
                 <div className="mb-3 flex items-center justify-between gap-3">
-                    <SectionTitle icon={<Clock className="h-4 w-4" />}>Historial de sesiones</SectionTitle>
+                    <SectionTitle style={{ margin: 0 }}>Historial de sesiones</SectionTitle>
                     <label className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 text-muted">
                         <CalendarSearch className="h-[15px] w-[15px]" />
                         <input

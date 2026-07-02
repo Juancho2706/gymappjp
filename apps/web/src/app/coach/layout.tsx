@@ -215,9 +215,16 @@ export default async function CoachLayout({
             }
         ` }} />
         <div
-            className="coach-layout-container flex min-h-[100dvh] min-w-0 flex-col bg-white transition-colors selection:bg-primary/30 selection:text-primary dark:bg-black md:min-h-screen md:flex-row has-[.coach-builder-shell]:h-dvh has-[.coach-builder-shell]:max-h-dvh has-[.coach-builder-shell]:min-h-0 has-[.coach-builder-shell]:overflow-hidden"
+            className="coach-layout-container flex min-h-[100dvh] min-w-0 flex-col bg-[var(--surface-app)] transition-colors selection:bg-primary/30 selection:text-primary md:h-dvh md:max-h-dvh md:flex-row md:overflow-hidden has-[.coach-builder-shell]:h-dvh has-[.coach-builder-shell]:max-h-dvh has-[.coach-builder-shell]:min-h-0 has-[.coach-builder-shell]:overflow-hidden"
             style={{ '--theme-primary': palette.primary, '--theme-primary-rgb': palette.primaryRgb } as React.CSSProperties}
         >
+            {/* .dt-skip — visible solo con foco de teclado (desktop, como el kit) */}
+            <a
+                href="#coach-main"
+                className="fixed left-3 top-[-48px] z-[200] hidden rounded-[var(--radius-md)] bg-[var(--sport-600)] px-4 py-[9px] font-ui text-[13px] font-bold text-white no-underline transition-[top] duration-150 focus:top-3 focus:outline-2 focus:outline-offset-2 focus:outline-white md:block"
+            >
+                Saltar al contenido
+            </a>
             <NewsFeedProvider initialUnreadCount={unreadCount} initialItems={newsItems}>
                 <CoachSidebar
                     coachName={coach.full_name}

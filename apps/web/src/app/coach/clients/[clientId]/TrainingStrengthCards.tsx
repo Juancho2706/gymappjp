@@ -13,6 +13,7 @@ import {
 } from 'recharts'
 import { Card } from '@/components/ui/card'
 import { Dumbbell, TrendingDown, TrendingUp, Minus, Star } from 'lucide-react'
+import { SectionTitle } from './_components/SectionTitle'
 import {
     selectStrengthCardExercises,
     strengthTrendDeltaKg,
@@ -199,9 +200,7 @@ export function TrainingStrengthCards({
 
     return (
         <div className="space-y-3">
-            <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
-                <Dumbbell className="h-4 w-4" /> Fuerza — 1RM estimado (Epley)
-            </h3>
+            <SectionTitle style={{ margin: 0 }}>Fuerza — 1RM estimado (Epley)</SectionTitle>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                 {exercises.map((ex, i) => (
                     <StrengthExerciseCard

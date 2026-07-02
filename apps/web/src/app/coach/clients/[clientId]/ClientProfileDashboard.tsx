@@ -3,13 +3,13 @@
 import { useState, useCallback, useTransition } from 'react'
 import { useTheme } from 'next-themes'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { Trophy, Layers } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
 import { getProfileTopAlert } from './getProfileTopAlert'
 import { ProfileTopAlertBanner } from './ProfileTopAlertBanner'
 import { ProfileTabNav, type ProfileMainTabId, type ProfileTabBadges } from './ProfileTabNav'
+import { SectionTitle } from './_components/SectionTitle'
 import { ProfileOverviewB3 } from './ProfileOverviewB3'
 import { TrainingTabB4Panels } from './TrainingTabB4Panels'
 import { NutritionTabB5 } from './NutritionTabB5'
@@ -386,9 +386,7 @@ export function ClientProfileDashboard({
                             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                                 {data.personalRecords?.length > 0 && (
                                     <Card padding="md">
-                                        <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
-                                            <Trophy className="h-4 w-4" /> Récords de peso (máx. registrado)
-                                        </h3>
+                                        <SectionTitle style={{ marginTop: 0 }}>Récords de peso (máx. registrado)</SectionTitle>
                                         <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
                                             {data.personalRecords.slice(0, 12).map((pr: any) => (
                                                 <div
@@ -414,9 +412,7 @@ export function ClientProfileDashboard({
                                 )}
                                 {data.muscleVolumeByGroup?.length > 0 && (
                                     <Card padding="md">
-                                        <h3 className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-sport-600">
-                                            <Layers className="h-4 w-4" /> Volumen últimos 30 días
-                                        </h3>
+                                        <SectionTitle style={{ marginTop: 0 }}>Volumen últimos 30 días</SectionTitle>
                                         <p className="mb-3 text-[10px] font-medium text-muted">
                                             Σ (peso × reps) por grupo muscular.
                                         </p>
