@@ -3,17 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { createPortal } from 'react-dom'
+import Link from 'next/link'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Loader2, Search, X, ChevronLeft, Plus, PenLine, Heart, AlertTriangle } from 'lucide-react'
+import { SegmentedControl } from '@/components/ui/segmented-control'
+import { Loader2, Search, X, ChevronLeft, Plus, PenLine, Heart, AlertTriangle, Layers } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { previewMacrosForQuantity } from './MacroCalculator'
 import type { FoodItemDraft } from './types'
 import { searchCoachFoodLibrary } from '../../_actions/food-library.actions'
 import { addCoachCustomFood } from '../../_actions/nutrition-coach.actions'
+import { listCoachMealGroups } from '../../../meal-groups/_actions/meal-groups.actions'
 
 type FoodRow = {
   id: string
@@ -46,6 +49,54 @@ interface Props {
   clientIntoleranceIds?: Set<string>
   /** food_ids marcados como "no le gusta" — badge gris de aviso blando (A3). */
   clientDislikeIds?: Set<string>
+  /** Habilita el tab "Grupos" (oculto en modo porciones/intercambios y en add-swap). */
+  groupsEnabled?: boolean
+  /** Inserta TODOS los alimentos de un grupo como ítems normales de la comida activa. */
+  onInsertGroup?: (items: FoodItemDraft[]) => void
+}
+
+/** Fila de item de un grupo (`saved_meal_items` + `food:foods(*)`). */
+type MealGroupItemRow = {
+  id: string
+  quantity: number
+  unit: string | null
+  food: FoodRow | null
+}
+
+/** Grupo del coach (`saved_meals` + items). */
+type MealGroupRow = {
+  id: string
+  name: string
+  items: MealGroupItemRow[] | null
+}
+
+/**
+ * Normaliza la unidad guardada en el grupo a la convención del builder de comidas.
+ * El modal de grupos guarda 'g' | 'u'; el drawer usa 'g' | 'ml' | 'un'. Para que el
+ * plan quede byte-idéntico a un alimento agregado a mano, los líquidos usan 'ml'|'un'
+ * y los sólidos 'g'|'un' (espejo del toggle de FoodSearchDrawer).
+ */
+function mealGroupUnitToMealUnit(raw: string | null | undefined, isLiquid: boolean): 'g' | 'ml' | 'un' {
+  const u = (raw ?? 'g').toLowerCase().trim()
+  if (u === 'un' || u === 'u' || u === 'unidad' || u === 'unidades') return 'un'
+  return isLiquid ? 'ml' : 'g'
+}
+
+/** ~kcal y P del grupo — mismo cálculo que la biblioteca /coach/meal-groups (label aprox). */
+function mealGroupTotals(items: MealGroupItemRow[]) {
+  return items.reduce(
+    (acc, item) => {
+      if (!item.food) return acc
+      const quantity = Number(item.quantity) || 0
+      const unit = (item.unit ?? 'g').toLowerCase()
+      const factor = unit === 'g' || unit === 'ml' ? quantity / 100 : quantity
+      return {
+        calories: acc.calories + (Number(item.food.calories) || 0) * factor,
+        protein: acc.protein + (Number(item.food.protein_g) || 0) * factor,
+      }
+    },
+    { calories: 0, protein: 0 }
+  )
 }
 
 const CATEGORIES = [
@@ -236,8 +287,15 @@ export function FoodSearchDrawer({
   clientAllergyIds,
   clientIntoleranceIds,
   clientDislikeIds,
+  groupsEnabled = false,
+  onInsertGroup,
 }: Props) {
   const [view, setView] = useState<View>('search')
+  // Tab del search view: alimentos individuales vs grupos guardados del coach.
+  const showGroupsTab = groupsEnabled && selectionMode === 'add-food'
+  const [tab, setTab] = useState<'foods' | 'groups'>('foods')
+  const [groups, setGroups] = useState<MealGroupRow[]>([])
+  const [groupsLoading, setGroupsLoading] = useState(false)
   // Alimento alergeno pendiente de confirmacion (A3): bloquea el pick hasta override deliberado.
   const [allergyConfirm, setAllergyConfirm] = useState<FoodRow | null>(null)
   const allergyCancelRef = useRef<HTMLButtonElement>(null)
@@ -266,6 +324,7 @@ export function FoodSearchDrawer({
   useEffect(() => {
     if (!open) {
       setView('search')
+      setTab('foods')
       setSearchTerm('')
       setResults([])
       setLoading(false)
@@ -363,6 +422,45 @@ export function FoodSearchDrawer({
     }, 300)
     return () => { cancelled = true; clearTimeout(t) }
   }, [searchTerm, open, coachId])
+
+  // Carga los grupos del coach al abrir (solo cuando el tab Grupos está disponible).
+  useEffect(() => {
+    if (!open || !coachId || !showGroupsTab) return
+    let cancelled = false
+    setGroupsLoading(true)
+    listCoachMealGroups(coachId)
+      .then((data) => {
+        if (!cancelled) setGroups((data as unknown as MealGroupRow[]) ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setGroups([])
+      })
+      .finally(() => {
+        if (!cancelled) setGroupsLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [open, coachId, showGroupsTab])
+
+  // Inserta un grupo = expande sus alimentos como ítems normales de la comida (copia).
+  const handleInsertGroup = useCallback(
+    (group: MealGroupRow) => {
+      const items: FoodItemDraft[] = (group.items ?? [])
+        .filter((it): it is MealGroupItemRow & { food: FoodRow } => !!it.food)
+        .map((it) => ({
+          food_id: it.food.id,
+          food: toFoodDraftShape(it.food),
+          quantity: Number(it.quantity) || 0,
+          unit: mealGroupUnitToMealUnit(it.unit, it.food.is_liquid ?? false),
+        }))
+      if (items.length === 0) {
+        toast.error('Este grupo no tiene alimentos')
+        return
+      }
+      onInsertGroup?.(items)
+      toast.success(`«${group.name}» agregado a la comida`)
+    },
+    [onInsertGroup]
+  )
 
   // Rank de afinidad: favorito arriba, alergia/dislike abajo (favorito +2 · dislike -1 · alergia -2).
   const affinityRank = (id: string): number => {
@@ -540,6 +638,21 @@ export function FoodSearchDrawer({
         {/* ── SEARCH VIEW ── */}
         {view === 'search' && (
           <>
+            {showGroupsTab && (
+              <div className="shrink-0 px-4 pt-3 pb-1">
+                <SegmentedControl
+                  size="sm"
+                  options={[
+                    { value: 'foods', label: 'Alimentos' },
+                    { value: 'groups', label: 'Grupos' },
+                  ]}
+                  value={tab}
+                  onChange={(v) => setTab(v as 'foods' | 'groups')}
+                />
+              </div>
+            )}
+            {tab === 'foods' ? (
+              <>
             {/* Search input — fixed below header */}
             <div className="shrink-0 px-4 pt-3 pb-2">
               <div className="relative">
@@ -620,6 +733,77 @@ export function FoodSearchDrawer({
                 />
               )}
             </div>
+              </>
+            ) : (
+              /* ── GROUPS LIST — insertar un grupo expande sus alimentos como ítems normales ── */
+              <div
+                className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-3"
+                style={{ WebkitOverflowScrolling: 'touch' }}
+              >
+                {groupsLoading ? (
+                  <div className="flex justify-center py-12">
+                    <Loader2 className="h-7 w-7 animate-spin text-subtle" />
+                  </div>
+                ) : groups.length === 0 ? (
+                  <div className="space-y-3 py-10 text-center">
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--sport-100)] text-[var(--sport-600)]">
+                      <Layers className="h-6 w-6" />
+                    </div>
+                    <p className="text-sm text-muted">Aún no tenés grupos de comidas.</p>
+                    <Link
+                      href="/coach/meal-groups"
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-dashed border-default px-4 py-2 text-xs font-bold text-sport-600 transition-colors hover:bg-surface-sunken"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Creá tu primer grupo
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {groups.map((group) => {
+                      const items = group.items ?? []
+                      const totals = mealGroupTotals(items)
+                      return (
+                        <div key={group.id} className="rounded-2xl border border-subtle bg-surface-card p-3.5">
+                          <div className="flex items-start justify-between gap-2.5">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-bold text-strong">{group.name}</p>
+                              <p className="mt-0.5 text-[11px] text-muted tabular-nums">
+                                {items.length} ingrediente{items.length === 1 ? '' : 's'} · ~{Math.round(totals.calories)} kcal · {Math.round(totals.protein)}g P
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              onClick={() => handleInsertGroup(group)}
+                              disabled={items.length === 0}
+                              className="h-11 shrink-0 gap-1.5 rounded-xl bg-[color:var(--theme-primary,#007AFF)] px-3.5 text-xs font-black text-white hover:opacity-90 disabled:opacity-50"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              Insertar
+                            </Button>
+                          </div>
+                          {items.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {items.slice(0, 3).map((it) => (
+                                <span
+                                  key={it.id}
+                                  className="whitespace-nowrap rounded-md bg-surface-sunken px-2 py-0.5 text-[11px] font-semibold text-body"
+                                >
+                                  {it.food?.name ?? '—'}
+                                </span>
+                              ))}
+                              {items.length > 3 && (
+                                <span className="px-1 py-0.5 text-[11px] font-bold text-subtle">+{items.length - 3}</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
 

@@ -15,6 +15,16 @@ import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-ki
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import { PlanBuilderSidebar } from './PlanBuilderSidebar'
 import { MealCanvas } from './MealCanvas'
 
@@ -46,6 +56,7 @@ import {
 } from '@/services/nutrition-exchanges/exchange-calc'
 import { loadBrandLogoDataUrl } from '@/lib/nutrition-pdf-brand'
 import { trackNutritionEvent } from '@/lib/product-analytics'
+import { saveMealGroup } from '../../../meal-groups/_actions/meal-groups.actions'
 import type { DayVariant, NutritionPlanMode } from '@/domain/nutrition/exchange.types'
 import type { ExchangeBuilderData, ExchangeTargetDraft, FoodItemDraft, MealDraft, PlanBuilderInitialData } from './types'
 import type { ClientProfileHint } from './PlanBuilderSidebar'
@@ -101,6 +112,9 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
     targetFoodIndex: null,
   })
   const [isSaving, setIsSaving] = useState(false)
+  // "Guardar como grupo": crea un saved_meal desde los alimentos actuales de una comida.
+  const [saveGroupState, setSaveGroupState] = useState<{ mealId: string; name: string } | null>(null)
+  const [isSavingGroup, setIsSavingGroup] = useState(false)
   const [autoSync, setAutoSync] = useState(true)
   const [clientFavoriteIds, setClientFavoriteIds] = useState<Set<string>>(new Set())
   // Restricciones del alumno (A3): alergia = bloqueo con override; intolerancia/dislike = aviso blando
@@ -383,6 +397,15 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
     setSearchDrawer({ open: false, targetMealId: null, mode: 'add-food', targetFoodIndex: null })
   }, [])
 
+  // Insertar grupo = agregar N alimentos de una (mismo path que addFoodToMeal, en batch).
+  const addFoodsToMeal = useCallback((mealId: string, items: FoodItemDraft[]) => {
+    if (items.length === 0) return
+    setMeals((prev) =>
+      prev.map((m) => (m.id === mealId ? { ...m, foodItems: [...m.foodItems, ...items] } : m))
+    )
+    setSearchDrawer({ open: false, targetMealId: null, mode: 'add-food', targetFoodIndex: null })
+  }, [])
+
   const addSwapOptionToFoodItem = useCallback(
     (
       mealId: string,
@@ -603,6 +626,52 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
     exchangeActive,
   ])
 
+  const openSaveAsGroup = useCallback(
+    (mealId: string) => {
+      const meal = meals.find((m) => m.id === mealId)
+      setSaveGroupState({ mealId, name: meal?.name ?? '' })
+    },
+    [meals]
+  )
+
+  // Reusa la action de meal-groups: crea un saved_meal (INSERT) con los alimentos actuales.
+  const handleConfirmSaveGroup = useCallback(async () => {
+    if (!saveGroupState) return
+    const name = saveGroupState.name.trim()
+    if (!name) {
+      toast.error('Ponle un nombre al grupo.')
+      return
+    }
+    const meal = meals.find((m) => m.id === saveGroupState.mealId)
+    if (!meal || meal.foodItems.length === 0) {
+      toast.error('La comida no tiene alimentos.')
+      return
+    }
+    setIsSavingGroup(true)
+    try {
+      const res = await saveMealGroup(
+        {
+          name,
+          items: meal.foodItems.map((fi) => ({
+            food_id: fi.food_id,
+            quantity: fi.quantity,
+            unit: fi.unit,
+          })),
+        },
+        coachId
+      )
+      if ('success' in res && res.success) {
+        toast.success('Grupo guardado — disponible en Grupos')
+        setSaveGroupState(null)
+      } else {
+        const message = 'error' in res ? res.error : undefined
+        toast.error(message ?? 'No se pudo guardar el grupo.')
+      }
+    } finally {
+      setIsSavingGroup(false)
+    }
+  }, [saveGroupState, meals, coachId])
+
   // Totales del sidebar: en modo porciones se derivan de los targets (Σ porciones × ref).
   const sidebarTotals = useMemo(() => {
     if (!exchangeActive || !exchange) return realTotals
@@ -704,6 +773,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
                 onUpdateMealDayOfWeek={updateMealDayOfWeek}
                 onUpdateMealNotes={updateMealNotes}
                 onRemoveMeal={removeMeal}
+                onSaveMealAsGroup={openSaveAsGroup}
                 onOpenFoodSearch={openFoodSearch}
                 onUpdateFoodItem={updateFoodItem}
                 onRemoveFoodItem={removeFoodItem}
@@ -764,7 +834,65 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
         clientAllergyIds={clientAllergyIds.size > 0 ? clientAllergyIds : undefined}
         clientIntoleranceIds={clientIntoleranceIds.size > 0 ? clientIntoleranceIds : undefined}
         clientDislikeIds={clientDislikeIds.size > 0 ? clientDislikeIds : undefined}
+        groupsEnabled={!exchangeActive}
+        onInsertGroup={(items) => {
+          if (searchDrawer.mode !== 'add-food') return
+          if (searchDrawer.targetMealId) addFoodsToMeal(searchDrawer.targetMealId, items)
+        }}
       />
+
+      {/* Guardar comida como grupo reutilizable */}
+      <Dialog
+        open={!!saveGroupState}
+        onOpenChange={(o) => {
+          if (!o) setSaveGroupState(null)
+        }}
+      >
+        <DialogContent className="border-subtle bg-surface-card sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg font-extrabold text-strong">
+              Guardar como grupo
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="save-meal-group-name" className="text-xs font-bold text-muted">
+              Nombre del grupo
+            </Label>
+            <Input
+              id="save-meal-group-name"
+              autoFocus
+              placeholder="Ej: Desayuno proteico"
+              value={saveGroupState?.name ?? ''}
+              onChange={(e) =>
+                setSaveGroupState((s) => (s ? { ...s, name: e.target.value } : s))
+              }
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  void handleConfirmSaveGroup()
+                }
+              }}
+              className="h-11 rounded-control border-default bg-surface-card text-[15px] font-semibold text-strong placeholder:text-muted"
+            />
+            <p className="text-[11px] text-muted">
+              Se guardará en Grupos con los alimentos actuales de esta comida.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSaveGroupState(null)} disabled={isSavingGroup}>
+              Cancelar
+            </Button>
+            <Button
+              variant="sport"
+              onClick={handleConfirmSaveGroup}
+              disabled={isSavingGroup || !saveGroupState?.name.trim()}
+              className="min-w-[130px]"
+            >
+              {isSavingGroup ? 'Guardando…' : 'Guardar grupo'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

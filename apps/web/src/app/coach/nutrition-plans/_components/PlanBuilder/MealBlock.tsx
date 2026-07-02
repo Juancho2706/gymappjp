@@ -4,11 +4,17 @@ import { useMemo } from 'react'
 import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core'
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus, Trash2, Utensils } from 'lucide-react'
+import { GripVertical, Plus, Trash2, Utensils, MoreVertical, Layers } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu'
 import {
   Select,
   SelectContent,
@@ -42,6 +48,8 @@ interface Props {
   onUpdateDayOfWeek: (day: number | null) => void
   onUpdateNotes: (notes: string) => void
   onRemove: () => void
+  /** Guarda los alimentos actuales de la comida como un grupo reutilizable. */
+  onSaveAsGroup?: () => void
   onOpenFoodSearch: () => void
   onUpdateFoodItem: (idx: number, qty: number, unit: string) => void
   onRemoveFoodItem: (idx: number) => void
@@ -64,6 +72,7 @@ export function MealBlock({
   onUpdateDayOfWeek,
   onUpdateNotes,
   onRemove,
+  onSaveAsGroup,
   onOpenFoodSearch,
   onUpdateFoodItem,
   onRemoveFoodItem,
@@ -94,6 +103,9 @@ export function MealBlock({
   const dowSelectValue = meal.day_of_week == null ? DOW_ALL : String(meal.day_of_week)
   const dowLabelMap = useMemo(() => Object.fromEntries(DOW_OPTIONS.map((o) => [o.value, o.label])), [])
 
+  // Guardar como grupo: solo por gramos (no en porciones) y con al menos 1 alimento.
+  const canSaveAsGroup = !exchangeMode && meal.foodItems.length > 0
+
   return (
     <div
       ref={setNodeRef}
@@ -122,9 +134,31 @@ export function MealBlock({
             placeholder="Nombre de la comida"
             className="h-10 flex-1 font-bold"
           />
-          <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={onRemove}>
-            <Trash2 className="h-4 w-4" />
-          </Button>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="h-12 w-12 min-w-0 rounded-full border-0 bg-transparent p-0 text-muted normal-case tracking-normal hover:bg-surface-sunken hover:text-strong dark:bg-transparent"
+                aria-label="Más opciones de la comida"
+                title="Más opciones de la comida"
+              >
+                <MoreVertical className="h-[18px] w-[18px]" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[13rem]">
+                <DropdownMenuItem
+                  disabled={!canSaveAsGroup}
+                  onClick={() => {
+                    if (canSaveAsGroup) onSaveAsGroup?.()
+                  }}
+                >
+                  <Layers className="h-4 w-4" />
+                  Guardar como grupo
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button type="button" variant="ghost" size="icon" onClick={onRemove}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
         <div className="flex w-full flex-col gap-1.5">
           <div className="flex items-center gap-1">

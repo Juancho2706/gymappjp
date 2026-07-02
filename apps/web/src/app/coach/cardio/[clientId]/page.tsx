@@ -94,7 +94,7 @@ export default async function CardioClientPage({ params }: Props) {
                             })}
                         </div>
                         <p className="text-[11px] text-subtle">
-                            El alumno ve estos rangos en los bloques cardio con zona prescrita ("Z4 · {zones.zones[3].minBpm}–{zones.zones[3].maxBpm} bpm").
+                            El alumno ve estos rangos en los bloques cardio con zona prescrita (&ldquo;Z4 · {zones.zones[3].minBpm}–{zones.zones[3].maxBpm} bpm&rdquo;).
                         </p>
                     </>
                 ) : (

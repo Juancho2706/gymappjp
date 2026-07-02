@@ -16,6 +16,7 @@ interface Props {
   onUpdateMealDayOfWeek: (mealId: string, day: number | null) => void
   onUpdateMealNotes: (mealId: string, notes: string) => void
   onRemoveMeal: (mealId: string) => void
+  onSaveMealAsGroup: (mealId: string) => void
   onOpenFoodSearch: (mealId: string) => void
   onUpdateFoodItem: (mealId: string, idx: number, qty: number, unit: string) => void
   onRemoveFoodItem: (mealId: string, idx: number) => void
@@ -40,6 +41,7 @@ export function MealCanvas({
   onUpdateMealDayOfWeek,
   onUpdateMealNotes,
   onRemoveMeal,
+  onSaveMealAsGroup,
   onOpenFoodSearch,
   onUpdateFoodItem,
   onRemoveFoodItem,
@@ -77,6 +79,7 @@ export function MealCanvas({
               onUpdateDayOfWeek={(day) => onUpdateMealDayOfWeek(meal.id, day)}
               onUpdateNotes={(notes) => onUpdateMealNotes(meal.id, notes)}
               onRemove={() => onRemoveMeal(meal.id)}
+              onSaveAsGroup={() => onSaveMealAsGroup(meal.id)}
               onOpenFoodSearch={() => onOpenFoodSearch(meal.id)}
               onUpdateFoodItem={(idx, q, u) => onUpdateFoodItem(meal.id, idx, q, u)}
               onRemoveFoodItem={(idx) => onRemoveFoodItem(meal.id, idx)}

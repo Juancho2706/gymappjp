@@ -38,6 +38,7 @@ function Input({
   disabled,
   ...props
 }: InputProps) {
+  const descId = React.useId()
   const ariaInvalid = props["aria-invalid"]
   const hasError =
     Boolean(error) || ariaInvalid === true || ariaInvalid === "true"
@@ -70,8 +71,6 @@ function Input({
   }
 
   // Rich mode: label + bordered control + hint/error (faithful to Input.jsx).
-  const descId = React.useId()
-
   return (
     <label
       data-slot="input-field"

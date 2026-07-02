@@ -1,8 +1,32 @@
 'use server'
 
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
+import { getMealGroups } from '../_data/meal-groups.queries'
 import { revalidatePath } from 'next/cache'
+
+const listMealGroupsSchema = z.object({ coachId: z.string().uuid() })
+
+/**
+ * Lectura de los grupos del coach para el builder de planes (tab "Grupos" del
+ * FoodSearchDrawer). Reusa el query canónico `getMealGroups` (ya filtra los
+ * artefactos `Internal_*`) y deriva el scope de org del workspace ACTIVO
+ * server-side — nunca del body. RLS de `saved_meals` es el guardián real.
+ */
+export async function listCoachMealGroups(coachId: string) {
+    const parsed = listMealGroupsSchema.safeParse({ coachId })
+    if (!parsed.success) return []
+
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+    const workspace = await resolvePreferredWorkspace(supabase, user.id)
+    const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
+
+    // coachId de la SESIÓN (coaches.id === auth.uid), nunca del argumento del caller.
+    return getMealGroups(user.id, orgId)
+}
 
 export async function saveMealGroup(groupData: { id?: string, name: string, items: { food_id: string, quantity: number, unit?: string }[] }, coachId: string) {
     const supabase = await createClient()

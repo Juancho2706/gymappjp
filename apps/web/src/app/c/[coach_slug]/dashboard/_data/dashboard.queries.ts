@@ -281,6 +281,8 @@ export type PersonalRecordItem = {
     exerciseName: string
     weightKg: number
     achievedAt: string
+    /** PR logrado en las últimas 24 h (calculado en data-layer; render puro). */
+    fresh: boolean
 }
 
 export const getPersonalRecords = cache(async (clientId: string): Promise<PersonalRecordItem[]> => {
@@ -338,6 +340,8 @@ export const getPersonalRecords = cache(async (clientId: string): Promise<Person
 
         const prs: PersonalRecordItem[] = []
         const seen = new Set<string>()
+        const now = Date.now()
+        const dayMs = 24 * 60 * 60 * 1000
         for (const row of recent) {
             const exId = blockToEx.get(row.block_id)
             if (!exId || row.weight_kg == null) continue
@@ -350,6 +354,7 @@ export const getPersonalRecords = cache(async (clientId: string): Promise<Person
                 exerciseName: exName.get(exId) ?? 'Ejercicio',
                 weightKg: row.weight_kg,
                 achievedAt: row.logged_at,
+                fresh: now - new Date(row.logged_at).getTime() < dayMs,
             })
         }
 

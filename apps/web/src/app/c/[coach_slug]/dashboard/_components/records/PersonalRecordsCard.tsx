@@ -14,9 +14,6 @@ export async function PersonalRecordsCard({ userId }: { userId: string }) {
     const prs = await getPersonalRecords(userId)
     if (prs.length === 0) return null
 
-    const dayMs = 24 * 60 * 60 * 1000
-    const now = Date.now()
-
     return (
         <Card variant="inverse" padding="md">
             <div className="mb-3 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-sport-400">
@@ -24,7 +21,7 @@ export async function PersonalRecordsCard({ userId }: { userId: string }) {
             </div>
             <div className="grid grid-cols-2 gap-2.5">
                 {prs.slice(0, 4).map((pr) => {
-                    const fresh = now - new Date(pr.achievedAt).getTime() < dayMs
+                    const fresh = pr.fresh
                     return (
                         <div
                             key={`${pr.exerciseId}-${pr.achievedAt}`}
