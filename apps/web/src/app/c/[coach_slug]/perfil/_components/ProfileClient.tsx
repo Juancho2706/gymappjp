@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -15,15 +15,25 @@ import {
     PersonStanding,
     Gauge,
     Palette,
+    Volume2,
     type LucideIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Switch } from '@/components/ui/switch'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toggleClientBrandColors } from '@/app/c/[coach_slug]/_actions/client-root.actions'
+import { playTimerSound, type TimerSound } from '@/lib/audioUtils'
 import { SectionTitle } from '../../dashboard/_components/shared/SectionTitle'
 import { SALES_EMAIL } from '@/lib/brand-assets'
+
+const REST_SOUND_LABELS: Record<TimerSound, string> = {
+    digital: 'Digital (Beep)',
+    bell: 'Campana',
+    classic: 'Clásico',
+    boxing: 'Boxeo',
+}
 
 interface Props {
     coachSlug: string
@@ -148,8 +158,24 @@ export function ProfileClient({
     const router = useRouter()
     const [useBrandColors, setUseBrandColors] = useState(initialUseBrandColors)
     const [isTogglingColors, setIsTogglingColors] = useState(false)
+    // Alarma de descanso (sonido del timer de rutina) — preferencia local (localStorage), movida
+    // acá desde el viejo engranaje del dashboard. El volumen se mantiene (default 1.0) para la
+    // preview; solo se expone el tipo de sonido, igual que el modal anterior.
+    const [restSound, setRestSound] = useState<TimerSound>('digital')
 
     const hasModules = showMovement || showBodyComposition
+
+    useEffect(() => {
+        const saved = localStorage.getItem('restTimerSound') as TimerSound | null
+        if (saved && saved in REST_SOUND_LABELS) setRestSound(saved)
+    }, [])
+
+    function handleRestSoundChange(next: TimerSound) {
+        setRestSound(next)
+        localStorage.setItem('restTimerSound', next)
+        const savedVolume = localStorage.getItem('restTimerVolume')
+        playTimerSound(next, savedVolume ? parseFloat(savedVolume) : 1.0) // preview
+    }
 
     async function handleSignOut() {
         const supabase = createClient()
@@ -200,7 +226,7 @@ export function ProfileClient({
     return (
         <div className="mx-auto w-full max-w-2xl px-5 pb-8 pt-safe">
             <header className="flex items-center py-4">
-                <h1 className="font-display text-[22px] font-black tracking-[-0.02em] text-text-strong">Más</h1>
+                <h1 className="font-display text-[22px] font-black tracking-[-0.02em] text-text-strong">Mi perfil</h1>
             </header>
 
             {/* Hero de identidad (Card inverse) */}
@@ -280,6 +306,29 @@ export function ProfileClient({
                 )}
             </div>
 
+            {/* Preferencias — Alarma de descanso (sonido del timer de rutina) */}
+            <SectionTitle>Preferencias</SectionTitle>
+            <div className="overflow-hidden rounded-card border border-border-subtle bg-surface-card">
+                <div className="flex min-h-[52px] items-center justify-between gap-3 px-3.5 py-2.5">
+                    <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-body">
+                        <Volume2 className="h-4 w-4 flex-shrink-0 text-text-muted" />
+                        <span className="truncate">Alarma de descanso</span>
+                    </span>
+                    <Select value={restSound} onValueChange={(v) => handleRestSoundChange(v as TimerSound)}>
+                        <SelectTrigger className="h-10 w-[9.5rem] rounded-control" aria-label="Sonido de la alarma de descanso">
+                            <SelectValue>{REST_SOUND_LABELS[restSound]}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                            {(Object.keys(REST_SOUND_LABELS) as TimerSound[]).map((key) => (
+                                <SelectItem key={key} value={key}>
+                                    {REST_SOUND_LABELS[key]}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
             {/* Módulos (read-only, solo los que el coach habilitó) */}
             {hasModules && (
                 <>
@@ -357,6 +406,8 @@ export function ProfileClient({
                     <ChevronRight className="h-[18px] w-[18px] flex-shrink-0 text-[var(--ink-300)]" />
                 </a>
             </div>
+
+            <p className="mt-6 text-center text-[10px] text-text-muted">v1.2.0 · Hecho con ❤️ para tu progreso</p>
         </div>
     )
 }

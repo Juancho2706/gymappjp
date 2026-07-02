@@ -14,7 +14,7 @@ import { getUnreadNewsCount, getPublishedNewsItems } from '@/lib/news/queries'
 import type { Metadata } from 'next'
 import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { generateBrandPalette } from '@/lib/color-utils'
-import { resolveBrandTheme, deriveSportTokens } from '@eva/brand-kit'
+import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding } from '@eva/brand-kit'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { getCoachEnterpriseContext, getCoachTeamContext } from './_data/layout.queries'
@@ -106,6 +106,10 @@ export default async function CoachLayout({
     // Marca por contexto: enterprise → org; team → team; standalone → la del coach.
     // white-label v2 (decisión #2): el branding standalone es Pro+ ENTERO. Si el coach no es Pro o
     // apagó el toggle, su panel cae a EVA. enterprise/team traen su marca propia (ya Pro).
+    // W1a — tema preset curado: si el coach eligió un preset, sus valores overridean color/color2/
+    // accent/tinte/fuente ANTES de derivar tokens. NULL/desconocida → passthrough (grandfather).
+    // Solo se consume en la rama standalone (managed usa la marca de su org/team, no la personal).
+    const presetBrand = resolvePresetBranding(coach)
     const isManaged = !!(enterpriseContext?.primaryColor || teamContext?.primaryColor)
     const standaloneBrandOn =
         !isManaged &&
@@ -117,15 +121,15 @@ export default async function CoachLayout({
             : teamContext?.primaryColor
             ? teamContext.primaryColor
             : standaloneBrandOn
-            ? (coach.primary_color || BRAND_PRIMARY_COLOR)
+            ? (presetBrand.primary_color || BRAND_PRIMARY_COLOR)
             : SYSTEM_PRIMARY_COLOR
 
     // Campos v2 (color2/accent/fuente) solo para el coach standalone Pro+ con el toggle en "mi marca".
-    const accentLight = standaloneBrandOn ? (coach.accent_light || null) : null
-    const accentDark = standaloneBrandOn ? (coach.accent_dark || null) : null
-    const neutralTint = standaloneBrandOn && coach.neutral_tint === true
-    const secondaryColor = standaloneBrandOn ? (coach.brand_secondary_color || null) : null
-    const brandFontStack = resolveBrandFontStack(standaloneBrandOn ? (coach.brand_font_key ?? '') : '')
+    const accentLight = standaloneBrandOn ? (presetBrand.accent_light || null) : null
+    const accentDark = standaloneBrandOn ? (presetBrand.accent_dark || null) : null
+    const neutralTint = standaloneBrandOn && presetBrand.neutral_tint === true
+    const secondaryColor = standaloneBrandOn ? (presetBrand.brand_secondary_color || null) : null
+    const brandFontStack = resolveBrandFontStack(standaloneBrandOn ? (presetBrand.brand_font_key ?? '') : '')
     const brandTheme = resolveBrandTheme({ brandColor: primaryColor, accentLight, accentDark, neutralTint, secondaryLight: secondaryColor, secondaryDark: secondaryColor })
     const palette = generateBrandPalette(brandTheme.light.accent, brandTheme.light.accent2)
     // D2 white-label: rampa SPORT derivada (--sport-100..700 + cta-fill + focus-ring) del color de marca.

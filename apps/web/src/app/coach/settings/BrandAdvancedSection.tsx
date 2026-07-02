@@ -5,8 +5,10 @@ import { resolveBrandTheme, contrastReport } from '@eva/brand-kit'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { CURATED_FONTS, FONT_KEY_TUPLE, type FontKey } from '@/lib/brand-fonts'
 import { LOADER_VARIANTS, LOADER_VARIANT_TUPLE, type LoaderVariant } from '@/lib/brand-loaders'
+import { serializeLoaderConfig, type LoaderComposite } from '@/lib/brand-composer'
 import { generateBrandPalette } from '@/lib/color-utils'
 import { Sparkles, Lock, Palette, Type as TypeIcon, Loader2, Check, AlertTriangle, ChevronRight } from 'lucide-react'
+import { LoaderComposer } from './_components/LoaderComposer'
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/
 
@@ -39,8 +41,15 @@ type Props = {
     /** Config del loader (texto/ícono/color) — controlado por el padre; se fusiona con la variante. */
     loader: AdvancedLoaderValue
     onLoaderChange: (patch: Partial<AdvancedLoaderValue>) => void
+    /** Loader compuesto "Crear el tuyo" (W1b) — precede a la variante cuando está definido. */
+    loaderConfig: LoaderComposite | null
+    onLoaderConfigChange: (next: LoaderComposite | null) => void
+    /** Nombre de marca (para la inicial/texto por defecto del compositor). */
+    brandName: string
     /** Logo actual (o el recién elegido) — habilita la opción de ícono "Mi logo". */
     logoUrl?: string | null
+    /** Hay un tema (preset) activo → los ajustes de abajo los define el tema salvo que los personalices. */
+    presetActive?: boolean
 }
 
 const CARD = 'bg-surface-card border border-subtle rounded-card p-4 sm:p-6 shadow-[var(--shadow-sm)]'
@@ -49,7 +58,7 @@ const CARD = 'bg-surface-card border border-subtle rounded-card p-4 sm:p-6 shado
  *  texto/ícono/color en UNA sola sección). Acordeón CERRADO por defecto (kit MiMarca). Los valores
  *  persistidos se emiten como hidden inputs SIEMPRE presentes (fuera del cuerpo colapsable) para que
  *  guardar funcione aunque el acordeón esté cerrado. Controlado: el estado vive en el padre. */
-export function BrandAdvancedSection({ tier, primaryColor, value, onChange, loader, onLoaderChange, logoUrl }: Props) {
+export function BrandAdvancedSection({ tier, primaryColor, value, onChange, loader, onLoaderChange, loaderConfig, onLoaderConfigChange, brandName, logoUrl, presetActive }: Props) {
     const { secondaryColor, accentLight, accentDark, neutralTint, fontKey, loaderVariant } = value
     const [open, setOpen] = useState(false)
     const [accentOpen, setAccentOpen] = useState(!!(value.accentLight || value.accentDark))
@@ -123,9 +132,19 @@ export function BrandAdvancedSection({ tier, primaryColor, value, onChange, load
             <input type="hidden" name="loader_text" value={loader.loaderText} />
             <input type="hidden" name="loader_icon_mode" value={loader.loaderIconMode} />
             <input type="hidden" name="loader_text_color" value={loader.loaderTextColor} />
+            <input type="hidden" name="loader_config" value={serializeLoaderConfig(loaderConfig)} />
 
             {open && (
                 <div className="mt-5 space-y-6">
+                    {presetActive && (
+                        <div className="flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
+                            <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                            <p className="text-[11px] leading-relaxed text-muted">
+                                Tu <b className="text-strong">tema</b> ya define color, fuente y loader. Cambiá algo acá
+                                solo si querés personalizar sobre tu tema.
+                            </p>
+                        </div>
+                    )}
                     {/* ── Color secundario ── */}
                     <div className="space-y-2">
                         <div className="flex items-center gap-2">
@@ -246,6 +265,15 @@ export function BrandAdvancedSection({ tier, primaryColor, value, onChange, load
                                 )
                             })}
                         </div>
+
+                        {/* Compositor "Crear el tuyo" — símbolo × animación × texto (precede a la variante) */}
+                        <LoaderComposer
+                            value={loaderConfig}
+                            onChange={onLoaderConfigChange}
+                            logoUrl={logoUrl}
+                            brandName={brandName}
+                            primaryColor={HEX_RE.test(primaryColor) ? primaryColor : '#10B981'}
+                        />
 
                         {/* Texto personalizado del loader */}
                         <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-border p-3">

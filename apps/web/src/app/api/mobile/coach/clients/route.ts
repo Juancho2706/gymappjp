@@ -8,6 +8,7 @@ import {
     buildClientWelcomeEmail,
     buildUpgradeRequiredEmail,
 } from '@/lib/email/transactional-templates'
+import { resolveStudentEmailBranding } from '@/lib/email/email-brand'
 import {
     assertPlatformEmailAvailable,
     isAuthDuplicateEmailMessage,
@@ -66,13 +67,13 @@ export async function POST(request: NextRequest) {
 
     const { data: rawCoachData, error: coachError } = await admin
         .from('coaches')
-        .select('id, slug, invite_code, full_name, brand_name, welcome_message, subscription_tier, max_clients, active_org_id')
+        .select('id, slug, invite_code, full_name, brand_name, welcome_message, subscription_tier, max_clients, active_org_id, primary_color, logo_url')
         .eq('id', coachUser.id)
         .maybeSingle()
 
     const coach = rawCoachData as Pick<
         Tables<'coaches'>,
-        'id' | 'slug' | 'invite_code' | 'full_name' | 'brand_name' | 'welcome_message' | 'subscription_tier' | 'max_clients'
+        'id' | 'slug' | 'invite_code' | 'full_name' | 'brand_name' | 'welcome_message' | 'subscription_tier' | 'max_clients' | 'primary_color' | 'logo_url'
     > & { active_org_id?: string | null } | null
 
     if (coachError) {
@@ -193,6 +194,13 @@ export async function POST(request: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
     const publicIdentifier = getCoachPublicIdentifier(coach)
     const loginUrl = appUrl ? `${appUrl}/c/${publicIdentifier}/login` : `https://app.tu-dominio.com/c/${publicIdentifier}/login`
+    // White-label (W2): marca del coach en el header/CTA solo si es standalone Pro+ (org → EVA).
+    const emailBrand = resolveStudentEmailBranding({
+        isStandalone: !orgId,
+        tier: coach.subscription_tier,
+        logoUrl: coach.logo_url,
+        primaryColor: coach.primary_color,
+    })
     const welcomeEmail = buildClientWelcomeEmail({
         brandName: coach.brand_name ?? 'EVA',
         coachName: coach.full_name ?? 'Tu entrenador',
@@ -200,6 +208,8 @@ export async function POST(request: NextRequest) {
         loginUrl,
         tempPassword: parsed.data.temp_password,
         welcomeMessage: coach.welcome_message,
+        logoUrl: emailBrand.logoUrl,
+        primaryColor: emailBrand.primaryColor,
     })
     const emailResult = await sendTransactionalEmail({
         to: emailSan,

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import webpush from 'web-push'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { getTodayInSantiago, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
+import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 
 function isAuthorized(req: Request) {
   const expected = process.env.CRON_SECRET
@@ -49,7 +50,9 @@ export async function GET(req: Request) {
         auth,
         clients!inner (
           coach_id,
-          coaches!inner ( slug ),
+          org_id,
+          team_id,
+          coaches!inner ( slug, brand_name, logo_url, primary_color, subscription_tier ),
           nutrition_plans!inner ( id, is_active, nutrition_meals ( name, day_of_week ) )
         )
       `
@@ -90,7 +93,15 @@ export async function GET(req: Request) {
     for (const sub of toNotify) {
       const clientData = sub.clients as unknown as {
         coach_id: string
-        coaches: { slug: string }
+        org_id: string | null
+        team_id: string | null
+        coaches: {
+          slug: string
+          brand_name: string | null
+          logo_url: string | null
+          primary_color: string | null
+          subscription_tier: string | null
+        }
         nutrition_plans: {
           id: string
           is_active: boolean
@@ -98,8 +109,18 @@ export async function GET(req: Request) {
         }[]
       }
 
-      const coachSlug = clientData?.coaches?.slug ?? ''
+      const coach = clientData?.coaches
+      const coachSlug = coach?.slug ?? ''
       const notificationUrl = `/c/${coachSlug}/nutrition`
+
+      // White-label (W2): la notificación lleva el nombre del coach y su logo como ícono,
+      // solo si es alumno STANDALONE (no pool team ni org) Pro+ (misma regla que la app).
+      // Si no → ícono/marca EVA (fallback del SW). El nombre del coach es identidad → siempre.
+      const brandName = coach?.brand_name ?? undefined
+      const isStandalone = !clientData?.org_id && !clientData?.team_id
+      const brandingOn =
+        isStandalone && isBrandingAllowed((coach?.subscription_tier ?? 'starter') as SubscriptionTier)
+      const iconUrl = brandingOn && coach?.logo_url ? coach.logo_url : undefined
 
       // Recordatorio meal-aware (C3, versión liviana): lista las comidas del plan que aplican HOY
       // (day_of_week null = diario; 1=Lun…7=Dom). Mismo cron diario, misma query (una relación
@@ -118,12 +139,14 @@ export async function GET(req: Request) {
       const body =
         mealsToday.length > 0
           ? `Hoy: ${mealsToday.slice(0, 4).join(' · ')}${mealsToday.length > 4 ? ` +${mealsToday.length - 4}` : ''}. Toca para registrar 🥗`
-          : 'Recuerda registrar tus comidas de hoy en EVA'
+          : `Recuerda registrar tus comidas de hoy${brandName ? ` en ${brandName}` : ''}`
 
       const payload = JSON.stringify({
         title: '¿Ya registraste tus comidas? 🥗',
         body,
         url: notificationUrl,
+        ...(brandName ? { brandName } : {}),
+        ...(iconUrl ? { icon: iconUrl } : {}),
       })
 
       const pushSubscription: webpush.PushSubscription = {

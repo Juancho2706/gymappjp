@@ -166,7 +166,7 @@ export async function importClientsAction(
 
     const { data: rawCoach } = await supabase
         .from('coaches')
-        .select('id, slug, full_name, brand_name, welcome_message, subscription_tier, max_clients')
+        .select('id, slug, full_name, brand_name, welcome_message, subscription_tier, max_clients, primary_color, logo_url')
         .eq('id', user.id)
         .maybeSingle()
 

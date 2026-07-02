@@ -61,12 +61,6 @@ export async function WeightWidget({ userId, coachSlug }: { userId: string; coac
         <Card padding="md" className="gap-0">
             <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-muted">Peso actual</span>
-                <Link
-                    href={`${base}/check-in`}
-                    className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-control px-2 text-[11px] font-bold text-sport-600"
-                >
-                    Registrar
-                </Link>
             </div>
             <div className="mt-1 flex items-end justify-between gap-2">
                 <WeightHeadline value={current} />

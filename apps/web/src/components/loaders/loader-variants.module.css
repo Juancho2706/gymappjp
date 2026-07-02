@@ -99,6 +99,36 @@
     animation: ldEq 1s ease-in-out infinite;
 }
 
+/* ── Compositor de loader "Crear el tuyo" (símbolo × animación) — W1b ── */
+.compSymbol {
+    position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center;
+    color: var(--ld-brand);
+    filter: drop-shadow(0 0 12px rgb(var(--ld-rgb) / 0.45));
+}
+.compInitial { font-weight: 900; line-height: 1; color: var(--ld-brand); letter-spacing: -0.04em; }
+
+/* pulso: símbolo que late + anillo que expande */
+.compPulse { animation: ldPulse 1.8s ease-in-out infinite; }
+.compPulseRing {
+    position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--ld-brand);
+    animation: ldPulseRing 1.8s ease-out infinite;
+}
+/* orbita: punto que gira alrededor del símbolo */
+.compOrbit { position: absolute; inset: 0; animation: ldSpin 2.4s linear infinite; transform-origin: center; }
+.compOrbitDot {
+    position: absolute; top: -3px; left: 50%; width: 10px; height: 10px; margin-left: -5px;
+    border-radius: 50%; background: var(--ld-brand); box-shadow: 0 0 10px rgb(var(--ld-rgb) / 0.8);
+}
+.compOrbitTrack {
+    position: absolute; inset: 6px; border-radius: 50%; border: 1.5px dashed rgb(var(--ld-rgb) / 0.22);
+}
+/* respiracion: escala suave que inhala/exhala */
+.compBreath { animation: ldBreath 3.2s ease-in-out infinite; }
+
+@keyframes ldPulse { 0%, 100% { transform: scale(0.92); opacity: 0.85; } 50% { transform: scale(1.06); opacity: 1; } }
+@keyframes ldPulseRing { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(1.35); opacity: 0; } }
+@keyframes ldBreath { 0%, 100% { transform: scale(0.94); } 50% { transform: scale(1.08); } }
+
 /* spinners */
 .spin { animation: ldSpin 1.2s linear infinite; transform-origin: center; }
 .spinSlow { animation: ldSpin 7s linear infinite; transform-origin: center; }
@@ -115,9 +145,11 @@
 @keyframes ldBar { 0% { width: 8%; } 60% { width: 96%; } 100% { width: 100%; } }
 
 @media (prefers-reduced-motion: reduce) {
-    .icon, .spin, .spinSlow, .arcA, .arcB, .dash, .conic, .barFill, .eqBar, .ping {
+    .icon, .spin, .spinSlow, .arcA, .arcB, .dash, .conic, .barFill, .eqBar, .ping,
+    .compPulse, .compPulseRing, .compOrbit, .compBreath {
         animation: none !important;
     }
     .barFill { width: 70%; }
     .eqBar { transform: scaleY(0.7); }
+    .compPulseRing { opacity: 0.3; }
 }

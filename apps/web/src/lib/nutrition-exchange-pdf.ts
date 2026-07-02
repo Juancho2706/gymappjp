@@ -38,7 +38,7 @@ export type ExchangePdfMeal = {
 export type ExchangePdfParams = {
     format: ExchangePdfFormat
     brand: PdfBrand
-    /** dataURL del logo ya resuelto client-side (loadBrandLogoDataUrl); null ⇒ inicial+color. */
+    /** dataURL del logo ya resuelto SERVER-side (resolveBrandLogoDataUrlServer); null ⇒ texto de marca. */
     logoDataUrl?: string | null
     planName: string
     clientName?: string | null

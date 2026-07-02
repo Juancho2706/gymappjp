@@ -13,7 +13,7 @@ import {
 import { getStudentMovementNavEnabled, getStudentBodyCompositionNavEnabled } from '../_data/client-root.queries'
 import { ProfileClient } from './_components/ProfileClient'
 
-export const metadata: Metadata = { title: 'Más' }
+export const metadata: Metadata = { title: 'Mi perfil' }
 
 interface Props {
     params: Promise<{ coach_slug: string }>

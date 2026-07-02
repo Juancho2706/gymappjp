@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/admin-client';
 import { BRAND_APP_ICON_512, BRAND_APP_ICON_MASKABLE } from '@/lib/brand-assets';
+import { resolveBrandTheme } from '@eva/brand-kit';
 
 type ManifestBrand = {
   brand_name: string
@@ -41,11 +42,13 @@ export async function GET(
   const startUrl = teamSlug ? `/t/${teamSlug}/dashboard` : `/c/${slug}/dashboard`
   const scope = teamSlug ? `/t/${teamSlug}` : `/c/${slug}`
 
-  // Background del splash: para alumno de pool espeja el route de imagen /api/splash
-  // (splash_bg_color del team, si no su primary_color); coach/org mantiene el negro.
+  // Background del splash nativo: para alumno de pool espeja el route de imagen /api/splash
+  // (splash_bg_color del team, si no su primary_color). Coach/org: la SUPERFICIE CLARA del
+  // tema derivada del color de marca (mismo motor que el layout del alumno), en vez del negro
+  // genérico fijo → el splash de instalación deja de ser negro.
   const backgroundColor = teamSlug
     ? (brand?.splash_bg_color ?? brand?.primary_color ?? "#000000")
-    : "#000000"
+    : deriveSplashBackground(brand?.primary_color)
 
   const manifest = {
     name: brand?.brand_name || "EVA",
@@ -66,6 +69,21 @@ export async function GET(
       'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=3600'
     },
   });
+}
+
+/** Superficie CLARA base del diseño (`--surface-app` claro). Splash sin marca ⇒ este near-white. */
+const EVA_LIGHT_SURFACE = '#FBFCFD'
+const HEX6_RE = /^#[0-9a-fA-F]{6}$/
+
+/**
+ * Background del splash del manifest (coach/org): la SUPERFICIE CLARA del tema derivada del
+ * color de marca vía el MISMO motor OKLCH que el layout del alumno (`resolveBrandTheme`), en
+ * lugar del negro genérico fijo. Un color inválido / sin marca cae a la superficie clara EVA.
+ * NOTA: el manifest sólo admite UN background_color (sin variante dark) → se ancla al claro.
+ */
+function deriveSplashBackground(primaryColor: string | null | undefined): string {
+  if (!primaryColor || !HEX6_RE.test(primaryColor)) return EVA_LIGHT_SURFACE
+  return resolveBrandTheme({ brandColor: primaryColor }).light.bg
 }
 
 /**

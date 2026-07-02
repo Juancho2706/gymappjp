@@ -58,8 +58,6 @@ export default async function ClientDashboardPage({ params }: Props) {
     const announcements = client.org_id ? await getActiveOrgAnnouncements(client.org_id) : []
 
     const headersList = await headers()
-    const useBrandColorsStr = headersList.get('x-client-use-brand-colors')
-    const initialUseBrandColors = useBrandColorsStr ? useBrandColorsStr === 'true' : true
 
     // Pool/team: el proxy /t reescribe a /c y reenvía la marca del TEAM en headers. La fila coaches
     // anidada trae la marca PERSONAL del coach asignado — no debe filtrarse al alumno de pool. En
@@ -83,8 +81,6 @@ export default async function ClientDashboardPage({ params }: Props) {
                     <Suspense fallback={<DashboardHeaderSkeleton />}>
                         <DashboardHeader
                             userId={user.id}
-                            coachSlug={coach_slug}
-                            initialUseBrandColors={initialUseBrandColors}
                             brandName={greetingBrandName}
                             welcomeMessage={greetingWelcomeMessage}
                         />
@@ -109,7 +105,6 @@ export default async function ClientDashboardPage({ params }: Props) {
                     <Suspense fallback={null}>
                         <CoachPresenceCard
                             userId={user.id}
-                            coachSlug={coach_slug}
                             brandName={greetingBrandName}
                             note={greetingWelcomeMessage}
                         />
@@ -136,7 +131,7 @@ export default async function ClientDashboardPage({ params }: Props) {
                                 <WeightWidget userId={user.id} coachSlug={coach_slug} />
                             </Suspense>
                             <Suspense fallback={<PersonalRecordsSkeleton />}>
-                                <PersonalRecordsCard userId={user.id} />
+                                <PersonalRecordsCard userId={user.id} coachSlug={coach_slug} />
                             </Suspense>
                         </div>
                     </div>
@@ -156,7 +151,7 @@ export default async function ClientDashboardPage({ params }: Props) {
 
                     {/* Nutrición de hoy */}
                     <div>
-                        <SectionTitle accent="var(--ember-500)" action="Ver dieta" actionHref={`${base}/nutrition`}>
+                        <SectionTitle accent="var(--ember-500)" action="Ver nutrición" actionHref={`${base}/nutrition`}>
                             Nutrición de hoy
                         </SectionTitle>
                         <Suspense fallback={<NutritionSkeleton />}>
@@ -171,7 +166,6 @@ export default async function ClientDashboardPage({ params }: Props) {
                         userId={user.id}
                         coachSlug={coach_slug}
                         base={base}
-                        initialUseBrandColors={initialUseBrandColors}
                         brandName={greetingBrandName}
                         welcomeMessage={greetingWelcomeMessage}
                     />

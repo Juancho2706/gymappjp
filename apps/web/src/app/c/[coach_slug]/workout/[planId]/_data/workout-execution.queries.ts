@@ -272,13 +272,16 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
     }
 
     const exerciseMaxes: Record<string, number> = {}
+    // Fecha del máximo histórico por ejercicio → el overlay post-entreno puede decir "superaste
+    // tus 80 kg del 12 jun". Paralelo a `exerciseMaxes` (misma pasada), ISO del log del máx.
+    const exerciseMaxDates: Record<string, string> = {}
 
     // Máximo histórico por ejercicio (para detectar PRs): mejor peso de días PREVIOS a hoy, de
     // CUALQUIER bloque INCLUIDO el propio plan. Antes excluía los bloques del plan actual → en
     // programas semanales reusados el máx salía vacío y marcaba "PR" falso casi cada sesión. Cap 5000.
     const { data: maxData } = exerciseIds.length === 0 ? { data: [] } : await supabase
         .from('workout_logs')
-        .select('weight_kg, exercise_id')
+        .select('weight_kg, exercise_id, logged_at')
         .eq('client_id', user.id)
         .not('weight_kg', 'is', null)
         // P1-3: match por el snapshot exercise_id del log → el máx histórico sobrevive al borrado
@@ -287,11 +290,12 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
         .lt('logged_at', todayStartUtc)
         .limit(5000)
 
-    maxData?.forEach((log: { weight_kg: number | null; exercise_id: string | null }) => {
+    maxData?.forEach((log: { weight_kg: number | null; exercise_id: string | null; logged_at?: string }) => {
         const exId = log.exercise_id
         if (!exId || log.weight_kg == null) return
         if (exerciseMaxes[exId] == null || log.weight_kg > exerciseMaxes[exId]) {
             exerciseMaxes[exId] = log.weight_kg
+            if (log.logged_at) exerciseMaxDates[exId] = log.logged_at
         }
     })
 
@@ -312,5 +316,5 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
         }
     }
 
-    return { user, plan, program, logs, previousHistory, exerciseMaxes, activeWeekVariant, currentWeek, lastSessionByBlock, areas, cardio }
+    return { user, plan, program, logs, previousHistory, exerciseMaxes, exerciseMaxDates, activeWeekVariant, currentWeek, lastSessionByBlock, areas, cardio }
 })

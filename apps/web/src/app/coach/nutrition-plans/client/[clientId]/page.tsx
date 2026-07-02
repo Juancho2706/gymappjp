@@ -12,6 +12,7 @@ import {
 } from '../../_data/exchange.queries'
 import type { ExchangeBuilderData } from '../../_components/PlanBuilder/types'
 import { mapClientPlanRowToInitialData } from '../../_data/plan-builder-mappers'
+import { resolveBrandLogoDataUrlServer } from '@/lib/nutrition-pdf-logo.server'
 import { AdherenceStrip } from '@/app/c/[coach_slug]/nutrition/_components/AdherenceStrip'
 import { getClientNutritionPlanPageAuthData, getCoachDisplayName } from './_data/client-plan-page.queries'
 import { EditedByBadge } from '@/components/coach/EditedByBadge'
@@ -79,7 +80,12 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
           }),
       getCoachPdfBrand(user.id, scope),
     ])
-    const equivalences = await getExchangeEquivalencesForGroups(groups.map((g) => g.id))
+    // Logo del PDF resuelto SERVER-side (fetch server del bucket público, sin CORS); null ⇒
+    // el generador dibuja el nombre de marca como texto (fallback). En paralelo a las equivalencias.
+    const [equivalences, logoDataUrl] = await Promise.all([
+      getExchangeEquivalencesForGroups(groups.map((g) => g.id)),
+      resolveBrandLogoDataUrlServer(pdfBrand.logoUrl),
+    ])
     exchange = {
       planId: (plan?.id as string | undefined) ?? null,
       planMode: bundle.planMode,
@@ -89,7 +95,7 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
       variantByMealId: bundle.variantByMealId,
       equivalences,
       brand: pdfBrand.brand,
-      brandLogoUrl: pdfBrand.logoUrl,
+      logoDataUrl,
       clientName: client.full_name,
     }
   }

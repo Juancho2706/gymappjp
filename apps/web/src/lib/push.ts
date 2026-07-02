@@ -12,6 +12,13 @@ export type PushPayload = {
     body: string
     url: string
     icon?: string
+    /**
+     * White-label (W2): marca del coach para que la notificación NO muestre EVA.
+     * `iconUrl` = logo del coach (URL absoluta; el caller lo gatea a Pro+). `brandName`
+     * = nombre del coach; el SW lo usa como título fallback en vez de 'EVA Fitness'.
+     */
+    iconUrl?: string
+    brandName?: string
 }
 
 async function sendExpoTokens(
@@ -45,7 +52,8 @@ export async function sendPushToClient(clientId: string, payload: PushPayload): 
 
     const json = JSON.stringify({
         ...payload,
-        icon: payload.icon ?? '/icons/icon-192x192.png',
+        // Logo del coach (white-label) tiene prioridad; si no, ícono por defecto (EVA).
+        icon: payload.iconUrl ?? payload.icon ?? '/icons/icon-192x192.png',
         badge: '/icons/icon-72x72.png',
     })
 

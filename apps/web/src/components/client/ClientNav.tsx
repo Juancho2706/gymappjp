@@ -114,7 +114,7 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
     // Base 4 (zona del pulgar en mobile): Inicio · Plan (si showNutrition) · Aprender · Check-in.
     const baseItems: NavItem[] = [
         { href: `${base}/dashboard`, label: 'Inicio', short: 'Inicio', icon: Home },
-        ...(showNutrition ? [{ href: `${base}/nutrition`, label: 'Plan Alimenticio', short: 'Plan', icon: Apple }] : []),
+        ...(showNutrition ? [{ href: `${base}/nutrition`, label: 'Nutrición', short: 'Nutrición', icon: Apple }] : []),
         { href: `${base}/exercises`, label: 'Aprender', short: 'Aprender', icon: Dumbbell },
         { href: `${base}/check-in`, label: 'Check-in', short: 'Check-in', icon: CheckCircle },
     ]
@@ -126,20 +126,21 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
         ...(showBodyComposition ? [{ href: `${base}/bodycomp`, label: 'Composición', short: 'Composición', icon: Gauge }] : []),
     ]
 
-    // Overflow del mobile ("Más"): Historial + módulos entitled. (Las acciones de cuenta — tema,
-    // colores, instalar, cerrar sesión — se renderizan aparte dentro del sheet.)
-    const overflowItems: NavItem[] = [
-        { href: `${base}/workout-history`, label: 'Historial', short: 'Historial', icon: History },
-        ...moduleItems,
-    ]
-    const isMoreActive = overflowItems.some((i) => pathname === i.href || pathname.startsWith(i.href + '/'))
+    // Historial: vive en el sidebar desktop (paridad) y como acceso del sheet "Más" mobile.
+    const historyItem: NavItem = { href: `${base}/workout-history`, label: 'Historial', short: 'Historial', icon: History }
 
-    // Estado activo del nav primario — preserva los special-cases (workout-history => Inicio activo,
-    // ejecución `/workout`, y el pulso optimista `isNavigating`).
+    // Rutas "bajo Más" para el estado activo del tab mobile: Historial, Mi perfil y los módulos
+    // entitled. Los módulos ya NO se listan en el sheet (se alcanzan via Mi perfil → /perfil), pero
+    // se mantienen aquí para que el tab "Más" quede activo cuando el alumno está dentro de uno.
+    const moreRoutes: string[] = [historyItem.href, `${base}/perfil`, ...moduleItems.map((i) => i.href)]
+    const isMoreActive = moreRoutes.some((href) => pathname === href || pathname.startsWith(href + '/'))
+
+    // Estado activo del nav primario — preserva la ejecución `/workout` y el pulso optimista
+    // `isNavigating`. (Historial ya es un link propio del sidebar desktop, así que /workout-history
+    // deja de forzar "Inicio" activo — resaltar Historial es lo correcto.)
     const isActiveHref = (href: string) =>
         pathname === href ||
         pathname.startsWith(href + '/workout') ||
-        (href === `${base}/dashboard` && pathname === `${base}/workout-history`) ||
         isNavigating === href
 
     // Píldora deslizante de la cápsula flotante (mobile): índice del tab activo entre los
@@ -338,6 +339,7 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
                 <div className="min-h-0 flex-1 overflow-visible">
                     <nav className="flex min-h-0 flex-1 flex-col justify-start gap-1 overflow-y-auto px-3 py-4 custom-scrollbar">
                         {baseItems.map(renderDesktopLink)}
+                        {renderDesktopLink(historyItem)}
                         {moduleItems.length > 0 && (
                             <>
                                 <div className={cn('flex shrink-0 select-none flex-col gap-1 pt-2', isCollapsed ? 'items-center' : 'px-3')} aria-hidden="true">
@@ -446,54 +448,33 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
                                 <ChevronRight className="h-[18px] w-[18px] flex-shrink-0 text-muted" />
                             </Link>
 
-                            {/* Navegación overflow: Historial + módulos entitled */}
-                            <div className="grid grid-cols-2 gap-1.5">
-                                {overflowItems.map((item) => {
-                                    const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
-                                    const Icon = item.icon
-                                    return (
-                                        <Link
-                                            key={item.href}
-                                            href={item.href}
-                                            prefetch={false}
-                                            title={item.label}
-                                            aria-label={item.label}
-                                            onClick={() => setMoreOpen(false)}
-                                            className={cn(
-                                                'flex min-h-[44px] items-center gap-3 rounded-control border border-transparent px-3 py-2.5 text-sm font-semibold transition-colors',
-                                                isActive ? 'text-strong' : 'text-muted hover:bg-surface-sunken hover:text-strong'
-                                            )}
-                                            style={isActive ? activeBgStyle : undefined}
-                                        >
-                                            <Icon className={cn('h-5 w-5 flex-shrink-0', isActive ? '' : 'text-muted')} style={isActive ? activeColorStyle : undefined} />
-                                            <span className="truncate">{item.label}</span>
-                                        </Link>
-                                    )
-                                })}
-                            </div>
+                            {/* Navegación overflow: Historial. (Tema, colores y cerrar sesión viven en
+                                Mi perfil; los módulos entitled se alcanzan desde ahí.) */}
+                            {(() => {
+                                const isActive = pathname === historyItem.href || pathname.startsWith(historyItem.href + '/')
+                                const Icon = historyItem.icon
+                                return (
+                                    <Link
+                                        href={historyItem.href}
+                                        prefetch={false}
+                                        title={historyItem.label}
+                                        aria-label={historyItem.label}
+                                        onClick={() => setMoreOpen(false)}
+                                        className={cn(
+                                            'flex min-h-[44px] items-center gap-3 rounded-control border border-transparent px-3 py-2.5 text-sm font-semibold transition-colors',
+                                            isActive ? 'text-strong' : 'text-muted hover:bg-surface-sunken hover:text-strong'
+                                        )}
+                                        style={isActive ? activeBgStyle : undefined}
+                                    >
+                                        <Icon className={cn('h-5 w-5 flex-shrink-0', isActive ? '' : 'text-muted')} style={isActive ? activeColorStyle : undefined} />
+                                        <span className="truncate">{historyItem.label}</span>
+                                    </Link>
+                                )
+                            })()}
 
-                            {/* Acciones de cuenta (en sitio — no son rutas) */}
+                            {/* Instalar app — utilidad PWA (no es navegación, no tiene hogar en /perfil) */}
                             <div className="flex flex-col gap-1 border-t border-subtle pt-2">
                                 <PwaNavButton />
-                                <div className="flex min-h-[44px] items-center justify-between rounded-control px-3 py-2">
-                                    <span className="text-sm font-medium text-body">Tema</span>
-                                    <ThemeToggle />
-                                </div>
-                                <div className="flex min-h-[44px] items-center justify-between gap-3 rounded-control px-3 py-2">
-                                    <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-body">
-                                        <Palette className="h-4 w-4 flex-shrink-0 text-muted" />
-                                        <span className="truncate">Colores del coach</span>
-                                    </span>
-                                    <Switch checked={useBrandColors} onCheckedChange={handleToggleBrandColors} disabled={isTogglingColors} aria-label="Colores del coach" />
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={handleSignOut}
-                                    className="group flex min-h-[44px] items-center gap-3 rounded-control px-3 py-2.5 text-sm font-medium text-muted transition-colors hover:bg-destructive/10 hover:text-destructive"
-                                >
-                                    <LogOut className="h-5 w-5 flex-shrink-0 group-hover:text-destructive" />
-                                    <span>Cerrar sesión</span>
-                                </button>
                             </div>
                         </motion.div>
                     </>

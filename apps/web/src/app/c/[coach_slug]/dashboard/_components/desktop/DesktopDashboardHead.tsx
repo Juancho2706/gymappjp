@@ -1,14 +1,16 @@
-import { Flame } from 'lucide-react'
-import { ClientSettingsModal } from '@/components/client/ClientSettingsModal'
+import Link from 'next/link'
+import { Flame, UserRound } from 'lucide-react'
 import { getActiveProgram, getClientProfile, getDashboardStreak } from '../../_data/dashboard.queries'
 import { formatLongDateSantiago, getTodayInSantiago, timeGreetingSantiago } from '@/lib/date-utils'
 import { programWeekIndex1Based } from '@/lib/workout/programWeekVariant'
+import { getClientBasePath } from '@/lib/client/base-path'
 
 /**
  * Cabecera desktop del alumno — `.dt-dash-head` de `DesktopAlumnoDashboard`:
  * eyebrow (programa · semana) + saludo grande a la izquierda, chip de racha a la derecha.
  * En desktop el kit DEMOTE la racha a un chip compacto (el ribbon prominente es el tratamiento
- * móvil). Se conserva el acceso a Opciones (`ClientSettingsModal`) — funcionalidad de la app.
+ * móvil). El acceso a cuenta/apariencia es un atajo a Mi perfil (`/perfil`) — hogar único de
+ * ajustes; el desktop no tiene entrada a /perfil en el sidebar.
  *
  * Datos reales: `getClientProfile` (nombre), `getDashboardStreak` (RPC racha), `getActiveProgram`
  * (nombre + semana). Todo deduplicado por `React.cache` con el resto del dashboard.
@@ -16,12 +18,11 @@ import { programWeekIndex1Based } from '@/lib/workout/programWeekVariant'
 export async function DesktopDashboardHead({
     userId,
     coachSlug,
-    initialUseBrandColors,
 }: {
     userId: string
     coachSlug: string
-    initialUseBrandColors: boolean
 }) {
+    const base = await getClientBasePath(coachSlug)
     const [{ client }, streak, program] = await Promise.all([
         getClientProfile(userId),
         getDashboardStreak(userId),
@@ -48,7 +49,15 @@ export async function DesktopDashboardHead({
                         <span className="text-xs">días</span>
                     </span>
                 ) : null}
-                <ClientSettingsModal coachSlug={coachSlug} initialUseBrandColors={initialUseBrandColors} />
+                <Link
+                    href={`${base}/perfil`}
+                    prefetch={false}
+                    aria-label="Mi perfil"
+                    title="Mi perfil"
+                    className="flex h-11 w-11 items-center justify-center rounded-control text-muted transition-colors hover:bg-surface-sunken hover:text-strong"
+                >
+                    <UserRound className="h-5 w-5" />
+                </Link>
             </div>
         </div>
     )

@@ -1,17 +1,14 @@
-import { ClientSettingsModal } from '@/components/client/ClientSettingsModal'
 import { getClientProfile } from '../_data/dashboard.queries'
 import { formatLongDateSantiago, getTodayInSantiago, timeGreetingSantiago } from '@/lib/date-utils'
 import { ClientGreeting } from './header/ClientGreeting'
 
 interface DashboardHeaderProps {
     userId: string
-    coachSlug: string
-    initialUseBrandColors: boolean
     brandName: string | null | undefined
     welcomeMessage?: string | null
 }
 
-export async function DashboardHeader({ userId, coachSlug, initialUseBrandColors, brandName, welcomeMessage }: DashboardHeaderProps) {
+export async function DashboardHeader({ userId, brandName, welcomeMessage }: DashboardHeaderProps) {
     const { client } = await getClientProfile(userId)
     const firstName = client?.full_name?.split(' ')[0] ?? 'Atleta'
     const greet = timeGreetingSantiago()
@@ -31,9 +28,6 @@ export async function DashboardHeader({ userId, coachSlug, initialUseBrandColors
                     {welcomeMessage ? (
                         <p className="mt-0.5 truncate text-[11px] text-muted">{welcomeMessage}</p>
                     ) : null}
-                </div>
-                <div className="flex flex-shrink-0 items-center gap-2">
-                    <ClientSettingsModal coachSlug={coachSlug} initialUseBrandColors={initialUseBrandColors} />
                 </div>
             </div>
         </header>

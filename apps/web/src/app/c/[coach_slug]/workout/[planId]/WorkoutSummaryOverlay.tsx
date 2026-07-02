@@ -4,7 +4,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { Trophy, Share2, Check } from 'lucide-react'
 import { epleyOneRM } from '@/app/coach/clients/[clientId]/profileTrainingAnalytics'
+import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { springs, fadeSlideUp, staggerContainer } from '@/lib/animation-presets'
+
+/** "12 jun" — fecha corta es-CL, día calendario Santiago. */
+function fmtShortDate(iso: string): string {
+    const ymd = getSantiagoIsoYmdForUtcInstant(iso)
+    return new Date(`${ymd}T12:00:00Z`).toLocaleDateString('es-CL', {
+        day: 'numeric',
+        month: 'short',
+        timeZone: 'UTC',
+    })
+}
 
 // canvas-confetti uses CommonJS export=; bundler wraps it as { default: fn } at runtime
 const fireConfetti = (opts: object) =>
@@ -35,6 +46,8 @@ export interface WorkoutSummaryOverlayProps {
     logs: SummaryLog[]
     blocks: BlockSummary[]
     exerciseMaxes: Record<string, number>
+    /** Fecha (ISO) del máximo histórico por ejercicio → "superaste tus 80 kg del 12 jun". */
+    exerciseMaxDates?: Record<string, string>
     onDone: () => void
 }
 
@@ -49,6 +62,7 @@ export function WorkoutSummaryOverlay({
     logs,
     blocks,
     exerciseMaxes,
+    exerciseMaxDates = {},
     onDone,
 }: WorkoutSummaryOverlayProps) {
     const reducedMotion = useReducedMotion()
@@ -125,11 +139,12 @@ export function WorkoutSummaryOverlay({
                     exerciseName: ex.name,
                     newWeightKg: ex.maxWeight,
                     prevWeightKg: prevKg,
+                    prevAchievedAt: exerciseMaxDates[ex.exerciseId] ?? null,
                     pct,
                     estimated1RM: Math.round(epleyOneRM(ex.maxWeight, Math.max(1, repsAtMax)) * 10) / 10,
                 }
             })
-    }, [exerciseBreakdown, exerciseMaxes])
+    }, [exerciseBreakdown, exerciseMaxes, exerciseMaxDates])
 
     const muscleGroupVolume = useMemo(() => {
         const map = new Map<string, number>()
@@ -155,7 +170,12 @@ export function WorkoutSummaryOverlay({
         const prText = detectedPRs.length > 0 ? ` 🏆 ${detectedPRs.length} récord${detectedPRs.length > 1 ? 's' : ''}!` : ''
         const text = `¡Completé "${planTitle}"! 💪 ${completedSets} series · ${totalReps} reps · ${Math.round(totalVolume)} kg${prText}`
         if (navigator.share) {
-            await navigator.share({ title: 'EVA Fitness', text }).catch(() => null)
+            // White-label (W2): compartir con la marca del coach, no "EVA Fitness". El layout /c
+            // fija data-brand-name en un wrapper del documento; este overlay se portalea a
+            // document.body, así que lo leemos del DOM (siempre la marca del coach; 'EVA' fallback).
+            const shareTitle =
+                document.querySelector('[data-brand-name]')?.getAttribute('data-brand-name')?.trim() || 'EVA'
+            await navigator.share({ title: shareTitle, text }).catch(() => null)
         } else {
             await navigator.clipboard.writeText(text).catch(() => null)
             setShared(true)
@@ -246,6 +266,11 @@ export function WorkoutSummaryOverlay({
                                             {pr.prevWeightKg} kg → {pr.newWeightKg} kg
                                             {pr.pct > 0 ? ` (+${pr.pct}%)` : ''}
                                         </p>
+                                        {pr.prevAchievedAt ? (
+                                            <p className="text-[10px] text-amber-200/80 mt-1">
+                                                Superaste tus {pr.prevWeightKg} kg del {fmtShortDate(pr.prevAchievedAt)}
+                                            </p>
+                                        ) : null}
                                         <p className="text-[10px] text-on-dark-muted mt-1">
                                             1RM estimado: <span className="font-semibold text-on-dark">{pr.estimated1RM} kg</span>
                                         </p>

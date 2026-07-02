@@ -27,6 +27,10 @@ export type CoachSession = Pick<
     | 'logo_url_dark'
     | 'brand_font_key'
     | 'loader_variant'
+    // white-label v2.1 (presets): key del tema + slots crudos (render por otro agente).
+    | 'theme_preset_key'
+    | 'login_layout_key'
+    | 'loader_config'
 > & {
     use_brand_colors_coach?: boolean
 }

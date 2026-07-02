@@ -98,7 +98,7 @@ export function resolvePdfBrand(source: TenantBrandSource | null | undefined): P
     return {
         brandName: name,
         primaryColor: color ?? EVA_PDF_BRAND.primaryColor,
-        logoDataUrl: null, // el dataURL se resuelve en el cliente vía fetch (loadBrandLogoDataUrl)
+        logoDataUrl: null, // el dataURL se resuelve SERVER-side (resolveBrandLogoDataUrlServer)
         poweredByEva: false,
     }
 }
@@ -116,26 +116,4 @@ export function pdfBrandFromProxyHeaders(h: {
         logoUrl: h.get('x-coach-logo-url'),
         subscriptionTier: h.get('x-coach-subscription-tier') ?? 'starter',
     })
-}
-
-/**
- * Client-side: logo del tenant → dataURL para jsPDF (fetch → canvas). Fallback null ⇒
- * el PDF dibuja inicial + color (patrón `generateFaviconSvg`). Nunca lanza.
- */
-export async function loadBrandLogoDataUrl(logoUrl: string | null | undefined): Promise<string | null> {
-    if (!logoUrl || typeof window === 'undefined') return null
-    try {
-        const res = await fetch(logoUrl, { mode: 'cors' })
-        if (!res.ok) return null
-        const blob = await res.blob()
-        if (!blob.type.startsWith('image/')) return null
-        return await new Promise<string | null>((resolve) => {
-            const reader = new FileReader()
-            reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null)
-            reader.onerror = () => resolve(null)
-            reader.readAsDataURL(blob)
-        })
-    } catch {
-        return null
-    }
 }

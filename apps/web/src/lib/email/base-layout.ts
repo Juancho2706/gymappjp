@@ -4,12 +4,28 @@
  *
  * Design: dark header (#0f172a) + white card body + EVA green accent (#10B981).
  * All styles inline — required for Gmail/Outlook compatibility.
+ *
+ * White-label (W2): emails AL ALUMNO pueden pasar `brand` (logo + color + nombre del
+ * coach). El header/CTA/footer usan la marca del coach; el "con tecnología de EVA" del
+ * footer se mantiene discreto. Sin `brand` (coach emails, free/starter, fallback) → EVA.
  */
+import { deriveSportTokens } from '@eva/brand-kit'
+
+export type EmailBrand = {
+    /** Nombre de marca del coach (identidad). Se muestra en el header si no hay logo. */
+    brandName?: string
+    /** URL ABSOLUTA del logo del coach (Supabase Storage). Solo Pro+ (gateado por el caller). */
+    logoUrl?: string | null
+    /** Color primario del coach (hex #rrggbb). Solo Pro+ (gateado por el caller). */
+    primaryColor?: string | null
+}
 
 export type BaseEmailOptions = {
     previewText?: string
     headerTitle?: string
     footerText?: string
+    /** White-label del email (solo emails al alumno; el caller decide el gate Pro+). */
+    brand?: EmailBrand
 }
 
 const EVA_GREEN = '#10B981'
@@ -18,13 +34,53 @@ const CARD_BG = '#ffffff'
 const TEXT_PRIMARY = '#111827'
 const TEXT_MUTED = '#6b7280'
 const BORDER = '#e5e7eb'
+const HEX_RE = /^#[0-9a-fA-F]{6}$/
+
+/** Escapa texto controlado por el coach (brand_name) para interpolarlo seguro en HTML/atributos. */
+function escHtml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+/**
+ * Colores de CTA white-safe para el color de marca del coach. Reusa el MISMO motor
+ * (`deriveSportTokens`) que la app (`--cta-fill` / `--text-on-sport`) → un CTA de email
+ * jamás queda ilegible, en cualquier color de marca. Sin color válido → verde EVA.
+ */
+export function brandCtaColors(primaryColor?: string | null): { bg: string; text: string } {
+    if (primaryColor && HEX_RE.test(primaryColor)) {
+        const t = deriveSportTokens(primaryColor)
+        return { bg: t.ctaFill, text: t.textOnSport }
+    }
+    return { bg: EVA_GREEN, text: '#ffffff' }
+}
 
 export function wrapEmailLayout(body: string, opts: BaseEmailOptions = {}): string {
     const preview = opts.previewText
         ? `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;color:#ffffff;line-height:1px;">${opts.previewText}&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>`
         : ''
 
-    const headerTitle = opts.headerTitle ?? 'EVA'
+    const brand = opts.brand
+    const brandNameRaw = brand?.brandName?.trim()
+    const brandName = brandNameRaw ? escHtml(brandNameRaw) : ''
+    const hasLogo = !!brand?.logoUrl
+    const hasColor = !!(brand?.primaryColor && HEX_RE.test(brand.primaryColor))
+    // Header brandeado SOLO si el caller pasó logo o color (⇒ Pro+ standalone). Si no → EVA (como hoy).
+    const branded = hasLogo || hasColor
+    const accent = branded ? brandCtaColors(brand?.primaryColor).bg : EVA_GREEN
+
+    const headerTitle = opts.headerTitle ?? (branded && brandNameRaw ? brandNameRaw : 'EVA')
+
+    const headerContent = branded
+        ? (hasLogo
+            ? `<img src="${brand!.logoUrl}" alt="${brandName || 'Logo'}" height="30" style="display:block;height:30px;max-height:30px;width:auto;border:0;" />`
+            : `<span style="font-size:22px;font-weight:800;letter-spacing:-0.4px;color:#ffffff;">${brandName}</span>`)
+        : `<span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#ffffff;">EVA</span>
+                    <span style="font-size:22px;font-weight:300;color:${EVA_GREEN};margin-left:2px;">·</span>`
+
+    // Footer: siempre mantiene "con tecnología de EVA" discreto (powered-by).
+    const senderLine = branded && brandName
+        ? `Enviado por <strong>${brandName}</strong> · con tecnología de EVA. Si no esperabas este correo, podés ignorarlo.`
+        : `Enviado por <strong>EVA Fitness Platform</strong>. Si no esperabas este correo, podés ignorarlo.`
 
     const footer = opts.footerText
         ? `<p style="margin:0 0 4px;">${opts.footerText}</p>`
@@ -49,12 +105,11 @@ export function wrapEmailLayout(body: string, opts: BaseEmailOptions = {}): stri
 
           <!-- Header -->
           <tr>
-            <td style="background-color:${DARK_BG};border-radius:12px 12px 0 0;padding:24px 32px;">
+            <td style="background-color:${DARK_BG};border-radius:12px 12px 0 0;padding:24px 32px;border-bottom:3px solid ${accent};">
               <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
                 <tr>
                   <td>
-                    <span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#ffffff;">EVA</span>
-                    <span style="font-size:22px;font-weight:300;color:${EVA_GREEN};margin-left:2px;">·</span>
+                    ${headerContent}
                   </td>
                 </tr>
               </table>
@@ -73,7 +128,7 @@ export function wrapEmailLayout(body: string, opts: BaseEmailOptions = {}): stri
             <td style="background-color:#f9fafb;border:1px solid ${BORDER};border-top:none;border-radius:0 0 12px 12px;padding:16px 32px;">
               <p style="margin:0;font-size:12px;color:${TEXT_MUTED};line-height:1.6;">
                 ${footer}
-                Enviado por <strong>EVA Fitness Platform</strong>. Si no esperabas este correo, podés ignorarlo.
+                ${senderLine}
               </p>
             </td>
           </tr>
@@ -86,9 +141,9 @@ export function wrapEmailLayout(body: string, opts: BaseEmailOptions = {}): stri
 </html>`
 }
 
-/** Renders a primary CTA button */
-export function ctaButton(label: string, url: string, color = EVA_GREEN): string {
-    return `<a href="${url}" target="_blank" style="display:inline-block;padding:13px 24px;background-color:${color};color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;border-radius:8px;letter-spacing:0.1px;">${label}</a>`
+/** Renders a primary CTA button. `textColor` lets branded CTAs stay WCAG-legible (ver `brandCtaColors`). */
+export function ctaButton(label: string, url: string, color = EVA_GREEN, textColor = '#ffffff'): string {
+    return `<a href="${url}" target="_blank" style="display:inline-block;padding:13px 24px;background-color:${color};color:${textColor};font-size:14px;font-weight:700;text-decoration:none;border-radius:8px;letter-spacing:0.1px;">${label}</a>`
 }
 
 /** Renders a secondary (ghost) link button */

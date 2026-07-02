@@ -200,7 +200,7 @@ export async function proxy(request: NextRequest) {
         ? (() => {
               const base = supabase
                   .from('coaches')
-                  .select('id, brand_name, primary_color, logo_url, slug, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, subscription_tier, brand_secondary_color, accent_light, accent_dark, neutral_tint, logo_url_dark, brand_font_key, loader_variant')
+                  .select('id, brand_name, primary_color, logo_url, slug, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, subscription_tier, brand_secondary_color, accent_light, accent_dark, neutral_tint, logo_url_dark, brand_font_key, loader_variant, theme_preset_key, login_layout_key, loader_config')
               if (INVITE_CODE_RE.test(cRouteSlug)) return base.eq('invite_code', cRouteSlug).maybeSingle()
               if (SLUG_RE.test(cRouteSlug)) return base.eq('slug', cRouteSlug).maybeSingle()
               return null
@@ -739,7 +739,7 @@ export async function proxy(request: NextRequest) {
             coachData = minData as typeof coachData
         }
 
-        const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug' | 'loader_text' | 'use_custom_loader' | 'loader_text_color' | 'loader_icon_mode' | 'subscription_tier' | 'brand_secondary_color' | 'accent_light' | 'accent_dark' | 'neutral_tint' | 'logo_url_dark' | 'brand_font_key' | 'loader_variant'> | null
+        const coach = coachData as Pick<Coach, 'id' | 'brand_name' | 'primary_color' | 'logo_url' | 'slug' | 'loader_text' | 'use_custom_loader' | 'loader_text_color' | 'loader_icon_mode' | 'subscription_tier' | 'brand_secondary_color' | 'accent_light' | 'accent_dark' | 'neutral_tint' | 'logo_url_dark' | 'brand_font_key' | 'loader_variant' | 'theme_preset_key' | 'loader_config'> | null
 
         if (!coach) {
             // No error + no fila → coach genuinamente inexistente → 404
@@ -775,6 +775,11 @@ export async function proxy(request: NextRequest) {
                 h.set('x-coach-loader-text-color', coach.loader_text_color?.trim() || '')
                 h.set('x-coach-loader-icon-mode', coach.loader_icon_mode || 'eva')
                 h.set('x-coach-loader-variant', coach.loader_variant || 'eva')
+                // W1a — tema preset curado: la key cruda viaja al layout, que hidrata
+                // color/color2/accent/tinte/fuente/loader desde el catálogo (resolvePresetBranding).
+                h.set('x-coach-theme-preset-key', coach.theme_preset_key || '')
+                // Loader compuesto (jsonb) — el layout lo valida/sanitiza antes de emitirlo como CSS var.
+                h.set('x-coach-loader-config', coach.loader_config ? JSON.stringify(coach.loader_config) : '')
             } else {
                 // free/starter → TODO EVA system (visual). El nombre del coach se conserva (identidad).
                 h.set('x-coach-primary-color', BRAND_PRIMARY_COLOR)
@@ -790,6 +795,8 @@ export async function proxy(request: NextRequest) {
                 h.set('x-coach-loader-text-color', '')
                 h.set('x-coach-loader-icon-mode', 'eva')
                 h.set('x-coach-loader-variant', 'eva')
+                h.set('x-coach-theme-preset-key', '')
+                h.set('x-coach-loader-config', '')
             }
         }
 

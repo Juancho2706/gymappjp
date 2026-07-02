@@ -147,10 +147,12 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('push', (event) => {
   const data = event.data?.json() ?? {}
-  const title = data.title ?? 'EVA Fitness'
+  // White-label (W2): el payload puede traer la marca del coach (brandName + iconUrl/icon).
+  // Fallback = EVA cuando el caller no manda marca (coach free/starter o sin logo).
+  const title = data.title ?? data.brandName ?? 'EVA Fitness'
   const options = {
     body: data.body ?? '',
-    icon: data.icon ?? '/LOGOS/eva-icon.png',
+    icon: data.icon ?? data.iconUrl ?? '/LOGOS/eva-icon.png',
     badge: data.badge ?? '/LOGOS/eva-icon.png',
     data: { url: data.url ?? '/' },
     vibrate: [100, 50, 100],

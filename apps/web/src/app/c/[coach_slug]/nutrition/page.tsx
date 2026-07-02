@@ -126,8 +126,8 @@ export default async function ClientNutritionPage({ params }: Props) {
   const plateProportion = platePropFromMacros(plan.protein_g ?? 0, plan.carbs_g ?? 0)
   const hasTodayWorkout = heroBundle.hero.hasWorkout
   // Marca del tenant resuelta SERVER-SIDE desde headers del proxy (free tier ⇒ EVA, AC4).
+  // El logo del PDF se resuelve aparte, server-side y lazy (resolveClientPdfLogoDataUrl).
   const pdfBrand = pdfBrandFromProxyHeaders(headersList)
-  const brandLogoUrl = pdfBrand.poweredByEva ? null : headersList.get('x-coach-logo-url')
 
   return (
     <div className="min-h-dvh bg-background">
@@ -183,7 +183,6 @@ export default async function ClientNutritionPage({ params }: Props) {
           today={today}
           exchange={exchange}
           pdfBrand={pdfBrand}
-          brandLogoUrl={brandLogoUrl}
           notes={notes}
           shoppingList={shoppingList}
           offPlanRecents={offPlanRecents}

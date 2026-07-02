@@ -1063,11 +1063,13 @@ export type Database = {
           id: string
           invite_code: string
           last_active_at: string | null
+          loader_config: Json | null
           loader_icon_mode: string
           loader_show_icon: boolean
           loader_text: string | null
           loader_text_color: string | null
           loader_variant: string
+          login_layout_key: string | null
           logo_url: string | null
           logo_url_dark: string | null
           marketing_consent: boolean
@@ -1084,6 +1086,7 @@ export type Database = {
           subscription_status: string
           subscription_tier: string
           superseded_mp_preapproval_id: string | null
+          theme_preset_key: string | null
           trial_ends_at: string | null
           trial_used_email: string | null
           trial_warning_days_sent: number[]
@@ -1118,11 +1121,13 @@ export type Database = {
           id: string
           invite_code?: string
           last_active_at?: string | null
+          loader_config?: Json | null
           loader_icon_mode?: string
           loader_show_icon?: boolean
           loader_text?: string | null
           loader_text_color?: string | null
           loader_variant?: string
+          login_layout_key?: string | null
           logo_url?: string | null
           logo_url_dark?: string | null
           marketing_consent?: boolean
@@ -1139,6 +1144,7 @@ export type Database = {
           subscription_status?: string
           subscription_tier?: string
           superseded_mp_preapproval_id?: string | null
+          theme_preset_key?: string | null
           trial_ends_at?: string | null
           trial_used_email?: string | null
           trial_warning_days_sent?: number[]
@@ -1173,11 +1179,13 @@ export type Database = {
           id?: string
           invite_code?: string
           last_active_at?: string | null
+          loader_config?: Json | null
           loader_icon_mode?: string
           loader_show_icon?: boolean
           loader_text?: string | null
           loader_text_color?: string | null
           loader_variant?: string
+          login_layout_key?: string | null
           logo_url?: string | null
           logo_url_dark?: string | null
           marketing_consent?: boolean
@@ -1194,6 +1202,7 @@ export type Database = {
           subscription_status?: string
           subscription_tier?: string
           superseded_mp_preapproval_id?: string | null
+          theme_preset_key?: string | null
           trial_ends_at?: string | null
           trial_used_email?: string | null
           trial_warning_days_sent?: number[]

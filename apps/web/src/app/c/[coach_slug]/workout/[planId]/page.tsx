@@ -27,6 +27,7 @@ export default async function WorkoutExecutionPage({ params }: Props) {
             previousHistory={data.previousHistory}
             coachSlug={coach_slug}
             exerciseMaxes={data.exerciseMaxes}
+            exerciseMaxDates={data.exerciseMaxDates}
             activeWeekVariant={data.activeWeekVariant}
             currentWeek={data.currentWeek}
             lastSessionByBlock={data.lastSessionByBlock}

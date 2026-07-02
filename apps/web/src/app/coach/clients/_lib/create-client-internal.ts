@@ -7,6 +7,7 @@ import {
 } from '@/lib/auth/platform-email'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildClientWelcomeEmail } from '@/lib/email/transactional-templates'
+import { resolveStudentEmailBranding } from '@/lib/email/email-brand'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
 
 type Db = SupabaseClient<Database>
@@ -25,6 +26,10 @@ type CoachContext = {
     full_name: string
     brand_name: string
     welcome_message: string | null
+    /** White-label (W2): marca del coach para el email de bienvenida (solo standalone Pro+). */
+    subscription_tier?: string | null
+    primary_color?: string | null
+    logo_url?: string | null
     /** If set, client is inserted with org_id instead of coach_id. */
     orgId?: string | null
     /** A.bis2: if set (and no orgId), client joins the team POOL (team_id + coach_id = creator). */
@@ -124,6 +129,14 @@ export async function createClientInternal(
         : `https://app.tu-dominio.com${loginPath}`
 
     if (options.sendEmail !== false) {
+        // White-label (W2): en imports por team/org la marca es del pool (brand_name ya viene con
+        // el nombre del team) → NO usar logo/color del coach. Solo standalone Pro+ brandea el header.
+        const emailBrand = resolveStudentEmailBranding({
+            isStandalone: !coach.orgId && !coach.teamId,
+            tier: coach.subscription_tier,
+            logoUrl: coach.logo_url,
+            primaryColor: coach.primary_color,
+        })
         const welcomeEmail = buildClientWelcomeEmail({
             brandName: coach.brand_name,
             coachName: coach.full_name,
@@ -131,6 +144,8 @@ export async function createClientInternal(
             loginUrl,
             tempPassword: data.temp_password,
             welcomeMessage: coach.welcome_message,
+            logoUrl: emailBrand.logoUrl,
+            primaryColor: emailBrand.primaryColor,
         })
         sendTransactionalEmail({
             to: emailSan,

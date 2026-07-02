@@ -327,3 +327,6 @@ export function deriveSportTokens(brandHex: string): SportTokens {
 
 // Tokens de motion compartidos (duraciones/easings/springs). Pure TS.
 export * from './motion'
+
+// Catálogo de temas preset curados (white-label v2.1) + resolvePresetBranding. Pure TS, DOM-free.
+export * from './presets'

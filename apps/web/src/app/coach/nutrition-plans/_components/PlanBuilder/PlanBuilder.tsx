@@ -54,7 +54,6 @@ import {
   dayTotalsByVariant,
   hasUnconfirmedMacros,
 } from '@/services/nutrition-exchanges/exchange-calc'
-import { loadBrandLogoDataUrl } from '@/lib/nutrition-pdf-brand'
 import { trackNutritionEvent } from '@/lib/product-analytics'
 import { saveMealGroup } from '../../../meal-groups/_actions/meal-groups.actions'
 import type { DayVariant, NutritionPlanMode } from '@/domain/nutrition/exchange.types'
@@ -269,7 +268,7 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
       startExchangePdf(async () => {
         try {
           const { downloadNutritionExchangePdf } = await import('@/lib/nutrition-exchange-pdf')
-          const logoDataUrl = await loadBrandLogoDataUrl(exchange.brandLogoUrl)
+          const logoDataUrl = exchange.logoDataUrl
           await downloadNutritionExchangePdf({
             format,
             brand: exchange.brand,

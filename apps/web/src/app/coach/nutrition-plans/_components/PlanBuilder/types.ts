@@ -27,7 +27,8 @@ export interface ExchangeBuilderData {
   variantByMealId: Record<string, string | null>
   equivalences: ExchangeFoodEquivalence[]
   brand: PdfBrand
-  brandLogoUrl: string | null
+  /** Logo del PDF ya resuelto a dataURL SERVER-side (fetch server, sin CORS); null ⇒ fallback texto. */
+  logoDataUrl: string | null
   clientName?: string | null
 }
 

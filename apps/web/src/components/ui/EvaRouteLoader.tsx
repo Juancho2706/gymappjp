@@ -5,8 +5,9 @@ import { useEffect, useState } from 'react'
 import { BRAND_APP_ICON } from '@/lib/brand-assets'
 import { cn } from '@/lib/utils'
 import { EvaTreefrogLoader } from '@/components/loaders/EvaTreefrogLoader'
-import { LoaderVariantView } from '@/components/loaders/variants'
+import { LoaderVariantView, CompositeLoaderView } from '@/components/loaders/variants'
 import { resolveLoaderVariant } from '@/lib/brand-loaders'
+import { parseLoaderConfig, type LoaderComposite } from '@/lib/brand-composer'
 import { generateBrandPalette } from '@/lib/color-utils'
 
 type IconMode = 'eva' | 'coach' | 'none'
@@ -22,6 +23,22 @@ function useCoachLoaderVariant() {
         setVariant(resolveLoaderVariant(raw))
     }, [])
     return variant
+}
+
+/** Lee el loader COMPUESTO del coach (--coach-loader-config, jsonb) post-mount. Precede a la variante.
+ *  Fail-closed: si la var está ausente o el JSON es inválido → null → cae a la variante/loader EVA. */
+function useCoachLoaderConfig() {
+    const [config, setConfig] = useState<LoaderComposite | null>(null)
+    useEffect(() => {
+        const raw = getComputedStyle(document.documentElement)
+            .getPropertyValue('--coach-loader-config')
+            .trim()
+            .replace(/^['"]|['"]$/g, '')
+            // el <style> escapa comillas dobles como \\22 y las simples como \\27 al serializar el jsonb.
+            .replace(/\\22/g, '"').replace(/\\27/g, "'")
+        setConfig(parseLoaderConfig(raw))
+    }, [])
+    return config
 }
 
 type EvaRouteLoaderProps = {
@@ -50,6 +67,7 @@ export function EvaRouteLoader({
     coachLogoUrl,
 }: EvaRouteLoaderProps) {
     const loaderVariant = useCoachLoaderVariant()
+    const loaderConfig = useCoachLoaderConfig()
     const displayText = useCustom && customText?.trim() ? customText.trim().toUpperCase() : 'EVA'
     const isLongText = displayText.length > 6
 
@@ -87,6 +105,20 @@ export function EvaRouteLoader({
 
     const showIcon = iconMode !== 'none'
     const iconSrc = iconMode === 'coach' && coachLogoUrl ? coachLogoUrl : BRAND_APP_ICON
+
+    // white-label W1b: si el coach compuso su propio loader (loader_config), tiene prioridad sobre
+    // la variante y el loader EVA. El símbolo 'logo' usa el logo del coach (o EVA como fallback).
+    if (loaderConfig) {
+        return (
+            <CompositeLoaderView
+                config={loaderConfig}
+                brandName={displayText}
+                iconSrc={showIcon ? iconSrc : undefined}
+                subtitle={subtitle}
+                size={size === 'sm' ? 'md' : size}
+            />
+        )
+    }
 
     // white-label v2: si el coach Pro+ eligió una variante (≠ 'eva'), la renderizamos en lugar del
     // wordmark shimmer por defecto. 'eva' (default + free/starter) sigue con el loader actual intacto.

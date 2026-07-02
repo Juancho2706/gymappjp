@@ -44,7 +44,7 @@ import type { MealCommentRow } from '@/services/nutrition-notes.service'
 import { addClientMealComment } from '../_actions/nutrition-notes.actions'
 import { ChevronDown } from 'lucide-react'
 import { macrosForTargets } from '@/services/nutrition-exchanges/exchange-calc'
-import { loadBrandLogoDataUrl } from '@/lib/nutrition-pdf-brand'
+import { resolveClientPdfLogoDataUrl } from '../_actions/pdf-logo.actions'
 import type { StudentExchangeBundle } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
 import type { ExchangeGroup, PdfBrand } from '@/domain/nutrition/exchange.types'
 import type { NutritionSectionKey } from '@eva/feature-prefs'
@@ -120,9 +120,9 @@ interface Props {
   today: string
   /** Módulo nutrition_exchanges (OFF/grams ⇒ null/disabled: vista byte-identical, AC5). */
   exchange?: StudentExchangeBundle | null
-  /** Marca del tenant resuelta SERVER-SIDE (headers del proxy) para los PDFs. */
+  /** Marca del tenant resuelta SERVER-SIDE (headers del proxy) para los PDFs. El logo del PDF
+   * se resuelve aparte, server-side y lazy, vía `resolveClientPdfLogoDataUrl` (no como prop). */
   pdfBrand?: PdfBrand | null
-  brandLogoUrl?: string | null
   // ─── Overhaul de nutrición (base tier) ───────────────────────────────────────
   /** Notas bidireccionales del día (coach ⇄ alumno). */
   notes?: MealCommentRow[]
@@ -162,7 +162,6 @@ export function NutritionShell({
   today,
   exchange,
   pdfBrand,
-  brandLogoUrl,
   notes,
   shoppingList,
   offPlanRecents,
@@ -809,7 +808,7 @@ export function NutritionShell({
     startPdfTransition(async () => {
       try {
         const { downloadNutritionExchangePdf } = await import('@/lib/nutrition-exchange-pdf')
-        const logoDataUrl = await loadBrandLogoDataUrl(brandLogoUrl)
+        const logoDataUrl = await resolveClientPdfLogoDataUrl()
         await downloadNutritionExchangePdf({
           format: 'equivalences',
           brand: pdfBrand ?? { brandName: 'EVA FITNESS', primaryColor: '#10B981', poweredByEva: true },
@@ -838,7 +837,7 @@ export function NutritionShell({
         toast.error('No se pudo generar el PDF. Intenta de nuevo.')
       }
     })
-  }, [exchange, pdfBrand, brandLogoUrl, plan.name, plan.instructions, goals, mealsSorted, selectedDate])
+  }, [exchange, pdfBrand, plan.name, plan.instructions, goals, mealsSorted, selectedDate])
 
   // ─── Tarjetas "de un vistazo" (rail desktop · stack mobile) ──────────────────
   // En <760 viven en la columna única ENCIMA de las comidas (orden del kit móvil);

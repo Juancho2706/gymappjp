@@ -42,21 +42,19 @@ export function DashboardDesktop({
     userId,
     coachSlug,
     base,
-    initialUseBrandColors,
     brandName,
     welcomeMessage,
 }: {
     userId: string
     coachSlug: string
     base: string
-    initialUseBrandColors: boolean
     brandName?: string | null
     welcomeMessage?: string | null
 }) {
     return (
         <div>
             <Suspense fallback={<DashboardHeaderSkeleton />}>
-                <DesktopDashboardHead userId={userId} coachSlug={coachSlug} initialUseBrandColors={initialUseBrandColors} />
+                <DesktopDashboardHead userId={userId} coachSlug={coachSlug} />
             </Suspense>
 
             {/* Check-in banner full-width (la app lo trae; el kit lo omite — no degradar) */}
@@ -72,7 +70,7 @@ export function DashboardDesktop({
                     </Suspense>
 
                     <Suspense fallback={null}>
-                        <CoachPresenceCard userId={userId} coachSlug={coachSlug} brandName={brandName} note={welcomeMessage} />
+                        <CoachPresenceCard userId={userId} brandName={brandName} note={welcomeMessage} />
                     </Suspense>
 
                     <div>
@@ -108,13 +106,13 @@ export function DashboardDesktop({
                                 <WeightWidget userId={userId} coachSlug={coachSlug} />
                             </Suspense>
                             <Suspense fallback={<PersonalRecordsSkeleton />}>
-                                <PersonalRecordsCard userId={userId} />
+                                <PersonalRecordsCard userId={userId} coachSlug={coachSlug} />
                             </Suspense>
                         </div>
                     </div>
 
                     <div>
-                        <SectionTitle accent="var(--ember-500)" action="Ver dieta" actionHref={`${base}/nutrition`}>
+                        <SectionTitle accent="var(--ember-500)" action="Ver nutrición" actionHref={`${base}/nutrition`}>
                             Nutrición de hoy
                         </SectionTitle>
                         <Suspense fallback={<NutritionSkeleton />}>

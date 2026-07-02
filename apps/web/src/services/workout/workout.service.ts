@@ -7,6 +7,7 @@ import { LIBRARY_PROGRAM_LIST_SELECT } from '@/lib/supabase/queries/workout-prog
 import type { ProgramListModel } from '@/app/coach/workout-programs/libraryStats'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildProgramAssignedEmail } from '@/lib/email/transactional-templates'
+import { resolveStudentEmailBranding } from '@/lib/email/email-brand'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { currentUserHasTeamAccessToClient } from '@/services/auth/team.service'
 import { matchPlans, diffBlocksByPosition, type ExistingPlan } from './workout-save-reconcile'
@@ -968,11 +969,18 @@ export async function assignProgramToClientsAction(
         const assignedClientIds: string[] = []
         const coachBrand = await supabase
             .from('coaches')
-            .select('brand_name, slug')
+            .select('brand_name, slug, subscription_tier, primary_color, logo_url')
             .eq('id', user.id)
             .maybeSingle()
         const brandName = coachBrand.data?.brand_name || 'Tu Coach'
         const coachSlug = coachBrand.data?.slug || 'coach'
+        // White-label (W2): logo/color del coach en el email "programa asignado" solo standalone Pro+.
+        const emailBrand = resolveStudentEmailBranding({
+            isStandalone: !scope.orgId && !scope.activeTeamId,
+            tier: coachBrand.data?.subscription_tier,
+            logoUrl: coachBrand.data?.logo_url,
+            primaryColor: coachBrand.data?.primary_color,
+        })
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL
 
         // Iterar por cada cliente
@@ -1070,6 +1078,8 @@ export async function assignProgramToClientsAction(
                         programName: template.name,
                         startDate: dateToUse,
                         dashboardUrl,
+                        logoUrl: emailBrand.logoUrl,
+                        primaryColor: emailBrand.primaryColor,
                     })
                     const emailResult = await sendTransactionalEmail({
                         to: clientInfo.email,

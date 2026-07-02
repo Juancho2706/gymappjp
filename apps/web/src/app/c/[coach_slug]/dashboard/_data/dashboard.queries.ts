@@ -2,7 +2,8 @@ import { cache } from 'react'
 import { format, subDays } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/database.types'
-import { getTodayInSantiago } from '@/lib/date-utils'
+import { getTodayInSantiago, getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
+import { epleyOneRM } from '@/app/coach/clients/[clientId]/profileTrainingAnalytics'
 import { measureServer } from '@/lib/perf/measure-server'
 import { findDashboardClientById } from '@/infrastructure/db'
 import { getClientRootUser } from '../../_data/client-root.queries'
@@ -362,6 +363,106 @@ export const getPersonalRecords = cache(async (clientId: string): Promise<Person
         return prs.slice(0, 5)
     })
 })
+
+/** Un punto de la progresión histórica de un lift: peso tope del día + 1RM estimado (Epley). */
+export type PRHistoryPoint = { date: string; topWeightKg: number; estimated1RM: number }
+/** Hito: día en que el peso tope superó la marca previa (`prevKg` = 0 en el primer registro). */
+export type PRMilestone = { date: string; weightKg: number; prevKg: number; deltaKg: number }
+export type ExercisePRDetail = {
+    exerciseId: string
+    exerciseName: string
+    currentPr: { weightKg: number; achievedAt: string }
+    history: PRHistoryPoint[]
+    milestones: PRMilestone[]
+}
+
+/**
+ * Historial de un lift para el sheet de detalle de records (READ-ONLY, mismo pipeline que
+ * `getPersonalRecords` pero acotado a UN ejercicio). Agrupa por día calendario Santiago:
+ * `topWeightKg` = peso máximo del día, `estimated1RM` = mejor Epley del día. Los `milestones`
+ * son los días en que la marca subió respecto al máximo previo. Sin schema nuevo: filtra
+ * `workout_logs` por el snapshot `exercise_id` (sobrevive al borrado del bloque, igual que
+ * el máx histórico de la ejecución de rutina).
+ */
+export const getExercisePRHistory = cache(
+    async (clientId: string, exerciseId: string): Promise<ExercisePRDetail | null> => {
+        return measureServer(`getExercisePRHistory client=${clientId.slice(0, 8)} ex=${exerciseId.slice(0, 8)}`, async () => {
+            const supabase = await createClient()
+
+            const [{ data: logs }, { data: exRow }] = await Promise.all([
+                supabase
+                    .from('workout_logs')
+                    .select('weight_kg, reps_done, logged_at')
+                    .eq('client_id', clientId)
+                    .eq('exercise_id', exerciseId)
+                    .not('weight_kg', 'is', null)
+                    .order('logged_at', { ascending: true })
+                    .limit(2000),
+                supabase.from('exercises').select('name').eq('id', exerciseId).maybeSingle(),
+            ])
+
+            const rows = logs ?? []
+            if (rows.length === 0) return null
+
+            // Agrupar por día calendario Santiago → peso tope + mejor 1RM del día.
+            type DayAgg = { topWeightKg: number; best1RM: number; topAt: string }
+            const byDate = new Map<string, DayAgg>()
+            for (const r of rows) {
+                if (r.weight_kg == null) continue
+                const ymd = getSantiagoIsoYmdForUtcInstant(r.logged_at)
+                const reps = Math.max(1, r.reps_done ?? 1)
+                const oneRm = epleyOneRM(r.weight_kg, reps)
+                const cur = byDate.get(ymd)
+                if (!cur) {
+                    byDate.set(ymd, { topWeightKg: r.weight_kg, best1RM: oneRm, topAt: r.logged_at })
+                } else {
+                    if (r.weight_kg > cur.topWeightKg) {
+                        cur.topWeightKg = r.weight_kg
+                        cur.topAt = r.logged_at
+                    }
+                    if (oneRm > cur.best1RM) cur.best1RM = oneRm
+                }
+            }
+
+            const history: PRHistoryPoint[] = [...byDate.entries()]
+                .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+                .map(([date, v]) => ({
+                    date,
+                    topWeightKg: v.topWeightKg,
+                    estimated1RM: Math.round(v.best1RM * 10) / 10,
+                }))
+            if (history.length === 0) return null
+
+            // Hitos: cada vez que el peso tope superó el máximo acumulado.
+            const milestones: PRMilestone[] = []
+            let runningMax = 0
+            for (const p of history) {
+                if (p.topWeightKg > runningMax) {
+                    milestones.push({
+                        date: p.date,
+                        weightKg: p.topWeightKg,
+                        prevKg: runningMax,
+                        deltaKg: Math.round((p.topWeightKg - runningMax) * 10) / 10,
+                    })
+                    runningMax = p.topWeightKg
+                }
+            }
+
+            // PR actual = mayor peso tope de toda la historia, con la fecha exacta del set tope.
+            let best = history[0]
+            for (const p of history) if (p.topWeightKg > best.topWeightKg) best = p
+            const bestDay = byDate.get(best.date)!
+
+            return {
+                exerciseId,
+                exerciseName: exRow?.name ?? 'Ejercicio',
+                currentPr: { weightKg: best.topWeightKg, achievedAt: bestDay.topAt },
+                history,
+                milestones,
+            }
+        })
+    }
+)
 
 export type OrgAnnouncement = {
     id: string

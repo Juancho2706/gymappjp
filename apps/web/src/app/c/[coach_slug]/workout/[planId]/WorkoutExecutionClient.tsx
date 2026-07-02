@@ -116,6 +116,8 @@ interface Props {
     previousHistory?: Record<string, { weight_kg: number | null, reps_done: number | null, date: string }[]>
     coachSlug: string
     exerciseMaxes?: Record<string, number>
+    /** Fecha (ISO) del máximo histórico por ejercicio — el overlay muestra "superaste tus X kg del …". */
+    exerciseMaxDates?: Record<string, string>
     activeWeekVariant?: 'A' | 'B' | null
     /** Semana 1-based del programa (sobrecarga progresiva). null si falta start_date. */
     currentWeek?: number | null
@@ -745,6 +747,7 @@ export function WorkoutExecutionClient({
     previousHistory = {},
     coachSlug,
     exerciseMaxes = {},
+    exerciseMaxDates = {},
     activeWeekVariant = null,
     currentWeek = null,
     lastSessionByBlock = {},
@@ -1337,6 +1340,7 @@ export function WorkoutExecutionClient({
                         logs={sessionLogs}
                         blocks={plan.workout_blocks}
                         exerciseMaxes={exerciseMaxes}
+                        exerciseMaxDates={exerciseMaxDates}
                         onDone={() => router.push(`${base}/dashboard`)}
                     />,
                     document.body

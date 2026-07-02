@@ -7,29 +7,32 @@ import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Loader2, Save, Palette, ExternalLink, Copy, Check, Type, MessageSquare, QrCode, Play, FileText, RotateCcw, ShieldCheck, ShieldAlert, ShieldX, Maximize2, X, ImagePlus, Moon } from 'lucide-react'
+import { Loader2, Save, ExternalLink, Copy, Check, Type, MessageSquare, QrCode, Play, FileText, Maximize2, X, ImagePlus, Moon } from 'lucide-react'
 import { updateBrandSettingsAction, updateLogoAction, updateLogoDarkAction, type BrandSettingsState } from './_actions/settings.actions'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/database.types'
-import { generateBrandPalette, getContrastInfo, hexToRgb } from '@/lib/color-utils'
+import { hexToRgb } from '@/lib/color-utils'
 import { BrandThemePreview } from './_components/BrandThemePreview'
+import { ThemeGallery } from './_components/ThemeGallery'
+import { LoginLayoutPicker } from './_components/LoginLayoutPicker'
 import { QRCodeSVG } from 'qrcode.react'
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
 import { BrandAdvancedSection, type AdvancedBrandValue, type AdvancedLoaderValue } from './BrandAdvancedSection'
 import type { SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack, isFontKey, type FontKey } from '@/lib/brand-fonts'
 import { resolveLoaderVariant, type LoaderVariant } from '@/lib/brand-loaders'
-import { BRAND_LOGO_WEB } from '@/lib/brand-assets'
+import { getThemePreset } from '@/lib/brand-presets'
+import { parseLoaderConfig, serializeLoaderConfig, resolveLoginLayout, type LoginLayoutKey, type LoaderComposite } from '@/lib/brand-composer'
+import { BRAND_LOGO_WEB, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 
 type Coach = Tables<'coaches'>
 
 const initialState: BrandSettingsState = {}
 const MAX_LOGO = 2 * 1024 * 1024
 
-const PRESET_COLORS = [
-    '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B',
-    '#EF4444', '#EC4899', '#06B6D4', '#F97316',
-]
+/** Colores "por defecto" de EVA: si el color guardado del coach es uno de estos, NO se considera
+ *  una marca custom legacy (no mostramos el chip "Tema personalizado"). */
+const EVA_DEFAULT_COLORS = new Set([SYSTEM_PRIMARY_COLOR.toLowerCase(), '#10b981', '#2680ff'])
 
 /** Slot de logo (claro u oscuro) — elige archivo a STAGE (no auto-guarda; entra al FAB unificado). */
 function LogoSlot({
@@ -113,7 +116,9 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     const [state, setState] = useState<BrandSettingsState>(initialState)
     const [isSaving, setIsSaving] = useState(false)
 
-    const [selectedColor, setSelectedColor] = useState(coach.primary_color)
+    // La rueda de color murió (W1b): el color legacy del coach se preserva (no editable acá), y el
+    // tema (preset) lo gobierna cuando está elegido. Se conserva como valor para reenviarlo intacto.
+    const [selectedColor] = useState(coach.primary_color)
     const [useCoachColors, setUseCoachColors] = useState(!!coach.use_brand_colors_coach)
     const [useCustomLoader, setUseCustomLoader] = useState(coach.use_custom_loader ?? false)
     const [loaderText, setLoaderText] = useState(coach.loader_text ?? '')
@@ -134,6 +139,10 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     const [neutralTint, setNeutralTint] = useState(coach.neutral_tint ?? false)
     const [fontKey, setFontKey] = useState<FontKey | ''>(isFontKey(coach.brand_font_key) ? coach.brand_font_key : '')
     const [loaderVariant, setLoaderVariant] = useState<LoaderVariant>(resolveLoaderVariant(coach.loader_variant))
+    // white-label W1b — tema (galería de presets), layout de login y loader compuesto ("Crear el tuyo").
+    const [themePresetKey, setThemePresetKey] = useState<string | null>(coach.theme_preset_key ?? null)
+    const [loginLayoutKey, setLoginLayoutKey] = useState<LoginLayoutKey>(resolveLoginLayout(coach.login_layout_key))
+    const [loaderConfig, setLoaderConfig] = useState<LoaderComposite | null>(parseLoaderConfig(coach.loader_config))
     // Vista previa: modo y pestaña LEVANTADOS al padre → una sola instancia lógica compartida
     // (mobile-top + sticky desktop + modal de zoom), toggle claro/oscuro ÚNICO.
     const [previewDark, setPreviewDark] = useState(false)
@@ -163,34 +172,40 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
         if (patch.loaderIconMode !== undefined) setLoaderIconMode(patch.loaderIconMode)
         if (patch.loaderTextColor !== undefined) setLoaderTextColor(patch.loaderTextColor)
     }
-    // Fuente resuelta para el preview del teléfono (solo si el coach eligió una; '' = sin cambio visual).
-    const previewFontFamily = fontKey ? resolveBrandFontStack(fontKey) : undefined
+    // Tema (preset) activo: gobierna color/fuente/loader de la vista previa (y del alumno vía el proxy).
+    // Sin preset → modo legacy: usa el color guardado + los overrides del branding avanzado.
+    const activePreset = useMemo(() => getThemePreset(themePresetKey), [themePresetKey])
+    const effectivePrimary = activePreset ? activePreset.brandColor : (selectedColor ?? '#007AFF')
+    const effectiveLoaderVariant: LoaderVariant = activePreset ? activePreset.loaderVariant : loaderVariant
+    const effectiveFontKey: FontKey | '' = activePreset ? activePreset.fontKey : fontKey
+    // Grandfather: el coach tiene un color custom real (≠ defaults EVA) → ofrecer el chip legacy/reversa.
+    const hasLegacyCustom = !!coach.primary_color && !EVA_DEFAULT_COLORS.has(coach.primary_color.toLowerCase())
+
+    // Fuente resuelta para el preview del teléfono (preset o override; '' = default de display de EVA).
+    const previewFontFamily = effectiveFontKey ? resolveBrandFontStack(effectiveFontKey) : undefined
     // Logo mostrado en el preview/avanzado: el recién elegido (stage) o el guardado.
     const previewLogoUrl = stagedLogoUrl ?? coach.logo_url
 
-    const palette = generateBrandPalette(selectedColor ?? '#007AFF')
     const publicStudentIdentifier = getCoachPublicIdentifier(coach)
     const studentUrl = `https://eva-app.cl/c/${publicStudentIdentifier}/login`
     // slug legacy: solo lectura (inmutable). Sigue funcionando como alias para alumnos antiguos.
     const legacyStudentUrl = coach.slug ? `https://eva-app.cl/c/${coach.slug}/login` : null
-
-    const contrast = useMemo(() => getContrastInfo(selectedColor ?? '#007AFF'), [selectedColor])
 
     // Brand Score (H6): recalibrado para que el branding avanzado (fuente / loader / color2) cuente
     // y el 100% sea alcanzable. Suma exacta = 100.
     const brandScore = useMemo(() => {
         let score = 0
         if (coach.logo_url || stagedLogo) score += 20
-        if (selectedColor && selectedColor !== '#007AFF') score += 15
+        if (activePreset || (selectedColor && selectedColor !== '#007AFF')) score += 15
         if (welcomeMessageInput.trim()) score += 10
         if (welcomeModalEnabled && welcomeModalContent.trim()) score += 10
         if (coach.brand_name && coach.brand_name !== coach.full_name) score += 10
         if (useCustomLoader && loaderText.trim()) score += 10
-        if (fontKey) score += 10
-        if (loaderVariant !== 'eva') score += 10
+        if (effectiveFontKey) score += 10
+        if (effectiveLoaderVariant !== 'eva' || loaderConfig) score += 10
         if (/^#[0-9a-fA-F]{6}$/.test(secondaryColor)) score += 5
         return score
-    }, [coach, stagedLogo, selectedColor, welcomeMessageInput, welcomeModalEnabled, welcomeModalContent, useCustomLoader, loaderText, fontKey, loaderVariant, secondaryColor])
+    }, [coach, stagedLogo, activePreset, selectedColor, welcomeMessageInput, welcomeModalEnabled, welcomeModalContent, useCustomLoader, loaderText, effectiveFontKey, effectiveLoaderVariant, loaderConfig, secondaryColor])
 
     const qrNode = useMemo(() => (
         <QRCodeSVG value={studentUrl} size={96} level="M" />
@@ -218,16 +233,20 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             accentDark !== (coach.accent_dark ?? '') ||
             neutralTint !== (coach.neutral_tint ?? false) ||
             fontKey !== (isFontKey(coach.brand_font_key) ? coach.brand_font_key : '') ||
-            loaderVariant !== resolveLoaderVariant(coach.loader_variant)
+            loaderVariant !== resolveLoaderVariant(coach.loader_variant) ||
+            // white-label W1b — tema / layout de login / loader compuesto
+            themePresetKey !== (coach.theme_preset_key ?? null) ||
+            loginLayoutKey !== resolveLoginLayout(coach.login_layout_key) ||
+            serializeLoaderConfig(loaderConfig) !== serializeLoaderConfig(parseLoaderConfig(coach.loader_config))
         )
-    }, [selectedColor, useCoachColors, useCustomLoader, loaderText, loaderTextColor, loaderIconMode, welcomeModalEnabled, welcomeModalContent, welcomeModalType, welcomeMessageInput, stagedLogo, stagedLogoDark, secondaryColor, accentLight, accentDark, neutralTint, fontKey, loaderVariant, coach])
+    }, [selectedColor, useCoachColors, useCustomLoader, loaderText, loaderTextColor, loaderIconMode, welcomeModalEnabled, welcomeModalContent, welcomeModalType, welcomeMessageInput, stagedLogo, stagedLogoDark, secondaryColor, accentLight, accentDark, neutralTint, fontKey, loaderVariant, themePresetKey, loginLayoutKey, loaderConfig, coach])
 
     // Live Preview Effect (H7: el mockup del teléfono SIEMPRE usa selectedColor; este efecto solo
     // tiñe el CHROME del panel del coach, y solo si use_brand_colors_coach está ON).
     useEffect(() => {
         const container = document.querySelector('.coach-layout-container') as HTMLElement;
         const originalColor = coach.use_brand_colors_coach === false ? '#007AFF' : (coach.primary_color || '#007AFF');
-        const previewColor = useCoachColors ? (selectedColor || '#007AFF') : '#007AFF';
+        const previewColor = useCoachColors ? (effectivePrimary || '#007AFF') : '#007AFF';
 
         document.documentElement.style.setProperty('--theme-primary', previewColor);
         document.documentElement.style.setProperty('--theme-primary-rgb', hexToRgb(previewColor));
@@ -244,7 +263,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                 container.style.setProperty('--theme-primary-rgb', hexToRgb(originalColor));
             }
         };
-    }, [selectedColor, useCoachColors, coach]);
+    }, [effectivePrimary, useCoachColors, coach]);
 
     // Dirty state warning
     useEffect(() => {
@@ -362,7 +381,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
             <div className="@4xl/brandform:hidden">
                 <BrandThemePreview
                     brandName={coach.brand_name}
-                    primaryColor={selectedColor}
+                    primaryColor={effectivePrimary}
                     logoUrl={previewLogoUrl}
                     welcomeMessage={welcomeMessageInput}
                     loaderText={loaderText}
@@ -370,7 +389,8 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                     loaderTextColor={loaderTextColor}
                     loaderIconMode={loaderIconMode}
                     fontFamily={previewFontFamily}
-                    loaderVariant={loaderVariant}
+                    loaderVariant={effectiveLoaderVariant}
+                    loaderConfig={loaderConfig}
                     isDark={previewDark}
                     onToggleDark={() => setPreviewDark((v) => !v)}
                     activeTab={previewTab}
@@ -608,104 +628,22 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         </div>
                     </div>
 
-                    {/* Brand color */}
-                    <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-sm" data-tour-id="brand-color">
-                        <div className="flex items-center gap-2">
-                            <Palette className="w-4 h-4 text-primary" />
-                            <h2 className="text-base font-bold text-strong">Color de marca</h2>
-                        </div>
-                        <p className="text-xs text-muted -mt-3">
-                            Este color se aplica a botones, elementos activos, gráficos y brillos de tu app. Generamos automáticamente variantes más claras y oscuras.
-                        </p>
+                    {/* Tema de marca (W1b): la galería de presets curados reemplaza la rueda de color libre.
+                        El color legacy del coach se preserva intacto en el hidden input (reversible). */}
+                    <ThemeGallery
+                        value={themePresetKey}
+                        onChange={setThemePresetKey}
+                        legacyPrimaryColor={selectedColor}
+                        hasLegacyCustom={hasLegacyCustom}
+                    />
+                    <input type="hidden" name="primary_color" value={selectedColor ?? '#007AFF'} />
 
-                        <div className="flex flex-wrap gap-3">
-                            {PRESET_COLORS.map((color) => (
-                                <button
-                                    key={color}
-                                    type="button"
-                                    onClick={() => setSelectedColor(color)}
-                                    className={cn(
-                                        'h-10 w-10 rounded-control border-2 transition-all duration-150 hover:scale-110',
-                                        selectedColor === color
-                                            ? 'scale-110 border-strong shadow-[var(--shadow-md)]'
-                                            : 'border-transparent'
-                                    )}
-                                    style={{ backgroundColor: color }}
-                                    title={color}
-                                />
-                            ))}
-
-                            <div className="flex items-center gap-2 ml-2">
-                                <input
-                                    type="color"
-                                    value={selectedColor ?? '#007AFF'}
-                                    onChange={(e) => setSelectedColor(e.target.value)}
-                                    className="w-10 h-10 rounded-xl cursor-pointer border-2 border-border bg-transparent"
-                                    title="Color personalizado"
-                                />
-                                <span className="text-xs text-muted font-mono">{selectedColor}</span>
-                            </div>
-                        </div>
-
-                        {/* Contrast badge + reset */}
-                        <div className="flex items-center gap-3 flex-wrap">
-                            <div
-                                className="flex items-center gap-1.5 rounded-control px-2.5 py-1 text-xs font-bold"
-                                style={
-                                    contrast.level === 'AA'
-                                        ? { background: 'var(--success-100)', color: 'var(--success-700)' }
-                                        : contrast.level === 'AA-large'
-                                        ? { background: 'var(--warning-100)', color: 'var(--warning-700)' }
-                                        : { background: 'var(--danger-100)', color: 'var(--danger-600)' }
-                                }
-                            >
-                                {contrast.level === 'AA' && <ShieldCheck className="w-3.5 h-3.5" />}
-                                {contrast.level === 'AA-large' && <ShieldAlert className="w-3.5 h-3.5" />}
-                                {contrast.level === 'fail' && <ShieldX className="w-3.5 h-3.5" />}
-                                {contrast.level === 'AA' ? 'Legible (WCAG AA)' : contrast.level === 'AA-large' ? 'Solo textos grandes' : 'Bajo contraste'}
-                                <span className="opacity-60">{contrast.ratio.toFixed(1)}:1</span>
-                            </div>
-                            {selectedColor && selectedColor !== '#007AFF' && (
-                                <button
-                                    type="button"
-                                    onClick={() => setSelectedColor('#007AFF')}
-                                    className="flex items-center gap-1 text-xs text-muted hover:text-strong transition-colors"
-                                >
-                                    <RotateCcw className="w-3 h-3" />
-                                    Restaurar por defecto
-                                </button>
-                            )}
-                        </div>
-
-                        <input type="hidden" name="primary_color" value={selectedColor} />
-
-                        {/* Generated palette */}
-                        <div className="space-y-2">
-                            <p className="text-[10px] font-bold text-muted uppercase tracking-wider">Paleta generada automáticamente</p>
-                            <div className="flex gap-2">
-                                {[
-                                    { label: 'Primario', color: palette.primary },
-                                    { label: 'Oscuro', color: palette.primaryDark },
-                                    { label: 'Claro', color: palette.primaryLight },
-                                    { label: 'Superficie', color: palette.primarySurface },
-                                    { label: 'Brillo', color: palette.primaryGlow },
-                                ].map(({ label, color }) => (
-                                    <div key={label} className="flex flex-col items-center gap-1">
-                                        <div
-                                            className="w-8 h-8 rounded-lg border border-border/50"
-                                            style={{ backgroundColor: color }}
-                                            title={color}
-                                        />
-                                        <span className="text-[9px] text-muted">{label}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {state.fieldErrors?.primary_color && (
-                            <p className="text-xs text-destructive">{state.fieldErrors.primary_color[0]}</p>
-                        )}
-                    </div>
+                    {/* Diseño del login del alumno (W1b): 4 variantes de layout que heredan el tema. */}
+                    <LoginLayoutPicker
+                        value={loginLayoutKey}
+                        onChange={setLoginLayoutKey}
+                        accentColor={effectivePrimary}
+                    />
 
                     {/* Aplicar mi marca a mi propio panel (de-anidado de "Color", es otra cosa: el chrome del coach) */}
                     <div className="bg-surface-card border border-subtle rounded-card p-4 sm:p-6 shadow-sm">
@@ -727,12 +665,16 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                     {/* white-label v2 — branding avanzado (Pro): acordeón cerrado (color2 + fuente + dark + loader) */}
                     <BrandAdvancedSection
                         tier={(coach.subscription_tier ?? 'starter') as SubscriptionTier}
-                        primaryColor={selectedColor || '#10B981'}
+                        primaryColor={effectivePrimary || '#10B981'}
                         value={advancedValue}
                         onChange={handleAdvancedChange}
                         loader={loaderValue}
                         onLoaderChange={handleLoaderChange}
+                        loaderConfig={loaderConfig}
+                        onLoaderConfigChange={setLoaderConfig}
+                        brandName={coach.brand_name}
                         logoUrl={previewLogoUrl}
+                        presetActive={!!activePreset}
                     />
 
                     {/* Share with students */}

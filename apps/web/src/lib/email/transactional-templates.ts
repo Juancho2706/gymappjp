@@ -1,4 +1,4 @@
-import { wrapEmailLayout, ctaButton, ghostButton, divider, featureRow, badge } from './base-layout'
+import { wrapEmailLayout, ctaButton, ghostButton, divider, featureRow, badge, brandCtaColors } from './base-layout'
 
 // ── Client Welcome ──────────────────────────────────────────────────────────
 
@@ -9,10 +9,14 @@ type WelcomeClientContext = {
     loginUrl: string
     tempPassword: string
     welcomeMessage?: string | null
+    /** White-label (W2): logo/color del coach para el header + CTA. Solo Pro+ standalone. */
+    logoUrl?: string | null
+    primaryColor?: string | null
 }
 
 export function buildClientWelcomeEmail(ctx: WelcomeClientContext) {
     const subject = `Bienvenido/a a ${ctx.brandName} — tus datos de acceso`
+    const cta = brandCtaColors(ctx.primaryColor)
 
     const welcomeLine = ctx.welcomeMessage?.trim()
         ? `<p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.7;font-style:italic;">"${ctx.welcomeMessage.trim()}"</p>`
@@ -47,7 +51,7 @@ ${welcomeLine}
 </table>
 
 <div style="margin-bottom:24px;">
-  ${ctaButton('Entrar a mi cuenta →', ctx.loginUrl)}
+  ${ctaButton('Entrar a mi cuenta →', ctx.loginUrl, cta.bg, cta.text)}
 </div>
 
 <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
@@ -57,6 +61,7 @@ ${welcomeLine}
     const html = wrapEmailLayout(body, {
         previewText: `Bienvenido/a a ${ctx.brandName}. Tu coach ${ctx.coachName} te espera.`,
         headerTitle: `Bienvenido/a a ${ctx.brandName}`,
+        brand: { brandName: ctx.brandName, logoUrl: ctx.logoUrl, primaryColor: ctx.primaryColor },
     })
 
     return { subject, html }
@@ -70,13 +75,17 @@ type ProgramAssignedContext = {
     programName: string
     startDate: string
     dashboardUrl: string
+    /** White-label (W2): logo/color del coach para el header + CTA. Solo Pro+ standalone. */
+    logoUrl?: string | null
+    primaryColor?: string | null
 }
 
 export function buildProgramAssignedEmail(ctx: ProgramAssignedContext) {
     const subject = `Nuevo programa: ${ctx.programName}`
+    const cta = brandCtaColors(ctx.primaryColor)
 
     const body = `
-<p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#10B981;letter-spacing:0.8px;text-transform:uppercase;">Nuevo programa asignado</p>
+<p style="margin:0 0 4px;font-size:12px;font-weight:700;color:${cta.bg};letter-spacing:0.8px;text-transform:uppercase;">Nuevo programa asignado</p>
 <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">
   ${ctx.clientName}, ya tenés programa
 </h1>
@@ -102,7 +111,7 @@ export function buildProgramAssignedEmail(ctx: ProgramAssignedContext) {
 </table>
 
 <div style="margin-bottom:20px;">
-  ${ctaButton('Ver mi programa →', ctx.dashboardUrl)}
+  ${ctaButton('Ver mi programa →', ctx.dashboardUrl, cta.bg, cta.text)}
 </div>
 
 <p style="margin:0;font-size:12px;color:#9ca3af;">
@@ -112,6 +121,7 @@ export function buildProgramAssignedEmail(ctx: ProgramAssignedContext) {
     const html = wrapEmailLayout(body, {
         previewText: `Tu coach te asignó "${ctx.programName}". ¡Entrá a verlo!`,
         headerTitle: `Nuevo programa — ${ctx.brandName}`,
+        brand: { brandName: ctx.brandName, logoUrl: ctx.logoUrl, primaryColor: ctx.primaryColor },
     })
 
     return { subject, html }
@@ -451,13 +461,17 @@ type ClientArchivedContext = {
     coachName: string
     coachEmail?: string | null
     coachPublicUrl: string
+    /** White-label (W2): logo/color del coach para el header + CTA. Solo Pro+ standalone. */
+    logoUrl?: string | null
+    primaryColor?: string | null
 }
 
 export function buildClientArchivedEmail(ctx: ClientArchivedContext) {
     const subject = `Tu acceso a ${ctx.coachBrandName} ha sido suspendido temporalmente`
+    const cta = brandCtaColors(ctx.primaryColor)
 
     const contactCta = ctx.coachEmail
-        ? ctaButton(`Contactar a ${ctx.coachName}`, `mailto:${ctx.coachEmail}`)
+        ? ctaButton(`Contactar a ${ctx.coachName}`, `mailto:${ctx.coachEmail}`, cta.bg, cta.text)
         : ghostButton(`Ver perfil de ${ctx.coachName}`, ctx.coachPublicUrl)
 
     const body = `
@@ -490,6 +504,7 @@ ${badge('AVISO IMPORTANTE', '#F59E0B')}
     const html = wrapEmailLayout(body, {
         previewText: `Tu acceso a ${ctx.coachBrandName} ha sido suspendido temporalmente por tu entrenador.`,
         headerTitle: ctx.coachBrandName,
+        brand: { brandName: ctx.coachBrandName, logoUrl: ctx.logoUrl, primaryColor: ctx.primaryColor },
     })
 
     return { subject, html }
@@ -502,10 +517,14 @@ type ClientUnarchivedContext = {
     coachBrandName: string
     coachName: string
     loginUrl: string
+    /** White-label (W2): logo/color del coach para el header + CTA. Solo Pro+ standalone. */
+    logoUrl?: string | null
+    primaryColor?: string | null
 }
 
 export function buildClientUnarchivedEmail(ctx: ClientUnarchivedContext) {
     const subject = `Tu acceso a ${ctx.coachBrandName} fue restaurado`
+    const cta = brandCtaColors(ctx.primaryColor)
 
     const body = `
 ${badge('ACCESO RESTAURADO', '#10B981')}
@@ -517,7 +536,7 @@ ${badge('ACCESO RESTAURADO', '#10B981')}
 </p>
 
 <div style="margin-bottom:0;">
-  ${ctaButton('Entrar a mi cuenta →', ctx.loginUrl)}
+  ${ctaButton('Entrar a mi cuenta →', ctx.loginUrl, cta.bg, cta.text)}
 </div>
 
 <p style="margin:24px 0 0;font-size:12px;color:#9ca3af;line-height:1.6;">
@@ -527,6 +546,7 @@ ${badge('ACCESO RESTAURADO', '#10B981')}
     const html = wrapEmailLayout(body, {
         previewText: `Tu acceso a ${ctx.coachBrandName} fue restaurado. Ya podés entrar.`,
         headerTitle: ctx.coachBrandName,
+        brand: { brandName: ctx.coachBrandName, logoUrl: ctx.logoUrl, primaryColor: ctx.primaryColor },
     })
 
     return { subject, html }

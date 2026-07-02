@@ -18,7 +18,7 @@ import { NetworkProvider } from '@/components/client/OfflineScreen'
 import { OfflineNutritionQueueSync } from '@/app/c/[coach_slug]/_components/OfflineNutritionQueueSync'
 import { OfflineWorkoutQueueSync } from '@/app/c/[coach_slug]/_components/OfflineWorkoutQueueSync'
 import { generateBrandPalette } from '@/lib/color-utils'
-import { resolveBrandTheme, deriveSportTokens } from '@eva/brand-kit'
+import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding } from '@eva/brand-kit'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { resolveLoaderVariant } from '@/lib/brand-loaders'
@@ -43,6 +43,20 @@ const APPLE_SPLASH: { dw: number; dh: number; r: number }[] = [
     { dw: 430, dh: 932, r: 3 }, // 14/15 Pro Max
     { dw: 768, dh: 1024, r: 2 }, // iPad
 ]
+
+/**
+ * apple-touch-icon debe ser un raster (PNG/JPG). iOS IGNORA SVG/WebP/AVIF y los data: URIs
+ * (por eso el favicon SVG generado no sirve como ícono de instalación). Servimos el logo del
+ * coach directo cuando el formato sirve; si no (o sin logo) → ícono EVA (PNG). NO reescalamos
+ * server-side: un logo NO cuadrado sale recortado por iOS. Cierre completo del gap = un endpoint
+ * tipo `/api/splash` que renderice un PNG 180×180 por coach (fuera de W2, anotado).
+ */
+function appleTouchIconFor(logoUrl: string | null | undefined): string {
+    if (!logoUrl) return BRAND_APP_ICON
+    const lower = logoUrl.toLowerCase()
+    if (lower.startsWith('data:') || /\.(svg|webp|avif)(\?|$)/.test(lower)) return BRAND_APP_ICON
+    return logoUrl
+}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const { coach_slug } = await params
@@ -77,7 +91,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             ? {
                 icon: [{ url: logoUrl }],
                 shortcut: [{ url: logoUrl }],
-                apple: [{ url: logoUrl }],
+                // apple-touch-icon = raster PNG/JPG del coach o EVA (iOS ignora SVG/WebP).
+                apple: [{ url: appleTouchIconFor(logoUrl) }],
             }
             : {
                 icon: [{ url: BRAND_APP_ICON, type: 'image/png' }],
@@ -132,9 +147,26 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     // white-label v2: branding = Pro+ ENTERO (no solo 'free'). `isFreeTier` ahora significa "< Pro".
     // El proxy ya manda defaults EVA para < Pro; esto es defense-in-depth (fila stale post-downgrade).
     const isFreeTier = !isBrandingAllowed(subscriptionTier)
+    // W1a — tema preset curado: si el coach eligió un preset (theme_preset_key, gateado a Pro+),
+    // sus valores (color/color2/accent/tinte/fuente/loader) OVERRIDEAN los crudos ANTES de derivar
+    // tokens. NULL/desconocida → passthrough intacto (grandfather del color libre legacy).
+    // El preset es PERSONAL del coach: NO se aplica cuando la marca viene de una org/team o el
+    // alumno es huérfano (esas superficies ya traen su propio color por header y deben ganar).
+    const brandSource = headersList.get('x-workspace-brand-source')
+    const isManagedBrand = brandSource === 'organization' || brandSource === 'orphan'
+    const preset = resolvePresetBranding({
+        theme_preset_key: (isFreeTier || isManagedBrand) ? null : headersList.get('x-coach-theme-preset-key'),
+        primary_color: headersList.get('x-coach-primary-color'),
+        brand_secondary_color: headersList.get('x-coach-secondary-color'),
+        accent_light: headersList.get('x-coach-accent-light'),
+        accent_dark: headersList.get('x-coach-accent-dark'),
+        neutral_tint: headersList.get('x-coach-neutral-tint') === 'true',
+        brand_font_key: headersList.get('x-coach-font-key'),
+        loader_variant: headersList.get('x-coach-loader-variant'),
+    })
     const primaryColor = isFreeTier
         ? SYSTEM_PRIMARY_COLOR
-        : (headersList.get('x-coach-primary-color') ?? BRAND_PRIMARY_COLOR)
+        : (preset.primary_color ?? BRAND_PRIMARY_COLOR)
     const logoUrl = isFreeTier
         ? BRAND_APP_ICON
         : (headersList.get('x-coach-logo-url') || BRAND_APP_ICON)
@@ -151,9 +183,9 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const loaderIconModeRaw = headersList.get('x-coach-loader-icon-mode') ?? 'eva'
     const loaderIconMode = (loaderIconModeRaw === 'coach' || loaderIconModeRaw === 'none') ? loaderIconModeRaw : 'eva'
     // white-label v2 — fuente curada + variante de loader + logo dark (todos gateados a Pro+ por isFreeTier).
-    const fontKey = isFreeTier ? '' : (headersList.get('x-coach-font-key') ?? '')
+    const fontKey = isFreeTier ? '' : (preset.brand_font_key ?? '')
     const brandFontStack = resolveBrandFontStack(fontKey) // server-side; nunca el string crudo del coach
-    const loaderVariant = isFreeTier ? 'eva' : resolveLoaderVariant(headersList.get('x-coach-loader-variant'))
+    const loaderVariant = isFreeTier ? 'eva' : resolveLoaderVariant(preset.loader_variant)
     const logoUrlDark = isFreeTier ? '' : (headersList.get('x-coach-logo-url-dark') || '')
 
     // Hardening anti stored-XSS: estos valores los fija un org_admin/co-gestor de team al
@@ -168,14 +200,25 @@ export default async function ClientBrandLayout({ children, params }: Props) {
         ? loaderTextColor
         : ''
     const safeLoaderText = sanitizeCssStringValue(loaderText || '')
+    // Loader COMPUESTO (loader_config jsonb): viaja como JSON string y se emite como CSS var
+    // pa' que EvaRouteLoader lo lea post-mount. Solo se acepta JSON válido con shape esperado.
+    const loaderConfigRaw = isFreeTier ? '' : (headersList.get('x-coach-loader-config') ?? '')
+    const safeLoaderConfig = (() => {
+        if (!loaderConfigRaw) return ''
+        try {
+            const parsed = JSON.parse(loaderConfigRaw)
+            if (!parsed || typeof parsed !== 'object' || typeof parsed.symbol !== 'string' || typeof parsed.animation !== 'string') return ''
+            return sanitizeCssStringValue(JSON.stringify(parsed))
+        } catch { return '' }
+    })()
 
     // Per-mode white-label accent (org-driven). brand-kit resolves a readable
     // light + dark accent from the brand color + optional per-mode overrides.
-    const accentLight = isFreeTier ? null : (headersList.get('x-coach-accent-light') || null)
-    const accentDark = isFreeTier ? null : (headersList.get('x-coach-accent-dark') || null)
-    const neutralTint = !isFreeTier && headersList.get('x-coach-neutral-tint') === 'true'
+    const accentLight = isFreeTier ? null : (preset.accent_light || null)
+    const accentDark = isFreeTier ? null : (preset.accent_dark || null)
+    const neutralTint = !isFreeTier && preset.neutral_tint === true
     // color2 INDEPENDIENTE (white-label v2): un color → clampeado por-modo a accent2 (legible en ambos).
-    const secondaryColor = isFreeTier ? null : (headersList.get('x-coach-secondary-color') || null)
+    const secondaryColor = isFreeTier ? null : (preset.brand_secondary_color || null)
     const brandTheme = resolveBrandTheme({ brandColor: primaryColor, accentLight, accentDark, neutralTint, secondaryLight: secondaryColor, secondaryDark: secondaryColor })
 
     // Generate full brand palette (derived shades) from the resolved light accent + secondary.
@@ -216,7 +259,9 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     return (
         <>
             <link rel="icon" href={faviconUrl} />
-            <link rel="apple-touch-icon" href={faviconUrl} />
+            {/* apple-touch-icon: logo raster del coach (o EVA). El favicon SVG generado NO sirve
+                acá — iOS lo ignora. Ver appleTouchIconFor. */}
+            <link rel="apple-touch-icon" href={appleTouchIconFor(logoUrl)} />
             {/* Raw manifest link (NOT metadata.manifest) so it carries crossOrigin —
                 the browser must send cookies when fetching /api/manifest/[slug], else
                 getUser() is null and the team (/t) start_url/scope/branding collapse to /c. */}
@@ -259,6 +304,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                     --coach-use-custom-loader: ${useCustomLoader ? '1' : '0'};
                     --coach-loader-color: '${safeLoaderTextColor}';
                     --coach-loader-icon-mode: '${loaderIconMode}';
+                    --coach-loader-config: '${safeLoaderConfig}';
                 }
                 /* Dark-mode accent (next-themes .dark class) — org can set a brighter accent for dark. */
                 .dark {

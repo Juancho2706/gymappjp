@@ -1,5 +1,6 @@
 'use server'
 
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { revalidatePath } from 'next/cache'
@@ -7,6 +8,23 @@ import { redirect } from 'next/navigation'
 import { BrandSettingsSchema } from '@eva/schemas'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { getPaymentsProvider } from '@/lib/payments/provider'
+import { isThemePresetKey } from '@/lib/brand-presets'
+import { isLoginLayoutKey, parseLoaderConfig } from '@/lib/brand-composer'
+
+/**
+ * white-label W1b — validación de las 3 columnas nuevas (aditivas):
+ * - theme_preset_key : '' (→ NULL, legacy) o una key del catálogo curado.
+ * - login_layout_key : '' (→ NULL, 'clasico') o una de las 4 variantes.
+ * - loader_config    : jsonb del compositor; se parsea aparte (shape estricto, fail-closed).
+ */
+const WhitelabelW1bSchema = z.object({
+    theme_preset_key: z
+        .string()
+        .refine((v) => v === '' || isThemePresetKey(v), 'Tema inválido'),
+    login_layout_key: z
+        .string()
+        .refine((v) => v === '' || isLoginLayoutKey(v), 'Diseño de login inválido'),
+})
 
 export type BrandSettingsState = {
     error?: string
@@ -44,6 +62,17 @@ export async function updateBrandSettingsAction(
     if (!parsed.success) {
         return { fieldErrors: parsed.error.flatten().fieldErrors }
     }
+
+    // white-label W1b — tema / layout de login / loader compuesto (validados aparte del schema compartido).
+    const wl3 = WhitelabelW1bSchema.safeParse({
+        theme_preset_key: (formData.get('theme_preset_key') as string | null)?.trim() ?? '',
+        login_layout_key: (formData.get('login_layout_key') as string | null)?.trim() ?? '',
+    })
+    if (!wl3.success) {
+        return { fieldErrors: wl3.error.flatten().fieldErrors }
+    }
+    // loader_config: shape estricto vía parseLoaderConfig → objeto limpio o null (fail-closed, no bloquea).
+    const loaderConfigParsed = parseLoaderConfig((formData.get('loader_config') as string | null) ?? '')
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -101,6 +130,11 @@ export async function updateBrandSettingsAction(
         updatePayload.neutral_tint = parsed.data.neutral_tint
         updatePayload.brand_font_key = parsed.data.brand_font_key || null
         updatePayload.loader_variant = parsed.data.loader_variant
+        // white-label W1b — mismo gate Pro+. NULL = comportamiento legacy (grandfather intocable):
+        // el tema NO materializa el color custom del coach (Opción A del informe §3, reversible).
+        updatePayload.theme_preset_key = wl3.data.theme_preset_key || null
+        updatePayload.login_layout_key = wl3.data.login_layout_key || null
+        updatePayload.loader_config = loaderConfigParsed // objeto jsonb limpio o null
     }
 
     const { error } = await supabase

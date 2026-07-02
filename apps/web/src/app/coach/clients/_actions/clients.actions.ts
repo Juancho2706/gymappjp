@@ -13,6 +13,7 @@ import {
     buildClientArchivedEmail,
     buildClientUnarchivedEmail,
 } from '@/lib/email/transactional-templates'
+import { resolveStudentEmailBranding } from '@/lib/email/email-brand'
 import {
     assertPlatformEmailAvailable,
     isAuthDuplicateEmailMessage,
@@ -61,11 +62,11 @@ export async function createClientAction(
 
     const { data: rawCoachData } = await supabase
         .from('coaches')
-        .select('id, slug, invite_code, full_name, brand_name, welcome_message, subscription_tier, max_clients, active_org_id')
+        .select('id, slug, invite_code, full_name, brand_name, welcome_message, subscription_tier, max_clients, active_org_id, primary_color, logo_url')
         .eq('id', coachUser.id)
         .maybeSingle()
 
-    const coach = rawCoachData as Pick<Tables<'coaches'>, 'id' | 'slug' | 'invite_code' | 'full_name' | 'brand_name' | 'welcome_message' | 'subscription_tier' | 'max_clients'> & { active_org_id?: string | null } | null
+    const coach = rawCoachData as Pick<Tables<'coaches'>, 'id' | 'slug' | 'invite_code' | 'full_name' | 'brand_name' | 'welcome_message' | 'subscription_tier' | 'max_clients' | 'primary_color' | 'logo_url'> & { active_org_id?: string | null } | null
 
     if (!coach) return { error: 'Coach no encontrado.' }
 
@@ -193,6 +194,14 @@ export async function createClientAction(
         loginPath = `/c/${getCoachPublicIdentifier(coach)}/login`
     }
     const loginUrl = appUrl ? `${appUrl}${loginPath}` : `https://app.tu-dominio.com${loginPath}`
+    // White-label (W2): el header/CTA del email usan la marca del coach solo si es standalone Pro+
+    // (team/org tienen su propia marca, no threadeada acá → fallback EVA).
+    const emailBrand = resolveStudentEmailBranding({
+        isStandalone: !scope.orgId && !scope.activeTeamId,
+        tier: coach.subscription_tier,
+        logoUrl: coach.logo_url,
+        primaryColor: coach.primary_color,
+    })
     const welcomeEmail = buildClientWelcomeEmail({
         brandName: emailBrandName,
         coachName: coach.full_name,
@@ -200,6 +209,8 @@ export async function createClientAction(
         loginUrl,
         tempPassword: parsed.data.temp_password,
         welcomeMessage: coach.welcome_message,
+        logoUrl: emailBrand.logoUrl,
+        primaryColor: emailBrand.primaryColor,
     })
     const emailResult = await sendTransactionalEmail({
         to: emailSan,
@@ -446,17 +457,25 @@ export async function archiveClientAction(clientId: string): Promise<{ error?: s
     if (client.email) {
         const { data: coach } = await supabase
             .from('coaches')
-            .select('full_name, brand_name, slug, invite_code')
+            .select('full_name, brand_name, slug, invite_code, subscription_tier, primary_color, logo_url')
             .eq('id', coachUser.id)
             .maybeSingle()
 
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eva-app.cl'
+        const emailBrand = resolveStudentEmailBranding({
+            isStandalone: !scope.orgId && !scope.activeTeamId,
+            tier: coach?.subscription_tier,
+            logoUrl: coach?.logo_url,
+            primaryColor: coach?.primary_color,
+        })
         const { subject, html } = buildClientArchivedEmail({
             clientName: client.full_name,
             coachBrandName: coach?.brand_name ?? coach?.full_name ?? 'EVA',
             coachName: coach?.full_name ?? 'Tu entrenador',
             coachEmail: coachUser.email ?? null,
             coachPublicUrl: buildCoachStudentUrl(appUrl, coach),
+            logoUrl: emailBrand.logoUrl,
+            primaryColor: emailBrand.primaryColor,
         })
         sendTransactionalEmail({ to: client.email, subject, html }).catch(() => null)
     }
@@ -516,16 +535,24 @@ export async function unarchiveClientAction(clientId: string): Promise<{ error?:
     if (client.email) {
         const { data: coachInfo } = await supabase
             .from('coaches')
-            .select('full_name, brand_name, slug, invite_code')
+            .select('full_name, brand_name, slug, invite_code, primary_color, logo_url')
             .eq('id', coachUser.id)
             .maybeSingle()
 
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eva-app.cl'
+        const emailBrand = resolveStudentEmailBranding({
+            isStandalone: !scope.orgId && !scope.activeTeamId,
+            tier: coach.subscription_tier,
+            logoUrl: coachInfo?.logo_url,
+            primaryColor: coachInfo?.primary_color,
+        })
         const { subject, html } = buildClientUnarchivedEmail({
             clientName: client.full_name,
             coachBrandName: coachInfo?.brand_name ?? coachInfo?.full_name ?? 'EVA',
             coachName: coachInfo?.full_name ?? 'Tu entrenador',
             loginUrl: buildCoachStudentUrl(appUrl, coachInfo, '/login'),
+            logoUrl: emailBrand.logoUrl,
+            primaryColor: emailBrand.primaryColor,
         })
         sendTransactionalEmail({ to: client.email, subject, html }).catch(() => null)
     }

@@ -6,7 +6,7 @@ import { getClientExerciseCatalogData } from "./_data/exercises.queries";
 import { getClientBasePath } from "@/lib/client/base-path";
 
 export const metadata: Metadata = {
-  title: "Catálogo de Ejercicios | EVA",
+  title: "Aprender | EVA",
 };
 
 interface Props {
@@ -40,10 +40,10 @@ export default async function ClientExercisesPage({ params }: Props) {
         </div>
         <div>
           <h1 className="font-display text-[22px] font-black leading-none tracking-[-0.02em] text-strong">
-            Aprender Técnica
+            Aprender
           </h1>
           <p className="mt-0.5 text-[12.5px] text-muted">
-            Catálogo completo de ejercicios
+            Técnica de cada ejercicio
           </p>
         </div>
       </header>
@@ -52,7 +52,7 @@ export default async function ClientExercisesPage({ params }: Props) {
         {/* Desktop (>=760): cabecera DesktopAprender — eyebrow + título grande */}
         <div className="mb-[22px] hidden md:block">
           <div className="text-[12px] font-bold tracking-[0.03em] text-muted">
-            Biblioteca de técnica
+            Técnica de cada ejercicio
           </div>
           <h1 className="mt-[3px] font-display text-[30px] font-black tracking-[-0.03em] text-strong">
             Aprender

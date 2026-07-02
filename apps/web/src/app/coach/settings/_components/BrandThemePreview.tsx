@@ -19,8 +19,9 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EvaRouteLoader } from '@/components/ui/EvaRouteLoader'
-import { LoaderVariantView } from '@/components/loaders/variants'
+import { LoaderVariantView, CompositeLoaderView } from '@/components/loaders/variants'
 import type { LoaderVariant } from '@/lib/brand-loaders'
+import type { LoaderComposite } from '@/lib/brand-composer'
 import { BRAND_APP_ICON } from '@/lib/brand-assets'
 import Image from 'next/image'
 
@@ -37,6 +38,8 @@ interface Props {
     fontFamily?: string
     /** Variante de loader elegida (white-label v2) — muestra la variante real en vivo. */
     loaderVariant?: LoaderVariant
+    /** Loader compuesto (W1b) — si está definido, precede a la variante en la vista previa. */
+    loaderConfig?: LoaderComposite | null
     /** Modo claro/oscuro CONTROLADO (opcional): comparte una única instancia lógica entre el preview
      *  mobile-top, el sticky de desktop y el modal de zoom. Si no se pasa, usa estado local. */
     isDark?: boolean
@@ -383,6 +386,7 @@ export function BrandThemePreview({
     loaderIconMode,
     fontFamily,
     loaderVariant = 'eva',
+    loaderConfig,
     isDark: isDarkProp,
     onToggleDark,
     activeTab: activeTabProp,
@@ -530,7 +534,14 @@ export function BrandThemePreview({
                     className="flex items-center justify-center py-2"
                     style={{ '--theme-primary': primaryColor, '--theme-primary-rgb': hexToSpaceRgb(primaryColor) } as CSSProperties}
                 >
-                    {loaderVariant !== 'eva' ? (
+                    {loaderConfig ? (
+                        <CompositeLoaderView
+                            config={loaderConfig}
+                            brandName={useCustomLoader && loaderText?.trim() ? loaderText : brandName}
+                            iconSrc={loaderIconMode === 'none' ? undefined : (loaderConfig.symbol === 'logo' && logoUrl ? logoUrl : BRAND_APP_ICON)}
+                            size="md"
+                        />
+                    ) : loaderVariant !== 'eva' ? (
                         <LoaderVariantView
                             variant={loaderVariant}
                             brandName={useCustomLoader && loaderText?.trim() ? loaderText : 'EVA'}
