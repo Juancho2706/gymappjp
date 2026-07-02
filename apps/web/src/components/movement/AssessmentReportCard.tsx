@@ -110,7 +110,14 @@ function ItemRow({ item, index }: { item: MovementAssessmentItem; index: number 
  * Reporte de una evaluacion final: semaforo + compuesto + banderas + tabla de 7
  * patrones (lado debil resaltado) + notas + disclaimer (AC5 SIEMPRE visible).
  */
-export function AssessmentReportCard({ assessment }: { assessment: MovementAssessmentWithItems }) {
+export function AssessmentReportCard({
+    assessment,
+    showDisclaimer = true,
+}: {
+    assessment: MovementAssessmentWithItems
+    /** El alumno lo apaga acá para renderizar el disclaimer al FINAL de la página (tras Evolución). */
+    showDisclaimer?: boolean
+}) {
     const { t, language } = useTranslation()
     const orderedItems = MOVEMENT_PATTERNS_V1.map((def) =>
         assessment.items.find((i) => i.pattern === def.slug)
@@ -185,7 +192,7 @@ export function AssessmentReportCard({ assessment }: { assessment: MovementAsses
                 </Card>
             )}
 
-            <MovementDisclaimer />
+            {showDisclaimer && <MovementDisclaimer />}
         </Reveal>
     )
 }

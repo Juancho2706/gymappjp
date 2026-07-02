@@ -83,3 +83,28 @@ Notas de contexto verificadas antes de reportar:
 - **Estados `consent` / `holding`** del kit `AccesoEstados` (Teams / Ley 21.719 / sin coach) — son gates de Teams; no reportados como gap del standalone.
 
 Verificado 1:1
+
+---
+
+## Fix log (2026-07-02)
+
+Implementación LADO ALUMNO (área auth-onboarding). Solo presentación + reuso de handlers/queries; engines, server actions y schemas intocados.
+
+### P0 — Pantalla Perfil / Más (`AlumnoMas`) → **construida**
+- **NUEVO** `apps/web/src/app/c/[coach_slug]/perfil/page.tsx` (RSC) + `perfil/_components/ProfileClient.tsx` (`'use client'`). Transcribe `AlumnoMas`: hero de identidad en card inverse (avatar iniciales + anillo sport, nombre, "Coach: {brandName}" team-aware, badge del programa activo), grid de StatCards (Entrenos / Racha), card "Compartí tu logro" (`navigator.share` + fallback `clipboard` + toast, sin backend), sección Apariencia (ThemeToggle + switch "Colores del coach" reusando `toggleClientBrandColors`, oculto en team), Módulos read-only (solo los entitled — `showMovement`/`showBodyComposition` — con badge "Ver" enlazando a `/movimiento` y `/bodycomp`), sección Cuenta (Historial → `/workout-history`, Ayuda → `mailto:contacto@eva-app.cl`, Cerrar sesión → `supabase.auth.signOut`), Zona de peligro → "Solicitar baja de cuenta" (`mailto:privacidad@eva-app.cl`, derechos ARCO — no hay action de auto-borrado para alumno).
+- **Lecturas reusadas** (no inventadas): `getClientProfile`, `getDashboardStreak`, `getWorkoutHistoryDayCounts(id,365)` (nº de días con series = "Entrenos"), `getActiveProgram` (nombre para el badge), `getStudentMovementNavEnabled`/`getStudentBodyCompositionNavEnabled`. brandName/isTeam/useBrandColors desde headers del proxy (team-aware).
+- **Entrada:** el sheet "Más" de `ClientNav.tsx` (que fue reworkeado en paralelo a cápsula flotante) se mantiene como acceso rápido y se le añadió una fila superior **"Mi perfil"** que enruta a `${base}/perfil`. Se optó por esta variante (bendecida por el informe) en vez de convertir el botón "Más" a ruta directa + eliminar el sheet, porque el archivo estaba siendo editado en paralelo (lógica de píldora deslizante `minimized`/`mobileActiveIndex`) y un restructure completo arriesgaba conflicto/rotura. NOTA para el jefe: esto deja el sheet y `/perfil` con contenido solapado; si se prefiere la variante 100% fiel (Más = pantalla), es un follow-up de bajo esfuerzo una vez estabilizado el rework del nav. Bonus: `ClientSettingsModal.tsx:133` ya enlazaba a `${basePath}/perfil` (link muerto en team) — ahora resuelve.
+
+### P1 — implementados
+- **Crear contraseña** (`change-password/page.tsx`): chips reactivos de reglas (8+ · 1 número · 1 mayúscula · Coinciden) que viran a `--success-100/700`. Gate del botón SOLO sobre las reglas que valida el server (`ChangePasswordSchema` = `min 8` + match); número/mayúscula quedan como pistas de fuerza no bloqueantes (ayudan con la protección de contraseñas filtradas de Supabase) para no prometer de más. Inputs pasados a controlados.
+- **Suspended** (`suspended/page.tsx`): danger/rojo + `AlertCircle` + `rounded-full` → warning/ámbar (`--warning-100/700`) + `Pause` + `rounded-card`; copy partido en dos líneas suaves; `MessageCircle` en el CTA de contacto; "Cerrar sesión" a estilo ghost.
+- **Onboarding Metas** (`OnboardingForm.tsx`): los 3 `<select>` nativos → grupos de chips tappables (`Pick`, seleccionado sólido `--ink-950`); mismos values de submit vía `formData` + los `<input hidden>` del paso 3 (verificados intactos). Server action sin cambios.
+
+### P2 — implementados
+- **Onboarding stepper**: círculos numerados → 3 barras segmentadas (`--sport-500` hasta `step`) + eyebrow "Paso X de 3"; títulos de paso a 24px/900; paso Bio apilado (no grid) con íconos leading `scale`/`ruler`; paso Salud con íconos leading `bandage`/`heart-pulse`.
+- **Login "con tecnología de"**: se añadió el mark sólido EVA (`icon-512.png`, 14px, rounded, opacidad 0.7) junto al wordmark.
+
+### No tocado / notas
+- **P2 change-password logo EVA header**: se mantuvo el `ShieldCheck` en caja temática (el informe acepta la card; el wordmark exacto `eva-logo-ink/white.png` del kit NO existe en `apps/web/public` — solo el square `icon-512`). Divergencia menor, no bloqueante.
+- **AlumnoMas filas "Estados de acceso" y "Notificaciones"**: omitidas — no hay ruta/acción real en standalone (requerirían páginas nuevas). Anotado; el resto de la sección Cuenta sí mapea a destinos reales.
+- Verde esperado; NO se corrió typecheck/build/tests (fuera de alcance del worker).

@@ -77,12 +77,11 @@ export function StudentIsakTrend({ rows }: { rows: BodyCompositionRow[] }) {
                         type="button"
                         onClick={() => setActive(s.key)}
                         className={cn(
-                            'min-h-11 rounded-control px-3 py-2 text-xs font-bold transition-colors',
+                            'min-h-11 rounded-pill px-3 py-2 text-xs font-bold transition-colors',
                             active === s.key
-                                ? 'text-primary-foreground shadow-sm'
+                                ? 'bg-[var(--ink-950)] text-white shadow-sm'
                                 : 'bg-surface-sunken text-[var(--text-muted)] hover:text-strong'
                         )}
-                        style={active === s.key ? { backgroundColor: 'var(--theme-primary)' } : undefined}
                     >
                         {t(s.labelKey)}
                     </button>

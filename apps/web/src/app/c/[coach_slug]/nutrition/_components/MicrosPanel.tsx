@@ -77,23 +77,67 @@ export function MicrosPanel({
   const reduce = useReducedMotion()
   const [open, setOpen] = useState(false)
 
-  const rows: {
+  type MicroRow = {
     key: string
     label: string
     value: number | null
     unit: string
     intent: 'cap' | 'aimup'
     target?: MicroTarget
-  }[] = [
+  }
+
+  const baseRows: MicroRow[] = [
     { key: 'sodio', label: 'Sodio', value: sodiumMg, unit: 'mg', intent: 'cap', target: sodiumTarget },
     { key: 'fibra', label: 'Fibra', value: fiberG, unit: 'g', intent: 'aimup', target: fiberTarget },
   ]
 
-  if (proEnabled) {
-    rows.push(
-      { key: 'azucar', label: 'Azúcar', value: sugarG, unit: 'g', intent: 'cap', target: sugarTarget },
-      { key: 'grasa-saturada', label: 'Grasa saturada', value: saturatedFatG, unit: 'g', intent: 'cap', target: saturatedFatTarget },
-      { key: 'grasa-insaturada', label: 'Grasa insaturada', value: unsaturatedFatG, unit: 'g', intent: 'aimup', target: unsaturatedFatTarget }
+  const advancedRows: MicroRow[] = [
+    { key: 'azucar', label: 'Azúcar', value: sugarG, unit: 'g', intent: 'cap', target: sugarTarget },
+    { key: 'grasa-saturada', label: 'Grasa saturada', value: saturatedFatG, unit: 'g', intent: 'cap', target: saturatedFatTarget },
+    { key: 'grasa-insaturada', label: 'Grasa insaturada', value: unsaturatedFatG, unit: 'g', intent: 'aimup', target: unsaturatedFatTarget },
+  ]
+
+  const renderRow = (row: MicroRow, delayIndex: number) => {
+    if (row.value == null && !hasAnyBound(row.target)) {
+      return (
+        <div key={row.key} className="space-y-0.5">
+          <div className="flex items-center justify-between text-[11px] font-medium">
+            <span className="text-muted-foreground">{row.label}</span>
+            <span className="tabular-nums text-muted-foreground">— {row.unit}</span>
+          </div>
+          <p className="text-[10px] text-muted-foreground/60">sin meta definida</p>
+        </div>
+      )
+    }
+
+    if (!hasAnyBound(row.target)) {
+      // Value present, but no coach target: show the number plainly.
+      return (
+        <div key={row.key} className="space-y-0.5">
+          <div className="flex items-center justify-between text-[11px] font-medium">
+            <span className="text-muted-foreground">{row.label}</span>
+            <span className="tabular-nums text-foreground">
+              {roundish(row.value ?? 0)}
+              {row.unit}
+            </span>
+          </div>
+          <p className="text-[10px] text-muted-foreground/60">sin meta definida</p>
+        </div>
+      )
+    }
+
+    return (
+      <NutrientRangeBar
+        key={row.key}
+        label={row.label}
+        value={row.value ?? 0}
+        unit={row.unit}
+        intent={row.intent}
+        floor={row.target?.floor}
+        target={row.target?.target}
+        ceiling={row.target?.ceiling}
+        delayIndex={delayIndex}
+      />
     )
   }
 
@@ -113,7 +157,7 @@ export function MicrosPanel({
           className="flex min-h-[44px] w-full items-center justify-between gap-2 px-4 py-3 text-left"
         >
           <span className="flex items-center gap-1.5">
-            <span className="text-sm font-semibold text-foreground">Micronutrientes</span>
+            <span className="font-display text-[17px] font-extrabold tracking-tight text-foreground">Micronutrientes</span>
             <InfoTooltip
               content="Micros — base. Tu coach puede fijar topes (ej. sodio) y metas (ej. fibra)."
               iconClassName="w-3.5 h-3.5"
@@ -143,55 +187,26 @@ export function MicrosPanel({
             className="overflow-hidden"
           >
             <div className="space-y-4 px-4 pb-4 pt-1">
-              {rows.map((row, i) => {
-                if (row.value == null && !hasAnyBound(row.target)) {
-                  return (
-                    <div key={row.key} className="space-y-0.5">
-                      <div className="flex items-center justify-between text-[11px] font-medium">
-                        <span className="text-muted-foreground">{row.label}</span>
-                        <span className="tabular-nums text-muted-foreground">
-                          — {row.unit}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground/60">sin meta definida</p>
-                    </div>
-                  )
-                }
+              {baseRows.map((row, i) => renderRow(row, i))}
 
-                if (!hasAnyBound(row.target)) {
-                  // Value present, but no coach target: show the number plainly.
-                  return (
-                    <div key={row.key} className="space-y-0.5">
-                      <div className="flex items-center justify-between text-[11px] font-medium">
-                        <span className="text-muted-foreground">{row.label}</span>
-                        <span className="tabular-nums text-foreground">
-                          {roundish(row.value ?? 0)}
-                          {row.unit}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground/60">sin meta definida</p>
-                    </div>
-                  )
-                }
+              {/* Divisor "AVANZADOS · PRO" (kit alumno-nutricion.jsx:351-357). */}
+              <div className="space-y-2 pt-1">
+                <div className="h-px bg-border/60" />
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wide text-muted-foreground/70">
+                    Avanzados
+                  </span>
+                  <span className="rounded-full bg-sport-100 px-1.5 py-0.5 text-[9px] font-extrabold text-sport-600">
+                    PRO
+                  </span>
+                </div>
+              </div>
 
-                return (
-                  <NutrientRangeBar
-                    key={row.key}
-                    label={row.label}
-                    value={row.value ?? 0}
-                    unit={row.unit}
-                    intent={row.intent}
-                    floor={row.target?.floor}
-                    target={row.target?.target}
-                    ceiling={row.target?.ceiling}
-                    delayIndex={i}
-                  />
-                )
-              })}
-
-              {!proEnabled && (
-                <p className="pt-1 text-[10px] leading-snug text-muted-foreground/60">
-                  Nutrición Pro desbloquea más micros (azúcar, grasas).
+              {proEnabled ? (
+                advancedRows.map((row, i) => renderRow(row, baseRows.length + i))
+              ) : (
+                <p className="text-[10px] leading-snug text-muted-foreground/60">
+                  Azúcar y grasas detalladas con Nutrición Pro de tu coach.
                 </p>
               )}
             </div>

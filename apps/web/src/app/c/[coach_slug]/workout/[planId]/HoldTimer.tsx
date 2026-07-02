@@ -71,19 +71,19 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
                 animate={{ y: 0, opacity: 1 }}
                 exit={reducedMotion ? undefined : { y: -24, opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="fixed z-50 left-3 right-3 md:left-auto md:right-6 md:w-[300px] top-[calc(env(safe-area-inset-top,0px)+6.25rem)] md:top-4 bg-card/95 backdrop-blur-xl border border-border/60 shadow-lg rounded-2xl px-2.5 py-2 overflow-hidden"
+                className="fixed z-50 left-3 right-3 md:left-auto md:right-6 md:w-[300px] top-[calc(env(safe-area-inset-top,0px)+6.25rem)] md:top-4 bg-[var(--ink-900)]/95 backdrop-blur-xl border border-[var(--border-inverse)] shadow-lg rounded-2xl px-2.5 py-2 overflow-hidden"
             >
                 {timeLeft === 0 && (
-                    <div className="absolute inset-0 bg-emerald-500/10 z-0 pointer-events-none" />
+                    <div className="absolute inset-0 bg-[var(--ember-500)]/15 z-0 pointer-events-none" />
                 )}
                 <div className="relative z-10 flex items-center justify-between gap-1.5 min-h-11">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                         <div className="relative w-11 h-11 flex items-center justify-center shrink-0">
                             <svg className="w-11 h-11 transform -rotate-90" viewBox="0 0 44 44">
-                                <circle cx="22" cy="22" r="18" stroke="currentColor" strokeWidth="3" fill="transparent" className="text-muted/30" />
+                                <circle cx="22" cy="22" r="18" stroke="currentColor" strokeWidth="3" fill="transparent" className="text-white/10" />
                                 <circle
                                     cx="22" cy="22" r="18"
-                                    stroke="var(--theme-primary)"
+                                    stroke="var(--ember-500)"
                                     strokeWidth="3"
                                     fill="transparent"
                                     strokeDasharray="176"
@@ -91,13 +91,13 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
                                     className="transition-all duration-300 ease-linear"
                                 />
                             </svg>
-                            <span className="absolute text-xs font-bold tabular-nums">{formatTime(timeLeft)}</span>
+                            <span className="absolute text-xs font-bold tabular-nums text-on-dark">{formatTime(timeLeft)}</span>
                         </div>
                         <div className="flex flex-col min-w-0">
-                            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider truncate">
+                            <p className="text-[10px] text-on-dark-muted font-semibold uppercase tracking-wider truncate">
                                 {label || 'Hold'}
                             </p>
-                            <p className="text-xs font-bold text-foreground truncate">
+                            <p className="text-xs font-bold text-on-dark truncate">
                                 {timeLeft === 0 ? '¡Listo! Cambia de lado o set' : 'Mantén la posición'}
                             </p>
                         </div>
@@ -106,7 +106,7 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-11 w-11 md:h-8 md:w-8 rounded-full"
+                            className="h-11 w-11 md:h-8 md:w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
                             onClick={() => setIsActive((v) => !v)}
                             aria-label={isActive ? 'Pausar' : 'Reanudar'}
                         >
@@ -115,7 +115,7 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-11 w-11 md:h-8 md:w-8 rounded-full"
+                            className="h-11 w-11 md:h-8 md:w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
                             onClick={restart}
                             title="Repetir (siguiente set o lado)"
                             aria-label="Repetir hold"
@@ -125,7 +125,7 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-11 w-11 md:h-8 md:w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+                            className="h-11 w-11 md:h-8 md:w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
                             onClick={onClose}
                             aria-label="Cerrar timer"
                         >

@@ -226,13 +226,13 @@ export function RestTimer({
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: -24, opacity: 0 }}
         transition={{ duration: 0.2 }}
-        className="fixed z-50 left-3 right-3 md:left-auto md:right-6 md:w-[300px] top-[calc(env(safe-area-inset-top,0px)+6.25rem)] md:top-4 bg-card/95 backdrop-blur-xl border border-border/60 shadow-lg rounded-2xl px-2.5 py-2 overflow-hidden"
+        className="fixed z-50 left-3 right-3 md:left-auto md:right-6 md:w-[300px] top-[calc(env(safe-area-inset-top,0px)+6.25rem)] md:top-4 bg-[var(--ink-900)]/95 backdrop-blur-xl border border-[var(--border-inverse)] shadow-lg rounded-2xl px-2.5 py-2 overflow-hidden"
       >
         {timeLeft === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="absolute inset-0 bg-emerald-500/10 z-0 pointer-events-none"
+            className="absolute inset-0 bg-[var(--ember-500)]/15 z-0 pointer-events-none"
           />
         )}
 
@@ -241,7 +241,7 @@ export function RestTimer({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground shrink-0"
+              className="h-8 w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10 shrink-0"
               onClick={() => {
                 setIsEditing(!isEditing);
                 setEditValue(timeLeft.toString());
@@ -258,10 +258,10 @@ export function RestTimer({
                   value={editValue}
                   onChange={(e) => setEditValue(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && saveEdit()}
-                  className="w-14 bg-background border rounded-md px-1.5 py-1 text-xs text-center font-bold"
+                  className="w-14 bg-white/[0.06] border border-[var(--border-inverse)] rounded-md px-1.5 py-1 text-xs text-center font-bold text-on-dark"
                   autoFocus
                 />
-                <span className="text-[10px] text-muted-foreground shrink-0">seg</span>
+                <span className="text-[10px] text-on-dark-muted shrink-0">seg</span>
                 <Button size="sm" onClick={saveEdit} className="h-7 px-2 text-xs shrink-0">
                   OK
                 </Button>
@@ -277,13 +277,13 @@ export function RestTimer({
                       stroke="currentColor"
                       strokeWidth="3"
                       fill="transparent"
-                      className="text-muted/30"
+                      className="text-white/10"
                     />
                     <circle
                       cx="22"
                       cy="22"
                       r="18"
-                      stroke="var(--theme-primary)"
+                      stroke="var(--ember-500)"
                       strokeWidth="3"
                       fill="transparent"
                       strokeDasharray="176"
@@ -291,15 +291,15 @@ export function RestTimer({
                       className="transition-all duration-500 ease-linear"
                     />
                   </svg>
-                  <span className="absolute text-xs font-bold tabular-nums">
+                  <span className="absolute text-xs font-bold tabular-nums text-on-dark">
                     {formatTime(timeLeft)}
                   </span>
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider truncate">
+                  <p className="text-[10px] text-on-dark-muted font-semibold uppercase tracking-wider truncate">
                     Descanso
                   </p>
-                  <p className="text-xs font-bold text-foreground truncate">
+                  <p className="text-xs font-bold text-on-dark truncate">
                     {timeLeft === 0 ? "¡Tiempo!" : "Recupérate"}
                   </p>
                 </div>
@@ -311,7 +311,7 @@ export function RestTimer({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-full"
+              className="h-8 w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
               onClick={toggleTimer}
               disabled={isEditing}
             >
@@ -324,7 +324,7 @@ export function RestTimer({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-full"
+              className="h-8 w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
               onClick={resetTimer}
               disabled={isEditing}
             >
@@ -333,7 +333,7 @@ export function RestTimer({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+              className="h-8 w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
               onClick={onClose}
             >
               <X className="w-3.5 h-3.5" />

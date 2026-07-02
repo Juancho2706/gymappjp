@@ -46,7 +46,7 @@ export function StudentMovementView({
             <main className="mx-auto w-full max-w-2xl space-y-5 px-4 py-6">
                 {latest ? (
                     <>
-                        <AssessmentReportCard assessment={latest} />
+                        <AssessmentReportCard assessment={latest} showDisclaimer={false} />
                         {finals.length >= 2 ? (
                             <EvolutionCharts finals={finals} />
                         ) : (
@@ -54,6 +54,7 @@ export function StudentMovementView({
                                 {t('assessment.evolution.needTwo')}
                             </p>
                         )}
+                        <MovementDisclaimer />
                     </>
                 ) : (
                     <Card padding="lg" className="gap-0 text-center">

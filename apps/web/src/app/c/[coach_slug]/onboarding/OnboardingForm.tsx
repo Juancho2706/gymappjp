@@ -6,10 +6,50 @@ import { submitIntakeForm } from './_actions/onboarding.actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ChevronLeft, ChevronRight, Check } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, Scale, Ruler, Bandage, HeartPulse } from 'lucide-react'
 
 interface Props {
     coachSlug: string
+}
+
+/** Chip group tappable (espejo del kit flow.jsx › AccesoEstados `Pick`). Seleccionado = sólido. */
+function Pick({
+    label,
+    value,
+    onPick,
+    options,
+}: {
+    label: string
+    value: string
+    onPick: (v: string) => void
+    options: { value: string; label: string }[]
+}) {
+    return (
+        <div className="space-y-2">
+            <div className="text-[13px] font-semibold text-text-strong">{label}</div>
+            <div className="flex flex-wrap gap-2">
+                {options.map((o) => {
+                    const active = value === o.value
+                    return (
+                        <button
+                            key={o.value}
+                            type="button"
+                            onClick={() => onPick(o.value)}
+                            aria-pressed={active}
+                            className="min-h-[38px] rounded-control border-[1.5px] px-3.5 text-[13.5px] font-semibold transition-colors"
+                            style={
+                                active
+                                    ? { background: 'var(--ink-950)', color: '#fff', borderColor: 'var(--ink-950)' }
+                                    : { background: 'var(--surface-card)', color: 'var(--text-body)', borderColor: 'var(--border-default)' }
+                            }
+                        >
+                            {o.label}
+                        </button>
+                    )
+                })}
+            </div>
+        </div>
+    )
 }
 
 const STORAGE_KEY = 'onboarding_draft'
@@ -63,6 +103,12 @@ export function OnboardingForm({ coachSlug }: Props) {
 
     const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         setTouched(prev => ({ ...prev, [e.target.name]: true }))
+    }
+
+    // Selección por chip (Metas): actualiza formData + marca touched para limpiar el error inline.
+    const handlePick = (name: 'goals' | 'experience_level' | 'availability') => (value: string) => {
+        setFormData(prev => ({ ...prev, [name]: value }))
+        setTouched(prev => ({ ...prev, [name]: true }))
     }
 
     const fieldError = (name: string): string | null => {
@@ -124,37 +170,22 @@ export function OnboardingForm({ coachSlug }: Props) {
 
     return (
         <div className="space-y-8 overflow-hidden">
-            {/* Progress Bar */}
-            <div className="relative pt-4 px-2">
-                <div className="flex justify-between mb-2">
+            {/* Progreso — barras segmentadas + eyebrow "Paso X de 3" (kit flow.jsx › onboarding). */}
+            <div className="pt-4 px-1">
+                <div className="flex gap-1.5">
                     {[1, 2, 3].map((step) => (
-                        <div key={step} className="flex flex-col items-center relative z-10">
-                            <motion.div 
+                        <div key={step} className="h-[5px] flex-1 overflow-hidden rounded-pill bg-[var(--sport-100)]">
+                            <motion.div
+                                className="h-full rounded-pill bg-[var(--sport-500)]"
                                 initial={false}
-                                animate={{
-                                    backgroundColor: currentStep >= step ? 'var(--theme-primary)' : 'hsl(var(--muted))',
-                                    color: currentStep >= step ? '#ffffff' : 'hsl(var(--muted-foreground))',
-                                    scale: currentStep === step ? 1.1 : 1
-                                }}
-                                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300`}
-                            >
-                                {currentStep > step ? <Check className="w-5 h-5" /> : step}
-                            </motion.div>
-                            <span className={`text-[10px] mt-1.5 uppercase tracking-wider font-semibold transition-colors duration-300 ${
-                                currentStep >= step ? 'text-foreground' : 'text-muted-foreground/60'
-                            }`}>
-                                {step === 1 ? 'Bio' : step === 2 ? 'Metas' : 'Salud'}
-                            </span>
+                                animate={{ width: currentStep >= step ? '100%' : '0%' }}
+                                transition={{ duration: 0.4, ease: 'easeInOut' }}
+                            />
                         </div>
                     ))}
                 </div>
-                <div className="absolute top-[32px] left-8 right-8 h-[2px] bg-muted -z-0">
-                    <motion.div 
-                        className="h-full bg-[var(--theme-primary)]"
-                        initial={{ width: '0%' }}
-                        animate={{ width: `${(currentStep - 1) * 50}%` }}
-                        transition={{ duration: 0.4, ease: 'easeInOut' }}
-                    />
+                <div className="mt-3 text-[12px] font-bold uppercase tracking-[0.06em] text-text-subtle">
+                    Paso {currentStep} de 3
                 </div>
             </div>
 
@@ -170,40 +201,46 @@ export function OnboardingForm({ coachSlug }: Props) {
                             className="space-y-6"
                         >
                             <div className="space-y-1">
-                                <h2 className="font-display text-xl font-extrabold tracking-[-0.01em] text-text-strong">Tus datos biométricos</h2>
+                                <h2 className="font-display text-2xl font-black tracking-[-0.02em] text-text-strong">Tus datos</h2>
                                 <p className="text-sm text-muted-foreground">Empecemos con lo básico para personalizar tu plan.</p>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="flex flex-col gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="weight" className="text-muted-foreground">Peso actual (kg)*</Label>
-                                    <Input
-                                        id="weight"
-                                        name="weight"
-                                        type="number"
-                                        step="0.1"
-                                        placeholder="Ej. 75.5"
-                                        required
-                                        value={formData.weight}
-                                        onChange={handleInputChange}
-                                        onBlur={handleBlur}
-                                        className={`border-border-default focus-visible:border-[var(--theme-primary)] focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] ${fieldError('weight') ? 'border-[var(--danger-500)] focus-visible:border-[var(--danger-500)]' : ''}`}
-                                    />
+                                    <div className="relative">
+                                        <Scale className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none z-10" />
+                                        <Input
+                                            id="weight"
+                                            name="weight"
+                                            type="number"
+                                            step="0.1"
+                                            placeholder="Ej. 75.5"
+                                            required
+                                            value={formData.weight}
+                                            onChange={handleInputChange}
+                                            onBlur={handleBlur}
+                                            className={`pl-10 border-border-default focus-visible:border-[var(--theme-primary)] focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] ${fieldError('weight') ? 'border-[var(--danger-500)] focus-visible:border-[var(--danger-500)]' : ''}`}
+                                        />
+                                    </div>
                                     {fieldError('weight') && <p className="text-xs text-[var(--danger-600)]">{fieldError('weight')}</p>}
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="height" className="text-muted-foreground">Estatura (cm)*</Label>
-                                    <Input
-                                        id="height"
-                                        name="height"
-                                        type="number"
-                                        placeholder="Ej. 178"
-                                        required
-                                        value={formData.height}
-                                        onChange={handleInputChange}
-                                        onBlur={handleBlur}
-                                        className={`border-border-default focus-visible:border-[var(--theme-primary)] focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] ${fieldError('height') ? 'border-[var(--danger-500)] focus-visible:border-[var(--danger-500)]' : ''}`}
-                                    />
+                                    <div className="relative">
+                                        <Ruler className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none z-10" />
+                                        <Input
+                                            id="height"
+                                            name="height"
+                                            type="number"
+                                            placeholder="Ej. 178"
+                                            required
+                                            value={formData.height}
+                                            onChange={handleInputChange}
+                                            onBlur={handleBlur}
+                                            className={`pl-10 border-border-default focus-visible:border-[var(--theme-primary)] focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] ${fieldError('height') ? 'border-[var(--danger-500)] focus-visible:border-[var(--danger-500)]' : ''}`}
+                                        />
+                                    </div>
                                     {fieldError('height') && <p className="text-xs text-[var(--danger-600)]">{fieldError('height')}</p>}
                                 </div>
                             </div>
@@ -220,70 +257,54 @@ export function OnboardingForm({ coachSlug }: Props) {
                             className="space-y-6"
                         >
                             <div className="space-y-1">
-                                <h2 className="font-display text-xl font-extrabold tracking-[-0.01em] text-text-strong">Metas y disponibilidad</h2>
+                                <h2 className="font-display text-2xl font-black tracking-[-0.02em] text-text-strong">Tus metas</h2>
                                 <p className="text-sm text-muted-foreground">¿Qué quieres lograr y cuánto tiempo tienes?</p>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label htmlFor="goals" className="text-muted-foreground">¿Cuál es tu objetivo principal?*</Label>
-                                <select
-                                    id="goals"
-                                    name="goals"
-                                    required
+                            <div className="space-y-1">
+                                <Pick
+                                    label="¿Cuál es tu objetivo principal?*"
                                     value={formData.goals}
-                                    onChange={handleInputChange}
-                                    onBlur={handleBlur}
-                                    className={`flex h-12 w-full rounded-control border-[1.5px] bg-surface-card px-3.5 text-[15px] font-medium text-text-strong outline-none transition-all focus:border-[var(--theme-primary)] focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] ${fieldError('goals') ? 'border-[var(--danger-500)]' : 'border-border-default'}`}
-                                >
-                                    <option value="">Selecciona tu meta</option>
-                                    <option value="Perder grasa">Perder grasa / Definición</option>
-                                    <option value="Aumentar masa muscular">Aumentar masa muscular / Volumen</option>
-                                    <option value="Recomposición corporal">Recomposición corporal</option>
-                                    <option value="Mantenimiento general">Mantenimiento general / Salud</option>
-                                    <option value="Rendimiento deportivo">Mejorar rendimiento deportivo</option>
-                                </select>
-                                {fieldError('goals') && <p className="text-xs text-[var(--danger-600)]">{fieldError('goals')}</p>}
+                                    onPick={handlePick('goals')}
+                                    options={[
+                                        { value: 'Perder grasa', label: 'Perder grasa' },
+                                        { value: 'Aumentar masa muscular', label: 'Masa muscular' },
+                                        { value: 'Recomposición corporal', label: 'Recomposición' },
+                                        { value: 'Mantenimiento general', label: 'Mantenimiento' },
+                                        { value: 'Rendimiento deportivo', label: 'Rendimiento' },
+                                    ]}
+                                />
+                                {fieldError('goals') && <p className="text-xs text-[var(--danger-600)] pt-1">{fieldError('goals')}</p>}
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="experience_level" className="text-muted-foreground">Experiencia*</Label>
-                                    <select
-                                        id="experience_level"
-                                        name="experience_level"
-                                        required
-                                        value={formData.experience_level}
-                                        onChange={handleInputChange}
-                                        onBlur={handleBlur}
-                                        className={`flex h-12 w-full rounded-control border-[1.5px] bg-surface-card px-3.5 text-[15px] font-medium text-text-strong outline-none transition-all focus:border-[var(--theme-primary)] focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] ${fieldError('experience_level') ? 'border-[var(--danger-500)]' : 'border-border-default'}`}
-                                    >
-                                        <option value="">Nivel</option>
-                                        <option value="Principiante">Principiante</option>
-                                        <option value="Intermedio">Intermedio</option>
-                                        <option value="Avanzado">Avanzado</option>
-                                    </select>
-                                    {fieldError('experience_level') && <p className="text-xs text-[var(--danger-600)]">{fieldError('experience_level')}</p>}
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="availability" className="text-muted-foreground">Días/semana*</Label>
-                                    <select
-                                        id="availability"
-                                        name="availability"
-                                        required
-                                        value={formData.availability}
-                                        onChange={handleInputChange}
-                                        onBlur={handleBlur}
-                                        className={`flex h-12 w-full rounded-control border-[1.5px] bg-surface-card px-3.5 text-[15px] font-medium text-text-strong outline-none transition-all focus:border-[var(--theme-primary)] focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] ${fieldError('availability') ? 'border-[var(--danger-500)]' : 'border-border-default'}`}
-                                    >
-                                        <option value="">Días</option>
-                                        <option value="2 días">2 días</option>
-                                        <option value="3 días">3 días</option>
-                                        <option value="4 días">4 días</option>
-                                        <option value="5 días">5 días</option>
-                                        <option value="6+ días">6+ días</option>
-                                    </select>
-                                    {fieldError('availability') && <p className="text-xs text-[var(--danger-600)]">{fieldError('availability')}</p>}
-                                </div>
+                            <div className="space-y-1">
+                                <Pick
+                                    label="Experiencia*"
+                                    value={formData.experience_level}
+                                    onPick={handlePick('experience_level')}
+                                    options={[
+                                        { value: 'Principiante', label: 'Principiante' },
+                                        { value: 'Intermedio', label: 'Intermedio' },
+                                        { value: 'Avanzado', label: 'Avanzado' },
+                                    ]}
+                                />
+                                {fieldError('experience_level') && <p className="text-xs text-[var(--danger-600)] pt-1">{fieldError('experience_level')}</p>}
+                            </div>
+
+                            <div className="space-y-1">
+                                <Pick
+                                    label="Días por semana*"
+                                    value={formData.availability}
+                                    onPick={handlePick('availability')}
+                                    options={[
+                                        { value: '2 días', label: '2' },
+                                        { value: '3 días', label: '3' },
+                                        { value: '4 días', label: '4' },
+                                        { value: '5 días', label: '5' },
+                                        { value: '6+ días', label: '6+' },
+                                    ]}
+                                />
+                                {fieldError('availability') && <p className="text-xs text-[var(--danger-600)] pt-1">{fieldError('availability')}</p>}
                             </div>
                         </motion.div>
                     )}
@@ -298,7 +319,7 @@ export function OnboardingForm({ coachSlug }: Props) {
                             className="space-y-6"
                         >
                             <div className="space-y-1">
-                                <h2 className="font-display text-xl font-extrabold tracking-[-0.01em] text-text-strong">Salud y seguridad</h2>
+                                <h2 className="font-display text-2xl font-black tracking-[-0.02em] text-text-strong">Salud y seguridad</h2>
                                 <p className="text-sm text-muted-foreground">Esta información es vital para evitar lesiones.</p>
                             </div>
                             <div className="rounded-control border border-[var(--warning-500)]/30 bg-[var(--warning-100)] px-3 py-2 text-xs text-[var(--warning-700)]">
@@ -307,28 +328,34 @@ export function OnboardingForm({ coachSlug }: Props) {
 
                             <div className="space-y-2">
                                 <Label htmlFor="injuries" className="text-muted-foreground">Lesiones o limitaciones</Label>
-                                <textarea 
-                                    id="injuries" 
-                                    name="injuries" 
-                                    rows={2}
-                                    placeholder="Ej. Dolor en rodilla derecha al correr..." 
-                                    value={formData.injuries}
-                                    onChange={handleInputChange}
-                                    className="flex w-full rounded-control border-[1.5px] border-border-default bg-surface-card px-3.5 py-2.5 text-[15px] text-text-strong outline-none transition-all focus:border-[var(--theme-primary)] focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] placeholder:text-text-muted"
-                                />
+                                <div className="relative">
+                                    <Bandage className="absolute left-3.5 top-3 w-4 h-4 text-text-muted pointer-events-none z-10" />
+                                    <textarea
+                                        id="injuries"
+                                        name="injuries"
+                                        rows={2}
+                                        placeholder="Ej. Dolor en rodilla derecha al correr..."
+                                        value={formData.injuries}
+                                        onChange={handleInputChange}
+                                        className="flex w-full rounded-control border-[1.5px] border-border-default bg-surface-card pl-10 pr-3.5 py-2.5 text-[15px] text-text-strong outline-none transition-all focus:border-[var(--theme-primary)] focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] placeholder:text-text-muted"
+                                    />
+                                </div>
                             </div>
 
                             <div className="space-y-2">
                                 <Label htmlFor="medical_conditions" className="text-muted-foreground">Condiciones médicas</Label>
-                                <textarea 
-                                    id="medical_conditions" 
-                                    name="medical_conditions" 
-                                    rows={2}
-                                    placeholder="Ej. Hipertensión, asma, diabetes..." 
-                                    value={formData.medical_conditions}
-                                    onChange={handleInputChange}
-                                    className="flex w-full rounded-control border-[1.5px] border-border-default bg-surface-card px-3.5 py-2.5 text-[15px] text-text-strong outline-none transition-all focus:border-[var(--theme-primary)] focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] placeholder:text-text-muted"
-                                />
+                                <div className="relative">
+                                    <HeartPulse className="absolute left-3.5 top-3 w-4 h-4 text-text-muted pointer-events-none z-10" />
+                                    <textarea
+                                        id="medical_conditions"
+                                        name="medical_conditions"
+                                        rows={2}
+                                        placeholder="Ej. Hipertensión, asma, diabetes..."
+                                        value={formData.medical_conditions}
+                                        onChange={handleInputChange}
+                                        className="flex w-full rounded-control border-[1.5px] border-border-default bg-surface-card pl-10 pr-3.5 py-2.5 text-[15px] text-text-strong outline-none transition-all focus:border-[var(--theme-primary)] focus:shadow-[0_0_0_3px_color-mix(in_oklab,var(--theme-primary)_30%,transparent)] placeholder:text-text-muted"
+                                    />
+                                </div>
                             </div>
 
                             {/* Hidden fields for server submission in step 3 if needed, 

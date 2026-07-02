@@ -1,6 +1,7 @@
 'use client'
 
 import { motion, useReducedMotion, type Transition } from 'framer-motion'
+import { Utensils } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 /**
@@ -129,7 +130,7 @@ function wedgePath(
 export function ProportionPlate({
   proportion,
   labels,
-  size = 160,
+  size = 96,
   showLegend = true,
   className,
 }: ProportionPlateProps) {
@@ -145,6 +146,9 @@ export function ProportionPlate({
   const cx = size / 2
   const cy = size / 2
   const r = (size / 2) - 2
+  // Donut hole (método del plato kit `Nut_Plate`): hueco central + ícono cubiertos.
+  const holeR = r * 0.44
+  const iconSize = Math.round(size * 0.2)
 
   // Build wedges in order: cada start es la suma acumulada de los shares previos (sin mutación en
   // render — el `let cursor` reasignado violaba react-hooks/immutability). Output byte-idéntico.
@@ -161,60 +165,73 @@ export function ProportionPlate({
     : { duration: 0.6, ease: [0.34, 1.56, 0.64, 1] }
 
   return (
-    <div className={cn('flex flex-col items-center gap-3', className)}>
-      <motion.div
-        role="img"
-        aria-label={ariaLabel}
-        style={{ width: size, height: size }}
-        className="relative"
-        initial={reduce ? false : { opacity: 0, scale: 0.92 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={revealTransition}
-      >
-        <svg width={size} height={size} aria-hidden>
-          {wedges.map((w) => (
-            <path
-              key={w.key}
-              d={wedgePath(w.start, w.end, cx, cy, r)}
-              fill={SEGMENT_META[w.key].color}
+    <div className={cn('flex flex-col gap-3', className)}>
+      {/* Dona (kit móvil `Nut_Plate`): plato compacto a la izquierda, leyenda a la derecha. */}
+      <div className="flex items-center gap-4">
+        <motion.div
+          role="img"
+          aria-label={ariaLabel}
+          style={{ width: size, height: size }}
+          className="relative shrink-0"
+          initial={reduce ? false : { opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={revealTransition}
+        >
+          <svg width={size} height={size} aria-hidden>
+            {wedges.map((w) => (
+              <path
+                key={w.key}
+                d={wedgePath(w.start, w.end, cx, cy, r)}
+                fill={SEGMENT_META[w.key].color}
+              />
+            ))}
+            {/* hueco central de la dona */}
+            <circle cx={cx} cy={cy} r={holeR} fill="var(--card)" />
+            {/* divider rim for definition in both themes */}
+            <circle
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="none"
+              stroke="var(--background)"
+              strokeWidth={2}
             />
-          ))}
-          {/* divider rim for definition in both themes */}
-          <circle
-            cx={cx}
-            cy={cy}
-            r={r}
-            fill="none"
-            stroke="var(--background)"
-            strokeWidth={2}
-          />
-        </svg>
-      </motion.div>
+          </svg>
+          {/* ícono de cubiertos centrado en el hueco */}
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <Utensils
+              style={{ width: iconSize, height: iconSize }}
+              className="text-muted-foreground"
+              aria-hidden
+            />
+          </div>
+        </motion.div>
 
-      {showLegend && (
-        <ul className="flex flex-col gap-1 text-xs" aria-hidden>
-          {SEGMENT_ORDER.map((key) => {
-            const share = shares[key]
-            if (share <= 0) return null
-            return (
-              <li key={key} className="flex items-center gap-2">
-                <span
-                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
-                  style={{ backgroundColor: SEGMENT_META[key].color }}
-                />
-                <span className="font-semibold text-foreground">
-                  {resolvedLabels[key]}
-                </span>
-                <span className="tabular-nums text-muted-foreground">
-                  {pct(share)}%
-                </span>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+        {showLegend && (
+          <ul className="flex min-w-0 flex-1 flex-col gap-2 text-xs" aria-hidden>
+            {SEGMENT_ORDER.map((key) => {
+              const share = shares[key]
+              if (share <= 0) return null
+              return (
+                <li key={key} className="flex items-center gap-2">
+                  <span
+                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+                    style={{ backgroundColor: SEGMENT_META[key].color }}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-foreground">
+                    {resolvedLabels[key]}
+                  </span>
+                  <span className="shrink-0 font-bold tabular-nums text-foreground">
+                    {pct(share)}%
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
 
-      <p className="max-w-[14rem] text-center text-[10px] leading-snug text-muted-foreground/70">
+      <p className="text-[10px] leading-snug text-muted-foreground/70">
         Proporción sugerida del plato, no una meta cumplida.
       </p>
     </div>

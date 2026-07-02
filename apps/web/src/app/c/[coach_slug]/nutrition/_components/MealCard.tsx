@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { CheckCircle2, ChevronDown, ChevronUp, Lock } from 'lucide-react'
+import { Check, Utensils, ChevronDown, ChevronUp, Lock } from 'lucide-react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { springs } from '@/lib/animation-presets'
 import { cn } from '@/lib/utils'
@@ -92,7 +92,7 @@ export function MealCard({
           type="button"
           onClick={handleToggle}
           className={cn(
-            'w-11 h-11 -ml-1 flex items-center justify-center rounded-xl flex-shrink-0',
+            'w-11 h-11 -ml-1 flex items-center justify-center rounded-full flex-shrink-0',
             'transition-all duration-200 touch-manipulation',
             !isToday && 'cursor-default opacity-50'
           )}
@@ -109,23 +109,35 @@ export function MealCard({
                   : { duration: 0.2, ease: 'easeOut' }
             }
             className={cn(
-              'w-7 h-7 rounded-full border-2 flex items-center justify-center transition-colors duration-200',
+              'w-11 h-11 rounded-full flex items-center justify-center transition-colors duration-200',
               isCompleted
-                ? 'border-ember-500 bg-ember-500 shadow-[var(--glow-ember)]'
-                : 'border-muted-foreground/30'
+                ? 'bg-ember-500 text-white shadow-[var(--glow-ember)]'
+                : 'bg-surface-sunken text-muted-foreground'
             )}
           >
-            <AnimatePresence mode="wait">
-              {isCompleted && (
-                <motion.div
+            <AnimatePresence mode="wait" initial={false}>
+              {isCompleted ? (
+                <motion.span
                   key="check"
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0, opacity: 0 }}
                   transition={reduceMotion ? { duration: 0 } : springs.elastic}
+                  className="flex"
                 >
-                  <CheckCircle2 className="w-4 h-4 text-white" />
-                </motion.div>
+                  <Check className="w-5 h-5" strokeWidth={2.5} />
+                </motion.span>
+              ) : (
+                <motion.span
+                  key="utensils"
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  transition={reduceMotion ? { duration: 0 } : { duration: 0.15 }}
+                  className="flex"
+                >
+                  <Utensils className="w-5 h-5" aria-hidden />
+                </motion.span>
               )}
             </AnimatePresence>
           </motion.div>

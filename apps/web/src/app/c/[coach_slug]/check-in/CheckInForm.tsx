@@ -7,7 +7,6 @@ import {
     ArrowRight,
     Camera,
     Check,
-    CheckCircle2,
     ChevronLeft,
     History,
     Loader2,
@@ -329,7 +328,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                     className="flex min-h-[60dvh] flex-col items-center justify-center px-8 pb-16 text-center"
                 >
                     <div className="mb-5 flex h-[88px] w-[88px] items-center justify-center rounded-full bg-[var(--success-500)] text-white shadow-[0_8px_28px_rgba(31,184,119,0.4)]">
-                        <CheckCircle2 className="h-11 w-11" />
+                        <Check className="h-11 w-11" />
                     </div>
                     <h1 className="font-display text-[27px] font-black tracking-tight text-strong">
                         ¡Check-in enviado!
@@ -448,7 +447,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                                     <Minus className="h-5 w-5" />
                                 </button>
                                 <div className="flex items-baseline gap-1">
-                                    <span className="font-display text-5xl font-black tabular-nums text-strong">
+                                    <span className="font-display text-5xl font-black tabular-nums tracking-[-0.03em] text-strong">
                                         {weight}
                                     </span>
                                     <span className="text-lg font-semibold text-muted">kg</span>
@@ -469,7 +468,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                         <Card padding="lg" className="mb-4 gap-3">
                             <div className="flex items-center justify-between">
                                 <span className="text-[13px] font-semibold text-strong">Nivel de energía</span>
-                                <span className="font-display text-base font-black tabular-nums text-sport-600">
+                                <span className="font-display text-base font-black tabular-nums tracking-[-0.03em] text-sport-600">
                                     {energyLevel}
                                     <span className="text-xs font-semibold text-muted">/10</span>
                                 </span>
@@ -662,7 +661,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                                     ['Fotos', `${photoCount} adj.`],
                                 ].map(([label, value]) => (
                                     <div key={label} className="text-center">
-                                        <div className="font-display text-lg font-black tabular-nums text-strong">{value}</div>
+                                        <div className="font-display text-lg font-black tabular-nums tracking-[-0.03em] text-strong">{value}</div>
                                         <div className="text-[11px] font-semibold text-muted">{label}</div>
                                     </div>
                                 ))}

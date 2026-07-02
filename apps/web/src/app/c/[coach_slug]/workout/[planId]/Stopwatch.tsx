@@ -63,18 +63,18 @@ export function Stopwatch({ onClose }: StopwatchProps) {
                 animate={{ y: 0, opacity: 1 }}
                 exit={reducedMotion ? undefined : { y: -24, opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="fixed z-50 left-3 right-3 md:left-auto md:right-6 md:w-[300px] top-[calc(env(safe-area-inset-top,0px)+6.25rem)] md:top-4 bg-card/95 backdrop-blur-xl border border-border/60 shadow-lg rounded-2xl px-3 py-2.5 overflow-hidden"
+                className="fixed z-50 left-3 right-3 md:left-auto md:right-6 md:w-[300px] top-[calc(env(safe-area-inset-top,0px)+6.25rem)] md:top-4 bg-[var(--ink-900)]/95 backdrop-blur-xl border border-[var(--border-inverse)] shadow-lg rounded-2xl px-3 py-2.5 overflow-hidden"
             >
                 <div className="flex items-center justify-between gap-2 min-h-11">
                     <div className="min-w-0 flex-1">
-                        <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Cronómetro</p>
-                        <p className="text-2xl font-black tabular-nums text-foreground leading-tight">{formatTime(elapsed)}</p>
+                        <p className="text-[10px] text-on-dark-muted font-semibold uppercase tracking-wider">Cronómetro</p>
+                        <p className="text-2xl font-black tabular-nums text-on-dark leading-tight">{formatTime(elapsed)}</p>
                     </div>
                     <div className="flex items-center gap-0.5 shrink-0">
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-11 w-11 md:h-8 md:w-8 rounded-full"
+                            className="h-11 w-11 md:h-8 md:w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
                             onClick={addLap}
                             title="Marcar vuelta"
                             aria-label="Marcar vuelta"
@@ -84,7 +84,7 @@ export function Stopwatch({ onClose }: StopwatchProps) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-11 w-11 md:h-8 md:w-8 rounded-full"
+                            className="h-11 w-11 md:h-8 md:w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
                             onClick={togglePause}
                             aria-label={isActive ? 'Pausar' : 'Reanudar'}
                         >
@@ -93,7 +93,7 @@ export function Stopwatch({ onClose }: StopwatchProps) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-11 w-11 md:h-8 md:w-8 rounded-full"
+                            className="h-11 w-11 md:h-8 md:w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
                             onClick={reset}
                             aria-label="Reiniciar"
                         >
@@ -102,7 +102,7 @@ export function Stopwatch({ onClose }: StopwatchProps) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-11 w-11 md:h-8 md:w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+                            className="h-11 w-11 md:h-8 md:w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
                             onClick={onClose}
                             aria-label="Cerrar cronómetro"
                         >
@@ -113,7 +113,7 @@ export function Stopwatch({ onClose }: StopwatchProps) {
                 {laps.length > 0 && (
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                         {laps.map((lap, i) => (
-                            <span key={`${lap}-${i}`} className="text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                            <span key={`${lap}-${i}`} className="text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded bg-white/[0.06] text-on-dark-muted">
                                 V{laps.length - i}: {formatTime(lap)}
                             </span>
                         ))}

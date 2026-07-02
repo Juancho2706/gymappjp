@@ -6,7 +6,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, Play } from 'lucide-react'
+import { ArrowLeft, Info, Dumbbell, HeartPulse, Move, GitCommit, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, Play, type LucideIcon } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { LogSetForm } from './LogSetForm'
 import { WorkoutTimerProvider, useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
@@ -145,12 +145,18 @@ const SIDE_LABEL: Record<string, string> = {
     alternating: 'Alternado',
 }
 
-/** Meta por tipo de bloque para el chip de tipo (color + label), estilo CD. */
-const RUT_TYPE_META: Record<WorkoutKind, { label: string; color: string }> = {
-    strength: { label: 'Fuerza', color: 'var(--sport-500)' },
-    cardio: { label: 'Cardio', color: 'var(--ember-500)' },
-    mobility: { label: 'Movilidad', color: '#14b8a6' },
-    roller: { label: 'Roller', color: '#8b5cf6' },
+/** Meta por tipo de bloque para el chip de tipo (color + label + icono tipado), estilo CD. */
+const RUT_TYPE_META: Record<WorkoutKind, { label: string; color: string; icon: LucideIcon }> = {
+    strength: { label: 'Fuerza', color: 'var(--sport-500)', icon: Dumbbell },
+    cardio: { label: 'Cardio', color: 'var(--ember-500)', icon: HeartPulse },
+    mobility: { label: 'Movilidad', color: '#14b8a6', icon: Move },
+    roller: { label: 'Roller', color: '#8b5cf6', icon: GitCommit },
+}
+
+/** Icono tipado por tipo de bloque, coloreado con el color del tipo (kit alumno-rutina §183). */
+function TypeGlyph({ kind, className = 'h-3 w-3' }: { kind: WorkoutKind; className?: string }) {
+    const Icon = RUT_TYPE_META[kind].icon
+    return <Icon className={className} style={{ color: RUT_TYPE_META[kind].color }} />
 }
 
 /** Nombre de la fase activa del programa (semanas de program_phases acumuladas vs semana actual). */
@@ -243,7 +249,7 @@ function TypedTargetGrid({ block, kind, cardio }: { block: BlockType; kind: Work
                             : 'border-[var(--border-inverse)] bg-white/[0.05]'
                     )}
                 >
-                    <p className={cn('text-[9.5px] font-bold uppercase tracking-wide', card.highlight ? 'text-[var(--ember-300)]' : 'text-on-dark-muted')}>{card.label}</p>
+                    <p className={cn('text-[9.5px] font-bold uppercase tracking-[0.06em]', card.highlight ? 'text-[var(--ember-300)]' : 'text-on-dark-muted')}>{card.label}</p>
                     <p className={cn('font-mono text-[15px] font-bold tabular-nums mt-0.5', card.highlight ? 'text-[var(--ember-200)]' : 'text-on-dark')}>{card.value}</p>
                 </div>
             ))}
@@ -585,7 +591,7 @@ function SupersetGroupCard({
                                     </h3>
                                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
                                         <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2 py-0.5 text-[10.5px] font-bold text-on-dark">
-                                            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: RUT_TYPE_META[m.effType].color }} />
+                                            <TypeGlyph kind={m.effType} className="h-3 w-3" />
                                             {m.exercise.muscle_group}
                                         </span>
                                         {(m.exercise.gif_url || m.exercise.video_url) && (
@@ -644,9 +650,9 @@ function SupersetGroupCard({
                         )}
 
                         {m.block.notes && (
-                            <div className="flex gap-2 rounded-sm border border-amber-400/30 bg-amber-400/10 px-2.5 py-1.5 text-[11px]">
-                                <Quote className="w-3.5 h-3.5 shrink-0 text-amber-300 mt-0.5" />
-                                <p className="text-amber-100/90">{m.block.notes}</p>
+                            <div className="flex gap-2 rounded-sm border border-primary/20 bg-primary/[0.10] px-2.5 py-1.5 text-[11px]">
+                                <Quote className="w-3.5 h-3.5 shrink-0 text-[var(--sport-300)] mt-0.5" />
+                                <p className="text-on-dark/90">{m.block.notes}</p>
                             </div>
                         )}
 
@@ -931,8 +937,8 @@ export function WorkoutExecutionClient({
                 >
                     <div className="px-4 py-3 md:px-8 max-w-5xl mx-auto w-full">
                         <div className="flex items-center justify-between mb-3 gap-2">
-                            <Link href={`${base}/dashboard`} className="p-2 -ml-2 text-on-dark-muted hover:text-on-dark transition-colors shrink-0">
-                                <ArrowLeft className="w-6 h-6" />
+                            <Link href={`${base}/dashboard`} aria-label="Salir" className="flex h-10 w-10 -ml-2 items-center justify-center rounded-control bg-white/[0.08] text-on-dark hover:bg-white/[0.14] transition-colors shrink-0">
+                                <ArrowLeft className="w-5 h-5" />
                             </Link>
                             <div className="min-w-0 px-2 text-center flex-1">
                                 <div className="flex items-center justify-center gap-2 flex-wrap">
@@ -962,7 +968,7 @@ export function WorkoutExecutionClient({
                                 <button
                                     type="button"
                                     onClick={() => setShowTimerSettings(true)}
-                                    className="flex h-10 w-10 items-center justify-center rounded-control text-on-dark hover:bg-white/[0.08] transition-colors"
+                                    className="flex h-10 w-10 items-center justify-center rounded-control bg-white/[0.08] text-on-dark hover:bg-white/[0.14] transition-colors"
                                     title="Descanso y alarma"
                                 >
                                     <Settings className="w-5 h-5" />
@@ -1086,7 +1092,7 @@ export function WorkoutExecutionClient({
                                                             animate={{ opacity: complete ? 0.6 : 1 }}
                                                             transition={reducedMotion ? { duration: 0 } : springs.smooth}
                                                             className={cn(
-                                                                'rounded-card border bg-white/[0.03] p-3 space-y-3 relative',
+                                                                'rounded-card border bg-white/[0.03] p-4 space-y-3 relative',
                                                                 complete
                                                                     ? 'border-[var(--sport-500)]/30'
                                                                     : 'border-[var(--border-inverse)]'
@@ -1095,8 +1101,8 @@ export function WorkoutExecutionClient({
                                                             <div className="space-y-2">
                                                                 {/* Chips: tipo de bloque + superserie (CD) */}
                                                                 <div className="flex flex-wrap items-center gap-1.5">
-                                                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-bold text-on-dark">
-                                                                        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: RUT_TYPE_META[effType].color }} />
+                                                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-bold" style={{ color: RUT_TYPE_META[effType].color }}>
+                                                                        <TypeGlyph kind={effType} className="h-3.5 w-3.5" />
                                                                         {RUT_TYPE_META[effType].label}
                                                                     </span>
                                                                     {group.type === 'superset' && (
@@ -1107,7 +1113,7 @@ export function WorkoutExecutionClient({
                                                                 </div>
                                                                 <div className="flex items-start justify-between gap-3">
                                                                     <div className="min-w-0 flex-1">
-                                                                        <h3 className="font-display text-[19px] font-black leading-[1.15] tracking-[-0.02em] text-on-dark">{exercise.name}</h3>
+                                                                        <h3 className="font-display text-[22px] font-black leading-[1.1] tracking-[-0.02em] text-on-dark">{exercise.name}</h3>
                                                                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                                                                             <span className="inline-flex items-center rounded-full bg-[var(--sport-500)]/15 px-2 py-0.5 text-[11px] font-bold text-[var(--sport-300)]">
                                                                                 {group.type === 'superset'
@@ -1146,7 +1152,7 @@ export function WorkoutExecutionClient({
                                                             {effType === 'strength' ? (
                                                             <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                                                                 <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2">
-                                                                    <p className="text-[9.5px] font-bold uppercase tracking-wide text-on-dark-muted">Series x reps</p>
+                                                                    <p className="text-[9.5px] font-bold uppercase tracking-[0.06em] text-on-dark-muted">Series x reps</p>
                                                                     <p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.sets} x {block.reps}</p>
                                                                 </div>
                                                                 {block.target_weight_kg != null && (() => {
@@ -1155,7 +1161,7 @@ export function WorkoutExecutionClient({
                                                                     const label = eff?.status === 'holding' ? 'Peso a mantener' : eff?.status === 'progressed' ? 'Peso hoy' : 'Peso'
                                                                     return (
                                                                         <div className={cn('rounded-sm border px-2.5 py-2', highlight ? 'border-emerald-500/40 bg-emerald-500/[0.12]' : 'border-[var(--border-inverse)] bg-white/[0.05]')}>
-                                                                            <p className={cn('text-[9.5px] font-bold uppercase tracking-wide', highlight ? 'text-emerald-300' : 'text-on-dark-muted')}>{label}</p>
+                                                                            <p className={cn('text-[9.5px] font-bold uppercase tracking-[0.06em]', highlight ? 'text-emerald-300' : 'text-on-dark-muted')}>{label}</p>
                                                                             <p className={cn('font-mono text-[15px] font-bold tabular-nums mt-0.5', highlight ? 'text-emerald-300' : 'text-on-dark')}>
                                                                                 {(eff?.weightKg ?? block.target_weight_kg)}kg
                                                                             </p>
@@ -1163,9 +1169,9 @@ export function WorkoutExecutionClient({
                                                                         </div>
                                                                     )
                                                                 })()}
-                                                                {block.rest_time && <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-wide text-on-dark-muted">Descanso</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.rest_time}</p></div>}
-                                                                {block.tempo && <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-wide text-on-dark-muted">Tempo</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.tempo}</p></div>}
-                                                                {block.rir && <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-wide text-on-dark-muted">RIR</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-[var(--sport-300)]">{block.rir}</p></div>}
+                                                                {block.rest_time && <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-[0.06em] text-on-dark-muted">Descanso</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.rest_time}</p></div>}
+                                                                {block.tempo && <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-[0.06em] text-on-dark-muted">Tempo</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.tempo}</p></div>}
+                                                                {block.rir && <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-[0.06em] text-on-dark-muted">RIR</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-[var(--sport-300)]">{block.rir}</p></div>}
                                                             </div>
                                                             ) : (
                                                                 <>
@@ -1222,11 +1228,11 @@ export function WorkoutExecutionClient({
                                                                 </div>
                                                             )}
                                                             {block.notes && (
-                                                                <div className="flex gap-2 rounded-sm border border-amber-400/30 bg-amber-400/10 px-3 py-2.5 text-sm">
-                                                                    <Quote className="w-3.5 h-3.5 shrink-0 text-amber-300 mt-0.5" />
+                                                                <div className="flex gap-2 rounded-sm border border-primary/20 bg-primary/[0.10] px-3 py-2.5 text-sm">
+                                                                    <Quote className="w-3.5 h-3.5 shrink-0 text-[var(--sport-300)] mt-0.5" />
                                                                     <div>
-                                                                        <p className="font-semibold text-amber-300">Nota del coach</p>
-                                                                        <p className="text-amber-100/90">{block.notes}</p>
+                                                                        <p className="font-semibold text-[var(--sport-300)]">Nota del coach</p>
+                                                                        <p className="text-on-dark/90">{block.notes}</p>
                                                                     </div>
                                                                 </div>
                                                             )}

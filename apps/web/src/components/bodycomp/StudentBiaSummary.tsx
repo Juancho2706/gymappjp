@@ -55,7 +55,7 @@ export function StudentBiaSummary({ rows }: { rows: BodyCompositionRow[] }) {
                 <span className="text-[11px] font-semibold text-muted">{deviceLabel(latest)}</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-3 gap-2">
                 {present.map((m) => {
                     const value = metrics[m.key] as number
                     const delta = deltaVsPrev(rows, 0, (r) => {

@@ -49,3 +49,13 @@ Notas de intención (NO gaps):
 ---
 
 Verificado 1:1
+
+## Fix log (2026-07-02)
+
+Implementado en `ClientExerciseCatalog.tsx` (mobile intacto 1:1):
+
+- **[P1 CONFIRMED] Search desktop compact `.dt-md-search`** — el `<Input>` rich compartido hardcodea `h-12`/`bg-surface-card`/`border-[1.5px]` en un div interno que `className` no alcanza, y es primitivo cross-app (fuera de scope). Reemplazado por un field local que espeja EXACTO el look mobile del Input rich (48px · `border-[1.5px] border-border-default` · `bg-surface-card` · icono 18px · `text-[15px]` · focus ring sport) y añade overrides desktop: `md:h-9 md:border md:bg-surface-sunken md:px-3` + input `md:text-[13.5px]` + icono `md:size-4`. Import de `Input` removido (quedaba sin uso).
+- **[P2] Modal-detalle desktop** — banner `md:h-64` → `md:h-[190px]`; play fallback `+md:h-[60px] md:w-[60px]`; close `+md:right-3.5 md:top-3.5 md:h-9 md:w-9`; `DialogContent` `md:max-w-[600px]` → `md:max-w-[620px]`.
+- **[P2] Micro-spacing vidcard desktop** — tag `+md:px-[7px]`; equip `+md:mt-[3px]`.
+
+No implementado (nits sub-pixel marcados "opcional"/"imperceptible" en el informe, y algunos en conflicto con el kit desktop): media mobile `h-24` vs 92, opacidad de tag 0.40 (el propio informe nota que 0.40 alinea con el kit desktop), y las micro-diferencias de `.dt-instr` (14.5/1.45 vs 14/1.5, número 13 vs 12).

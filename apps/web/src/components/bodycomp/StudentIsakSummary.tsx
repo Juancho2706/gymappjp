@@ -49,25 +49,25 @@ export function StudentIsakSummary({ rows }: { rows: BodyCompositionRow[] }) {
                 </div>
             </div>
 
-            {/* Headlines: % grasa + somatotipo con count-up */}
-            <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-control border border-subtle bg-surface-sunken px-3 py-2.5">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted">
-                        {t('bodycomp.metric.bodyFat')}
-                    </p>
+            {/* Headlines desnudos: % grasa + somatotipo como métricas hero (kit coach-modules §682) */}
+            <div className="flex flex-wrap gap-x-[22px] gap-y-3">
+                <div>
                     <CountUpValue
                         value={bodyFat.percent}
                         format={fmtPct}
-                        className="mt-0.5 block text-lg font-black tabular-nums text-strong"
+                        className="block font-display text-[26px] font-black leading-none tabular-nums tracking-[-0.03em] text-strong"
                     />
+                    <p className="mt-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
+                        {t('bodycomp.metric.bodyFat')}
+                    </p>
                     <p className="text-[9px] font-semibold text-muted">{bodyFat.equation}</p>
                 </div>
-                <div className="rounded-control border border-subtle bg-surface-sunken px-3 py-2.5">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-muted">
-                        {t('bodycomp.metric.somatotype')}
-                    </p>
-                    <p className="mt-0.5 text-sm font-black tabular-nums text-strong">
+                <div>
+                    <p className="font-display text-[26px] font-black leading-none tabular-nums tracking-[-0.03em] text-strong">
                         {s.endomorphy.toFixed(1)} – {s.mesomorphy.toFixed(1)} – {s.ectomorphy.toFixed(1)}
+                    </p>
+                    <p className="mt-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">
+                        {t('bodycomp.metric.somatotype')}
                     </p>
                     <p className="text-[9px] font-semibold text-muted">{t('bodycomp.metric.somatotypeAxes')}</p>
                 </div>

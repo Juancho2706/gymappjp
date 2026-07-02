@@ -933,6 +933,12 @@ export function NutritionShell({
         {plateCard}
       </div>
 
+      {mealsVisible.length > 0 && (
+        <h2 className="font-display text-[17px] font-extrabold tracking-tight text-foreground">
+          {isToday ? 'Comidas de hoy' : 'Comidas del día'}
+        </h2>
+      )}
+
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={selectedDate}

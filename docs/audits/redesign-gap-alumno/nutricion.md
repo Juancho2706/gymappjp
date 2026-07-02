@@ -90,3 +90,19 @@ Comparación kit Claude Design ↔ implementación real de `/c/[coach_slug]/nutr
 - **Layout 2-col desktop** (`NutritionShell.tsx:902-1138`) ↔ `DesktopPlan`: comidas izq + rail sticky der (racha · anillos · micros · plato · adherencia). Portado correctamente.
 
 Verificado 1:1.
+
+---
+
+## Fix log (2026-07-02)
+
+Implementados los CONFIRMED + P2 baratos del informe (lado alumno, `apps/web`). White-label respetado: cero colores de marca hardcodeados; se usó la rampa `sport`/`ember` de tokens EVA DS. No se corrió typecheck/build/tests (fuera de alcance del worker).
+
+- **P1 (CONFIRMED) — Completar comida:** `MealCard.tsx` — el botón pasó de anillo hueco 28px (`w-7 h-7 rounded-full border-2`) a **círculo pleno 44px** (`w-11 h-11 rounded-full`): pendiente = `bg-surface-sunken` + ícono `Utensils` (w-5 h-5, `text-muted-foreground`); completo = `bg-ember-500 text-white` + `Check` + `shadow-[var(--glow-ember)]`. Se conserva el spring elástico y el mismo handler optimista (`handleToggle`). Import: `CheckCircle2` → `Check, Utensils`.
+- **P1 (CONFIRMED) — Método del plato:** `components/nutrition/ProportionPlate.tsx` (solo lo renderiza `PlatePanel` del alumno; sin uso en coach) — pie sólido 160px → **dona ~96px** con hueco central (`<circle r={r*0.44} fill="var(--card)">`) + ícono `Utensils` centrado, y **leyenda a la derecha** (layout horizontal `flex items-center gap-4`, filas dot·nombre(flex-1)·% a la derecha). `size` default 160 → 96. Se mantiene el color veg `--color-macro-fats` (decisión deliberada), el `aria-label` del SVG y la nota "proporción sugerida".
+- **P1 (CONFIRMED) — SectionTitle 17/800 + "Comidas de hoy":** headings promovidos a `font-display text-[17px] font-extrabold tracking-tight text-foreground` en `MicrosPanel` ("Micronutrientes"), `PlatePanel` ("Tu plato") y `RecipeIdeasSection` ("Ideas de recetas", se quitó `text-xs uppercase tracking-widest`). Nuevo título **"Comidas de hoy"** en `NutritionShell.tsx` sobre la lista de comidas (gated en `mealsVisible.length > 0`; usa `isToday ? 'Comidas de hoy' : 'Comidas del día'`).
+- **P2 (DOWNGRADED, barato) — divisor "AVANZADOS · PRO":** `MicrosPanel.tsx` — se separaron `baseRows`/`advancedRows` (helper `renderRow`) y se agregó el divisor `h-px bg-border/60` + label "Avanzados" + pill `PRO` (`bg-sport-100 text-sport-600`) antes de las filas avanzadas; no-Pro muestra "Azúcar y grasas detalladas con Nutrición Pro de tu coach.". El panel sigue colapsado por defecto (decisión documentada, no gap).
+- **P2 (CLAVE, BUG white-label) — WorkoutContextBanner:** `WorkoutContextBanner.tsx` — `sky-*` hardcodeado → tokens `sport-*` (`border-sport-500/25 bg-sport-500/10 text-sport-700 dark:text-sport-200`, icono `text-sport-600 dark:text-sport-300`, tooltip `text-sport-600/70 dark:text-sport-300/80`). Ahora tinta con el color del coach.
+
+**No tocado (justificado):**
+- **P2 Adherencia 30d (DOWNGRADED):** grilla 10×3 → 1 fila NO es swap barato (rework de layout) y el propio verdict defiende la grilla como elección de legibilidad coherente (4 tramos + leyenda + ring de hoy). Diferido.
+- **P2 header pantalla / recap sparkles / recetas carrusel / notas burbuja-acento:** marcados "opcional/baja prioridad" en el informe; el header además requiere verificación global cross-pantalla y las notas comparten componente con coach. Fuera de scope de swaps baratos.

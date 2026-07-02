@@ -26,7 +26,7 @@ export function RecipeIdeasSection({ recipes }: Props) {
     <section aria-label="Ideas de recetas" className="space-y-3">
       <div className="flex items-center gap-2">
         <Lightbulb className="h-4 w-4 shrink-0 text-amber-500" aria-hidden />
-        <h2 className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+        <h2 className="font-display text-[17px] font-extrabold tracking-tight text-foreground">
           Ideas de recetas
         </h2>
       </div>

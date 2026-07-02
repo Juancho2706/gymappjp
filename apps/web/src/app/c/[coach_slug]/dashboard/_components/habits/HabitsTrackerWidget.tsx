@@ -1,7 +1,7 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getTodayInSantiago } from '@/lib/date-utils'
-import { HabitsTracker } from '@/app/c/[coach_slug]/nutrition/_components/HabitsTracker'
+import { HabitsCard } from './HabitsCard'
 
 const getTodayHabits = cache(async (clientId: string, today: string) => {
   const supabase = await createClient()
@@ -19,7 +19,7 @@ export async function HabitsTrackerWidget({ userId, coachSlug }: { userId: strin
   const data = await getTodayHabits(userId, today)
 
   return (
-    <HabitsTracker
+    <HabitsCard
       clientId={userId}
       coachSlug={coachSlug}
       logDate={today}

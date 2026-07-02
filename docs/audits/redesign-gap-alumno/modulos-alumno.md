@@ -128,3 +128,15 @@ Los hallazgos son deuda de estilo/token, no estructural.
   verificados 1:1.
 
 **Verificado 1:1.**
+
+## Fix log (2026-07-02)
+
+Implementado (vista alumno read-only; motores/CountUp/charts intactos):
+
+- **[P1→P2 DOWNGRADED] Headlines ISAK desnudos** — `StudentIsakSummary.tsx`: % grasa y somatotipo salen del `grid grid-cols-2` de tiles boxeadas (`rounded-control border bg-surface-sunken`, `text-lg`/`text-sm`) a métricas hero desnudas en `flex flex-wrap gap-x-[22px]` a `font-display text-[26px] font-black tabular-nums tracking-[-0.03em] text-strong`, con la etiqueta chica (11px) debajo (kit `coach-modules.jsx §682`). `CountUpValue` conservado en % grasa. Nota: esto reintroduce la asimetría del kit (BIA boxeado / ISAK desnudo) a propósito — es lo que hace el kit; el verdict DOWNGRADED confirmó el hecho y lo mantuvo como divergencia válida.
+- **[P2] Badge "Módulo" verde → sport soft (white-label)** — `StudentBodyCompositionView.tsx`: `bg-[var(--success-100)] text-[var(--success-700)]` → `bg-sport-100 text-sport-600` (deriva del tema del coach, kit `Badge tone="sport" variant="soft"`).
+- **[P2] Grid BIA 3-col en móvil** — `StudentBiaSummary.tsx`: `grid-cols-2 sm:grid-cols-3` → `grid-cols-3` (densidad del kit en el viewport primario).
+- **[P2] Toggle de serie de Tendencia = pill ink-950** — `StudentBiaTrend.tsx` y `StudentIsakTrend.tsx`: activo `text-primary-foreground` + `backgroundColor: var(--theme-primary)` + `rounded-control` → `bg-[var(--ink-950)] text-white rounded-pill` (píldora neutra del kit §713; tinte de tema inline eliminado).
+- **[P2] Disclaimer de Movimiento al final** — `AssessmentReportCard.tsx` gana prop opcional `showDisclaimer` (default `true` → la vista del coach `ClientMovementReport` queda byte-idéntica). `StudentMovementView.tsx` pasa `showDisclaimer={false}` y renderiza `<MovementDisclaimer />` DESPUÉS de `EvolutionCharts` → cierra la pantalla como el kit §485, ya no a mitad de página.
+
+No implementado (defendible como "riqueza extra" según el propio informe): Tendencia AreaChart (recharts) vs barras del kit — se deja el enriquecimiento consciente.

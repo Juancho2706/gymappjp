@@ -1,9 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { motion } from 'framer-motion'
-import { Check, ChevronRight } from 'lucide-react'
-import { fadeSlideLeft, staggerContainer, springs } from '@/lib/animation-presets'
+import { CheckCircle2, ChevronRight, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useBasePath } from '@/components/client/BasePathProvider'
 
@@ -23,43 +21,43 @@ export function WorkoutPlanCards({
 }) {
     const base = useBasePath(`/c/${coachSlug}`)
     return (
-        <motion.div className="grid grid-cols-1 gap-2" variants={staggerContainer(0.05)} initial="hidden" animate="show">
-            {plans.map((p, i) => {
+        // Carrusel horizontal de day-cards 96px (kit alumno-dashboard.jsx:413-424).
+        <div className="hide-scrollbar -ml-0.5 flex gap-2 overflow-x-auto pl-0.5">
+            {plans.map((p) => {
                 const dow = p.day_of_week ?? 1
                 const isToday = dow === todayDow
                 const done = isToday && workoutLoggedToday
                 return (
-                    <motion.div key={p.id} variants={fadeSlideLeft} transition={springs.smooth} custom={i}>
-                        <Link href={`${base}/workout/${p.id}`}>
-                            <motion.div
-                                whileHover={{ x: 4 }}
+                    <Link
+                        key={p.id}
+                        href={`${base}/workout/${p.id}`}
+                        className={cn(
+                            'block w-24 shrink-0 rounded-control border p-3 transition-colors',
+                            isToday ? 'border-sport-500 bg-sport-100' : 'border-subtle bg-surface-card hover:bg-surface-sunken'
+                        )}
+                    >
+                        <div className="flex items-center justify-between">
+                            <span
                                 className={cn(
-                                    'flex items-center gap-4 rounded-control border p-3 transition-colors',
-                                    isToday
-                                        ? 'border-sport-500/30 bg-sport-500/10'
-                                        : 'border-subtle bg-surface-card hover:bg-surface-sunken'
+                                    'text-[10.5px] font-extrabold uppercase tracking-wide',
+                                    isToday ? 'text-sport-600' : 'text-subtle'
                                 )}
                             >
-                                <div
-                                    className={cn(
-                                        'flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-control border-[1.5px] font-display text-xs font-bold',
-                                        isToday
-                                            ? 'border-transparent bg-[var(--cta-fill)] text-on-sport'
-                                            : 'border-sport-500/25 bg-sport-500/10 text-sport-600'
-                                    )}
-                                >
-                                    <span>{DAYS[dow - 1]}</span>
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-bold text-strong">{p.title}</p>
-                                    <p className="text-[10px] text-muted">Día {dow}</p>
-                                </div>
-                                {done ? <Check className="h-5 w-5 shrink-0 text-[var(--success-500)]" /> : <ChevronRight className="h-5 w-5 shrink-0 text-[var(--ink-300)]" />}
-                            </motion.div>
-                        </Link>
-                    </motion.div>
+                                {DAYS[dow - 1]}
+                            </span>
+                            {done ? (
+                                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[var(--success-500)]" />
+                            ) : isToday ? (
+                                <Play className="h-3 w-3 shrink-0 text-sport-600" />
+                            ) : (
+                                <ChevronRight className="h-[13px] w-[13px] shrink-0 text-[var(--ink-300)]" />
+                            )}
+                        </div>
+                        <p className="mt-1.5 line-clamp-2 text-[13px] font-bold leading-tight text-strong">{p.title}</p>
+                        <p className="mt-0.5 text-[10.5px] text-subtle">Día {dow}</p>
+                    </Link>
                 )
             })}
-        </motion.div>
+        </div>
     )
 }

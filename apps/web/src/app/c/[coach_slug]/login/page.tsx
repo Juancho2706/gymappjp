@@ -3,7 +3,7 @@ import Image from 'next/image'
 import ClientLoginForm from './ClientLoginForm'
 import type { Metadata } from 'next'
 import { InstallPrompt } from '@/components/InstallPrompt'
-import { BRAND_APP_ICON } from '@/lib/brand-assets'
+import { BRAND_APP_ICON, BRAND_APP_ICON_512 } from '@/lib/brand-assets'
 import { LoginEntrance, LoginEntranceItem } from './_components/LoginEntrance'
 import { getClientLoginCoach, getClientLoginMetadataCoach } from './_data/login.queries'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
@@ -142,10 +142,13 @@ export default async function ClientLoginPage({ params }: Props) {
                         logoUrl={logoUrl}
                     />
 
-                    {/* Powered by EVA */}
+                    {/* Powered by EVA — mark sólido (icon-512) + wordmark, opacidad discreta */}
                     <div className="flex items-center justify-center gap-1.5 pt-[18px] text-[11px] text-text-subtle">
                         con tecnología de
-                        <span className="font-semibold text-text-muted">EVA</span>
+                        <span className="inline-flex items-center gap-1 opacity-70">
+                            <Image src={BRAND_APP_ICON_512} alt="EVA" width={14} height={14} className="rounded-[3px]" />
+                            <span className="font-semibold text-text-muted">EVA</span>
+                        </span>
                     </div>
                 </LoginEntranceItem>
             </LoginEntrance>

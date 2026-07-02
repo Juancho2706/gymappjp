@@ -81,3 +81,27 @@ El **orden y las secciones** del móvil son 1:1 con el kit (`page.tsx:82-166`): 
 ---
 
 Verificado 1:1
+
+---
+
+## Fix log (2026-07-02)
+
+Implementados los CONFIRMED P0/P1 + P2 baratos. Los engines/handlers (server actions, cola offline, optimistic) se reusan tal cual — solo presentación.
+
+**P0 — Hábitos de hoy (kit card):** creado `_components/habits/HabitsCard.tsx` (EVA DS, abierto por defecto) y `HabitsTrackerWidget` ahora lo monta en vez del `nutrition/HabitsTracker` legacy. No existía versión del kit (grep confirmado) → componente nuevo que REUSA `upsertDailyHabits`/`getDailyHabits` (mismos handlers). Tokens aqua/sport (sin sky/emerald/violet), barra de progreso de agua + chips, Pasos input mono, Sueño 7 opciones full-width `flex-1`, Ayuno/Suplementos como 2 toggles. El `nutrition/HabitsTracker` NO se tocó (es dominio nutrición). Nota de datos: los toggles escriben no-destructivo — Ayuno on→16h/off→null; Suplementos on→`['Suplementos']` genérico/off→`[]` (el detalle fino de supps/horas sigue en la pantalla de Nutrición; un valor sentinela no rompe el lector de nutrición, solo no resalta chip).
+
+**P1 — Hero quick-log inline:** `WorkoutHeroCard.tsx` reescrito a filas interactivas (relleno por fila `logged/sets`, contador mono, chip 34×34 plus→check) reusando `logSetAction` (mismo payload que `QuickLogSheet`, `set_number = base+extra+1`, `router.refresh()`). El ring del hero ahora refleja el total en vivo. Se quitó el botón "Rápido"/`QuickLogSheet` (el kit tiene un solo CTA); `QuickLogSheet.tsx` queda huérfano (sin importadores, inofensivo). También quitado el icono Dumbbell del `<h2>` (P2).
+
+**P1 — Barra de fases:** `ProgramPhaseBar.tsx` ahora, con `program_phases`, pinta segmentos por estado (actual sport-500 / pasada sport-200 / futura sunken) + fila de nombres justificados (actual bold sport-600). Rama sin fases (barra + dot) intacta.
+
+**P1 — Días como carrusel:** `WorkoutPlanCard.tsx` pasó de grid vertical a carrusel horizontal `overflow-x-auto` de day-cards 96px (label uppercase + icono check/play/chevron + título + "Día N").
+
+**P1 — Nutrición hero kcal:** `NutritionDailySummary.tsx` reemplazó la barra de calorías por titular grande (`font-display 27px` kcal consumidas) + "/ target kcal" + Badge ember "N restantes" (flame). Macros/comidas/CTA abajo sin cambios.
+
+**P2 baratos:** saludo móvil `text-xl`→`text-[25px]` (`ClientGreeting`); RestDay CTA link→`Button secondary lg` con arrow-right (`RestDayCard`); CheckIn banner ahora card entera tappable con icono `clipboard-check` + chevron-right, ambas variantes (`CheckInBanner`); sparkline de peso marca el último punto (dot recharts, `WeightSparkline`); "Actividad reciente" ahora usa `SectionTitle` (acento + acción "Historial") y la card sin header interno (`RecentWorkoutsSection`).
+
+**Notas / no hechos (necesitan plumbing de datos, fuera de "swap barato"):**
+- Hero badge "Sem N · variante": `WorkoutHeroCard` no recibe semana/variante — requiere plumbing desde `ActiveProgramSection`→hero bundle. Solo se hizo la mitad barata (quitar el Dumbbell).
+- `MealCompletionRow` kcal por comida: el row no recibe kcal; requiere calcular kcal por comida en `NutritionDailySummary` (motor de macros) + prop nueva. Se dejó como está (fila con checkbox) para no tocar el cálculo.
+- Header racha condensada al scroll: `DashboardHeader` no es scroll-aware; motion opcional, no implementado.
+- Se removió el footer "Ver historial completo →" de Actividad reciente (la acción vive ahora en el SectionTitle "Historial"); si algún e2e dependía de ese texto, apunta a "Historial".

@@ -33,3 +33,10 @@ Diferencias respecto al kit = **riqueza extra de la app** (no son gaps, se manti
 ---
 
 Verificado 1:1 (salvo los 2 nits P2 anteriores; 0 P0, 0 P1).
+
+## Fix log (2026-07-02)
+
+Implementado en `CheckInForm.tsx` (ambos P2, wizard/flujo intactos):
+
+- **[P2] Tightening `-0.03em` en los números métricos** — `tracking-[-0.03em]` añadido a los tres spans `.eva-metric` del kit: peso héroe 48px (~451), valor de energía (~472) y las 3 métricas del Resumen (~665). Ahora matchean el "look métrico deportivo" (fw-black 900 · tabular · -0.03em) del kit.
+- **[P2] Estado enviado con check limpio** — `CheckCircle2` (aro dentro del círculo) → `Check` liso (~332), 1:1 con el kit §789. Import de `CheckCircle2` removido (quedaba sin uso; `Check` ya estaba importado).

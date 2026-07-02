@@ -25,7 +25,7 @@ export function PlatePanel({ proportion, className }: PlatePanelProps) {
       )}
     >
       <div className="mb-3 flex items-center gap-1.5">
-        <h3 className="m-0 text-sm font-semibold text-foreground">Tu plato</h3>
+        <h3 className="m-0 font-display text-[17px] font-extrabold tracking-tight text-foreground">Tu plato</h3>
         <InfoTooltip
           content="Es una guía proporcional: cómo dividir el plato (verduras, proteína, carbohidrato), no cantidades absolutas ni una meta cumplida."
           iconClassName="w-3.5 h-3.5"

@@ -2,8 +2,10 @@
 
 import { motion } from 'framer-motion'
 import Link from 'next/link'
-import { Moon } from 'lucide-react'
+import { ArrowRight, Moon } from 'lucide-react'
 import { Card } from '@/components/ui/card'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { useBasePath } from '@/components/client/BasePathProvider'
 
 interface RestDayCardProps {
@@ -36,8 +38,9 @@ export function RestDayCard({ coachSlug, nextWorkoutTitle, nextWorkoutDayLabel, 
                 <p className="mt-1.5 max-w-[280px] text-[13.5px] leading-relaxed text-muted">Recupera bien para la próxima sesión.</p>
             )}
             {showNutritionLink && (
-                <Link href={`${base}/nutrition`} className="mt-4 inline-block text-[13px] font-bold text-sport-600">
-                    Ver nutrición →
+                <Link href={`${base}/nutrition`} className={cn(buttonVariants({ variant: 'secondary', size: 'lg' }), 'mt-4')}>
+                    Ver nutrición de hoy
+                    <ArrowRight className="h-5 w-5" />
                 </Link>
             )}
         </Card>

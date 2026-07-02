@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AlertCircle, CheckCircle2 } from 'lucide-react'
+import { ClipboardCheck, ChevronRight } from 'lucide-react'
 import { getLastCheckIn } from '../../_data/dashboard.queries'
 import { formatRelativeDate, getTodayInSantiago } from '@/lib/date-utils'
 import { differenceInCalendarDays, parseISO } from 'date-fns'
@@ -13,21 +13,19 @@ export async function CheckInBanner({ userId, coachSlug }: { userId: string; coa
 
     if (!last?.created_at) {
         return (
-            <div className="flex items-center gap-3 rounded-card border border-subtle bg-surface-sunken p-3">
+            <Link
+                href={`${base}/check-in`}
+                className="flex items-center gap-3 rounded-card border border-subtle bg-surface-sunken p-3"
+            >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-surface-card text-muted">
-                    <AlertCircle className="h-[18px] w-[18px]" />
+                    <ClipboardCheck className="h-[18px] w-[18px]" />
                 </span>
                 <div className="min-w-0 flex-1">
                     <p className="text-sm font-bold text-strong">Registra tu primer check-in</p>
                     <p className="text-xs text-muted">Peso y energía en segundos</p>
                 </div>
-                <Link
-                    href={`${base}/check-in`}
-                    className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control px-3 text-xs font-bold text-sport-600"
-                >
-                    Ir
-                </Link>
-            </div>
+                <ChevronRight className="h-[18px] w-[18px] shrink-0 text-muted" />
+            </Link>
         )
     }
 
@@ -55,19 +53,16 @@ export async function CheckInBanner({ userId, coachSlug }: { userId: string; coa
     const iconChip = overdue ? 'bg-[var(--danger-500)]' : 'bg-ember-500'
 
     return (
-        <CheckInBannerFrame overdue={overdue} className={`flex items-center gap-3 rounded-card border p-3 ${box}`}>
-            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-white ${iconChip}`}>
-                {overdue ? <AlertCircle className="h-[18px] w-[18px]" /> : <CheckCircle2 className="h-[18px] w-[18px]" />}
-            </span>
-            <div className="min-w-0 flex-1">
-                <p className={`text-sm font-bold ${accentText}`}>{message}</p>
-                <p className={`text-xs ${accentText} opacity-90`}>{dateText}</p>
-            </div>
-            <Link
-                href={`${base}/check-in`}
-                className={`inline-flex min-h-11 shrink-0 items-center justify-center rounded-control bg-surface-card px-4 text-xs font-bold shadow-sm ${accentText}`}
-            >
-                Check-in
+        <CheckInBannerFrame overdue={overdue} className={`rounded-card border ${box}`}>
+            <Link href={`${base}/check-in`} className="flex items-center gap-3 p-3">
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-white ${iconChip}`}>
+                    <ClipboardCheck className="h-[18px] w-[18px]" />
+                </span>
+                <div className="min-w-0 flex-1">
+                    <p className={`text-sm font-bold ${accentText}`}>{message}</p>
+                    <p className={`text-xs ${accentText} opacity-90`}>{dateText}</p>
+                </div>
+                <ChevronRight className={`h-[18px] w-[18px] shrink-0 ${accentText}`} />
             </Link>
         </CheckInBannerFrame>
     )

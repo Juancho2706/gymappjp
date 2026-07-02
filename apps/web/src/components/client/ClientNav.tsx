@@ -14,8 +14,9 @@ import {
     Gauge,
     History,
     Palette,
-    ChevronRight,
     MoreHorizontal,
+    UserRound,
+    ChevronRight,
     X,
     PanelLeftClose,
     PanelLeft,
@@ -64,6 +65,9 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
     const [useBrandColors, setUseBrandColors] = useState(initialUseBrandColors)
     const [isTogglingColors, setIsTogglingColors] = useState(false)
     const [moreOpen, setMoreOpen] = useState(false)
+    // Cápsula flotante mobile: hide-on-scroll-down / reveal-on-scroll-up → colapsa a pill
+    // icon-only (TabBar `minimized`: insets 14→72, labels fade).
+    const [minimized, setMinimized] = useState(false)
     const reduce = useReducedMotion()
 
     // Reset navigating state when pathname changes
@@ -74,6 +78,30 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
     // Cerrar el panel "Más" al navegar (cambio de ruta).
     useEffect(() => {
         setMoreOpen(false)
+    }, [pathname])
+
+    // Hide-on-scroll de la cápsula: el scroll móvil ocurre en el documento (window) —
+    // `<main>` es `min-h-dvh` (crece con el contenido), no un contenedor de alto fijo. Si el
+    // window no scrollea el listener simplemente no dispara (degradación sin daño).
+    useEffect(() => {
+        let lastY = window.scrollY
+        let ticking = false
+        const onScroll = () => {
+            if (ticking) return
+            ticking = true
+            requestAnimationFrame(() => {
+                const y = window.scrollY
+                const dy = y - lastY
+                if (Math.abs(dy) > 6) {
+                    // baja + más allá de 80px → minimiza; sube o cerca del top → revela
+                    setMinimized(dy > 0 && y > 80)
+                    lastY = y
+                }
+                ticking = false
+            })
+        }
+        window.addEventListener('scroll', onScroll, { passive: true })
+        return () => window.removeEventListener('scroll', onScroll)
     }, [pathname])
 
     // Estilo white-label del estado activo (preserva `var(--theme-primary)`).
@@ -113,6 +141,14 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
         pathname.startsWith(href + '/workout') ||
         (href === `${base}/dashboard` && pathname === `${base}/workout-history`) ||
         isNavigating === href
+
+    // Píldora deslizante de la cápsula flotante (mobile): índice del tab activo entre los
+    // `baseItems` + el botón "Más" (último). -1 => ninguno (indicador oculto).
+    const mobileTabCount = baseItems.length + 1
+    const mobileMoreActive = isMoreActive || moreOpen
+    const mobileActiveIndex = mobileMoreActive
+        ? baseItems.length
+        : baseItems.findIndex((i) => isActiveHref(i.href))
 
     async function handleSignOut() {
         await supabase.auth.signOut()
@@ -163,13 +199,22 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
                 }}
                 title={isCollapsed ? item.label : undefined}
                 className={cn(
-                    'group flex w-full flex-none items-center gap-3 rounded-control border border-transparent px-3 py-2.5 text-sm font-semibold transition-all duration-300',
+                    'group relative flex w-full flex-none items-center gap-3 rounded-control border border-transparent px-3 py-2.5 text-sm font-semibold transition-all duration-300',
                     isCollapsed ? 'justify-center px-0' : 'justify-start',
                     isActive ? 'text-strong' : 'text-muted hover:text-strong hover:bg-surface-sunken',
                     isNavigating === item.href && 'animate-pulse'
                 )}
                 style={isActive ? activeBgStyle : undefined}
             >
+                {/* .dt-nav-accent — barra-acento izquierda del activo (3px, white-label) */}
+                <span
+                    aria-hidden="true"
+                    className={cn(
+                        'pointer-events-none absolute left-[-12px] top-1/2 w-[3px] -translate-y-1/2 rounded-r-[3px] transition-[height] duration-200 ease-[cubic-bezier(.22,1,.36,1)]',
+                        isActive ? 'h-[22px]' : 'h-0'
+                    )}
+                    style={{ backgroundColor: 'var(--theme-primary)' }}
+                />
                 <Icon
                     className={cn(
                         'h-5 w-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110',
@@ -180,14 +225,13 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
                 <span className={cn('truncate', isCollapsed && 'hidden')} style={isActive ? activeColorStyle : undefined}>
                     {item.label}
                 </span>
-                {isActive && !isCollapsed && (
-                    <ChevronRight className="ml-auto h-3 w-3 opacity-60" style={activeColorStyle} />
-                )}
             </Link>
         )
     }
 
-    // MOBILE — tile de la barra inferior (44px+ touch target, zona del pulgar).
+    // MOBILE — tile de la cápsula flotante (44px+ touch target, zona del pulgar). El indicador
+    // activo es la píldora deslizante detrás del tab (motivo iOS-26 del DS); el glifo activo se
+    // rellena (fill-opacity .18) y el label sube a 800.
     const renderBaseTile = (item: NavItem) => {
         const isActive = isActiveHref(item.href)
         const Icon = item.icon
@@ -197,26 +241,51 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
                 href={item.href}
                 prefetch={false}
                 aria-label={item.label}
+                aria-current={isActive ? 'page' : undefined}
                 title={item.label}
                 onClick={() => {
                     if (pathname !== item.href) setIsNavigating(item.href)
                 }}
-                className={cn(
-                    'relative flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1 rounded-control px-1 py-1.5 transition-colors',
-                    isActive ? '' : 'hover:bg-surface-sunken',
-                    isNavigating === item.href && 'animate-pulse'
-                )}
+                className={cn('eva-tabbar-press', isNavigating === item.href && 'animate-pulse')}
+                style={{
+                    position: 'relative',
+                    zIndex: 1,
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: minimized ? 0 : 3,
+                    padding: minimized ? '5px 0' : '6px 0',
+                    minHeight: 44,
+                    border: 'none',
+                    background: 'transparent',
+                    color: isActive ? 'var(--theme-primary)' : 'var(--text-muted)',
+                    textDecoration: 'none',
+                    transition: 'color var(--dur-base) var(--ease-out), padding var(--dur-base) var(--ease-out)',
+                }}
             >
-                {isActive && (
-                    <span className="absolute -top-0.5 left-1/2 h-1 w-8 -translate-x-1/2 rounded-pill" style={{ backgroundColor: 'var(--theme-primary)' }} />
-                )}
-                <Icon
-                    className={cn('h-[22px] w-[22px] flex-shrink-0 transition-transform duration-200', isActive ? '' : 'text-muted')}
-                    style={isActive ? activeColorStyle : undefined}
-                />
                 <span
-                    className={cn('max-w-full truncate text-[10px] font-semibold leading-tight', isActive ? '' : 'text-muted')}
-                    style={isActive ? activeColorStyle : undefined}
+                    className={cn(
+                        'inline-flex h-[22px] w-[22px] items-center justify-center',
+                        isActive && '[&_svg]:fill-current [&_svg]:[fill-opacity:0.18]'
+                    )}
+                    style={{ transform: isActive ? 'translateY(-1px)' : 'none', transition: 'transform var(--dur-base) var(--ease-spring)' }}
+                >
+                    <Icon className="h-[22px] w-[22px]" />
+                </span>
+                <span
+                    style={{
+                        fontSize: 10,
+                        fontWeight: isActive ? 800 : 600,
+                        letterSpacing: '0.01em',
+                        lineHeight: 1.1,
+                        maxHeight: minimized ? 0 : 14,
+                        opacity: minimized ? 0 : 1,
+                        overflow: 'hidden',
+                        maxWidth: '100%',
+                        transition: 'max-height var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out)',
+                    }}
                 >
                     {item.short}
                 </span>
@@ -351,6 +420,32 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
                                 </button>
                             </div>
 
+                            {/* Mi perfil — pantalla completa (AlumnoMas): identidad, racha, módulos,
+                                cuenta y zona de peligro. El sheet queda como acceso rápido. */}
+                            <Link
+                                href={`${base}/perfil`}
+                                prefetch={false}
+                                onClick={() => setMoreOpen(false)}
+                                aria-label="Mi perfil"
+                                className={cn(
+                                    'flex min-h-[52px] items-center gap-3 rounded-control border border-transparent px-3 py-2.5 transition-colors',
+                                    pathname === `${base}/perfil` ? 'text-strong' : 'bg-surface-sunken hover:opacity-90'
+                                )}
+                                style={pathname === `${base}/perfil` ? activeBgStyle : undefined}
+                            >
+                                <span
+                                    className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-control"
+                                    style={{ background: 'color-mix(in srgb, var(--theme-primary) 12%, transparent)', color: 'var(--theme-primary)' }}
+                                >
+                                    <UserRound className="h-[18px] w-[18px]" />
+                                </span>
+                                <div className="min-w-0 flex-1">
+                                    <div className="text-sm font-bold text-strong">Mi perfil</div>
+                                    <div className="text-[12px] text-muted">Racha, módulos, cuenta y más</div>
+                                </div>
+                                <ChevronRight className="h-[18px] w-[18px] flex-shrink-0 text-muted" />
+                            </Link>
+
                             {/* Navegación overflow: Historial + módulos entitled */}
                             <div className="grid grid-cols-2 gap-1.5">
                                 {overflowItems.map((item) => {
@@ -405,36 +500,103 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
                 )}
             </AnimatePresence>
 
-            {/* ============================ MOBILE BOTTOM BAR ============================ */}
-            {/* Patrón nativo "4 primarios + Más" (espejo de CoachSidebar). Oculto durante la ejecución
-                de plan (/workout/) y en desktop (md:). */}
-            <nav
-                aria-label="Navegación principal"
-                className={cn(
-                    'client-nav-mobile md:hidden fixed bottom-0 left-0 right-0 z-[59] flex items-stretch gap-0.5 border-t border-subtle bg-surface-card/95 backdrop-blur-xl px-1.5 pt-1.5 pb-safe pl-safe pr-safe shadow-md',
-                    isWorkout && 'hidden'
-                )}
-            >
-                {baseItems.map(renderBaseTile)}
-                <button
-                    type="button"
-                    onClick={() => setMoreOpen((o) => !o)}
-                    aria-label="Más"
-                    aria-expanded={moreOpen}
-                    className={cn(
-                        'relative flex min-h-[44px] flex-1 flex-col items-center justify-center gap-1 rounded-control px-1 py-1.5 transition-colors',
-                        isMoreActive || moreOpen ? '' : 'hover:bg-surface-sunken'
-                    )}
+            {/* ============================ MOBILE FLOATING CAPSULE ============================ */}
+            {/* Cápsula flotante de vidrio esmerilado (decisión del DS, iOS-26) — espejo de la
+                cápsula del coach (CoachSidebar / TabBar `floating`), tinte white-label vía
+                `--theme-primary`. Patrón "4 primarios + Más". Oculta durante la ejecución de plan
+                (/workout/) y en desktop (md:). */}
+            {!isWorkout && (
+                <nav
+                    aria-label="Navegación principal"
+                    className="client-nav-mobile flex md:hidden"
+                    style={{
+                        position: 'fixed',
+                        left: minimized ? 72 : 14,
+                        right: minimized ? 72 : 14,
+                        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)',
+                        zIndex: 59,
+                        alignItems: 'stretch',
+                        padding: 8,
+                        borderRadius: 30,
+                        background: 'color-mix(in srgb, var(--surface-card) 74%, transparent)',
+                        backdropFilter: 'saturate(180%) blur(26px)',
+                        WebkitBackdropFilter: 'saturate(180%) blur(26px)',
+                        border: '1px solid color-mix(in srgb, var(--text-strong) 9%, transparent)',
+                        boxShadow:
+                            '0 1px 0 rgba(255,255,255,0.45) inset, 0 14px 36px rgba(13,18,28,0.24), 0 4px 12px rgba(13,18,28,0.12)',
+                        transition:
+                            'left var(--dur-slow) var(--ease-spring), right var(--dur-slow) var(--ease-spring)',
+                    }}
                 >
-                    {(isMoreActive || moreOpen) && (
-                        <span className="absolute -top-0.5 left-1/2 h-1 w-8 -translate-x-1/2 rounded-pill" style={{ backgroundColor: 'var(--theme-primary)' }} />
-                    )}
-                    <MoreHorizontal className={cn('h-[22px] w-[22px] flex-shrink-0', isMoreActive || moreOpen ? '' : 'text-muted')} style={isMoreActive || moreOpen ? activeColorStyle : undefined} />
-                    <span className={cn('text-[10px] font-semibold leading-tight', isMoreActive || moreOpen ? '' : 'text-muted')} style={isMoreActive || moreOpen ? activeColorStyle : undefined}>
-                        Más
-                    </span>
-                </button>
-            </nav>
+                    {/* Píldora deslizante detrás del tab activo (tinte white-label del coach). */}
+                    <span
+                        aria-hidden="true"
+                        style={{
+                            position: 'absolute',
+                            top: 8,
+                            bottom: 8,
+                            left: `calc(8px + ${mobileActiveIndex < 0 ? 0 : mobileActiveIndex} * ((100% - 16px) / ${mobileTabCount}))`,
+                            width: `calc((100% - 16px) / ${mobileTabCount})`,
+                            borderRadius: 22,
+                            background: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)',
+                            border: '1px solid color-mix(in srgb, var(--theme-primary) 24%, transparent)',
+                            transition: 'left var(--dur-slow) var(--ease-spring)',
+                            pointerEvents: 'none',
+                            zIndex: 0,
+                            opacity: mobileActiveIndex < 0 ? 0 : 1,
+                        }}
+                    />
+                    {baseItems.map(renderBaseTile)}
+                    <button
+                        type="button"
+                        onClick={() => setMoreOpen((o) => !o)}
+                        aria-label="Más"
+                        aria-expanded={moreOpen}
+                        className="eva-tabbar-press"
+                        style={{
+                            position: 'relative',
+                            zIndex: 1,
+                            flex: 1,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: minimized ? 0 : 3,
+                            padding: minimized ? '5px 0' : '6px 0',
+                            minHeight: 44,
+                            border: 'none',
+                            background: 'transparent',
+                            color: mobileMoreActive ? 'var(--theme-primary)' : 'var(--text-muted)',
+                            cursor: 'pointer',
+                            transition: 'color var(--dur-base) var(--ease-out), padding var(--dur-base) var(--ease-out)',
+                        }}
+                    >
+                        <span
+                            className={cn(
+                                'inline-flex h-[22px] w-[22px] items-center justify-center',
+                                mobileMoreActive && '[&_svg]:fill-current [&_svg]:[fill-opacity:0.18]'
+                            )}
+                            style={{ transform: mobileMoreActive ? 'translateY(-1px)' : 'none', transition: 'transform var(--dur-base) var(--ease-spring)' }}
+                        >
+                            <MoreHorizontal className="h-[22px] w-[22px]" />
+                        </span>
+                        <span
+                            style={{
+                                fontSize: 10,
+                                fontWeight: mobileMoreActive ? 800 : 600,
+                                letterSpacing: '0.01em',
+                                lineHeight: 1.1,
+                                maxHeight: minimized ? 0 : 14,
+                                opacity: minimized ? 0 : 1,
+                                overflow: 'hidden',
+                                transition: 'max-height var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out)',
+                            }}
+                        >
+                            Más
+                        </span>
+                    </button>
+                </nav>
+            )}
         </>
     )
 }

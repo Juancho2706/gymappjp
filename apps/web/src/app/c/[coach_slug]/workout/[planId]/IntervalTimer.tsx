@@ -14,10 +14,10 @@ interface IntervalTimerProps {
 }
 
 const PHASE_COLOR: Record<IntervalPhase['kind'], string> = {
-    warmup: 'text-sky-500',
-    work: 'text-red-500',
-    recovery: 'text-emerald-500',
-    cooldown: 'text-sky-500',
+    warmup: 'text-sport-300',
+    work: 'text-[var(--ember-300)]',
+    recovery: 'text-[var(--aqua-500)]',
+    cooldown: 'text-sport-300',
 }
 
 /**
@@ -123,21 +123,21 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                 animate={{ y: 0, opacity: 1 }}
                 exit={reducedMotion ? undefined : { y: -24, opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="fixed z-50 left-3 right-3 md:left-auto md:right-6 md:w-[340px] top-[calc(env(safe-area-inset-top,0px)+6.25rem)] md:top-4 bg-card/95 backdrop-blur-xl border border-border/60 shadow-lg rounded-2xl px-3 py-2.5 overflow-hidden"
+                className="fixed z-50 left-3 right-3 md:left-auto md:right-6 md:w-[340px] top-[calc(env(safe-area-inset-top,0px)+6.25rem)] md:top-4 bg-[var(--ink-900)]/95 backdrop-blur-xl border border-[var(--border-inverse)] shadow-lg rounded-2xl px-3 py-2.5 overflow-hidden"
             >
                 <div className="flex items-center justify-between gap-2 min-h-11">
                     <div className="min-w-0 flex-1">
                         {finished ? (
-                            <p className="text-sm font-bold text-emerald-500">¡Intervalos completados!</p>
+                            <p className="text-sm font-bold text-[var(--success-500)]">¡Intervalos completados!</p>
                         ) : (
                             <>
                                 <p className={`text-[10px] font-black uppercase tracking-widest ${phase ? PHASE_COLOR[phase.kind] : ''}`}>
                                     {phase ? INTERVAL_PHASE_LABEL[phase.kind] : ''}
                                     {phase?.repeat != null && phase.totalRepeats != null && (
-                                        <span className="text-muted-foreground font-bold"> · intervalo {phase.repeat} de {phase.totalRepeats}</span>
+                                        <span className="text-on-dark-muted font-bold"> · intervalo {phase.repeat} de {phase.totalRepeats}</span>
                                     )}
                                 </p>
-                                <p className="text-2xl font-black tabular-nums text-foreground leading-tight">
+                                <p className="text-2xl font-black tabular-nums text-on-dark leading-tight">
                                     {formatTime(timeLeft)}
                                 </p>
                             </>
@@ -147,7 +147,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className={`h-11 w-11 md:h-8 md:w-8 rounded-full ${wakeLockOn ? 'text-amber-500 bg-amber-500/10' : 'text-muted-foreground'}`}
+                            className={`h-11 w-11 md:h-8 md:w-8 rounded-full ${wakeLockOn ? 'text-[var(--warning-500)] bg-[var(--warning-500)]/10' : 'text-on-dark-muted hover:text-on-dark hover:bg-white/10'}`}
                             onClick={toggleWakeLock}
                             title={wakeLockOn ? 'Pantalla siempre encendida: ON (gasta más batería)' : 'Mantener pantalla encendida'}
                             aria-label="Mantener pantalla encendida"
@@ -160,7 +160,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-11 w-11 md:h-8 md:w-8 rounded-full"
+                                    className="h-11 w-11 md:h-8 md:w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
                                     onClick={() => setIsActive((v) => !v)}
                                     aria-label={isActive ? 'Pausar' : 'Reanudar'}
                                 >
@@ -169,7 +169,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-11 w-11 md:h-8 md:w-8 rounded-full"
+                                    className="h-11 w-11 md:h-8 md:w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
                                     onClick={advance}
                                     title="Saltar fase"
                                     aria-label="Saltar fase"
@@ -181,7 +181,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-11 w-11 md:h-8 md:w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+                            className="h-11 w-11 md:h-8 md:w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
                             onClick={onClose}
                             aria-label="Cerrar timer"
                         >
@@ -191,18 +191,18 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
                 </div>
                 {/* Barra de progreso de la fase actual */}
                 {!finished && phase && (
-                    <div className="mt-1.5 h-1 rounded-full bg-muted overflow-hidden">
+                    <div className="mt-1.5 h-1 rounded-full bg-white/10 overflow-hidden">
                         <div
                             className="h-full rounded-full transition-all duration-300 ease-linear"
                             style={{
-                                backgroundColor: 'var(--theme-primary)',
+                                backgroundColor: phase.kind === 'work' ? 'var(--ember-500)' : 'var(--theme-primary)',
                                 width: `${phase.durationSec > 0 ? ((phase.durationSec - timeLeft) / phase.durationSec) * 100 : 0}%`,
                             }}
                         />
                     </div>
                 )}
                 {wakeLockOn && (
-                    <p className="mt-1 text-[9px] text-muted-foreground">
+                    <p className="mt-1 text-[9px] text-on-dark-muted">
                         Pantalla siempre encendida activa — consume más batería.
                     </p>
                 )}

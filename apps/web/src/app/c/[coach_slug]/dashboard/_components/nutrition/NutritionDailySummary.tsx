@@ -1,6 +1,7 @@
 import Link from 'next/link'
-import { Apple } from 'lucide-react'
+import { Apple, Flame } from 'lucide-react'
 import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { getActiveNutritionPlan, getTodayNutritionBundle } from '../../_data/dashboard.queries'
 import { getDashboardNutritionDomainEnabled } from '../../_data/heroComplianceBundle'
 import { getTodayInSantiago, nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
@@ -155,21 +156,17 @@ export async function NutritionDailySummary({ userId, coachSlug }: { userId: str
             {!dailyLog && totalMeals > 0 ? (
                 <p className="text-xs text-muted">¡Registra tu primera comida desde nutrición!</p>
             ) : null}
-            <div>
-                <div className="mb-1 flex justify-between text-xs font-semibold">
-                    <span className="text-muted">Calorías</span>
-                    <span className="tabular-nums text-strong">
-                        {consumedCal} / {tCal} kcal
+            {/* Hero kcal (kit alumno-dashboard.jsx:536-542): número grande + "/ target" + badge ember restantes. */}
+            <div className="flex items-center justify-between gap-2">
+                <div className="flex items-baseline gap-1.5">
+                    <span className="font-display text-[27px] font-black leading-none tabular-nums text-strong">
+                        {consumedCal.toLocaleString('es-CL')}
                     </span>
+                    <span className="text-[13px] text-muted">/ {tCal.toLocaleString('es-CL')} kcal</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-pill bg-[var(--track)]">
-                    <div
-                        className="h-full rounded-pill bg-ember-500 transition-all"
-                        style={{
-                            width: `${tCal > 0 ? Math.min(100, (consumedCal / tCal) * 100) : 0}%`,
-                        }}
-                    />
-                </div>
+                <Badge tone="ember" icon={<Flame />}>
+                    {Math.max(0, tCal - consumedCal).toLocaleString('es-CL')} restantes
+                </Badge>
             </div>
             <MacroBar label="Proteína" consumed={consumedP} target={tP} unit="g" colorClass="bg-[color:var(--color-macro-protein)]" delayIndex={0} />
             <MacroBar label="Carbos" consumed={consumedC} target={tC} unit="g" colorClass="bg-[color:var(--color-macro-carbs)]" delayIndex={1} />

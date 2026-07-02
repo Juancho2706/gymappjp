@@ -15,7 +15,7 @@ export function ClientGreeting({ greeting, dateLabel }: ClientGreetingProps) {
         return (
             <div className="min-w-0">
                 <p className="truncate text-[10px] font-semibold uppercase tracking-widest text-muted">{dateLabel}</p>
-                <h1 className="truncate font-display text-xl font-black tracking-[-0.03em] text-strong">{greeting}</h1>
+                <h1 className="truncate font-display text-[25px] font-black tracking-[-0.03em] text-strong">{greeting}</h1>
             </div>
         )
     }
@@ -30,7 +30,7 @@ export function ClientGreeting({ greeting, dateLabel }: ClientGreetingProps) {
                 {dateLabel}
             </motion.p>
             <motion.h1
-                className="truncate font-display text-xl font-black tracking-[-0.03em] text-strong"
+                className="truncate font-display text-[25px] font-black tracking-[-0.03em] text-strong"
                 variants={staggerContainer(0.04)}
                 initial="hidden"
                 animate="show"

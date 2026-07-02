@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { springs } from '@/lib/animation-presets'
+import { cn } from '@/lib/utils'
 
 export interface PhaseSeg {
     name: string
@@ -34,27 +35,40 @@ export function ProgramPhaseBar({
         )
     }
 
+    // Segmentos por estado (kit alumno-dashboard.jsx:397-411): actual sport-500, pasadas sport-200,
+    // futuras sunken; debajo la fila de nombres justificados (actual en negrita sport-600).
+    const segs = phases.map((p, i) => {
+        const before = phases.slice(0, i).reduce((a, ph) => a + ph.weeks, 0)
+        const isCurrent = currentWeek > before && currentWeek <= before + p.weeks
+        const isPast = before + p.weeks < currentWeek
+        return { ...p, isCurrent, isPast }
+    })
+
     return (
-        <div className="relative h-2 w-full overflow-hidden rounded-pill bg-[var(--track)]">
-            <div className="absolute inset-0 flex">
-                {phases.map((p, i) => (
+        <div>
+            <div className="flex gap-[3px]">
+                {segs.map((p, i) => (
                     <div
                         key={`${p.name}-${i}`}
-                        className="h-full border-r border-[var(--surface-card)]/50 last:border-0"
-                        style={{
-                            width: `${(p.weeks / totalWeeks) * 100}%`,
-                            backgroundColor: p.color || 'color-mix(in srgb, var(--sport-500) 40%, transparent)',
-                        }}
+                        title={p.name}
+                        className={cn(
+                            'h-2 rounded-pill',
+                            p.isCurrent ? 'bg-sport-500' : p.isPast ? 'bg-sport-200' : 'bg-surface-sunken'
+                        )}
+                        style={{ flexGrow: p.weeks, flexBasis: 0 }}
                     />
                 ))}
             </div>
-            <motion.div
-                className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--surface-card)] shadow-md"
-                style={{ backgroundColor: 'var(--sport-500)', left: `${pct}%` }}
-                initial={{ left: '0%' }}
-                animate={{ left: `${pct}%` }}
-                transition={{ ...springs.smooth, delay: 0.2 }}
-            />
+            <div className="mt-1.5 flex justify-between">
+                {segs.map((p, i) => (
+                    <span
+                        key={`${p.name}-label-${i}`}
+                        className={cn('text-[10px]', p.isCurrent ? 'font-extrabold text-sport-600' : 'font-semibold text-subtle')}
+                    >
+                        {p.name}
+                    </span>
+                ))}
+            </div>
         </div>
     )
 }

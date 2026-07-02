@@ -26,6 +26,24 @@ export function WeightSparkline({ data }: { data: Point[] }) {
 
     if (chartData.length === 0) return null
 
+    // Punto final marcado sobre la curva (kit alumno-dashboard.jsx:447).
+    const lastIndex = chartData.length - 1
+    const renderLastDot = (props: { cx?: number; cy?: number; index?: number; key?: React.Key | null }) => {
+        const { cx, cy, index, key } = props
+        if (index !== lastIndex || cx == null || cy == null) return <g key={key ?? `d${index}`} />
+        return (
+            <circle
+                key={key ?? 'last'}
+                cx={cx}
+                cy={cy}
+                r={4}
+                fill="var(--sport-500)"
+                stroke="var(--surface-card)"
+                strokeWidth={2.5}
+            />
+        )
+    }
+
     return (
         <div ref={chartRef} className="mt-3 h-[72px] w-full min-w-px">
             {chartWidth > 0 && (
@@ -36,7 +54,7 @@ export function WeightSparkline({ data }: { data: Point[] }) {
                             <stop offset="95%" stopColor="var(--sport-500)" stopOpacity={0} />
                         </linearGradient>
                     </defs>
-                    <Area type="monotone" dataKey="w" stroke="var(--sport-500)" strokeWidth={2} fill="url(#wGradDash)" dot={false} isAnimationActive={!reduce} />
+                    <Area type="monotone" dataKey="w" stroke="var(--sport-500)" strokeWidth={2} fill="url(#wGradDash)" dot={renderLastDot} isAnimationActive={!reduce} />
                 </AreaChart>
             )}
         </div>

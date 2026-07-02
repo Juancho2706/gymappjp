@@ -9,7 +9,6 @@ import {
   DialogTitle,
   DialogClose,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dumbbell, Search, X, Play, Loader2, ChevronDown } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
@@ -162,7 +161,7 @@ function ExerciseCard({ ex, onSelect }: { ex: Exercise; onSelect: () => void }) 
     >
       <div className="relative flex h-24 items-center justify-center overflow-hidden bg-gradient-to-br from-[#1B2129] to-[#0B0E13] md:h-[116px]">
         {renderThumb()}
-        <span className="absolute bottom-1.5 left-1.5 rounded-[5px] bg-black/40 px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.05em] text-sport-300 md:bottom-2 md:left-2">
+        <span className="absolute bottom-1.5 left-1.5 rounded-[5px] bg-black/40 px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.05em] text-sport-300 md:bottom-2 md:left-2 md:px-[7px]">
           {ex.muscle_group}
         </span>
       </div>
@@ -171,7 +170,7 @@ function ExerciseCard({ ex, onSelect }: { ex: Exercise; onSelect: () => void }) 
           {ex.name}
         </h3>
         {ex.equipment && (
-          <p className="mt-0.5 text-[11.5px] text-muted md:text-xs">{ex.equipment}</p>
+          <p className="mt-0.5 text-[11.5px] text-muted md:mt-[3px] md:text-xs">{ex.equipment}</p>
         )}
       </div>
     </div>
@@ -239,13 +238,21 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
     <div className="space-y-5">
       {/* Filters — móvil: search + chips apilados; desktop: barra inline (.dt-aprender-bar) */}
       <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:gap-4">
+        {/* Mobile: field 48px (espeja el Input rich del DS). Desktop: compact .dt-md-search
+            (36px · surface-sunken · borde 1px · 13.5px) inline con los chips. */}
         <div className="md:max-w-[360px] md:flex-1">
-          <Input
-            iconLeft={<Search className="h-5 w-5" />}
-            placeholder="Buscar ejercicio…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <div className="flex h-12 items-center gap-2 rounded-control border-[1.5px] border-border-default bg-surface-card px-3.5 [transition:border-color_var(--dur-fast)_var(--ease-out),box-shadow_var(--dur-fast)_var(--ease-out)] focus-within:border-sport-600 focus-within:shadow-[var(--ring-focus)] md:h-9 md:border md:bg-surface-sunken md:px-3">
+            <span className="inline-flex size-[18px] shrink-0 items-center justify-center text-text-muted [&_svg]:size-[18px] md:size-4 md:[&_svg]:size-4">
+              <Search className="h-5 w-5" />
+            </span>
+            <input
+              type="text"
+              placeholder="Buscar ejercicio…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="min-w-0 flex-1 border-none bg-transparent font-ui text-[15px] font-medium text-text-strong outline-none placeholder:text-text-muted md:text-[13.5px]"
+            />
+          </div>
         </div>
 
         <div className="hide-scrollbar flex snap-x gap-2 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
@@ -326,12 +333,12 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
       >
         <DialogContent
           showCloseButton={false}
-          className="custom-scrollbar bottom-0 left-0 top-auto w-full max-w-full translate-x-0 translate-y-0 flex flex-col overflow-y-auto rounded-t-[28px] rounded-b-none border-subtle bg-surface-card p-0 max-h-[85dvh] focus:outline-none md:bottom-auto md:left-1/2 md:top-1/2 md:w-[90vw] md:max-w-[600px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[28px]"
+          className="custom-scrollbar bottom-0 left-0 top-auto w-full max-w-full translate-x-0 translate-y-0 flex flex-col overflow-y-auto rounded-t-[28px] rounded-b-none border-subtle bg-surface-card p-0 max-h-[85dvh] focus:outline-none md:bottom-auto md:left-1/2 md:top-1/2 md:w-[90vw] md:max-w-[620px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[28px]"
         >
           {selectedExercise && (
             <>
               {/* Media banner */}
-              <div className="relative h-[180px] w-full shrink-0 md:h-64">
+              <div className="relative h-[180px] w-full shrink-0 md:h-[190px]">
                 {(() => {
                   if (selectedExercise.gif_url) {
                     return (
@@ -412,7 +419,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                   // Sin media: banner de fallback con ícono play (diseño)
                   return (
                     <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#1B2129] to-[#0B0E13]">
-                      <span className="flex h-[58px] w-[58px] items-center justify-center rounded-full bg-white/[0.12] text-white">
+                      <span className="flex h-[58px] w-[58px] items-center justify-center rounded-full bg-white/[0.12] text-white md:h-[60px] md:w-[60px]">
                         <Play className="h-6 w-6" />
                       </span>
                     </div>
@@ -420,7 +427,7 @@ export function ClientExerciseCatalog({ byMuscle, primaryColor }: Props) {
                 })()}
                 <DialogClose
                   aria-label="Cerrar"
-                  className="absolute right-3 top-3 z-20 flex h-[34px] w-[34px] items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/55"
+                  className="absolute right-3 top-3 z-20 flex h-[34px] w-[34px] items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/55 md:right-3.5 md:top-3.5 md:h-9 md:w-9"
                 >
                   <X className="h-[18px] w-[18px]" />
                 </DialogClose>

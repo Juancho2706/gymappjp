@@ -58,7 +58,7 @@ export function StudentBodyCompositionView({
                             {t('bodycomp.student.title')}
                         </h1>
                     </div>
-                    <span className="shrink-0 rounded-full bg-[var(--success-100)] px-2.5 py-1 text-[11px] font-bold text-[var(--success-700)]">
+                    <span className="shrink-0 rounded-full bg-sport-100 px-2.5 py-1 text-[11px] font-bold text-sport-600">
                         Módulo
                     </span>
                 </div>
