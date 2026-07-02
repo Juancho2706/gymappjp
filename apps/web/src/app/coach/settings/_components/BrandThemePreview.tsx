@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import {
     Sun,
     Moon,
@@ -19,6 +19,9 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { EvaRouteLoader } from '@/components/ui/EvaRouteLoader'
+import { LoaderVariantView } from '@/components/loaders/variants'
+import type { LoaderVariant } from '@/lib/brand-loaders'
+import { BRAND_APP_ICON } from '@/lib/brand-assets'
 import Image from 'next/image'
 
 interface Props {
@@ -30,6 +33,10 @@ interface Props {
     useCustomLoader?: boolean
     loaderTextColor?: string
     loaderIconMode?: 'eva' | 'coach' | 'none'
+    /** Fuente curada resuelta (white-label v2) — se aplica a los títulos del mockup. */
+    fontFamily?: string
+    /** Variante de loader elegida (white-label v2) — muestra la variante real en vivo. */
+    loaderVariant?: LoaderVariant
 }
 
 /* ─── helpers ─── */
@@ -38,9 +45,16 @@ const strongCls = (isDark: boolean) => (isDark ? 'text-white' : 'text-zinc-900')
 const cardBgCls = (isDark: boolean) => (isDark ? 'bg-white/5 border-white/10' : 'bg-white border-zinc-200')
 const subtleBgCls = (isDark: boolean) => (isDark ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-zinc-200')
 const pxMix = (primaryColor: string, val: string) => `color-mix(in srgb, ${primaryColor} ${val}, transparent)`
+/** Hex → "r g b" (space-separated) para las CSS vars --theme-primary-rgb que consume el loader v2. */
+const hexToSpaceRgb = (hex: string): string => {
+    const m = /^#?([0-9a-fA-F]{6})$/.exec((hex ?? '').trim())
+    if (!m) return '16 185 129'
+    const n = parseInt(m[1], 16)
+    return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`
+}
 
 /* ─── screen sub-components ─── */
-function PreviewHomeScreen({ isDark, primaryColor, brandName }: { isDark: boolean; primaryColor: string; brandName: string }) {
+function PreviewHomeScreen({ isDark, primaryColor, brandName, fontFamily }: { isDark: boolean; primaryColor: string; brandName: string; fontFamily?: string }) {
     const muted = mutedCls(isDark)
     const strong = strongCls(isDark)
     const cardBg = cardBgCls(isDark)
@@ -50,7 +64,7 @@ function PreviewHomeScreen({ isDark, primaryColor, brandName }: { isDark: boolea
     return (
         <div className="px-4 py-4 space-y-3">
             <div className="flex items-center justify-between">
-                <p className={cn('text-[10px] font-bold uppercase tracking-widest', muted)}>{brandName}</p>
+                <p className={cn('text-[10px] font-bold uppercase tracking-widest', muted)} style={{ fontFamily }}>{brandName}</p>
                 <span
                     className="text-[8px] font-bold px-1.5 py-0.5 rounded border"
                     style={{ borderColor: primaryColor, color: primaryColor, backgroundColor: px('8%') }}
@@ -111,7 +125,7 @@ function PreviewHomeScreen({ isDark, primaryColor, brandName }: { isDark: boolea
     )
 }
 
-function PreviewNutritionScreen({ isDark, primaryColor }: { isDark: boolean; primaryColor: string }) {
+function PreviewNutritionScreen({ isDark, primaryColor, fontFamily }: { isDark: boolean; primaryColor: string; fontFamily?: string }) {
     const muted = mutedCls(isDark)
     const strong = strongCls(isDark)
     const cardBg = cardBgCls(isDark)
@@ -123,7 +137,7 @@ function PreviewNutritionScreen({ isDark, primaryColor }: { isDark: boolean; pri
                     <ArrowLeft className="w-3.5 h-3.5" style={{ color: primaryColor }} />
                 </div>
                 <div className="flex-1 min-w-0">
-                    <h2 className={cn('text-xs font-black tracking-tight', strong)}>Plan Nutricional</h2>
+                    <h2 className={cn('text-xs font-black tracking-tight', strong)} style={{ fontFamily }}>Plan Nutricional</h2>
                     <p className={cn('text-[8px] font-medium', muted)}>Plan Volumen</p>
                 </div>
                 <Info className={cn('w-3.5 h-3.5', muted)} />
@@ -228,7 +242,7 @@ function PreviewNutritionScreen({ isDark, primaryColor }: { isDark: boolean; pri
     )
 }
 
-function PreviewExercisesScreen({ isDark, primaryColor }: { isDark: boolean; primaryColor: string }) {
+function PreviewExercisesScreen({ isDark, primaryColor, fontFamily }: { isDark: boolean; primaryColor: string; fontFamily?: string }) {
     const muted = mutedCls(isDark)
     const strong = strongCls(isDark)
     const cardBg = cardBgCls(isDark)
@@ -242,7 +256,7 @@ function PreviewExercisesScreen({ isDark, primaryColor }: { isDark: boolean; pri
                     <Dumbbell className="w-3.5 h-3.5" style={{ color: primaryColor }} />
                 </div>
                 <div className="flex-1 min-w-0">
-                    <h2 className={cn('text-xs font-black tracking-tight', strong)}>Aprender Técnica</h2>
+                    <h2 className={cn('text-xs font-black tracking-tight', strong)} style={{ fontFamily }}>Aprender Técnica</h2>
                     <p className={cn('text-[8px] font-medium', muted)}>Catálogo completo de ejercicios</p>
                 </div>
                 <Info className={cn('w-3.5 h-3.5', muted)} />
@@ -290,7 +304,7 @@ function PreviewExercisesScreen({ isDark, primaryColor }: { isDark: boolean; pri
     )
 }
 
-function PreviewCheckInScreen({ isDark, primaryColor }: { isDark: boolean; primaryColor: string }) {
+function PreviewCheckInScreen({ isDark, primaryColor, fontFamily }: { isDark: boolean; primaryColor: string; fontFamily?: string }) {
     const muted = mutedCls(isDark)
     const strong = strongCls(isDark)
     const cardBg = cardBgCls(isDark)
@@ -298,7 +312,7 @@ function PreviewCheckInScreen({ isDark, primaryColor }: { isDark: boolean; prima
     return (
         <div className="px-4 py-4 space-y-3">
             <div>
-                <h2 className={cn('text-sm font-black tracking-tight', strong)}>Check-in Mensual</h2>
+                <h2 className={cn('text-sm font-black tracking-tight', strong)} style={{ fontFamily }}>Check-in Mensual</h2>
                 <p className={cn('text-[9px] font-medium mt-0.5', muted)}>Registra tu progreso para que tu coach pueda ajustar tu plan.</p>
             </div>
 
@@ -360,6 +374,8 @@ export function BrandThemePreview({
     useCustomLoader,
     loaderTextColor,
     loaderIconMode,
+    fontFamily,
+    loaderVariant = 'eva',
 }: Props) {
     const [isDark, setIsDark] = useState(false)
     const [activeTab, setActiveTab] = useState('home')
@@ -420,7 +436,7 @@ export function BrandThemePreview({
                         </div>
                     )}
                     <div>
-                        <p className={cn('font-bold text-lg', strong)}>{brandName}</p>
+                        <p className={cn('font-bold text-lg', strong)} style={{ fontFamily }}>{brandName}</p>
                         <p className={cn('text-[10px] mt-1', muted)}>
                             {welcomeMessage || 'Tu plataforma de entrenamiento personalizado'}
                         </p>
@@ -438,10 +454,10 @@ export function BrandThemePreview({
 
                 {/* Dynamic screen content */}
                 <div className="flex-1 min-h-[280px]">
-                    {activeTab === 'home' && <PreviewHomeScreen isDark={isDark} primaryColor={primaryColor} brandName={brandName} />}
-                    {activeTab === 'nutrition' && <PreviewNutritionScreen isDark={isDark} primaryColor={primaryColor} />}
-                    {activeTab === 'exercises' && <PreviewExercisesScreen isDark={isDark} primaryColor={primaryColor} />}
-                    {activeTab === 'checkin' && <PreviewCheckInScreen isDark={isDark} primaryColor={primaryColor} />}
+                    {activeTab === 'home' && <PreviewHomeScreen isDark={isDark} primaryColor={primaryColor} brandName={brandName} fontFamily={fontFamily} />}
+                    {activeTab === 'nutrition' && <PreviewNutritionScreen isDark={isDark} primaryColor={primaryColor} fontFamily={fontFamily} />}
+                    {activeTab === 'exercises' && <PreviewExercisesScreen isDark={isDark} primaryColor={primaryColor} fontFamily={fontFamily} />}
+                    {activeTab === 'checkin' && <PreviewCheckInScreen isDark={isDark} primaryColor={primaryColor} fontFamily={fontFamily} />}
                 </div>
 
                 {/* Bottom nav */}
@@ -490,18 +506,30 @@ export function BrandThemePreview({
                 </div>
             </div>
 
-            {/* Loader preview */}
+            {/* Loader preview — refleja la variante white-label v2 elegida (H3). 'eva' = loader legacy. */}
             <div className="rounded-control border border-subtle bg-surface-sunken p-4">
                 <p className="mb-3 text-center text-xs text-muted">Así se ve al cargar la app de tus alumnos</p>
-                <div className="flex items-center justify-center py-2">
-                    <EvaRouteLoader
-                        customText={loaderText}
-                        useCustom={useCustomLoader}
-                        textColor={loaderTextColor || undefined}
-                        primaryColor={!loaderTextColor ? primaryColor : undefined}
-                        iconMode={loaderIconMode}
-                        size="sm"
-                    />
+                <div
+                    className="flex items-center justify-center py-2"
+                    style={{ '--theme-primary': primaryColor, '--theme-primary-rgb': hexToSpaceRgb(primaryColor) } as CSSProperties}
+                >
+                    {loaderVariant !== 'eva' ? (
+                        <LoaderVariantView
+                            variant={loaderVariant}
+                            brandName={useCustomLoader && loaderText?.trim() ? loaderText : 'EVA'}
+                            iconSrc={loaderIconMode === 'none' ? undefined : (loaderIconMode === 'coach' && logoUrl ? logoUrl : BRAND_APP_ICON)}
+                            size="md"
+                        />
+                    ) : (
+                        <EvaRouteLoader
+                            customText={loaderText}
+                            useCustom={useCustomLoader}
+                            textColor={loaderTextColor || undefined}
+                            primaryColor={!loaderTextColor ? primaryColor : undefined}
+                            iconMode={loaderIconMode}
+                            size="sm"
+                        />
+                    )}
                 </div>
             </div>
         </div>

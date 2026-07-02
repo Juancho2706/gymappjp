@@ -115,3 +115,23 @@ El write-path (server action + GRANT UPDATE de `20260621220000`) está **sano**:
 **Write-path OK:** GRANT UPDATE de las 7 columnas presente (`20260621220000_grant_update_whitelabel_v2_brand_cols.sql`); schema Zod valida (`packages/schemas/coach.ts:19-25`); el server action escribe todo bajo gate `isBrandingAllowed`. No hay riesgo 42501 aquí.
 
 **Refactor unificador:** H1+H2+H3+H5 se resuelven juntos: (1) completar el SELECT en `settings.queries.ts`, y (2) levantar el estado de `BrandAdvancedSection` (fontKey/loaderVariant/secondary/accents/tint) al form padre para que `BrandThemePreview` reciba y renderice esos valores. Es la corrección de mayor palanca.
+
+---
+
+## Fix log (2026-07-02)
+
+Implementados **H1, H2, H3, H5** (el refactor unificador). **H4/H6/H7 NO** (fuera de scope: pendientes de decisión/menores). No se tocó el write-path (server action + payload verificados intactos; ya escribía las 7 columnas v2). Ambas rutas que renderizan el form (`/coach/settings/brand` y el pane embebido `/coach/settings` → `CoachSettingsDesktop`) usan la MISMA query, así que el fix cubre las dos.
+
+| H | Estado | Archivos | Nota |
+|---|--------|----------|------|
+| **H1** | ✅ Fixed | `apps/web/src/app/coach/settings/_data/settings.queries.ts` | SELECT ahora trae las 7 cols white-label v2: `brand_secondary_color, accent_light, accent_dark, neutral_tint, brand_font_key, loader_variant, logo_url_dark`. Con esto el round-trip refleja lo guardado (fuente/loader/color2 dejan de "desaparecer" al recargar). |
+| **H2** | ✅ Fixed | `BrandSettingsForm.tsx`, `_components/BrandThemePreview.tsx` | Estado `fontKey` levantado al form padre; `BrandThemePreview` recibe `fontFamily` (resuelto con `resolveBrandFontStack`, solo si hay fuente elegida) y lo aplica a los títulos del mockup (brand name del login + headings de Home/Nutrición/Aprender/Check-in). Fuentes cargadas page-wide vía `<body>` (root `layout.tsx` `BRAND_FONT_VARS`), así que renderiza en vivo. |
+| **H3** | ✅ Fixed | `BrandSettingsForm.tsx`, `_components/BrandThemePreview.tsx` | `BrandThemePreview` recibe `loaderVariant` y, cuando `!== 'eva'`, renderiza el componente REAL del alumno (`LoaderVariantView` de `components/loaders/variants.tsx`) — mismas 6 animaciones. `'eva'` sigue con `EvaRouteLoader` legacy. Se setea el color en el contenedor vía CSS vars `--theme-primary` / `--theme-primary-rgb` (helper `hexToSpaceRgb`, formato "r g b" que espera `loader-variants.module.css`). El wordmark espeja el alumno (loader_text custom o 'EVA'). |
+| **H5** | ✅ Fixed | `BrandSettingsForm.tsx`, `BrandAdvancedSection.tsx` | `BrandAdvancedSection` pasó de `defaults` (uncontrolled) a **controlado** (`value` + `onChange`); los 6 campos avanzados viven en el padre. `isDirty` (y por transición el guard `beforeunload` + chip "Sin guardar" + reset por remount con `key=updated_at`) ahora comparan fuente/loader/color2/acentos/tinte. |
+
+**Gotchas / decisiones:**
+- **Interdependencia:** H2/H3/H5 dependen de H1. Sin el SELECT completo, el estado del padre seedearía a vacío/'eva' y el form quedaría dirty apenas monta. Con H1, todo round-trippea (guardar → remount con `key` nuevo → baseline correcto → `isDirty=false`).
+- **Refactor a controlado:** `BrandAdvancedSection` ahora expone `type AdvancedBrandValue`; el patch de `accent_light/accent_dark` se hace type-safe (sin computed-key para no romper `Partial<AdvancedBrandValue>`). `previewMode`/`advancedOpen` siguen locales.
+- **RGB del loader:** las cols nuevas del alumno inyectan `--theme-primary-rgb` comma-separated, pero `loader-variants.module.css` usa `rgb(var(--ld-rgb) / α)` (space-separated). En el preview se inyecta en formato correcto ("r g b") vía `hexToSpaceRgb` → los adornos de baja opacidad también toman el color elegido.
+- **Fuente title-only:** se aplica `fontFamily` solo a títulos/display (no al body), fiel a la decisión #4 de `brand-fonts.ts` (cuerpo queda en Inter). Con `fontKey === ''` → `undefined` → sin cambio visual (no regresiona el estado "sin fuente").
+- No se corrió typecheck/build (lo gatea el orquestador); verificado releyendo.

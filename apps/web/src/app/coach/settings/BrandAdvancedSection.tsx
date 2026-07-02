@@ -9,38 +9,33 @@ import { Sparkles, Lock, Palette, Type as TypeIcon, Loader2, Check, AlertTriangl
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/
 
+/** Valores persistidos del branding avanzado — viven levantados en el form padre (preview + dirty). */
+export type AdvancedBrandValue = {
+    secondaryColor: string
+    accentLight: string
+    accentDark: string
+    neutralTint: boolean
+    fontKey: FontKey | ''
+    loaderVariant: LoaderVariant
+}
+
 type Props = {
     tier: SubscriptionTier
     /** Color primario reactivo (lo controla el form padre) — base del cálculo de contraste. */
     primaryColor: string
-    defaults: {
-        secondaryColor: string
-        accentLight: string
-        accentDark: string
-        neutralTint: boolean
-        fontKey: string
-        loaderVariant: string
-    }
+    /** Estado controlado por el form padre (para reflejarlo en el preview del teléfono + dirty). */
+    value: AdvancedBrandValue
+    onChange: (patch: Partial<AdvancedBrandValue>) => void
 }
 
 const CARD = 'bg-surface-card border border-subtle rounded-card p-4 sm:p-6 space-y-5 shadow-[var(--shadow-sm)]'
 
 /** Sección "Branding avanzado (Pro)" del white-label v2: color2 + fuente + dark + loader, con
- *  preview en vivo y guardia WCAG. Emite hidden inputs que el form padre envía al server action. */
-export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
-    const [secondaryColor, setSecondaryColor] = useState(defaults.secondaryColor || '')
-    const [accentLight, setAccentLight] = useState(defaults.accentLight || '')
-    const [accentDark, setAccentDark] = useState(defaults.accentDark || '')
-    const [neutralTint, setNeutralTint] = useState(defaults.neutralTint)
-    const [fontKey, setFontKey] = useState<FontKey | ''>(
-        (FONT_KEY_TUPLE as readonly string[]).includes(defaults.fontKey) ? (defaults.fontKey as FontKey) : ''
-    )
-    const [loaderVariant, setLoaderVariant] = useState<LoaderVariant>(
-        (LOADER_VARIANT_TUPLE as readonly string[]).includes(defaults.loaderVariant)
-            ? (defaults.loaderVariant as LoaderVariant)
-            : 'eva'
-    )
-    const [advancedOpen, setAdvancedOpen] = useState(!!(defaults.accentLight || defaults.accentDark))
+ *  preview en vivo y guardia WCAG. Emite hidden inputs que el form padre envía al server action.
+ *  Controlado: los campos persistidos viven en el padre (preview del teléfono + dirty/beforeunload). */
+export function BrandAdvancedSection({ tier, primaryColor, value, onChange }: Props) {
+    const { secondaryColor, accentLight, accentDark, neutralTint, fontKey, loaderVariant } = value
+    const [advancedOpen, setAdvancedOpen] = useState(!!(value.accentLight || value.accentDark))
     const [previewMode, setPreviewMode] = useState<'light' | 'dark'>('light')
 
     // Tema derivado en vivo (mismo motor que el render real) → preview y guardia de contraste.
@@ -108,18 +103,18 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
                         type="color"
                         aria-label="Color secundario"
                         value={HEX_RE.test(secondaryColor) ? secondaryColor : '#00C7BE'}
-                        onChange={(e) => setSecondaryColor(e.target.value)}
+                        onChange={(e) => onChange({ secondaryColor: e.target.value })}
                         className="h-10 w-12 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5"
                     />
                     <input
                         type="text"
                         value={secondaryColor}
-                        onChange={(e) => setSecondaryColor(e.target.value)}
+                        onChange={(e) => onChange({ secondaryColor: e.target.value })}
                         placeholder="#00C7BE (opcional)"
                         className="h-10 w-full rounded-lg border border-border bg-background px-3 font-mono text-sm uppercase outline-none focus:ring-2 focus:ring-primary/40"
                     />
                     {secondaryColor && (
-                        <button type="button" onClick={() => setSecondaryColor('')} className="text-xs text-muted underline shrink-0">Quitar</button>
+                        <button type="button" onClick={() => onChange({ secondaryColor: '' })} className="text-xs text-muted underline shrink-0">Quitar</button>
                     )}
                 </div>
             </div>
@@ -139,7 +134,7 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
                             <button
                                 key={k}
                                 type="button"
-                                onClick={() => setFontKey(selected ? '' : k)}
+                                onClick={() => onChange({ fontKey: selected ? '' : k })}
                                 className={`flex flex-col items-start gap-0.5 rounded-xl border p-2.5 text-left transition-all ${
                                     selected ? 'border-primary ring-2 ring-primary/30 bg-primary/5' : 'border-border hover:border-primary/40'
                                 }`}
@@ -161,7 +156,7 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
                         type="button"
                         role="switch"
                         aria-checked={neutralTint}
-                        onClick={() => setNeutralTint((v) => !v)}
+                        onClick={() => onChange({ neutralTint: !neutralTint })}
                         className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${neutralTint ? 'bg-primary' : 'bg-border'}`}
                     >
                         <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${neutralTint ? 'left-[22px]' : 'left-0.5'}`} />
@@ -172,16 +167,19 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
                 </button>
                 {advancedOpen && (
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        {([['accent_light', 'Acento claro', accentLight, setAccentLight, '#047857'], ['accent_dark', 'Acento oscuro', accentDark, setAccentDark, '#34d399']] as const).map(
-                            ([, label, val, setter, ph]) => (
-                                <div key={label} className="space-y-1">
-                                    <span className="text-xs font-medium text-muted">{label}</span>
-                                    <div className="flex items-center gap-2">
-                                        <input type="color" aria-label={label} value={HEX_RE.test(val) ? val : ph} onChange={(e) => setter(e.target.value)} className="h-9 w-10 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5" />
-                                        <input type="text" value={val} onChange={(e) => setter(e.target.value)} placeholder={`${ph} (auto)`} className="h-9 w-full rounded-lg border border-border bg-background px-2 font-mono text-xs uppercase outline-none focus:ring-2 focus:ring-primary/40" />
+                        {([['accentLight', 'Acento claro', accentLight, '#047857'], ['accentDark', 'Acento oscuro', accentDark, '#34d399']] as const).map(
+                            ([field, label, val, ph]) => {
+                                const set = (v: string) => onChange(field === 'accentLight' ? { accentLight: v } : { accentDark: v })
+                                return (
+                                    <div key={label} className="space-y-1">
+                                        <span className="text-xs font-medium text-muted">{label}</span>
+                                        <div className="flex items-center gap-2">
+                                            <input type="color" aria-label={label} value={HEX_RE.test(val) ? val : ph} onChange={(e) => set(e.target.value)} className="h-9 w-10 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent p-0.5" />
+                                            <input type="text" value={val} onChange={(e) => set(e.target.value)} placeholder={`${ph} (auto)`} className="h-9 w-full rounded-lg border border-border bg-background px-2 font-mono text-xs uppercase outline-none focus:ring-2 focus:ring-primary/40" />
+                                        </div>
                                     </div>
-                                </div>
-                            )
+                                )
+                            }
                         )}
                     </div>
                 )}
@@ -201,7 +199,7 @@ export function BrandAdvancedSection({ tier, primaryColor, defaults }: Props) {
                             <button
                                 key={v}
                                 type="button"
-                                onClick={() => setLoaderVariant(v)}
+                                onClick={() => onChange({ loaderVariant: v })}
                                 className={`flex flex-col items-start gap-0.5 rounded-xl border p-2.5 text-left transition-all ${
                                     selected ? 'border-primary ring-2 ring-primary/30 bg-primary/5' : 'border-border hover:border-primary/40'
                                 }`}
