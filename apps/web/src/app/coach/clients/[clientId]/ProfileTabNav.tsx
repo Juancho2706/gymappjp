@@ -30,8 +30,25 @@ interface ProfileTabNavProps {
 export function ProfileTabNav({ activeTab, onChange, badges }: ProfileTabNavProps) {
     const reduceMotion = useReducedMotion()
     const scrollRef = useRef<HTMLDivElement>(null)
+    const barRef = useRef<HTMLDivElement>(null)
     const [canScrollRight, setCanScrollRight] = useState(false)
     const [hintDismissed, setHintDismissed] = useState(false)
+    const [stuck, setStuck] = useState(false)
+
+    // Estado "stuck": la barra se eleva (border-default + sombra) al pegarse (kit
+    // coach-ficha.jsx). Se compara el top real de la barra contra su offset sticky
+    // resuelto (getComputedStyle resuelve la var mobile / md:top-0 desktop a px).
+    useEffect(() => {
+        const bar = barRef.current
+        if (!bar) return
+        const onScroll = () => {
+            const stickyTop = parseFloat(getComputedStyle(bar).top) || 0
+            setStuck(bar.getBoundingClientRect().top <= stickyTop + 0.5)
+        }
+        onScroll()
+        window.addEventListener('scroll', onScroll, { passive: true, capture: true })
+        return () => window.removeEventListener('scroll', onScroll, { capture: true })
+    }, [])
 
     const checkScroll = useCallback(() => {
         const el = scrollRef.current
@@ -59,8 +76,12 @@ export function ProfileTabNav({ activeTab, onChange, badges }: ProfileTabNavProp
 
     return (
         <div
+            ref={barRef}
             className={cn(
-                'sticky z-20 mx-0 mb-2 w-full max-w-full min-w-0 border-b border-subtle px-0',
+                'sticky z-20 mx-0 mb-2 w-full max-w-full min-w-0 border-b px-0 transition-[box-shadow,border-color] duration-200 ease-out',
+                stuck
+                    ? 'border-default shadow-[0_6px_16px_-10px_rgba(0,0,0,0.28)]'
+                    : 'border-subtle',
                 'bg-[color-mix(in_srgb,var(--surface-app)_80%,transparent)] [backdrop-filter:saturate(180%)_blur(12px)] [-webkit-backdrop-filter:saturate(180%)_blur(12px)]',
                 'top-[var(--coach-mobile-content-top-offset)] md:top-0 print:static print:border-0 print:bg-transparent'
             )}

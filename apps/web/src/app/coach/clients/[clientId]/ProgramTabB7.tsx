@@ -31,6 +31,7 @@ import {
 } from './profileProgramStructureUtils'
 import { resolveEffectiveWeekVariant } from '@/lib/workout/programWeekVariant'
 import { cn } from '@/lib/utils'
+import { SectionTitle } from './_components/SectionTitle'
 
 // L–D microciclo (1 = Lunes … 7 = Domingo).
 const DAY_LABELS = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -81,23 +82,6 @@ function useSheetSide(): 'bottom' | 'right' {
         return () => q.removeEventListener('change', fn)
     }, [])
     return side
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-    return (
-        <h3
-            className="font-display"
-            style={{
-                fontSize: 17,
-                fontWeight: 800,
-                letterSpacing: '-0.02em',
-                color: TXT,
-                margin: '0 0 10px',
-            }}
-        >
-            {children}
-        </h3>
-    )
 }
 
 function DarkChip({ children }: { children: React.ReactNode }) {

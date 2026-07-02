@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { getClientProfileData } from './_actions/client-detail.actions'
-import { ArrowLeft, FileDown } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientProfileDashboard } from './ClientProfileDashboard'
@@ -22,19 +22,11 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
         <div className="relative mx-auto max-w-[1600px] w-full min-w-0 space-y-8 animate-fade-in">
             <div className="flex items-center justify-between print:hidden">
                 <Link href="/coach/clients"
-                    className="group inline-flex max-w-full min-w-0 items-center gap-2 break-words text-[10px] font-black uppercase tracking-[0.3em] text-muted transition-all hover:text-sport-600">
+                    className="group inline-flex max-w-full min-w-0 items-center gap-2 break-words text-[10px] font-black uppercase tracking-widest text-muted transition-all hover:text-sport-600">
                     <div className="rounded-control bg-surface-sunken p-1.5 transition-colors group-hover:bg-sport-100">
                         <ArrowLeft className="h-3 w-3 transition-transform group-hover:-translate-x-0.5" />
                     </div>
-                    Directorio de Unidades
-                </Link>
-                <Link
-                    href={`/coach/clients/${clientId}/progress-print`}
-                    target="_blank"
-                    className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.3em] text-muted transition-colors hover:text-sport-600"
-                >
-                    <FileDown className="h-3.5 w-3.5" />
-                    Exportar PDF
+                    Alumnos
                 </Link>
             </div>
 

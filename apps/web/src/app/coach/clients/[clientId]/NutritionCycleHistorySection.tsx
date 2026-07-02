@@ -293,7 +293,7 @@ export function NutritionCycleHistorySection({
                 {formBlocks.map((b, i) => (
                   <div
                     key={i}
-                    className={cn('grid gap-2 rounded-lg border border-border/40 p-3 sm:grid-cols-2')}
+                    className={cn('grid gap-2 rounded-control border border-subtle p-3 sm:grid-cols-2')}
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-1">

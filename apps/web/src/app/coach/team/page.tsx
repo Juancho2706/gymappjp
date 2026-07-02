@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Users, Crown, Shield, User, ChevronRight, Sparkles, Lock } from 'lucide-react'
+import { Users, Crown, Shield, User, ChevronRight, Lock } from 'lucide-react'
+import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
 import { createClient } from '@/lib/supabase/server'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import { getCoachTeamOverview } from './_data/team.queries'
@@ -186,10 +187,7 @@ export default async function CoachTeamPage() {
 
                         {/* ── Footer EVA Teams ──────────────────────────── */}
                         <div className="flex flex-col items-center gap-2 pt-4 opacity-60">
-                            <div className="flex items-center gap-1.5 text-muted">
-                                <Sparkles className="h-4 w-4" />
-                                <span className="font-display text-sm font-extrabold tracking-tight">EVA</span>
-                            </div>
+                            <EvaBrandIcon className="h-6 w-6" />
                             <span className="text-xs font-semibold text-subtle">EVA Teams · {team.name}</span>
                         </div>
                         </section>

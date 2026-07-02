@@ -105,3 +105,15 @@ App: `apps/web/src/app/coach/settings/**`.
 - **[P2 nit] Icono rail Módulos** → FIXED. `CoachSettingsDesktop.tsx`: `Package` → `LayoutGrid` (kit `layout-grid`).
 - **[P2 nit] Footer logo img** → SKIPPED (el asset del kit `eva-logo-ink.png` no existe en `apps/web/public`; el candidato `eva-wordmark-outline.png` es el outline tenue conocido — copiar el asset del kit = wiring externo/asset nuevo).
 - **[P2 nit] FAB Guardar muta a "Guardado"** → SKIPPED tras intentarlo: `isDirty` NO trackea los inputs no-controlados `full_name`/`brand_name` (usan `defaultValue`) — deshabilitar el botón con `!isDirty` rompería guardar un cambio de solo-nombre. Exige controlar esos inputs primero (cambio de comportamiento del form, no un swap).
+
+### Verificación wave-2 (segunda pasada, 2026-07-01)
+
+El commit `2f5ddbd0` ("opciones parciales (WIP)") dejó el Fix log de arriba ya redactado. Segunda pasada re-verificó cada finding contra el código commiteado: **todos los FIXED están efectivamente aplicados y consistentes**, sin nada a medio aplicar. Cero cambios nuevos de código.
+
+- [P1] Free hub → OK (`page.tsx` L248/L353 gating por `canUseBranding`; `brand/page.tsx` L28-41 upsell sub-pantalla; `BrandUpsell.tsx` con `UpgradeGateTracker`).
+- [P1] Soporte pane → OK (`SupportPane.tsx` embebido como `sections.soporte`; `CoachSettingsDesktop` L60 `soporte` sin `href`). **Importar re-evaluado → sigue SKIPPED (justificado):** embeberlo exige AÑADIR data-loading a `settings/page.tsx` (getCoachOrgContext + count scoped + max_clients + UpsellGate — viola presentación-only) y el `ImportWizard` vive en `coach/clients/import` (fuera del área permitida). Queda como `<Link>` en el rail; requiere wiring externo (extraer un pane autocontenido).
+- [P1] Módulos re-skin → OK (`ModulesForm.tsx`: banner sport-100, tile 46px radius 13, chips scope+superficies, `eva-metric` "/ mes", nota prorrateo; catálogo `@eva/module-catalog` expone `label/pitch/surfaces/priceClp`, keys ↔ `MODULE_ICONS` alineadas).
+- [P1] Mi Marca preview mobile → OK (`BrandSettingsForm.tsx` L190 `lg:hidden` tras Brand Score; L742 columna derecha `hidden lg:sticky lg:block`).
+- [P1→P2] FeaturePrefsPanel preset → OK (`FeaturePrefsPanel.tsx` L275 activo = `bg-[var(--sport-500)] text-[var(--text-on-sport)]` borde transparente).
+- [P2] Team Soporte card (L220) + rail Módulos `LayoutGrid` → OK.
+- [P0] team_managed SettingsShell → NO TOCADO (REFUTED).

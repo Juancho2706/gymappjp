@@ -196,7 +196,7 @@ export function CoachNutrientTargetsEditor({
   return (
     <Card className="p-5">
       <div className="mb-4 flex items-center gap-1.5">
-        <h3 className="text-xs font-black uppercase tracking-widest text-primary">
+        <h3 className="font-display text-[17px] font-extrabold tracking-[-0.02em] text-strong">
           Umbrales de micronutrientes
         </h3>
         <InfoTooltip content="Define topes/metas de micros para este alumno — base." />
@@ -216,7 +216,7 @@ export function CoachNutrientTargetsEditor({
               initial={reduceMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: reduceMotion ? 0 : 0.22, delay: reduceMotion ? 0 : idx * 0.05 }}
-              className="space-y-3 rounded-xl border border-border/40 bg-secondary/15 p-4"
+              className="space-y-3 rounded-control border border-subtle bg-surface-sunken p-4"
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">
@@ -225,10 +225,10 @@ export function CoachNutrientTargetsEditor({
                   </span>
                   <span
                     className={cn(
-                      'rounded-md px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest',
+                      'rounded-control px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest',
                       n.intent === 'cap'
-                        ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
-                        : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                        ? 'bg-[var(--warning-100)] text-[var(--warning-700)]'
+                        : 'bg-[var(--success-100)] text-[var(--success-700)]'
                     )}
                   >
                     {n.intent === 'cap' ? 'Tope' : 'Meta'}

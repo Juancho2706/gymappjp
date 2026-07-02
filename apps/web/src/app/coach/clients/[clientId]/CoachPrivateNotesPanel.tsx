@@ -66,15 +66,15 @@ export function CoachPrivateNotesPanel({ clientId, notes }: CoachPrivateNotesPan
   const olderNotes = notes.slice(1)
 
   return (
-    <Card className="border-amber-500/25 bg-amber-500/[0.02] p-5 dark:border-amber-500/15">
+    <Card className="p-5">
       <div className="mb-1 flex items-center gap-1.5">
-        <Lock className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-        <h3 className="text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">
+        <Lock className="h-3.5 w-3.5 shrink-0 text-[var(--warning-600)]" />
+        <h3 className="font-display text-[17px] font-extrabold tracking-[-0.02em] text-strong">
           Nota privada
         </h3>
         <InfoTooltip content="Notas internas tuyas sobre la nutrición de este alumno. El alumno nunca las ve." iconClassName="w-3 h-3" />
       </div>
-      <p className="mb-4 inline-flex items-center gap-1 rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">
+      <p className="mb-4 inline-flex items-center gap-1 rounded-control bg-[var(--warning-100)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-[var(--warning-700)]">
         Privada — el alumno no la ve
       </p>
 
@@ -111,7 +111,7 @@ export function CoachPrivateNotesPanel({ clientId, notes }: CoachPrivateNotesPan
       </div>
 
       {olderNotes.length > 0 && (
-        <div className="mt-5 border-t border-border/40 pt-4">
+        <div className="mt-5 border-t border-subtle pt-4">
           <h4 className="mb-2 text-[9px] font-black uppercase tracking-widest text-muted-foreground">
             Notas anteriores
           </h4>
@@ -123,7 +123,7 @@ export function CoachPrivateNotesPanel({ clientId, notes }: CoachPrivateNotesPan
                   initial={reduceMotion ? false : { opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: reduceMotion ? 0 : 0.2, delay: reduceMotion ? 0 : idx * 0.04 }}
-                  className="rounded-lg border border-border/40 bg-secondary/15 px-3 py-2"
+                  className="rounded-control border border-subtle bg-surface-sunken px-3 py-2"
                 >
                   <p className="whitespace-pre-wrap text-xs text-muted-foreground">{note.body}</p>
                   <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-muted-foreground/70">

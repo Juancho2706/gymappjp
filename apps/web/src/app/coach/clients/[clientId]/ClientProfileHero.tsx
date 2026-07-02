@@ -201,11 +201,21 @@ export function ClientProfileHero({
             {/* Hero inverso: identidad + 4 chips (2×2) */}
             <Card variant="inverse" padding="lg" className="gap-0">
                 <div className="flex items-start gap-4">
-                    <div className="relative flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-[var(--border-inverse)] bg-white/[0.07] shadow-[var(--shadow-md)] md:h-20 md:w-20">
-                        <span className="font-display relative z-10 text-2xl font-black text-on-dark uppercase md:text-3xl">
-                            {client.full_name[0]}
+                    <span
+                        className="relative flex h-16 w-16 flex-shrink-0 rounded-full md:h-20 md:w-20"
+                        style={{ padding: 2, background: `var(--${STATUS_TONE[status.level]}-500)` }}
+                    >
+                        <span
+                            className="flex h-full w-full items-center justify-center rounded-full font-display text-xl font-extrabold tracking-[-0.02em] md:text-2xl"
+                            style={{
+                                background: 'var(--surface-inverse)',
+                                color: 'var(--sport-400)',
+                                border: '2px solid var(--surface-card)',
+                            }}
+                        >
+                            {initialsOf(client.full_name)}
                         </span>
-                    </div>
+                    </span>
                     <div className="min-w-0 flex-1 space-y-1.5">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             <Badge
@@ -297,6 +307,18 @@ function parseIsoSafe(s: string | null): Date | null {
     if (!s) return null
     const d = new Date(s.length <= 10 ? `${s}T12:00:00` : s)
     return isFinite(d.getTime()) ? d : null
+}
+
+function initialsOf(name?: string | null): string {
+    return (
+        (name ?? '')
+            .split(' ')
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((w) => w[0])
+            .join('')
+            .toUpperCase() || '?'
+    )
 }
 
 function HeroChipBar({ value }: { value: number }) {
