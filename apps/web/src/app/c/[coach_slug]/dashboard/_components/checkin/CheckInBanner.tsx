@@ -4,6 +4,7 @@ import { getLastCheckIn } from '../../_data/dashboard.queries'
 import { formatRelativeDate, getTodayInSantiago } from '@/lib/date-utils'
 import { differenceInCalendarDays, parseISO } from 'date-fns'
 import { CheckInBannerFrame } from './CheckInBannerFrame'
+import { AppBadgeSync } from '@/components/client/AppBadgeSync'
 import { getClientBasePath } from '@/lib/client/base-path'
 
 export async function CheckInBanner({ userId, coachSlug }: { userId: string; coachSlug: string }) {
@@ -54,6 +55,8 @@ export async function CheckInBanner({ userId, coachSlug }: { userId: string; coa
 
     return (
         <CheckInBannerFrame overdue={overdue} className={`rounded-card border ${box}`}>
+            {/* P16: badge en el ícono de la PWA cuando el check-in está pendiente (se limpia al entrar a /check-in). */}
+            <AppBadgeSync count={1} />
             <Link href={`${base}/check-in`} className="flex items-center gap-3 p-3">
                 <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-white ${iconChip}`}>
                     <ClipboardCheck className="h-[18px] w-[18px]" />

@@ -313,3 +313,42 @@ Fuentes:
 **Integración de salud:**
 - Google Fit → Health Connect: https://support.google.com/googlehealth/answer/17037331
 - HealthKit + Health Connect integración: https://medium.com/@rohandhalpe05/integrating-apple-health-and-google-health-connect-in-health-fitness-apps-f9e04218c645
+
+---
+
+## Implementado wave 2
+
+**Fecha:** 2026-07-02 · **Alcance:** quick-wins S del research (P3 / P1 / P12 / P16), solo lado ALUMNO (`/c/**` + `components/client/**`). Sin tocar copy del coach, ni valores calculados, ni motores de racha/offline/nutrición. Tokens EVA DS + dark + white-label respetados.
+
+### P3 — Lenguaje sin culpa (barrido de copy del alumno)
+Cambios en `apps/web/src/app/c/[coach_slug]/nutrition/_components/NutritionStreakBanner.tsx` (banner visible al alumno):
+- **"Racha en riesgo · {N de 7 días}" → "Tu racha sigue viva · {N de 7 días}"**. El estado de gracia (grace day) dejaba de leerse como alarma. El copy ahora coincide con el título del tooltip que ya decía "Tu racha sigue viva por hoy".
+- **Ícono `AlertTriangle` (alarma) → `Flame`** en ese mismo estado. Se quitó `AlertTriangle` del import (quedaba sin uso). Se mantuvo el color ámbar (tono cauto, no rojo).
+- **"Vas muy bien, no lo rompas." → "Vas muy bien, sigue así."** (se elimina el loss-framing "no lo rompas").
+- **Tooltip mecánica:** "…Si fallas un día completo, te queda un día de gracia antes de reiniciar." → "…Si te saltas un día completo, tienes un día de gracia antes de volver a empezar." (fuera "fallar"/"reiniciar").
+- **Verificado sin cambios (ya gentil):** `CheckInBanner.tsx` usa "¡Check-in pendiente!" / "Check-in próximo" (invitacional, no acusatorio); `RestDayCard.tsx` "Día de descanso / Recupera bien". Grep de "atrasada/fallaste/no cumpliste/perdiste/en riesgo" en todo `/c/**` y `components/client/**`: los únicos hits alumno-facing eran los de arriba. Las cadenas "atrasada/riesgo" del lado coach NO se tocaron.
+
+### P1 — Racha compasiva (solo presentación)
+- **Verificada la consistencia del CERO:** `StreakRibbon.tsx` (dashboard, protagonista) ya muestra "Empieza tu racha hoy / Entrena hoy y enciende la primera llama" cuando `streak<=0`; `StreakWidget.tsx` (chip) muestra "Empieza tu racha". Ningún componente muestra el 0 en rojo ni como fracaso. Sin cambios necesarios.
+- **Perfil StatCards** (`perfil/_components/ProfileClient.tsx`): la card "Racha" muestra el número (`0 días`) como stat neutro junto a "Entrenos", sin lenguaje ni color de fracaso → se deja como está (neutro, no acusatorio).
+- **Reencuadre "semanas al día" — SKIP con nota:** el ribbon de racha (`StreakRibbonSection`) solo carga el `streak` (un int, vía RPC). Derivar "X de Y días esta semana" ahí exigiría duplicar las 3 queries pesadas del programa+planes+logs → SKIP por la regla de "query nueva pesada". El dato de la semana YA está surfaceado visualmente en `MomentumCard` / `MomentumWeekStrip` (tira de 7 días con los entrenados marcados), que es el reencuadre semanal positivo sin números inventados; añadir una sublínea numérica ahí desviaría del mapeo 1:1 con el diseño (el propio componente documenta que omitió sublíneas mock a propósito). El MOTOR de racha (`get_client_current_streak`, compartido con el coach) no se tocó.
+
+### P12 — Última vez inline + micro-reto
+- **Verificado:** "Sesión anterior · {fecha}: {peso}kg × {reps}" YA es visible por defecto (no en tooltip) en la ejecución, tanto en bloque normal como en `SupersetGroupCard` (`WorkoutExecutionClient.tsx`, usa `previousHistory[exercise.id]`).
+- **Agregado el micro-reto:** cuando el objetivo de hoy iguala o supera la última marca (`suggestedWeightKg >= best.weight_kg`), se muestra junto al pill un span "↗ Superá tu marca" (icono `TrendingUp`, ya importado; color `--sport-300`, voseo consistente con el copy de la superserie). Añadido en las DOS instancias de "Sesión anterior" (bloque normal ~L1258 y superserie ~L665). Sin nueva query: reusa `suggestedWeightKg` (progresión) y `previousHistory` ya cargados.
+
+### P16 — Badging API (numerito en el ícono de la PWA)
+- **Util nuevo** `apps/web/src/lib/client/app-badge.ts`: `setAppBadge(count?)` + `clearAppBadge()` con feature-detect de `navigator.setAppBadge`/`clearAppBadge`, `typeof navigator` guard (SSR-safe) y `try/catch` + `.catch()` — no-op total y sin errores donde el API no existe (iOS <16.4, Firefox, PWA no instalada). Progressive enhancement puro.
+- **Componente cliente** `apps/web/src/components/client/AppBadgeSync.tsx`: monta desde un Server Component que ya conoce el dato; `useEffect` setea/limpia según `count`; no renderiza nada.
+- **Set:** en `CheckInBanner.tsx`, la rama del recordatorio (variantes warning/overdue = "Check-in próximo / pendiente", `daysSince>=3`) ahora renderiza `<AppBadgeSync count={1} />` → el ícono muestra el badge cuando hay check-in pendiente. No se badgea el prompt de primer check-in (evita badge permanente en onboarding).
+- **Clear:** `CheckInForm.tsx` (página de check-in) limpia el badge al montar (`useEffect(() => clearAppBadge(), [])`).
+
+### Archivos tocados
+- `apps/web/src/app/c/[coach_slug]/nutrition/_components/NutritionStreakBanner.tsx` (P3)
+- `apps/web/src/app/c/[coach_slug]/workout/[planId]/WorkoutExecutionClient.tsx` (P12, 2 sitios)
+- `apps/web/src/app/c/[coach_slug]/dashboard/_components/checkin/CheckInBanner.tsx` (P16 set)
+- `apps/web/src/app/c/[coach_slug]/check-in/CheckInForm.tsx` (P16 clear)
+- `apps/web/src/lib/client/app-badge.ts` (nuevo, P16 util)
+- `apps/web/src/components/client/AppBadgeSync.tsx` (nuevo, P16 sync)
+
+Sin typecheck/build local (los gatea el orquestador).

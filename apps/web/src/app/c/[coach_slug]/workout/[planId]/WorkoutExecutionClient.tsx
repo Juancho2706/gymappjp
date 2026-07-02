@@ -661,6 +661,8 @@ function SupersetGroupCard({
                         {m.effType === 'strength' && previousHistory[m.exercise.id] && previousHistory[m.exercise.id].length > 0 && (() => {
                             const prev = previousHistory[m.exercise.id]
                             const best = prev.reduce((mx, s) => ((s.weight_kg ?? 0) > (mx.weight_kg ?? 0) ? s : mx), prev[0])
+                            // P12: micro-reto cuando el objetivo de hoy iguala o supera la última marca.
+                            const beatIt = best.weight_kg != null && best.weight_kg > 0 && m.suggestedWeightKg != null && m.suggestedWeightKg >= best.weight_kg
                             return (
                                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-sm bg-white/[0.04] px-2.5 py-1.5">
                                     <History className="w-3.5 h-3.5 shrink-0 text-on-dark-muted" />
@@ -670,6 +672,11 @@ function SupersetGroupCard({
                                     <span className="font-mono text-[11px] font-bold text-on-dark">
                                         {best.weight_kg ? `${best.weight_kg}kg` : '-'} × {best.reps_done || '-'}
                                     </span>
+                                    {beatIt && (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--sport-300)]">
+                                            <TrendingUp className="h-3 w-3" /> Superá tu marca
+                                        </span>
+                                    )}
                                 </div>
                             )
                         })()}
@@ -1243,6 +1250,8 @@ export function WorkoutExecutionClient({
                                                                 const prev = previousHistory[exercise.id]
                                                                 // Pill compacta (CD): mejor serie de la sesión anterior (mayor peso).
                                                                 const best = prev.reduce((m, s) => ((s.weight_kg ?? 0) > (m.weight_kg ?? 0) ? s : m), prev[0])
+                                                                // P12: micro-reto cuando el objetivo de hoy iguala o supera la última marca.
+                                                                const beatIt = best.weight_kg != null && best.weight_kg > 0 && suggestedWeightKg != null && suggestedWeightKg >= best.weight_kg
                                                                 return (
                                                                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-sm bg-white/[0.04] px-3 py-2">
                                                                         <History className="w-3.5 h-3.5 shrink-0 text-on-dark-muted" />
@@ -1252,6 +1261,11 @@ export function WorkoutExecutionClient({
                                                                         <span className="font-mono text-xs font-bold text-on-dark">
                                                                             {best.weight_kg ? `${best.weight_kg}kg` : '-'} × {best.reps_done || '-'}
                                                                         </span>
+                                                                        {beatIt && (
+                                                                            <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-[var(--sport-300)]">
+                                                                                <TrendingUp className="h-3 w-3" /> Superá tu marca
+                                                                            </span>
+                                                                        )}
                                                                     </div>
                                                                 )
                                                             })()}

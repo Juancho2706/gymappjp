@@ -30,6 +30,7 @@ import {
 import { formatRelativeDate } from '@/lib/date-utils'
 import { springs } from '@/lib/animation-presets'
 import { useBasePath } from '@/components/client/BasePathProvider'
+import { clearAppBadge } from '@/lib/client/app-badge'
 import { SuccessWaveOverlay } from '@/components/ui/SuccessWaveOverlay'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -82,6 +83,11 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
     const [optimizing, setOptimizing] = useState<{ front?: boolean; back?: boolean }>({})
     const preparedRef = useRef<{ front?: Promise<Blob | File | null>; back?: Promise<Blob | File | null> }>({})
     const jobSeq = useRef({ front: 0, back: 0 })
+
+    // P16: al abrir el check-in, limpiar el badge del ícono de la PWA (ya no "espera" nada).
+    useEffect(() => {
+        clearAppBadge()
+    }, [])
 
     useEffect(() => {
         if (state.error != null || state.success) {
