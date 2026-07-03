@@ -140,6 +140,17 @@ export function hexToChannels(hex: string): string {
 }
 
 /**
+ * "rgba(r, g, b, a)" -> "r g b" channels (alpha DROPPED — el sistema de vars de
+ * NativeWind aplica el alpha en la utility `rgb(var(--x) / <alpha>)`). Espejo de
+ * global.css `.dark --color-sport-100: 38 128 255` (comentado como rgba(...,.20)).
+ */
+function rgbaToChannels(rgba: string): string {
+  const m = rgba.match(/-?\d+(?:\.\d+)?/g)
+  if (!m || m.length < 3) return '0 0 0'
+  return `${Math.round(+m[0])} ${Math.round(+m[1])} ${Math.round(+m[2])}`
+}
+
+/**
  * StyleSheet Theme branded via @eva/brand-kit (same engine as web/PWA): the
  * accent is contrast-clamped and matches the published org/coach brand.
  */
@@ -165,6 +176,12 @@ export function brandVars(primaryColor: string | null | undefined, scheme: 'ligh
   // D2 white-label: rampa SPORT derivada (misma engine que web/PWA) → recolorea --sport-* en vivo.
   // En dark, 600/700 usan los foregrounds aclarados legibles sobre la superficie oscura.
   const sport = deriveSportTokens(brand)
+  // En dark, sport-100 FLIPEA a los canales de marca (el alpha .20 lo aplica la
+  // utility) — espejo de global.css .dark --color-sport-100. Sin esto la rampa
+  // CLARA del light se filtra al dark y los bg-sport-100 salen lila claro con
+  // texto blanco = ilegible. dark['100'] es un string rgba(...), así que se
+  // parsea a canales (NO pasa por hexToChannels). 600/700 = foregrounds aclarados.
+  const sport100 = scheme === 'dark' ? rgbaToChannels(sport.dark['100']) : hexToChannels(sport.ramp['100'])
   const sport600 = scheme === 'dark' ? sport.dark['600'] : sport.ramp['600']
   const sport700 = scheme === 'dark' ? sport.dark['700'] : sport.ramp['700']
   return {
@@ -173,7 +190,7 @@ export function brandVars(primaryColor: string | null | undefined, scheme: 'ligh
     '--color-accent': hexToChannels(t.accent),
     '--color-accent-foreground': hexToChannels(t.accent),
     '--color-brand': hexToChannels(sport.ramp['500']),
-    '--color-sport-100': hexToChannels(sport.ramp['100']),
+    '--color-sport-100': sport100,
     '--color-sport-200': hexToChannels(sport.ramp['200']),
     '--color-sport-300': hexToChannels(sport.ramp['300']),
     '--color-sport-400': hexToChannels(sport.ramp['400']),

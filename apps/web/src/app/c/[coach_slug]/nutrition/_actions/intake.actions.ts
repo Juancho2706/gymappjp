@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { NutritionIntakeService } from '@/services/nutrition-intake.service'
+import { NutritionIntakeService, INTAKE_SOURCES } from '@/services/nutrition-intake.service'
 
 /**
  * Off-plan intake (registro fuera de plan) — server actions del alumno.
@@ -18,7 +18,7 @@ const addIntakeEntrySchema = z
     customName: z.string().trim().min(1).max(120).nullable().optional(),
     quantity: z.number().positive().max(100000),
     unit: z.enum(['g', 'ml', 'un']),
-    source: z.enum(['manual', 'recipe', 'plan']).optional(),
+    source: z.enum(INTAKE_SOURCES).optional(),
   })
   .refine((v) => Boolean(v.foodId) || Boolean(v.customName), {
     message: 'Debes indicar un alimento del catálogo o un nombre libre.',
@@ -80,7 +80,7 @@ export async function addIntakeEntryAction(
     customName: customName ?? null,
     quantity,
     unit,
-    source: source ?? 'manual',
+    source: source ?? 'offplan',
   })
 
   if (!inserted) return { success: false, error: 'No se pudo registrar' }

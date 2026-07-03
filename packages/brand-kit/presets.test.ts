@@ -94,6 +94,10 @@ describe('THEME_PRESETS — gate de contraste WCAG (claro + oscuro)', () => {
                 // tints 100/200 legibles como foreground sobre el surface OSCURO
                 expect(contrastRatio(t.ramp['100'], SURFACE_DARK)).toBeGreaterThanOrEqual(4.5)
                 expect(contrastRatio(t.ramp['200'], SURFACE_DARK)).toBeGreaterThanOrEqual(4.5)
+                // dark.100 = tint traslúcido de marca @ 0.20 (evita que la rampa CLARA
+                // se filtre al dark → bg-sport-100 lila claro con texto blanco = ilegible)
+                expect(t.dark['100']).toMatch(/^rgba\(/)
+                expect(t.dark['100']).toMatch(/, 0\.2\)$/)
                 // foregrounds sport de modo oscuro legibles sobre el surface oscuro
                 expect(contrastRatio(t.dark['600'], SURFACE_DARK)).toBeGreaterThanOrEqual(4.5)
                 expect(contrastRatio(t.dark['700'], SURFACE_DARK)).toBeGreaterThanOrEqual(4.5)

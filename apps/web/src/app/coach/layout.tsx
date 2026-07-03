@@ -223,7 +223,7 @@ export default async function CoachLayout({
                    Sin esto la rampa LIGHT del :root se filtra al dark y los fills
                    selected/active (bg-[var(--sport-100..500)]) salen azul claro
                    sobre superficie oscura = invisibles. */
-                --sport-100: rgba(${palette.primaryRgb}, 0.20);
+                --sport-100: ${sportTokens.dark['100']};
                 --sport-200: rgba(${palette.primaryRgb}, 0.28);
                 --sport-300: rgba(${palette.primaryRgb}, 0.40);
                 --sport-400: rgba(${palette.primaryRgb}, 0.55);

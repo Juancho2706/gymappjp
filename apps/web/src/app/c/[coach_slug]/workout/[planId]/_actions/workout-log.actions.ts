@@ -8,6 +8,11 @@ import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '@/lib/date-utils
 export type LogState = {
     error?: string
     success?: boolean
+    /**
+     * Código de clase de error para que el flush de la cola offline decida reintentar vs DESCARTAR.
+     * `invalid_block` = el block_id no existe (huérfano de reseed / FK 23503) → descartar, no reintentar.
+     */
+    code?: 'invalid_block' | 'unauthenticated' | 'validation' | 'db'
 }
 
 export async function logSetAction(
@@ -44,12 +49,12 @@ export async function logSetAction(
 
     const parsed = WorkoutLogSetSchema.safeParse(raw)
     if (!parsed.success) {
-        return { error: parsed.error.issues[0].message }
+        return { error: parsed.error.issues[0].message, code: 'validation' }
     }
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'No autenticado.' }
+    if (!user) return { error: 'No autenticado.', code: 'unauthenticated' }
 
     // R3 (auditoria 2026-06-11): todas las operaciones son sobre workout_logs propios del alumno
     // (client_manage_logs) → cliente user-scoped. RLS ademas acota el DELETE de duplicados.
@@ -103,7 +108,13 @@ export async function logSetAction(
         dbError = insertError
     }
 
-    if (dbError) return { error: dbError.message }
+    if (dbError) {
+        // FK 23503 = el block_id no existe (bloque borrado/recreado por reseed): huérfano → el flush
+        // debe DESCARTARLO, no reintentar en loop. (PostgrestError expone .code de Postgres.)
+        const pgCode = (dbError as { code?: string }).code
+        if (pgCode === '23503') return { error: 'El bloque ya no existe.', code: 'invalid_block' }
+        return { error: dbError.message, code: 'db' }
+    }
 
     revalidatePath('/c', 'layout')
     revalidatePath(`/coach/clients/${user.id}`)

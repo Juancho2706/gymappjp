@@ -314,6 +314,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                     --primary-foreground: ${darkOnAccent};
                     --theme-secondary: ${darkAccent2};
                     --theme-secondary-foreground: ${darkOnAccent2};
+                    --sport-100: ${sportTokens.dark['100']};
                     --sport-600: ${sportTokens.dark['600']};
                     --sport-700: ${sportTokens.dark['700']};
                     --cta-fill: ${sportTokens.ctaFill};

@@ -8,7 +8,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Info, Dumbbell, HeartPulse, Move, GitCommit, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, Play, ChevronDown, type LucideIcon } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
-import { LogSetForm } from './LogSetForm'
+import { LogSetForm, type SetSyncResult } from './LogSetForm'
+import { readWorkoutOfflineQueueForPlan } from '@/lib/workout-offline-queue'
 import { WorkoutTimerProvider, useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import Image from 'next/image'
@@ -535,6 +536,7 @@ interface SupersetGroupCardProps {
     autoTimerEnabled: boolean
     nextCue: { blockId: string; set: number } | null
     onLogged: (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null; note?: string | null }) => void
+    onResult: (blockId: string, setNumber: number, result: SetSyncResult) => void
     openTechnique: (exercise: ExerciseType | null) => void
     registerRowRef: (blockId: string, setNumber: number, el: HTMLDivElement | null) => void
     getExercise: (block: BlockType) => ExerciseType | null
@@ -558,6 +560,7 @@ function SupersetGroupCard({
     autoTimerEnabled,
     nextCue,
     onLogged,
+    onResult,
     openTechnique,
     registerRowRef,
     getExercise,
@@ -802,6 +805,7 @@ function SupersetGroupCard({
                                                 closesRound: () => isRoundComplete(members, round, sessionLogs, m.block.id),
                                             }}
                                             onLogged={onLogged}
+                                            onResult={onResult}
                                         />
                                     </div>
                                 )
@@ -892,6 +896,12 @@ export function WorkoutExecutionClient({
     const blocks = useMemo(() => [...plan.workout_blocks].sort((a, b) => a.order_index - b.order_index), [plan.workout_blocks])
     const [showTechnique, setShowTechnique] = useState(false)
     const [autoTimerEnabled, setAutoTimerEnabled] = useState(true)
+    // Preferencia persistida (QA CEO 2026-07-03): el toggle escribía localStorage pero nunca lo
+    // leía → cada entreno arrancaba en ON. Se lee post-montaje (no en el initializer) para no
+    // desalinear la hidratación SSR.
+    useEffect(() => {
+        if (localStorage.getItem('omni_autotimer') === 'false') setAutoTimerEnabled(false)
+    }, [])
     const [showTimerSettings, setShowTimerSettings] = useState(false)
     const [showCompleted, setShowCompleted] = useState(false)
     const [selectedExercise, setSelectedExercise] = useState<ExerciseType | null>(null)
@@ -1101,7 +1111,38 @@ export function WorkoutExecutionClient({
             setTimeout(() => scrollToNextIncomplete(nextLogs), 350)
         }
     }
+    // Reconciliación del optimismo (contrato a + e): el hijo reporta el resultado REAL del server.
+    // 'error' → REVERTIR el log optimista de esta serie para que el bloque se re-expanda y el error
+    // (con "Reintentar") sea visible aunque el bloque se hubiera colapsado. El valor tipeado NO se
+    // pierde: sigue como respaldo en la cola (write-through) y el hijo reabre la fila editable.
+    const handleResult = useCallback((blockId: string, setNumber: number, result: SetSyncResult) => {
+        if (result === 'error') {
+            setSessionLogs((prev) => prev.filter((l) => !(l.block_id === blockId && l.set_number === setNumber)))
+        }
+    }, [])
+
     const handleFinish = () => {
+        // Contrato (c): no finalizar en falso si quedan series sin sincronizar. Avisar y dar la
+        // chance de esperar la sincronización (el flush corre solo al recuperar conexión / montar).
+        const pending = readWorkoutOfflineQueueForPlan(plan.id)
+        if (pending.length > 0) {
+            const n = pending.length
+            toast.warning(
+                `${n} serie${n !== 1 ? 's' : ''} sin sincronizar`,
+                {
+                    description: 'Se guardarán cuando vuelva la conexión. Podés finalizar igual o esperar.',
+                    duration: 6000,
+                    action: {
+                        label: 'Finalizar igual',
+                        onClick: () => {
+                            setFinishedElapsed(sessionElapsed)
+                            setShowCompleted(true)
+                        },
+                    },
+                },
+            )
+            return
+        }
         setFinishedElapsed(sessionElapsed)
         setShowCompleted(true)
     }
@@ -1269,6 +1310,7 @@ export function WorkoutExecutionClient({
                                                         autoTimerEnabled={autoTimerEnabled}
                                                         nextCue={nextCue}
                                                         onLogged={handleLogged}
+                                                        onResult={handleResult}
                                                         openTechnique={openTechnique}
                                                         registerRowRef={registerRowRef}
                                                         getExercise={getExercise}
@@ -1575,6 +1617,7 @@ export function WorkoutExecutionClient({
                                                                                 prefill={fillByBlock[block.id]?.setNumber === setNumber ? fillByBlock[block.id] : undefined}
                                                                                 reopenNonce={reopenSignal?.blockId === block.id && reopenSignal?.setNumber === setNumber ? reopenSignal.nonce : undefined}
                                                                                 onLogged={handleLogged}
+                                                                                onResult={handleResult}
                                                                             />
                                                                         )
                                                                     })}
@@ -1599,6 +1642,7 @@ export function WorkoutExecutionClient({
                                                                                     mode={effType}
                                                                                     isActive={setNumber === firstUnlogged}
                                                                                     onLogged={handleLogged}
+                                                                                    onResult={handleResult}
                                                                                 />
                                                                             )
                                                                         })}

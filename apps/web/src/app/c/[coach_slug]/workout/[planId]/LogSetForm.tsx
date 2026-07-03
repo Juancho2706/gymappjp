@@ -2,13 +2,19 @@
 
 import { useActionState, useEffect, useRef, useOptimistic, useState, startTransition } from 'react'
 import { useParams } from 'next/navigation'
-import { Check, Loader2, StickyNote, Info } from 'lucide-react'
+import { Check, Loader2, StickyNote, Info, CloudOff } from 'lucide-react'
 import { useFormStatus } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
 import { logSetAction, type LogState } from './_actions/workout-log.actions'
 import { useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
-import { enqueueWorkoutLog } from '@/lib/workout-offline-queue'
+import {
+    enqueueWorkoutLog,
+    dequeueWorkoutLog,
+    readWorkoutOfflineQueue,
+    workoutLogKey,
+    type WorkoutOfflineLog,
+} from '@/lib/workout-offline-queue'
 import { triggerHaptic } from '@/lib/client/haptics'
 import { cn } from '@/lib/utils'
 import { springs } from '@/lib/animation-presets'
@@ -87,6 +93,26 @@ interface Props {
         rir: number | null
         note?: string | null
     }) => void
+    /**
+     * Resultado REAL del guardado en server (reconciliación del optimismo del padre).
+     * 'ok' = confirmado en DB · 'error' = falló (el padre debe REVERTIR su log optimista para que
+     * la fila se re-expanda y el error sea visible aunque el bloque se hubiera colapsado) ·
+     * 'pending' = encolado sin conexión (se sincroniza luego). El motor identidad no cambia.
+     */
+    onResult?: (blockId: string, setNumber: number, result: SetSyncResult) => void
+}
+
+/** Estado de sincronización de una serie de cara al usuario (contrato a). */
+export type SetSyncStatus = 'saved' | 'pending' | 'error'
+export type SetSyncResult = 'ok' | 'error' | 'pending'
+
+/** Lee el item encolado (sin sincronizar) de una serie concreta, si existe. */
+function readQueuedFor(blockId: string, setNumber: number): WorkoutOfflineLog | null {
+    const key = workoutLogKey(blockId, setNumber)
+    for (const item of readWorkoutOfflineQueue()) {
+        if (workoutLogKey(item.blockId, item.setNumber) === key) return item
+    }
+    return null
 }
 
 export function LogSetForm(props: Props) {
@@ -182,15 +208,45 @@ function StrengthLogSetForm({
     reopenNonce,
     supersetRest,
     onLogged,
+    onResult,
 }: Props) {
     const params = useParams<{ coach_slug: string; planId: string }>()
     const [state, formAction] = useActionState(logSetAction, initialState)
+    // Item encolado (sin sincronizar) de ESTA serie tras un reload. Se hidrata en un EFECTO
+    // post-montaje (no en el initializer) para evitar mismatch de hidratación: el server no ve
+    // localStorage → render inicial idéntico, y el pendiente aparece al montar en el cliente.
+    const [queuedInit, setQueuedInit] = useState<WorkoutOfflineLog | null>(null)
     const [optimisticLogged, addOptimisticLogged] = useOptimistic(
         !!existingLog || state.success,
         (_, newValue: boolean) => newValue
     )
+    // Estado de sync de cara al usuario (contrato a). Fuente: server (saved) > cola (pending) > error.
+    const [syncStatus, setSyncStatus] = useState<SetSyncStatus | null>(existingLog ? 'saved' : null)
 
-    const isLogged = optimisticLogged
+    // Hidratación del pendiente (contrato b): si el server NO tiene esta serie pero hay un item en la
+    // cola, mostrarla como PENDING con sus valores — nunca como fila vacía ni como "guardada ✔".
+    useEffect(() => {
+        if (existingLog) return
+        const q = readQueuedFor(blockId, setNumber)
+        if (!q) return
+        setQueuedInit(q)
+        setChipValues({ w: q.weightKg, r: q.repsDone })
+        setRpe(q.rpe ?? null)
+        setRir(q.rir != null && q.rir >= 1 && q.rir <= 10 ? q.rir : null)
+        setNote(q.note ?? '')
+        setSyncStatus('pending')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    // Promoción pending → saved sin remontar: si el flush confirma con la pantalla abierta,
+    // router.refresh() trae existingLog pero este estado local seguiría 'pending' y el chip
+    // ámbar mentiría. El server manda: llegó la fila → está guardada.
+    useEffect(() => {
+        if (existingLog && syncStatus === 'pending') setSyncStatus('saved')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [existingLog])
+
+    const isLogged = optimisticLogged || syncStatus === 'pending'
     const { startRest, cancelRest } = useWorkoutTimer()
     const reducedMotion = useReducedMotion()
     const weightRef = useRef<HTMLInputElement>(null)
@@ -217,7 +273,7 @@ function StrengthLogSetForm({
     // Nota rápida por serie (quick-win E2-6). Source of truth = state; viaja por un mirror oculto.
     const [note, setNote] = useState(existingLog?.note ?? '')
     const [noteOpen, setNoteOpen] = useState(false)
-    // Respaldo de valores para el chip recap mientras el prop existingLog se propaga.
+    // Respaldo de valores para el chip recap mientras el prop existingLog se propaga (o pendiente de cola).
     const [chipValues, setChipValues] = useState<{ w: number | null; r: number | null } | null>(null)
 
     // Prefill "= última vez" (quick-win E2-3): escribe en los inputs uncontrolled al cambiar el nonce.
@@ -235,6 +291,27 @@ function StrengthLogSetForm({
         setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [reopenNonce])
+
+    // Reconciliación del guardado ONLINE (contrato a + e): el resultado REAL del server manda sobre
+    // el optimismo. Confirmado → se saca de la cola (write-through) y queda 'saved'. Error → NO se
+    // pierde el valor (sigue encolado como respaldo), la fila se REABRE y el padre revierte su log
+    // optimista para que el error sea visible aunque el bloque se hubiera colapsado.
+    const lastHandledState = useRef<LogState | null>(null)
+    useEffect(() => {
+        if (state === lastHandledState.current) return
+        if (state.success) {
+            lastHandledState.current = state
+            dequeueWorkoutLog(blockId, setNumber)
+            setSyncStatus('saved')
+            onResult?.(blockId, setNumber, 'ok')
+        } else if (state.error) {
+            lastHandledState.current = state
+            setSyncStatus('error')
+            setEditing(true)
+            onResult?.(blockId, setNumber, 'error')
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [state])
 
     const noteTrimmed = note.trim() || null
     const showNoteControls = isActive || editing
@@ -268,50 +345,53 @@ function StrengthLogSetForm({
         if (rir != null) formData.set('rir', String(rir))
         else formData.delete('rir')
 
-        // Offline guard: enqueue and show optimistic state without hitting server
+        // Normalize decimal comma → dot (es/pt locales) — antes de leer, para que la cola guarde el número real.
+        const wRaw0 = formData.get('weight_kg')
+        if (wRaw0 !== null && wRaw0 !== '') formData.set('weight_kg', String(wRaw0).replace(',', '.'))
+        const weightRaw = formData.get('weight_kg')
+        const repsRaw = formData.get('reps_done')
+        const w = weightRaw === null || weightRaw === '' ? null : Number(weightRaw)
+        const r = repsRaw === null || repsRaw === '' ? null : Number(repsRaw)
+
+        // Write-through SIEMPRE: el valor tipeado entra a la cola ANTES de tocar la red. Así una
+        // request abortada/tragada en 4G inestable (navigator.onLine=true pero sin conectividad real)
+        // NUNCA pierde lo tipeado (bug forense: "valores que jamás llegaron a la DB"). Confirmar el
+        // guardado lo saca de la cola (efecto de reconciliación). Dedup por (block,set): última gana.
+        enqueueWorkoutLog({
+            blockId,
+            setNumber,
+            weightKg: w,
+            repsDone: r,
+            rpe,
+            rir,
+            note: noteTrimmed,
+            planId: params.planId,
+            coachSlug: params.coach_slug,
+            timestamp: Date.now(),
+        })
+        settleRef.current = true
+        prRef.current = prThresholdKg != null && w != null && w > 0 && w >= prThresholdKg
+        setChipValues({ w, r })
+
+        // Offline guard: encolado y en estado PENDIENTE (nunca "guardado ✔"), sin tocar el server.
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
-            const wRaw = formData.get('weight_kg')
-            const rRaw = formData.get('reps_done')
-            const w = wRaw === null || wRaw === '' ? null : Number(String(wRaw).replace(',', '.'))
-            const r = rRaw === null || rRaw === '' ? null : Number(rRaw)
-            enqueueWorkoutLog({
-                blockId,
-                setNumber,
-                weightKg: w,
-                repsDone: r,
-                rpe,
-                rir,
-                note: noteTrimmed,
-                planId: params.planId,
-                coachSlug: params.coach_slug,
-                timestamp: Date.now(),
-            })
-            settleRef.current = true
-            prRef.current = prThresholdKg != null && w != null && w > 0 && w >= prThresholdKg
-            setChipValues({ w, r })
             addOptimisticLogged(true)
+            setSyncStatus('pending')
             setNoteOpen(false)
             setEditing(false)
+            onResult?.(blockId, setNumber, 'pending')
             toast.info('Sin conexión — el log se guardará al reconectar')
             return
         }
 
         addOptimisticLogged(true)
+        // En vuelo online: PENDIENTE hasta que el server confirme (contrato a). El efecto de
+        // reconciliación lo pasa a 'saved' (✔) o 'error' (reabre + respaldo en cola).
+        setSyncStatus('pending')
         setNoteOpen(false)
         setEditing(false)
         buildRest()
 
-        // Normalize decimal comma → dot (es/pt locales)
-        const wRaw = formData.get('weight_kg')
-        if (wRaw !== null && wRaw !== '') formData.set('weight_kg', String(wRaw).replace(',', '.'))
-
-        const weightRaw = formData.get('weight_kg')
-        const repsRaw = formData.get('reps_done')
-        const w = weightRaw === null || weightRaw === '' ? null : Number(weightRaw)
-        const r = repsRaw === null || repsRaw === '' ? null : Number(repsRaw)
-        settleRef.current = true
-        prRef.current = prThresholdKg != null && w != null && w > 0 && w >= prThresholdKg
-        setChipValues({ w, r })
         onLogged?.({
             blockId,
             setNumber,
@@ -330,16 +410,26 @@ function StrengthLogSetForm({
         const dispW = existingLog?.weight_kg ?? chipValues?.w ?? null
         const dispR = existingLog?.reps_done ?? chipValues?.r ?? null
         // Se celebra sólo la serie recién cerrada en esta sesión (refs en false para logs cargados).
-        const celebrate = settleRef.current && !reducedMotion
-        const prGlow = prRef.current && !reducedMotion
+        const isPending = syncStatus === 'pending'
+        const celebrate = !isPending && settleRef.current && !reducedMotion
+        const prGlow = !isPending && prRef.current && !reducedMotion
         return (
             <motion.button
                 layout={!reducedMotion}
                 transition={reducedMotion ? { duration: 0 } : springs.smooth}
                 type="button"
                 onClick={() => setEditing(true)}
-                className="relative flex w-full items-center gap-2 overflow-hidden rounded-control border border-[var(--sport-500)]/25 bg-[var(--sport-500)]/[0.06] px-3 py-2 text-left transition-colors hover:bg-[var(--sport-500)]/[0.12] active:scale-[0.99]"
-                aria-label={`Serie ${setNumber} registrada — tocá para editar`}
+                className={cn(
+                    'relative flex w-full items-center gap-2 overflow-hidden rounded-control border px-3 py-2 text-left transition-colors active:scale-[0.99]',
+                    isPending
+                        ? 'border-amber-500/30 bg-amber-500/[0.06] hover:bg-amber-500/[0.12]'
+                        : 'border-[var(--sport-500)]/25 bg-[var(--sport-500)]/[0.06] hover:bg-[var(--sport-500)]/[0.12]',
+                )}
+                aria-label={
+                    isPending
+                        ? `Serie ${setNumber} sin sincronizar — tocá para editar`
+                        : `Serie ${setNumber} registrada — tocá para editar`
+                }
             >
                 {prGlow && (
                     <motion.span
@@ -367,14 +457,21 @@ function StrengthLogSetForm({
                 {noteTrimmed && (
                     <StickyNote className="h-3.5 w-3.5 shrink-0 text-amber-400" aria-label="Serie con nota" />
                 )}
-                <motion.span
-                    className="ml-auto shrink-0 text-[var(--sport-400)]"
-                    initial={celebrate ? { scale: 0, rotate: -25 } : false}
-                    animate={{ scale: 1, rotate: 0 }}
-                    transition={celebrate ? springs.elastic : { duration: 0 }}
-                >
-                    <Check className="h-4 w-4" />
-                </motion.span>
+                {isPending ? (
+                    <span className="ml-auto flex shrink-0 items-center gap-1 text-amber-400">
+                        <CloudOff className="h-3.5 w-3.5" />
+                        <span className="text-[10px] font-bold uppercase tracking-wide">Sin sincronizar</span>
+                    </span>
+                ) : (
+                    <motion.span
+                        className="ml-auto shrink-0 text-[var(--sport-400)]"
+                        initial={celebrate ? { scale: 0, rotate: -25 } : false}
+                        animate={{ scale: 1, rotate: 0 }}
+                        transition={celebrate ? springs.elastic : { duration: 0 }}
+                    >
+                        <Check className="h-4 w-4" />
+                    </motion.span>
+                )}
             </motion.button>
         )
     }
@@ -428,7 +525,7 @@ function StrengthLogSetForm({
                                 step="0.5"
                                 min="0"
                                 inputMode="decimal"
-                                defaultValue={existingLog?.weight_kg ?? suggestedWeightKg ?? ''}
+                                defaultValue={existingLog?.weight_kg ?? queuedInit?.weightKg ?? suggestedWeightKg ?? ''}
                                 placeholder="-"
                                 className={inputClass}
                             />
@@ -442,7 +539,7 @@ function StrengthLogSetForm({
                                 type="number"
                                 min="0"
                                 inputMode="numeric"
-                                defaultValue={existingLog?.reps_done ?? ''}
+                                defaultValue={existingLog?.reps_done ?? queuedInit?.repsDone ?? ''}
                                 placeholder="-"
                                 className={inputClass}
                             />
@@ -584,6 +681,7 @@ function TypedLogSetRow({
     mode,
     supersetRest,
     onLogged,
+    onResult,
 }: Props & { mode: Exclude<LogSetMode, 'strength'> }) {
     const params = useParams<{ coach_slug: string; planId: string }>()
     const [state, formAction] = useActionState(logSetAction, initialState)
@@ -623,27 +721,47 @@ function TypedLogSetRow({
         rpe: parseNum(formData.get('rpe')),
     })
 
+    // Reconciliación del guardado (contrato a + e): éxito → sale de la cola; error → respaldo en cola
+    // + el padre revierte su optimismo (onResult).
+    const lastHandledState = useRef<LogState | null>(null)
+    useEffect(() => {
+        if (state === lastHandledState.current) return
+        if (state.success) {
+            lastHandledState.current = state
+            dequeueWorkoutLog(blockId, setNumber)
+            onResult?.(blockId, setNumber, 'ok')
+        } else if (state.error) {
+            lastHandledState.current = state
+            onResult?.(blockId, setNumber, 'error')
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [state])
+
     const handleSubmit = (formData: FormData) => {
         normalizeFormData(formData)
         const values = collectValues(formData)
 
+        // Write-through SIEMPRE: el registro entra a la cola antes de tocar la red (respaldo ante
+        // request abortada en red inestable). Confirmar el guardado lo saca (efecto de arriba).
+        enqueueWorkoutLog({
+            blockId,
+            setNumber,
+            weightKg: null,
+            repsDone: values.repsDone,
+            rpe: values.rpe,
+            rir: null,
+            actualDurationSec: values.actualDurationSec,
+            actualDistanceM: values.actualDistanceM,
+            actualHoldSec: values.actualHoldSec,
+            actualAvgHr: values.actualAvgHr,
+            planId: params.planId,
+            coachSlug: params.coach_slug,
+            timestamp: Date.now(),
+        })
+
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
-            enqueueWorkoutLog({
-                blockId,
-                setNumber,
-                weightKg: null,
-                repsDone: values.repsDone,
-                rpe: values.rpe,
-                rir: null,
-                actualDurationSec: values.actualDurationSec,
-                actualDistanceM: values.actualDistanceM,
-                actualHoldSec: values.actualHoldSec,
-                actualAvgHr: values.actualAvgHr,
-                planId: params.planId,
-                coachSlug: params.coach_slug,
-                timestamp: Date.now(),
-            })
             addOptimisticLogged(true)
+            onResult?.(blockId, setNumber, 'pending')
             toast.info('Sin conexión — el registro se guardará al reconectar')
             return
         }

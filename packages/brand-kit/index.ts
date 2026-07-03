@@ -247,8 +247,14 @@ export type SportTokens = {
     focusRing: string
     /** Texto legible SOBRE el fill de marca (white|ink) — espejo de `--text-on-sport`. */
     textOnSport: string
-    /** Foregrounds sport ACLARADOS para modo OSCURO (legibles ≥4.5:1 sobre #0A0D12). */
-    dark: { '600': string; '700': string }
+    /**
+     * Overrides sport para modo OSCURO. `100` = tint TRASLÚCIDO de marca @ 0.20
+     * alpha (espejo exacto de globals.css `.dark --sport-100`) — sin él, la rampa
+     * CLARA del :root se filtra al dark y los `bg-sport-100` (day-cards del
+     * dashboard alumno, Badge soft, chips) quedan lila claro con texto blanco =
+     * ilegible. `600`/`700` = foregrounds ACLARADOS (legibles ≥4.5:1 sobre #0A0D12).
+     */
+    dark: { '100': string; '600': string; '700': string }
 }
 
 /**
@@ -315,13 +321,16 @@ export function deriveSportTokens(brandHex: string): SportTokens {
     // Dark-mode sport foregrounds: lightened brand, legible ON the dark surface.
     const dark600 = clampAccent(oklchHex(0.72, Math.min(cBrand * 0.7, 0.16), h), SURFACE_APP_DARK, AA_TEXT)
     const dark700 = clampAccent(oklchHex(0.8, Math.min(cBrand * 0.55, 0.13), h), SURFACE_APP_DARK, AA_TEXT)
+    // Dark-mode sport-100: tint traslúcido de marca @ 0.20 alpha — espejo exacto
+    // de globals.css `.dark --sport-100: rgba(38,128,255,0.20)` (default #2680FF).
+    const dark100 = rgbaFromHex(brandHex, 0.2)
 
     return {
         ramp,
         ctaFill,
         focusRing: rgbaFromHex(brandHex, 0.4),
         textOnSport: pickOnColor(ctaFill),
-        dark: { '600': dark600, '700': dark700 },
+        dark: { '100': dark100, '600': dark600, '700': dark700 },
     }
 }
 

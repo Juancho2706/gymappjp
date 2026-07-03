@@ -13,6 +13,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { addIntakeEntryAction } from '../_actions/intake.actions'
+import type { IntakeSource } from '@/services/nutrition-intake.service'
 
 /**
  * Registro fuera de plan (off-plan intake) del alumno — base tier.
@@ -119,7 +120,7 @@ export function OffPlanLogger({ recents, coachSlug, today }: OffPlanLoggerProps)
     }
   }, [term, open, supabase])
 
-  async function logFood(foodId: string, name: string) {
+  async function logFood(foodId: string, name: string, source: IntakeSource = 'offplan') {
     setPendingId(foodId)
     const unit = SEARCH_UNIT
     const res = await addIntakeEntryAction({
@@ -128,7 +129,7 @@ export function OffPlanLogger({ recents, coachSlug, today }: OffPlanLoggerProps)
       foodId,
       quantity: DEFAULT_QUANTITY,
       unit,
-      source: 'manual',
+      source,
     })
     setPendingId(null)
     if (res.success) {
@@ -236,7 +237,7 @@ export function OffPlanLogger({ recents, coachSlug, today }: OffPlanLoggerProps)
                         key={r.id}
                         type="button"
                         disabled={pendingId !== null}
-                        onClick={() => logFood(r.id, r.name)}
+                        onClick={() => logFood(r.id, r.name, 'recent')}
                         className="inline-flex h-11 max-w-full items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-50 touch-manipulation"
                       >
                         {pendingId === r.id ? (
@@ -293,7 +294,7 @@ export function OffPlanLogger({ recents, coachSlug, today }: OffPlanLoggerProps)
                           <button
                             type="button"
                             disabled={pendingId !== null}
-                            onClick={() => logFood(f.id, f.name)}
+                            onClick={() => logFood(f.id, f.name, 'offplan')}
                             className="flex min-h-12 w-full items-center justify-between gap-3 py-2.5 text-left transition-colors hover:bg-muted/40 disabled:opacity-50 touch-manipulation"
                           >
                             <span className="min-w-0 flex-1">

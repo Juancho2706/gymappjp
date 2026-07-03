@@ -19,26 +19,37 @@ export function WorkoutTimerSettingsPanel({
   onToggleAutoTimer,
 }: WorkoutTimerSettingsPanelProps) {
   const { sound, volume, setSoundPersist, setVolumePersist } = useRestTimerPreferences()
-  const [notificationsGranted, setNotificationsGranted] = useState<boolean | null>(true)
+  // null = cargando (evita flash del card antes de leer el permiso real).
+  const [permission, setPermission] = useState<
+    'granted' | 'denied' | 'default' | 'unsupported' | null
+  >(null)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!('Notification' in window)) {
-      setNotificationsGranted(null)
+      setPermission('unsupported')
       return
     }
-    setNotificationsGranted(Notification.permission === 'granted')
+    setPermission(Notification.permission)
   }, [])
 
   const requestNotificationPermission = async () => {
     if (!('Notification' in window)) return
-    const permission = await Notification.requestPermission()
-    setNotificationsGranted(permission === 'granted')
-    if (permission === 'granted') {
-      new Notification('¡Notificaciones activadas!', {
-        body: 'El cronómetro te avisará cuando termine el descanso.',
-        icon: BRAND_APP_ICON,
-      })
+    // requestPermission siempre resuelve con el estado final (incluso 'denied' si estaba bloqueado).
+    const result = await Notification.requestPermission()
+    setPermission(result)
+    if (result === 'granted') {
+      // PWA/Android: las notificaciones de pagina solo van via el service worker
+      // (new Notification() lanza "Illegal constructor"). Confirmacion en try/catch silencioso.
+      try {
+        const reg = await navigator.serviceWorker?.getRegistration()
+        await reg?.showNotification('¡Notificaciones activadas!', {
+          body: 'El cronómetro te avisará cuando termine el descanso.',
+          icon: BRAND_APP_ICON,
+        })
+      } catch {
+        // sin service worker o showNotification no disponible: el permiso quedo igual concedido.
+      }
     }
   }
 
@@ -116,28 +127,37 @@ export function WorkoutTimerSettingsPanel({
         </div>
       </section>
 
-      {notificationsGranted === false && (
+      {(permission === 'default' || permission === 'denied') && (
         <section className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4 flex gap-3 text-xs text-amber-800 dark:text-amber-200">
           <BellRing className="w-4 h-4 shrink-0 mt-0.5" />
           <div>
             <p className="font-semibold mb-1">Alertas en segundo plano</p>
-            <p className="mb-2 opacity-90">
-              Activa las notificaciones para avisos si bloqueas la pantalla o cambias de app.
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 text-xs border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/15"
-              onClick={requestNotificationPermission}
-            >
-              Activar permisos
-            </Button>
+            {permission === 'default' ? (
+              <>
+                <p className="mb-2 opacity-90">
+                  Activa las notificaciones para avisos si bloqueas la pantalla o cambias de app.
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/15"
+                  onClick={requestNotificationPermission}
+                >
+                  Activar permisos
+                </Button>
+              </>
+            ) : (
+              <p className="opacity-90">
+                Las notificaciones están bloqueadas para esta app. Actívalas en los ajustes del
+                navegador o del sistema (Ajustes → Notificaciones) y vuelve a intentar.
+              </p>
+            )}
           </div>
         </section>
       )}
 
-      {notificationsGranted === null && (
+      {permission === 'unsupported' && (
         <p className="text-xs text-muted-foreground">
           Este navegador no soporta notificaciones; mantén la app visible para oír la alarma.
         </p>

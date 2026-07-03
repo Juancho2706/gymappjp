@@ -13,7 +13,15 @@ import { Database } from '@/lib/database.types'
 
 type IntakeEntryRow = Database['public']['Tables']['nutrition_intake_entries']['Row']
 
-export type IntakeSource = 'manual' | 'recipe' | 'plan'
+/**
+ * Valores permitidos de `source` — deben coincidir EXACTAMENTE con el
+ * CHECK de la migracion de `nutrition_intake_entries`
+ * (`source IN ('offplan','quickadd','recent','copy')`). Fuente unica de verdad:
+ * el schema Zod de la action y los tests derivan de aca (evita drift codigo/DB).
+ */
+export const INTAKE_SOURCES = ['offplan', 'quickadd', 'recent', 'copy'] as const
+
+export type IntakeSource = (typeof INTAKE_SOURCES)[number]
 
 /** Subconjunto del catálogo de alimentos resuelto para una entrada. */
 export type IntakeFoodRef = {
@@ -68,12 +76,19 @@ export class NutritionIntakeService {
         custom_name: input.customName ?? null,
         quantity: input.quantity,
         unit: input.unit,
-        source: input.source ?? 'manual',
+        source: input.source ?? 'offplan',
       })
       .select(INTAKE_SELECT)
       .single()
 
-    if (error || !data) return null
+    if (error || !data) {
+      if (error) {
+        // Server-side only (no filtra al cliente): deja rastro del motivo real
+        // del fallo de insert para no debuggear a ciegas (ej. violacion de CHECK).
+        console.error('[nutrition-intake] insert failed:', error.message)
+      }
+      return null
+    }
     return data as unknown as IntakeEntryWithFood
   }
 

@@ -139,6 +139,8 @@ describe('deriveSportRamp / deriveSportTokens (D2 white-label sport ramp)', () =
                 expect(tokens.focusRing).toMatch(/^rgba\(/)
                 expect(tokens.focusRing).toContain('0.4') // brand @ 0.40 alpha
                 expect(typeof tokens.textOnSport).toBe('string')
+                expect(tokens.dark['100']).toMatch(/^rgba\(/)
+                expect(tokens.dark['100']).toContain('0.2') // marca @ 0.20 alpha
                 expect(typeof tokens.dark['600']).toBe('string')
                 expect(typeof tokens.dark['700']).toBe('string')
             })
@@ -179,6 +181,10 @@ describe('deriveSportRamp / deriveSportTokens (D2 white-label sport ramp)', () =
 
     it('focusRing encodes the brand RGB at 0.40 alpha (default #2680FF → 38,128,255)', () => {
         expect(deriveSportTokens('#2680FF').focusRing).toBe('rgba(38, 128, 255, 0.4)')
+    })
+
+    it('dark.100 = tint traslúcido de marca @ 0.20 alpha (espejo exacto de globals.css .dark --sport-100)', () => {
+        expect(deriveSportTokens('#2680FF').dark['100']).toBe('rgba(38, 128, 255, 0.2)')
     })
 
     it('survives achromatic / extreme brand inputs (no throw, still WCAG-safe)', () => {
