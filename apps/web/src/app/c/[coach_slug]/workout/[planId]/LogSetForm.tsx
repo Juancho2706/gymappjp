@@ -2,10 +2,11 @@
 
 import { useActionState, useEffect, useRef, useOptimistic, useState, startTransition } from 'react'
 import { useParams } from 'next/navigation'
-import { Check, Loader2, StickyNote, Info, CloudOff } from 'lucide-react'
+import { Check, Loader2, StickyNote, HelpCircle, CloudOff } from 'lucide-react'
 import { useFormStatus } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
+import { Popover, PopoverContent, PopoverDescription, PopoverTrigger } from '@/components/ui/popover'
 import { logSetAction, type LogState } from './_actions/workout-log.actions'
 import { useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
 import {
@@ -126,14 +127,31 @@ export function LogSetForm(props: Props) {
 
 const SCALE_OPTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const
 
-/** Anclas de la escala RPE 1-10 (mini-sheet explicativa 1-tap, quick-win E2-7). */
-const RPE_INFO: { label: string; text: string }[] = [
-    { label: '10', text: 'Máximo esfuerzo · al fallo (0 reps en reserva)' },
-    { label: '8–9', text: 'Muy exigente · te quedaban 1–2 reps' },
-    { label: '6–7', text: 'Exigente · te quedaban 3–4 reps' },
-    { label: '4–5', text: 'Moderado · varias reps en reserva' },
-    { label: '1–3', text: 'Muy fácil · calentamiento' },
-]
+/** Ayuda 1-tap para el alumno — texto corto, sin jerga (quick-win E2-7). */
+const RPE_HELP = 'RPE = qué tan duro se sintió la serie. 1 = muy fácil · 10 = no podías hacer ni una repetición más.'
+const RIR_HELP = 'RIR = cuántas reps te quedaban en el tanque. Si te quedaba 1, es 1. Así de simple.'
+
+/**
+ * Botoncito (?) accesible junto a los labels de RPE/RIR: Popover con explicación corta para
+ * alumnos (mismo patrón que InfoTooltip de nutrición). El icono es chico pero el hit-area es
+ * ≥44px (h-11 w-11) con márgenes negativos para no inflar la fila del label.
+ */
+function EffortHelp({ label, text }: { label: string; text: string }) {
+    return (
+        <Popover>
+            <PopoverTrigger
+                type="button"
+                aria-label={`¿Qué es el ${label}?`}
+                className="-my-3 inline-flex h-11 w-11 items-center justify-center rounded-full text-on-dark-muted transition-colors hover:text-on-dark touch-manipulation"
+            >
+                <HelpCircle className="h-3.5 w-3.5" aria-hidden />
+            </PopoverTrigger>
+            <PopoverContent className="w-64">
+                <PopoverDescription className="text-xs leading-relaxed">{text}</PopoverDescription>
+            </PopoverContent>
+        </Popover>
+    )
+}
 
 /**
  * Escala segmentada 1-10 (dots) para registrar esfuerzo por serie (decisión CEO): la usan
@@ -268,8 +286,6 @@ function StrengthLogSetForm({
     const [rir, setRir] = useState<number | null>(
         existingLog?.rir != null && existingLog.rir >= 1 && existingLog.rir <= 10 ? existingLog.rir : null,
     )
-    // Explicación RPE 1-tap (quick-win E2-7).
-    const [rpeInfoOpen, setRpeInfoOpen] = useState(false)
     // Nota rápida por serie (quick-win E2-6). Source of truth = state; viaja por un mirror oculto.
     const [note, setNote] = useState(existingLog?.note ?? '')
     const [noteOpen, setNoteOpen] = useState(false)
@@ -527,6 +543,13 @@ function StrengthLogSetForm({
                                 inputMode="decimal"
                                 defaultValue={existingLog?.weight_kg ?? queuedInit?.weightKg ?? suggestedWeightKg ?? ''}
                                 placeholder="-"
+                                // Enter NO cierra la serie (implicit submit) — pasa el foco a reps. Submit solo por "Listo".
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault()
+                                        repsRef.current?.focus()
+                                    }
+                                }}
                                 className={inputClass}
                             />
                         </label>
@@ -541,6 +564,13 @@ function StrengthLogSetForm({
                                 inputMode="numeric"
                                 defaultValue={existingLog?.reps_done ?? queuedInit?.repsDone ?? ''}
                                 placeholder="-"
+                                // Enter cierra el teclado (blur) sin submitear — deja meter RPE/RIR antes de "Listo".
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault()
+                                        e.currentTarget.blur()
+                                    }
+                                }}
                                 className={inputClass}
                             />
                         </label>
@@ -552,52 +582,18 @@ function StrengthLogSetForm({
                     <div>
                         <span className="mb-1 flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">
                             Esfuerzo · RPE
-                            {isActive && (
-                                <button
-                                    type="button"
-                                    onClick={() => setRpeInfoOpen((o) => !o)}
-                                    aria-expanded={rpeInfoOpen}
-                                    aria-label="¿Qué es el RPE?"
-                                    className="flex h-5 w-5 items-center justify-center rounded-full text-on-dark-muted transition-colors hover:text-on-dark"
-                                >
-                                    <Info className="h-3 w-3" />
-                                </button>
-                            )}
+                            <EffortHelp label="RPE" text={RPE_HELP} />
                         </span>
                         <ScaleDots name="RPE" value={rpe} onChange={setRpe} reducedMotion={reducedMotion} compact={!isActive} />
                     </div>
                     <div>
-                        <span className="mb-1 block text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">
+                        <span className="mb-1 flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">
                             Reps en reserva · RIR
+                            <EffortHelp label="RIR" text={RIR_HELP} />
                         </span>
                         <ScaleDots name="RIR" value={rir} onChange={setRir} reducedMotion={reducedMotion} compact={!isActive} />
                     </div>
                 </div>
-
-                {/* Explicación RPE/RIR 1-tap (quick-win E2-7) — anclas 1-10 */}
-                <AnimatePresence initial={false}>
-                    {rpeInfoOpen && (
-                        <motion.div
-                            initial={reducedMotion ? false : { height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={reducedMotion ? undefined : { height: 0, opacity: 0 }}
-                            transition={reducedMotion ? { duration: 0 } : { duration: 0.2 }}
-                            className="overflow-hidden"
-                        >
-                            <ul className="mt-2 space-y-0.5 rounded-control border border-[var(--border-inverse)] bg-white/[0.03] p-2.5">
-                                {RPE_INFO.map((row) => (
-                                    <li key={row.label} className="flex items-baseline gap-2 text-[11px] leading-snug">
-                                        <span className="w-11 shrink-0 font-mono font-bold text-[var(--sport-300)]">RPE {row.label}</span>
-                                        <span className="text-on-dark/85">{row.text}</span>
-                                    </li>
-                                ))}
-                                <li className="mt-1.5 border-t border-[var(--border-inverse)] pt-1.5 text-[11px] leading-snug text-on-dark/70">
-                                    RIR = reps en reserva (cuántas te quedaban). En 1-10, RPE alto = RIR bajo.
-                                </li>
-                            </ul>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
 
                 <div className="mt-3 flex justify-end">
                     <SubmitSetButton isLogged={Boolean(isLogged)} label={isActive ? (isLogged ? 'Guardar' : 'Listo') : undefined} />
@@ -806,6 +802,19 @@ function TypedLogSetRow({
         })
     }
 
+    // Enter en cualquier input NO submitea (implicit submission cerraba la serie sin dejar meter RPE):
+    // avanza al siguiente numérico, y en el último hace blur. Submit solo por el botón explícito.
+    const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+        if (e.key !== 'Enter') return
+        const target = e.target as HTMLInputElement
+        if (target.tagName !== 'INPUT' || target.type !== 'number') return
+        e.preventDefault()
+        const inputs = Array.from(e.currentTarget.querySelectorAll<HTMLInputElement>('input[type="number"]'))
+        const next = inputs[inputs.indexOf(target) + 1]
+        if (next) next.focus()
+        else target.blur()
+    }
+
     const gridCols =
         mode === 'cardio'
             ? 'grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_1fr_auto]'
@@ -819,6 +828,7 @@ function TypedLogSetRow({
                 key={existingLog ? `tlog-${existingLog.actual_duration_sec}-${existingLog.actual_hold_sec}-${existingLog.reps_done}` : 'new'}
                 ref={formRef}
                 action={handleSubmit}
+                onKeyDown={handleFormKeyDown}
                 className={`grid ${gridCols} gap-2 items-center px-1.5 md:px-2 py-1.5`}
             >
                 <input type="hidden" name="block_id" value={blockId} />
@@ -930,8 +940,9 @@ function TypedLogSetRow({
                         transition={reducedMotion ? { duration: 0 } : { duration: 0.25 }}
                         className="overflow-hidden px-2 pb-2"
                     >
-                        <div className="text-[10px] font-semibold text-on-dark-muted mb-1 mt-1">
+                        <div className="flex items-center gap-1 text-[10px] font-semibold text-on-dark-muted mb-1 mt-1">
                             RPE {rpeLocal != null ? `· ${rpeLocal}` : '(opcional)'}
+                            <EffortHelp label="RPE" text={RPE_HELP} />
                         </div>
                         <input
                             type="range"

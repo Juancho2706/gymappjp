@@ -45,12 +45,6 @@ export default async function ProfilePage({ params }: Props) {
     const coachBranding = Array.isArray(coachRow) ? coachRow[0] : coachRow
     const brandName = headersList.get('x-coach-brand-name') || coachBranding?.brand_name || 'tu coach'
 
-    const basePath = headersList.get('x-client-base-path') ?? ''
-    const isTeam = headersList.get('x-workspace-brand-source') === 'organization' || basePath.startsWith('/t')
-
-    const useBrandColorsStr = headersList.get('x-client-use-brand-colors')
-    const initialUseBrandColors = useBrandColorsStr ? useBrandColorsStr === 'true' : true
-
     return (
         <ProfileClient
             coachSlug={coach_slug}
@@ -62,8 +56,6 @@ export default async function ProfilePage({ params }: Props) {
             totalWorkouts={dayCounts.length}
             showMovement={showMovement}
             showBodyComposition={showBodyComposition}
-            initialUseBrandColors={initialUseBrandColors}
-            showBrandColorsToggle={!isTeam}
         />
     )
 }

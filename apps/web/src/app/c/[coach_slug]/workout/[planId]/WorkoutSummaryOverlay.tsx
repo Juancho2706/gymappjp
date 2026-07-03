@@ -8,6 +8,8 @@ import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { springs, fadeSlideUp, staggerContainer } from '@/lib/animation-presets'
 import { MuscleMapSvg } from './MuscleMapSvg'
 import { muscleGroupsToRegionIntensity, MUSCLE_REGIONS } from './muscle-map'
+import { PRShareCardModal } from './PRShareCardModal'
+import type { WorkoutPRCardData } from '@/lib/workout-pr-card-canvas'
 
 /** "12 jun" — fecha corta es-CL, día calendario Santiago. */
 function fmtShortDate(iso: string): string {
@@ -194,6 +196,7 @@ export function WorkoutSummaryOverlay({
     const totalVolume = logs.reduce((acc, l) => acc + (l.weight_kg || 0) * (l.reps_done || 0), 0)
 
     const [shared, setShared] = useState(false)
+    const [prCard, setPrCard] = useState<WorkoutPRCardData | null>(null)
 
     const handleShare = useCallback(async () => {
         const prText = detectedPRs.length > 0 ? ` 🏆 ${detectedPRs.length} récord${detectedPRs.length > 1 ? 's' : ''}!` : ''
@@ -287,8 +290,18 @@ export function WorkoutSummaryOverlay({
                             </p>
                             <div className="space-y-2">
                                 {detectedPRs.map((pr, i) => (
-                                    <motion.div
+                                    <motion.button
                                         key={pr.exerciseName}
+                                        type="button"
+                                        onClick={() =>
+                                            setPrCard({
+                                                exerciseName: pr.exerciseName,
+                                                newWeightKg: pr.newWeightKg,
+                                                prevWeightKg: pr.prevWeightKg,
+                                                pct: pr.pct,
+                                                estimated1RM: pr.estimated1RM,
+                                            })
+                                        }
                                         initial={reducedMotion ? false : { opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={
@@ -296,9 +309,14 @@ export function WorkoutSummaryOverlay({
                                                 ? { duration: 0 }
                                                 : { delay: 0.1 * i, duration: 0.28 }
                                         }
-                                        className="rounded-lg border border-amber-400/25 bg-white/[0.06] px-3 py-2 text-sm"
+                                        className="group w-full rounded-lg border border-amber-400/25 bg-white/[0.06] px-3 py-2 text-left text-sm transition-colors hover:bg-white/[0.1] active:bg-white/[0.12]"
                                     >
-                                        <p className="font-bold text-on-dark">{pr.exerciseName}</p>
+                                        <div className="flex items-start justify-between gap-2">
+                                            <p className="font-bold text-on-dark">{pr.exerciseName}</p>
+                                            <span className="flex shrink-0 items-center gap-1 text-[10px] font-semibold text-amber-200/90">
+                                                <Share2 className="h-3 w-3" /> Compartir
+                                            </span>
+                                        </div>
                                         <p className="text-xs text-on-dark-muted mt-0.5">
                                             {pr.prevWeightKg} kg → {pr.newWeightKg} kg
                                             {pr.pct > 0 ? ` (+${pr.pct}%)` : ''}
@@ -311,7 +329,7 @@ export function WorkoutSummaryOverlay({
                                         <p className="text-[10px] text-on-dark-muted mt-1">
                                             1RM estimado: <span className="font-semibold text-on-dark">{pr.estimated1RM} kg</span>
                                         </p>
-                                    </motion.div>
+                                    </motion.button>
                                 ))}
                             </div>
                         </div>
@@ -427,6 +445,8 @@ export function WorkoutSummaryOverlay({
                     </button>
                 </div>
             </div>
+
+            {prCard && <PRShareCardModal pr={prCard} onClose={() => setPrCard(null)} />}
         </div>
     )
 }

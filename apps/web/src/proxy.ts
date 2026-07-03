@@ -855,12 +855,11 @@ export async function proxy(request: NextRequest) {
             // Verify the user is a client belonging to this coach (direct or via org membership)
             const { data: rawClientData } = await supabase
                 .from('clients')
-                .select('id, coach_id, org_id, team_id, force_password_change, onboarding_completed, is_active, is_archived, use_coach_brand_colors')
+                .select('id, coach_id, org_id, team_id, force_password_change, onboarding_completed, is_active, is_archived')
                 .eq('id', user.id)
                 .maybeSingle()
 
-            type ClientWithBrand = Client & { use_coach_brand_colors?: boolean }
-            let client: ClientWithBrand | null = null
+            let client: Client | null = null
             // F2: org branding may only be painted when the accessing coach is an ACTIVE
             // member of the client's org. A direct coach_id match is NOT enough — a coach
             // removed from the org must stop showing org white-label to their (now orphaned)
@@ -868,13 +867,13 @@ export async function proxy(request: NextRequest) {
             let orgMembershipActive = false
             if (rawClientData) {
                 if (rawClientData.coach_id === coach.id) {
-                    client = rawClientData as unknown as ClientWithBrand
+                    client = rawClientData as unknown as Client
                     if (rawClientData.org_id) {
                         orgMembershipActive = await isCoachActiveOrgMember(supabase, rawClientData.org_id, coach.id)
                     }
                 } else if (rawClientData.org_id) {
                     if (await isCoachActiveOrgMember(supabase, rawClientData.org_id, coach.id)) {
-                        client = rawClientData as unknown as ClientWithBrand
+                        client = rawClientData as unknown as Client
                         orgMembershipActive = true
                     }
                 }
@@ -937,13 +936,10 @@ export async function proxy(request: NextRequest) {
                 requestHeaders.set('x-orphan-org-name', typeof orphanName === 'string' ? orphanName : '')
             }
 
-            // Default behavior if columns are missing or false
-            const useBrandColors = client.use_coach_brand_colors ?? true
-            requestHeaders.set('x-client-use-brand-colors', String(useBrandColors))
-
-            if (!client.org_id && !useBrandColors) {
-                requestHeaders.set('x-coach-primary-color', SYSTEM_PRIMARY_COLOR)
-            }
+            // El alumno SIEMPRE ve el tema del coach: el opt-out por-alumno quedó retirado, así que
+            // `client.use_coach_brand_colors` se ignora (no se migra, solo se deja de leer). El header
+            // se mantiene fijo en 'true' para los lectores existentes.
+            requestHeaders.set('x-client-use-brand-colors', 'true')
 
             const response = buildClientRouteResponse()
 

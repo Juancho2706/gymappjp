@@ -175,8 +175,6 @@ export default async function ClientBrandLayout({ children, params }: Props) {
     const isOrphan = headersList.get('x-workspace-orphan') === 'true'
     const orphanOrgName = headersList.get('x-orphan-org-name') ?? ''
     const coachId = headersList.get('x-coach-id') ?? ''
-    const useBrandColorsStr = headersList.get('x-client-use-brand-colors')
-    const initialUseBrandColors = useBrandColorsStr ? useBrandColorsStr === 'true' : true
     const loaderText = headersList.get('x-coach-loader-text') ?? ''
     const useCustomLoader = headersList.get('x-coach-use-custom-loader') === 'true'
     const loaderTextColor = headersList.get('x-coach-loader-text-color') ?? undefined
@@ -337,7 +335,6 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                         basePath={basePath}
                         coachBrand={brandName}
                         coachLogoUrl={logoUrl}
-                        initialUseBrandColors={initialUseBrandColors}
                         showMovement={showMovement}
                         showBodyComposition={showBodyComposition}
                         showNutrition={showNutrition}

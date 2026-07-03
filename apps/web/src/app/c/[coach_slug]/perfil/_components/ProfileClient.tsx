@@ -14,16 +14,13 @@ import {
     CircleHelp,
     PersonStanding,
     Gauge,
-    Palette,
     Volume2,
     type LucideIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { ThemeToggle } from '@/components/ThemeToggle'
-import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { toggleClientBrandColors } from '@/app/c/[coach_slug]/_actions/client-root.actions'
 import { playTimerSound, type TimerSound } from '@/lib/audioUtils'
 import { SectionTitle } from '../../dashboard/_components/shared/SectionTitle'
 import { SALES_EMAIL } from '@/lib/brand-assets'
@@ -45,8 +42,6 @@ interface Props {
     totalWorkouts: number
     showMovement: boolean
     showBodyComposition: boolean
-    initialUseBrandColors: boolean
-    showBrandColorsToggle: boolean
 }
 
 function initials(name: string): string {
@@ -143,7 +138,6 @@ function Row({
 }
 
 export function ProfileClient({
-    coachSlug,
     base,
     fullName,
     brandName,
@@ -152,12 +146,8 @@ export function ProfileClient({
     totalWorkouts,
     showMovement,
     showBodyComposition,
-    initialUseBrandColors,
-    showBrandColorsToggle,
 }: Props) {
     const router = useRouter()
-    const [useBrandColors, setUseBrandColors] = useState(initialUseBrandColors)
-    const [isTogglingColors, setIsTogglingColors] = useState(false)
     // Alarma de descanso (sonido del timer de rutina) — preferencia local (localStorage), movida
     // acá desde el viejo engranaje del dashboard. El volumen se mantiene (default 1.0) para la
     // preview; solo se expone el tipo de sonido, igual que el modal anterior.
@@ -200,26 +190,6 @@ export function ProfileClient({
             }
         } catch {
             /* usuario canceló el share nativo — no-op */
-        }
-    }
-
-    async function handleToggleBrandColors(newValue: boolean) {
-        setIsTogglingColors(true)
-        setUseBrandColors(newValue)
-        try {
-            const res = await toggleClientBrandColors(newValue, coachSlug)
-            if (res.error) {
-                setUseBrandColors(!newValue)
-                toast.error('Error al guardar preferencia')
-            } else {
-                toast.success(newValue ? 'Colores del coach activados' : 'Colores por defecto activados')
-                router.refresh()
-            }
-        } catch {
-            setUseBrandColors(!newValue)
-            toast.error('Error de red')
-        } finally {
-            setIsTogglingColors(false)
         }
     }
 
@@ -287,23 +257,6 @@ export function ProfileClient({
                     <span className="text-sm font-semibold text-body">Tema</span>
                     <ThemeToggle />
                 </div>
-                {showBrandColorsToggle && (
-                    <>
-                        <div className="mx-3.5 h-px bg-border-subtle" />
-                        <div className="flex min-h-[52px] items-center justify-between gap-3 px-3.5 py-2.5">
-                            <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-body">
-                                <Palette className="h-4 w-4 flex-shrink-0 text-text-muted" />
-                                <span className="truncate">Colores del coach</span>
-                            </span>
-                            <Switch
-                                checked={useBrandColors}
-                                onCheckedChange={handleToggleBrandColors}
-                                disabled={isTogglingColors}
-                                aria-label="Colores del coach"
-                            />
-                        </div>
-                    </>
-                )}
             </div>
 
             {/* Preferencias — Alarma de descanso (sonido del timer de rutina) */}

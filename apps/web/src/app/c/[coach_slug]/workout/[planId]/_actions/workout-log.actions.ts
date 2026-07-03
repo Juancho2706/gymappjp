@@ -1,7 +1,6 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { revalidatePath } from 'next/cache'
 import { WorkoutLogSetSchema } from '@eva/schemas'
 import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '@/lib/date-utils'
 
@@ -116,7 +115,10 @@ export async function logSetAction(
         return { error: dbError.message, code: 'db' }
     }
 
-    revalidatePath('/c', 'layout')
-    revalidatePath(`/coach/clients/${user.id}`)
+    // Sin revalidatePath por serie: la UI del exec es optimista + write-through y el resumen usa
+    // sessionLogs en memoria. Revalidar el layout entero en cada serie devolvía payload RSC del
+    // layout → parpadeo + salto de scroll (multiplicado N veces por el flush de la cola). Next 16
+    // con dynamic=0 (staleTime 0) re-fetchea al navegar, así que coach/dashboard ven fresco igual;
+    // el flush offline mantiene su router.refresh() al reconectar.
     return { success: true }
 }

@@ -446,11 +446,10 @@ export function ProfileOverviewB3({
                         })}
                     </div>
                 ) : (
-                    <div className="rounded-sm bg-surface-sunken py-8 text-center">
-                        <Camera className="mx-auto mb-2 h-8 w-8 text-[var(--ink-300)]" />
-                        <p className="text-sm font-medium text-muted">
-                            Sin fotos recientes de check-in.
-                        </p>
+                    // Sin fotos → línea compacta (sin caja con min-height reservado que dejaba un hueco).
+                    <div className="flex items-center gap-2 rounded-sm bg-surface-sunken px-3 py-2.5 text-sm font-medium text-muted">
+                        <Camera className="h-4 w-4 shrink-0 text-[var(--ink-300)]" />
+                        Sin fotos recientes de check-in.
                     </div>
                 )}
             </Card>
@@ -474,16 +473,20 @@ export function ProfileOverviewB3({
                 </div>
             )}
                 </div>
+                {/* ===== Editar plan — tercer ítem del grid, SIEMPRE al final. En 1-col
+                    (panel angosto) cae tras Módulos; en 2-col ocupa una fila propia
+                    full-bleed (col-span-2) bajo ambas columnas (mismo aspecto que antes). ===== */}
+                <Link
+                    href={`/coach/builder/${clientId}`}
+                    className={cn(
+                        buttonVariants({ variant: 'sport', size: 'lg' }),
+                        'w-full @5xl/ficha:col-span-2'
+                    )}
+                >
+                    <PencilLine className="h-5 w-5" />
+                    Editar plan
+                </Link>
             </div>
-
-            {/* ===== Editar plan (full-width, fuera del grid de 2 columnas) ===== */}
-            <Link
-                href={`/coach/builder/${clientId}`}
-                className={cn(buttonVariants({ variant: 'sport', size: 'lg' }), 'w-full')}
-            >
-                <PencilLine className="h-5 w-5" />
-                Editar plan
-            </Link>
         </div>
     )
 }

@@ -1,13 +1,10 @@
 'use client'
 
-import { useCallback, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { Check, Play, Plus } from 'lucide-react'
+import { Check, Play } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { ProgressRing } from '@/components/ui/progress-ring'
-import { logSetAction } from '@/app/c/[coach_slug]/workout/[planId]/_actions/workout-log.actions'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { useBasePath } from '@/components/client/BasePathProvider'
@@ -43,40 +40,12 @@ export function WorkoutHeroCard({
 }: WorkoutHeroCardProps) {
     const { t } = useTranslation()
     const base = useBasePath(`/c/${coachSlug}`)
-    const router = useRouter()
-    const [extra, setExtra] = useState<Record<string, number>>({})
-    const [pending, startTransition] = useTransition()
 
     const show = blocks.slice(0, 4)
     const more = blocks.length - show.length
 
-    // Ring en vivo: base total + series registradas inline en esta sesión.
-    const liveLogged = useMemo(
-        () => totalSetsLogged + Object.values(extra).reduce((a, b) => a + b, 0),
-        [totalSetsLogged, extra]
-    )
+    const liveLogged = totalSetsLogged
     const pct = totalSetsTarget > 0 ? Math.min(100, (liveLogged / totalSetsTarget) * 100) : 0
-
-    // Reusa logSetAction (mismo payload que QuickLogSheet) — 1 tap = +1 serie.
-    const logOne = useCallback(
-        (b: HeroBlock) => {
-            const current = (baseLoggedPerBlock[b.id] ?? 0) + (extra[b.id] ?? 0)
-            if (current >= b.sets) return
-            const next = current + 1
-            startTransition(async () => {
-                const fd = new FormData()
-                fd.set('block_id', b.id)
-                fd.set('set_number', String(next))
-                fd.set('weight_kg', '0')
-                const res = await logSetAction({}, fd)
-                if (res.success) {
-                    setExtra((prev) => ({ ...prev, [b.id]: (prev[b.id] ?? 0) + 1 }))
-                    router.refresh()
-                }
-            })
-        },
-        [baseLoggedPerBlock, extra, router]
-    )
 
     return (
         <Card variant="inverse" padding="lg" className="relative gap-0 shadow-[var(--shadow-lg)]">
@@ -117,50 +86,33 @@ export function WorkoutHeroCard({
 
             <ul className="mt-4 mb-4 flex flex-col gap-px overflow-hidden rounded-control bg-white/[0.04]">
                 {show.map((b) => {
-                    const logged = (baseLoggedPerBlock[b.id] ?? 0) + (extra[b.id] ?? 0)
+                    const logged = baseLoggedPerBlock[b.id] ?? 0
                     const full = logged >= b.sets
-                    const canLog = !isAlreadyLogged && !full
                     return (
-                        <li key={b.id}>
-                            <button
-                                type="button"
-                                onClick={() => logOne(b)}
-                                disabled={!canLog || pending}
-                                aria-label={`Registrar serie de ${b.exercise.name}`}
-                                className="relative flex min-h-[52px] w-full items-center gap-2.5 overflow-hidden px-3 py-2.5 text-left disabled:cursor-default"
-                            >
-                                <span
-                                    aria-hidden
-                                    className={cn(
-                                        'absolute inset-y-0 left-0 transition-[width] duration-[var(--dur-base)] ease-[var(--ease-out)]',
-                                        full ? 'bg-[rgba(76,201,164,0.12)]' : 'bg-white/[0.07]'
-                                    )}
-                                    style={{ width: `${b.sets ? (logged / b.sets) * 100 : 0}%` }}
-                                />
-                                <div className="relative min-w-0 flex-1">
-                                    <div className="truncate text-[13.5px] font-semibold text-on-dark">{b.exercise.name}</div>
-                                    <div className="text-[11px] text-on-dark-muted">
-                                        {b.sets} × {b.reps}
-                                    </div>
+                        <li key={b.id} className="relative flex min-h-[52px] w-full items-center gap-2.5 overflow-hidden px-3 py-2.5">
+                            <span
+                                aria-hidden
+                                className={cn(
+                                    'absolute inset-y-0 left-0',
+                                    full ? 'bg-[rgba(76,201,164,0.12)]' : 'bg-white/[0.07]'
+                                )}
+                                style={{ width: `${b.sets ? (logged / b.sets) * 100 : 0}%` }}
+                            />
+                            <div className="relative min-w-0 flex-1">
+                                <div className="truncate text-[13.5px] font-semibold text-on-dark">{b.exercise.name}</div>
+                                <div className="text-[11px] text-on-dark-muted">
+                                    {b.sets} × {b.reps}
                                 </div>
-                                <span
-                                    className={cn(
-                                        'relative text-[11.5px] font-bold tabular-nums',
-                                        full ? 'text-sport-500' : 'text-on-dark-muted'
-                                    )}
-                                >
-                                    {logged}/{b.sets}
-                                </span>
-                                <span
-                                    aria-hidden
-                                    className={cn(
-                                        'relative flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px]',
-                                        full ? 'bg-white/[0.06] text-sport-500' : 'bg-sport-500 text-white'
-                                    )}
-                                >
-                                    {full ? <Check className="h-4 w-4" /> : <Plus className="h-[17px] w-[17px]" />}
-                                </span>
-                            </button>
+                            </div>
+                            <span
+                                className={cn(
+                                    'relative flex items-center gap-1 text-[11.5px] font-bold tabular-nums',
+                                    full ? 'text-sport-500' : 'text-on-dark-muted'
+                                )}
+                            >
+                                {logged}/{b.sets}
+                                {full ? <Check className="h-3.5 w-3.5" /> : null}
+                            </span>
                         </li>
                     )
                 })}

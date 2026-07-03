@@ -13,7 +13,6 @@ import {
     PersonStanding,
     Gauge,
     History,
-    Palette,
     MoreHorizontal,
     UserRound,
     ChevronRight,
@@ -27,9 +26,6 @@ import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { PwaNavButton } from './PwaNavButton'
-import { toggleClientBrandColors } from '@/app/c/[coach_slug]/_actions/client-root.actions'
-import { toast } from 'sonner'
-import { Switch } from '@/components/ui/switch'
 import { BRAND_APP_ICON } from '@/lib/brand-assets'
 
 interface Props {
@@ -39,7 +35,6 @@ interface Props {
     basePath?: string
     coachBrand: string
     coachLogoUrl: string
-    initialUseBrandColors?: boolean
     /** Espejo del modulo movement_assessment (resuelto server-side; gate real en la page). */
     showMovement?: boolean
     /** Espejo del modulo body_composition (resuelto server-side; gate real en la page). */
@@ -55,15 +50,13 @@ interface Props {
 
 type NavItem = { href: string; label: string; short: string; icon: LucideIcon }
 
-export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initialUseBrandColors = true, showMovement = false, showBodyComposition = false, showNutrition = true }: Props) {
+export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, showMovement = false, showBodyComposition = false, showNutrition = true }: Props) {
     const base = basePath ?? `/c/${coachSlug}`
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
     const [isCollapsed, setIsCollapsed] = useState(false)
     const [isNavigating, setIsNavigating] = useState<string | null>(null)
-    const [useBrandColors, setUseBrandColors] = useState(initialUseBrandColors)
-    const [isTogglingColors, setIsTogglingColors] = useState(false)
     const [moreOpen, setMoreOpen] = useState(false)
     // Cápsula flotante mobile: hide-on-scroll-down / reveal-on-scroll-up → colapsa a pill
     // icon-only (TabBar `minimized`: insets 14→72, labels fade).
@@ -155,27 +148,6 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
         await supabase.auth.signOut()
         router.push(`${base}/login`)
         router.refresh()
-    }
-
-    const handleToggleBrandColors = async () => {
-        setIsTogglingColors(true)
-        const newValue = !useBrandColors
-        setUseBrandColors(newValue)
-
-        try {
-            const res = await toggleClientBrandColors(newValue, coachSlug)
-            if (res.error) {
-                setUseBrandColors(!newValue) // revert
-                toast.error('Error al guardar preferencia')
-            } else {
-                toast.success(newValue ? 'Colores del Coach activados' : 'Colores por defecto activados')
-                router.refresh() // Re-runs middleware and Server Components to pick up new color header
-            }
-        } catch (error) {
-            setUseBrandColors(!newValue) // revert
-        } finally {
-            setIsTogglingColors(false)
-        }
     }
 
     // Don't show nav on login, register, onboarding, etc, or during workout execution
@@ -360,13 +332,6 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, initi
                             <div className="flex items-center justify-between rounded-control px-3 py-2">
                                 <span className="text-sm font-medium text-body">Tema</span>
                                 <ThemeToggle />
-                            </div>
-                            <div className="flex items-center justify-between gap-3 rounded-control px-3 py-2">
-                                <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-body">
-                                    <Palette className="h-4 w-4 flex-shrink-0 text-muted" />
-                                    <span className="truncate">Colores del coach</span>
-                                </span>
-                                <Switch checked={useBrandColors} onCheckedChange={handleToggleBrandColors} disabled={isTogglingColors} aria-label="Colores del coach" />
                             </div>
                         </>
                     ) : (

@@ -90,15 +90,14 @@ export function ProfileFloatingActions({
     return (
         <div
             ref={rootRef}
-            // Posición en 3 estados, ACOPLADA al mismo container-query que el grid 2-col de la ficha
-            // (@5xl/ficha) para que "sticky ⇔ 2-col" nunca se desincronicen (esa desincronización —
-            // sticky por viewport md pero 1-col por container — era la que dejaba la barra flotando
-            // encima de "Evolución visual" en el panel angosto):
-            //  · Móvil (<760): FIXED sobre la cápsula del nav (sticky se despegaba a mitad de página).
-            //  · Panel angosto / ventana reducida (≥760 pero ficha < @5xl → 1 columna): STATIC, en
-            //    FLUJO como último elemento — nunca se pinta encima de una card.
-            //  · Desktop ancho (ficha ≥ @5xl → 2 columnas): STICKY abajo full-bleed (intacto).
-            className="static print:hidden max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(env(safe-area-inset-bottom)+96px)] max-md:z-40 @5xl/ficha:sticky @5xl/ficha:bottom-0 @5xl/ficha:z-40 @5xl/ficha:-mx-6"
+            // Posición en 2 estados:
+            //  · Móvil (<md): FIXED sobre la cápsula del nav (sticky se despegaba a mitad de página).
+            //  · md+ (panel angosto 1-col Y ficha ancha 2-col): STICKY bottom-0 SIEMPRE, para que los
+            //    botones ACOMPAÑEN el scroll también en el panel angosto (el scroll vive en <main>
+            //    md:overflow-y-auto). Es el ÚLTIMO elemento del flujo → reposa al final; el contenedor
+            //    es pointer-events:none con hijos auto, así que aunque quede sobre una card no bloquea
+            //    su contenido. @5xl/ficha:-mx-6 lo lleva a full-bleed cuando la ficha está en 2 columnas.
+            className="static print:hidden max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(env(safe-area-inset-bottom)+96px)] max-md:z-40 md:sticky md:bottom-0 md:z-40 @5xl/ficha:-mx-6"
             style={{
                 boxSizing: 'border-box',
                 minHeight: 'calc(72px + env(safe-area-inset-bottom))',
@@ -161,7 +160,8 @@ export function ProfileFloatingActions({
                         fontSize: 14,
                         fontWeight: 700,
                         boxShadow: 'var(--shadow-md)',
-                        opacity: 0.5,
+                        // Verde SÓLIDO (no translúcido): se lee como botón real aunque esté deshabilitado.
+                        opacity: 0.85,
                         cursor: 'not-allowed',
                         pointerEvents: 'auto',
                         border: 'none',

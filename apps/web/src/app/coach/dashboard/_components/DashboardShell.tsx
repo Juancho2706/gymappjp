@@ -95,16 +95,16 @@ export function DashboardShell({
 
                 {/* ───────── Mobile (eva-app structure, <md) ───────── */}
                 <div className="md:hidden">
-                    <header className="flex items-center justify-between pb-3.5">
-                        <div>
-                            <div className="text-[13px] font-semibold text-[var(--text-muted)]">
+                    <header className="flex items-center justify-between gap-2 pb-3.5">
+                        <div className="min-w-0 flex-1">
+                            <div className="truncate text-[13px] font-semibold text-[var(--text-muted)]">
                                 {todayLabel()}
                             </div>
-                            <h1 className="font-display text-[28px] font-black leading-[1.05] tracking-[-0.03em] text-[var(--text-strong)]">
+                            <h1 className="truncate font-display text-[28px] font-black leading-[1.05] tracking-[-0.03em] text-[var(--text-strong)]">
                                 Hola, {firstName}
                             </h1>
                         </div>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex shrink-0 items-center gap-1.5">
                             <button
                                 type="button"
                                 onClick={openInsights}

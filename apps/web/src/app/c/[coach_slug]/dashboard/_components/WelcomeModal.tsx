@@ -34,6 +34,10 @@ export function WelcomeModal({
     const [isOpen, setIsOpen] = useState(false)
     const [dontShowAgain, setDontShowAgain] = useState(false)
     const [isMuted, setIsMuted] = useState(true)
+    // El video debe arrancar CON sonido. `soundActivated` gobierna el overlay "Activar sonido":
+    // mientras es false el video corre muteado (única forma de autoplay garantizado) con el overlay
+    // encima; el gesto del alumno lo desmutea.
+    const [soundActivated, setSoundActivated] = useState(false)
 
     useEffect(() => {
         if (!welcomeModalEnabled || !welcomeModalContent?.trim()) return
@@ -49,6 +53,24 @@ export function WelcomeModal({
             // localStorage no disponible
         }
     }, [welcomeModalEnabled, welcomeModalContent, welcomeModalVersion])
+
+    // Intento de sonido por defecto. Los browsers bloquean el autoplay con audio sin gesto; para un
+    // <iframe> cross-origin (YouTube/Vimeo) no hay promesa de play() que capturar, así que usamos
+    // getAutoplayPolicy como equivalente al try/catch de NotAllowedError: si el documento permite
+    // audio (media-engagement alto) arrancamos desmuteados; si no, quedamos muteados con el overlay.
+    useEffect(() => {
+        if (!isOpen) return
+        const nav = navigator as Navigator & { getAutoplayPolicy?: (type: string) => string }
+        if (nav.getAutoplayPolicy?.('mediaelement') === 'allowed') {
+            setIsMuted(false)
+            setSoundActivated(true)
+        }
+    }, [isOpen])
+
+    const activateSound = () => {
+        setIsMuted(false)
+        setSoundActivated(true)
+    }
 
     const handleClose = () => {
         setIsOpen(false)
@@ -120,6 +142,19 @@ export function WelcomeModal({
                                 {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                                 {isMuted ? 'Silenciado' : 'Sonido'}
                             </button>
+                            {!soundActivated && (
+                                <button
+                                    type="button"
+                                    onClick={activateSound}
+                                    className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-black/45 backdrop-blur-[2px] transition-colors hover:bg-black/55"
+                                    aria-label="Activar sonido"
+                                >
+                                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/95 text-black shadow-lg">
+                                        <Volume2 className="w-6 h-6" />
+                                    </span>
+                                    <span className="text-sm font-bold text-white drop-shadow">Activar sonido</span>
+                                </button>
+                            )}
                         </div>
                     ) : welcomeModalType === 'video' ? (
                         <div className="aspect-video rounded-xl bg-muted flex flex-col items-center justify-center gap-2 text-muted-foreground">

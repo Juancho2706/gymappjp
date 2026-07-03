@@ -19,7 +19,6 @@ import {
 import { nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
 import { toast } from 'sonner'
 import { FileDown, Copy, MessageCircle } from 'lucide-react'
-import { HabitsTracker } from './HabitsTracker'
 import { WorkoutContextBanner } from './WorkoutContextBanner'
 import {
   enqueueNutritionOfflineToggle,
@@ -686,11 +685,13 @@ export function NutritionShell({
         else next.add(foodId)
         return next
       })
+      // Sin clientProfileRevalidateId: revalidatePath invalida el Router Cache del cliente y
+      // fuerza un refetch del RSC del route actual (recarga visible). El toggle es optimista
+      // local con rollback; la ficha del coach se renderiza dinamica y toma el favorito al recargar.
       toggleClientFoodPreference({
         clientId: userId,
         foodId,
         preferenceType: 'favorite',
-        clientProfileRevalidateId: userId,
       }).then((res) => {
         if (!res.success) {
           setFavoriteFoodIds((prev) => {
@@ -1120,15 +1121,6 @@ export function NutritionShell({
           group={equivalenceGroup}
           equivalences={exchange.equivalences}
           onClose={() => setEquivalenceGroup(null)}
-        />
-      )}
-
-      {sectionFlags.habits && (
-        <HabitsTracker
-          clientId={userId}
-          coachSlug={coachSlug}
-          logDate={selectedDate}
-          isToday={isToday}
         />
       )}
 

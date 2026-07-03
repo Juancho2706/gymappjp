@@ -230,22 +230,6 @@ export function ClientExerciseCatalog({
     });
   }, [isLoading, hasMore, search, selectedMuscle]);
 
-  // Infinite scroll REAL: pide la siguiente página cuando el sentinel entra en viewport.
-  // Mientras `isLoading`, el observer se desconecta (evita disparos duplicados).
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const node = sentinelRef.current;
-    if (!node || !hasMore || isLoading) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) loadMore();
-      },
-      { rootMargin: "600px 0px" },
-    );
-    obs.observe(node);
-    return () => obs.disconnect();
-  }, [hasMore, isLoading, loadMore]);
-
   const openExercise = (ex: Exercise) => {
     setSelectedExercise(ex);
     setInstructions(null);
@@ -346,10 +330,12 @@ export function ClientExerciseCatalog({
         </>
       )}
 
-      {/* Infinite-scroll sentinel + contador */}
+      {/* Paginación manual: "Ver más" — sin autocarga por scroll (evita traer GIFs de más). */}
       {hasMore && (
-        <div ref={sentinelRef} className="flex flex-col items-center gap-3 py-4">
-          <Loader2 className="h-5 w-5 animate-spin text-muted opacity-60" />
+        <div className="flex flex-col items-center gap-3 py-4">
+          {isLoading && (
+            <Loader2 className="h-5 w-5 animate-spin text-muted opacity-60" />
+          )}
           <button
             onClick={loadMore}
             disabled={isLoading}
