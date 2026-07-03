@@ -1,0 +1,233 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Landing v2 "Prism" — estilos scopeados a #landing-v2-root.
+   Portado de nuevalandingv2/LandingPrism v2.dc.html (helmet <style>, líneas 20-79).
+   TODO va bajo #landing-v2-root para no filtrar al DS global (::selection,
+   focus-visible, los tags genéricos nav/footer, y los overrides responsive).
+   Keyframes prefijados `lv2*` para no colisionar con keyframes de la app.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── selección de texto (acento de marca) ── */
+#landing-v2-root ::selection {
+  background: rgba(var(--sel-rgb, 0 122 255) / 0.35);
+}
+
+/* ── focus-visible con el color de marca ── */
+#landing-v2-root a:focus-visible,
+#landing-v2-root button:focus-visible,
+#landing-v2-root summary:focus-visible {
+  outline: 2px solid var(--brand, #007aff);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ── keyframes ── */
+@keyframes lv2PrismUp {
+  from {
+    opacity: 0;
+    transform: translateY(34px) scale(0.972);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+@keyframes lv2PrismDraw {
+  from {
+    stroke-dashoffset: 900;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes lv2PlFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+@keyframes lv2PlSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes lv2PrismUpM {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── faq nativo (<details>) ── */
+#landing-v2-root details.faq-i > summary {
+  cursor: pointer;
+  list-style: none;
+}
+#landing-v2-root details.faq-i > summary::-webkit-details-marker {
+  display: none;
+}
+#landing-v2-root details.faq-i .faq-x {
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+#landing-v2-root details.faq-i[open] .faq-x {
+  transform: rotate(45deg);
+}
+
+/* ── dashboard live-loop fade ── */
+#landing-v2-root .dash-fade {
+  transition: opacity 0.3s ease;
+}
+
+/* ── hovers (traducción de style-hover del runtime DC) ── */
+#landing-v2-root .lv2-navlink {
+  transition: color 0.2s;
+}
+#landing-v2-root .lv2-navlink:hover {
+  color: #ffffff;
+}
+#landing-v2-root .lv2-cta-pill:hover {
+  transform: translateY(-2px);
+}
+#landing-v2-root .lv2-ghost:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ── reveal on scroll (IntersectionObserver-driven, time-based). El estado
+      oculto sólo aplica cuando el provider agrega `.anim-on` → no-JS = visible. ── */
+@media (prefers-reduced-motion: no-preference) {
+  #landing-v2-root.anim-on [data-reveal] {
+    opacity: 0;
+    will-change: opacity, transform, filter;
+  }
+  #landing-v2-root.anim-on [data-reveal].is-in {
+    animation: lv2PrismUp 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  #landing-v2-root.anim-on [data-reveal].is-in [data-draw] {
+    animation: lv2PrismDraw 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
+  }
+}
+
+/* ══ Responsive — los DC son inline-styled, así que las media queries viven acá
+      (override-only, !important). Verbatim del diseño, scopeadas a #landing-v2-root. ══ */
+@media (max-width: 980px) {
+  #landing-v2-root .r-marca {
+    grid-template-columns: 1fr !important;
+    gap: 40px !important;
+  }
+  #landing-v2-root .r-marca > div:last-child {
+    order: -1;
+    min-height: 440px !important;
+  }
+  #landing-v2-root .r-modgrid > div + div {
+    border-left: none !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.07) !important;
+  }
+  #landing-v2-root .r-social {
+    grid-template-columns: 1fr !important;
+  }
+  #landing-v2-root .r-teams {
+    grid-template-columns: 1fr !important;
+    gap: 30px !important;
+    padding: 34px 30px !important;
+  }
+  #landing-v2-root .r-price {
+    grid-template-columns: 1fr !important;
+    max-width: 460px !important;
+  }
+  #landing-v2-root .r-modgrid {
+    grid-template-columns: 1fr !important;
+  }
+}
+@media (max-width: 640px) {
+  #landing-v2-root nav {
+    gap: 12px !important;
+    padding: 11px 16px !important;
+  }
+  #landing-v2-root .r-navlinks,
+  #landing-v2-root .r-navlogin {
+    display: none !important;
+  }
+  #landing-v2-root .r-menubtn {
+    display: inline-flex !important;
+  }
+  #landing-v2-root #mcta {
+    display: flex !important;
+  }
+  #landing-v2-root footer {
+    padding-bottom: 112px !important;
+  }
+  #landing-v2-root.anim-on [data-reveal] {
+    will-change: opacity, transform;
+  }
+  #landing-v2-root.anim-on [data-reveal].is-in {
+    animation-name: lv2PrismUpM !important;
+  }
+  #landing-v2-root #sw-rail button {
+    width: 34px !important;
+    height: 34px !important;
+  }
+  #landing-v2-root .r-swbig button {
+    width: 44px !important;
+    height: 44px !important;
+  }
+  #landing-v2-root #top {
+    padding: 70px 18px 28px !important;
+  }
+  #landing-v2-root #marca,
+  #landing-v2-root #panel,
+  #landing-v2-root #precios,
+  #landing-v2-root #teams,
+  #landing-v2-root #modulos,
+  #landing-v2-root #coaches,
+  #landing-v2-root #faq {
+    padding-left: 18px !important;
+    padding-right: 18px !important;
+  }
+  #landing-v2-root .r-stat {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  #landing-v2-root .r-dash {
+    grid-template-columns: 1fr !important;
+  }
+  #landing-v2-root .r-dashside {
+    display: none !important;
+  }
+  #landing-v2-root .r-dashkpis {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  #landing-v2-root .r-brandrail {
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+  }
+  #landing-v2-root .r-cyc {
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+  }
+  #landing-v2-root .r-row {
+    grid-template-columns: 52px 1fr !important;
+    gap: 16px !important;
+    padding: 20px 18px !important;
+  }
+  #landing-v2-root .r-rowtag {
+    display: none !important;
+  }
+  #landing-v2-root .r-modtabs {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  #landing-v2-root .r-modgrid {
+    grid-template-columns: 1fr !important;
+  }
+}
+@media (max-width: 460px) {
+  #landing-v2-root #top h1 {
+    font-size: clamp(34px, 11vw, 50px) !important;
+  }
+}
