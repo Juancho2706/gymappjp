@@ -314,7 +314,7 @@ export function ClientsDirectoryClient({
             <button
                 type="button"
                 onClick={() => setCreateOpen(true)}
-                className="eva-press fixed right-5 z-40 inline-flex h-[50px] items-center gap-2 rounded-pill bg-sport-500 px-5 font-ui text-[15px] font-bold text-white shadow-[var(--shadow-lg)] md:hidden"
+                className="eva-press fixed right-5 z-40 inline-flex h-[50px] items-center gap-2 rounded-pill bg-[var(--cta-fill)] px-5 font-ui text-[15px] font-bold text-[var(--text-on-sport)] shadow-[var(--shadow-lg)] md:hidden"
                 style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)' }}
             >
                 <UserPlus className="h-[19px] w-[19px]" />
