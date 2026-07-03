@@ -24,7 +24,10 @@ import {
     HeartPulse,
     PersonStanding,
     Scale,
+    Loader2,
 } from 'lucide-react'
+import { getClientDossier } from './_actions/client-detail.actions'
+import { downloadClientDossierPdf } from '@/lib/pdf/client-dossier-pdf'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -170,8 +173,21 @@ export function ClientProfileHero({
 
     const waHref = client.phone ? `https://wa.me/${client.phone.replace(/\D/g, '')}` : null
 
-    const handleExport = () => {
-        window.print()
+    const [exporting, setExporting] = useState(false)
+    const [exportError, setExportError] = useState<string | null>(null)
+
+    const handleExport = async () => {
+        if (exporting) return
+        setExportError(null)
+        setExporting(true)
+        try {
+            const dossier = await getClientDossier(clientId)
+            await downloadClientDossierPdf(dossier)
+        } catch {
+            setExportError('No se pudo generar el PDF. Intentá de nuevo.')
+        } finally {
+            setExporting(false)
+        }
     }
 
     return (
@@ -190,11 +206,17 @@ export function ClientProfileHero({
                     <button
                         type="button"
                         onClick={handleExport}
-                        aria-label="Exportar PDF"
-                        title="Exportar PDF"
-                        className="flex h-10 w-10 items-center justify-center rounded-control border border-default bg-surface-card text-strong shadow-[var(--shadow-sm)] transition-colors hover:bg-surface-sunken"
+                        disabled={exporting}
+                        aria-busy={exporting}
+                        aria-label={exporting ? 'Generando PDF…' : 'Exportar PDF'}
+                        title={exporting ? 'Generando PDF…' : 'Exportar PDF'}
+                        className="flex h-10 w-10 items-center justify-center rounded-control border border-default bg-surface-card text-strong shadow-[var(--shadow-sm)] transition-colors hover:bg-surface-sunken disabled:opacity-70"
                     >
-                        <Download className="h-[18px] w-[18px]" />
+                        {exporting ? (
+                            <Loader2 className="h-[18px] w-[18px] animate-spin" />
+                        ) : (
+                            <Download className="h-[18px] w-[18px]" />
+                        )}
                     </button>
                     <button
                         type="button"
@@ -205,6 +227,11 @@ export function ClientProfileHero({
                     >
                         <MoreVertical className="h-[18px] w-[18px]" />
                     </button>
+                    {exportError && (
+                        <p role="alert" className="basis-full text-[11px] font-semibold text-[var(--danger-500)]">
+                            {exportError}
+                        </p>
+                    )}
                 </div>
             </div>
 

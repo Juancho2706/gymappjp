@@ -300,17 +300,22 @@ export const getClientProfileData = cache(async (clientId: string) => {
     // 1. Calcular Workouts Target: días con entreno en la variante A/B que toca esta semana
     let weeklyWorkoutTarget = 0
     const activeProgram = (activePrograms || [])[0]
+    // Variante A/B efectiva expuesta en el retorno: el dossier PDF filtra los días del
+    // programa con la MISMA variante que este target semanal (sin programa ⇒ null).
+    let programEffectiveWeekVariant: 'A' | 'B' | null = null
+    let programAbMode = false
     if (activeProgram?.workout_plans) {
-        const abMode = !!activeProgram.ab_mode
+        programAbMode = !!activeProgram.ab_mode
         const wkIdx = programWeekIndex1Based(activeProgram, today)
         // Variante EFECTIVA: el target semanal del coach cuenta los días que el alumno realmente ve
         // (cae a la variante con planes si la del ciclo está vacía por un A/B mal armado).
         const variantLetter = resolveEffectiveWeekVariant(activeProgram, activeProgram.workout_plans, wkIdx, today)
+        programEffectiveWeekVariant = variantLetter
         weeklyWorkoutTarget = activeProgram.workout_plans.filter(
             (wp: any) =>
                 wp.workout_blocks &&
                 wp.workout_blocks.length > 0 &&
-                workoutPlanMatchesVariant(wp, variantLetter, abMode)
+                workoutPlanMatchesVariant(wp, variantLetter, programAbMode)
         ).length
     }
     // Si no hay programa o no tiene bloques, evitamos dividir por 0
@@ -743,6 +748,8 @@ export const getClientProfileData = cache(async (clientId: string) => {
         compliance,
         personalRecords,
         muscleVolumeByGroup,
+        programEffectiveWeekVariant,
+        programAbMode,
         mealDetails,
         attentionScore,
         profileLastActivityAt,
