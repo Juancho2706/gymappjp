@@ -72,7 +72,12 @@
 .ping {
     position: absolute; top: 50%; left: 50%; width: 100%; height: 100%;
     border-radius: 50%; border: 2px solid var(--ld-brand);
-    animation: ldPing 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+    /* Estado BASE = frame 0 del keyframe (centrado e invisible): durante el animation-delay
+       de ping2/ping3 el elemento se pintaba SIN translate (esquina anclada al centro) y opaco
+       → "círculo fuera de lugar" al montar. backwards refuerza el frame-0 durante el delay. */
+    transform: translate(-50%, -50%) scale(0.45);
+    opacity: 0;
+    animation: ldPing 2.2s cubic-bezier(0, 0, 0.2, 1) infinite backwards;
 }
 .ping2 { animation-delay: 0.73s; }
 .ping3 { animation-delay: 1.46s; }
@@ -152,4 +157,7 @@
     .barFill { width: 70%; }
     .eqBar { transform: scaleY(0.7); }
     .compPulseRing { opacity: 0.3; }
+    /* Radar estático: un solo anillo tenue centrado (los otros dos pings se ocultan). */
+    .ping { transform: translate(-50%, -50%) scale(1); opacity: 0.25; }
+    .ping2, .ping3 { opacity: 0; }
 }
