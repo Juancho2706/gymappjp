@@ -267,14 +267,20 @@ export function resolvePresetBranding(row: PresetResolvableBranding): ResolvedPr
             appliedPreset: null,
         }
     }
+    // COLORES: el preset SIEMPRE manda (elegir tema = cambiar la paleta entera).
+    // FUENTE y LOADER: el preset es SUGERENCIA — la elección EXPLÍCITA del coach gana
+    // (decisión CEO "sugerencia editable"). Explícito = loader distinto de 'eva'/vacío,
+    // fuente no vacía. Sin esto, elegir "Ritmo" se pisaba con el loader del tema.
+    const explicitLoader = row.loader_variant && row.loader_variant !== 'eva' ? row.loader_variant : null
+    const explicitFont = row.brand_font_key?.trim() ? row.brand_font_key : null
     return {
         primary_color: preset.brandColor,
         brand_secondary_color: preset.secondaryColor,
         accent_light: preset.accentLight ?? null,
         accent_dark: preset.accentDark ?? null,
         neutral_tint: preset.neutralTint,
-        brand_font_key: preset.fontKey,
-        loader_variant: preset.loaderVariant,
+        brand_font_key: explicitFont ?? preset.fontKey,
+        loader_variant: explicitLoader ?? preset.loaderVariant,
         appliedPreset: preset,
     }
 }

@@ -112,17 +112,17 @@ describe('THEME_PRESETS — gate de contraste WCAG (claro + oscuro)', () => {
 })
 
 describe('resolvePresetBranding', () => {
-    it('key válida ⇒ overridea con los valores del preset', () => {
+    it('key válida ⇒ COLORES del preset mandan; fuente/loader del preset solo si el coach no eligió', () => {
         const p = THEME_PRESETS[0]
+        // Coach SIN elección explícita de fuente/loader (loader 'eva' = default, fuente vacía)
         const out = resolvePresetBranding({
             theme_preset_key: p.key,
-            // valores propios del coach que DEBEN ser pisados por el preset
             primary_color: '#000000',
             brand_secondary_color: '#000000',
             accent_light: '#000000',
             accent_dark: '#000000',
             neutral_tint: false,
-            brand_font_key: 'inter',
+            brand_font_key: '',
             loader_variant: 'eva',
         })
         expect(out.primary_color).toBe(p.brandColor)
@@ -130,6 +130,22 @@ describe('resolvePresetBranding', () => {
         expect(out.brand_font_key).toBe(p.fontKey)
         expect(out.loader_variant).toBe(p.loaderVariant)
         expect(out.neutral_tint).toBe(p.neutralTint)
+        expect(out.appliedPreset?.key).toBe(p.key)
+    })
+
+    it('key válida + elección EXPLÍCITA del coach ⇒ fuente/loader del coach GANAN (sugerencia editable)', () => {
+        const p = THEME_PRESETS[0]
+        const out = resolvePresetBranding({
+            theme_preset_key: p.key,
+            primary_color: '#000000',
+            brand_font_key: 'inter',
+            loader_variant: 'ritmo',
+        })
+        // Colores: siempre del preset (elegir tema = cambiar la paleta)
+        expect(out.primary_color).toBe(p.brandColor)
+        // Fuente/loader: la elección explícita del coach le gana a la sugerencia del tema
+        expect(out.brand_font_key).toBe('inter')
+        expect(out.loader_variant).toBe('ritmo')
         expect(out.appliedPreset?.key).toBe(p.key)
     })
 
