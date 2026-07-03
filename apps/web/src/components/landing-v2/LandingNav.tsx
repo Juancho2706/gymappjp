@@ -25,21 +25,8 @@ const NAV_LINKS: { href: string; key: string; es: string }[] = [
   { href: '#precios', key: 'nav_precios', es: 'Precios' },
 ]
 
-const langBtnStyle = (active: boolean): CSSProperties => ({
-  all: 'unset',
-  cursor: 'pointer',
-  padding: '4px 10px',
-  borderRadius: 9999,
-  fontFamily: MONO,
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: '0.12em',
-  color: active ? '#FFFFFF' : '#8A8A93',
-  background: active ? 'rgba(255,255,255,0.10)' : 'transparent',
-})
-
 export function LandingNav() {
-  const { lang, setLang, t } = useLandingBrand()
+  const { t } = useLandingBrand()
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
@@ -107,33 +94,6 @@ export function LandingNav() {
         </div>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              padding: 3,
-              borderRadius: 9999,
-              background: 'rgba(255,255,255,0.04)',
-              border: '1px solid rgba(255,255,255,0.08)',
-            }}
-          >
-            <button
-              type="button"
-              aria-pressed={lang === 'es'}
-              onClick={() => setLang('es')}
-              style={langBtnStyle(lang === 'es')}
-            >
-              ES
-            </button>
-            <button
-              type="button"
-              aria-pressed={lang === 'en'}
-              onClick={() => setLang('en')}
-              style={langBtnStyle(lang === 'en')}
-            >
-              EN
-            </button>
-          </div>
-
           <Link
             href="/login"
             className="r-navlogin"

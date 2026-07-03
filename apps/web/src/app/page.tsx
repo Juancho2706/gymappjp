@@ -5,7 +5,6 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { resolveMetadataBase } from '@/lib/site-url'
 import '../components/landing-v2/landing-v2.css'
 import { LandingBrandProvider } from '@/components/landing-v2/_brand-provider'
-import { PageLoader } from '@/components/landing-v2/PageLoader'
 import { HeroBackdrop } from '@/components/landing-v2/HeroBackdrop'
 import { LandingNav } from '@/components/landing-v2/LandingNav'
 // Componentes de sección (construidos por otros agentes en paralelo). Todos
@@ -141,7 +140,6 @@ export default async function LandingPage() {
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(teamsJsonLd) }}
             />
-            <PageLoader />
             <HeroBackdrop />
             <LandingNav />
             <main>
