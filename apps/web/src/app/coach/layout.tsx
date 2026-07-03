@@ -17,6 +17,7 @@ import { generateBrandPalette } from '@/lib/color-utils'
 import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding } from '@eva/brand-kit'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
+import { resolveLoaderVariant } from '@/lib/brand-loaders'
 import { getCoachEnterpriseContext, getCoachTeamContext } from './_data/layout.queries'
 import { createClient } from '@/lib/supabase/server'
 import { getPreferredWorkspaceForRender, listUserWorkspacesForRender } from '@/services/auth/workspace-render-cache'
@@ -138,6 +139,18 @@ export default async function CoachLayout({
 
     // Loader del panel: custom solo si la marca está activa (standalone Pro+) o si es managed con toggle on.
     const useCustomStyles = isManaged ? (coach.use_brand_colors_coach !== false) : standaloneBrandOn
+    // Variante + loader compuesto (espejo del layout /c): EvaRouteLoader los lee de las CSS vars
+    // --coach-loader-variant/--coach-loader-config — sin emitirlas acá, el panel del coach caía
+    // SIEMPRE al loader legacy aunque el coach eligiera Ritmo/Órbitas/compuesto en Mi Marca.
+    const loaderVariant = useCustomStyles ? resolveLoaderVariant(presetBrand.loader_variant) : 'eva'
+    const safeLoaderConfigJson = (() => {
+        if (!useCustomStyles || !coach.loader_config) return ''
+        try {
+            const parsed = coach.loader_config as { symbol?: unknown; animation?: unknown }
+            if (!parsed || typeof parsed !== 'object' || typeof parsed.symbol !== 'string' || typeof parsed.animation !== 'string') return ''
+            return JSON.stringify(parsed).replace(/[<>]/g, '').replace(/'/g, "\\'")
+        } catch { return '' }
+    })()
     const loaderConfig = useCustomStyles ? {
         customText: coach.loader_text ?? undefined,
         useCustom: coach.use_custom_loader ?? false,
@@ -194,6 +207,8 @@ export default async function CoachLayout({
                 --coach-use-custom-loader: ${loaderConfig.useCustom ? '1' : '0'};
                 --coach-loader-color: '${(loaderConfig.textColor || '').replace(/'/g, "\\'")}';
                 --coach-loader-icon-mode: '${loaderConfig.iconMode}';
+                --coach-loader-variant: '${loaderVariant}';
+                --coach-loader-config: '${safeLoaderConfigJson}';
             }
             /* Dark-mode brandeado (antes el panel NO tenía bloque .dark → dark genérico). */
             .dark {
