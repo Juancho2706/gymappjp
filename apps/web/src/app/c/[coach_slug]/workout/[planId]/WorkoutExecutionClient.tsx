@@ -815,9 +815,10 @@ function SupersetGroupCard({
 }
 
 /**
- * Recap colapsado de un ejercicio/superserie COMPLETADO (modelo de foco M1): fila delgada y
- * atenuada; tap la expande de nuevo a la card completa. Si `celebrate`, el check entra elástico +
- * un barrido sutil del borde (floreo al cerrar el ejercicio). Todo respeta reduced-motion.
+ * Recap colapsado de un ejercicio/superserie COMPLETADO: fila delgada a opacidad PLENA (el plegado
+ * es útil, no una atenuación — decisión CEO); tap la expande de nuevo a la card completa. Si
+ * `celebrate`, el check entra elástico + un barrido sutil del borde (floreo al cerrar el ejercicio).
+ * Todo respeta reduced-motion.
  */
 function CollapsedExerciseBar({
     name,
@@ -838,7 +839,7 @@ function CollapsedExerciseBar({
             layout={!reducedMotion}
             onClick={onExpand}
             transition={reducedMotion ? { duration: 0 } : springs.smooth}
-            className="relative flex w-full items-center gap-2.5 overflow-hidden rounded-card border border-[var(--sport-500)]/25 bg-[var(--sport-500)]/[0.05] px-3.5 py-2.5 text-left opacity-70 transition-opacity hover:opacity-100 active:scale-[0.99]"
+            className="relative flex w-full items-center gap-2.5 overflow-hidden rounded-card border border-[var(--sport-500)]/25 bg-[var(--sport-500)]/[0.05] px-3.5 py-2.5 text-left transition-colors hover:bg-[var(--sport-500)]/[0.09] active:scale-[0.99]"
             aria-label={`${name} — completado, tocá para ver o editar`}
         >
             {celebrate && (
@@ -1008,8 +1009,9 @@ export function WorkoutExecutionClient({
     const totalExercises = blocks.length
     const currentExerciseIdx = blocks.findIndex((b) => !isBlockComplete(b, sessionLogs))
     const currentExerciseNum = currentExerciseIdx === -1 ? totalExercises : currentExerciseIdx + 1
-    // Foco por jerarquía (M1): el primer bloque incompleto del plan es la card ACTIVA (protagonista);
-    // el resto de los incompletos quedan en peek tenue y los completados colapsan a recap.
+    // Marcador de progreso (decisión CEO: SIN atenuar — el alumno elige cuál hacer cuando quiera):
+    // el primer bloque incompleto del plan sólo recibe un borde sport sutil + elevación (marcador
+    // discreto, opacidad PLENA); los completados colapsan a recap. Todas las cards se ven plenas.
     const activeBlockId = currentExerciseIdx === -1 ? null : blocks[currentExerciseIdx].id
 
     const isSetLogged = (blockId: string, setNumber: number) => sessionLogs.some((log) => log.block_id === blockId && log.set_number === setNumber)
@@ -1252,7 +1254,6 @@ export function WorkoutExecutionClient({
                                                     key={group.key}
                                                     layout={!reducedMotion}
                                                     className="rounded-card"
-                                                    animate={{ opacity: groupFocus === 'active' ? 1 : groupFocus === 'upcoming' ? 0.55 : 0.6 }}
                                                     transition={reducedMotion ? { duration: 0 } : springs.smooth}
                                                     style={groupFocus === 'active' ? { boxShadow: '0 8px 32px -14px color-mix(in srgb, var(--sport-500) 60%, transparent)' } : undefined}
                                                 >
@@ -1324,8 +1325,9 @@ export function WorkoutExecutionClient({
                                                         (effType !== 'strength' && !!block.instructions) ||
                                                         !!block.notes ||
                                                         prevList.length > 0
-                                                    // Modelo de foco (M1): la card activa (primer bloque incompleto) es protagonista
-                                                    // (borde sport + elevación); las completadas colapsan a recap; el resto en peek tenue.
+                                                    // Marcador de progreso (SIN atenuar — decisión CEO): la card activa (primer bloque
+                                                    // incompleto) sólo lleva borde sport + elevación (marcador discreto); las completadas
+                                                    // colapsan a recap. TODAS las cards a opacidad e iluminación plenas.
                                                     const focus: 'active' | 'upcoming' | 'done' = complete
                                                         ? 'done'
                                                         : block.id === activeBlockId ? 'active' : 'upcoming'
@@ -1355,7 +1357,6 @@ export function WorkoutExecutionClient({
                                                                 if (el) blockRefs.current.set(block.id, el)
                                                                 else blockRefs.current.delete(block.id)
                                                             }}
-                                                            animate={{ opacity: focus === 'active' ? 1 : focus === 'upcoming' ? 0.55 : 0.6 }}
                                                             transition={reducedMotion ? { duration: 0 } : springs.smooth}
                                                             style={focus === 'active' ? { boxShadow: '0 8px 32px -14px color-mix(in srgb, var(--sport-500) 60%, transparent)' } : undefined}
                                                             className={cn(

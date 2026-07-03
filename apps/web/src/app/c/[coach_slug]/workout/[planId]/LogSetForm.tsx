@@ -98,40 +98,43 @@ export function LogSetForm(props: Props) {
     return <StrengthLogSetForm {...props} />
 }
 
-const RPE_OPTS = [6, 7, 8, 9, 10] as const
+const SCALE_OPTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const
 
-/** Tabla estática de RPE → reps en reserva (quick-win E2-7, mini-sheet explicativa 1-tap). */
-const RPE_INFO: { rpe: number; text: string }[] = [
-    { rpe: 10, text: 'Máximo esfuerzo · 0 reps en reserva (al fallo)' },
-    { rpe: 9, text: 'Te quedaba 1 repetición' },
-    { rpe: 8, text: 'Te quedaban 2 repeticiones' },
-    { rpe: 7, text: 'Te quedaban 3 repeticiones' },
-    { rpe: 6, text: 'Te quedaban 4 repeticiones' },
+/** Anclas de la escala RPE 1-10 (mini-sheet explicativa 1-tap, quick-win E2-7). */
+const RPE_INFO: { label: string; text: string }[] = [
+    { label: '10', text: 'Máximo esfuerzo · al fallo (0 reps en reserva)' },
+    { label: '8–9', text: 'Muy exigente · te quedaban 1–2 reps' },
+    { label: '6–7', text: 'Exigente · te quedaban 3–4 reps' },
+    { label: '4–5', text: 'Moderado · varias reps en reserva' },
+    { label: '1–3', text: 'Muy fácil · calentamiento' },
 ]
 
 /**
- * Escala de esfuerzo ÚNICA por serie de fuerza (decisión CEO): RPE segmentado (dots 6-10).
- * Reemplaza el input numérico de RPE y el slider RIR. `name`/payload de RPE intactos —
- * el valor viaja por el submit igual que antes; esto es sólo la UI de captura.
+ * Escala segmentada 1-10 (dots) para registrar esfuerzo por serie (decisión CEO): la usan
+ * RPE y RIR con UI idéntica. Los botones son `flex-1` para que los 10 segmentos quepan en la
+ * fila activa sin volver a la "sopa" de inputs. `name`/payload los inyecta el submit — esto es
+ * sólo la UI de captura (el valor viaja igual que antes).
  */
-function RpeDots({
+function ScaleDots({
     value,
     onChange,
     reducedMotion,
+    name,
     compact = false,
 }: {
     value: number | null
     onChange: (v: number) => void
     reducedMotion: boolean | null
+    name: string
     compact?: boolean
 }) {
     return (
         <div
             role="radiogroup"
-            aria-label="RPE (esfuerzo percibido, 6-10)"
+            aria-label={`${name} (escala 1 a 10)`}
             className="flex items-center gap-0.5"
         >
-            {RPE_OPTS.map((n) => {
+            {SCALE_OPTS.map((n) => {
                 const filled = value != null && n <= value
                 const selected = value === n
                 return (
@@ -140,12 +143,9 @@ function RpeDots({
                         type="button"
                         role="radio"
                         aria-checked={selected}
-                        aria-label={`RPE ${n}`}
+                        aria-label={`${name} ${n}`}
                         onClick={() => onChange(n)}
-                        className={cn(
-                            'flex h-11 items-center justify-center',
-                            compact ? 'w-6' : 'w-7',
-                        )}
+                        className="flex h-11 flex-1 items-center justify-center"
                     >
                         <motion.span
                             className={cn(
@@ -154,12 +154,12 @@ function RpeDots({
                             )}
                             animate={{ scale: selected ? 1.3 : filled ? 1 : 0.7 }}
                             transition={reducedMotion ? { duration: 0 } : springs.snappy}
-                            style={{ width: compact ? 9 : 11, height: compact ? 9 : 11 }}
+                            style={{ width: compact ? 8 : 10, height: compact ? 8 : 10 }}
                         />
                     </button>
                 )
             })}
-            <span className={cn('ml-1 w-5 text-center font-mono font-bold tabular-nums text-[var(--sport-300)]', compact ? 'text-[11px]' : 'text-xs')}>
+            <span className={cn('ml-1 w-5 shrink-0 text-center font-mono font-bold tabular-nums text-[var(--sport-300)]', compact ? 'text-[11px]' : 'text-xs')}>
                 {value != null ? value : '–'}
             </span>
         </div>
@@ -204,16 +204,19 @@ function StrengthLogSetForm({
     const prRef = useRef(false)
     // Reapertura de una serie cerrada (tap en el chip recap → fila editable).
     const [editing, setEditing] = useState(false)
-    // Escala única surfaceada: RPE (dots). El name/payload no cambia — se inyecta en el submit.
+    // Esfuerzo por serie: RPE y RIR, ambos escala 1-10 (dots), ambos opcionales (decisión CEO).
+    // El name/payload no cambia — se inyectan en el submit igual que antes.
     const [rpe, setRpe] = useState<number | null>(existingLog?.rpe ?? null)
+    // RIR = reps en reserva. Clampa un legacy fuera del rango de entrada 1-10 (p.ej. rir=0 viejo)
+    // a "sin valor" para no mandar un valor que el Zod (min 1) rechazaría al editar una serie vieja.
+    const [rir, setRir] = useState<number | null>(
+        existingLog?.rir != null && existingLog.rir >= 1 && existingLog.rir <= 10 ? existingLog.rir : null,
+    )
     // Explicación RPE 1-tap (quick-win E2-7).
     const [rpeInfoOpen, setRpeInfoOpen] = useState(false)
     // Nota rápida por serie (quick-win E2-6). Source of truth = state; viaja por un mirror oculto.
     const [note, setNote] = useState(existingLog?.note ?? '')
     const [noteOpen, setNoteOpen] = useState(false)
-    // El RIR prescrito ya no se captura por serie (decisión CEO). Preservamos el histórico
-    // en re-submits de edición para no perder datos viejos.
-    const rirCarry = existingLog?.rir ?? null
     // Respaldo de valores para el chip recap mientras el prop existingLog se propaga.
     const [chipValues, setChipValues] = useState<{ w: number | null; r: number | null } | null>(null)
 
@@ -259,10 +262,11 @@ function StrengthLogSetForm({
     }
 
     const handleSubmit = (formData: FormData) => {
-        // El RPE viaja por el submit igual que siempre; ahora su origen es el control segmentado.
+        // RPE y RIR viajan por el submit igual que siempre; su origen son los controles segmentados.
         if (rpe != null) formData.set('rpe', String(rpe))
         else formData.delete('rpe')
-        if (rirCarry != null) formData.set('rir', String(rirCarry))
+        if (rir != null) formData.set('rir', String(rir))
+        else formData.delete('rir')
 
         // Offline guard: enqueue and show optimistic state without hitting server
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -276,7 +280,7 @@ function StrengthLogSetForm({
                 weightKg: w,
                 repsDone: r,
                 rpe,
-                rir: rirCarry,
+                rir,
                 note: noteTrimmed,
                 planId: params.planId,
                 coachSlug: params.coach_slug,
@@ -314,7 +318,7 @@ function StrengthLogSetForm({
             weightKg: w,
             repsDone: r,
             rpe,
-            rir: rirCarry,
+            rir,
             note: noteTrimmed,
         })
 
@@ -357,6 +361,9 @@ function StrengthLogSetForm({
                 {rpe != null && (
                     <span className="font-mono text-[11px] font-semibold text-on-dark-muted">RPE {rpe}</span>
                 )}
+                {rir != null && (
+                    <span className="font-mono text-[11px] font-semibold text-on-dark-muted">RIR {rir}</span>
+                )}
                 {noteTrimmed && (
                     <StickyNote className="h-3.5 w-3.5 shrink-0 text-amber-400" aria-label="Serie con nota" />
                 )}
@@ -372,7 +379,7 @@ function StrengthLogSetForm({
         )
     }
 
-    // ── Fila de captura (activa = protagonista; próxima = recesiva) ────────────
+    // ── Fila de captura (activa = protagonista por TAMAÑO; próxima = compacta, sin atenuar) ──
     const inputClass = cn(
         'w-full rounded-control bg-white/[0.06] border text-center font-semibold font-mono transition-colors focus:outline-none focus:ring-1 text-on-dark border-[var(--border-inverse)] focus:border-[var(--sport-500)] focus:ring-[var(--sport-500)]',
         isActive ? 'h-14 text-2xl' : 'h-11 text-base',
@@ -386,7 +393,7 @@ function StrengthLogSetForm({
                 'rounded-control border transition-colors',
                 isActive
                     ? 'border-[var(--sport-500)]/50 bg-[var(--sport-500)]/[0.06]'
-                    : 'border-[var(--border-inverse)] bg-white/[0.02] opacity-60',
+                    : 'border-[var(--border-inverse)] bg-white/[0.02]',
             )}
         >
             <form
@@ -443,7 +450,8 @@ function StrengthLogSetForm({
                     </div>
                 </div>
 
-                <div className="mt-3 flex items-end justify-between gap-2">
+                {/* Esfuerzo por serie: RPE y RIR en escala 1-10 (dots), ambos opcionales */}
+                <div className="mt-3 space-y-2.5">
                     <div>
                         <span className="mb-1 flex items-center gap-1 text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">
                             Esfuerzo · RPE
@@ -459,12 +467,17 @@ function StrengthLogSetForm({
                                 </button>
                             )}
                         </span>
-                        <RpeDots value={rpe} onChange={setRpe} reducedMotion={reducedMotion} compact={!isActive} />
+                        <ScaleDots name="RPE" value={rpe} onChange={setRpe} reducedMotion={reducedMotion} compact={!isActive} />
                     </div>
-                    <SubmitSetButton isLogged={Boolean(isLogged)} label={isActive ? (isLogged ? 'Guardar' : 'Listo') : undefined} />
+                    <div>
+                        <span className="mb-1 block text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">
+                            Reps en reserva · RIR
+                        </span>
+                        <ScaleDots name="RIR" value={rir} onChange={setRir} reducedMotion={reducedMotion} compact={!isActive} />
+                    </div>
                 </div>
 
-                {/* Explicación RPE 1-tap (quick-win E2-7) — tabla estática 6-10 */}
+                {/* Explicación RPE/RIR 1-tap (quick-win E2-7) — anclas 1-10 */}
                 <AnimatePresence initial={false}>
                     {rpeInfoOpen && (
                         <motion.div
@@ -476,15 +489,22 @@ function StrengthLogSetForm({
                         >
                             <ul className="mt-2 space-y-0.5 rounded-control border border-[var(--border-inverse)] bg-white/[0.03] p-2.5">
                                 {RPE_INFO.map((row) => (
-                                    <li key={row.rpe} className="flex items-baseline gap-2 text-[11px] leading-snug">
-                                        <span className="w-11 shrink-0 font-mono font-bold text-[var(--sport-300)]">RPE {row.rpe}</span>
+                                    <li key={row.label} className="flex items-baseline gap-2 text-[11px] leading-snug">
+                                        <span className="w-11 shrink-0 font-mono font-bold text-[var(--sport-300)]">RPE {row.label}</span>
                                         <span className="text-on-dark/85">{row.text}</span>
                                     </li>
                                 ))}
+                                <li className="mt-1.5 border-t border-[var(--border-inverse)] pt-1.5 text-[11px] leading-snug text-on-dark/70">
+                                    RIR = reps en reserva (cuántas te quedaban). En 1-10, RPE alto = RIR bajo.
+                                </li>
                             </ul>
                         </motion.div>
                     )}
                 </AnimatePresence>
+
+                <div className="mt-3 flex justify-end">
+                    <SubmitSetButton isLogged={Boolean(isLogged)} label={isActive ? (isLogged ? 'Guardar' : 'Listo') : undefined} />
+                </div>
 
                 {/* Nota rápida por serie (quick-win E2-6) — input inline; viaja por el mirror oculto */}
                 {showNoteControls && (
@@ -797,12 +817,12 @@ function TypedLogSetRow({
                         </div>
                         <input
                             type="range"
-                            min={6}
+                            min={1}
                             max={10}
                             step={1}
                             value={rpeDraft}
                             className="w-full accent-[var(--sport-500)]"
-                            aria-label="RPE"
+                            aria-label="RPE (escala 1 a 10)"
                             onChange={(e) => setRpeDraft(Number(e.target.value))}
                             onPointerUp={(e) => {
                                 const val = Number((e.currentTarget as HTMLInputElement).value)
@@ -811,7 +831,7 @@ function TypedLogSetRow({
                             }}
                         />
                         <div className="flex justify-between text-[10px] text-on-dark-muted">
-                            <span>6</span>
+                            <span>1</span>
                             <span>10</span>
                         </div>
                     </motion.div>

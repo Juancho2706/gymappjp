@@ -1,6 +1,7 @@
 'use client'
 
 import { useOptimistic, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -32,6 +33,7 @@ export function MealCompletionRow({
     dailyLogId,
     coachSlug,
 }: MealCompletionRowProps) {
+    const router = useRouter()
     const [pending, startTransition] = useTransition()
     const [optimistic, setOptimistic] = useOptimistic(completed, (_current, next: boolean) => next)
 
@@ -59,6 +61,10 @@ export function MealCompletionRow({
                     completed: next ? 1 : 0,
                     date_is_today: 1,
                 })
+                // `toggleMealCompletion` ya no hace revalidatePath (evita el refetch del RSC pesado de
+                // /nutrition, ~4s). Acá refrescamos el route ACTUAL (dashboard) para que la base del
+                // useOptimistic (`completed`) se actualice y el check no vuelva atrás al cerrar la transición.
+                router.refresh()
             } catch (e) {
                 if (isLikelyOfflineError(e)) {
                     enqueueNutritionOfflineToggle({

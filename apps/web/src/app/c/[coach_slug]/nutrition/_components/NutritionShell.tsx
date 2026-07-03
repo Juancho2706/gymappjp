@@ -99,6 +99,37 @@ function toMealCardMeal(m: PlanMealRow): MealCardMeal {
   }
 }
 
+/**
+ * Aplica un cambio de un meal-log en el read-model local (`currentLog`) SIN refetch del servidor.
+ * Es la reconciliación de la base de los estados optimistas: tras la escritura de la action
+ * parcheamos aquí en vez de re-pedir el día entero (antes: `fetchLogForDate` en cada gesto).
+ * Si aún no hay daily-log (primera comida del día) arma un shell mínimo; el id real llega del
+ * server (`res.logId`) y se sella acá para que porción/satisfacción puedan escribir después.
+ */
+function patchLocalMealLog(
+  prev: Record<string, unknown> | null,
+  logId: string | undefined,
+  mealId: string,
+  patch: Partial<MealLogRow>,
+): Record<string, unknown> | null {
+  const logs = (prev?.nutrition_meal_logs as MealLogRow[] | undefined) ?? []
+  const idx = logs.findIndex((l) => l.meal_id === mealId)
+  const nextLogs: MealLogRow[] =
+    idx >= 0
+      ? logs.map((l, i) => (i === idx ? { ...l, ...patch } : l))
+      : [
+          ...logs,
+          { meal_id: mealId, is_completed: false, consumed_quantity: null, satisfaction_score: null, ...patch },
+        ]
+  const resolvedId = (prev?.id as string | undefined) ?? logId
+  return {
+    ...(prev ?? {}),
+    ...(resolvedId ? { id: resolvedId } : {}),
+    nutrition_meal_logs: nextLogs,
+    nutrition_meal_food_swaps: (prev?.nutrition_meal_food_swaps as unknown[] | undefined) ?? [],
+  }
+}
+
 interface Props {
   /** Entreno previsto para hoy (microciclo / fecha asignada), vía dashboard bundle. */
   hasTodayWorkout?: boolean
@@ -174,6 +205,14 @@ export function NutritionShell({
   const reduceMotion = useReducedMotion()
   const [selectedDate, setSelectedDate] = useState(today)
   const [currentLog, setCurrentLog] = useState<Record<string, unknown> | null>(initialLog)
+  /** Espejo de `currentLog` para leer el logId/última verdad dentro de callbacks async sin re-crearlos. */
+  const currentLogRef = useRef(currentLog)
+  useEffect(() => {
+    currentLogRef.current = currentLog
+  }, [currentLog])
+  /** Serializa las escrituras de toggle POR comida (spam-safe: última intención gana, sin writes concurrentes). */
+  const toggleInFlight = useRef<Set<string>>(new Set())
+  const toggleQueued = useRef<Map<string, boolean>>(new Map())
   /** Evita repetir el confetti del "día completo" más de una vez por fecha. */
   const dayCompleteConfettiRef = useRef<Set<string>>(new Set())
   useEffect(() => {
@@ -197,7 +236,6 @@ export function NutritionShell({
     setCurrentLog(initialLog)
   }, [initialLog, selectedDate, today, coachSlug, plan.id, userId])
   const [isDateLoading, startDateTransition] = useTransition()
-  const [isTogglePending, startToggleTransition] = useTransition()
   const [isPortionPending, startPortionTransition] = useTransition()
   const [isSatisfactionPending, startSatisfactionTransition] = useTransition()
   const [isSwapPending, startSwapTransition] = useTransition()
@@ -239,10 +277,21 @@ export function NutritionShell({
     }
   }, [isOnline, adherence, coachSlug, plan.id, today, userId])
 
-  const adherenceEffective = useMemo(
-    () => adherenceBoost ?? adherence,
-    [adherenceBoost, adherence]
-  )
+  const adherenceEffective = useMemo(() => {
+    const base = adherenceBoost ?? adherence
+    // Sin revalidatePath ya no hay refetch del RSC en cada toggle, así que la racha/puntos del día
+    // no se refrescarían solos. Inyectamos la fila de HOY desde el read-model local (`currentLog`)
+    // para que sigan vivos. Solo cuando el día seleccionado ES hoy (en histórico `currentLog` es
+    // el log de OTRO día — nunca editable — y `adherence` del server ya trae el hoy correcto).
+    if (selectedDate !== today) return base
+    const todayLogs = ((currentLog?.nutrition_meal_logs as MealLogRow[] | undefined) ?? []).map((l) => ({
+      meal_id: l.meal_id,
+      is_completed: l.is_completed,
+    }))
+    const todayRow: DayAdherence = { log_date: today, nutrition_meal_logs: todayLogs }
+    const idx = base.findIndex((d) => d.log_date === today)
+    return idx >= 0 ? base.map((d, i) => (i === idx ? todayRow : d)) : [...base, todayRow]
+  }, [adherenceBoost, adherence, selectedDate, today, currentLog])
 
   /** Copia local del read model del día actual (resiliencia offline; no reemplaza servidor). */
   useEffect(() => {
@@ -290,21 +339,16 @@ export function NutritionShell({
     [optimisticPartialPct]
   )
 
-  const serverCompletions = useMemo(() => {
+  // Completado driven por el read-model local: cada toggle parchea `currentLog` de forma SÍNCRONA
+  // (instantáneo, sin depender del ciclo de una transición ni del RSC). La escritura al server corre
+  // en background, serializada por comida (ver `writeToggle`).
+  const completions = useMemo(() => {
     const o: Record<string, boolean> = {}
     for (const ml of mealLogs) {
       o[ml.meal_id] = ml.is_completed
     }
     return o
   }, [mealLogs])
-
-  const [optimisticCompletions, setOptimisticCompletion] = useOptimistic(
-    serverCompletions,
-    (state: Record<string, boolean>, update: { mealId: string; isCompleted: boolean }) => ({
-      ...state,
-      [update.mealId]: update.isCompleted,
-    })
-  )
 
   const isToday = selectedDate === today
   const mealsSorted = useMemo(
@@ -386,10 +430,10 @@ export function NutritionShell({
   const completedIds = useMemo(() => {
     const ids = new Set<string>()
     for (const m of mealsVisible) {
-      if (optimisticCompletions[m.id]) ids.add(m.id)
+      if (completions[m.id]) ids.add(m.id)
     }
     return ids
-  }, [mealsVisible, optimisticCompletions])
+  }, [mealsVisible, completions])
 
   const goals = useMemo(
     () => ({
@@ -439,14 +483,89 @@ export function NutritionShell({
     [userId, plan.id]
   )
 
+  // Escritura al server de UN toggle, serializada por comida vía refs (nunca dos writes concurrentes
+  // sobre la misma comida → sin carreras de orden). El display ya está parcheado local; esto solo
+  // persiste. Al terminar, si llegó una intención más nueva mientras estaba en vuelo, la re-dispara
+  // (último estado gana). Conserva la cola offline intacta.
+  const writeToggle = useCallback(
+    async (mealId: string, desired: boolean) => {
+      toggleInFlight.current.add(mealId)
+      let hardError = false
+      try {
+        const res = await toggleMealCompletion(
+          userId,
+          plan.id,
+          mealId,
+          desired,
+          currentLogRef.current?.id as string | undefined,
+          coachSlug,
+          selectedDate
+        )
+        if (!res.success) {
+          hardError = true
+          toast.error('Error al registrar comida')
+          const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
+          setCurrentLog(dailyLog as Record<string, unknown> | null)
+          return
+        }
+        trackNutritionEvent('nutrition_meal_toggled', {
+          source: 'nutrition_shell',
+          completed: desired ? 1 : 0,
+          date_is_today: selectedDate === today ? 1 : 0,
+        })
+        // Reconcilia la base local (sin refetch): sella el logId real la primera vez.
+        setCurrentLog((prev) =>
+          patchLocalMealLog(
+            prev,
+            res.logId,
+            mealId,
+            desired ? { is_completed: true } : { is_completed: false, consumed_quantity: null }
+          )
+        )
+      } catch (e) {
+        console.error(e)
+        if (isLikelyOfflineError(e)) {
+          // Offline: el patch local ya aplicado se CONSERVA (optimista); se sincroniza al volver la red.
+          enqueueNutritionOfflineToggle({
+            userId,
+            planId: plan.id,
+            mealId,
+            completed: desired,
+            logId: currentLogRef.current?.id as string | undefined,
+            coachSlug,
+            date: selectedDate,
+          })
+          trackNutritionEvent('nutrition_meal_toggle_queued', {
+            source: 'nutrition_shell',
+            date_is_today: selectedDate === today ? 1 : 0,
+          })
+          toast('Sin conexión — se sincronizará automáticamente', { icon: '📶' })
+        } else {
+          hardError = true
+          toast.error('Error al registrar comida')
+          const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
+          setCurrentLog(dailyLog as Record<string, unknown> | null)
+        }
+      } finally {
+        toggleInFlight.current.delete(mealId)
+        const queued = toggleQueued.current.get(mealId)
+        toggleQueued.current.delete(mealId)
+        // En error duro reseteamos a la verdad del server (arriba) y NO re-disparamos la cola:
+        // el usuario re-toca si quiere. Offline/OK sí drenan la última intención.
+        if (queued !== undefined && !hardError) {
+          void writeToggle(mealId, queued)
+        }
+      }
+    },
+    [userId, plan.id, coachSlug, selectedDate, today]
+  )
+
   const handleToggle = useCallback(
     (mealId: string, currentCompleted: boolean) => {
       const next = !currentCompleted
       // Confetti chico al completar la ÚLTIMA comida del día (delight, 1×/fecha, reduce off).
       if (next) {
-        const stillPending = mealsVisible.filter(
-          (m) => m.id !== mealId && !optimisticCompletions[m.id]
-        )
+        const stillPending = mealsVisible.filter((m) => m.id !== mealId && !completions[m.id])
         if (
           stillPending.length === 0 &&
           mealsVisible.length > 0 &&
@@ -457,68 +576,24 @@ export function NutritionShell({
           void fireConfetti({ particleCount: 45, spread: 45, startVelocity: 28, origin: { x: 0.5, y: 0.7 } })
         }
       }
-      startToggleTransition(async () => {
-        setOptimisticCompletion({ mealId, isCompleted: next })
-        try {
-          const res = await toggleMealCompletion(
-            userId,
-            plan.id,
-            mealId,
-            next,
-            currentLog?.id as string | undefined,
-            coachSlug,
-            selectedDate
-          )
-          if (!res.success) {
-            toast.error('Error al registrar comida')
-            const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
-            setCurrentLog(dailyLog as Record<string, unknown> | null)
-            return
-          }
-          trackNutritionEvent('nutrition_meal_toggled', {
-            source: 'nutrition_shell',
-            completed: next ? 1 : 0,
-            date_is_today: selectedDate === today ? 1 : 0,
-          })
-          const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
-          setCurrentLog(dailyLog as Record<string, unknown> | null)
-        } catch (e) {
-          console.error(e)
-          if (isLikelyOfflineError(e)) {
-            enqueueNutritionOfflineToggle({
-              userId,
-              planId: plan.id,
-              mealId,
-              completed: next,
-              logId: currentLog?.id as string | undefined,
-              coachSlug,
-              date: selectedDate,
-            })
-            trackNutritionEvent('nutrition_meal_toggle_queued', {
-              source: 'nutrition_shell',
-              date_is_today: selectedDate === today ? 1 : 0,
-            })
-            toast('Sin conexión — se sincronizará automáticamente', { icon: '📶' })
-          } else {
-            toast.error('Error al registrar comida')
-            const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
-            setCurrentLog(dailyLog as Record<string, unknown> | null)
-          }
-        }
-      })
+      // 1. Patch local INSTANTÁNEO — fuente de verdad del display, cero round-trip.
+      setCurrentLog((prev) =>
+        patchLocalMealLog(
+          prev,
+          undefined,
+          mealId,
+          next ? { is_completed: true } : { is_completed: false, consumed_quantity: null }
+        )
+      )
+      // 2. Persistencia serializada por comida: si ya hay un write en vuelo, encolamos la ÚLTIMA
+      //    intención (spam-safe, sin escrituras concurrentes); si no, disparamos ya.
+      if (toggleInFlight.current.has(mealId)) {
+        toggleQueued.current.set(mealId, next)
+      } else {
+        void writeToggle(mealId, next)
+      }
     },
-    [
-      setOptimisticCompletion,
-      userId,
-      plan.id,
-      currentLog,
-      coachSlug,
-      selectedDate,
-      today,
-      mealsVisible,
-      optimisticCompletions,
-      reduceMotion,
-    ]
+    [mealsVisible, completions, reduceMotion, selectedDate, writeToggle]
   )
 
   const handlePartialPctChange = useCallback(
@@ -538,8 +613,8 @@ export function NutritionShell({
             consumedPct: pct,
           })
           if (!success) throw new Error('portion')
-          const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
-          setCurrentLog(dailyLog as Record<string, unknown> | null)
+          // Reconcilia la base local sin refetch pesado (el server guarda consumed_quantity = pct|null).
+          setCurrentLog((prev) => patchLocalMealLog(prev, dailyLogId, mealId, { consumed_quantity: pct }))
         } catch (e) {
           console.error(e)
           toast.error('No se pudo guardar la porción')
@@ -569,17 +644,38 @@ export function NutritionShell({
     return o
   }, [mealLogs])
 
+  // Antes NO había optimista para satisfacción → el emoji no se pintaba hasta 2 round-trips (~laggy).
+  // Ahora refleja al instante y la action corre en background.
+  const [optimisticSatisfaction, applyOptimisticSatisfaction] = useOptimistic(
+    satisfactionMap,
+    (state: Record<string, 1 | 2 | 3>, u: { mealId: string; score: 1 | 2 | 3 | null }) => {
+      const n = { ...state }
+      if (u.score == null) delete n[u.mealId]
+      else n[u.mealId] = u.score
+      return n
+    }
+  )
+
   const handleSatisfactionChange = useCallback(
     (mealId: string, score: 1 | 2 | 3 | null) => {
       const dailyLogId = currentLog?.id as string | undefined
       if (!dailyLogId || !isToday) return
       startSatisfactionTransition(async () => {
-        await updateMealSatisfaction({ clientId: userId, dailyLogId, mealId, score })
-        const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
-        setCurrentLog(dailyLog as Record<string, unknown> | null)
+        applyOptimisticSatisfaction({ mealId, score })
+        try {
+          const { success } = await updateMealSatisfaction({ clientId: userId, dailyLogId, mealId, score })
+          if (!success) throw new Error('satisfaction')
+          // Reconcilia la base local sin refetch (el server guarda satisfaction_score = score|null).
+          setCurrentLog((prev) => patchLocalMealLog(prev, dailyLogId, mealId, { satisfaction_score: score }))
+        } catch (e) {
+          console.error(e)
+          toast.error('No se pudo guardar tu valoración')
+          const { dailyLog } = await fetchLogForDate(userId, plan.id, selectedDate)
+          setCurrentLog(dailyLog as Record<string, unknown> | null)
+        }
       })
     },
-    [currentLog, isToday, userId, plan.id, selectedDate]
+    [currentLog, isToday, applyOptimisticSatisfaction, userId, plan.id, selectedDate]
   )
 
   const handleToggleFoodFavorite = useCallback(
@@ -611,8 +707,11 @@ export function NutritionShell({
   )
 
   const totalMeals = mealsVisible.length
+  // El toggle YA no participa del pending (es local instantáneo + write serializado en background),
+  // así que el círculo de completar nunca se bloquea (spam fluido). Este flag solo gatea porción /
+  // satisfacción / swap / pdf / navegación de día.
   const isPending =
-    isTogglePending || isDateLoading || isPortionPending || isSatisfactionPending || isSwapPending || isPdfPending
+    isDateLoading || isPortionPending || isSatisfactionPending || isSwapPending || isPdfPending
   const activeSwapByMealFoodKey = useMemo(() => {
     const m = new Map<string, string>()
     for (const s of mealSwapLogs) {
@@ -986,13 +1085,13 @@ export function NutritionShell({
                   </>
                 ) : undefined
               }
-              isCompleted={!!optimisticCompletions[meal.id]}
+              isCompleted={!!completions[meal.id]}
               partialPlanPct={meal.id in optimisticPartialPct ? optimisticPartialPct[meal.id]! : null}
               isToday={isToday}
               isPending={isPending}
               onToggle={handleToggle}
               onPartialPlanPctChange={handlePartialPctChange}
-              satisfactionScore={satisfactionMap[meal.id] ?? null}
+              satisfactionScore={optimisticSatisfaction[meal.id] ?? null}
               onSatisfactionChange={isToday ? handleSatisfactionChange : undefined}
               favoriteFoodIds={favoriteFoodIds}
               onToggleFoodFavorite={handleToggleFoodFavorite}

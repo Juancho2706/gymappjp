@@ -64,7 +64,7 @@ export async function toggleMealCompletion(
   mealId: string,
   isCompleted: boolean,
   existingLogId: string | undefined,
-  coachSlug: string,
+  _coachSlug: string,
   targetDate: string
 ): Promise<{ success: boolean; logId?: string }> {
   const supabase = await createClient()
@@ -108,9 +108,10 @@ export async function toggleMealCompletion(
     if (error) return { success: false }
   }
 
-  revalidatePath(`/c/${coachSlug}/nutrition`)
-  revalidatePath(`/c/${coachSlug}/dashboard`)
-
+  // NO revalidatePath del route actual (/nutrition): forzaba re-render del RSC completo
+  // (~15 queries: adherencia 30d, exchanges, recap, micros, shopping, notas...) en CADA toggle
+  // → ~4s de lag. El shell reconcilia el estado local optimista sin refetch. El dashboard se
+  // refresca solo al navegar (route dinamica, sin cache de router en Next 16). Ver W3.
   return { success: true, logId: dailyLogId }
 }
 
@@ -146,7 +147,7 @@ export async function updateMealConsumedPortion(
   const parsed = updateConsumedPortionSchema.safeParse(raw)
   if (!parsed.success) return { success: false }
 
-  const { clientId, planId, mealId, dailyLogId, coachSlug, targetDate, consumedPct } = parsed.data
+  const { clientId, planId, mealId, dailyLogId, targetDate, consumedPct } = parsed.data
   const supabase = await createClient()
   const {
     data: { user },
@@ -186,8 +187,7 @@ export async function updateMealConsumedPortion(
 
   if (error) return { success: false }
 
-  revalidatePath(`/c/${coachSlug}/nutrition`)
-  revalidatePath(`/c/${coachSlug}/dashboard`)
+  // Sin revalidatePath del route actual (ver toggleMealCompletion): el shell reconcilia local.
   return { success: true }
 }
 

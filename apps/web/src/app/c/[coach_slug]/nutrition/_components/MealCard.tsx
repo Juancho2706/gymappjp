@@ -69,11 +69,13 @@ export function MealCard({
   const handleToggle = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      if (!isToday || isPending) return
+      // Sin gate por isPending: el completado es local instantáneo + persistencia serializada en el
+      // shell (spam-safe). Bloquearlo aquí volvía a "perder" toques rápidos. Solo se veta día no-hoy.
+      if (!isToday) return
       if ('vibrate' in navigator) navigator.vibrate(50)
       onToggle(meal.id, isCompleted)
     },
-    [isToday, isPending, meal.id, isCompleted, onToggle]
+    [isToday, meal.id, isCompleted, onToggle]
   )
 
   return (
@@ -96,7 +98,7 @@ export function MealCard({
             'transition-all duration-200 touch-manipulation',
             !isToday && 'cursor-default opacity-50'
           )}
-          disabled={!isToday || isPending}
+          disabled={!isToday}
           aria-label={isCompleted ? 'Marcar incompleta' : 'Marcar completa'}
         >
           <motion.div

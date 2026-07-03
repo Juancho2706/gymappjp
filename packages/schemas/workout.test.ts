@@ -242,6 +242,19 @@ describe('WorkoutLogSetSchema — espejo polimórfico (AC4)', () => {
     it('rechaza FC promedio absurda', () => {
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, actual_avg_hr: 300 }).success).toBe(false)
     })
+
+    // Escala 1-10 para AMBOS (decisión CEO, pisa RPE 6-10 / RIR 0-5 anteriores).
+    it('acepta RPE y RIR en el borde 1 y 10', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '1', rir: '1' }).success).toBe(true)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '10', rir: '10' }).success).toBe(true)
+    })
+
+    it('rechaza RPE/RIR fuera de 1-10 (0 y 11)', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '0' }).success).toBe(false)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rir: '0' }).success).toBe(false)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '11' }).success).toBe(false)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rir: '11' }).success).toBe(false)
+    })
 })
 
 describe('CardioProfileUpdateSchema (AC9)', () => {
