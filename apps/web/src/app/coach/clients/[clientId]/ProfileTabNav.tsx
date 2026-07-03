@@ -78,7 +78,9 @@ export function ProfileTabNav({ activeTab, onChange, badges }: ProfileTabNavProp
         <div
             ref={barRef}
             className={cn(
-                'sticky z-20 mx-0 mb-2 w-full max-w-full min-w-0 border-b px-0 transition-[box-shadow,border-color] duration-200 ease-out',
+                // Full-bleed contra el gutter de la página (px-5 / lg:px-6): el fondo cruza TODO el
+                // ancho del dispositivo y las pills scrollean con padding propio (no se cortan).
+                'sticky z-20 -mx-5 mb-2 min-w-0 border-b transition-[box-shadow,border-color] duration-200 ease-out lg:-mx-6',
                 stuck
                     ? 'border-default shadow-[0_6px_16px_-10px_rgba(0,0,0,0.28)]'
                     : 'border-subtle',
@@ -89,8 +91,8 @@ export function ProfileTabNav({ activeTab, onChange, badges }: ProfileTabNavProp
             <div className="relative min-w-0">
                 <div
                     ref={scrollRef}
-                    className="relative z-10 flex min-w-0 gap-1.5 overflow-x-auto py-2 scrollbar-none"
-                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                    className="relative z-10 flex min-w-0 gap-1.5 overflow-x-auto px-5 py-2 scrollbar-none lg:px-6"
+                    style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', scrollPaddingInline: 20 }}
                 >
                     {TABS.map((tab) => {
                         const active = activeTab === tab.id

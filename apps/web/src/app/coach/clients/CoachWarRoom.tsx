@@ -159,8 +159,11 @@ function DirMetricChip({
                 selected ? 'border-strong bg-[var(--text-strong)]' : 'border-subtle bg-surface-card'
             )}
         >
+            {/* Selected = pill inversa (bg --text-strong): el texto usa --surface-card, que es su
+                inverso REAL en ambos temas (dark: pill blanca + texto tinta; light: pill tinta +
+                texto blanco). text-white solo funcionaba en claro. */}
             <div
-                className={cn('font-display text-[15.5px] font-black leading-none', selected && 'text-white')}
+                className={cn('font-display text-[15.5px] font-black leading-none', selected && 'text-[var(--surface-card)]')}
                 style={!selected && fg ? { color: fg } : undefined}
             >
                 <AnimatedNumber value={value} />
@@ -169,7 +172,7 @@ function DirMetricChip({
             <div
                 className={cn(
                     'truncate text-[9.5px] font-semibold',
-                    selected ? 'text-white/70' : 'text-muted'
+                    selected ? 'text-[var(--surface-card)] opacity-70' : 'text-muted'
                 )}
             >
                 {label}

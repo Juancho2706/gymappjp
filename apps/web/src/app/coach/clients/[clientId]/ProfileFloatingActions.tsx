@@ -90,7 +90,7 @@ export function ProfileFloatingActions({
     return (
         <div
             ref={rootRef}
-            className="sticky bottom-[calc(var(--mobile-content-bottom-offset)+0.5rem)] z-40 -mx-5 border-t border-subtle bg-[color-mix(in_srgb,var(--surface-card)_95%,transparent)] backdrop-blur-md print:hidden md:bottom-0 md:border-t-0 md:bg-transparent md:backdrop-blur-none lg:-mx-6"
+            className="sticky bottom-[calc(var(--mobile-content-bottom-offset)+0.5rem)] z-40 -mx-5 print:hidden md:bottom-0 lg:-mx-6"
             style={{
                 boxSizing: 'border-box',
                 minHeight: 'calc(72px + env(safe-area-inset-bottom))',
