@@ -43,7 +43,7 @@ function ProgresoLoader({ brandName, iconSrc, subtitle, size }: LoaderVariantPro
         <div className={styles.wrap}>
             <div className={styles.ringBox}>
                 <svg viewBox="0 0 120 120" className={cn(styles.absSvg, styles.spinSlow)} aria-hidden>
-                    <circle cx="60" cy="60" r="54" fill="none" stroke="rgb(var(--ld-rgb) / 0.18)" strokeWidth="1.5" strokeDasharray="2 7" strokeLinecap="round" />
+                    <circle cx="60" cy="60" r="54" fill="none" stroke="rgba(var(--ld-rgb), 0.18)" strokeWidth="1.5" strokeDasharray="2 7" strokeLinecap="round" />
                 </svg>
                 <Icon iconSrc={iconSrc} />
             </div>
@@ -62,7 +62,7 @@ function AnilloLoader({ brandName, iconSrc, subtitle, size }: LoaderVariantProps
         <div className={styles.wrap}>
             <div className={styles.ringBox}>
                 <svg viewBox="0 0 120 120" className={cn(styles.absSvg, styles.spin)} aria-hidden>
-                    <circle cx="60" cy="60" r="50" fill="none" stroke="rgb(var(--ld-rgb) / 0.12)" strokeWidth="5" />
+                    <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(var(--ld-rgb), 0.12)" strokeWidth="5" />
                     <circle className={styles.dash} cx="60" cy="60" r="50" fill="none" stroke="var(--ld-brand)" strokeWidth="5" strokeLinecap="round" strokeDasharray="314" />
                 </svg>
                 <Icon iconSrc={iconSrc} />
@@ -127,7 +127,7 @@ function OrbitasLoader({ brandName, iconSrc, subtitle, size }: LoaderVariantProp
                     <circle cx="60" cy="60" r="52" fill="none" stroke="var(--ld-brand)" strokeWidth="3.5" strokeLinecap="round" strokeDasharray="82 245" />
                 </svg>
                 <svg viewBox="0 0 120 120" className={cn(styles.absSvg, styles.arcB)} aria-hidden>
-                    <circle cx="60" cy="60" r="40" fill="none" stroke="rgb(var(--ld-rgb) / 0.45)" strokeWidth="3.5" strokeLinecap="round" strokeDasharray="63 188" />
+                    <circle cx="60" cy="60" r="40" fill="none" stroke="rgba(var(--ld-rgb), 0.45)" strokeWidth="3.5" strokeLinecap="round" strokeDasharray="63 188" />
                 </svg>
                 <Icon iconSrc={iconSrc} px={40} />
             </div>

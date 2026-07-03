@@ -21,7 +21,7 @@
     height: 420px;
     transform: translate(-50%, -50%);
     border-radius: 50%;
-    background: radial-gradient(circle, rgb(var(--ld-rgb) / 0.16) 0%, transparent 62%);
+    background: radial-gradient(circle, rgba(var(--ld-rgb), 0.16) 0%, transparent 62%);
     filter: blur(70px);
     pointer-events: none;
 }
@@ -40,7 +40,7 @@
     position: relative;
     z-index: 1;
     object-fit: contain;
-    filter: drop-shadow(0 0 12px rgb(var(--ld-rgb) / 0.55));
+    filter: drop-shadow(0 0 12px rgba(var(--ld-rgb), 0.55));
     animation: ldFloat 2.8s ease-in-out infinite;
 }
 
@@ -60,10 +60,10 @@
 }
 
 /* V0 · progreso */
-.bar { position: relative; width: 200px; height: 3px; border-radius: 99px; background: rgb(var(--ld-rgb) / 0.12); overflow: hidden; }
+.bar { position: relative; width: 200px; height: 3px; border-radius: 99px; background: rgba(var(--ld-rgb), 0.12); overflow: hidden; }
 .barFill {
     position: absolute; inset: 0 auto 0 0; width: 30%; border-radius: 99px;
-    background: var(--ld-brand); box-shadow: 0 0 10px rgb(var(--ld-rgb) / 0.7);
+    background: var(--ld-brand); box-shadow: 0 0 10px rgba(var(--ld-rgb), 0.7);
     animation: ldBar 2.6s ease-in-out infinite;
 }
 .pct { font-variant-numeric: tabular-nums; font-size: 0.7rem; font-weight: 600; color: var(--ld-brand); }
@@ -79,13 +79,13 @@
 .radarCore {
     position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center;
     width: 56px; height: 56px; border-radius: 50%;
-    background: rgb(var(--ld-rgb) / 0.12); border: 1px solid rgb(var(--ld-rgb) / 0.4);
+    background: rgba(var(--ld-rgb), 0.12); border: 1px solid rgba(var(--ld-rgb), 0.4);
 }
 
 /* V3 · cometa */
 .conic {
     position: absolute; inset: 0; border-radius: 50%;
-    background: conic-gradient(from 0deg, transparent 0%, rgb(var(--ld-rgb) / 0.05) 35%, var(--ld-brand) 100%);
+    background: conic-gradient(from 0deg, transparent 0%, rgba(var(--ld-rgb), 0.05) 35%, var(--ld-brand) 100%);
     -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
     mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
     animation: ldSpin 1s linear infinite;
@@ -95,7 +95,7 @@
 .eq { display: flex; align-items: flex-end; gap: 7px; height: 56px; }
 .eqBar {
     width: 7px; height: 56px; border-radius: 4px; transform-origin: bottom;
-    background: linear-gradient(180deg, var(--ld-brand), rgb(var(--ld-rgb) / 0.4));
+    background: linear-gradient(180deg, var(--ld-brand), rgba(var(--ld-rgb), 0.4));
     animation: ldEq 1s ease-in-out infinite;
 }
 
@@ -103,7 +103,7 @@
 .compSymbol {
     position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center;
     color: var(--ld-brand);
-    filter: drop-shadow(0 0 12px rgb(var(--ld-rgb) / 0.45));
+    filter: drop-shadow(0 0 12px rgba(var(--ld-rgb), 0.45));
 }
 .compInitial { font-weight: 900; line-height: 1; color: var(--ld-brand); letter-spacing: -0.04em; }
 
@@ -117,10 +117,10 @@
 .compOrbit { position: absolute; inset: 0; animation: ldSpin 2.4s linear infinite; transform-origin: center; }
 .compOrbitDot {
     position: absolute; top: -3px; left: 50%; width: 10px; height: 10px; margin-left: -5px;
-    border-radius: 50%; background: var(--ld-brand); box-shadow: 0 0 10px rgb(var(--ld-rgb) / 0.8);
+    border-radius: 50%; background: var(--ld-brand); box-shadow: 0 0 10px rgba(var(--ld-rgb), 0.8);
 }
 .compOrbitTrack {
-    position: absolute; inset: 6px; border-radius: 50%; border: 1.5px dashed rgb(var(--ld-rgb) / 0.22);
+    position: absolute; inset: 6px; border-radius: 50%; border: 1.5px dashed rgba(var(--ld-rgb), 0.22);
 }
 /* respiracion: escala suave que inhala/exhala */
 .compBreath { animation: ldBreath 3.2s ease-in-out infinite; }

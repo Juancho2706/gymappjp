@@ -55,12 +55,13 @@ const strongCls = (isDark: boolean) => (isDark ? 'text-white' : 'text-zinc-900')
 const cardBgCls = (isDark: boolean) => (isDark ? 'bg-white/5 border-white/10' : 'bg-white border-zinc-200')
 const subtleBgCls = (isDark: boolean) => (isDark ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-zinc-200')
 const pxMix = (primaryColor: string, val: string) => `color-mix(in srgb, ${primaryColor} ${val}, transparent)`
-/** Hex → "r g b" (space-separated) para las CSS vars --theme-primary-rgb que consume el loader v2. */
+/** Hex → "r, g, b" (COMAS — la convención de --theme-primary-rgb en toda la app; el módulo de
+ *  loaders consume `rgba(var(--ld-rgb), X)`). El formato con espacios rompía las rutas. */
 const hexToSpaceRgb = (hex: string): string => {
     const m = /^#?([0-9a-fA-F]{6})$/.exec((hex ?? '').trim())
-    if (!m) return '16 185 129'
+    if (!m) return '16, 185, 129'
     const n = parseInt(m[1], 16)
-    return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`
+    return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
 }
 
 /* ─── screen sub-components ─── */
