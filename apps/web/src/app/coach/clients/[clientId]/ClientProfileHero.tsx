@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode, SVGProps } from 'react'
+import { useState, type ReactNode, type SVGProps } from 'react'
 
 function WhatsAppIcon(props: SVGProps<SVGSVGElement>) {
     return (
@@ -21,7 +21,10 @@ import {
     Dumbbell,
     Utensils,
     Target,
+    Loader2,
 } from 'lucide-react'
+import { getClientDossier } from './_actions/client-detail.actions'
+import { downloadClientDossierPdf } from '@/lib/pdf/client-dossier-pdf'
 import { Badge } from '@/components/ui/badge'
 import { GlassButton } from '@/components/ui/glass-button'
 import { Button } from '@/components/ui/button'
@@ -102,8 +105,21 @@ export function ClientProfileHero({
     const ab = attentionBadge(attentionScore)
     const active = client.is_active !== false
 
-    const handleExport = () => {
-        window.print()
+    const [exporting, setExporting] = useState(false)
+    const [exportError, setExportError] = useState<string | null>(null)
+
+    const handleExport = async () => {
+        if (exporting) return
+        setExportError(null)
+        setExporting(true)
+        try {
+            const dossier = await getClientDossier(clientId)
+            await downloadClientDossierPdf(dossier)
+        } catch {
+            setExportError('No se pudo generar el PDF. Intentá de nuevo.')
+        } finally {
+            setExporting(false)
+        }
     }
 
     return (
@@ -216,11 +232,25 @@ export function ClientProfileHero({
                         type="button"
                         variant="outline"
                         onClick={handleExport}
-                        className="h-12 px-4 border-dashed border-primary/30 bg-background/80 hover:bg-primary/5 font-bold uppercase tracking-widest text-[10px] gap-2"
+                        disabled={exporting}
+                        aria-busy={exporting}
+                        className="h-12 px-4 border-dashed border-primary/30 bg-background/80 hover:bg-primary/5 font-bold uppercase tracking-widest text-[10px] gap-2 disabled:opacity-70"
                     >
-                        <Download className="w-4 h-4" />
-                        Exportar
+                        {exporting ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <Download className="w-4 h-4" />
+                        )}
+                        {exporting ? 'Generando…' : 'Exportar PDF'}
                     </Button>
+                    {exportError && (
+                        <p
+                            role="alert"
+                            className="basis-full text-[10px] font-semibold normal-case tracking-normal text-rose-500"
+                        >
+                            {exportError}
+                        </p>
+                    )}
                 </div>
             </div>
 
