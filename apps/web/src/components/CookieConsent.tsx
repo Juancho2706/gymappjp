@@ -48,7 +48,7 @@ export function CookieConsent() {
         <div
             role="dialog"
             aria-label="Consentimiento de cookies"
-            className="fixed bottom-0 left-0 right-0 z-[70] border-t border-border bg-background/95 backdrop-blur-sm p-4 pb-safe animate-in slide-in-from-bottom-2 duration-300"
+            className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-[70] mx-auto max-w-4xl rounded-[var(--radius-card)] border border-border bg-background/95 p-4 shadow-[var(--shadow-lg)] backdrop-blur-sm animate-in slide-in-from-bottom-2 duration-300 sm:inset-x-6"
         >
             <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <Cookie className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5 sm:mt-0" />

@@ -204,10 +204,26 @@ export default function RegisterPage() {
         }
         setClientError(null)
         setStep((prev) => (prev === 1 ? 2 : 3))
+        scrollPaneToTop()
     }
 
     function prevStep() {
         setStep((prev) => (prev === 3 ? 2 : 1))
+        scrollPaneToTop()
+    }
+
+    // El panel del auth-layout es el scroll container (overflow-y-auto): al cambiar de paso
+    // conserva el scroll anterior y el título queda tapado por el header sticky. Reset a 0.
+    function scrollPaneToTop() {
+        requestAnimationFrame(() => {
+            let node: HTMLElement | null = document.querySelector('form[action]')
+            while (node) {
+                if (/(auto|scroll)/.test(getComputedStyle(node).overflowY)) break
+                node = node.parentElement
+            }
+            if (node) node.scrollTo({ top: 0 })
+            window.scrollTo({ top: 0 })
+        })
     }
 
     return (
