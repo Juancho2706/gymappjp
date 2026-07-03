@@ -34,6 +34,8 @@ export interface BuilderBlock {
     tempo?: string
     rir?: string
     rest_time?: string
+    /** Descanso de las series de aproximación (Fase M — 8b). Vacío ⇒ mismo descanso que rest_time. */
+    warmup_rest_time?: string
     notes?: string
     superset_group?: string | null
     progression_type?: 'weight' | 'reps' | null

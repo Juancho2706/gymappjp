@@ -14,15 +14,23 @@ import type { IntervalConfig } from '@/domain/workout/types'
  * startHold + startInterval + startStopwatch. UN SOLO timer activo: el nuevo
  * reemplaza al anterior con confirmación suave (toast — AC5).
  */
+/** Opciones del descanso (M2): `label` = "qué sigue" mostrado en la barra; `warmup` = descanso de aproximación. */
+interface RestOptions {
+    label?: string
+    warmup?: boolean
+}
+
 interface WorkoutContextType {
-    startRest: (timeStr: string | null) => void
+    startRest: (timeStr: string | null, opts?: RestOptions) => void
     startHold: (seconds: number, label?: string) => void
     startInterval: (config: IntervalConfig, sets?: number) => void
     startStopwatch: () => void
+    /** Auto-skip (M2): cortar el descanso en curso (p.ej. al registrar la siguiente serie). */
+    cancelRest: () => void
 }
 
 type ActiveTimer =
-    | { kind: 'rest'; seconds: number }
+    | { kind: 'rest'; seconds: number; label?: string; warmup?: boolean }
     | { kind: 'hold'; seconds: number; label?: string }
     | { kind: 'interval'; phases: IntervalPhase[] }
     | { kind: 'stopwatch' }
@@ -85,9 +93,9 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
         if (next) setTimeout(() => setActive(next), 10)
     }, [])
 
-    const startRest = useCallback((timeStr: string | null) => {
+    const startRest = useCallback((timeStr: string | null, opts?: RestOptions) => {
         const seconds = parseRestTime(timeStr)
-        if (seconds > 0) replaceWith({ kind: 'rest', seconds })
+        if (seconds > 0) replaceWith({ kind: 'rest', seconds, label: opts?.label, warmup: opts?.warmup })
     }, [replaceWith])
 
     const startHold = useCallback((seconds: number, label?: string) => {
@@ -110,12 +118,16 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
     }, [replaceWith])
 
     const close = useCallback(() => setActive(null), [])
+    // Auto-skip (M2): sólo corta si HAY un descanso corriendo (no pisa hold/interval/cronómetro).
+    const cancelRest = useCallback(() => {
+        setActive((cur) => (cur?.kind === 'rest' ? null : cur))
+    }, [])
 
     return (
-        <WorkoutContext.Provider value={{ startRest, startHold, startInterval, startStopwatch }}>
+        <WorkoutContext.Provider value={{ startRest, startHold, startInterval, startStopwatch, cancelRest }}>
             {children}
             {active?.kind === 'rest' && (
-                <RestTimer initialSeconds={active.seconds} onClose={close} />
+                <RestTimer initialSeconds={active.seconds} nextLabel={active.label} warmup={active.warmup} onClose={close} />
             )}
             {active?.kind === 'hold' && (
                 <HoldTimer initialSeconds={active.seconds} label={active.label} onClose={close} />

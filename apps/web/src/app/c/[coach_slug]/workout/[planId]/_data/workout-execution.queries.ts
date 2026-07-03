@@ -30,6 +30,8 @@ export interface BlockType {
     tempo: string | null
     rir: string | null
     rest_time: string | null
+    /** Descanso de las series de aproximación (Fase M — 8b); null ⇒ un solo descanso (rest_time). */
+    warmup_rest_time: string | null
     notes: string | null
     section: 'warmup' | 'main' | 'cooldown' | null
     section_template_id: string | null
@@ -95,7 +97,7 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
         .select(`
             id, title, assigned_date, day_of_week, week_variant, program_id, coach_id,
             workout_blocks (
-                id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, notes, section, section_template_id, superset_group, progression_type, progression_value, progression_mode, is_override,
+                id, order_index, sets, reps, target_weight_kg, tempo, rir, rest_time, warmup_rest_time, notes, section, section_template_id, superset_group, progression_type, progression_value, progression_mode, is_override,
                 exercise_type_override, side_mode, reps_value, reps_unit, load_value, load_unit,
                 distance_value, distance_unit, duration_sec, target_pace_sec_per_km, hr_zone,
                 instructions, interval_config,

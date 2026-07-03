@@ -90,9 +90,15 @@ export function ProfileFloatingActions({
     return (
         <div
             ref={rootRef}
-            // Móvil: FIXED clavada justo sobre la cápsula del nav (sticky se despegaba al llegar a su
-            // posición del DOM y quedaba flotando a mitad de página). Desktop conserva sticky (funciona).
-            className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+96px)] z-40 print:hidden md:sticky md:inset-x-auto md:bottom-0 md:-mx-6"
+            // Posición en 3 estados, ACOPLADA al mismo container-query que el grid 2-col de la ficha
+            // (@5xl/ficha) para que "sticky ⇔ 2-col" nunca se desincronicen (esa desincronización —
+            // sticky por viewport md pero 1-col por container — era la que dejaba la barra flotando
+            // encima de "Evolución visual" en el panel angosto):
+            //  · Móvil (<760): FIXED sobre la cápsula del nav (sticky se despegaba a mitad de página).
+            //  · Panel angosto / ventana reducida (≥760 pero ficha < @5xl → 1 columna): STATIC, en
+            //    FLUJO como último elemento — nunca se pinta encima de una card.
+            //  · Desktop ancho (ficha ≥ @5xl → 2 columnas): STICKY abajo full-bleed (intacto).
+            className="static print:hidden max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(env(safe-area-inset-bottom)+96px)] max-md:z-40 @5xl/ficha:sticky @5xl/ficha:bottom-0 @5xl/ficha:z-40 @5xl/ficha:-mx-6"
             style={{
                 boxSizing: 'border-box',
                 minHeight: 'calc(72px + env(safe-area-inset-bottom))',

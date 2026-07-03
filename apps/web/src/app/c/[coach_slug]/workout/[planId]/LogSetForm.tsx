@@ -7,7 +7,7 @@ import { useFormStatus } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
 import { logSetAction, type LogState } from './_actions/workout-log.actions'
-import { useWorkoutTimer } from './WorkoutTimerProvider'
+import { useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
 import { enqueueWorkoutLog } from '@/lib/workout-offline-queue'
 import { triggerHaptic } from '@/lib/client/haptics'
 import { cn } from '@/lib/utils'
@@ -22,8 +22,21 @@ interface Props {
     blockId: string
     setNumber: number
     restTimeStr: string | null
+    /**
+     * Descanso de aproximación (M2 · 6): si existe, la 1ª serie de un bloque de ≥3 series usa este
+     * descanso (más corto) en vez de `restTimeStr`. Sólo aplica al camino strength de series sueltas
+     * (las superseries mandan por `closesRound`). null ⇒ siempre `restTimeStr`.
+     */
+    warmupRestTimeStr?: string | null
+    /** Total de series del bloque — heurística del descanso de aproximación (warmup sólo si ≥3). */
+    totalSets?: number
+    /** "Qué sigue" para la barra de descanso (M2 · 1) — nombre del ejercicio/serie próxima. */
+    nextUpLabel?: string
     /** Peso objetivo sugerido (sobrecarga progresiva): pre-llena el input si no hay log aún. */
     suggestedWeightKg?: number | null
+    /** Máximo histórico (kg) del ejercicio: si el peso registrado lo iguala o supera, la serie
+     *  pulsa dorado (PR inline). Sólo presentación — no cambia el motor de logging. */
+    prThresholdKg?: number | null
     existingLog?: {
         weight_kg: number | null
         reps_done: number | null
@@ -157,7 +170,11 @@ function StrengthLogSetForm({
     blockId,
     setNumber,
     restTimeStr,
+    warmupRestTimeStr,
+    totalSets,
+    nextUpLabel,
     suggestedWeightKg,
+    prThresholdKg,
     existingLog,
     autoTimerEnabled = true,
     isActive = false,
@@ -174,11 +191,17 @@ function StrengthLogSetForm({
     )
 
     const isLogged = optimisticLogged
-    const { startRest } = useWorkoutTimer()
+    const { startRest, cancelRest } = useWorkoutTimer()
     const reducedMotion = useReducedMotion()
     const weightRef = useRef<HTMLInputElement>(null)
     const repsRef = useRef<HTMLInputElement>(null)
     const formRef = useRef<HTMLFormElement>(null)
+    // Celebraciones sobrias (M1): al cerrar la serie el chip hace un settle (check elástico); si el
+    // peso alcanza el máximo histórico, un pulso dorado 300ms. Refs (no state) porque el chip se
+    // MONTA de nuevo al colapsar y lee el valor vigente sin disparar un re-render extra. En logs ya
+    // existentes (carga de página) quedan en false ⇒ sin animación fantasma.
+    const settleRef = useRef(false)
+    const prRef = useRef(false)
     // Reapertura de una serie cerrada (tap en el chip recap → fila editable).
     const [editing, setEditing] = useState(false)
     // Escala única surfaceada: RPE (dots). El name/payload no cambia — se inyecta en el submit.
@@ -216,13 +239,22 @@ function StrengthLogSetForm({
     const collapsed = isLogged && !editing
 
     const buildRest = () => {
-        if (!(autoTimerEnabled && !isLogged)) return
+        // Editar una serie ya cerrada no toca el descanso en curso.
+        if (isLogged) return
+        // Auto-skip (M2 · 4): con auto-timer OFF, registrar la serie corta cualquier descanso manual en curso.
+        if (!autoTimerEnabled) { cancelRest(); return }
         triggerHaptic(50)
         if (supersetRest) {
-            // Superserie: descanso completo del grupo SOLO al cerrar la ronda.
-            if (supersetRest.closesRound()) startRest(String(supersetRest.groupRestSeconds))
+            // Superserie: descanso completo del grupo SOLO al cerrar la ronda (semántica intacta);
+            // si no la cierra, seguís con el otro ejercicio → cortá el descanso en curso (auto-skip).
+            if (supersetRest.closesRound()) startRest(String(supersetRest.groupRestSeconds), { label: nextUpLabel })
+            else cancelRest()
         } else {
-            startRest(restTimeStr)
+            // Descanso de aproximación (M2 · 6): la 1ª serie de un bloque de ≥3 series usa el warmup.
+            const useWarmup = !!warmupRestTimeStr && setNumber === 1 && (totalSets ?? 0) >= 3
+            const restStr = useWarmup ? (warmupRestTimeStr as string) : restTimeStr
+            if (parseRestTime(restStr) > 0) startRest(restStr, { label: nextUpLabel, warmup: useWarmup })
+            else cancelRest()
         }
     }
 
@@ -250,6 +282,8 @@ function StrengthLogSetForm({
                 coachSlug: params.coach_slug,
                 timestamp: Date.now(),
             })
+            settleRef.current = true
+            prRef.current = prThresholdKg != null && w != null && w > 0 && w >= prThresholdKg
             setChipValues({ w, r })
             addOptimisticLogged(true)
             setNoteOpen(false)
@@ -271,6 +305,8 @@ function StrengthLogSetForm({
         const repsRaw = formData.get('reps_done')
         const w = weightRaw === null || weightRaw === '' ? null : Number(weightRaw)
         const r = repsRaw === null || repsRaw === '' ? null : Number(repsRaw)
+        settleRef.current = true
+        prRef.current = prThresholdKg != null && w != null && w > 0 && w >= prThresholdKg
         setChipValues({ w, r })
         onLogged?.({
             blockId,
@@ -289,15 +325,27 @@ function StrengthLogSetForm({
     if (collapsed) {
         const dispW = existingLog?.weight_kg ?? chipValues?.w ?? null
         const dispR = existingLog?.reps_done ?? chipValues?.r ?? null
+        // Se celebra sólo la serie recién cerrada en esta sesión (refs en false para logs cargados).
+        const celebrate = settleRef.current && !reducedMotion
+        const prGlow = prRef.current && !reducedMotion
         return (
             <motion.button
                 layout={!reducedMotion}
                 transition={reducedMotion ? { duration: 0 } : springs.smooth}
                 type="button"
                 onClick={() => setEditing(true)}
-                className="flex w-full items-center gap-2 rounded-control border border-[var(--sport-500)]/25 bg-[var(--sport-500)]/[0.06] px-3 py-2 text-left transition-colors hover:bg-[var(--sport-500)]/[0.12] active:scale-[0.99]"
+                className="relative flex w-full items-center gap-2 overflow-hidden rounded-control border border-[var(--sport-500)]/25 bg-[var(--sport-500)]/[0.06] px-3 py-2 text-left transition-colors hover:bg-[var(--sport-500)]/[0.12] active:scale-[0.99]"
                 aria-label={`Serie ${setNumber} registrada — tocá para editar`}
             >
+                {prGlow && (
+                    <motion.span
+                        aria-hidden
+                        className="pointer-events-none absolute inset-0 rounded-control ring-2 ring-amber-400"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: [0, 0.8, 0] }}
+                        transition={{ duration: 0.32, times: [0, 0.4, 1] }}
+                    />
+                )}
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--sport-500)]/20 text-[11px] font-black tabular-nums text-[var(--sport-300)]">
                     {setNumber}
                 </span>
@@ -312,7 +360,14 @@ function StrengthLogSetForm({
                 {noteTrimmed && (
                     <StickyNote className="h-3.5 w-3.5 shrink-0 text-amber-400" aria-label="Serie con nota" />
                 )}
-                <Check className="ml-auto h-4 w-4 shrink-0 text-[var(--sport-400)]" />
+                <motion.span
+                    className="ml-auto shrink-0 text-[var(--sport-400)]"
+                    initial={celebrate ? { scale: 0, rotate: -25 } : false}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={celebrate ? springs.elastic : { duration: 0 }}
+                >
+                    <Check className="h-4 w-4" />
+                </motion.span>
             </motion.button>
         )
     }
@@ -503,6 +558,7 @@ function TypedLogSetRow({
     blockId,
     setNumber,
     restTimeStr,
+    nextUpLabel,
     existingLog,
     autoTimerEnabled = true,
     mode,
@@ -516,7 +572,7 @@ function TypedLogSetRow({
         (_, newValue: boolean) => newValue
     )
     const isLogged = optimisticLogged
-    const { startRest } = useWorkoutTimer()
+    const { startRest, cancelRest } = useWorkoutTimer()
     const formRef = useRef<HTMLFormElement>(null)
     const [rpeLocal, setRpeLocal] = useState<number | null>(existingLog?.rpe ?? null)
     const [rpeDraft, setRpeDraft] = useState(8)
@@ -573,14 +629,20 @@ function TypedLogSetRow({
         }
 
         addOptimisticLogged(true)
-        if (autoTimerEnabled && !isLogged) {
-            if (supersetRest) {
-                // Superserie: descanso completo del grupo SOLO al cerrar la ronda.
+        // Descanso + auto-skip (M2 · 4): editar una serie ya cerrada no toca el descanso en curso.
+        if (!isLogged) {
+            if (!autoTimerEnabled) {
+                cancelRest()
+            } else if (supersetRest) {
+                // Superserie: descanso completo del grupo SOLO al cerrar la ronda (semántica intacta).
                 triggerHaptic(50)
-                if (supersetRest.closesRound()) startRest(String(supersetRest.groupRestSeconds))
+                if (supersetRest.closesRound()) startRest(String(supersetRest.groupRestSeconds), { label: nextUpLabel })
+                else cancelRest()
             } else if (restTimeStr) {
                 triggerHaptic(50)
-                startRest(restTimeStr)
+                startRest(restTimeStr, { label: nextUpLabel })
+            } else {
+                cancelRest()
             }
         }
         onLogged?.({

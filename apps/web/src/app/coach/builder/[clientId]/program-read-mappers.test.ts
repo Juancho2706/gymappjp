@@ -86,6 +86,24 @@ describe('mapDbBlockToBuilderBlock', () => {
         expect(block.is_unilateral).toBe(true)
         expect(block.extra_targets).toEqual({ glutes: 0.3, core: 0.2 })
     })
+    it('warmup_rest_time: viaja cuando existe; ausente -> "" (Fase M 8b)', () => {
+        const withWarmup = mapDbBlockToBuilderBlock(
+            { exercise_id: 'e4', sets: 4, reps: '5', rest_time: '3min', warmup_rest_time: '60s' },
+            new Map(),
+            'uid-4',
+            1,
+        )
+        expect(withWarmup.warmup_rest_time).toBe('60s')
+        expect(withWarmup.rest_time).toBe('3min')
+
+        const legacy = mapDbBlockToBuilderBlock(
+            { exercise_id: 'e5', sets: 3, reps: '10' },
+            new Map(),
+            'uid-5',
+            1,
+        )
+        expect(legacy.warmup_rest_time).toBe('')
+    })
     it('section desconocida -> main; usa catálogo si no hay FK embebida', () => {
         const cat = ex({ id: 'e2', name: 'Sentadilla', muscle_group: 'Pierna', gif_url: 'g.gif' })
         const block = mapDbBlockToBuilderBlock(

@@ -4339,6 +4339,7 @@ export type Database = {
           target_pace_sec_per_km: number | null
           target_weight_kg: number | null
           tempo: string | null
+          warmup_rest_time: string | null
         }
         Insert: {
           created_at?: string
@@ -4376,6 +4377,7 @@ export type Database = {
           target_pace_sec_per_km?: number | null
           target_weight_kg?: number | null
           tempo?: string | null
+          warmup_rest_time?: string | null
         }
         Update: {
           created_at?: string
@@ -4413,6 +4415,7 @@ export type Database = {
           target_pace_sec_per_km?: number | null
           target_weight_kg?: number | null
           tempo?: string | null
+          warmup_rest_time?: string | null
         }
         Relationships: [
           {

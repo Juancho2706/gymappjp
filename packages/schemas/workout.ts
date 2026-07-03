@@ -124,6 +124,9 @@ export const WorkoutBlockSchema = z.object({
     tempo: z.string().max(20, 'Máximo 20 caracteres en tempo').nullable().optional(),
     rir: z.string().max(10, 'Máximo 10 caracteres en RIR').nullable().optional(),
     rest_time: z.string().max(20, 'Máximo 20 caracteres en recuperación').nullable().optional(),
+    // Descanso diferenciado de las series de calentamiento/aproximación (Fase M — item 8b).
+    // Mismo trato que rest_time: texto libre opcional; null/vacío ⇒ un solo descanso (rest_time).
+    warmup_rest_time: z.string().max(20, 'Máximo 20 caracteres en descanso de calentamiento').nullable().optional(),
     notes: z.string().max(1000, 'Las notas del ejercicio no pueden superar 1000 caracteres').nullable().optional(),
     superset_group: z.string().max(10).nullable().optional(),
     progression_type: z.enum(['weight', 'reps']).nullable().optional(),

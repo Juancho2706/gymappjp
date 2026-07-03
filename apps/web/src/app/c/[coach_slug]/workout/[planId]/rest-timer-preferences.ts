@@ -7,6 +7,8 @@ import type { TimerSound } from '@/lib/audioUtils'
 export const REST_TIMER_SOUND_KEY = 'restTimerSound'
 /** localStorage: volumen 0–1 */
 export const REST_TIMER_VOLUME_KEY = 'restTimerVolume'
+/** localStorage: silenciar beeps 3-2-1 + alarma (M2). default = false ⇒ sonido ON (comportamiento actual). */
+export const REST_TIMER_MUTED_KEY = 'restTimerMuted'
 /** localStorage: auto-iniciar cronómetro al guardar serie (gestionado en WorkoutExecutionClient) */
 export const OMNIAUTOTIMER_KEY = 'omni_autotimer'
 
@@ -41,6 +43,18 @@ export function writeRestTimerVolume(volume: number) {
   if (typeof window === 'undefined') return
   const v = Math.max(0, Math.min(1, volume))
   localStorage.setItem(REST_TIMER_VOLUME_KEY, String(v))
+  window.dispatchEvent(new CustomEvent('rest-timer-prefs-changed'))
+}
+
+/** Silencio del descanso (beeps 3-2-1 + alarma final). Default false ⇒ suena (comportamiento actual). */
+export function readRestTimerMuted(): boolean {
+  if (typeof window === 'undefined') return false
+  return localStorage.getItem(REST_TIMER_MUTED_KEY) === '1'
+}
+
+export function writeRestTimerMuted(muted: boolean) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(REST_TIMER_MUTED_KEY, muted ? '1' : '0')
   window.dispatchEvent(new CustomEvent('rest-timer-prefs-changed'))
 }
 

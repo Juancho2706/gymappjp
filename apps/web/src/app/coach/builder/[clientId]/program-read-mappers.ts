@@ -67,6 +67,7 @@ export function mapDbBlockToBuilderBlock(
         tempo: b.tempo || '',
         rir: b.rir || '',
         rest_time: b.rest_time || '',
+        warmup_rest_time: b.warmup_rest_time || '',
         notes: b.notes || '',
         superset_group: b.superset_group || null,
         progression_type: b.progression_type || null,

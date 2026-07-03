@@ -839,6 +839,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                         tempo: b.tempo || null,
                         rir: b.rir || null,
                         rest_time: b.rest_time || null,
+                        warmup_rest_time: b.warmup_rest_time || null,
                         notes: b.notes || null,
                         superset_group: b.superset_group || null,
                         progression_type: b.progression_type || null,

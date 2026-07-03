@@ -725,6 +725,23 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                         </div>
                     </div>
 
+                    {/* Descanso de calentamiento (Fase M — item 8b): opcional, solo fuerza.
+                        Vacío ⇒ un solo descanso (rest_time), como hasta hoy. */}
+                    <div className="space-y-3">
+                        <label className="text-[12.5px] font-semibold text-foreground flex items-center gap-1.5">
+                            Descanso calentamiento
+                        </label>
+                        <Input
+                            value={block.warmup_rest_time || ''}
+                            onChange={e => onChange({ ...block, warmup_rest_time: e.target.value })}
+                            placeholder="Ej. 60s o 1min"
+                            maxLength={20}
+                            autoComplete="off"
+                            className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
+                        />
+                        <p className="text-[10px] text-muted-foreground/50">para las series de aproximación — vacío = mismo descanso</p>
+                    </div>
+
                     {/* Ejes adicionales (farmer carry: carga + distancia + lado — AC2) */}
                     <div className="space-y-3 rounded-card border border-border bg-muted/30 p-4 dark:border-white/10">
                         <label className={FIELD_LABEL_CLASS}>Ejes adicionales (opcional)</label>

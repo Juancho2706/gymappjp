@@ -1,5 +1,37 @@
 export type TimerSound = 'digital' | 'bell' | 'classic' | 'boxing';
 
+/**
+ * Beep suave y corto para la cuenta regresiva 3-2-1 del descanso (M2). Un solo tono sine breve
+ * — distinto de la alarma final (playTimerSound), que es más larga/insistente. Misma infra Web
+ * Audio (extiende, no duplica). Silencioso y sin errores en navegadores sin AudioContext.
+ */
+export function playCountdownBeep(volume: number = 1.0) {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    if (ctx.state === 'suspended') ctx.resume();
+
+    const t = ctx.currentTime;
+    const v = Math.max(0, Math.min(1, volume));
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(760, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.12 * v || 0.0001, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+
+    osc.start(t);
+    osc.stop(t + 0.16);
+  } catch (e) {
+    console.error('Countdown beep error:', e);
+  }
+}
+
 export function playTimerSound(soundType: TimerSound = 'digital', volume: number = 1.0) {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;

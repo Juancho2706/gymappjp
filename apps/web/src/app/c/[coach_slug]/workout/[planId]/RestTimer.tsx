@@ -1,42 +1,85 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, Play, Pause, RotateCcw, Pencil } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { playTimerSound } from "@/lib/audioUtils";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { X, Play, Pause, RotateCcw, Volume2, VolumeX } from "lucide-react";
+import { playTimerSound, playCountdownBeep } from "@/lib/audioUtils";
 import { BRAND_APP_ICON } from "@/lib/brand-assets";
 import { triggerHaptic } from "@/lib/client/haptics";
-import { readRestTimerSound, readRestTimerVolume } from "./rest-timer-preferences";
+import { cn } from "@/lib/utils";
+import { springsSheet } from "@/lib/animation-presets";
+import {
+  readRestTimerSound,
+  readRestTimerVolume,
+  readRestTimerMuted,
+  writeRestTimerMuted,
+} from "./rest-timer-preferences";
 
 interface RestTimerProps {
   initialSeconds: number;
+  /** "Qué sigue" (nombre del próximo ejercicio/serie) — mostrado en la barra si está a mano. */
+  nextLabel?: string;
+  /** Descanso de aproximación (warmup) vs efectivo — sólo cambia la etiqueta. */
+  warmup?: boolean;
   onClose: () => void;
 }
 
+// Anillo grande de cuenta regresiva (reuse del pill, agrandado a barra protagonista).
+const RING_R = 52;
+const RING_C = 2 * Math.PI * RING_R;
+
 export function RestTimer({
   initialSeconds,
+  nextLabel,
+  warmup = false,
   onClose,
 }: RestTimerProps) {
   const [timeLeft, setTimeLeft] = useState(initialSeconds);
   const [totalSeconds, setTotalSeconds] = useState(initialSeconds);
   const [isActive, setIsActive] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editValue, setEditValue] = useState(initialSeconds.toString());
   const [isAlarmRinging, setIsAlarmRinging] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const reducedMotion = useReducedMotion();
+
   const isAlarmRingingRef = useRef(false);
   const alarmIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const alarmCountRef = useRef(0);
-
   const endTimeRef = useRef<number | null>(null);
+  // Latest-refs: leídos en callbacks (adjust / alarma / beeps) sin re-suscribir efectos.
+  const timeLeftRef = useRef(initialSeconds);
+  const isActiveRef = useRef(true);
+  const mutedRef = useRef(false);
+  // Guarda anti-doble-beep: último segundo (3/2/1) ya beepeado.
+  const lastBeepRef = useRef<number | null>(null);
 
+  useEffect(() => {
+    isActiveRef.current = isActive;
+  }, [isActive]);
+
+  // Preferencia de silencio (persistida). Se sincroniza con el panel de ajustes y otras pestañas.
+  useEffect(() => {
+    const sync = () => setMuted(readRestTimerMuted());
+    sync();
+    window.addEventListener("rest-timer-prefs-changed", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("rest-timer-prefs-changed", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+
+  useEffect(() => {
+    mutedRef.current = muted;
+  }, [muted]);
+
+  // Reinicio al re-disparar el descanso (mismo o distinto tipo → remount con nuevos segundos).
   useEffect(() => {
     setTimeLeft(initialSeconds);
     setTotalSeconds(initialSeconds);
-    setEditValue(initialSeconds.toString());
+    timeLeftRef.current = initialSeconds;
     endTimeRef.current = null;
+    lastBeepRef.current = null;
     setIsActive(true);
-    setIsEditing(false);
   }, [initialSeconds]);
 
   const stopAlarm = useCallback(() => {
@@ -49,13 +92,18 @@ export function RestTimer({
     alarmCountRef.current = 0;
   }, []);
 
+  // Limpieza dura del loop de alarma si el componente se desmonta sonando (auto-skip / cierre).
+  useEffect(() => {
+    return () => {
+      if (alarmIntervalRef.current) clearInterval(alarmIntervalRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     if (!isAlarmRinging) return;
-
     const handleInteraction = () => stopAlarm();
     document.addEventListener("click", handleInteraction);
     document.addEventListener("touchstart", handleInteraction);
-
     return () => {
       document.removeEventListener("click", handleInteraction);
       document.removeEventListener("touchstart", handleInteraction);
@@ -65,31 +113,31 @@ export function RestTimer({
   const triggerAlarm = useCallback(() => {
     if (isAlarmRingingRef.current) return;
 
-    const sound = readRestTimerSound();
-    const volume = readRestTimerVolume();
-
     isAlarmRingingRef.current = true;
     setIsAlarmRinging(true);
     alarmCountRef.current = 1;
-    playTimerSound(sound, volume);
+    // Silencio (opt-out): mantiene háptico + visual + notificación en background, sin sonido.
+    if (!mutedRef.current) playTimerSound(readRestTimerSound(), readRestTimerVolume());
 
     alarmIntervalRef.current = setInterval(() => {
       alarmCountRef.current += 1;
       if (alarmCountRef.current > 5) {
         stopAlarm();
       } else {
-        playTimerSound(readRestTimerSound(), readRestTimerVolume());
+        if (!mutedRef.current) playTimerSound(readRestTimerSound(), readRestTimerVolume());
         triggerHaptic([200, 100, 200, 100, 400]);
       }
     }, 3000);
 
+    // Push en background (M2 · 5): notificación local con marca del coach SÓLO si ya hay permiso.
+    // Sin permiso ⇒ silencio (cero prompts nuevos en medio del entreno).
     if (
       "Notification" in window &&
       Notification.permission === "granted" &&
       document.visibilityState !== "visible"
     ) {
       navigator.serviceWorker.ready.then((registration) => {
-        registration.showNotification("¡Tiempo de Descanso Terminado!", {
+        registration.showNotification("¡Descanso listo!", {
           body: "Prepárate para la siguiente serie. (Toca para detener)",
           icon: BRAND_APP_ICON,
           vibrate: [200, 100, 200, 100, 400],
@@ -100,11 +148,11 @@ export function RestTimer({
     }
 
     triggerHaptic([200, 100, 200, 100, 400]);
-
     setIsActive(false);
     endTimeRef.current = null;
   }, [stopAlarm]);
 
+  // Wake lock durante el descanso (la sesión ya tiene su propio lock; esto refuerza en background).
   useEffect(() => {
     let wakeLock: { release: () => Promise<void> } | null = null;
     const requestWakeLock = async () => {
@@ -116,42 +164,33 @@ export function RestTimer({
         console.error("Wake Lock error:", err);
       }
     };
-
     requestWakeLock();
-
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        requestWakeLock();
-      }
+      if (document.visibilityState === "visible") requestWakeLock();
     };
-
     document.addEventListener("visibilitychange", handleVisibilityChange);
-
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       wakeLock?.release().catch(console.error);
     };
   }, []);
 
+  // Cuenta regresiva (endTime-based → resiste throttling de background).
   useEffect(() => {
     let interval: NodeJS.Timeout;
-
     if (isActive && timeLeft > 0) {
       if (!endTimeRef.current) {
         endTimeRef.current = Date.now() + timeLeft * 1000;
       }
-
       interval = setInterval(() => {
         if (endTimeRef.current) {
           const newTimeLeft = Math.max(
             0,
             Math.ceil((endTimeRef.current - Date.now()) / 1000)
           );
+          timeLeftRef.current = newTimeLeft;
           setTimeLeft(newTimeLeft);
-
-          if (newTimeLeft === 0) {
-            triggerAlarm();
-          }
+          if (newTimeLeft === 0) triggerAlarm();
         }
       }, 500);
     } else if (timeLeft === 0 && isActive) {
@@ -159,9 +198,20 @@ export function RestTimer({
     } else if (!isActive) {
       endTimeRef.current = null;
     }
-
     return () => clearInterval(interval);
   }, [isActive, timeLeft, triggerAlarm]);
+
+  // Beeps suaves 3-2-1 (M2 · 3): un beep por segundo en los últimos 3s; el 0 lo cubre la alarma.
+  useEffect(() => {
+    if (!isActive) return;
+    if (timeLeft > 0 && timeLeft <= 3 && lastBeepRef.current !== timeLeft) {
+      lastBeepRef.current = timeLeft;
+      if (!mutedRef.current) {
+        playCountdownBeep(readRestTimerVolume());
+        triggerHaptic(30);
+      }
+    }
+  }, [timeLeft, isActive]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -169,172 +219,205 @@ export function RestTimer({
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  const toggleTimer = () => setIsActive(!isActive);
-
-  // Media Session API — allows lock screen / headset controls to pause/play timer
-  useEffect(() => {
-    if (!('mediaSession' in navigator)) return;
-    if (isActive) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: 'Descanso activo',
-        artist: `${formatTime(timeLeft)} restantes`,
-        album: 'EVA Fitness',
-        artwork: [{ src: BRAND_APP_ICON, sizes: '512x512', type: 'image/png' }],
-      });
-      navigator.mediaSession.setActionHandler('pause', () => setIsActive(false));
-      navigator.mediaSession.setActionHandler('play', () => setIsActive(true));
-    } else {
-      navigator.mediaSession.setActionHandler('pause', null);
-      navigator.mediaSession.setActionHandler('play', null);
-    }
-    return () => {
-      navigator.mediaSession.metadata = null;
-      navigator.mediaSession.setActionHandler('pause', null);
-      navigator.mediaSession.setActionHandler('play', null);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive]);
+  const toggleTimer = () => setIsActive((a) => !a);
 
   const resetTimer = () => {
     stopAlarm();
     setTimeLeft(initialSeconds);
     setTotalSeconds(initialSeconds);
+    timeLeftRef.current = initialSeconds;
+    lastBeepRef.current = null;
     endTimeRef.current = null;
-    if (!isActive) setIsActive(true);
+    setIsActive(true);
   };
 
-  const saveEdit = () => {
-    let val = parseInt(editValue, 10);
-    if (isNaN(val) || val < 0) val = 0;
-    setTimeLeft(val);
-    setTotalSeconds(val);
-    endTimeRef.current = isActive ? Date.now() + val * 1000 : null;
-    setIsEditing(false);
+  // ±15s al vuelo (M2 · 2). Reanuda si veníamos del 0 (alarma); mantiene pausa si estaba pausado.
+  const adjust = useCallback(
+    (delta: number) => {
+      triggerHaptic(10);
+      const prev = timeLeftRef.current;
+      const next = Math.max(0, prev + delta);
+      timeLeftRef.current = next;
+      setTimeLeft(next);
+      setTotalSeconds((t) => (next > t ? next : t));
+      if (next <= 3) lastBeepRef.current = null; // permite re-beep si volvemos a la zona 3-2-1
+
+      if (next === 0) {
+        endTimeRef.current = null;
+      } else if (prev === 0) {
+        stopAlarm();
+        setIsActive(true);
+        endTimeRef.current = Date.now() + next * 1000;
+      } else if (isActiveRef.current) {
+        endTimeRef.current = Date.now() + next * 1000;
+      } else {
+        endTimeRef.current = null;
+      }
+    },
+    [stopAlarm]
+  );
+
+  const toggleMute = () => {
+    setMuted((m) => {
+      const next = !m;
+      writeRestTimerMuted(next);
+      return next;
+    });
   };
 
-  const denom = totalSeconds || 1;
-  const percentage = (timeLeft / denom) * 100;
-  const strokeDashoffset = 176 - (176 * Math.min(100, percentage)) / 100;
+  // Media Session API — controles de lock screen / auriculares (pausa/play del descanso).
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    if (isActive) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: "Descanso activo",
+        artist: `${formatTime(timeLeft)} restantes`,
+        album: "EVA Fitness",
+        artwork: [{ src: BRAND_APP_ICON, sizes: "512x512", type: "image/png" }],
+      });
+      navigator.mediaSession.setActionHandler("pause", () => setIsActive(false));
+      navigator.mediaSession.setActionHandler("play", () => setIsActive(true));
+    } else {
+      navigator.mediaSession.setActionHandler("pause", null);
+      navigator.mediaSession.setActionHandler("play", null);
+    }
+    return () => {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.setActionHandler("pause", null);
+      navigator.mediaSession.setActionHandler("play", null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
+
+  const done = timeLeft === 0;
+  const frac = Math.max(0, Math.min(1, timeLeft / (totalSeconds || 1)));
+  const dashoffset = RING_C * (1 - frac);
+
+  const utilityBtn =
+    "flex h-9 w-9 items-center justify-center rounded-full text-on-dark-muted transition-colors hover:text-on-dark hover:bg-white/10";
 
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ y: -24, opacity: 0 }}
+        initial={reducedMotion ? false : { y: 40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        exit={{ y: -24, opacity: 0 }}
-        transition={{ duration: 0.2 }}
-        className="fixed z-50 left-3 right-3 md:left-auto md:right-6 md:w-[300px] top-[calc(env(safe-area-inset-top,0px)+6.25rem)] md:top-4 bg-[var(--ink-900)]/95 backdrop-blur-xl border border-[var(--border-inverse)] shadow-lg rounded-2xl px-2.5 py-2 overflow-hidden"
-      >
-        {timeLeft === 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="absolute inset-0 bg-[var(--ember-500)]/15 z-0 pointer-events-none"
-          />
+        exit={reducedMotion ? undefined : { y: 40, opacity: 0 }}
+        transition={reducedMotion ? { duration: 0 } : springsSheet.enter}
+        // Barra/sheet inferior protagonista: sobre el footer de Finalizar (no lo tapa), capsule en <760, centrada en desktop.
+        className={cn(
+          "fixed z-50 left-3 right-3 md:left-1/2 md:right-auto md:w-[460px] md:-translate-x-1/2",
+          "bottom-[calc(env(safe-area-inset-bottom,0px)+5.5rem)]",
+          "overflow-hidden rounded-sheet border bg-[var(--ink-900)]/95 shadow-2xl backdrop-blur-xl",
+          done ? "border-[var(--ember-500)]/60" : "border-[var(--border-inverse)]"
         )}
+      >
+        {/* Pulso ember al llegar a 0 (estático bajo reduced-motion). */}
+        {done &&
+          (reducedMotion ? (
+            <div className="pointer-events-none absolute inset-0 bg-[var(--ember-500)]/15" />
+          ) : (
+            <motion.div
+              aria-hidden
+              className="pointer-events-none absolute inset-0 bg-[var(--ember-500)]/20"
+              animate={{ opacity: [0.2, 0.5, 0.2] }}
+              transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
+            />
+          ))}
 
-        <div className="relative z-10 flex items-center justify-between gap-1.5 min-h-11">
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10 shrink-0"
-              onClick={() => {
-                setIsEditing(!isEditing);
-                setEditValue(timeLeft.toString());
-                if (!isEditing) setIsActive(false);
-              }}
-            >
-              <Pencil className="w-3.5 h-3.5" />
-            </Button>
-
-            {isEditing ? (
-              <div className="flex items-center gap-1.5 min-w-0">
-                <input
-                  type="number"
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && saveEdit()}
-                  className="w-14 bg-white/[0.06] border border-[var(--border-inverse)] rounded-md px-1.5 py-1 text-xs text-center font-bold text-on-dark"
-                  autoFocus
-                />
-                <span className="text-[10px] text-on-dark-muted shrink-0">seg</span>
-                <Button size="sm" onClick={saveEdit} className="h-7 px-2 text-xs shrink-0">
-                  OK
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div className="relative w-11 h-11 flex items-center justify-center shrink-0">
-                  <svg className="w-11 h-11 transform -rotate-90" viewBox="0 0 44 44">
-                    <circle
-                      cx="22"
-                      cy="22"
-                      r="18"
-                      stroke="currentColor"
-                      strokeWidth="3"
-                      fill="transparent"
-                      className="text-white/10"
-                    />
-                    <circle
-                      cx="22"
-                      cy="22"
-                      r="18"
-                      stroke="var(--ember-500)"
-                      strokeWidth="3"
-                      fill="transparent"
-                      strokeDasharray="176"
-                      strokeDashoffset={strokeDashoffset}
-                      className="transition-all duration-500 ease-linear"
-                    />
-                  </svg>
-                  <span className="absolute text-xs font-bold tabular-nums text-on-dark">
-                    {formatTime(timeLeft)}
-                  </span>
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <p className="text-[10px] text-on-dark-muted font-semibold uppercase tracking-wider truncate">
-                    Descanso
-                  </p>
-                  <p className="text-xs font-bold text-on-dark truncate">
-                    {timeLeft === 0 ? "¡Tiempo!" : "Recupérate"}
-                  </p>
-                </div>
-              </>
-            )}
+        <div className="relative z-10 flex items-center gap-3.5 p-3.5">
+          {/* Anillo grande + tiempo gigante */}
+          <div className="relative h-24 w-24 shrink-0">
+            <svg className="h-24 w-24 -rotate-90" viewBox="0 0 120 120">
+              <circle
+                cx="60"
+                cy="60"
+                r={RING_R}
+                strokeWidth="9"
+                fill="none"
+                stroke="currentColor"
+                className="text-white/10"
+              />
+              <circle
+                cx="60"
+                cy="60"
+                r={RING_R}
+                strokeWidth="9"
+                fill="none"
+                stroke="var(--ember-500)"
+                strokeLinecap="round"
+                strokeDasharray={RING_C}
+                strokeDashoffset={dashoffset}
+                style={{ transition: reducedMotion ? "none" : "stroke-dashoffset 0.5s linear" }}
+              />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="eva-metric text-[1.75rem] leading-none text-on-dark">
+                {formatTime(timeLeft)}
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-0.5 shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
-              onClick={toggleTimer}
-              disabled={isEditing}
-            >
-              {isActive ? (
-                <Pause className="w-3.5 h-3.5" />
-              ) : (
-                <Play className="w-3.5 h-3.5" />
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
-              onClick={resetTimer}
-              disabled={isEditing}
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-full text-on-dark-muted hover:text-on-dark hover:bg-white/10"
-              onClick={onClose}
-            >
-              <X className="w-3.5 h-3.5" />
-            </Button>
+          {/* Info + controles */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--ember-300)]">
+                  {warmup ? "Aproximación" : "Descanso"}
+                </p>
+                <p className="truncate text-[13px] font-semibold text-on-dark">
+                  {done
+                    ? "¡A entrenar!"
+                    : nextLabel
+                      ? <>Sigue · <span className="text-on-dark-muted">{nextLabel}</span></>
+                      : "Recupérate"}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center">
+                <button type="button" onClick={toggleTimer} className={utilityBtn} aria-label={isActive ? "Pausar" : "Reanudar"}>
+                  {isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                </button>
+                <button type="button" onClick={resetTimer} className={utilityBtn} aria-label="Reiniciar descanso">
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={onClose} className={utilityBtn} aria-label="Cerrar descanso">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* ±15s (44px) + mute */}
+            <div className="mt-2.5 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => adjust(-15)}
+                className="flex h-11 flex-1 items-center justify-center rounded-control border border-[var(--border-inverse)] bg-white/[0.06] text-sm font-bold text-on-dark transition-colors hover:bg-white/[0.12] active:scale-95"
+                aria-label="Restar 15 segundos"
+              >
+                −15s
+              </button>
+              <button
+                type="button"
+                onClick={() => adjust(15)}
+                className="flex h-11 flex-1 items-center justify-center rounded-control border border-[var(--border-inverse)] bg-white/[0.06] text-sm font-bold text-on-dark transition-colors hover:bg-white/[0.12] active:scale-95"
+                aria-label="Sumar 15 segundos"
+              >
+                +15s
+              </button>
+              <button
+                type="button"
+                onClick={toggleMute}
+                aria-pressed={muted}
+                className={cn(
+                  "flex h-11 w-11 shrink-0 items-center justify-center rounded-control border transition-colors active:scale-95",
+                  muted
+                    ? "border-[var(--border-inverse)] bg-white/[0.03] text-on-dark-muted"
+                    : "border-[var(--ember-500)]/30 bg-[var(--ember-500)]/[0.12] text-[var(--ember-200)]"
+                )}
+                aria-label={muted ? "Activar sonido del descanso" : "Silenciar descanso"}
+              >
+                {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
         </div>
       </motion.div>

@@ -53,6 +53,8 @@ interface BlockType {
     tempo: string | null
     rir: string | null
     rest_time: string | null
+    /** Descanso de las series de aproximación (Fase M — 8b); null ⇒ un solo descanso (rest_time). */
+    warmup_rest_time: string | null
     notes: string | null
     section: 'warmup' | 'main' | 'cooldown' | null
     section_template_id: string | null
@@ -528,6 +530,7 @@ interface SupersetGroupCardProps {
     weeksToRepeat?: number
     previousHistory: Record<string, { weight_kg: number | null; reps_done: number | null; date: string }[]>
     lastSessionByBlock: Record<string, { date: string; sets: Array<{ weight_kg: number | null; reps_done: number | null }> }>
+    exerciseMaxes: Record<string, number>
     cardio?: ClientCardioView
     autoTimerEnabled: boolean
     nextCue: { blockId: string; set: number } | null
@@ -550,6 +553,7 @@ function SupersetGroupCard({
     weeksToRepeat,
     previousHistory,
     lastSessionByBlock,
+    exerciseMaxes,
     cardio,
     autoTimerEnabled,
     nextCue,
@@ -786,8 +790,10 @@ function SupersetGroupCard({
                                             blockId={m.block.id}
                                             setNumber={round}
                                             restTimeStr={m.block.rest_time}
+                                            nextUpLabel={memberVMs[0]?.exercise.name}
                                             existingLog={existing}
                                             suggestedWeightKg={m.suggestedWeightKg}
+                                            prThresholdKg={exerciseMaxes[m.exercise.id] ?? null}
                                             autoTimerEnabled={autoTimerEnabled}
                                             mode={m.effType}
                                             isActive={isNext}
@@ -805,6 +811,59 @@ function SupersetGroupCard({
                 })}
             </div>
         </div>
+    )
+}
+
+/**
+ * Recap colapsado de un ejercicio/superserie COMPLETADO (modelo de foco M1): fila delgada y
+ * atenuada; tap la expande de nuevo a la card completa. Si `celebrate`, el check entra elástico +
+ * un barrido sutil del borde (floreo al cerrar el ejercicio). Todo respeta reduced-motion.
+ */
+function CollapsedExerciseBar({
+    name,
+    sub,
+    onExpand,
+    reducedMotion,
+    celebrate,
+}: {
+    name: string
+    sub: string
+    onExpand: () => void
+    reducedMotion: boolean | null
+    celebrate: boolean
+}) {
+    return (
+        <motion.button
+            type="button"
+            layout={!reducedMotion}
+            onClick={onExpand}
+            transition={reducedMotion ? { duration: 0 } : springs.smooth}
+            className="relative flex w-full items-center gap-2.5 overflow-hidden rounded-card border border-[var(--sport-500)]/25 bg-[var(--sport-500)]/[0.05] px-3.5 py-2.5 text-left opacity-70 transition-opacity hover:opacity-100 active:scale-[0.99]"
+            aria-label={`${name} — completado, tocá para ver o editar`}
+        >
+            {celebrate && (
+                <motion.span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 rounded-card border-2 border-[var(--sport-500)]"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: [0, 0.55, 0] }}
+                    transition={{ duration: 0.5, times: [0, 0.35, 1] }}
+                />
+            )}
+            <motion.span
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--sport-500)]/15 text-[var(--sport-400)]"
+                initial={celebrate ? { scale: 0 } : false}
+                animate={{ scale: 1 }}
+                transition={celebrate ? springs.elastic : { duration: 0 }}
+            >
+                <CheckCircle2 className="h-5 w-5" />
+            </motion.span>
+            <span className="min-w-0 flex-1">
+                <span className="block truncate font-display text-[15px] font-bold text-on-dark">{name}</span>
+                <span className="block truncate font-mono text-[11px] text-on-dark-muted">{sub}</span>
+            </span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-on-dark-muted" />
+        </motion.button>
     )
 }
 
@@ -838,6 +897,9 @@ export function WorkoutExecutionClient({
     const [sessionLogs, setSessionLogs] = useState(logs)
     const [isOffline, setIsOffline] = useState(false)
     const [sessionElapsed, setSessionElapsed] = useState(0)
+    // Duración congelada al finalizar → el resumen post-entreno muestra el tiempo real de la
+    // sesión (el cronómetro sigue corriendo detrás del overlay; sin congelar, "Duración" tickearía).
+    const [finishedElapsed, setFinishedElapsed] = useState<number | null>(null)
     // Disclosure "Detalles" por ejercicio (instrucciones + nota + historial detrás de un tap).
     const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({})
     const toggleDetails = useCallback((id: string) => setOpenDetails((prev) => ({ ...prev, [id]: !prev[id] })), [])
@@ -846,6 +908,14 @@ export function WorkoutExecutionClient({
     const [fillByBlock, setFillByBlock] = useState<Record<string, { weight: number | null; reps: number | null; nonce: number; setNumber: number }>>({})
     // Deshacer (quick-win E2-4): reabre la última serie logueada para corregir (no existe DELETE del log).
     const [reopenSignal, setReopenSignal] = useState<{ blockId: string; setNumber: number; nonce: number } | null>(null)
+    // Modelo de foco (M1): los ejercicios/superseries COMPLETADOS colapsan a un recap delgado; el
+    // usuario puede reexpandir cualquiera (para editar una serie) con un tap. Clave = block.id (bloque
+    // suelto) o group.key (superserie).
+    const [expandedDone, setExpandedDone] = useState<Record<string, boolean>>({})
+    const toggleExpandDone = useCallback((key: string) => setExpandedDone((prev) => ({ ...prev, [key]: !prev[key] })), [])
+    // Floreo al cerrar un ejercicio (M1): id del bloque recién completado + nonce para disparar la
+    // celebración una sola vez en el recap colapsado (el check elástico + barrido del borde).
+    const [justCompleted, setJustCompleted] = useState<{ id: string; nonce: number } | null>(null)
 
     // Wake lock de TODA la sesión (bug E2-1) — antes el lock solo cubría el descanso.
     useScreenWakeLock()
@@ -938,6 +1008,9 @@ export function WorkoutExecutionClient({
     const totalExercises = blocks.length
     const currentExerciseIdx = blocks.findIndex((b) => !isBlockComplete(b, sessionLogs))
     const currentExerciseNum = currentExerciseIdx === -1 ? totalExercises : currentExerciseIdx + 1
+    // Foco por jerarquía (M1): el primer bloque incompleto del plan es la card ACTIVA (protagonista);
+    // el resto de los incompletos quedan en peek tenue y los completados colapsan a recap.
+    const activeBlockId = currentExerciseIdx === -1 ? null : blocks[currentExerciseIdx].id
 
     const isSetLogged = (blockId: string, setNumber: number) => sessionLogs.some((log) => log.block_id === blockId && log.set_number === setNumber)
     const isBlockCompleted = (block: BlockType) => isBlockComplete(block, sessionLogs)
@@ -995,7 +1068,8 @@ export function WorkoutExecutionClient({
                         ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
                 }, 350)
             } else {
-                // Grupo completo → saltar al siguiente bloque/serie incompleto del plan.
+                // Grupo completo → floreo del recap + saltar al siguiente bloque/serie incompleto.
+                setJustCompleted({ id: payload.blockId, nonce: Date.now() })
                 setTimeout(() => scrollToNextIncomplete(nextLogs), 350)
             }
             return
@@ -1020,12 +1094,22 @@ export function WorkoutExecutionClient({
         const wasComplete = isBlockComplete(block, prev)
         const nowComplete = isBlockComplete(block, nextLogs)
         if (!wasComplete && nowComplete) {
+            // Floreo al cerrar el ejercicio: la card colapsa a recap y el recap celebra una vez.
+            setJustCompleted({ id: payload.blockId, nonce: Date.now() })
             setTimeout(() => scrollToNextIncomplete(nextLogs), 350)
         }
     }
     const handleFinish = () => {
+        setFinishedElapsed(sessionElapsed)
         setShowCompleted(true)
     }
+    // Contexto del programa para el nudge "lo que viene" del resumen (reusa la sub-línea del header;
+    // sin queries — el próximo plan concreto no está en el payload → no se resuelve acá).
+    const nextHint = phaseName || program
+        ? `${phaseName ? `${phaseName} · ` : ''}${program?.program_structure_type === 'cycle'
+            ? `Día ${plan.day_of_week || 1} de ${program.cycle_length || '?'}`
+            : 'Programa semanal'}`
+        : null
 
     return (
         <WorkoutTimerProvider>
@@ -1142,24 +1226,56 @@ export function WorkoutExecutionClient({
                                     )}
                                 </div>
                                 <div className="space-y-3">
-                                    {section.groups.map((group, groupIndex) => group.type === 'superset' ? (
-                                        <SupersetGroupCard
-                                            key={group.key}
-                                            info={supersetInfo.get(group.blocks[0].id)!}
-                                            sessionLogs={sessionLogs}
-                                            currentWeek={currentWeek}
-                                            weeksToRepeat={program?.weeks_to_repeat}
-                                            previousHistory={previousHistory}
-                                            lastSessionByBlock={lastSessionByBlock}
-                                            cardio={cardio}
-                                            autoTimerEnabled={autoTimerEnabled}
-                                            nextCue={nextCue}
-                                            onLogged={handleLogged}
-                                            openTechnique={openTechnique}
-                                            registerRowRef={registerRowRef}
-                                            getExercise={getExercise}
-                                        />
-                                    ) : (
+                                    {section.groups.map((group) => {
+                                        if (group.type === 'superset') {
+                                            const info = supersetInfo.get(group.blocks[0].id)!
+                                            const members = info.members
+                                            const groupComplete = members.every((m) => isBlockCompleted(m))
+                                            const groupActive = activeBlockId != null && members.some((m) => m.id === activeBlockId)
+                                            const groupFocus: 'active' | 'upcoming' | 'done' = groupComplete ? 'done' : groupActive ? 'active' : 'upcoming'
+                                            // Superserie completa → colapsa a recap (reexpandible con un tap).
+                                            if (groupFocus === 'done' && !expandedDone[group.key]) {
+                                                const names = members.map((m) => getExercise(m)?.name).filter(Boolean).join(' + ')
+                                                return (
+                                                    <CollapsedExerciseBar
+                                                        key={group.key}
+                                                        name={names || 'Superserie'}
+                                                        sub={`Superserie · ${members.length} ejercicios`}
+                                                        reducedMotion={reducedMotion}
+                                                        celebrate={justCompleted != null && members.some((m) => m.id === justCompleted.id) && !reducedMotion}
+                                                        onExpand={() => toggleExpandDone(group.key)}
+                                                    />
+                                                )
+                                            }
+                                            return (
+                                                <motion.div
+                                                    key={group.key}
+                                                    layout={!reducedMotion}
+                                                    className="rounded-card"
+                                                    animate={{ opacity: groupFocus === 'active' ? 1 : groupFocus === 'upcoming' ? 0.55 : 0.6 }}
+                                                    transition={reducedMotion ? { duration: 0 } : springs.smooth}
+                                                    style={groupFocus === 'active' ? { boxShadow: '0 8px 32px -14px color-mix(in srgb, var(--sport-500) 60%, transparent)' } : undefined}
+                                                >
+                                                    <SupersetGroupCard
+                                                        info={info}
+                                                        sessionLogs={sessionLogs}
+                                                        currentWeek={currentWeek}
+                                                        weeksToRepeat={program?.weeks_to_repeat}
+                                                        previousHistory={previousHistory}
+                                                        lastSessionByBlock={lastSessionByBlock}
+                                                        exerciseMaxes={exerciseMaxes}
+                                                        cardio={cardio}
+                                                        autoTimerEnabled={autoTimerEnabled}
+                                                        nextCue={nextCue}
+                                                        onLogged={handleLogged}
+                                                        openTechnique={openTechnique}
+                                                        registerRowRef={registerRowRef}
+                                                        getExercise={getExercise}
+                                                    />
+                                                </motion.div>
+                                            )
+                                        }
+                                        return (
                                         <div key={group.key} className="space-y-3">
                                             <div className="space-y-3">
                                                 {group.blocks.sort((a, b) => a.order_index - b.order_index).map((block, blockIndex) => {
@@ -1208,6 +1324,29 @@ export function WorkoutExecutionClient({
                                                         (effType !== 'strength' && !!block.instructions) ||
                                                         !!block.notes ||
                                                         prevList.length > 0
+                                                    // Modelo de foco (M1): la card activa (primer bloque incompleto) es protagonista
+                                                    // (borde sport + elevación); las completadas colapsan a recap; el resto en peek tenue.
+                                                    const focus: 'active' | 'upcoming' | 'done' = complete
+                                                        ? 'done'
+                                                        : block.id === activeBlockId ? 'active' : 'upcoming'
+                                                    const recapWeight = suggestedWeightKg ?? block.target_weight_kg
+                                                    const recapSub = effType === 'strength'
+                                                        ? `${block.sets} × ${block.reps}${recapWeight != null ? ` · ${recapWeight} kg` : ''}`
+                                                        : `${block.sets} ${block.sets === 1 ? 'serie' : 'series'} · ${exercise.muscle_group}`
+                                                    // Completado → recap delgado; tap lo reexpande para editar una serie.
+                                                    if (focus === 'done' && !expandedDone[block.id]) {
+                                                        return (
+                                                            <Fragment key={block.id}>
+                                                                <CollapsedExerciseBar
+                                                                    name={exercise.name}
+                                                                    sub={recapSub}
+                                                                    reducedMotion={reducedMotion}
+                                                                    celebrate={justCompleted?.id === block.id && !reducedMotion}
+                                                                    onExpand={() => toggleExpandDone(block.id)}
+                                                                />
+                                                            </Fragment>
+                                                        )
+                                                    }
                                                     return (
                                                         <Fragment key={block.id}>
                                                         <motion.div
@@ -1216,13 +1355,16 @@ export function WorkoutExecutionClient({
                                                                 if (el) blockRefs.current.set(block.id, el)
                                                                 else blockRefs.current.delete(block.id)
                                                             }}
-                                                            animate={{ opacity: complete ? 0.6 : 1 }}
+                                                            animate={{ opacity: focus === 'active' ? 1 : focus === 'upcoming' ? 0.55 : 0.6 }}
                                                             transition={reducedMotion ? { duration: 0 } : springs.smooth}
+                                                            style={focus === 'active' ? { boxShadow: '0 8px 32px -14px color-mix(in srgb, var(--sport-500) 60%, transparent)' } : undefined}
                                                             className={cn(
                                                                 'rounded-card border bg-white/[0.03] p-4 space-y-3 relative',
-                                                                complete
-                                                                    ? 'border-[var(--sport-500)]/30'
-                                                                    : 'border-[var(--border-inverse)]'
+                                                                focus === 'active'
+                                                                    ? 'border-[var(--sport-500)]/50'
+                                                                    : focus === 'done'
+                                                                        ? 'border-[var(--sport-500)]/30'
+                                                                        : 'border-[var(--border-inverse)]'
                                                             )}
                                                         >
                                                             <div className="space-y-2">
@@ -1266,14 +1408,17 @@ export function WorkoutExecutionClient({
                                                                 <div className="flex items-start justify-between gap-3">
                                                                     <h3 className="min-w-0 flex-1 font-display text-[22px] font-black leading-[1.1] tracking-[-0.02em] text-on-dark">{exercise.name}</h3>
                                                                     {complete ? (
-                                                                        <motion.div
+                                                                        <motion.button
+                                                                            type="button"
+                                                                            onClick={() => toggleExpandDone(block.id)}
                                                                             initial={reducedMotion ? false : { scale: 0 }}
                                                                             animate={{ scale: 1 }}
                                                                             transition={reducedMotion ? { duration: 0 } : springs.elastic}
                                                                             className="shrink-0 text-[var(--sport-400)]"
+                                                                            aria-label="Colapsar ejercicio completado"
                                                                         >
                                                                             <CheckCircle2 className="w-7 h-7" />
-                                                                        </motion.div>
+                                                                        </motion.button>
                                                                     ) : (
                                                                         <div className="flex shrink-0 items-center gap-1 pt-2">
                                                                             {Array.from({ length: block.sets }).map((_, i) => (
@@ -1417,8 +1562,12 @@ export function WorkoutExecutionClient({
                                                                                 blockId={block.id}
                                                                                 setNumber={setNumber}
                                                                                 restTimeStr={block.rest_time}
+                                                                                warmupRestTimeStr={block.warmup_rest_time}
+                                                                                totalSets={block.sets}
+                                                                                nextUpLabel={exercise.name}
                                                                                 existingLog={log}
                                                                                 suggestedWeightKg={suggestedWeightKg}
+                                                                                prThresholdKg={exerciseMaxes[exercise.id] ?? null}
                                                                                 autoTimerEnabled={autoTimerEnabled}
                                                                                 mode={effType}
                                                                                 isActive={setNumber === firstUnlogged}
@@ -1442,6 +1591,7 @@ export function WorkoutExecutionClient({
                                                                                     blockId={block.id}
                                                                                     setNumber={setNumber}
                                                                                     restTimeStr={block.rest_time}
+                                                                                    nextUpLabel={exercise.name}
                                                                                     existingLog={log}
                                                                                     suggestedWeightKg={suggestedWeightKg}
                                                                                     autoTimerEnabled={autoTimerEnabled}
@@ -1460,7 +1610,8 @@ export function WorkoutExecutionClient({
                                                 })}
                                             </div>
                                         </div>
-                                    ))}
+                                        )
+                                    })}
                                 </div>
                             </section>
                         ))}
@@ -1508,6 +1659,9 @@ export function WorkoutExecutionClient({
                         blocks={plan.workout_blocks}
                         exerciseMaxes={exerciseMaxes}
                         exerciseMaxDates={exerciseMaxDates}
+                        durationSec={finishedElapsed ?? sessionElapsed}
+                        programName={program?.name ?? null}
+                        nextHint={nextHint}
                         onDone={() => router.push(`${base}/dashboard`)}
                     />,
                     document.body
