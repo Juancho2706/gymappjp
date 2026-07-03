@@ -135,8 +135,10 @@ export function ProfileCheckInSnapshot({ checkIn, clientId, onViewHistory }: Pro
         locale: es,
     })
 
+    // h-full/flex-1 SOLO desktop (empareja columnas del grid); en móvil la card es de alto natural
+    // — antes el espaciador flex crecía y dejaba un hueco gigante entre Notas y los botones.
     return (
-        <Card padding="md" className="h-full gap-0">
+        <Card padding="md" className="gap-0 md:h-full">
             <SectionTitle style={{ marginTop: 0 }}>Último check-in</SectionTitle>
             <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-muted">
                 {relative}
@@ -197,7 +199,7 @@ export function ProfileCheckInSnapshot({ checkIn, clientId, onViewHistory }: Pro
                 </>
             )}
 
-            <div className="relative z-10 flex-1 space-y-0">
+            <div className="relative z-10 space-y-0 md:flex-1">
                 <MetricRow icon={Scale} label="Peso">
                     {checkIn.weight != null ? `${checkIn.weight} kg` : '—'}
                 </MetricRow>

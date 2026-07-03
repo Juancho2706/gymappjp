@@ -90,7 +90,9 @@ export function ProfileFloatingActions({
     return (
         <div
             ref={rootRef}
-            className="sticky bottom-[calc(var(--mobile-content-bottom-offset)+0.5rem)] z-40 -mx-5 print:hidden md:bottom-0 lg:-mx-6"
+            // Móvil: FIXED clavada justo sobre la cápsula del nav (sticky se despegaba al llegar a su
+            // posición del DOM y quedaba flotando a mitad de página). Desktop conserva sticky (funciona).
+            className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+96px)] z-40 print:hidden md:sticky md:inset-x-auto md:bottom-0 md:-mx-6"
             style={{
                 boxSizing: 'border-box',
                 minHeight: 'calc(72px + env(safe-area-inset-bottom))',
