@@ -176,8 +176,12 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     // Sin preset → modo legacy: usa el color guardado + los overrides del branding avanzado.
     const activePreset = useMemo(() => getThemePreset(themePresetKey), [themePresetKey])
     const effectivePrimary = activePreset ? activePreset.brandColor : (selectedColor ?? '#007AFF')
-    const effectiveLoaderVariant: LoaderVariant = activePreset ? activePreset.loaderVariant : loaderVariant
-    const effectiveFontKey: FontKey | '' = activePreset ? activePreset.fontKey : fontKey
+    // Espejo de resolvePresetBranding (@eva/brand-kit): la elección EXPLÍCITA del coach le gana
+    // a la sugerencia del tema; el preset solo aporta fuente/loader si el coach no eligió.
+    const effectiveLoaderVariant: LoaderVariant = loaderVariant !== 'eva'
+        ? loaderVariant
+        : (activePreset?.loaderVariant ?? 'eva')
+    const effectiveFontKey: FontKey | '' = fontKey || (activePreset?.fontKey ?? '')
     // Grandfather: el coach tiene un color custom real (≠ defaults EVA) → ofrecer el chip legacy/reversa.
     const hasLegacyCustom = !!coach.primary_color && !EVA_DEFAULT_COLORS.has(coach.primary_color.toLowerCase())
 

@@ -45,12 +45,12 @@ const ANIMATION_LABELS: Record<LoaderAnimation, string> = {
     respiracion: 'Respiración',
 }
 
-/** Convierte un hex a "r g b" (space-separated) para --theme-primary-rgb del preview. */
+/** Convierte un hex a "r, g, b" (comas — convención de la app) para --theme-primary-rgb del preview. */
 function hexToSpaceRgb(hex: string): string {
     const m = /^#?([0-9a-fA-F]{6})$/.exec((hex ?? '').trim())
-    if (!m) return '16 185 129'
+    if (!m) return '16, 185, 129'
     const n = parseInt(m[1], 16)
-    return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`
+    return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
 }
 
 export function LoaderComposer({ value, onChange, logoUrl, brandName, primaryColor }: Props) {

@@ -16,12 +16,12 @@ import { LoaderComposer } from './_components/LoaderComposer'
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/
 
-/** Convierte un hex a "r g b" (space-separated) para --theme-primary-rgb de los previews de loader. */
+/** Convierte un hex a "r, g, b" (comas — convención de la app) para --theme-primary-rgb de los previews de loader. */
 function hexToSpaceRgb(hex: string): string {
     const m = /^#?([0-9a-fA-F]{6})$/.exec((hex ?? '').trim())
-    if (!m) return '16 185 129'
+    if (!m) return '16, 185, 129'
     const n = parseInt(m[1], 16)
-    return `${(n >> 16) & 255} ${(n >> 8) & 255} ${n & 255}`
+    return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
 }
 
 /** Valores persistidos del branding avanzado — viven levantados en el form padre (preview + dirty). */
@@ -420,9 +420,11 @@ export function BrandAdvancedSection({ tier, primaryColor, value, onChange, load
                                     })}
                                 </div>
 
-                                {/* Mini-preview: la animación elegida, en vivo y en miniatura */}
+                                {/* Mini-preview: la animación elegida, en vivo y en miniatura.
+                                    overflow-hidden: los pings del radar / arcos escalan más allá del
+                                    frame por diseño — se recortan como en la app real. */}
                                 <PreviewFrame label="Vista previa en vivo">
-                                    <div className="flex items-center justify-center py-2" style={loaderVars}>
+                                    <div className="relative flex w-full items-center justify-center overflow-hidden py-2" style={loaderVars}>
                                         {loaderVariant !== 'eva' ? (
                                             <LoaderVariantView
                                                 variant={loaderVariant}
