@@ -8,20 +8,23 @@
  *  - Precios computados en vivo desde `@eva/tiers` (NO los números del diseño).
  *  - Equivalente mensual = round(total período / meses) — mismo cálculo que
  *    `LandingPricingPreview.tsx`.
- *  - Rango Elite = 31–100 (maxClients real), NO el 31–60 del diseño.
+ *  - Rango Elite = 31–100 (maxClients real), NO el 31–60 del diseño. Se deriva de
+ *    `getTierMaxClients` en AMBOS idiomas → corrige también el `pe_1` (31–60) que
+ *    quedó stale en `copy.ts`/EN_DICT.
  *  - CTAs → `/register?tier=<id>&cycle=<ciclo activo>` (Free → `/register`).
  *
- * Decisiones documentadas:
- *  - `cycle` es estado LOCAL (§I: ninguna otra sección lo usa hoy → aceptable local).
- *  - i18n: lee `lang` del provider compartido; copy ES/EN local a la sección.
- *  - "818 ejercicios" (Free · bullet 3) se mantiene como número de marketing del diseño:
- *    PreciosSection no recibe `exerciseCount` por contrato (§7). Discrepancia 818 vs count
- *    real ~129 → decisión de negocio pendiente (§8.1). Si se resuelve usar el real, se
- *    agrega una prop.
+ * Estado transversal desde el provider (§7): `t` (i18n), `cycle`/`setCycle` (ciclo
+ * compartido 'm'|'q'|'a'). El color de marca llega por CSS (`var(--brand)`), sin JS.
+ * Hovers de los CTA (`style-hover` del diseño) → `onMouseEnter/Leave` + estado; el
+ * `translateY(-2px)` del CTA brand se desactiva bajo `prefers-reduced-motion`.
+ *
+ * El bullet 3 de Free ("Catálogo de N ejercicios con GIF") usa el `exerciseCount` REAL
+ * (mismo dato que ModulosSection, pasado como prop desde `page.tsx`) vía el placeholder
+ * `{{count}}` — ya no el "818" mock del diseño, para no mentir el tamaño del catálogo.
  */
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { type CSSProperties, useEffect, useState } from 'react'
 import {
     type BillingCycle,
     getTierPriceClp,
@@ -41,100 +44,80 @@ const PRO_HI = getTierMaxClients('pro') // 30
 const ELITE_LO = getTierMaxClients('pro') + 1 // 31
 const ELITE_HI = getTierMaxClients('elite') // 100
 
-const COPY = {
-    es: {
-        mark: '// 03 · precios',
-        title: 'Paga por cupo de alumnos.',
-        lede: 'Sin contratos. Cambia o cancela cuando quieras. Ahorra hasta 20% con prepago anual.',
-        cycM: 'Mensual',
-        cycQ: 'Trimestral −10%',
-        cycA: 'Anual −20%',
-        cycGroup: 'Ciclo de facturación',
-        cycNote: '// equivalente mensual · facturado por período · clp',
-        unit: 'clp / mes',
-        free: '// free',
-        freeSub: 'Prueba EVA sin tarjeta. Hasta 3 alumnos, para siempre.',
-        freeR: `Hasta ${FREE_HI} alumnos activos`,
-        free2: 'Builder de rutinas completo',
-        free3: 'Catálogo de 818 ejercicios con GIF',
-        free4: 'Sin módulo de nutrición',
-        freeCta: 'Empezar gratis',
-        pop: 'más popular',
-        pro: '// pro',
-        proSub: 'El equilibrio habitual: más cupos y nutrición incluida.',
-        proR: `${PRO_LO}–${PRO_HI} alumnos activos`,
-        pro2: 'Planes de nutrición incluidos',
-        pro3: 'White-label: tu logo y tu color',
-        pro4: 'Check-ins, progreso y alertas',
-        proCta: 'Elegir Pro →',
-        elite: '// elite',
-        eliteSub: 'Para negocios consolidados con alto volumen de alumnos.',
-        eliteR: `${ELITE_LO}–${ELITE_HI} alumnos activos`,
-        elite2: 'Todo lo de Pro, con más cupos',
-        elite3: 'Descuentos por prepago anual',
-        elite4: 'Soporte prioritario',
-        eliteCta: 'Elegir Elite',
-        note: '// también: starter (1–10) · growth (61–120) · scale (hasta 500) — todos con rutinas ilimitadas y dashboard',
-    },
-    en: {
-        mark: '// 02 · pricing',
-        title: 'Pay per client slot.',
-        lede: 'No contracts. Change or cancel anytime. Save up to 20% with annual prepay.',
-        cycM: 'Monthly',
-        cycQ: 'Quarterly −10%',
-        cycA: 'Annual −20%',
-        cycGroup: 'Billing cycle',
-        cycNote: '// monthly equivalent · billed per period · clp',
-        unit: 'clp / mo',
-        free: '// free',
-        freeSub: 'Try EVA without a card. Up to 3 clients, forever.',
-        freeR: `Up to ${FREE_HI} active clients`,
-        free2: 'Full routine builder',
-        free3: '818-exercise GIF catalog',
-        free4: 'No nutrition module',
-        freeCta: 'Start free',
-        pop: 'most popular',
-        pro: '// pro',
-        proSub: 'The usual sweet spot: more slots and nutrition included.',
-        proR: `${PRO_LO}–${PRO_HI} active clients`,
-        pro2: 'Nutrition plans included',
-        pro3: 'White-label: your logo and color',
-        pro4: 'Check-ins, progress and alerts',
-        proCta: 'Choose Pro →',
-        elite: '// elite',
-        eliteSub: 'For established businesses with high client volume.',
-        eliteR: `${ELITE_LO}–${ELITE_HI} active clients`,
-        elite2: 'Everything in Pro, more slots',
-        elite3: 'Annual prepay discounts',
-        elite4: 'Priority support',
-        eliteCta: 'Choose Elite',
-        note: '// also: starter (1–10) · growth (61–120) · scale (up to 500) — all with unlimited routines and dashboard',
-    },
-} as const
+// Ciclo del provider ('m'|'q'|'a') → BillingCycle de @eva/tiers.
+const CYCLE_MAP = { m: 'monthly', q: 'quarterly', a: 'annual' } as const satisfies Record<
+    string,
+    BillingCycle
+>
 
 function fmtClp(n: number) {
     return `$${n.toLocaleString('es-CL')}`
 }
 
-export function PreciosSection() {
-    const { lang } = useLandingBrand()
-    const t = COPY[lang === 'en' ? 'en' : 'es']
-    const [cycle, setCycle] = useState<BillingCycle>('monthly')
+/** Escucha `prefers-reduced-motion` en vivo (SSR-safe: arranca en false). */
+function useReducedMotion() {
+    const [reduce, setReduce] = useState(false)
+    useEffect(() => {
+        const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+        const update = () => setReduce(mq.matches)
+        update()
+        mq.addEventListener('change', update)
+        return () => mq.removeEventListener('change', update)
+    }, [])
+    return reduce
+}
+
+export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
+    const { t, lang, cycle, setCycle } = useLandingBrand()
+    const reduce = useReducedMotion()
+    const [hovered, setHovered] = useState<string | null>(null)
+
+    const billing: BillingCycle = CYCLE_MAP[cycle]
 
     const monthlyEquiv = (tier: 'pro' | 'elite') => {
-        const total = getTierPriceClp(tier, cycle)
-        return cycle === 'monthly'
+        const total = getTierPriceClp(tier, billing)
+        return billing === 'monthly'
             ? total
-            : Math.round(total / BILLING_CYCLE_CONFIG[cycle].months)
+            : Math.round(total / BILLING_CYCLE_CONFIG[billing].months)
     }
 
     const proPrice = fmtClp(monthlyEquiv('pro'))
     const elitePrice = fmtClp(monthlyEquiv('elite'))
 
-    const cycleBtn = (
-        key: BillingCycle,
-        label: string
-    ) => {
+    // Rango de alumnos por idioma, derivado del maxClients real (NO del EN_DICT stale).
+    const rangeLabel = (lo: number | null, hi: number) => {
+        if (lang === 'en') {
+            return lo == null ? `Up to ${hi} active clients` : `${lo}–${hi} active clients`
+        }
+        return lo == null ? `Hasta ${hi} alumnos activos` : `${lo}–${hi} alumnos activos`
+    }
+
+    // CTA glass (Free / Elite): hover sube el fondo 0.04 → 0.08.
+    const ghostCta = (key: string): CSSProperties => ({
+        marginTop: 'auto',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        padding: '11px 20px',
+        borderRadius: '9999px',
+        background: hovered === key ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.04)',
+        color: '#F8F9FA',
+        border: '1px solid rgba(255,255,255,0.12)',
+        fontWeight: 600,
+        fontSize: 13,
+        textDecoration: 'none',
+        transition: 'background 0.25s ease',
+    })
+
+    const hoverHandlers = (key: string) => ({
+        onMouseEnter: () => setHovered(key),
+        onMouseLeave: () => setHovered((h) => (h === key ? null : h)),
+        onFocus: () => setHovered(key),
+        onBlur: () => setHovered((h) => (h === key ? null : h)),
+    })
+
+    const cycleBtn = (key: 'm' | 'q' | 'a', label: string) => {
         const active = cycle === key
         return (
             <button
@@ -196,7 +179,7 @@ export function PreciosSection() {
                         transition: 'color 0.2s linear',
                     }}
                 >
-                    {t.mark}
+                    {t('s3_mark', '// 03 · precios')}
                 </div>
                 <h2
                     id="precios-title"
@@ -209,7 +192,7 @@ export function PreciosSection() {
                         margin: 0,
                     }}
                 >
-                    {t.title}
+                    {t('s3_title', 'Paga por cupo de alumnos.')}
                 </h2>
                 <p
                     style={{
@@ -221,13 +204,16 @@ export function PreciosSection() {
                         textWrap: 'pretty',
                     }}
                 >
-                    {t.lede}
+                    {t(
+                        's3_lede',
+                        'Sin contratos. Cambia o cancela cuando quieras. Ahorra hasta 20% con prepago anual.'
+                    )}
                 </p>
 
                 <div
                     className="r-cyc"
                     role="group"
-                    aria-label={t.cycGroup}
+                    aria-label="Ciclo de facturación"
                     style={{
                         display: 'inline-flex',
                         padding: 4,
@@ -237,9 +223,9 @@ export function PreciosSection() {
                         marginTop: 8,
                     }}
                 >
-                    {cycleBtn('monthly', t.cycM)}
-                    {cycleBtn('quarterly', t.cycQ)}
-                    {cycleBtn('annual', t.cycA)}
+                    {cycleBtn('m', t('cyc_m', 'Mensual'))}
+                    {cycleBtn('q', t('cyc_q', 'Trimestral −10%'))}
+                    {cycleBtn('a', t('cyc_a', 'Anual −20%'))}
                 </div>
 
                 <div
@@ -250,7 +236,7 @@ export function PreciosSection() {
                         letterSpacing: '0.1em',
                     }}
                 >
-                    {t.cycNote}
+                    {t('cyc_note', '// equivalente mensual · facturado por período · clp')}
                 </div>
             </div>
 
@@ -280,116 +266,38 @@ export function PreciosSection() {
                         flexDirection: 'column',
                     }}
                 >
-                    <div
-                        style={{
-                            fontFamily: FONT_MONO,
-                            fontSize: 10.5,
-                            color: '#A1A1AA',
-                            letterSpacing: '0.18em',
-                            textTransform: 'uppercase',
-                            fontWeight: 600,
-                        }}
-                    >
-                        {t.free}
-                    </div>
-                    <h3
-                        style={{
-                            fontFamily: FONT_DISPLAY,
-                            fontWeight: 800,
-                            fontSize: 26,
-                            letterSpacing: '-0.03em',
-                            margin: '6px 0 4px',
-                        }}
-                    >
-                        Free
-                    </h3>
-                    <p
-                        style={{
-                            fontSize: 13,
-                            color: '#A1A1AA',
-                            margin: '0 0 20px',
-                            lineHeight: 1.5,
-                        }}
-                    >
-                        {t.freeSub}
+                    <div style={planKicker}>// free</div>
+                    <h3 style={planName}>Free</h3>
+                    <p style={planSub}>
+                        {t('pf_sub', 'Prueba EVA sin tarjeta. Hasta 3 alumnos, para siempre.')}
                     </p>
-                    <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'baseline',
-                            gap: 8,
-                            marginBottom: 22,
-                        }}
-                    >
-                        <span
-                            style={{
-                                fontFamily: FONT_NUM,
-                                fontWeight: 900,
-                                fontSize: 46,
-                                letterSpacing: '-0.045em',
-                                lineHeight: 0.9,
-                                fontVariantNumeric: 'tabular-nums',
-                            }}
-                        >
-                            $0
-                        </span>
-                        <span
-                            style={{
-                                fontFamily: FONT_MONO,
-                                fontSize: 11,
-                                color: '#8A8A93',
-                                letterSpacing: '0.05em',
-                            }}
-                        >
-                            {t.unit}
-                        </span>
+                    <div style={priceRow}>
+                        <span style={priceNum}>$0</span>
+                        <span style={priceUnit}>{t('p_unit', 'clp / mes')}</span>
                     </div>
-                    <ul
-                        style={{
-                            listStyle: 'none',
-                            padding: 0,
-                            margin: '0 0 24px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8,
-                        }}
-                    >
+                    <ul style={featureList}>
                         <li style={liStyle}>
                             <span style={{ color: '#4ADE80' }}>✓</span>
-                            {t.freeR}
+                            {rangeLabel(null, FREE_HI)}
                         </li>
                         <li style={liStyle}>
                             <span style={{ color: '#4ADE80' }}>✓</span>
-                            {t.free2}
+                            {t('pf_2', 'Builder de rutinas completo')}
                         </li>
                         <li style={liStyle}>
                             <span style={{ color: '#4ADE80' }}>✓</span>
-                            {t.free3}
+                            {t('pf_3', 'Catálogo de {{count}} ejercicios con GIF').replace(
+                                '{{count}}',
+                                String(exerciseCount),
+                            )}
                         </li>
                         <li style={{ ...liStyle, color: '#8A8A93' }}>
                             <span style={{ color: '#8A8A93' }}>✗</span>
-                            {t.free4}
+                            {t('pf_4', 'Sin módulo de nutrición')}
                         </li>
                     </ul>
-                    <Link
-                        href="/register"
-                        className="lv2-ghostbtn"
-                        style={{
-                            marginTop: 'auto',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 8,
-                            padding: '11px 20px',
-                            borderRadius: '9999px',
-                            color: '#F8F9FA',
-                            border: '1px solid rgba(255,255,255,0.12)',
-                            fontWeight: 600,
-                            fontSize: 13,
-                            textDecoration: 'none',
-                        }}
-                    >
-                        {t.freeCta}
+                    <Link href="/register" style={ghostCta('free')} {...hoverHandlers('free')}>
+                        {t('pf_cta', 'Empezar gratis')}
                     </Link>
                 </div>
 
@@ -444,109 +352,49 @@ export function PreciosSection() {
                             transition: 'background 0.4s ease',
                         }}
                     >
-                        {t.pop}
+                        {t('badge_pop', 'más popular')}
                     </div>
                     <div
                         style={{
+                            ...planKicker,
                             position: 'relative',
-                            fontFamily: FONT_MONO,
-                            fontSize: 10.5,
                             color: 'var(--brand)',
-                            letterSpacing: '0.18em',
-                            textTransform: 'uppercase',
-                            fontWeight: 600,
                             transition: 'color 0.2s linear',
                         }}
                     >
-                        {t.pro}
+                        // pro
                     </div>
-                    <h3
-                        style={{
-                            position: 'relative',
-                            fontFamily: FONT_DISPLAY,
-                            fontWeight: 800,
-                            fontSize: 26,
-                            letterSpacing: '-0.03em',
-                            margin: '6px 0 4px',
-                        }}
-                    >
-                        Pro
-                    </h3>
-                    <p
-                        style={{
-                            position: 'relative',
-                            fontSize: 13,
-                            color: '#A1A1AA',
-                            margin: '0 0 20px',
-                            lineHeight: 1.5,
-                        }}
-                    >
-                        {t.proSub}
+                    <h3 style={{ ...planName, position: 'relative' }}>Pro</h3>
+                    <p style={{ ...planSub, position: 'relative' }}>
+                        {t('pp_sub', 'El equilibrio habitual: más cupos y nutrición incluida.')}
                     </p>
-                    <div
-                        style={{
-                            position: 'relative',
-                            display: 'flex',
-                            alignItems: 'baseline',
-                            gap: 8,
-                            marginBottom: 22,
-                        }}
-                    >
-                        <span
-                            data-price="pro"
-                            style={{
-                                fontFamily: FONT_NUM,
-                                fontWeight: 900,
-                                fontSize: 46,
-                                letterSpacing: '-0.045em',
-                                lineHeight: 0.9,
-                                fontVariantNumeric: 'tabular-nums',
-                            }}
-                        >
+                    <div style={{ ...priceRow, position: 'relative' }}>
+                        <span data-price="pro" style={priceNum}>
                             {proPrice}
                         </span>
-                        <span
-                            style={{
-                                fontFamily: FONT_MONO,
-                                fontSize: 11,
-                                color: '#8A8A93',
-                                letterSpacing: '0.05em',
-                            }}
-                        >
-                            {t.unit}
-                        </span>
+                        <span style={priceUnit}>{t('p_unit', 'clp / mes')}</span>
                     </div>
-                    <ul
-                        style={{
-                            position: 'relative',
-                            listStyle: 'none',
-                            padding: 0,
-                            margin: '0 0 24px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8,
-                        }}
-                    >
+                    <ul style={{ ...featureList, position: 'relative' }}>
                         <li style={liStyle}>
                             <span style={brandCheck}>✓</span>
-                            {t.proR}
+                            {rangeLabel(PRO_LO, PRO_HI)}
                         </li>
                         <li style={liStyle}>
                             <span style={brandCheck}>✓</span>
-                            {t.pro2}
+                            {t('pp_2', 'Planes de nutrición incluidos')}
                         </li>
                         <li style={liStyle}>
                             <span style={brandCheck}>✓</span>
-                            {t.pro3}
+                            {t('pp_3', 'White-label: tu logo y tu color')}
                         </li>
                         <li style={liStyle}>
                             <span style={brandCheck}>✓</span>
-                            {t.pro4}
+                            {t('pp_4', 'Check-ins, progreso y alertas')}
                         </li>
                     </ul>
                     <Link
-                        href={`/register?tier=pro&cycle=${cycle}`}
-                        className="lv2-brandbtn"
+                        href={`/register?tier=pro&cycle=${billing}`}
+                        {...hoverHandlers('pro')}
                         style={{
                             position: 'relative',
                             marginTop: 'auto',
@@ -562,9 +410,13 @@ export function PreciosSection() {
                             fontSize: 13.5,
                             textDecoration: 'none',
                             boxShadow: '0 0 22px -4px var(--brand)',
+                            transform:
+                                hovered === 'pro' && !reduce ? 'translateY(-2px)' : 'none',
+                            transition:
+                                'transform 0.3s ease, background 0.4s ease, box-shadow 0.4s ease',
                         }}
                     >
-                        {t.proCta}
+                        {t('pp_cta', 'Elegir Pro →')}
                     </Link>
                 </div>
 
@@ -583,117 +435,41 @@ export function PreciosSection() {
                         flexDirection: 'column',
                     }}
                 >
-                    <div
-                        style={{
-                            fontFamily: FONT_MONO,
-                            fontSize: 10.5,
-                            color: '#A1A1AA',
-                            letterSpacing: '0.18em',
-                            textTransform: 'uppercase',
-                            fontWeight: 600,
-                        }}
-                    >
-                        {t.elite}
-                    </div>
-                    <h3
-                        style={{
-                            fontFamily: FONT_DISPLAY,
-                            fontWeight: 800,
-                            fontSize: 26,
-                            letterSpacing: '-0.03em',
-                            margin: '6px 0 4px',
-                        }}
-                    >
-                        Elite
-                    </h3>
-                    <p
-                        style={{
-                            fontSize: 13,
-                            color: '#A1A1AA',
-                            margin: '0 0 20px',
-                            lineHeight: 1.5,
-                        }}
-                    >
-                        {t.eliteSub}
+                    <div style={planKicker}>// elite</div>
+                    <h3 style={planName}>Elite</h3>
+                    <p style={planSub}>
+                        {t('pe_sub', 'Para negocios consolidados con alto volumen de alumnos.')}
                     </p>
-                    <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'baseline',
-                            gap: 8,
-                            marginBottom: 22,
-                        }}
-                    >
-                        <span
-                            data-price="elite"
-                            style={{
-                                fontFamily: FONT_NUM,
-                                fontWeight: 900,
-                                fontSize: 46,
-                                letterSpacing: '-0.045em',
-                                lineHeight: 0.9,
-                                fontVariantNumeric: 'tabular-nums',
-                            }}
-                        >
+                    <div style={priceRow}>
+                        <span data-price="elite" style={priceNum}>
                             {elitePrice}
                         </span>
-                        <span
-                            style={{
-                                fontFamily: FONT_MONO,
-                                fontSize: 11,
-                                color: '#8A8A93',
-                                letterSpacing: '0.05em',
-                            }}
-                        >
-                            {t.unit}
-                        </span>
+                        <span style={priceUnit}>{t('p_unit', 'clp / mes')}</span>
                     </div>
-                    <ul
-                        style={{
-                            listStyle: 'none',
-                            padding: 0,
-                            margin: '0 0 24px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8,
-                        }}
-                    >
+                    <ul style={featureList}>
                         <li style={liStyle}>
                             <span style={{ color: '#4ADE80' }}>✓</span>
-                            {t.eliteR}
+                            {rangeLabel(ELITE_LO, ELITE_HI)}
                         </li>
                         <li style={liStyle}>
                             <span style={{ color: '#4ADE80' }}>✓</span>
-                            {t.elite2}
+                            {t('pe_2', 'Todo lo de Pro, con más cupos')}
                         </li>
                         <li style={liStyle}>
                             <span style={{ color: '#4ADE80' }}>✓</span>
-                            {t.elite3}
+                            {t('pe_3', 'Descuentos por prepago anual')}
                         </li>
                         <li style={liStyle}>
                             <span style={{ color: '#4ADE80' }}>✓</span>
-                            {t.elite4}
+                            {t('pe_4', 'Soporte prioritario')}
                         </li>
                     </ul>
                     <Link
-                        href={`/register?tier=elite&cycle=${cycle}`}
-                        className="lv2-ghostbtn"
-                        style={{
-                            marginTop: 'auto',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 8,
-                            padding: '11px 20px',
-                            borderRadius: '9999px',
-                            color: '#F8F9FA',
-                            border: '1px solid rgba(255,255,255,0.12)',
-                            fontWeight: 600,
-                            fontSize: 13,
-                            textDecoration: 'none',
-                        }}
+                        href={`/register?tier=elite&cycle=${billing}`}
+                        style={ghostCta('elite')}
+                        {...hoverHandlers('elite')}
                     >
-                        {t.eliteCta}
+                        {t('pe_cta', 'Elegir Elite')}
                     </Link>
                 </div>
             </div>
@@ -709,38 +485,73 @@ export function PreciosSection() {
                     letterSpacing: '0.1em',
                 }}
             >
-                {t.note}
+                {t(
+                    'table_note',
+                    '// también: starter (1–10) · growth (61–120) · scale (hasta 500) — todos con rutinas ilimitadas y dashboard'
+                )}
             </div>
-
-            <style jsx>{`
-                .lv2-ghostbtn {
-                    background: rgba(255, 255, 255, 0.04);
-                    transition: background 0.25s ease, border-color 0.25s ease;
-                }
-                .lv2-ghostbtn:hover {
-                    background: rgba(255, 255, 255, 0.08);
-                }
-                .lv2-brandbtn {
-                    transition: transform 0.3s ease, background 0.4s ease,
-                        box-shadow 0.4s ease;
-                }
-                .lv2-brandbtn:hover {
-                    transform: translateY(-2px);
-                }
-                @media (prefers-reduced-motion: reduce) {
-                    .lv2-brandbtn {
-                        transition: background 0.4s ease, box-shadow 0.4s ease;
-                    }
-                    .lv2-brandbtn:hover {
-                        transform: none;
-                    }
-                }
-            `}</style>
         </section>
     )
 }
 
-const liStyle: React.CSSProperties = {
+// ── Estilos compartidos entre las 3 cards ────────────────────────────────────
+const planKicker: CSSProperties = {
+    fontFamily: FONT_MONO,
+    fontSize: 10.5,
+    color: '#A1A1AA',
+    letterSpacing: '0.18em',
+    textTransform: 'uppercase',
+    fontWeight: 600,
+}
+
+const planName: CSSProperties = {
+    fontFamily: FONT_DISPLAY,
+    fontWeight: 800,
+    fontSize: 26,
+    letterSpacing: '-0.03em',
+    margin: '6px 0 4px',
+}
+
+const planSub: CSSProperties = {
+    fontSize: 13,
+    color: '#A1A1AA',
+    margin: '0 0 20px',
+    lineHeight: 1.5,
+}
+
+const priceRow: CSSProperties = {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 8,
+    marginBottom: 22,
+}
+
+const priceNum: CSSProperties = {
+    fontFamily: FONT_NUM,
+    fontWeight: 900,
+    fontSize: 46,
+    letterSpacing: '-0.045em',
+    lineHeight: 0.9,
+    fontVariantNumeric: 'tabular-nums',
+}
+
+const priceUnit: CSSProperties = {
+    fontFamily: FONT_MONO,
+    fontSize: 11,
+    color: '#8A8A93',
+    letterSpacing: '0.05em',
+}
+
+const featureList: CSSProperties = {
+    listStyle: 'none',
+    padding: 0,
+    margin: '0 0 24px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+}
+
+const liStyle: CSSProperties = {
     display: 'flex',
     gap: 8,
     fontSize: 13,
@@ -748,7 +559,9 @@ const liStyle: React.CSSProperties = {
     lineHeight: 1.5,
 }
 
-const brandCheck: React.CSSProperties = {
+const brandCheck: CSSProperties = {
     color: 'var(--brand)',
     transition: 'color 0.2s linear',
 }
+
+export default PreciosSection

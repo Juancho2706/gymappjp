@@ -15,6 +15,7 @@
  */
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useLandingBrand } from './_brand-provider';
 
@@ -75,7 +76,7 @@ function usePrefersReducedMotion(): boolean {
   return reduced;
 }
 
-export default function Hero() {
+function Hero() {
   const { lang, lockBrand, resumeAuto, lockedIdx } = useLandingBrand();
   const t = COPY[lang === 'en' ? 'en' : 'es'];
   const reduced = usePrefersReducedMotion();
@@ -109,7 +110,7 @@ export default function Hero() {
     >
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 22 }}>
         <h1
-          data-reveal=""
+          data-reveal
           style={{
             animationDelay: '0.08s',
             fontFamily: FONT_DISPLAY,
@@ -138,7 +139,7 @@ export default function Hero() {
         </h1>
 
         <p
-          data-reveal=""
+          data-reveal
           style={{
             animationDelay: '0.16s',
             fontSize: 17,
@@ -153,7 +154,7 @@ export default function Hero() {
         </p>
 
         <div
-          data-reveal=""
+          data-reveal
           style={{
             animationDelay: '0.24s',
             display: 'flex',
@@ -163,7 +164,7 @@ export default function Hero() {
             justifyContent: 'center',
           }}
         >
-          <a
+          <Link
             href="/register"
             onMouseEnter={reduced ? undefined : (e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
             onMouseLeave={reduced ? undefined : (e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
@@ -183,7 +184,7 @@ export default function Hero() {
             }}
           >
             {t.hero_cta1}
-          </a>
+          </Link>
           <a
             href="#marca"
             onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
@@ -211,7 +212,7 @@ export default function Hero() {
 
         {/* Brand rail: lockable white-label color */}
         <div
-          data-reveal=""
+          data-reveal
           className="r-brandrail"
           style={{
             animationDelay: '0.3s',
@@ -291,7 +292,7 @@ export default function Hero() {
       </div>
 
       {/* Showcase: glass coach dashboard */}
-      <div data-reveal="" style={{ animationDelay: '0.36s', position: 'relative', marginTop: 70, display: 'flex', justifyContent: 'center' }}>
+      <div data-reveal style={{ animationDelay: '0.36s', position: 'relative', marginTop: 70, display: 'flex', justifyContent: 'center' }}>
         <div
           aria-hidden="true"
           style={{
@@ -636,3 +637,6 @@ export default function Hero() {
     </section>
   );
 }
+
+export default Hero;
+export { Hero };

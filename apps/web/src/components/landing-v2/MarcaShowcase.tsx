@@ -18,6 +18,7 @@
  */
 
 import Image from 'next/image';
+import { type CSSProperties } from 'react';
 import { useLandingBrand } from './_brand-provider';
 
 // ── Font-family mapping (§4 del spec) ────────────────────────────────────────
@@ -77,7 +78,7 @@ const PHONE_RINGS = [
   { color: '#4ADE80', dash: '117.5 138.2', value: 85, label: 'Check-ins', opacity: 1, transition: false },
 ] as const;
 
-const barStyle: React.CSSProperties = {
+const barStyle: CSSProperties = {
   width: 2,
   alignSelf: 'stretch',
   minHeight: 40,
@@ -87,10 +88,10 @@ const barStyle: React.CSSProperties = {
   flexShrink: 0,
   transition: 'background 0.3s linear',
 };
-const benefitTitleStyle: React.CSSProperties = { fontWeight: 600, fontSize: 15 };
-const benefitDescStyle: React.CSSProperties = { fontSize: 13.5, lineHeight: 1.55, color: '#A1A1AA' };
+const benefitTitleStyle: CSSProperties = { fontWeight: 600, fontSize: 15 };
+const benefitDescStyle: CSSProperties = { fontSize: 13.5, lineHeight: 1.55, color: '#A1A1AA' };
 
-export default function MarcaShowcase() {
+function MarcaShowcase() {
   const { lang, lockBrand, resumeAuto, lockedIdx } = useLandingBrand();
   const t = COPY[lang === 'en' ? 'en' : 'es'];
 
@@ -101,7 +102,7 @@ export default function MarcaShowcase() {
     >
       {/* Header */}
       <div
-        data-reveal=""
+        data-reveal
         style={{
           animationDelay: '0s',
           display: 'flex',
@@ -153,7 +154,7 @@ export default function MarcaShowcase() {
 
       {/* Grid: benefits + morphing phone */}
       <div
-        data-reveal=""
+        data-reveal
         className="r-marca"
         style={{ animationDelay: '0.1s', display: 'grid', gridTemplateColumns: '1fr 1.05fr', gap: 56, alignItems: 'center' }}
       >
@@ -461,3 +462,6 @@ export default function MarcaShowcase() {
     </section>
   );
 }
+
+export default MarcaShowcase;
+export { MarcaShowcase };

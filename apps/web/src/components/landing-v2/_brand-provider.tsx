@@ -84,10 +84,10 @@ export function useLandingBrand(): LandingBrandContextValue {
 // sí, para pintar el color/reveal antes del primer paint (menos flash).
 const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
 
-const ROOT_STYLE: CSSProperties = {
+const ROOT_STYLE = {
   // Valores iniciales (SSR / no-JS): EVA blue. El rAF los sobreescribe con `!important`.
-  ['--brand' as string]: 'rgb(0 122 255)',
-  ['--brand-rgb' as string]: '0 122 255',
+  '--brand': 'rgb(0 122 255)',
+  '--brand-rgb': '0 122 255',
   position: 'relative',
   minHeight: '100dvh',
   background: '#08080a',
@@ -95,7 +95,7 @@ const ROOT_STYLE: CSSProperties = {
   fontFamily: 'var(--font-inter), ui-sans-serif, system-ui, sans-serif',
   // CLAUDE.md: `overflow-x: clip`, nunca `hidden`.
   overflowX: 'clip',
-}
+} as CSSProperties
 
 export function LandingBrandProvider({
   children,

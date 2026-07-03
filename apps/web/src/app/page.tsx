@@ -1,18 +1,35 @@
 import type { Metadata } from 'next'
-import { LandingPillNav } from '@/components/landing/LandingPillNav'
-import { LandingStickyBrandingCard } from '@/components/landing/LandingStickyBrandingCard'
-import { LandingHeroSection } from '@/components/landing/LandingHeroSection'
-import { LandingCoachCalloutSections } from '@/components/landing/LandingCoachCalloutSections'
-import { LandingExerciseCatalogShowcase } from '@/components/landing/LandingExerciseCatalogShowcase'
-import { LandingPricingPreview } from '@/components/landing/LandingPricingPreview'
-import { LandingStudentTabs } from '@/components/landing/LandingStudentTabs'
-import { LandingFinalCTA } from '@/components/landing/LandingFinalCTA'
-import { LandingContactFooter } from '@/components/landing/LandingContactFooter'
-import { LandingTeamsSection } from '@/components/landing/LandingTeamsSection'
-import { LandingModulesSection } from '@/components/landing/LandingModulesSection'
+import { Geist_Mono } from 'next/font/google'
 import { SALES_EMAIL } from '@/lib/brand-assets'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { resolveMetadataBase } from '@/lib/site-url'
+import '../components/landing-v2/landing-v2.css'
+import { LandingBrandProvider } from '@/components/landing-v2/_brand-provider'
+import { PageLoader } from '@/components/landing-v2/PageLoader'
+import { HeroBackdrop } from '@/components/landing-v2/HeroBackdrop'
+import { LandingNav } from '@/components/landing-v2/LandingNav'
+// Componentes de sección (construidos por otros agentes en paralelo). Todos
+// exponen default export → import default uniforme.
+import Hero from '@/components/landing-v2/Hero'
+import MarcaShowcase from '@/components/landing-v2/MarcaShowcase'
+import ModulosSection from '@/components/landing-v2/ModulosSection'
+import CoachesProof from '@/components/landing-v2/CoachesProof'
+import ModulosPro from '@/components/landing-v2/ModulosPro'
+import PreciosSection from '@/components/landing-v2/PreciosSection'
+import TeamsSection from '@/components/landing-v2/TeamsSection'
+import FaqSection from '@/components/landing-v2/FaqSection'
+import CtaFinal from '@/components/landing-v2/CtaFinal'
+import { LandingFooter } from '@/components/landing-v2/LandingFooter'
+
+// Geist Mono NO está en el layout (la app usa JetBrains Mono). La landing lo
+// carga scopeado: la CSS var `--font-geist-mono` se aplica al root de la landing
+// vía `fontClassName` (preload:false → sólo baja la woff2 al usarse). Spec §4 opción A.
+const geistMono = Geist_Mono({
+  variable: '--font-geist-mono',
+  subsets: ['latin'],
+  display: 'swap',
+  preload: false,
+})
 
 export const metadata: Metadata = {
     title: { absolute: 'Software para Personal Trainers y Gyms en Chile | EVA' },
@@ -114,7 +131,7 @@ export default async function LandingPage() {
     }
 
     return (
-        <div className="min-h-dvh bg-background text-foreground overflow-x-clip">
+        <LandingBrandProvider fontClassName={geistMono.variable}>
             {/* JSON-LD inline (server-rendered, sin next/script) → visible al crawler sin ejecutar JS. */}
             <script
                 type="application/ld+json"
@@ -124,19 +141,21 @@ export default async function LandingPage() {
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(teamsJsonLd) }}
             />
-            <LandingPillNav />
-            <LandingStickyBrandingCard />
+            <PageLoader />
+            <HeroBackdrop />
+            <LandingNav />
             <main>
-                <LandingHeroSection exerciseCount={exerciseCount} />
-                <LandingCoachCalloutSections />
-                <LandingExerciseCatalogShowcase exerciseCount={exerciseCount} />
-                <LandingPricingPreview />
-                <LandingModulesSection />
-                <LandingStudentTabs />
-                <LandingTeamsSection />
-                <LandingFinalCTA />
-                <LandingContactFooter />
+                <Hero />
+                <MarcaShowcase />
+                <ModulosSection exerciseCount={exerciseCount} />
+                <CoachesProof />
+                <ModulosPro />
+                <PreciosSection exerciseCount={exerciseCount} />
+                <TeamsSection />
+                <FaqSection exerciseCount={exerciseCount} />
+                <CtaFinal />
+                <LandingFooter />
             </main>
-        </div>
+        </LandingBrandProvider>
     )
 }

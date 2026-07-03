@@ -8,39 +8,46 @@
  * ("Crear mi cuenta →" → /register · "Escríbenos" → mailto SALES_EMAIL).
  *
  * Contrato (§7): la tabla marca CtaFinal como server. Se porta como client SOLO
- * para reaccionar al toggle de idioma del provider (mismo criterio que FaqSection).
- * El HTML igual se renderiza en SSR. Datos reales: mailto vía `SALES_EMAIL`
- * (`lib/brand-assets.ts`), no el literal del diseño.
+ * para reaccionar al toggle de idioma (`t()` del provider, mismo criterio que
+ * FaqSection). El HTML igual se renderiza en SSR. Datos reales: mailto vía
+ * `SALES_EMAIL` (`lib/brand-assets.ts`), no el literal del diseño. Hovers de los CTA
+ * → `onMouseEnter/Leave` + estado; el `translateY(-2px)` del CTA brand se desactiva
+ * bajo `prefers-reduced-motion`.
  */
 
 import Image from 'next/image'
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { SALES_EMAIL } from '@/lib/brand-assets'
 import { useLandingBrand } from './_brand-provider'
 
 const FONT_MONO = 'var(--font-geist-mono), ui-monospace, monospace'
 const FONT_DISPLAY = 'var(--font-montserrat), var(--font-inter), sans-serif'
 
-const COPY = {
-    es: {
-        mark: '// listo cuando tú lo estés',
-        title: 'Profesionaliza tu coaching.',
-        sub: 'Crea tu cuenta en minutos y ajusta tu plan cuando crezcas. Empiezas gratis, sin tarjeta.',
-        cta1: 'Crear mi cuenta →',
-        cta2: 'Escríbenos',
-    },
-    en: {
-        mark: '// ready when you are',
-        title: 'Take your coaching pro.',
-        sub: 'Create your account in minutes and adjust your plan as you grow. Start free, no card.',
-        cta1: 'Create my account →',
-        cta2: 'Write to us',
-    },
-} as const
+/** Escucha `prefers-reduced-motion` en vivo (SSR-safe: arranca en false). */
+function useReducedMotion() {
+    const [reduce, setReduce] = useState(false)
+    useEffect(() => {
+        const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+        const update = () => setReduce(mq.matches)
+        update()
+        mq.addEventListener('change', update)
+        return () => mq.removeEventListener('change', update)
+    }, [])
+    return reduce
+}
 
 export function CtaFinal() {
-    const { lang } = useLandingBrand()
-    const t = COPY[lang === 'en' ? 'en' : 'es']
+    const { t } = useLandingBrand()
+    const reduce = useReducedMotion()
+    const [hovered, setHovered] = useState<string | null>(null)
+
+    const hoverHandlers = (key: string) => ({
+        onMouseEnter: () => setHovered(key),
+        onMouseLeave: () => setHovered((h) => (h === key ? null : h)),
+        onFocus: () => setHovered(key),
+        onBlur: () => setHovered((h) => (h === key ? null : h)),
+    })
 
     return (
         <section
@@ -108,7 +115,7 @@ export function CtaFinal() {
                         transition: 'color 0.2s linear',
                     }}
                 >
-                    {t.mark}
+                    {t('fin_mark', '// listo cuando tú lo estés')}
                 </div>
                 <h2
                     id="cta-final-title"
@@ -124,7 +131,7 @@ export function CtaFinal() {
                         maxWidth: 760,
                     }}
                 >
-                    {t.title}
+                    {t('fin_title', 'Profesionaliza tu coaching.')}
                 </h2>
                 <p
                     style={{
@@ -136,7 +143,10 @@ export function CtaFinal() {
                         textWrap: 'pretty',
                     }}
                 >
-                    {t.sub}
+                    {t(
+                        'fin_sub',
+                        'Crea tu cuenta en minutos y ajusta tu plan cuando crezcas. Empiezas gratis, sin tarjeta.'
+                    )}
                 </p>
                 <div
                     style={{
@@ -150,7 +160,7 @@ export function CtaFinal() {
                 >
                     <Link
                         href="/register"
-                        className="lv2-brandbtn"
+                        {...hoverHandlers('cta1')}
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -163,55 +173,41 @@ export function CtaFinal() {
                             fontSize: 15,
                             textDecoration: 'none',
                             boxShadow: '0 0 26px -4px var(--brand)',
+                            transform:
+                                hovered === 'cta1' && !reduce ? 'translateY(-2px)' : 'none',
+                            transition:
+                                'transform 0.3s ease, background 0.4s ease, box-shadow 0.4s ease',
                         }}
                     >
-                        {t.cta1}
+                        {t('fin_cta1', 'Crear mi cuenta →')}
                     </Link>
                     <a
                         href={`mailto:${SALES_EMAIL}`}
-                        className="lv2-ghostbtn"
+                        {...hoverHandlers('cta2')}
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: 8,
                             padding: '13px 24px',
                             borderRadius: '9999px',
+                            background:
+                                hovered === 'cta2'
+                                    ? 'rgba(255,255,255,0.08)'
+                                    : 'rgba(255,255,255,0.04)',
                             color: '#F8F9FA',
                             border: '1px solid rgba(255,255,255,0.12)',
                             fontWeight: 600,
                             fontSize: 14,
                             textDecoration: 'none',
+                            transition: 'background 0.25s ease',
                         }}
                     >
-                        {t.cta2}
+                        {t('fin_cta2', 'Escríbenos')}
                     </a>
                 </div>
             </div>
-
-            <style jsx>{`
-                .lv2-ghostbtn {
-                    background: rgba(255, 255, 255, 0.04);
-                    transition: background 0.25s ease, border-color 0.25s ease;
-                }
-                .lv2-ghostbtn:hover {
-                    background: rgba(255, 255, 255, 0.08);
-                }
-                .lv2-brandbtn {
-                    transition: transform 0.3s ease, background 0.4s ease,
-                        box-shadow 0.4s ease;
-                }
-                .lv2-brandbtn:hover {
-                    transform: translateY(-2px);
-                }
-                @media (prefers-reduced-motion: reduce) {
-                    .lv2-brandbtn {
-                        transition: background 0.4s ease, box-shadow 0.4s ease;
-                    }
-                    .lv2-brandbtn:hover {
-                        transform: none;
-                    }
-                }
-            `}</style>
         </section>
     )
 }
+
+export default CtaFinal

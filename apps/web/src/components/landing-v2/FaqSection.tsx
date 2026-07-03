@@ -5,15 +5,19 @@
  *
  * Fidelidad 1:1 con `nuevalandingv2/LandingPrism v2.dc.html` (líneas 795-823):
  * 5 `<details>`/`<summary>` NATIVOS (el acordeón funciona sin JS de acordeón).
- * El "+" rota 45° al abrir vía CSS `[open]` — incluida acá (styled-jsx) para que
- * la sección sea autosuficiente aunque `landing-v2.css` aún no cargue.
  *
- * Nota de contrato (§7): la tabla marca FaqSection como server. Se porta como
- * client SOLO para reaccionar al toggle de idioma (`lang` del provider): un toggle
- * ES/EN transversal exige que TODO el texto visible cambie, y un server component no
- * puede suscribirse al contexto client. El contenido igual se renderiza en SSR
- * (client components emiten su HTML inicial en el App Router) → SEO/FAQPage intactos.
- * El único "JS" que agrega es leer el idioma; el acordeón sigue siendo nativo.
+ * CSS del acordeón (§K/§7): el marcador por defecto se elimina INLINE con
+ * `display:flex` (suprime el triángulo en Blink/WebKit) + `listStyle:none` (Firefox),
+ * sin depender de ninguna hoja externa. La rotación 45° del "+" al abrir usa el
+ * selector `.faq-i[open] .faq-x` que vive en `landing-v2.css` (deliverable del
+ * provider/foundation) — por eso se conservan los NOMBRES de clase EXACTOS del
+ * contrato `faq-i` / `faq-x`. Si esa hoja aún no cargó, el acordeón sigue funcional
+ * (el "+" simplemente no rota) → degradación elegante.
+ *
+ * Nota de contrato (§7): la tabla marca FaqSection como server. Se porta como client
+ * SOLO para reaccionar al toggle de idioma (`t()` del provider): un toggle ES/EN
+ * transversal exige que TODO el texto visible cambie, y un server component no puede
+ * suscribirse al contexto client. El HTML igual se renderiza en SSR → SEO intacto.
  */
 
 import { useLandingBrand } from './_brand-provider'
@@ -21,65 +25,43 @@ import { useLandingBrand } from './_brand-provider'
 const FONT_MONO = 'var(--font-geist-mono), ui-monospace, monospace'
 const FONT_DISPLAY = 'var(--font-montserrat), var(--font-inter), sans-serif'
 
-const COPY = {
-    es: {
-        mark: '// preguntas frecuentes',
-        title: 'Antes de que preguntes.',
-        items: [
-            {
-                q: '¿Puedo cancelar cuando quiera?',
-                a: 'Sí. No hay contratos: cambias de plan o cancelas desde tu panel y sigues con acceso hasta el fin del período pagado.',
-            },
-            {
-                q: '¿Qué pasa si supero mi cupo de alumnos?',
-                a: 'Subes al plan siguiente con un clic. No se borra nada: tus rutinas, historiales y alumnos se mantienen intactos.',
-            },
-            {
-                q: '¿Mis alumnos pagan algo por la app?',
-                a: 'No. Instalan tu app gratis y entran con un código de 5 dígitos. Tú pagas solo tu plan de coach.',
-            },
-            {
-                q: '¿Puedo migrar mis rutinas desde Excel?',
-                a: 'Sí. Cargas tu rutina una vez en el builder —con los 818 ejercicios del catálogo— y la reutilizas con todos los alumnos que quieras.',
-            },
-            {
-                q: '¿Necesito tarjeta para empezar?',
-                a: 'No. El plan Free es permanente para hasta 3 alumnos, sin tarjeta y con el builder completo.',
-            },
-        ],
-    },
-    en: {
-        mark: '// frequently asked questions',
-        title: 'Before you ask.',
-        items: [
-            {
-                q: 'Can I cancel anytime?',
-                a: 'Yes. No contracts: change plans or cancel from your panel and keep access until the end of the paid period.',
-            },
-            {
-                q: 'What if I outgrow my client slots?',
-                a: 'Upgrade to the next plan in one click. Nothing is deleted: routines, history and clients stay intact.',
-            },
-            {
-                q: 'Do my clients pay anything for the app?',
-                a: 'No. They install your app for free and log in with a 5-digit code. You only pay your coach plan.',
-            },
-            {
-                q: 'Can I migrate my routines from Excel?',
-                a: 'Yes. Load a routine once in the builder —with the 818-exercise catalog— and reuse it with as many clients as you want.',
-            },
-            {
-                q: 'Do I need a card to start?',
-                a: 'No. The Free plan is permanent for up to 3 clients, no card, with the full builder.',
-            },
-        ],
-    },
-} as const
+// [keyPregunta, ES pregunta, keyRespuesta, ES respuesta] — el EN sale de EN_DICT vía t().
+const FAQ_ITEMS: [string, string, string, string][] = [
+    [
+        'q1',
+        '¿Puedo cancelar cuando quiera?',
+        'a1',
+        'Sí. No hay contratos: cambias de plan o cancelas desde tu panel y sigues con acceso hasta el fin del período pagado.',
+    ],
+    [
+        'q2',
+        '¿Qué pasa si supero mi cupo de alumnos?',
+        'a2',
+        'Subes al plan siguiente con un clic. No se borra nada: tus rutinas, historiales y alumnos se mantienen intactos.',
+    ],
+    [
+        'q3',
+        '¿Mis alumnos pagan algo por la app?',
+        'a3',
+        'No. Instalan tu app gratis y entran con un código de 5 dígitos. Tú pagas solo tu plan de coach.',
+    ],
+    [
+        'q4',
+        '¿Puedo migrar mis rutinas desde Excel?',
+        'a4',
+        'Sí. Cargas tu rutina una vez en el builder —con los {{count}} ejercicios del catálogo— y la reutilizas con todos los alumnos que quieras.',
+    ],
+    [
+        'q5',
+        '¿Necesito tarjeta para empezar?',
+        'a5',
+        'No. El plan Free es permanente para hasta 3 alumnos, sin tarjeta y con el builder completo.',
+    ],
+]
 
-export function FaqSection() {
-    const { lang } = useLandingBrand()
-    const t = COPY[lang === 'en' ? 'en' : 'es']
-    const lastIndex = t.items.length - 1
+export function FaqSection({ exerciseCount }: { exerciseCount: number }) {
+    const { t } = useLandingBrand()
+    const lastIndex = FAQ_ITEMS.length - 1
 
     return (
         <section
@@ -116,7 +98,7 @@ export function FaqSection() {
                         transition: 'color 0.2s linear',
                     }}
                 >
-                    {t.mark}
+                    {t('faq_mark', '// preguntas frecuentes')}
                 </div>
                 <h2
                     id="faq-title"
@@ -129,13 +111,12 @@ export function FaqSection() {
                         margin: 0,
                     }}
                 >
-                    {t.title}
+                    {t('faq_title', 'Antes de que preguntes.')}
                 </h2>
             </div>
 
             <div
                 data-reveal
-                className="lv2-faq-card"
                 style={{
                     animationDelay: '0.06s',
                     borderRadius: 24,
@@ -147,10 +128,10 @@ export function FaqSection() {
                     overflow: 'hidden',
                 }}
             >
-                {t.items.map((item, i) => (
+                {FAQ_ITEMS.map(([qKey, qEs, aKey, aEs], i) => (
                     <details
-                        key={i}
-                        className="lv2-faq-i"
+                        key={qKey}
+                        className="faq-i"
                         style={
                             i === lastIndex
                                 ? undefined
@@ -159,7 +140,11 @@ export function FaqSection() {
                     >
                         <summary
                             style={{
+                                // display:flex suprime el triángulo en Blink/WebKit;
+                                // listStyle:none lo suprime en Firefox → sin CSS externo.
                                 display: 'flex',
+                                listStyle: 'none',
+                                cursor: 'pointer',
                                 alignItems: 'center',
                                 gap: 14,
                                 padding: '20px 26px',
@@ -173,10 +158,10 @@ export function FaqSection() {
                                     color: '#F8F9FA',
                                 }}
                             >
-                                {item.q}
+                                {t(qKey, qEs)}
                             </span>
                             <span
-                                className="lv2-faq-x"
+                                className="faq-x"
                                 aria-hidden="true"
                                 style={{
                                     fontFamily: FONT_MONO,
@@ -198,42 +183,13 @@ export function FaqSection() {
                                 maxWidth: 640,
                             }}
                         >
-                            {item.a}
+                            {t(aKey, aEs).replace('{{count}}', String(exerciseCount))}
                         </p>
                     </details>
                 ))}
             </div>
-
-            <style jsx>{`
-                .lv2-faq-i > summary {
-                    cursor: pointer;
-                    list-style: none;
-                    outline: none;
-                }
-                .lv2-faq-i > summary::-webkit-details-marker {
-                    display: none;
-                }
-                .lv2-faq-i > summary::marker {
-                    display: none;
-                    content: '';
-                }
-                .lv2-faq-i > summary:focus-visible {
-                    outline: 2px solid var(--brand);
-                    outline-offset: -2px;
-                    border-radius: 12px;
-                }
-                .lv2-faq-x {
-                    transition: transform 0.25s ease;
-                }
-                .lv2-faq-i[open] .lv2-faq-x {
-                    transform: rotate(45deg);
-                }
-                @media (prefers-reduced-motion: reduce) {
-                    .lv2-faq-x {
-                        transition: none;
-                    }
-                }
-            `}</style>
         </section>
     )
 }
+
+export default FaqSection
