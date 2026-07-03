@@ -249,7 +249,6 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     // tiñe el CHROME del panel del coach, y solo si use_brand_colors_coach está ON).
     useEffect(() => {
         const container = document.querySelector('.coach-layout-container') as HTMLElement;
-        const originalColor = coach.use_brand_colors_coach === false ? '#007AFF' : (coach.primary_color || '#007AFF');
         const previewColor = useCoachColors ? (effectivePrimary || '#007AFF') : '#007AFF';
 
         document.documentElement.style.setProperty('--theme-primary', previewColor);
@@ -260,11 +259,14 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
         }
 
         return () => {
-            document.documentElement.style.setProperty('--theme-primary', originalColor);
-            document.documentElement.style.setProperty('--theme-primary-rgb', hexToRgb(originalColor));
+            // REMOVER las inline (no "restaurar" un valor calculado): el <style> del layout —
+            // que ya es preset-aware — retoma el control. Antes el cleanup dejaba INLINE el
+            // primary_color LEGACY crudo (naranja) pisando al tema elegido hasta el reload.
+            document.documentElement.style.removeProperty('--theme-primary');
+            document.documentElement.style.removeProperty('--theme-primary-rgb');
             if (container) {
-                container.style.setProperty('--theme-primary', originalColor);
-                container.style.setProperty('--theme-primary-rgb', hexToRgb(originalColor));
+                container.style.removeProperty('--theme-primary');
+                container.style.removeProperty('--theme-primary-rgb');
             }
         };
     }, [effectivePrimary, useCoachColors, coach]);
