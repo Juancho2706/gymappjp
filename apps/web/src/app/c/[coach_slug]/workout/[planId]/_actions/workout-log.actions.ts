@@ -20,6 +20,11 @@ export async function logSetAction(
         return String(val).replace(',', '.')
     }
 
+    // Nota (quick-win E2-6): texto libre — leída CRUDA, jamás por getOptional (que hace
+    // replace(',', '.') y corrompería el texto). '' → undefined para no pisar con vacío.
+    const noteRaw = formData.get('note')
+    const note = noteRaw === null || String(noteRaw).trim() === '' ? undefined : String(noteRaw)
+
     const raw = {
         block_id: formData.get('block_id') as string,
         set_number: formData.get('set_number') as string,
@@ -27,6 +32,7 @@ export async function logSetAction(
         reps_done: getOptional('reps_done'),
         rpe: getOptional('rpe'),
         rir: getOptional('rir'),
+        note,
         // Espejo polimórfico (M3): solo llegan desde las variantes cardio/movilidad/roller
         // del LogSetForm — un log strength de hoy no envía estas keys (AC4 sin regresión).
         actual_duration_sec: getOptional('actual_duration_sec'),
@@ -67,6 +73,7 @@ export async function logSetAction(
         reps_done: parsed.data.reps_done ?? null,
         rpe: parsed.data.rpe ?? null,
         rir: parsed.data.rir ?? null,
+        note: parsed.data.note ?? null,
         actual_duration_sec: parsed.data.actual_duration_sec ?? null,
         actual_distance_m: parsed.data.actual_distance_m ?? null,
         actual_pace_sec_per_km: parsed.data.actual_pace_sec_per_km ?? null,

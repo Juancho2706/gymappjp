@@ -4452,6 +4452,7 @@ export type Database = {
           id: string
           logged_at: string
           metadata: Json | null
+          note: string | null
           plan_name_at_log: string | null
           reps_done: number | null
           rir: number | null
@@ -4474,6 +4475,7 @@ export type Database = {
           id?: string
           logged_at?: string
           metadata?: Json | null
+          note?: string | null
           plan_name_at_log?: string | null
           reps_done?: number | null
           rir?: number | null
@@ -4496,6 +4498,7 @@ export type Database = {
           id?: string
           logged_at?: string
           metadata?: Json | null
+          note?: string | null
           plan_name_at_log?: string | null
           reps_done?: number | null
           rir?: number | null

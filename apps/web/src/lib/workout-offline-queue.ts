@@ -7,6 +7,8 @@ export type WorkoutOfflineLog = {
     repsDone: number | null
     rpe: number | null
     rir: number | null
+    /** Nota rápida por serie (quick-win E2-6) — opcional: los items legacy siguen parseando. */
+    note?: string | null
     planId: string
     coachSlug: string
     timestamp: number

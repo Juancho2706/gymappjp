@@ -152,6 +152,7 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
         reps_done: number | null
         rpe: number | null
         rir: number | null
+        note: string | null
         actual_duration_sec: number | null
         actual_distance_m: number | null
         actual_hold_sec: number | null
@@ -161,7 +162,7 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
     if (blockIds.length > 0) {
         const { data: rawLogs } = await supabase
             .from('workout_logs')
-            .select('block_id, set_number, weight_kg, reps_done, rpe, rir, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr')
+            .select('block_id, set_number, weight_kg, reps_done, rpe, rir, note, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr')
             .in('block_id', blockIds)
             .gte('logged_at', todayStartUtc)
             .lt('logged_at', todayEndUtc)

@@ -6,6 +6,7 @@ import { X, Play, Pause, RotateCcw, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { playTimerSound } from "@/lib/audioUtils";
 import { BRAND_APP_ICON } from "@/lib/brand-assets";
+import { triggerHaptic } from "@/lib/client/haptics";
 import { readRestTimerSound, readRestTimerVolume } from "./rest-timer-preferences";
 
 interface RestTimerProps {
@@ -78,9 +79,7 @@ export function RestTimer({
         stopAlarm();
       } else {
         playTimerSound(readRestTimerSound(), readRestTimerVolume());
-        if ("vibrate" in navigator) {
-          navigator.vibrate([200, 100, 200, 100, 400]);
-        }
+        triggerHaptic([200, 100, 200, 100, 400]);
       }
     }, 3000);
 
@@ -100,9 +99,7 @@ export function RestTimer({
       });
     }
 
-    if ("vibrate" in navigator) {
-      navigator.vibrate([200, 100, 200, 100, 400]);
-    }
+    triggerHaptic([200, 100, 200, 100, 400]);
 
     setIsActive(false);
     endTimeRef.current = null;

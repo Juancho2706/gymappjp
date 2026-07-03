@@ -5,6 +5,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { X, Play, Pause, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { playTimerSound } from '@/lib/audioUtils'
+import { triggerHaptic } from '@/lib/client/haptics'
 import { readRestTimerSound, readRestTimerVolume } from './rest-timer-preferences'
 
 interface HoldTimerProps {
@@ -30,7 +31,7 @@ export function HoldTimer({ initialSeconds, label, onClose }: HoldTimerProps) {
         firedRef.current = true
         // Beep primario (gesto previo del usuario ya desbloqueó Web Audio) + vibración refuerzo
         playTimerSound(readRestTimerSound(), readRestTimerVolume())
-        if ('vibrate' in navigator) navigator.vibrate([200, 100, 400])
+        triggerHaptic([200, 100, 400])
         setIsActive(false)
         endTimeRef.current = null
     }, [])

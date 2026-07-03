@@ -5,6 +5,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { X, Play, Pause, SkipForward, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { playTimerSound } from '@/lib/audioUtils'
+import { triggerHaptic } from '@/lib/client/haptics'
 import { readRestTimerSound, readRestTimerVolume } from './rest-timer-preferences'
 import { INTERVAL_PHASE_LABEL, type IntervalPhase } from '@/lib/workout-interval'
 
@@ -41,9 +42,7 @@ export function IntervalTimer({ phases, onClose }: IntervalTimerProps) {
 
     const beep = useCallback((double = false) => {
         playTimerSound(readRestTimerSound(), readRestTimerVolume())
-        if ('vibrate' in navigator) {
-            navigator.vibrate(double ? [200, 100, 200, 100, 400] : [200, 100, 200])
-        }
+        triggerHaptic(double ? [200, 100, 200, 100, 400] : [200, 100, 200])
     }, [])
 
     const advance = useCallback(() => {

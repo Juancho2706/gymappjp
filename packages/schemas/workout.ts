@@ -219,6 +219,9 @@ export const WorkoutLogSetSchema = z.object({
     reps_done: z.coerce.number().int().min(0).optional(),
     rpe: z.coerce.number().min(1).max(10).optional(),
     rir: z.coerce.number().int().min(0).max(10).optional(),
+    // Nota rápida por serie (quick-win E2-6). Texto libre corto — NUNCA pasar por el
+    // normalizador de decimales (comas→puntos) del action; se lee crudo aparte.
+    note: z.string().trim().max(300, 'La nota no puede superar 300 caracteres').optional(),
     // ── Espejo polimórfico (M3) — opcionales, el log strength de hoy no cambia ──
     actual_duration_sec: z.coerce.number().int().min(0).max(86400).optional(),
     actual_distance_m: z.coerce.number().min(0).max(1000000).optional(),

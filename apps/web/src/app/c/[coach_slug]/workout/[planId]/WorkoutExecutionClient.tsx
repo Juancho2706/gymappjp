@@ -2,11 +2,11 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Info, Dumbbell, HeartPulse, Move, GitCommit, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, Play, type LucideIcon } from 'lucide-react'
+import { ArrowLeft, Info, Dumbbell, HeartPulse, Move, GitCommit, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, Play, ChevronDown, type LucideIcon } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { LogSetForm } from './LogSetForm'
 import { WorkoutTimerProvider, useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { formatRelativeDate } from '@/lib/date-utils'
 import { springs } from '@/lib/animation-presets'
 import { useBasePath } from '@/components/client/BasePathProvider'
+import { useScreenWakeLock } from '@/lib/client/use-screen-wake-lock'
 import {
     groupContiguousSupersetRuns,
     type WorkoutSectionKey,
@@ -108,6 +109,7 @@ interface Props {
         reps_done: number | null
         rpe: number | null
         rir?: number | null
+        note?: string | null
         actual_duration_sec?: number | null
         actual_distance_m?: number | null
         actual_hold_sec?: number | null
@@ -134,7 +136,7 @@ function ManualTimerButton({ defaultTime }: { defaultTime: string | null }) {
     return (
         <button
             onClick={() => startRest(defaultTime || '90')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-control bg-white/[0.08] text-on-dark text-xs font-bold transition-all hover:bg-white/[0.14] active:scale-95"
+            className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-control bg-[var(--ember-500)]/15 text-[var(--ember-200)] border border-[var(--ember-500)]/25 text-xs font-bold transition-all hover:bg-[var(--ember-500)]/25 active:scale-95"
         >
             <Timer className="w-3.5 h-3.5" />
             Descanso ({defaultTime || '90s'})
@@ -180,6 +182,13 @@ function fmtElapsed(totalSec: number): string {
     const m = Math.floor(totalSec / 60)
     const s = totalSec % 60
     return `${m}:${String(s).padStart(2, '0')}`
+}
+
+/** Volumen de sesión compacto (kg acumulados → "850 kg" / "5.2 t"). null si 0. */
+function fmtVolume(kg: number): string | null {
+    if (kg <= 0) return null
+    if (kg >= 1000) return `${(kg / 1000).toFixed(kg >= 10000 ? 0 : 1)} t`
+    return `${Math.round(kg)} kg`
 }
 
 /** Cards de objetivo por tipo (cardio/movilidad/roller) — los strength quedan intactos (AC3). */
@@ -269,7 +278,7 @@ function TypedBlockTimerButton({ block, kind }: { block: BlockType; kind: Workou
             return (
                 <button
                     onClick={() => startInterval(config, block.sets || 1)}
-                    className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-control bg-primary/[0.12] text-on-dark border border-[var(--border-inverse)] text-xs font-bold transition-all hover:bg-primary/20 active:scale-95"
+                    className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-control bg-[var(--sport-500)]/[0.12] text-on-dark border border-[var(--border-inverse)] text-xs font-bold transition-all hover:bg-[var(--sport-500)]/20 active:scale-95"
                 >
                     <Timer className="w-3.5 h-3.5" />
                     Iniciar intervalos
@@ -279,7 +288,7 @@ function TypedBlockTimerButton({ block, kind }: { block: BlockType; kind: Workou
         return (
             <button
                 onClick={() => startStopwatch()}
-                className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-control bg-primary/[0.12] text-on-dark border border-[var(--border-inverse)] text-xs font-bold transition-all hover:bg-primary/20 active:scale-95"
+                className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-control bg-[var(--sport-500)]/[0.12] text-on-dark border border-[var(--border-inverse)] text-xs font-bold transition-all hover:bg-[var(--sport-500)]/20 active:scale-95"
             >
                 <Timer className="w-3.5 h-3.5" />
                 Cronómetro
@@ -295,7 +304,7 @@ function TypedBlockTimerButton({ block, kind }: { block: BlockType; kind: Workou
         return (
             <button
                 onClick={() => startHold(seconds, kind === 'mobility' ? 'Hold' : 'Roller')}
-                className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-control bg-primary/[0.12] text-on-dark border border-[var(--border-inverse)] text-xs font-bold transition-all hover:bg-primary/20 active:scale-95"
+                className="flex min-h-[44px] items-center gap-1.5 px-3 py-1.5 rounded-control bg-[var(--sport-500)]/[0.12] text-on-dark border border-[var(--border-inverse)] text-xs font-bold transition-all hover:bg-[var(--sport-500)]/20 active:scale-95"
             >
                 <Timer className="w-3.5 h-3.5" />
                 {label}
@@ -407,7 +416,7 @@ interface SupersetInfo {
 /** Aplica un log optimista (dedup por block+set) — misma forma que empuja `handleLogged`. */
 function applyOptimisticLog<T extends SessionLog>(
     prev: T[],
-    payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null },
+    payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null; note?: string | null },
 ): T[] {
     const next = prev.filter((log) => !(log.block_id === payload.blockId && log.set_number === payload.setNumber))
     next.push({
@@ -417,6 +426,7 @@ function applyOptimisticLog<T extends SessionLog>(
         reps_done: payload.repsDone,
         rpe: payload.rpe,
         rir: payload.rir,
+        note: payload.note ?? null,
     } as unknown as T)
     return next
 }
@@ -464,23 +474,51 @@ function findNextIncompleteInRounds(
     return null
 }
 
-/** Texto compacto de sobrecarga progresiva para la leyenda de un miembro de la superserie. */
-function progressionCompactText(
+/** Separador compacto (·) entre segmentos de la línea de prescripción. */
+const Sep = () => <span className="text-on-dark-muted/40">·</span>
+
+/** Chip compacto de sobrecarga progresiva (reemplaza el banner verboso). null ⇒ sin chip. */
+function overloadChipLabel(
     block: BlockType,
     eff: ReturnType<typeof computeEffectiveTarget> | null,
     currentWeek: number | null | undefined,
-): string {
+): string | null {
+    if (!block.progression_type || block.progression_value == null) return null
+    if (block.progression_type === 'weight' && block.target_weight_kg == null) return null
     const v = block.progression_value
     if (block.progression_type !== 'weight' || !eff?.modeImplemented) {
-        return `Sobrecarga: +${v} ${block.progression_type === 'weight' ? 'kg/sem' : 'rep/sesión'}`
+        return block.progression_type === 'weight' ? `+${v} kg/sem` : `+${v} rep/ses`
     }
     if (eff.mode === 'double') {
-        return eff.status === 'holding'
-            ? `Doble progresión: mantené ${eff.weightKg} kg`
-            : `Doble progresión: objetivo ${eff.weightKg} kg`
+        return eff.status === 'holding' ? `Mantené ${eff.weightKg} kg` : `Objetivo ${eff.weightKg} kg`
     }
-    if (eff.isProgressed && currentWeek != null) return `Semana ${currentWeek}: objetivo ${eff.weightKg} kg`
-    return `Sobrecarga: +${v} kg/sem`
+    if (eff.isProgressed && currentWeek != null) return `Sem ${currentWeek} · ${eff.weightKg} kg`
+    return `+${v} kg/sem`
+}
+
+/** Explicación completa de la sobrecarga (va a "Detalles", no a la card). */
+function overloadDetailText(
+    block: BlockType,
+    eff: ReturnType<typeof computeEffectiveTarget> | null,
+    currentWeek: number | null | undefined,
+): string | null {
+    if (!block.progression_type || block.progression_value == null) return null
+    if (block.progression_type === 'weight' && block.target_weight_kg == null) return null
+    const v = block.progression_value
+    if (block.progression_type !== 'weight' || !eff?.modeImplemented) {
+        return `Sube +${v} ${block.progression_type === 'weight' ? 'kg cada semana' : 'rep cada sesión'}.`
+    }
+    if (eff.mode === 'double') {
+        if (eff.status === 'holding') return `Doble progresión: mantené ${eff.weightKg} kg y completá ${eff.repsTopToUnlock} reps en todas las series para subir.`
+        if (eff.status === 'progressed') {
+            return eff.isProgressed
+                ? `Doble progresión: ¡subiste! Objetivo ${eff.weightKg} kg (base ${eff.baseWeightKg}).`
+                : `Doble progresión: objetivo ${eff.weightKg} kg (aún por debajo de la base ${eff.baseWeightKg}).`
+        }
+        return `Doble progresión: subí +${v} kg cuando completes ${eff.repsTopToUnlock} reps en todas las series.`
+    }
+    if (eff.isProgressed && currentWeek != null) return `Semana ${currentWeek}: objetivo ${eff.weightKg} kg (base ${eff.baseWeightKg} +${eff.addedKg}).`
+    return `Sube +${v} kg cada semana (esta semana arrancás en la base).`
 }
 
 interface SupersetGroupCardProps {
@@ -493,7 +531,7 @@ interface SupersetGroupCardProps {
     cardio?: ClientCardioView
     autoTimerEnabled: boolean
     nextCue: { blockId: string; set: number } | null
-    onLogged: (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null }) => void
+    onLogged: (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null; note?: string | null }) => void
     openTechnique: (exercise: ExerciseType | null) => void
     registerRowRef: (blockId: string, setNumber: number, el: HTMLDivElement | null) => void
     getExercise: (block: BlockType) => ExerciseType | null
@@ -521,6 +559,8 @@ function SupersetGroupCard({
     getExercise,
 }: SupersetGroupCardProps) {
     const { members, letterByBlock, groupRestSeconds, maxSets } = info
+    const reducedMotion = useReducedMotion()
+    const [howToOpen, setHowToOpen] = useState(false)
 
     const memberVMs = members
         .map((block) => {
@@ -558,21 +598,44 @@ function SupersetGroupCard({
     const secondLabel = `${memberVMs[1].letter}1`
 
     return (
-        <div className="rounded-card border border-primary/30 bg-primary/[0.08] p-4 space-y-3">
+        <div className="rounded-card border border-[var(--sport-500)]/30 bg-[var(--sport-500)]/[0.05] p-4 space-y-3">
             <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <p className="font-display text-sm font-bold text-on-dark">Superserie</p>
-                    <span className="text-[11px] font-semibold text-on-dark-muted">
-                        {memberVMs.length} ejercicios · {maxSets} ronda{maxSets === 1 ? '' : 's'}
-                    </span>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                        <p className="font-display text-sm font-bold text-on-dark">Superserie</p>
+                        <span className="text-[11px] font-semibold text-on-dark-muted">
+                            {memberVMs.length} ejercicios · {maxSets} ronda{maxSets === 1 ? '' : 's'}
+                        </span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setHowToOpen((o) => !o)}
+                        aria-expanded={howToOpen}
+                        className="flex h-8 items-center gap-1 rounded-control px-2 text-[11px] font-semibold text-on-dark-muted transition-colors hover:text-on-dark"
+                    >
+                        Cómo hacerla
+                        <ChevronDown className={cn('h-3 w-3 transition-transform', howToOpen && 'rotate-180')} />
+                    </button>
                 </div>
-                <div className="rounded-sm border border-primary/20 bg-primary/[0.10] p-3 text-xs leading-relaxed text-on-dark/90">
-                    <p className="font-semibold text-[var(--sport-300)] mb-1">Cómo hacerla</p>
-                    <p>
-                        Trabajá por rondas: hacé <strong>{firstLabel}</strong>, seguí con <strong>{secondLabel}</strong> sin
-                        descanso, y descansá al <strong>cerrar la ronda</strong>. Repetí hasta completar todas las series.
-                    </p>
-                </div>
+                <p className="text-[12px] leading-snug text-on-dark-muted">
+                    Rondas: <strong className="text-on-dark">{firstLabel}</strong> → <strong className="text-on-dark">{secondLabel}</strong> sin descanso, descansá al cerrar la ronda.
+                </p>
+                <AnimatePresence initial={false}>
+                    {howToOpen && (
+                        <motion.div
+                            initial={reducedMotion ? false : { height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={reducedMotion ? undefined : { height: 0, opacity: 0 }}
+                            transition={reducedMotion ? { duration: 0 } : { duration: 0.25 }}
+                            className="overflow-hidden"
+                        >
+                            <p className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.03] p-3 text-[12px] leading-relaxed text-on-dark/90">
+                                Trabajá por rondas: hacé <strong>{firstLabel}</strong>, seguí con <strong>{secondLabel}</strong> sin
+                                descanso, y descansá al <strong>cerrar la ronda</strong>. Repetí hasta completar todas las series.
+                            </p>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
 
             {/* Leyenda: referencia rápida de cada ejercicio (objetivo, técnica, notas). */}
@@ -584,7 +647,7 @@ function SupersetGroupCard({
                     >
                         <div className="flex items-start justify-between gap-2">
                             <div className="flex items-start gap-2 min-w-0">
-                                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[12px] font-black text-primary">
+                                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--sport-500)]/15 text-[12px] font-black text-[var(--sport-300)]">
                                     {m.letter}
                                 </span>
                                 <div className="min-w-0">
@@ -637,23 +700,23 @@ function SupersetGroupCard({
                             </div>
                         )}
 
-                        {m.effType === 'strength' && m.block.progression_type && m.block.progression_value != null && (m.block.progression_type !== 'weight' || m.block.target_weight_kg != null) && (
-                            <div className="flex items-center gap-1.5 rounded-sm border border-emerald-500/25 bg-emerald-500/[0.10] px-2 py-1 text-[11px] text-emerald-100/95">
-                                <TrendingUp className="w-3 h-3 shrink-0 text-emerald-300" />
-                                <span>{progressionCompactText(m.block, m.eff, currentWeek)}</span>
-                            </div>
+                        {m.effType === 'strength' && overloadChipLabel(m.block, m.eff, currentWeek) && (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--sport-500)]/30 bg-[var(--sport-500)]/[0.10] px-2 py-0.5 text-[10.5px] font-bold text-[var(--sport-300)]">
+                                <TrendingUp className="w-3 h-3 shrink-0" />
+                                {overloadChipLabel(m.block, m.eff, currentWeek)}
+                            </span>
                         )}
 
                         {m.effType !== 'strength' && m.block.instructions && (
-                            <div className="flex gap-2 rounded-sm border border-primary/20 bg-primary/[0.10] px-2.5 py-1.5 text-[11px]">
-                                <Info className="w-3.5 h-3.5 shrink-0 text-[var(--sport-300)] mt-0.5" />
+                            <div className="flex gap-2 rounded-sm border border-[var(--border-inverse)] bg-white/[0.03] px-2.5 py-1.5 text-[11px]">
+                                <Info className="w-3.5 h-3.5 shrink-0 text-on-dark-muted mt-0.5" />
                                 <p className="text-on-dark/90">{m.block.instructions}</p>
                             </div>
                         )}
 
                         {m.block.notes && (
-                            <div className="flex gap-2 rounded-sm border border-primary/20 bg-primary/[0.10] px-2.5 py-1.5 text-[11px]">
-                                <Quote className="w-3.5 h-3.5 shrink-0 text-[var(--sport-300)] mt-0.5" />
+                            <div className="flex gap-2 rounded-sm border border-[var(--border-inverse)] bg-white/[0.03] px-2.5 py-1.5 text-[11px]">
+                                <Quote className="w-3.5 h-3.5 shrink-0 text-on-dark-muted mt-0.5" />
                                 <p className="text-on-dark/90">{m.block.notes}</p>
                             </div>
                         )}
@@ -705,20 +768,17 @@ function SupersetGroupCard({
                                     <div
                                         key={m.block.id}
                                         ref={(el) => registerRowRef(m.block.id, round, el)}
-                                        className={cn(
-                                            'rounded-control border p-1 transition-colors',
-                                            isNext ? 'border-primary/60 bg-primary/[0.06]' : 'border-transparent',
-                                        )}
+                                        className="space-y-1"
                                     >
-                                        <div className="flex items-center gap-2 px-1.5 pb-0.5">
-                                            <span className="inline-flex items-center rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-black tabular-nums text-primary">
+                                        <div className="flex items-center gap-2 px-1.5">
+                                            <span className="inline-flex items-center rounded-full bg-[var(--sport-500)]/15 px-1.5 py-0.5 text-[10px] font-black tabular-nums text-[var(--sport-300)]">
                                                 {label}
                                             </span>
                                             <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-on-dark">
                                                 {m.exercise.name}
                                             </span>
                                             {isNext && (
-                                                <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-primary">Sigue</span>
+                                                <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-[var(--sport-300)]">Sigue</span>
                                             )}
                                         </div>
                                         <LogSetForm
@@ -730,6 +790,7 @@ function SupersetGroupCard({
                                             suggestedWeightKg={m.suggestedWeightKg}
                                             autoTimerEnabled={autoTimerEnabled}
                                             mode={m.effType}
+                                            isActive={isNext}
                                             supersetRest={{
                                                 groupRestSeconds,
                                                 closesRound: () => isRoundComplete(members, round, sessionLogs, m.block.id),
@@ -777,6 +838,17 @@ export function WorkoutExecutionClient({
     const [sessionLogs, setSessionLogs] = useState(logs)
     const [isOffline, setIsOffline] = useState(false)
     const [sessionElapsed, setSessionElapsed] = useState(0)
+    // Disclosure "Detalles" por ejercicio (instrucciones + nota + historial detrás de un tap).
+    const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({})
+    const toggleDetails = useCallback((id: string) => setOpenDetails((prev) => ({ ...prev, [id]: !prev[id] })), [])
+    // Prefill "= última vez" (quick-win E2-3): tap en la línea de historial autollena la serie activa.
+    // `setNumber` acota el fill a la serie que estaba activa al tocar (no arrastra a las siguientes).
+    const [fillByBlock, setFillByBlock] = useState<Record<string, { weight: number | null; reps: number | null; nonce: number; setNumber: number }>>({})
+    // Deshacer (quick-win E2-4): reabre la última serie logueada para corregir (no existe DELETE del log).
+    const [reopenSignal, setReopenSignal] = useState<{ blockId: string; setNumber: number; nonce: number } | null>(null)
+
+    // Wake lock de TODA la sesión (bug E2-1) — antes el lock solo cubría el descanso.
+    useScreenWakeLock()
 
     useEffect(() => {
         const onOnline = () => setIsOffline(false)
@@ -859,6 +931,13 @@ export function WorkoutExecutionClient({
     const requiredSets = blocks.reduce((acc, b) => acc + b.sets, 0)
     const completedSetCount = countUniqueLoggedSets(blocks, sessionLogs)
     const completionPct = requiredSets === 0 ? 0 : Math.min(100, Math.round((completedSetCount / requiredSets) * 100))
+    // Volumen de sesión en vivo (quick-win E2-5): Σ peso × reps de los logs locales (cero queries).
+    const sessionVolumeKg = sessionLogs.reduce((acc, l) => acc + (l.weight_kg ?? 0) * (l.reps_done ?? 0), 0)
+    const sessionVolumeLabel = fmtVolume(sessionVolumeKg)
+    // "Ejercicio X de Y" — X = primer bloque incompleto (o el total si ya terminó todo).
+    const totalExercises = blocks.length
+    const currentExerciseIdx = blocks.findIndex((b) => !isBlockComplete(b, sessionLogs))
+    const currentExerciseNum = currentExerciseIdx === -1 ? totalExercises : currentExerciseIdx + 1
 
     const isSetLogged = (blockId: string, setNumber: number) => sessionLogs.some((log) => log.block_id === blockId && log.set_number === setNumber)
     const isBlockCompleted = (block: BlockType) => isBlockComplete(block, sessionLogs)
@@ -889,7 +968,7 @@ export function WorkoutExecutionClient({
         blockRefs.current.get(nextIncomplete.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
 
-    const handleLogged = (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null }) => {
+    const handleLogged = (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null; note?: string | null }) => {
         // Estado (puro) — dedup por block+set, misma forma de siempre.
         setSessionLogs((prev) => applyOptimisticLog(prev, payload))
 
@@ -926,6 +1005,18 @@ export function WorkoutExecutionClient({
         setNextCue(null)
         const block = blocks.find((b) => b.id === payload.blockId)
         if (!block) return
+        // Deshacer (quick-win E2-4): sin DELETE del log → "Deshacer" reabre la serie para corregir
+        // (usa el path de edición existente del chip). Solo en fuerza (las variantes tipadas no colapsan a chip).
+        const ex = getExercise(block)
+        if (ex && effectiveExerciseType(block, ex) === 'strength') {
+            toast('Serie registrada', {
+                duration: 5000,
+                action: {
+                    label: 'Deshacer',
+                    onClick: () => setReopenSignal({ blockId: payload.blockId, setNumber: payload.setNumber, nonce: Date.now() }),
+                },
+            })
+        }
         const wasComplete = isBlockComplete(block, prev)
         const nowComplete = isBlockComplete(block, nextLogs)
         if (!wasComplete && nowComplete) {
@@ -956,13 +1047,7 @@ export function WorkoutExecutionClient({
                                         {plan.title}
                                     </h1>
                                     {activeWeekVariant != null && (
-                                        <span
-                                            className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border shrink-0"
-                                            style={{
-                                                borderColor: 'color-mix(in srgb, var(--theme-primary) 40%, transparent)',
-                                                color: 'var(--theme-primary)',
-                                            }}
-                                        >
+                                        <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border border-white/20 text-on-dark-muted shrink-0">
                                             Semana {activeWeekVariant}
                                         </span>
                                     )}
@@ -995,14 +1080,31 @@ export function WorkoutExecutionClient({
                                 transition={reducedMotion ? { duration: 0 } : springs.smooth}
                             />
                         </div>
-                        <div className="flex justify-between mt-1.5 font-mono text-[11px] tabular-nums text-on-dark-muted">
-                            <span>
-                                <strong className="text-on-dark">{completedSetCount}</strong>/{requiredSets} series
+                        <div className="flex items-start justify-between gap-2 mt-1.5 font-mono text-[11px] tabular-nums text-on-dark-muted">
+                            <span className="shrink-0 pt-0.5">
+                                <strong className="text-on-dark">Ejercicio {currentExerciseNum}</strong> de {totalExercises}
                             </span>
-                            <span className="flex items-center gap-1.5 font-bold">
-                                <span className="font-medium text-on-dark-muted">{fmtElapsed(sessionElapsed)}</span>
-                                <span className="font-medium text-on-dark-muted">·</span>
-                                <span style={{ color: 'var(--sport-400)' }}>{completionPct}%</span>
+                            <span className="flex flex-wrap items-center justify-end gap-x-1.5 gap-y-0.5">
+                                <span className="font-medium">{completedSetCount}/{requiredSets} series</span>
+                                {sessionVolumeLabel && (
+                                    <>
+                                        <span className="font-medium">·</span>
+                                        <span className="font-medium" title="Volumen de la sesión (kg × reps)">{sessionVolumeLabel}</span>
+                                    </>
+                                )}
+                                <span className="font-medium">·</span>
+                                <span className="font-medium">{fmtElapsed(sessionElapsed)}</span>
+                                <span className="font-medium">·</span>
+                                <motion.span
+                                    key={completedSetCount}
+                                    initial={reducedMotion ? false : { scale: 1.18 }}
+                                    animate={{ scale: 1 }}
+                                    transition={reducedMotion ? { duration: 0 } : springs.snappy}
+                                    className="font-bold"
+                                    style={{ color: 'var(--sport-400)' }}
+                                >
+                                    {completionPct}%
+                                </motion.span>
                             </span>
                         </div>
                     </div>
@@ -1032,9 +1134,6 @@ export function WorkoutExecutionClient({
                                             {section.title}
                                         </h2>
                                         <hr className="flex-1 h-px bg-white/10 border-0 min-w-[2rem]" />
-                                        <span className="text-xs text-on-dark-muted whitespace-nowrap">
-                                            {section.groups.length} bloque(s)
-                                        </span>
                                     </div>
                                     {section.subtitle && (
                                         <p className="text-xs leading-relaxed text-on-dark-muted pl-4 border-l-2 border-white/10">
@@ -1061,13 +1160,8 @@ export function WorkoutExecutionClient({
                                             getExercise={getExercise}
                                         />
                                     ) : (
-                                        <div key={group.key} className="rounded-card border border-[var(--border-inverse)] bg-[var(--ink-900)] p-4">
-                                            <div className="mb-3 space-y-2">
-                                                <p className="font-display text-sm font-bold text-on-dark">
-                                                    {`Ejercicio ${groupIndex + 1}`}
-                                                </p>
-                                            </div>
-                                            <div className="space-y-4">
+                                        <div key={group.key} className="space-y-3">
+                                            <div className="space-y-3">
                                                 {group.blocks.sort((a, b) => a.order_index - b.order_index).map((block, blockIndex) => {
                                                     const exercise = getExercise(block)
                                                     if (!exercise) return null
@@ -1091,6 +1185,29 @@ export function WorkoutExecutionClient({
                                                         ? computeEffectiveTarget(block, { currentWeek, weeksToRepeat: program?.weeks_to_repeat, lastSession })
                                                         : null
                                                     const suggestedWeightKg = eff?.weightKg ?? block.target_weight_kg
+                                                    const loggedSetNumbers = new Set(
+                                                        blockLogs.filter((l) => l.set_number >= 1 && l.set_number <= block.sets).map((l) => l.set_number),
+                                                    )
+                                                    const doneCount = loggedSetNumbers.size
+                                                    let firstUnlogged: number | null = null
+                                                    for (let i = 1; i <= block.sets; i += 1) { if (!loggedSetNumbers.has(i)) { firstUnlogged = i; break } }
+                                                    const detailsOpen = !!openDetails[block.id]
+                                                    // Cue de técnica inline (reusa la 1ra instrucción del ejercicio; el resto en Detalles).
+                                                    const cueLine = effType === 'strength'
+                                                        ? (exercise.instructions?.[0]?.replace(/^Step:\d+\s*/i, '') ?? null)
+                                                        : null
+                                                    const overloadLabel = effType === 'strength' ? overloadChipLabel(block, eff, currentWeek) : null
+                                                    const overloadDetail = effType === 'strength' ? overloadDetailText(block, eff, currentWeek) : null
+                                                    const prevList = previousHistory[exercise.id] ?? []
+                                                    const bestPrev = prevList.length
+                                                        ? prevList.reduce((m, s) => ((s.weight_kg ?? 0) > (m.weight_kg ?? 0) ? s : m), prevList[0])
+                                                        : null
+                                                    const beatIt = bestPrev?.weight_kg != null && bestPrev.weight_kg > 0 && suggestedWeightKg != null && suggestedWeightKg >= bestPrev.weight_kg
+                                                    const hasDetails =
+                                                        (effType === 'strength' && ((exercise.instructions?.length ?? 0) > 0 || !!overloadDetail)) ||
+                                                        (effType !== 'strength' && !!block.instructions) ||
+                                                        !!block.notes ||
+                                                        prevList.length > 0
                                                     return (
                                                         <Fragment key={block.id}>
                                                         <motion.div
@@ -1109,35 +1226,45 @@ export function WorkoutExecutionClient({
                                                             )}
                                                         >
                                                             <div className="space-y-2">
-                                                                {/* Chips: tipo de bloque + superserie (CD) */}
-                                                                <div className="flex flex-wrap items-center gap-1.5">
-                                                                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-bold" style={{ color: RUT_TYPE_META[effType].color }}>
-                                                                        <TypeGlyph kind={effType} className="h-3.5 w-3.5" />
-                                                                        {RUT_TYPE_META[effType].label}
-                                                                    </span>
-                                                                    {group.type === 'superset' && (
-                                                                        <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-on-dark-muted">
-                                                                            Superserie {group.supersetLetter ?? group.key} · {group.blocks.length} ejercicios
+                                                                {/* Fila silenciosa: tipo · músculo  +  acciones (Detalles, técnica) */}
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-bold">
+                                                                        <TypeGlyph kind={effType} className="h-3.5 w-3.5 shrink-0" />
+                                                                        <span className="shrink-0" style={{ color: RUT_TYPE_META[effType].color }}>{RUT_TYPE_META[effType].label}</span>
+                                                                        <span className="text-on-dark-muted/40">·</span>
+                                                                        <span className="truncate font-semibold text-on-dark-muted">
+                                                                            {group.type === 'superset'
+                                                                                ? `${group.supersetLetter ?? 'SS'}-${blockIndex + 1} · ${exercise.muscle_group}`
+                                                                                : exercise.muscle_group}
                                                                         </span>
-                                                                    )}
-                                                                </div>
-                                                                <div className="flex items-start justify-between gap-3">
-                                                                    <div className="min-w-0 flex-1">
-                                                                        <h3 className="font-display text-[22px] font-black leading-[1.1] tracking-[-0.02em] text-on-dark">{exercise.name}</h3>
-                                                                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                                                            <span className="inline-flex items-center rounded-full bg-[var(--sport-500)]/15 px-2 py-0.5 text-[11px] font-bold text-[var(--sport-300)]">
-                                                                                {group.type === 'superset'
-                                                                                    ? `${group.supersetLetter ?? 'SS'}-${blockIndex + 1} · ${exercise.muscle_group}`
-                                                                                    : exercise.muscle_group}
-                                                                            </span>
-                                                                            {(exercise.gif_url || exercise.video_url) && (
-                                                                                <button onClick={() => openTechnique(exercise)} className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-on-dark-muted transition-colors hover:text-on-dark">
-                                                                                    <Info className="w-3.5 h-3.5" /> Ver técnica
-                                                                                </button>
-                                                                            )}
-                                                                        </div>
                                                                     </div>
-                                                                    {/* Derecha: check si completado; si no, botón play (abre técnica) */}
+                                                                    <div className="flex shrink-0 items-center gap-1">
+                                                                        {hasDetails && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => toggleDetails(block.id)}
+                                                                                aria-expanded={detailsOpen}
+                                                                                className="flex h-8 items-center gap-1 rounded-control px-2 text-[11px] font-semibold text-on-dark-muted transition-colors hover:text-on-dark"
+                                                                            >
+                                                                                <Info className="h-3.5 w-3.5" /> Detalles
+                                                                                <ChevronDown className={cn('h-3 w-3 transition-transform', detailsOpen && 'rotate-180')} />
+                                                                            </button>
+                                                                        )}
+                                                                        {(exercise.gif_url || exercise.video_url) && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => openTechnique(exercise)}
+                                                                                className="flex h-8 items-center gap-1 rounded-control bg-white/[0.06] px-2.5 text-[11px] font-bold text-on-dark transition-colors hover:bg-white/[0.12]"
+                                                                                aria-label={`Ver técnica de ${exercise.name}`}
+                                                                            >
+                                                                                <Play className="h-3 w-3 fill-current" /> Técnica
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                {/* Nombre + dots de progreso de series (o check al completar) */}
+                                                                <div className="flex items-start justify-between gap-3">
+                                                                    <h3 className="min-w-0 flex-1 font-display text-[22px] font-black leading-[1.1] tracking-[-0.02em] text-on-dark">{exercise.name}</h3>
                                                                     {complete ? (
                                                                         <motion.div
                                                                             initial={reducedMotion ? false : { scale: 0 }}
@@ -1145,44 +1272,70 @@ export function WorkoutExecutionClient({
                                                                             transition={reducedMotion ? { duration: 0 } : springs.elastic}
                                                                             className="shrink-0 text-[var(--sport-400)]"
                                                                         >
-                                                                            <CheckCircle2 className="w-8 h-8" />
+                                                                            <CheckCircle2 className="w-7 h-7" />
                                                                         </motion.div>
-                                                                    ) : (exercise.gif_url || exercise.video_url) ? (
-                                                                        <button
-                                                                            onClick={() => openTechnique(exercise)}
-                                                                            className="shrink-0 flex h-12 w-12 items-center justify-center rounded-control text-white shadow-lg transition-transform active:scale-95"
-                                                                            style={{ backgroundColor: RUT_TYPE_META[effType].color }}
-                                                                            aria-label={`Ver técnica de ${exercise.name}`}
-                                                                        >
-                                                                            <Play className="w-5 h-5 fill-current" />
-                                                                        </button>
-                                                                    ) : null}
+                                                                    ) : (
+                                                                        <div className="flex shrink-0 items-center gap-1 pt-2">
+                                                                            {Array.from({ length: block.sets }).map((_, i) => (
+                                                                                <span key={i} className={cn('h-1.5 w-1.5 rounded-full', i < doneCount ? 'bg-[var(--sport-400)]' : 'bg-white/15')} />
+                                                                            ))}
+                                                                            <span className="ml-1 font-mono text-[11px] tabular-nums text-on-dark-muted">{doneCount}/{block.sets}</span>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                             {effType === 'strength' ? (
-                                                            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                                                                <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2">
-                                                                    <p className="text-[9.5px] font-bold uppercase tracking-[0.06em] text-on-dark-muted">Series x reps</p>
-                                                                    <p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.sets} x {block.reps}</p>
-                                                                </div>
-                                                                {block.target_weight_kg != null && (() => {
-                                                                    const highlight = eff != null && eff.status !== 'flat'
-                                                                    const showBase = eff != null && eff.weightKg != null && eff.baseWeightKg != null && eff.weightKg !== eff.baseWeightKg
-                                                                    const label = eff?.status === 'holding' ? 'Peso a mantener' : eff?.status === 'progressed' ? 'Peso hoy' : 'Peso'
-                                                                    return (
-                                                                        <div className={cn('rounded-sm border px-2.5 py-2', highlight ? 'border-emerald-500/40 bg-emerald-500/[0.12]' : 'border-[var(--border-inverse)] bg-white/[0.05]')}>
-                                                                            <p className={cn('text-[9.5px] font-bold uppercase tracking-[0.06em]', highlight ? 'text-emerald-300' : 'text-on-dark-muted')}>{label}</p>
-                                                                            <p className={cn('font-mono text-[15px] font-bold tabular-nums mt-0.5', highlight ? 'text-emerald-300' : 'text-on-dark')}>
-                                                                                {(eff?.weightKg ?? block.target_weight_kg)}kg
-                                                                            </p>
-                                                                            {showBase && <p className="text-[9px] leading-none text-on-dark-muted mt-0.5">base {eff!.baseWeightKg}kg</p>}
+                                                                <>
+                                                                    {/* Línea de prescripción + chip compacto de sobrecarga */}
+                                                                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+                                                                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[13px] font-semibold text-on-dark">
+                                                                            <span>{block.sets} × {block.reps}</span>
+                                                                            {block.target_weight_kg != null && (<><Sep /><span>{suggestedWeightKg ?? block.target_weight_kg} kg</span></>)}
+                                                                            {block.rest_time && (<><Sep /><span className="text-on-dark-muted">desc {block.rest_time}</span></>)}
+                                                                            {block.tempo && (<><Sep /><span className="text-on-dark-muted">tempo {block.tempo}</span></>)}
+                                                                            {block.rir && (<><Sep /><span className="text-on-dark-muted">RIR {block.rir}</span></>)}
                                                                         </div>
-                                                                    )
-                                                                })()}
-                                                                {block.rest_time && <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-[0.06em] text-on-dark-muted">Descanso</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.rest_time}</p></div>}
-                                                                {block.tempo && <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-[0.06em] text-on-dark-muted">Tempo</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-on-dark">{block.tempo}</p></div>}
-                                                                {block.rir && <div className="rounded-sm border border-[var(--border-inverse)] bg-white/[0.05] px-2.5 py-2"><p className="text-[9.5px] font-bold uppercase tracking-[0.06em] text-on-dark-muted">RIR</p><p className="font-mono text-[15px] font-bold tabular-nums mt-0.5 text-[var(--sport-300)]">{block.rir}</p></div>}
-                                                            </div>
+                                                                        {overloadLabel && (
+                                                                            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--sport-500)]/30 bg-[var(--sport-500)]/[0.10] px-2 py-0.5 text-[11px] font-bold text-[var(--sport-300)]">
+                                                                                <TrendingUp className="h-3 w-3" /> {overloadLabel}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    {/* "La vez anterior" inline (muted) — tap autollena la serie activa (quick-win E2-3/8) */}
+                                                                    {bestPrev && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                if (firstUnlogged == null) return
+                                                                                setFillByBlock((prev) => ({
+                                                                                    ...prev,
+                                                                                    [block.id]: { weight: bestPrev.weight_kg, reps: bestPrev.reps_done, nonce: Date.now(), setNumber: firstUnlogged },
+                                                                                }))
+                                                                            }}
+                                                                            disabled={firstUnlogged == null}
+                                                                            className="flex min-h-[40px] w-full flex-wrap items-center gap-x-2 gap-y-0.5 rounded-control py-1 text-left text-[11px] transition-colors enabled:hover:bg-white/[0.05] enabled:active:scale-[0.99] disabled:cursor-default"
+                                                                            aria-label={firstUnlogged != null && bestPrev.weight_kg ? `Autollenar la serie activa con ${bestPrev.weight_kg} kg por ${bestPrev.reps_done ?? '-'} reps` : undefined}
+                                                                        >
+                                                                            <History className="h-3.5 w-3.5 shrink-0 text-on-dark-muted" />
+                                                                            <span className="font-semibold text-on-dark-muted">Última vez:</span>
+                                                                            <span className="font-mono font-bold text-on-dark">
+                                                                                {bestPrev.weight_kg ? `${bestPrev.weight_kg}kg` : '-'} × {bestPrev.reps_done || '-'}
+                                                                            </span>
+                                                                            {beatIt && (
+                                                                                <span className="inline-flex items-center gap-1 font-bold text-[var(--sport-300)]">
+                                                                                    <TrendingUp className="h-3 w-3" /> Superá tu marca
+                                                                                </span>
+                                                                            )}
+                                                                            {firstUnlogged != null && (
+                                                                                <span className="ml-auto shrink-0 font-bold text-[var(--sport-300)]">= usar</span>
+                                                                            )}
+                                                                        </button>
+                                                                    )}
+                                                                    {/* Cue de técnica inline (1 línea, muted) — el resto en Detalles */}
+                                                                    {cueLine && (
+                                                                        <p className="line-clamp-1 text-[12px] leading-snug text-on-dark-muted">{cueLine}</p>
+                                                                    )}
+                                                                </>
                                                             ) : (
                                                                 <>
                                                                     <TypedTargetGrid block={block} kind={effType} cardio={cardio} />
@@ -1191,97 +1344,70 @@ export function WorkoutExecutionClient({
                                                                     </div>
                                                                 </>
                                                             )}
-                                                            {/* Sobrecarga progresiva. Para PESO con motor (weekly_linear) muestra el objetivo
-                                                                calculado de la semana; si no, cae al cartel-instrucción (reps, o sin semana). */}
-                                                            {effType === 'strength' && block.progression_type && block.progression_value != null && (block.progression_type !== 'weight' || block.target_weight_kg != null) && (
-                                                                <div className="flex items-center gap-2 rounded-sm border border-emerald-500/25 bg-emerald-500/[0.12] px-3 py-2.5 text-sm">
-                                                                    <TrendingUp className="w-4 h-4 shrink-0 text-emerald-300" />
-                                                                    <p className="text-emerald-100/95">
-                                                                        {(() => {
-                                                                            const v = block.progression_value
-                                                                            const S = ({ children }: { children: React.ReactNode }) => (
-                                                                                <span className="font-semibold text-emerald-200">{children}</span>
-                                                                            )
-                                                                            // reps, o modo sin motor → cartel-instrucción simple.
-                                                                            if (block.progression_type !== 'weight' || !eff?.modeImplemented) {
-                                                                                return (<><S>Sobrecarga progresiva:</S> sube <span className="font-bold">+{v} {block.progression_type === 'weight' ? 'kg cada semana' : 'rep cada sesión'}</span></>)
-                                                                            }
-                                                                            if (eff.mode === 'double') {
-                                                                                if (eff.status === 'holding') {
-                                                                                    return (<><S>Doble progresión:</S> mantené <span className="font-bold">{eff.weightKg} kg</span> y completá <span className="font-bold">{eff.repsTopToUnlock} reps</span> en todas las series para subir</>)
-                                                                                }
-                                                                                if (eff.status === 'progressed') {
-                                                                                    return eff.isProgressed ? (
-                                                                                        <><S>Doble progresión · ¡subiste!</S> objetivo <span className="font-bold">{eff.weightKg} kg</span> <span className="text-emerald-300/70">(base {eff.baseWeightKg})</span></>
-                                                                                    ) : (
-                                                                                        <><S>Doble progresión:</S> objetivo <span className="font-bold">{eff.weightKg} kg</span> <span className="text-emerald-300/70">(aún por debajo de la base {eff.baseWeightKg})</span></>
-                                                                                    )
-                                                                                }
-                                                                                return (<><S>Doble progresión:</S> subí <span className="font-bold">+{v} kg</span> cuando completes <span className="font-bold">{eff.repsTopToUnlock} reps</span> en todas las series</>)
-                                                                            }
-                                                                            // weekly_linear
-                                                                            if (eff.isProgressed && currentWeek != null) {
-                                                                                return (<><S>Sobrecarga progresiva · Semana {currentWeek}:</S> objetivo <span className="font-bold">{eff.weightKg} kg</span> <span className="text-emerald-300/70">(base {eff.baseWeightKg} +{eff.addedKg})</span></>)
-                                                                            }
-                                                                            return (<><S>Sobrecarga progresiva:</S> sube <span className="font-bold">+{v} kg cada semana</span> <span className="text-emerald-300/70">(esta semana arrancás en la base)</span></>)
-                                                                        })()}
-                                                                    </p>
-                                                                </div>
-                                                            )}
-                                                            {effType !== 'strength' && block.instructions && (
-                                                                <div className="flex gap-2 rounded-sm border border-primary/20 bg-primary/[0.10] px-3 py-2.5 text-sm">
-                                                                    <Info className="w-3.5 h-3.5 shrink-0 text-[var(--sport-300)] mt-0.5" />
-                                                                    <div>
-                                                                        <p className="font-semibold text-[var(--sport-300)]">Instrucciones</p>
-                                                                        <p className="text-on-dark/90">{block.instructions}</p>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                            {block.notes && (
-                                                                <div className="flex gap-2 rounded-sm border border-primary/20 bg-primary/[0.10] px-3 py-2.5 text-sm">
-                                                                    <Quote className="w-3.5 h-3.5 shrink-0 text-[var(--sport-300)] mt-0.5" />
-                                                                    <div>
-                                                                        <p className="font-semibold text-[var(--sport-300)]">Nota del coach</p>
-                                                                        <p className="text-on-dark/90">{block.notes}</p>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                            {effType === 'strength' && previousHistory[exercise.id] && previousHistory[exercise.id].length > 0 && (() => {
-                                                                const prev = previousHistory[exercise.id]
-                                                                // Pill compacta (CD): mejor serie de la sesión anterior (mayor peso).
-                                                                const best = prev.reduce((m, s) => ((s.weight_kg ?? 0) > (m.weight_kg ?? 0) ? s : m), prev[0])
-                                                                // P12: micro-reto cuando el objetivo de hoy iguala o supera la última marca.
-                                                                const beatIt = best.weight_kg != null && best.weight_kg > 0 && suggestedWeightKg != null && suggestedWeightKg >= best.weight_kg
-                                                                return (
-                                                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-sm bg-white/[0.04] px-3 py-2">
-                                                                        <History className="w-3.5 h-3.5 shrink-0 text-on-dark-muted" />
-                                                                        <span className="text-[11px] font-semibold text-on-dark-muted">
-                                                                            Sesión anterior · {formatRelativeDate(prev[0].date)}:
-                                                                        </span>
-                                                                        <span className="font-mono text-xs font-bold text-on-dark">
-                                                                            {best.weight_kg ? `${best.weight_kg}kg` : '-'} × {best.reps_done || '-'}
-                                                                        </span>
-                                                                        {beatIt && (
-                                                                            <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-[var(--sport-300)]">
-                                                                                <TrendingUp className="h-3 w-3" /> Superá tu marca
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                )
-                                                            })()}
-                                                            <div className="rounded-card border border-[var(--border-inverse)] bg-white/[0.02] p-2">
-                                                                {effType === 'strength' ? (
-                                                                <div className="grid grid-cols-[auto_3.5rem_3.5rem_3rem_auto] md:grid-cols-[auto_1fr_1fr_3.5rem_auto] gap-2 px-2 pb-2 text-[10px] font-bold text-on-dark-muted uppercase tracking-wider border-b border-white/10">
-                                                                    <div className="w-4 text-center">Set</div>
-                                                                    <div className="text-center">Kg</div>
-                                                                    <div className="text-center">Reps</div>
-                                                                    <div className="text-center">RPE</div>
-                                                                    <div className="w-8"></div>
-                                                                </div>
-                                                                ) : (
-                                                                    <TypedLogHeader kind={effType} />
+                                                            {/* Detalles (disclosure): técnica completa + nota del coach + sobrecarga + historial */}
+                                                            <AnimatePresence initial={false}>
+                                                                {detailsOpen && (
+                                                                    <motion.div
+                                                                        initial={reducedMotion ? false : { height: 0, opacity: 0 }}
+                                                                        animate={{ height: 'auto', opacity: 1 }}
+                                                                        exit={reducedMotion ? undefined : { height: 0, opacity: 0 }}
+                                                                        transition={reducedMotion ? { duration: 0 } : { duration: 0.25 }}
+                                                                        className="overflow-hidden"
+                                                                    >
+                                                                        <div className="space-y-3 rounded-card border border-[var(--border-inverse)] bg-white/[0.02] p-3">
+                                                                            {effType !== 'strength' && block.instructions && (
+                                                                                <div>
+                                                                                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-on-dark-muted">Instrucciones</p>
+                                                                                    <p className="text-[12px] leading-relaxed text-on-dark/90">{block.instructions}</p>
+                                                                                </div>
+                                                                            )}
+                                                                            {effType === 'strength' && exercise.instructions && exercise.instructions.length > 0 && (
+                                                                                <div>
+                                                                                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-on-dark-muted">Técnica</p>
+                                                                                    <ol className="space-y-1">
+                                                                                        {exercise.instructions.map((step, i) => (
+                                                                                            <li key={i} className="flex gap-2 text-[12px] leading-relaxed text-on-dark/90">
+                                                                                                <span className="font-mono text-on-dark-muted">{i + 1}.</span>
+                                                                                                <span>{step.replace(/^Step:\d+\s*/i, '')}</span>
+                                                                                            </li>
+                                                                                        ))}
+                                                                                    </ol>
+                                                                                </div>
+                                                                            )}
+                                                                            {block.notes && (
+                                                                                <div>
+                                                                                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-on-dark-muted">Nota del coach</p>
+                                                                                    <p className="flex gap-2 text-[12px] leading-relaxed text-on-dark/90">
+                                                                                        <Quote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-on-dark-muted" />
+                                                                                        {block.notes}
+                                                                                    </p>
+                                                                                </div>
+                                                                            )}
+                                                                            {effType === 'strength' && overloadDetail && (
+                                                                                <div>
+                                                                                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-on-dark-muted">Sobrecarga progresiva</p>
+                                                                                    <p className="text-[12px] leading-relaxed text-on-dark/90">{overloadDetail}</p>
+                                                                                </div>
+                                                                            )}
+                                                                            {prevList.length > 0 && (
+                                                                                <div>
+                                                                                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-on-dark-muted">Historial</p>
+                                                                                    <ul className="space-y-0.5">
+                                                                                        {prevList.slice(0, 5).map((s, i) => (
+                                                                                            <li key={i} className="flex justify-between font-mono text-[11px] text-on-dark-muted">
+                                                                                                <span>{formatRelativeDate(s.date)}</span>
+                                                                                                <span className="text-on-dark">{s.weight_kg ? `${s.weight_kg}kg` : '-'} × {s.reps_done || '-'}</span>
+                                                                                            </li>
+                                                                                        ))}
+                                                                                    </ul>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </motion.div>
                                                                 )}
-                                                                <div className="space-y-1 pt-2">
+                                                            </AnimatePresence>
+                                                            {effType === 'strength' ? (
+                                                                <div className="space-y-1.5">
                                                                     {Array.from({ length: block.sets }).map((_, i) => {
                                                                         const setNumber = i + 1
                                                                         const log = blockLogs.find((entry) => entry.set_number === setNumber)
@@ -1295,12 +1421,39 @@ export function WorkoutExecutionClient({
                                                                                 suggestedWeightKg={suggestedWeightKg}
                                                                                 autoTimerEnabled={autoTimerEnabled}
                                                                                 mode={effType}
+                                                                                isActive={setNumber === firstUnlogged}
+                                                                                prefill={fillByBlock[block.id]?.setNumber === setNumber ? fillByBlock[block.id] : undefined}
+                                                                                reopenNonce={reopenSignal?.blockId === block.id && reopenSignal?.setNumber === setNumber ? reopenSignal.nonce : undefined}
                                                                                 onLogged={handleLogged}
                                                                             />
                                                                         )
                                                                     })}
                                                                 </div>
-                                                            </div>
+                                                            ) : (
+                                                                <div className="rounded-card border border-[var(--border-inverse)] bg-white/[0.02] p-2">
+                                                                    <TypedLogHeader kind={effType} />
+                                                                    <div className="space-y-1 pt-2">
+                                                                        {Array.from({ length: block.sets }).map((_, i) => {
+                                                                            const setNumber = i + 1
+                                                                            const log = blockLogs.find((entry) => entry.set_number === setNumber)
+                                                                            return (
+                                                                                <LogSetForm
+                                                                                    key={`${block.id}-${setNumber}`}
+                                                                                    blockId={block.id}
+                                                                                    setNumber={setNumber}
+                                                                                    restTimeStr={block.rest_time}
+                                                                                    existingLog={log}
+                                                                                    suggestedWeightKg={suggestedWeightKg}
+                                                                                    autoTimerEnabled={autoTimerEnabled}
+                                                                                    mode={effType}
+                                                                                    isActive={setNumber === firstUnlogged}
+                                                                                    onLogged={handleLogged}
+                                                                                />
+                                                                            )
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </motion.div>
                                                         </Fragment>
                                                     )
@@ -1319,7 +1472,7 @@ export function WorkoutExecutionClient({
                         <ManualTimerButton defaultTime={'90'} />
                         <button
                             onClick={handleFinish}
-                            className="h-12 px-5 flex items-center gap-2 rounded-control bg-primary text-primary-foreground font-bold transition-transform active:scale-[0.99]"
+                            className="h-12 px-5 flex items-center gap-2 rounded-control bg-[var(--sport-500)] text-white font-bold transition-transform active:scale-[0.99]"
                         >
                             <CheckCircle2 className="w-4 h-4" />
                             Finalizar entrenamiento
@@ -1448,11 +1601,11 @@ export function WorkoutExecutionClient({
                                         <ol className="space-y-3">
                                             {selectedExercise.instructions.map((step, i) => (
                                                 <li key={i} className="flex gap-3 text-sm text-muted-foreground">
-                                                    <span 
+                                                    <span
                                                         className="flex-shrink-0 w-6 h-6 rounded-full font-bold flex items-center justify-center text-xs mt-0.5"
-                                                        style={{ 
-                                                            backgroundColor: 'color-mix(in srgb, var(--theme-primary) 15%, transparent)',
-                                                            color: 'var(--theme-primary)'
+                                                        style={{
+                                                            backgroundColor: 'color-mix(in srgb, var(--sport-500) 15%, transparent)',
+                                                            color: 'var(--sport-500)'
                                                         }}
                                                     >
                                                         {i + 1}

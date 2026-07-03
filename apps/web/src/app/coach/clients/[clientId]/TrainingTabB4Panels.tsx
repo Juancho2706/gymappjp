@@ -11,6 +11,7 @@ import {
     AlertTriangle,
     CalendarSearch,
     Moon,
+    StickyNote,
 } from 'lucide-react'
 import { MetricInfo } from '@/components/ui/metric-info'
 import { SectionTitle } from './_components/SectionTitle'
@@ -708,6 +709,27 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                                     )
                                 })}
                             </div>
+                            {/* Notas rápidas del alumno por serie (quick-win E2-6) — badge si existe. */}
+                            {sortedSets.some((s) => s.note) && (
+                                <div className="mt-1.5 space-y-1">
+                                    {sortedSets
+                                        .filter((s) => s.note)
+                                        .map((s, ni) => (
+                                            <p
+                                                key={ni}
+                                                className="flex items-start gap-1.5 text-[11px] leading-snug text-muted"
+                                            >
+                                                <StickyNote className="mt-[1px] h-3 w-3 shrink-0 text-[var(--warning-600)]" />
+                                                <span>
+                                                    <span className="font-semibold text-strong">
+                                                        Serie {s.set_number ?? ni + 1}:
+                                                    </span>{' '}
+                                                    {s.note}
+                                                </span>
+                                            </p>
+                                        ))}
+                                </div>
+                            )}
                         </div>
                     )
                 })}
