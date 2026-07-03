@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { getClientProfileData } from './_actions/client-detail.actions'
-import { ArrowLeft, FileDown, HeartPulse, PersonStanding, Scale, ChevronRight } from 'lucide-react'
+import { ArrowLeft, HeartPulse, PersonStanding, Scale, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ClientProfileDashboard } from './ClientProfileDashboard'
@@ -27,14 +27,6 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
                         <ArrowLeft className="w-3 h-3 group-hover:-translate-x-0.5 transition-transform" />
                     </div>
                     Directorio de Unidades
-                </Link>
-                <Link
-                    href={`/coach/clients/${clientId}/progress-print`}
-                    target="_blank"
-                    className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground hover:text-primary transition-colors"
-                >
-                    <FileDown className="w-3.5 h-3.5" />
-                    Exportar PDF
                 </Link>
             </div>
 

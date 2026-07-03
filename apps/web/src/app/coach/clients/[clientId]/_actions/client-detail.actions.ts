@@ -14,10 +14,24 @@ import {
     updateClientGoalWeight as updateClientGoalWeightService,
     markCheckInReviewed as markCheckInReviewedService,
 } from '@/services/client/client-detail.service'
+import { buildClientDossier } from '@/services/client/client-dossier'
 import { revalidatePath } from 'next/cache'
 
 export async function getClientProfileData(clientId: string) {
     return getClientProfileDataService(clientId)
+}
+
+/**
+ * Dossier serializable del alumno para el export a PDF (tema oscuro, client-side).
+ * Llama al service en el CLICK ⇒ URLs firmadas de fotos frescas (TTL 600s) y datos al día.
+ * El service ya scopea por el coach autenticado (RLS + assertCoachClientReadAccess).
+ */
+export async function getClientDossier(clientId: string) {
+    if (typeof clientId !== 'string' || clientId.trim() === '') {
+        throw new Error('clientId inválido')
+    }
+    const data = await getClientProfileDataService(clientId)
+    return buildClientDossier(data, { generatedAtIso: new Date().toISOString() })
 }
 
 export async function addPayment(data: {
