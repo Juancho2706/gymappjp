@@ -238,9 +238,12 @@ export function ClientProfileHero({
 
             {/* Hero inverso: identidad + 4 chips (2×2), con marco animado de marca
                 (GlowBorderCard). La Card lleva el borde en transparente para no
-                duplicar borde: el anillo del wrapper hace de borde visible. */}
+                duplicar borde: el anillo del wrapper hace de borde visible.
+                En dark el fondo baja MÁS OSCURO que el inverse (#2A323D leía "plomo"
+                y lavaba el texto — feedback CEO): mezcla card→app, near-black estilo
+                del reference GlowingShadow. */}
             <GlowBorderCard>
-            <Card variant="inverse" padding="lg" className="gap-0 !border-transparent">
+            <Card variant="inverse" padding="lg" className="gap-0 !border-transparent dark:!bg-[color-mix(in_srgb,var(--surface-card)_55%,var(--surface-app))]">
                 <div className="flex items-start gap-4">
                     <span
                         className="relative flex h-16 w-16 flex-shrink-0 rounded-full md:h-20 md:w-20"

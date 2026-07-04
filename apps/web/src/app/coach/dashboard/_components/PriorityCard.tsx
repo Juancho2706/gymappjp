@@ -147,10 +147,11 @@ export function PriorityCard({
 
     return (
         <div
-            className="rounded-card border border-[var(--border-inverse)] p-4"
+            // Fondo por clase (no inline) para poder divergir por tema: en light sigue siendo la
+            // hero card oscura (inverse-2 → inverse); en dark baja MÁS OSCURA que las cards vecinas
+            // (mezcla card→app) para que el contenido interno resalte (feedback CEO 2026-07-04).
+            className="rounded-card border border-[var(--border-inverse)] p-4 [background:linear-gradient(165deg,var(--surface-inverse-2)_0%,var(--surface-inverse)_100%)] dark:[background:linear-gradient(165deg,color-mix(in_srgb,var(--surface-card)_70%,var(--surface-app))_0%,var(--surface-app)_100%)]"
             style={{
-                background:
-                    'linear-gradient(165deg, var(--surface-inverse-2) 0%, var(--surface-inverse) 100%)',
                 boxShadow:
                     '0 10px 30px -12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.09)',
             }}
