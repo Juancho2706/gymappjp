@@ -146,6 +146,31 @@ export async function listCoachRecipes(
 }
 
 /**
+ * Búsqueda global (topbar coach) — recetas del scope activo cuyo `name` matchea `q` (`ilike`).
+ * Columnas mínimas (`id, name, image_url`) para el dropdown; respeta el scope coach XOR team
+ * (mismo criterio que `listCoachRecipes`). Consumido por el agregador `searchCoachWorkspace`.
+ */
+export async function searchCoachRecipes(
+  supabase: DB,
+  scope: RecipeScope,
+  q: string,
+  limit = 5
+): Promise<Pick<RecipeRow, 'id' | 'name' | 'image_url'>[]> {
+  let query = supabase
+    .from('nutrition_recipes')
+    .select('id, name, image_url')
+    .ilike('name', `%${q}%`)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  query = scope.teamId
+    ? query.eq('team_id', scope.teamId)
+    : query.eq('coach_id', scope.coachId).is('team_id', null)
+
+  const { data } = await query
+  return (data ?? []) as Pick<RecipeRow, 'id' | 'name' | 'image_url'>[]
+}
+
+/**
  * Asigna una receta a N alumnos (idempotente — upsert por (recipe_id, client_id)).
  * `assignedBy` queda como audit del coach que asignó.
  */

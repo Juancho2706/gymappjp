@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from 'react'
 import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { BookOpen, Plus } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -52,7 +53,12 @@ export function NutritionHub({
   recipes,
   coachId,
 }: Props) {
-  const [hubTab, setHubTab] = useState('clients')
+  // Deep-link ?tab= desde la búsqueda global del topbar (p. ej. una receta abre ?tab=recipes).
+  const searchParams = useSearchParams()
+  const initialTab = searchParams.get('tab')
+  const [hubTab, setHubTab] = useState(
+    ['templates', 'clients', 'foods', 'recipes'].includes(initialTab ?? '') ? initialTab! : 'clients'
+  )
   const hasClients = assignClients.length > 0
   const showCreate = hubTab === 'clients' || hubTab === 'templates'
 

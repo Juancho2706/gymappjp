@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import {
     Dialog,
@@ -31,8 +32,10 @@ interface ExerciseCatalogClientProps {
 }
 
 export function ExerciseCatalogClient({ globalExercises, customExercises, byMuscle, canCreateExercises = false }: ExerciseCatalogClientProps) {
+    // Deep-link ?q= desde la búsqueda global del topbar: pre-carga el filtro del catálogo.
+    const searchParams = useSearchParams()
     const [selected, setSelected] = useState<Exercise | null>(null)
-    const [search, setSearch] = useState('')
+    const [search, setSearch] = useState(() => searchParams.get('q') ?? '')
     const [muscleFilter, setMuscleFilter] = useState<string>('Todos')
     const [customOnly, setCustomOnly] = useState(false)
     const [withVideoOnly, setWithVideoOnly] = useState(false)

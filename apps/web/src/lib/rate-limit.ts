@@ -14,6 +14,7 @@ let authRatelimit: Ratelimit | null | undefined
 let signupRatelimit: Ratelimit | null | undefined
 let paymentRatelimit: Ratelimit | null | undefined
 let recipesRatelimit: Ratelimit | null | undefined
+let coachSearchRatelimit: Ratelimit | null | undefined
 let adminRatelimit: Ratelimit | null | undefined
 let coachOnboardingEventsRatelimit: Ratelimit | null | undefined
 let supportRatelimit: Ratelimit | null | undefined
@@ -133,6 +134,36 @@ export async function rateLimitRecipesSearch(
     const limiter = getRecipesRatelimit()
     if (!limiter) return { ok: true }
     const res = await limiter.limit(`recipes:${identifier}`)
+    await res.pending.catch(() => undefined)
+    if (res.success) return { ok: true }
+    const retryAfter = Math.max(1, Math.ceil((res.reset - Date.now()) / 1000))
+    return { ok: false, retryAfter }
+}
+
+function getCoachSearchRatelimit(): Ratelimit | null {
+    if (coachSearchRatelimit !== undefined) return coachSearchRatelimit
+    const redis = redisFromEnv()
+    if (!redis) {
+        coachSearchRatelimit = null
+        return null
+    }
+    coachSearchRatelimit = new Ratelimit({
+        redis,
+        // 60/min: la búsqueda global es incremental (debounce ~250ms) → ventana generosa para el
+        // tecleo legítimo de un coach, sin abrir la puerta a scraping del workspace.
+        limiter: Ratelimit.slidingWindow(60, '1 m'),
+        prefix: 'ratelimit:coach-search',
+    })
+    return coachSearchRatelimit
+}
+
+/** fail-OPEN (espeja rateLimitRecipesSearch): sin Redis permite; la búsqueda es lectura scopeada. */
+export async function rateLimitCoachSearch(
+    identifier: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const limiter = getCoachSearchRatelimit()
+    if (!limiter) return { ok: true }
+    const res = await limiter.limit(`coach-search:${identifier}`)
     await res.pending.catch(() => undefined)
     if (res.success) return { ok: true }
     const retryAfter = Math.max(1, Math.ceil((res.reset - Date.now()) / 1000))

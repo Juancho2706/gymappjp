@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { Search, ChevronRight, ArrowLeft, X, Table2, PanelLeft, ChevronsUpDown } from 'lucide-react'
+import { ChevronRight, ArrowLeft, Table2, PanelLeft, ChevronsUpDown } from 'lucide-react'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
+import { CoachGlobalSearch } from '@/components/coach/CoachGlobalSearch'
 import { useRosterView } from '@/components/coach/RosterViewContext'
 import { Avatar } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
@@ -122,7 +123,6 @@ function RosterViewToggle({
 export function CoachTopBar({ coachName, coachBrand, logoUrl, workspaces, currentWorkspaceLabel }: CoachTopBarProps) {
     const pathname = usePathname()
     const inputRef = useRef<HTMLInputElement>(null)
-    const [query, setQuery] = useState('')
     // Toggle Tabla/Ficha: solo se muestra mientras /coach/clients está montado (active).
     const { active: rosterActive, mode: rosterMode, setMode: setRosterMode } = useRosterView()
 
@@ -188,43 +188,12 @@ export function CoachTopBar({ coachName, coachBrand, logoUrl, workspaces, curren
                 )}
             </div>
 
-            {/* .dt-tb-search — búsqueda global centrada. Chrome 1:1: input enfocable con "/",
-                Escape limpia/desenfoca, botón × para limpiar y anillo de foco sport (.dt-tb-input:focus).
-                DIFERIDO a la ola de datos: el dropdown de resultados agrupados
-                (Alumnos/Programas/Ejercicios/Recetas) requiere endpoints reales de búsqueda. */}
-            <div className="relative mx-auto flex max-w-[460px] flex-1 items-center">
-                <span className="pointer-events-none absolute left-3 inline-flex text-[var(--text-subtle)]">
-                    <Search size={17} />
-                </span>
-                <input
-                    ref={inputRef}
-                    type="search"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Escape') {
-                            setQuery('')
-                            e.currentTarget.blur()
-                        }
-                    }}
-                    placeholder="Buscar alumno o programa…  (/)"
-                    aria-label="Buscar alumno o programa"
-                    className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] pl-[38px] pr-[34px] text-sm text-[var(--text-strong)] outline-none transition-[border-color,background,box-shadow] duration-150 placeholder:text-[var(--text-subtle)] focus:border-[var(--sport-500)] focus:bg-[var(--surface-card)] focus:shadow-[var(--ring-focus)] [&::-webkit-search-cancel-button]:appearance-none"
-                />
-                {query && (
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setQuery('')
-                            inputRef.current?.focus()
-                        }}
-                        aria-label="Limpiar"
-                        className="absolute right-2 flex h-[22px] w-[22px] items-center justify-center rounded-[6px] text-[var(--text-subtle)] transition-colors hover:bg-[var(--surface-sunken)] hover:text-[var(--text-strong)]"
-                    >
-                        <X size={14} />
-                    </button>
-                )}
-            </div>
+            {/* .dt-tb-search — búsqueda global centrada. El chrome 1:1 (input enfocable con "/",
+                Escape limpia/desenfoca, botón × y anillo de foco sport) vive ahora en
+                CoachGlobalSearch, que además monta el dropdown de resultados agrupados
+                (Alumnos/Programas/Ejercicios/Recetas) contra GET /api/coach/search. El atajo "/"
+                sigue enfocando este input vía el inputRef compartido. */}
+            <CoachGlobalSearch inputRef={inputRef} />
 
             {/* .dt-viewtoggle — toggle Tabla/Ficha, solo en /coach/clients. Entre la
                 búsqueda centrada y las acciones (igual que el slot viewToggle del diseño). */}
