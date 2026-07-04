@@ -1,10 +1,10 @@
 'use client'
 
-import { useActionState, useEffect, useMemo, useState } from 'react'
+import { useActionState, useEffect, useMemo, useRef, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
 import Script from 'next/script'
-import { Loader2, User, Mail, Lock, Store, CheckCircle2, Sparkles, ChevronLeft, ArrowRight, Check, CreditCard } from 'lucide-react'
+import { Loader2, User, Mail, Lock, Store, CheckCircle2, Sparkles, ChevronLeft, ArrowRight, Check, Minus, CreditCard } from 'lucide-react'
 import { registerAction, type RegisterState } from './_actions/register.actions'
 import { completeOAuthOnboarding, type CompleteOnboardingState } from '@/app/coach/onboarding/complete/_actions/complete.actions'
 import { cn } from '@/lib/utils'
@@ -17,8 +17,6 @@ import {
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
     getTierCapabilities,
-    getTierBillingCycleSummary,
-    getTierNutritionSummary,
     getTierPriceClp,
     isBillingCycleAllowedForTier,
     isSaleTier,
@@ -123,6 +121,8 @@ export default function RegisterPage() {
         [allowedCycles]
     )
     const isFreeTier = tier === 'free'
+    // Radiogroup del selector de plan (paso 2): navegación por flechas con roving tabindex.
+    const tierGroupRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search)
@@ -224,6 +224,34 @@ export default function RegisterPage() {
             if (node) node.scrollTo({ top: 0 })
             window.scrollTo({ top: 0 })
         })
+    }
+
+    // Navegación por teclado del radiogroup de planes (patrón WAI-ARIA: flechas mueven
+    // la selección + el foco; Home/End a los extremos). Space/Enter selecciona vía onClick.
+    function handleTierKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
+        let next = index
+        switch (event.key) {
+            case 'ArrowDown':
+            case 'ArrowRight':
+                next = (index + 1) % tierOptions.length
+                break
+            case 'ArrowUp':
+            case 'ArrowLeft':
+                next = (index - 1 + tierOptions.length) % tierOptions.length
+                break
+            case 'Home':
+                next = 0
+                break
+            case 'End':
+                next = tierOptions.length - 1
+                break
+            default:
+                return
+        }
+        event.preventDefault()
+        setTier(tierOptions[next][0])
+        const radios = tierGroupRef.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]')
+        radios?.[next]?.focus()
     }
 
     return (
@@ -461,68 +489,122 @@ export default function RegisterPage() {
                                 <p className="mt-1 text-[13.5px] text-text-muted">Cambiá o cancelá cuando quieras. Empezá gratis si querés probar.</p>
                             </div>
                             <section className="space-y-2">
-                                <div className="grid gap-2">
-                                    {tierOptions.map(([key, option]) => {
+                                <div
+                                    ref={tierGroupRef}
+                                    role="radiogroup"
+                                    aria-label="Elegí tu plan"
+                                    className="grid gap-2.5"
+                                >
+                                    {tierOptions.map(([key, option], index) => {
                                         const caps = getTierCapabilities(key)
-                                        const nutritionText = getTierNutritionSummary(key)
-                                        const cycleText = getTierBillingCycleSummary(key)
                                         const defaultCycleForKey = getDefaultBillingCycleForTier(key)
                                         const displayPrice = getTierPriceClp(key, defaultCycleForKey)
+                                        const cycleLabel = BILLING_CYCLE_CONFIG[defaultCycleForKey].label.toLowerCase()
                                         const isFree = key === 'free'
                                         // Paridad con /pricing: pro es el plan destacado ("Más popular").
                                         const isPopular = key === 'pro'
+                                        const selected = tier === key
+                                        // Features clave por tarjeta — strings EXACTOS de @eva/tiers (no se inventan).
+                                        // La fila "no incluida" (dash) muestra la escalera de upgrade.
+                                        const features = [
+                                            { label: `Hasta ${option.maxClients} alumnos`, included: true },
+                                            { label: 'Planes de nutrición', included: caps.canUseNutrition },
+                                            { label: 'Branding personalizado', included: caps.canUseBranding },
+                                        ]
                                         return (
                                             <button
                                                 key={key}
                                                 type="button"
+                                                role="radio"
+                                                aria-checked={selected}
+                                                aria-label={option.label}
+                                                tabIndex={selected ? 0 : -1}
                                                 onClick={() => setTier(key)}
+                                                onKeyDown={(event) => handleTierKeyDown(event, index)}
                                                 className={cn(
-                                                    'rounded-card border-[1.5px] p-3.5 text-left transition',
-                                                    tier === key
+                                                    'group relative w-full rounded-card border-[1.5px] p-4 text-left transition-all duration-200',
+                                                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]',
+                                                    selected
                                                         ? 'border-sport-500 bg-sport-100 shadow-[var(--glow-sport)]'
                                                         : isPopular
-                                                            ? 'border-sport-500/50 hover:border-sport-500/70'
-                                                            : 'border-border-subtle hover:border-sport-500/40'
+                                                            ? 'border-sport-500/50 hover:border-sport-500/70 hover:bg-surface-sunken/40'
+                                                            : 'border-border-subtle hover:border-sport-500/40 hover:bg-surface-sunken/40'
                                                 )}
                                             >
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <p className="font-semibold text-text-strong">{option.label}</p>
-                                                        {isFree && (
-                                                            <span className="rounded-pill px-1.5 py-0.5 text-[10px] font-bold bg-[var(--success-100)] text-[var(--success-600)]">
-                                                                Gratis para siempre
-                                                            </span>
-                                                        )}
-                                                        {isPopular && (
-                                                            <span className="rounded-pill px-1.5 py-0.5 text-[10px] font-bold bg-sport-500 text-[var(--text-on-sport)]">
-                                                                Más popular
-                                                            </span>
-                                                        )}
-                                                    </div>
+                                                <div className="flex items-start gap-3">
+                                                    {/* Indicador de radio — refuerzo visual de la semántica role=radio */}
                                                     <span
+                                                        aria-hidden="true"
                                                         className={cn(
-                                                            'shrink-0 rounded-pill px-1.5 py-0.5 text-[10px] font-bold',
-                                                            caps.canUseNutrition
-                                                                ? 'bg-[var(--success-100)] text-[var(--success-600)]'
-                                                                : 'bg-[var(--warning-100)] text-[var(--warning-700)]'
+                                                            'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                                                            selected
+                                                                ? 'border-sport-500 bg-sport-500'
+                                                                : 'border-border-default group-hover:border-sport-500/60'
                                                         )}
                                                     >
-                                                        {nutritionText}
+                                                        <span
+                                                            className={cn(
+                                                                'h-2 w-2 rounded-full bg-[var(--text-on-sport)] transition-transform duration-200',
+                                                                selected ? 'scale-100' : 'scale-0'
+                                                            )}
+                                                        />
                                                     </span>
+
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex flex-wrap items-center gap-1.5">
+                                                            <span className="font-display text-[15px] font-black tracking-[-0.01em] text-text-strong">
+                                                                {option.label}
+                                                            </span>
+                                                            {isFree && (
+                                                                <span className="rounded-pill bg-[var(--success-100)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--success-600)]">
+                                                                    Gratis para siempre
+                                                                </span>
+                                                            )}
+                                                            {isPopular && (
+                                                                <span className="rounded-pill bg-sport-500 px-1.5 py-0.5 text-[10px] font-bold text-[var(--text-on-sport)]">
+                                                                    Más popular
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="mt-1 flex items-baseline gap-1">
+                                                            {isFree ? (
+                                                                <>
+                                                                    <span className="font-display text-xl font-black text-[var(--success-600)]">$0</span>
+                                                                    <span className="text-xs font-semibold text-text-muted">· Sin tarjeta</span>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <span className="font-display text-xl font-black text-text-strong">
+                                                                        ${displayPrice.toLocaleString('es-CL')}
+                                                                    </span>
+                                                                    <span className="text-xs font-medium text-text-muted">CLP / {cycleLabel}</span>
+                                                                </>
+                                                            )}
+                                                        </div>
+
+                                                        <ul className="mt-2.5 space-y-1">
+                                                            {features.map((feature) => (
+                                                                <li
+                                                                    key={feature.label}
+                                                                    className={cn(
+                                                                        'flex items-center gap-1.5 text-[12.5px]',
+                                                                        feature.included ? 'text-text-body' : 'text-text-subtle'
+                                                                    )}
+                                                                >
+                                                                    {feature.included ? (
+                                                                        <Check className="h-3.5 w-3.5 shrink-0 text-sport-600" aria-hidden="true" />
+                                                                    ) : (
+                                                                        <Minus className="h-3.5 w-3.5 shrink-0 text-text-subtle" aria-hidden="true" />
+                                                                    )}
+                                                                    <span className={cn(!feature.included && 'line-through decoration-1')}>
+                                                                        {feature.label}
+                                                                    </span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
                                                 </div>
-                                                <p className="text-xs text-text-muted mt-0.5">
-                                                    Hasta {option.maxClients} alumnos · {cycleText}
-                                                </p>
-                                                <p className="text-sm text-text-body mt-1 font-medium">
-                                                    {isFree ? (
-                                                        <span className="text-[var(--success-600)] font-bold">$0 · Sin tarjeta</span>
-                                                    ) : (
-                                                        <>
-                                                            ${displayPrice.toLocaleString('es-CL')} CLP /{' '}
-                                                            {BILLING_CYCLE_CONFIG[defaultCycleForKey].label.toLowerCase()}
-                                                        </>
-                                                    )}
-                                                </p>
                                             </button>
                                         )
                                     })}
