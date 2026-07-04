@@ -223,7 +223,7 @@ export function CoachGlobalSearch({ inputRef }: CoachGlobalSearchProps) {
                 onFocus={() => setOpen(true)}
                 onKeyDown={onKeyDown}
                 placeholder="Buscar alumno, programa, ejercicio…  (/)"
-                className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--border-subtle)] bg-[var(--surface-sunken)] pl-[38px] pr-[34px] text-sm text-[var(--text-strong)] outline-none transition-[border-color,background,box-shadow] duration-150 placeholder:text-[var(--text-subtle)] focus:border-[var(--sport-500)] focus:bg-[var(--surface-card)] focus:shadow-[var(--ring-focus)]"
+                className="h-10 w-full rounded-[var(--radius-md)] border border-[var(--border-subtle)] dark:border-[var(--border-default)] bg-[var(--surface-sunken)] pl-[38px] pr-[34px] text-sm text-[var(--text-strong)] outline-none transition-[border-color,background,box-shadow] duration-150 placeholder:text-[var(--text-subtle)] focus:border-[var(--sport-500)] focus:bg-[var(--surface-card)] focus:shadow-[var(--ring-focus)]"
             />
             {query && (
                 <button

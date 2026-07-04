@@ -585,14 +585,14 @@
   --surface-app:      #0A0D12;
   --surface-card:     #161B22;
   --surface-sunken:   #1F262F;
-  --surface-inverse:  #16273C;
-  --surface-inverse-2:#0E1722;
+  --surface-inverse:  #2A323D;
+  --surface-inverse-2:#232A33;
   --surface-overlay:  rgba(0, 0, 0, 0.62);
 
   /* Text */
   --text-strong:   #F4F6F8;
   --text-body:     #CDD3DB;
-  --text-muted:    #8A95A3;
+  --text-muted:    #98A2B0;
   --text-subtle:   #86919E;
   --text-link:     var(--sport-400);
 

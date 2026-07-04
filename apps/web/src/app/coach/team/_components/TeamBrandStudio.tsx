@@ -304,7 +304,7 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
 
     // Neutrales del mock = familia ink del kit (BrandPreview, teams-equipo.jsx:85-88).
     const N = previewMode === 'dark'
-        ? { bg: '#0F1729', surf: '#1A2233', text: '#F4F6FB', muted: '#93A0B8', border: '#2A3447' }
+        ? { bg: '#0B0E13', surf: '#1B2129', text: '#F4F6FB', muted: '#93A0B8', border: '#2A323D' }
         : { bg: '#F6F8FB', surf: '#FFFFFF', text: '#0F1729', muted: '#64748B', border: '#E6EAF1' }
     if (draft.neutral_tint) {
         N.border = hexA(primary, previewMode === 'dark' ? 0.34 : 0.2)

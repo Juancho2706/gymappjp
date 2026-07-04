@@ -71,7 +71,7 @@ function LogoSlot({
                 onDrop={(e) => { e.preventDefault(); setDrag(false); pick(e.dataTransfer.files?.[0]) }}
                 className={cn(
                     'relative flex aspect-[16/9] cursor-pointer items-center justify-center overflow-hidden rounded-control border-2 border-dashed transition-colors',
-                    dark ? 'bg-[#121212]' : 'bg-surface-sunken',
+                    dark ? 'bg-[var(--ink-950)]' : 'bg-surface-sunken',
                     drag ? 'border-[var(--sport-500)]' : 'border-default hover:border-[var(--sport-400)]'
                 )}
             >

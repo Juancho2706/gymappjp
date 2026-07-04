@@ -78,7 +78,7 @@ export function VisualEvolution({
                             </div>
                         </div>
                         <Select value={beforeId} onValueChange={(val) => val && setBeforeId(val)}>
-                            <SelectTrigger className="h-8 md:h-10 text-[10px] md:text-xs font-bold bg-background/50 border-white/10">
+                            <SelectTrigger className="h-8 md:h-10 text-[10px] md:text-xs font-bold bg-background/50">
                                 <SelectValue placeholder="Seleccionar fecha">
                                     {beforeCheckIn ? formatDate(beforeCheckIn.created_at) : undefined}
                                 </SelectValue>
@@ -112,7 +112,7 @@ export function VisualEvolution({
                             </div>
                         </div>
                         <Select value={afterId} onValueChange={(val) => val && setAfterId(val)}>
-                            <SelectTrigger className="h-8 md:h-10 text-[10px] md:text-xs font-bold bg-background/50 border-white/10">
+                            <SelectTrigger className="h-8 md:h-10 text-[10px] md:text-xs font-bold bg-background/50">
                                 <SelectValue placeholder="Seleccionar fecha">
                                     {afterCheckIn ? formatDate(afterCheckIn.created_at) : undefined}
                                 </SelectValue>

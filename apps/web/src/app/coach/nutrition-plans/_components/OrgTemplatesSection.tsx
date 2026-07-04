@@ -29,7 +29,7 @@ export function OrgTemplatesSection({ orgName, templates }: Props) {
                     <Link
                         key={t.id}
                         href={`/coach/nutrition-plans/new?org_template=${t.id}`}
-                        className="flex items-center justify-between gap-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-4 py-3 hover:border-violet-400 dark:hover:border-violet-700 transition-colors group"
+                        className="flex items-center justify-between gap-3 rounded-xl bg-white dark:bg-surface-sunken border border-zinc-200 dark:border-zinc-800 px-4 py-3 hover:border-violet-400 dark:hover:border-violet-700 transition-colors group"
                     >
                         <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">

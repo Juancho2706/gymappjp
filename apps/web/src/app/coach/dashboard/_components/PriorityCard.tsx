@@ -150,7 +150,7 @@ export function PriorityCard({
             className="rounded-card border border-[var(--border-inverse)] p-4"
             style={{
                 background:
-                    'linear-gradient(165deg, var(--ink-900, #14181F) 0%, var(--ink-950, #0B0E13) 100%)',
+                    'linear-gradient(165deg, var(--surface-inverse-2) 0%, var(--surface-inverse) 100%)',
                 boxShadow:
                     '0 10px 30px -12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.09)',
             }}

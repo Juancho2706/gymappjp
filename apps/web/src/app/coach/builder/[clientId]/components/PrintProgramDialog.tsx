@@ -299,7 +299,7 @@ export function PrintProgramDialog({ open, onClose, programName, clientName, coa
                 </div>
 
                 {/* Preview — white bg always, single-column list */}
-                <div className="flex-1 overflow-y-auto p-6 bg-gray-100 dark:bg-zinc-800">
+                <div className="flex-1 overflow-y-auto p-6 bg-gray-100 dark:bg-surface-sunken">
                     <div
                         ref={printRef}
                         style={{ background: '#fff', color: '#111', padding: '20px 28px', borderRadius: '8px', boxShadow: '0 2px 12px rgba(0,0,0,0.10)' }}

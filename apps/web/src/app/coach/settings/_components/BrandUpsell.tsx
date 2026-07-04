@@ -32,7 +32,8 @@ export function BrandUpsell({ tier }: { tier: SubscriptionTier }) {
             </p>
             <div className="grid grid-cols-2 gap-3">
                 <div className="overflow-hidden rounded-card border border-subtle bg-surface-card shadow-[var(--shadow-sm)]">
-                    <div className="flex items-center gap-2 px-3 py-2.5" style={{ background: '#2b333d' }}>
+                    {/* ink-700 base literal: var(--ink-700) flipea a foreground claro en .dark */}
+                    <div className="flex items-center gap-2 px-3 py-2.5" style={{ background: '#2A323D' }}>
                         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20">
                             <span className="text-[9px] font-bold text-white">E</span>
                         </div>

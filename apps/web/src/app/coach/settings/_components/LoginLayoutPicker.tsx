@@ -23,7 +23,7 @@ function Thumb({ layout, accent }: { layout: LoginLayoutKey; accent: string }) {
         return (
             <div className={base}>
                 <div className="h-7 w-full" style={{ background: accent }} />
-                <div className="-mt-2 w-[85%] flex-1 rounded-t-md bg-white shadow-sm dark:bg-zinc-800">
+                <div className="-mt-2 w-[85%] flex-1 rounded-t-md bg-white shadow-sm dark:bg-surface-sunken">
                     <div className="mx-auto mt-2 h-1.5 w-8 rounded bg-black/10 dark:bg-white/15" />
                     <div className="mx-auto mt-1 h-1.5 w-12 rounded bg-black/10 dark:bg-white/10" />
                 </div>

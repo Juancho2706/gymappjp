@@ -435,7 +435,7 @@ export function BrandThemePreview({
             <div
                 className={cn(
                     'mx-auto w-full max-w-[min(280px,85vw)] rounded-[28px] border-4 overflow-hidden flex flex-col',
-                    isDark ? 'border-zinc-700 bg-[#121212]' : 'border-zinc-200 bg-white'
+                    isDark ? 'border-zinc-700 bg-[var(--ink-950)]' : 'border-zinc-200 bg-white'
                 )}
             >
                 {/* Notch */}

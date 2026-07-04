@@ -45,7 +45,7 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                 transition={{ duration: 0.5, delay: 0.3 }}
                 className="h-full"
             >
-                <GlassCard className="h-full flex flex-col bg-card dark:bg-zinc-950">
+                <GlassCard className="h-full flex flex-col bg-card dark:bg-surface-card">
                     <div className="px-6 py-5 border-b border-border dark:border-white/10 flex items-center justify-between bg-muted/30 dark:bg-white/[0.02]">
                         <div className="flex items-center gap-3">
                             <div className="p-1.5 rounded-md bg-blue-500/10">
@@ -131,7 +131,7 @@ export function DashboardCharts({ areaData, barData }: DashboardChartsProps) {
                 transition={{ duration: 0.5, delay: 0.4 }}
                 className="h-full"
             >
-                <GlassCard className="h-full flex flex-col bg-card dark:bg-zinc-950">
+                <GlassCard className="h-full flex flex-col bg-card dark:bg-surface-card">
                     <div className="px-6 py-5 border-b border-border dark:border-white/10 flex items-center justify-between bg-muted/30 dark:bg-white/[0.02]">
                         <div className="flex items-center gap-3">
                             <div className="p-1.5 rounded-md bg-cyan-400/10">

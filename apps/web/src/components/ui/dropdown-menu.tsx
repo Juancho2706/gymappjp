@@ -19,7 +19,7 @@ function DropdownMenuTrigger({ className, ...props }: MenuPrimitive.Trigger.Prop
     <MenuPrimitive.Trigger
       data-slot="dropdown-menu-trigger"
       className={cn(
-        "inline-flex items-center justify-center whitespace-nowrap rounded-xl text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 uppercase tracking-widest border border-border dark:border-white/10 bg-secondary/50 dark:bg-white/5 hover:bg-secondary hover:border-primary/30 dark:hover:bg-white/10 dark:hover:border-primary/40 backdrop-blur-md text-foreground h-12 px-6",
+        "inline-flex items-center justify-center whitespace-nowrap rounded-xl text-sm font-bold ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 uppercase tracking-widest border border-border dark:border-[var(--border-default)] bg-secondary/50 dark:bg-white/5 hover:bg-secondary hover:border-primary/30 dark:hover:bg-white/10 dark:hover:border-primary/40 backdrop-blur-md text-foreground h-12 px-6",
         className
       )}
       {...props}
