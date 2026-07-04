@@ -65,6 +65,13 @@ interface Props {
         actual_distance_m?: number | null
         actual_hold_sec?: number | null
         actual_avg_hr?: number | null
+        /**
+         * Reconciliación (informe forense 2026-07-04): la serie está en `sessionLogs` porque la reconció
+         * el padre desde la COLA offline, pero el server AÚN no la confirmó. `true` ⇒ se muestra como
+         * PENDING ("sin sincronizar"), no como guardada — un `existingLog` sin esta marca (server real u
+         * optimismo online) sigue siendo 'saved' como siempre.
+         */
+        _pending?: boolean
     }
     autoTimerEnabled?: boolean
     /** default 'strength' ⇒ render EXACTAMENTE el de siempre (anti-regresión). */
@@ -186,7 +193,11 @@ function StrengthLogSetForm({
         (_, newValue: boolean) => newValue
     )
     // Estado de sync de cara al usuario (contrato a). Fuente: server (saved) > cola (pending) > error.
-    const [syncStatus, setSyncStatus] = useState<SetSyncStatus | null>(existingLog ? 'saved' : null)
+    // Una serie merge-eada desde la cola por el padre llega con `existingLog._pending` → arranca PENDING
+    // (no un check verde mentiroso); un `existingLog` confirmado por el server arranca 'saved'.
+    const [syncStatus, setSyncStatus] = useState<SetSyncStatus | null>(
+        existingLog ? (existingLog._pending ? 'pending' : 'saved') : null,
+    )
 
     // Hidratación del pendiente (contrato b): si el server NO tiene esta serie pero hay un item en la
     // cola, mostrarla como PENDING con sus valores — nunca como fila vacía ni como "guardada ✔".
@@ -204,10 +215,12 @@ function StrengthLogSetForm({
     }, [])
 
     // Promoción pending → saved sin remontar: si el flush confirma con la pantalla abierta,
-    // router.refresh() trae existingLog pero este estado local seguiría 'pending' y el chip
-    // ámbar mentiría. El server manda: llegó la fila → está guardada.
+    // router.refresh() trae existingLog CONFIRMADO (server) pero este estado local seguiría 'pending' y
+    // el chip ámbar mentiría. El server manda: llegó la fila confirmada → está guardada. Guard
+    // `!_pending`: si el `existingLog` viene de la reconciliación de la COLA (aún sin confirmar) NO se
+    // promueve — se mantiene "sin sincronizar" hasta que el server realmente la devuelva.
     useEffect(() => {
-        if (existingLog && syncStatus === 'pending') setSyncStatus('saved')
+        if (existingLog && !existingLog._pending && syncStatus === 'pending') setSyncStatus('saved')
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [existingLog])
 

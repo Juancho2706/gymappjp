@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { WorkoutLogSetSchema } from '@eva/schemas'
 import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '@/lib/date-utils'
@@ -138,6 +139,18 @@ export async function logSetAction(
     // sessionLogs en memoria. Revalidar el layout entero en cada serie devolvía payload RSC del
     // layout → parpadeo + salto de scroll (multiplicado N veces por el flush de la cola). Next 16
     // con dynamic=0 (staleTime 0) re-fetchea al navegar, así que coach/dashboard ven fresco igual;
-    // el flush offline mantiene su router.refresh() al reconectar.
+    // el flush offline mantiene su router.refresh() al reconectar. La invalidación explícita ocurre
+    // UNA vez al FINALIZAR (revalidateWorkoutViewAction), no por serie.
     return { success: true }
+}
+
+/**
+ * Invalidación explícita de la vista de ejecución + dashboard, invocada UNA vez al FINALIZAR el
+ * entreno (informe forense 2026-07-04, Fix C). Complementa (no sustituye) la frescura al reentrar
+ * que garantiza el `router.refresh()` de montaje del cliente: evita que una entrada stale del cache
+ * de ruta se reutilice en una navegación posterior. No revalida por serie (eso causaba parpadeo).
+ */
+export async function revalidateWorkoutViewAction(coachSlug: string, planId: string): Promise<void> {
+    revalidatePath(`/c/${coachSlug}/workout/${planId}`)
+    revalidatePath(`/c/${coachSlug}/dashboard`)
 }

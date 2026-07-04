@@ -22,12 +22,13 @@ import {
     isStepComplete,
     stepIndexOfBlock,
 } from '@/lib/workout-stepper'
-import { logSetAction } from './_actions/workout-log.actions'
+import { logSetAction, revalidateWorkoutViewAction } from './_actions/workout-log.actions'
 import {
     flushWorkoutQueue,
     readWorkoutOfflineQueueForPlan,
     workoutLogToFormData,
 } from '@/lib/workout-offline-queue'
+import { reconcileSessionLogs, type ReconciledSessionLog } from './session-logs.reconcile'
 import { WorkoutTimerProvider, useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
 import { WorkoutKeypadProvider } from './WorkoutKeypadProvider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
@@ -125,21 +126,10 @@ interface ProgramType {
 /**
  * Log de una serie de la sesión (elemento de `Props['logs']` / `sessionLogs`). Exportado para que
  * `SingleExerciseCard` tipee `blockLogs` con el MISMO shape (evita drift; estructuralmente idéntico
- * al inline de `Props['logs']`).
+ * al inline de `Props['logs']`). Fuente de verdad del shape = `session-logs.reconcile.ts` (incluye la
+ * marca `_pending` de series encoladas sin confirmar por el server).
  */
-export type WorkoutSessionLog = {
-    block_id: string
-    set_number: number
-    weight_kg: number | null
-    reps_done: number | null
-    rpe: number | null
-    rir?: number | null
-    note?: string | null
-    actual_duration_sec?: number | null
-    actual_distance_m?: number | null
-    actual_hold_sec?: number | null
-    actual_avg_hr?: number | null
-}
+export type WorkoutSessionLog = ReconciledSessionLog
 
 /**
  * Sustitución activa de un bloque en la sesión (Fase L · workstream C). Snapshot de los datos del
@@ -180,6 +170,8 @@ interface Props {
         substituted_exercise_id?: string | null
         substituted_exercise_name?: string | null
         substitution_reason?: string | null
+        // Reconciliación (informe forense 2026-07-04): serie en cola offline sin confirmar por server.
+        _pending?: boolean
     }>
     previousHistory?: Record<string, { weight_kg: number | null, reps_done: number | null, date: string }[]>
     coachSlug: string
@@ -981,6 +973,14 @@ export function WorkoutExecutionClient({
     const router = useRouter()
     const base = useBasePath(`/c/${coachSlug}`)
     const reducedMotion = useReducedMotion()
+    // Marca "esta sesión tuvo actividad" (informe forense 2026-07-04, Fix A). El snapshot viejo del
+    // client Router Cache puede reentrar VACÍO (logs=[]), así que el prop `logs` NO distingue "primera
+    // visita limpia" de "ya entrené acá y vuelvo por atrás". sessionStorage por plan (se auto-limpia al
+    // cerrar la pestaña, y una carga fría trae RSC fresco de todos modos) sí lo distingue → gatea el refresh.
+    const workoutTouchedKey = `eva:workout-touched:${plan.id}`
+    const markWorkoutTouched = useCallback(() => {
+        try { sessionStorage.setItem(workoutTouchedKey, '1') } catch { /* private mode / SSR */ }
+    }, [workoutTouchedKey])
     const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map())
     // Superserie (F2): refs por fila de serie (block:set) para el auto-scroll intercalado.
     const setRowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
@@ -1060,6 +1060,41 @@ export function WorkoutExecutionClient({
             }
         }
         if (Object.keys(initial).length > 0) setSubstitutionByBlock(initial)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    // Reconciliación de `sessionLogs` (informe forense 2026-07-04, Root Cause B). Antes estaba congelado
+    // en `useState(logs)`: cuando el prop `logs` llega fresco (Fix A: router.refresh al reentrar; o el
+    // back/forward re-monta con un snapshot viejo del client Router Cache) la UI NO lo repintaba → el
+    // alumno veía VACÍO/"a medias" pese a tener la DB íntegra. Merge server∪cola (server gana por
+    // (block,set); la cola conserva lo aún-no-confirmado marcado `_pending`, que el chip pinta "sin
+    // sincronizar"). SÓLO estado: sin toasts, scroll, celebraciones ni auto-avance (esos viven en
+    // handleLogged, intacto). En sesión normal `logs` no cambia (no hay revalidate por serie) → el
+    // efecto no vuelve a correr y el optimismo en vuelo se preserva.
+    useEffect(() => {
+        setSessionLogs(reconcileSessionLogs(logs, readWorkoutOfflineQueueForPlan(plan.id)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [logs])
+
+    // Frescura al (re)entrar (informe forense 2026-07-04, Root Cause A). En back/forward Next reutiliza
+    // el snapshot cacheado del client Router Cache IGNORANDO `staleTimes` (doc oficial) → el ejecutor
+    // re-monta con `logs` viejo (típicamente []). `router.refresh()` trae los logs reales del server y
+    // Fix B los pinta; `visibilitychange` cubre el retorno al tab/PWA. GATEADO: sólo refresca si hay
+    // indicios de actividad previa (logs del server, cola pendiente, o la marca de sesión) — una
+    // primera visita 100% limpia no paga un fetch extra.
+    useEffect(() => {
+        if (logs.length > 0) markWorkoutTouched()
+        const readTouched = () => {
+            try { return sessionStorage.getItem(workoutTouchedKey) === '1' } catch { return false }
+        }
+        const hasPriorData = () =>
+            logs.length > 0 || readWorkoutOfflineQueueForPlan(plan.id).length > 0 || readTouched()
+        if (hasPriorData()) router.refresh()
+        const onVisible = () => {
+            if (document.visibilityState === 'visible' && hasPriorData()) router.refresh()
+        }
+        document.addEventListener('visibilitychange', onVisible)
+        return () => document.removeEventListener('visibilitychange', onVisible)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
@@ -1282,6 +1317,9 @@ export function WorkoutExecutionClient({
     }
 
     const handleLogged = (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null; note?: string | null }) => {
+        // Marca de actividad (Fix A): al primer log, futuras REENTRADAS por atrás refrescan aunque el
+        // snapshot del client Router Cache vuelva vacío.
+        markWorkoutTouched()
         // Estado (puro) — dedup por block+set, misma forma de siempre.
         setSessionLogs((prev) => applyOptimisticLog(prev, payload))
 
@@ -1372,6 +1410,9 @@ export function WorkoutExecutionClient({
                         action: {
                             label: 'Finalizar igual',
                             onClick: () => {
+                                // Fix C (informe forense, P2): invalidación server-side de la vista al
+                                // terminar (defensa complementaria a A+B, no sustituto). Fire-and-forget.
+                                void revalidateWorkoutViewAction(coachSlug, plan.id).catch(() => {})
                                 markFirstWorkoutCompleted()
                                 setFinishedElapsed(sessionElapsed)
                                 setShowCompleted(true)
@@ -1382,6 +1423,10 @@ export function WorkoutExecutionClient({
                 return
             }
         }
+        // Fix C (informe forense, P2): al FINALIZAR (no por serie — evita parpadeo/scroll) invalidamos la
+        // ruta del workout + dashboard, para que una navegación posterior no reuse una entrada stale.
+        // Complementa A+B (el garante de la frescura al reentrar sigue siendo el router.refresh de Fix A).
+        void revalidateWorkoutViewAction(coachSlug, plan.id).catch(() => {})
         // Señal de "primer workout completado" → arma el prompt de instalación PWA (gating por engagement).
         markFirstWorkoutCompleted()
         setFinishedElapsed(sessionElapsed)

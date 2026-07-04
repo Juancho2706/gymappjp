@@ -1,0 +1,113 @@
+import { describe, it, expect } from 'vitest'
+import { reconcileSessionLogs, sessionLogKey, type ReconciledSessionLog } from './session-logs.reconcile'
+import type { WorkoutOfflineLog } from '@/lib/workout-offline-queue'
+
+/** Server log mínimo (los opcionales quedan sin setear como en el payload real del RSC). */
+function serverLog(
+    blockId: string,
+    setNumber: number,
+    extra: Partial<ReconciledSessionLog> = {},
+): ReconciledSessionLog {
+    return { block_id: blockId, set_number: setNumber, weight_kg: 100, reps_done: 5, rpe: 8, ...extra }
+}
+
+/** Item de cola mínimo (los polimórficos/sustitución quedan sin setear = legacy). */
+function queued(blockId: string, setNumber: number, extra: Partial<WorkoutOfflineLog> = {}): WorkoutOfflineLog {
+    return {
+        blockId,
+        setNumber,
+        weightKg: 60,
+        repsDone: 10,
+        rpe: null,
+        rir: null,
+        planId: 'plan-1',
+        coachSlug: 'coach',
+        timestamp: 1,
+        ...extra,
+    }
+}
+
+describe('reconcileSessionLogs', () => {
+    it('cola vacía → devuelve exactamente los logs del server (el caso del CEO: todo sincronizado)', () => {
+        const server = [serverLog('b1', 1), serverLog('b1', 2), serverLog('b2', 1)]
+        const out = reconcileSessionLogs(server, [])
+        expect(out).toHaveLength(3)
+        // cada uno marcado como NO pendiente (confirmado por el server)
+        expect(out.every((l) => l._pending === false)).toBe(true)
+        expect(out.map((l) => sessionLogKey(l.block_id, l.set_number)).sort()).toEqual(['b1:1', 'b1:2', 'b2:1'])
+    })
+
+    it('server vacío + cola → rellena huecos con las series encoladas marcadas _pending', () => {
+        const out = reconcileSessionLogs([], [queued('b1', 1, { weightKg: 62.5, repsDone: 8 })])
+        expect(out).toHaveLength(1)
+        expect(out[0]).toMatchObject({
+            block_id: 'b1',
+            set_number: 1,
+            weight_kg: 62.5,
+            reps_done: 8,
+            _pending: true,
+        })
+    })
+
+    it('el server GANA por (block,set): un huérfano en cola no pisa la fila confirmada ni la marca pendiente', () => {
+        const server = [serverLog('b1', 1, { weight_kg: 105, reps_done: 6 })]
+        // mismo block/set en la cola con OTRO valor (huérfano ya guardado, no dequeueado)
+        const out = reconcileSessionLogs(server, [queued('b1', 1, { weightKg: 999, repsDone: 99 })])
+        expect(out).toHaveLength(1)
+        expect(out[0].weight_kg).toBe(105) // valor del server, no el de la cola
+        expect(out[0].reps_done).toBe(6)
+        expect(out[0]._pending).toBe(false) // no se ve "sin sincronizar"
+    })
+
+    it('mezcla: server confirma unas y la cola aporta OTRAS (distintas) sin colisión', () => {
+        const server = [serverLog('b1', 1), serverLog('b1', 2)]
+        const q = [queued('b1', 3), queued('b2', 1)]
+        const out = reconcileSessionLogs(server, q)
+        const byKey = new Map(out.map((l) => [sessionLogKey(l.block_id, l.set_number), l]))
+        expect(out).toHaveLength(4)
+        expect(byKey.get('b1:1')?._pending).toBe(false)
+        expect(byKey.get('b1:2')?._pending).toBe(false)
+        expect(byKey.get('b1:3')?._pending).toBe(true)
+        expect(byKey.get('b2:1')?._pending).toBe(true)
+    })
+
+    it('items legacy de cola (sin campos polimórficos/sustitución) parsean a null, no undefined', () => {
+        const out = reconcileSessionLogs([], [queued('b1', 1)])
+        expect(out[0].actual_duration_sec).toBeNull()
+        expect(out[0].actual_distance_m).toBeNull()
+        expect(out[0].actual_hold_sec).toBeNull()
+        expect(out[0].actual_avg_hr).toBeNull()
+        expect(out[0].substituted_exercise_id).toBeNull()
+        expect(out[0].note).toBeNull()
+    })
+
+    it('preserva los ejes polimórficos + sustitución de una serie encolada', () => {
+        const out = reconcileSessionLogs(
+            [],
+            [
+                queued('b1', 1, {
+                    actualDurationSec: 1800,
+                    actualDistanceM: 5000,
+                    substitutedExerciseId: 'ex-9',
+                    substitutedExerciseName: 'Prensa',
+                    substitutionReason: 'machine_busy',
+                }),
+            ],
+        )
+        expect(out[0]).toMatchObject({
+            actual_duration_sec: 1800,
+            actual_distance_m: 5000,
+            substituted_exercise_id: 'ex-9',
+            substituted_exercise_name: 'Prensa',
+            substitution_reason: 'machine_busy',
+            _pending: true,
+        })
+    })
+
+    it('no muta las entradas del server (copia con _pending, no referencia)', () => {
+        const original = serverLog('b1', 1)
+        const out = reconcileSessionLogs([original], [])
+        expect(out[0]).not.toBe(original)
+        expect(original).not.toHaveProperty('_pending')
+    })
+})
