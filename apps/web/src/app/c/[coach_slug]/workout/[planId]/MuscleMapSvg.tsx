@@ -2,11 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { useMemo } from 'react'
-import {
-    muscleGroupsToRegionIntensity,
-    muscleGroupToRegion,
-    type MuscleRegion,
-} from './muscle-map'
+import { muscleGroupsToRegionIntensity, type MuscleRegion } from './muscle-map'
 import { BODY_SHAPES, BODY_VIEWBOX, type BodyShape } from './body-anatomy'
 
 /**
@@ -15,12 +11,13 @@ import { BODY_SHAPES, BODY_VIEWBOX, type BodyShape } from './body-anatomy'
  * Reemplaza la silueta de "bloques redondeados" por paths anatomicos organicos
  * (frente + espalda) vendoreados de react-native-body-highlighter (MIT — ver
  * `body-anatomy.ts`). Cada region de EVA se tinta con la rampa del tema segun la
- * intensidad relativa por volumen (0..1). Se alimenta del desglose que el overlay
- * ya tiene en memoria — cero queries. Contrato de props intacto.
+ * intensidad relativa de trabajo (0..1). Se alimenta del trabajo por grupo que el
+ * overlay ya tiene en memoria (fuerza kg + proxy movilidad/roller, cardio excluido)
+ * — cero queries. Contrato de props intacto.
  *
  * Intensidad: 4 niveles sobre `rgba(var(--theme-primary-rgb), a)`. El nivel maximo
  * ademas lleva stroke marcado (accesibilidad: no solo color). Cuerpo base gris
- * neutro theme-aware. Leyenda de niveles + aria-label por region con el volumen.
+ * neutro theme-aware. Leyenda de niveles + aria-label por region con el nivel.
  */
 
 const REGION_LABEL: Record<MuscleRegion, string> = {
@@ -61,24 +58,16 @@ const REGION_SHAPES: Record<MuscleRegion, BodyShape[]> = (() => {
 const REGION_ORDER = Object.keys(REGION_LABEL) as MuscleRegion[]
 
 export interface MuscleMapSvgProps {
-    /** Desglose de volumen por grupo muscular (ES) — el overlay ya lo calcula. */
+    /**
+     * Trabajo por grupo muscular (ES) — el overlay ya lo calcula. Combina volumen de fuerza (kg) con
+     * el proxy de movilidad/roller (cardio excluido), de modo que la intensidad es RELATIVA, no kg.
+     */
     groups: { group: string; vol: number }[]
     reducedMotion?: boolean | null
 }
 
 export function MuscleMapSvg({ groups, reducedMotion }: MuscleMapSvgProps) {
     const intensity = useMemo(() => muscleGroupsToRegionIntensity(groups), [groups])
-
-    // Volumen (kg) agregado por region — solo para el aria-label ("Pecho: 1200 kg").
-    const regionVolume = useMemo(() => {
-        const acc = {} as Record<MuscleRegion, number>
-        for (const r of REGION_ORDER) acc[r] = 0
-        for (const { group, vol } of groups) {
-            const region = muscleGroupToRegion(group)
-            if (region && vol > 0) acc[region] += vol
-        }
-        return acc
-    }, [groups])
 
     const workedRegions = useMemo(
         () => REGION_ORDER.filter((r) => intensity[r] > 0).sort((a, b) => intensity[b] - intensity[a]),
@@ -136,7 +125,6 @@ export function MuscleMapSvg({ groups, reducedMotion }: MuscleMapSvgProps) {
                     const tier = tierOf(t)
                     const worked = tier > 0
                     const shapes = REGION_SHAPES[region]
-                    const vol = Math.round(regionVolume[region])
 
                     if (!worked) {
                         return (
@@ -167,7 +155,7 @@ export function MuscleMapSvg({ groups, reducedMotion }: MuscleMapSvgProps) {
                         <motion.g
                             key={region}
                             role="img"
-                            aria-label={`${REGION_LABEL[region]}: ${vol} kg`}
+                            aria-label={`${REGION_LABEL[region]}, intensidad ${litTier} de 4`}
                             fill={fill}
                             stroke={stroke}
                             strokeWidth={strokeWidth}

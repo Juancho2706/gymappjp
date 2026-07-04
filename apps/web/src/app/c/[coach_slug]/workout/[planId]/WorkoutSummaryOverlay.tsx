@@ -1,13 +1,21 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { Trophy, Share2, Check, ArrowRight } from 'lucide-react'
+import { Trophy, Share2, Check, ArrowRight, HeartPulse, Move, GitCommit } from 'lucide-react'
 import { epleyOneRM } from '@/app/coach/clients/[clientId]/profileTrainingAnalytics'
 import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { springs, fadeSlideUp, staggerContainer } from '@/lib/animation-presets'
+import { compactDistance } from '@/lib/workout-exercise-type'
 import { MuscleMapSvg } from './MuscleMapSvg'
 import { muscleGroupsToRegionIntensity, MUSCLE_REGIONS } from './muscle-map'
+import {
+    summarizeSessionByKind,
+    type SummaryBlock,
+    type SummaryLogLike,
+    type CardioItem,
+    type MobilityItem,
+} from './session-summary'
 import { PRShareCardModal } from './PRShareCardModal'
 import type { WorkoutPRCardData } from '@/lib/workout-pr-card-canvas'
 
@@ -35,30 +43,10 @@ function fmtDuration(totalSec: number | undefined): string {
 const fireConfetti = (opts: object) =>
     (import('canvas-confetti') as Promise<any>).then(m => (m.default ?? m)(opts))  // eslint-disable-line @typescript-eslint/no-explicit-any
 
-interface ExerciseType {
-    id: string
-    name: string
-    muscle_group: string
-}
-
-interface SummaryLog {
-    block_id: string
-    weight_kg: number | null
-    reps_done: number | null
-    rpe: number | null
-    set_number: number
-}
-
-interface BlockSummary {
-    id: string
-    exercises: ExerciseType | ExerciseType[]
-    sets: number
-}
-
 export interface WorkoutSummaryOverlayProps {
     planTitle: string
-    logs: SummaryLog[]
-    blocks: BlockSummary[]
+    logs: SummaryLogLike[]
+    blocks: SummaryBlock[]
     exerciseMaxes: Record<string, number>
     /** Fecha (ISO) del máximo histórico por ejercicio → "superaste tus 80 kg del 12 jun". */
     exerciseMaxDates?: Record<string, string>
@@ -77,10 +65,78 @@ export interface WorkoutSummaryOverlayProps {
     onDone: () => void
 }
 
-function normalizeExercise(block: BlockSummary): ExerciseType | null {
-    const ex = block.exercises
-    if (Array.isArray(ex)) return ex[0] ?? null
-    return ex ?? null
+type SummaryTile = { value: string; unit?: string; label: string }
+
+/** Tiles de un bloque de cardio (tiempo/distancia/FC/rondas), sólo con lo registrado. */
+function cardioTiles(c: CardioItem): SummaryTile[] {
+    const tiles: SummaryTile[] = []
+    if (c.durationSec != null && c.durationSec > 0) tiles.push({ value: fmtDuration(c.durationSec), label: 'Tiempo' })
+    if (c.distanceM != null && c.distanceM > 0) tiles.push({ value: compactDistance(c.distanceM, 'm'), label: 'Distancia' })
+    if (c.avgHr != null && c.avgHr > 0) tiles.push({ value: String(c.avgHr), unit: 'bpm', label: 'FC media' })
+    if (c.rounds > 1) tiles.push({ value: String(c.rounds), label: 'Rondas' })
+    // Cardio sin actuals registrados: al menos mostramos que se completó (no dejar la card vacía).
+    if (tiles.length === 0) tiles.push({ value: String(c.rounds), label: c.rounds === 1 ? 'Ronda' : 'Rondas' })
+    return tiles
+}
+
+/** Tiles de un bloque de movilidad/roller (series completadas + hold total). */
+function mobilityTiles(m: MobilityItem): SummaryTile[] {
+    const tiles: SummaryTile[] = [{ value: String(m.sets), label: m.sets === 1 ? 'Serie' : 'Series' }]
+    if (m.holdSec != null && m.holdSec > 0) tiles.push({ value: fmtDuration(m.holdSec), label: 'Hold total' })
+    return tiles
+}
+
+/** Card del resumen para un bloque NO-fuerza (cardio/movilidad/roller). Tiles EVA DS. */
+function NonStrengthCard({
+    name,
+    typeLabel,
+    accent,
+    icon,
+    tiles,
+    reducedMotion,
+}: {
+    name: string
+    typeLabel: string
+    accent: string
+    icon: ReactNode
+    tiles: SummaryTile[]
+    reducedMotion: boolean | null
+}) {
+    return (
+        <motion.div
+            variants={reducedMotion ? undefined : fadeSlideUp}
+            className="rounded-card border border-[var(--border-inverse)] bg-white/[0.03] px-3 py-3"
+        >
+            <div className="mb-2.5 flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                    {icon}
+                    <p className="truncate text-sm font-semibold text-on-dark">{name}</p>
+                </div>
+                <span
+                    className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                    style={{ color: accent, backgroundColor: `color-mix(in srgb, ${accent} 16%, transparent)` }}
+                >
+                    {typeLabel}
+                </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+                {tiles.map((t, i) => (
+                    <div
+                        key={i}
+                        className="rounded-control border border-[var(--border-inverse)] bg-white/[0.05] px-3 py-2.5 text-center"
+                    >
+                        <p className="eva-metric text-[20px] leading-none text-on-dark">
+                            {t.value}
+                            {t.unit ? (
+                                <span className="ml-0.5 text-[11px] font-bold text-on-dark-muted">{t.unit}</span>
+                            ) : null}
+                        </p>
+                        <p className="mt-1.5 text-[10px] font-semibold text-on-dark-muted">{t.label}</p>
+                    </div>
+                ))}
+            </div>
+        </motion.div>
+    )
 }
 
 export function WorkoutSummaryOverlay({
@@ -96,64 +152,15 @@ export function WorkoutSummaryOverlay({
     onDone,
 }: WorkoutSummaryOverlayProps) {
     const reducedMotion = useReducedMotion()
-    const substitutedSet = useMemo(() => new Set(substitutedBlockIds), [substitutedBlockIds])
 
-    const exerciseBreakdown = useMemo(() => {
-        type Row = {
-            exerciseId: string
-            name: string
-            muscleGroup: string
-            sets: SummaryLog[]
-            totalVolume: number
-            maxWeight: number
-            best1RM: number
-        }
-        const byId = new Map<string, Row>()
-
-        for (const block of blocks) {
-            const exercise = normalizeExercise(block)
-            if (!exercise) continue
-            const blockLogs = logs.filter((l) => l.block_id === block.id)
-            if (blockLogs.length === 0) continue
-
-            // Bloque sustituido (máquina ocupada): cuenta el VOLUMEN (fue trabajo real) pero NO aporta
-            // al máx/1RM del ejercicio prescrito → nunca marca un PR falso en el slot original (AC-C5).
-            const isSubstituted = substitutedSet.has(block.id)
-
-            let addVol = 0
-            let addMaxW = 0
-            let addBest1 = 0
-            for (const l of blockLogs) {
-                const w = l.weight_kg ?? 0
-                const r = l.reps_done ?? 0
-                addVol += w * r
-                if (isSubstituted) continue
-                if (w > addMaxW) addMaxW = w
-                const e1 = epleyOneRM(w, r)
-                if (e1 > addBest1) addBest1 = e1
-            }
-
-            const prev = byId.get(exercise.id)
-            if (prev) {
-                prev.sets.push(...blockLogs)
-                prev.totalVolume += addVol
-                if (addMaxW > prev.maxWeight) prev.maxWeight = addMaxW
-                if (addBest1 > prev.best1RM) prev.best1RM = addBest1
-            } else {
-                byId.set(exercise.id, {
-                    exerciseId: exercise.id,
-                    name: exercise.name,
-                    muscleGroup: exercise.muscle_group,
-                    sets: [...blockLogs],
-                    totalVolume: addVol,
-                    maxWeight: addMaxW,
-                    best1RM: addBest1,
-                })
-            }
-        }
-
-        return [...byId.values()]
-    }, [blocks, logs, substitutedSet])
+    // Derivación por-tipo en una sola pasada (fuerza + cardio + movilidad/roller). El bug CEO era
+    // que sólo se contaba fuerza: movilidad/roller no encendían el mapa y cardio/movilidad no
+    // aparecían en el resumen. Lógica pura y testeada → `summarizeSessionByKind`.
+    const session = useMemo(
+        () => summarizeSessionByKind(blocks, logs, substitutedBlockIds),
+        [blocks, logs, substitutedBlockIds],
+    )
+    const exerciseBreakdown = session.strength
 
     const detectedPRs = useMemo(() => {
         return exerciseBreakdown
@@ -182,31 +189,36 @@ export function WorkoutSummaryOverlay({
             })
     }, [exerciseBreakdown, exerciseMaxes, exerciseMaxDates])
 
+    // Barras "Músculos trabajados" en kg → sólo volumen de FUERZA (kg es honesto ahí).
     const muscleGroupVolume = useMemo(() => {
-        const map = new Map<string, number>()
-        for (const ex of exerciseBreakdown) {
-            map.set(ex.muscleGroup, (map.get(ex.muscleGroup) ?? 0) + ex.totalVolume)
-        }
-        const entries = [...map.entries()].sort((a, b) => b[1] - a[1])
-        const maxV = entries[0]?.[1] ?? 1
-        return entries.map(([group, vol]) => ({
+        const maxV = session.strengthMuscleVolume[0]?.vol ?? 1
+        return session.strengthMuscleVolume.map(({ group, vol }) => ({
             group,
             vol,
             pct: Math.round((vol / maxV) * 100),
         }))
-    }, [exerciseBreakdown])
+    }, [session.strengthMuscleVolume])
 
-    // ¿Hay alguna región de la silueta encendida? (sesión con volumen de fuerza mapeable).
-    // Solo entonces vale la pena renderizar el mapa muscular; sesiones puras de cardio/movilidad
-    // caen a 0 en todas las regiones y se muestran únicamente en el desglose por grupo.
+    // El mapa muscular usa el trabajo COMBINADO (fuerza + movilidad/roller; cardio excluido) para
+    // que las zonas de movilidad/roller también se enciendan. ¿Alguna región encendida?
     const hasMuscleMap = useMemo(() => {
-        const intensity = muscleGroupsToRegionIntensity(muscleGroupVolume)
+        const intensity = muscleGroupsToRegionIntensity(session.muscleWork)
         return MUSCLE_REGIONS.some((r) => intensity[r] > 0)
-    }, [muscleGroupVolume])
+    }, [session.muscleWork])
+
+    const hasNonStrength = session.cardio.length > 0 || session.mobility.length > 0
 
     const completedSets = logs.length
     const totalReps = logs.reduce((acc, l) => acc + (l.reps_done || 0), 0)
     const totalVolume = logs.reduce((acc, l) => acc + (l.weight_kg || 0) * (l.reps_done || 0), 0)
+
+    // Hero adaptativo: si no hubo fuerza (sesión cardio/movilidad), el 2º stat no puede ser "0 kg".
+    const heroSecondary =
+        totalVolume > 0
+            ? { value: String(Math.round(totalVolume)), unit: 'kg', label: 'Volumen total' }
+            : session.totalCardioDistanceM > 0
+                ? { value: compactDistance(session.totalCardioDistanceM, 'm'), unit: undefined, label: 'Distancia' }
+                : { value: String(completedSets), unit: undefined, label: completedSets === 1 ? 'Serie' : 'Series' }
 
     const [shared, setShared] = useState(false)
     const [prCard, setPrCard] = useState<WorkoutPRCardData | null>(null)
@@ -267,7 +279,7 @@ export function WorkoutSummaryOverlay({
                     transition={motionOpts ?? { delay: 0.05, duration: 0.3 }}
                     className="mb-6"
                 >
-                    {/* Hero: Duración + Volumen (stats grandes .eva-metric) — CEO M5.1. */}
+                    {/* Hero: Duración + stat adaptativo (volumen kg / distancia / series) — CEO M5.1. */}
                     <div className="grid grid-cols-2 gap-2">
                         <div className="rounded-control border border-[var(--border-inverse)] bg-[var(--ink-900)] px-4 py-5 text-center">
                             <p className="eva-metric text-[34px] leading-none text-[var(--sport-500)]">{fmtDuration(durationSec)}</p>
@@ -275,17 +287,23 @@ export function WorkoutSummaryOverlay({
                         </div>
                         <div className="rounded-control border border-[var(--border-inverse)] bg-[var(--ink-900)] px-4 py-5 text-center">
                             <p className="eva-metric text-[34px] leading-none text-[var(--sport-500)]">
-                                {Math.round(totalVolume)}
-                                <span className="text-base font-bold text-on-dark-muted ml-1">kg</span>
+                                {heroSecondary.value}
+                                {heroSecondary.unit ? (
+                                    <span className="text-base font-bold text-on-dark-muted ml-1">{heroSecondary.unit}</span>
+                                ) : null}
                             </p>
-                            <p className="text-[11px] font-semibold text-on-dark-muted mt-2">Volumen total</p>
+                            <p className="text-[11px] font-semibold text-on-dark-muted mt-2">{heroSecondary.label}</p>
                         </div>
                     </div>
-                    {/* Secundario: series · reps (línea fina). */}
+                    {/* Secundario: series · reps (línea fina). Reps sólo si hubo (cardio/movilidad ⇒ 0). */}
                     <div className="mt-2 flex items-center justify-center gap-2 rounded-control border border-[var(--border-inverse)] bg-white/[0.03] px-4 py-2.5 text-sm text-on-dark-muted tabular-nums">
                         <span><span className="font-bold text-on-dark">{completedSets}</span> series</span>
-                        <span className="text-on-dark-muted/50">·</span>
-                        <span><span className="font-bold text-on-dark">{totalReps}</span> reps</span>
+                        {totalReps > 0 && (
+                            <>
+                                <span className="text-on-dark-muted/50">·</span>
+                                <span><span className="font-bold text-on-dark">{totalReps}</span> reps</span>
+                            </>
+                        )}
                     </div>
                 </motion.div>
 
@@ -349,34 +367,79 @@ export function WorkoutSummaryOverlay({
                     </motion.section>
                 )}
 
-                <motion.section
-                    variants={reducedMotion ? undefined : staggerContainer(0.06, 0.05)}
-                    initial="hidden"
-                    animate="show"
-                    className="mb-6 space-y-2"
-                >
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-on-dark-muted mb-2">
-                        Por ejercicio
-                    </h3>
-                    {exerciseBreakdown.map((ex, i) => (
-                        <motion.div
-                            key={`${ex.exerciseId}-${i}`}
-                            variants={reducedMotion ? undefined : fadeSlideUp}
-                            className="rounded-card border border-[var(--border-inverse)] bg-white/[0.04] px-3 py-2.5 flex flex-wrap items-baseline justify-between gap-2"
-                        >
-                            <div>
-                                <p className="font-semibold text-sm text-on-dark">{ex.name}</p>
-                                <p className="text-[10px] text-on-dark-muted">{ex.muscleGroup}</p>
-                            </div>
-                            <div className="text-right text-xs text-on-dark-muted tabular-nums">
-                                <span className="font-bold text-on-dark">{ex.sets.length}</span> series ·{' '}
-                                <span className="font-bold text-on-dark">{Math.round(ex.totalVolume)}</span> kg vol.
-                            </div>
-                        </motion.div>
-                    ))}
-                </motion.section>
+                {exerciseBreakdown.length > 0 && (
+                    <motion.section
+                        variants={reducedMotion ? undefined : staggerContainer(0.06, 0.05)}
+                        initial="hidden"
+                        animate="show"
+                        className="mb-6 space-y-2"
+                    >
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-on-dark-muted mb-2">
+                            Por ejercicio
+                        </h3>
+                        {exerciseBreakdown.map((ex, i) => (
+                            <motion.div
+                                key={`${ex.exerciseId}-${i}`}
+                                variants={reducedMotion ? undefined : fadeSlideUp}
+                                className="rounded-card border border-[var(--border-inverse)] bg-white/[0.04] px-3 py-2.5 flex flex-wrap items-baseline justify-between gap-2"
+                            >
+                                <div>
+                                    <p className="font-semibold text-sm text-on-dark">{ex.name}</p>
+                                    <p className="text-[10px] text-on-dark-muted">{ex.muscleGroup}</p>
+                                </div>
+                                <div className="text-right text-xs text-on-dark-muted tabular-nums">
+                                    <span className="font-bold text-on-dark">{ex.sets.length}</span> series ·{' '}
+                                    <span className="font-bold text-on-dark">{Math.round(ex.totalVolume)}</span> kg vol.
+                                </div>
+                            </motion.div>
+                        ))}
+                    </motion.section>
+                )}
 
-                {muscleGroupVolume.length > 0 && (
+                {/* Cardio y movilidad/roller: lo NO-fuerza que antes no aparecía en el resumen (bug CEO).
+                    Garantiza que una sesión sólo de cardio/movilidad no quede vacía. */}
+                {hasNonStrength && (
+                    <motion.section
+                        variants={reducedMotion ? undefined : staggerContainer(0.06, 0.05)}
+                        initial="hidden"
+                        animate="show"
+                        className="mb-6 space-y-2"
+                    >
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-on-dark-muted mb-2">
+                            Cardio y movilidad
+                        </h3>
+                        {session.cardio.map((c) => (
+                            <NonStrengthCard
+                                key={c.blockId}
+                                name={c.name}
+                                typeLabel="Cardio"
+                                accent="var(--ember-500)"
+                                icon={<HeartPulse className="h-4 w-4 shrink-0" style={{ color: 'var(--ember-500)' }} />}
+                                tiles={cardioTiles(c)}
+                                reducedMotion={reducedMotion}
+                            />
+                        ))}
+                        {session.mobility.map((m) => (
+                            <NonStrengthCard
+                                key={m.blockId}
+                                name={m.name}
+                                typeLabel={m.kind === 'roller' ? 'Foam roller' : 'Movilidad'}
+                                accent={m.kind === 'roller' ? '#8b5cf6' : '#14b8a6'}
+                                icon={
+                                    m.kind === 'roller' ? (
+                                        <GitCommit className="h-4 w-4 shrink-0" style={{ color: '#8b5cf6' }} />
+                                    ) : (
+                                        <Move className="h-4 w-4 shrink-0" style={{ color: '#14b8a6' }} />
+                                    )
+                                }
+                                tiles={mobilityTiles(m)}
+                                reducedMotion={reducedMotion}
+                            />
+                        ))}
+                    </motion.section>
+                )}
+
+                {(hasMuscleMap || muscleGroupVolume.length > 0) && (
                     <section className="mb-8">
                         <h3 className="text-xs font-bold uppercase tracking-widest text-on-dark-muted mb-3">
                             Músculos trabajados
@@ -388,7 +451,7 @@ export function WorkoutSummaryOverlay({
                                 transition={reducedMotion ? { duration: 0 } : { duration: 0.3 }}
                                 className="mb-4 rounded-card border border-[var(--border-inverse)] bg-white/[0.03] px-3 pt-3 pb-1"
                             >
-                                <MuscleMapSvg groups={muscleGroupVolume} reducedMotion={reducedMotion} />
+                                <MuscleMapSvg groups={session.muscleWork} reducedMotion={reducedMotion} />
                             </motion.div>
                         )}
                         <div className="space-y-2">
