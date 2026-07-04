@@ -18,6 +18,12 @@ export type WorkoutOfflineLog = {
     actualDistanceM?: number | null
     actualHoldSec?: number | null
     actualAvgHr?: number | null
+    // ── Sustitución de máquina ocupada (Fase L · workstream C, DC-1) ──
+    // Opcionales/aditivos: los items legacy encolados (sin estas keys) siguen parseando; el flush
+    // last-wins reenvía la serie con su marca de sustitución intacta.
+    substitutedExerciseId?: string | null
+    substitutedExerciseName?: string | null
+    substitutionReason?: string | null
 }
 
 /** Clave de identidad de una serie encolada: el motor es (block_id, set_number). */
@@ -116,6 +122,10 @@ export function workoutLogToFormData(item: WorkoutOfflineLog): FormData {
     if (item.actualDistanceM != null) fd.set('actual_distance_m', String(item.actualDistanceM))
     if (item.actualHoldSec != null) fd.set('actual_hold_sec', String(item.actualHoldSec))
     if (item.actualAvgHr != null) fd.set('actual_avg_hr', String(item.actualAvgHr))
+    // Sustitución (Fase L · C): sólo viajan cuando la serie se logueó con sustitución activa.
+    if (item.substitutedExerciseId != null && item.substitutedExerciseId !== '') fd.set('substituted_exercise_id', item.substitutedExerciseId)
+    if (item.substitutedExerciseName != null && item.substitutedExerciseName !== '') fd.set('substituted_exercise_name', item.substitutedExerciseName)
+    if (item.substitutionReason != null && item.substitutionReason !== '') fd.set('substitution_reason', item.substitutionReason)
     return fd
 }
 

@@ -159,12 +159,16 @@ export const getWorkoutExecutionData = cache(async (planId: string) => {
         actual_distance_m: number | null
         actual_hold_sec: number | null
         actual_avg_hr: number | null
+        // Sustitución de máquina ocupada (Fase L · C): rehidratan `substitutionByBlock` tras reload.
+        substituted_exercise_id: string | null
+        substituted_exercise_name: string | null
+        substitution_reason: string | null
     }> = []
 
     if (blockIds.length > 0) {
         const { data: rawLogs } = await supabase
             .from('workout_logs')
-            .select('block_id, set_number, weight_kg, reps_done, rpe, rir, note, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr')
+            .select('block_id, set_number, weight_kg, reps_done, rpe, rir, note, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr, substituted_exercise_id, substituted_exercise_name, substitution_reason')
             .in('block_id', blockIds)
             .gte('logged_at', todayStartUtc)
             .lt('logged_at', todayEndUtc)

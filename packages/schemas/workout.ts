@@ -234,6 +234,13 @@ export const WorkoutLogSetSchema = z.object({
     actual_pace_sec_per_km: z.coerce.number().int().positive().max(3600).optional(),
     actual_hold_sec: z.coerce.number().int().min(0).max(86400).optional(),
     actual_avg_hr: z.coerce.number().int().min(25).max(250).optional(),
+    // ── Sustitución de máquina ocupada (Fase L · workstream C, DC-1) — opcionales/aditivos ──
+    // Los items legacy encolados (sin estas keys) siguen parseando. NUNCA sobreescriben exercise_id
+    // (AC-C7): viven en columnas dedicadas de workout_logs. z.guid() (no z.uuid) por el gotcha de
+    // seeds no-RFC del catálogo. `reason` sin enum en v1 (valor único 'machine_busy' desde const).
+    substituted_exercise_id: z.guid().optional(),
+    substituted_exercise_name: z.string().trim().max(120).optional(),
+    substitution_reason: z.string().trim().max(40).optional(),
 })
 export type WorkoutLogSetInput = z.infer<typeof WorkoutLogSetSchema>
 

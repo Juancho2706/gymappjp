@@ -12,6 +12,9 @@ import { LogSetForm, type SetSyncResult } from './LogSetForm'
 import { SingleExerciseCard } from './SingleExerciseCard'
 import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { STEPPER_MODE_KEY } from './rest-timer-preferences'
+import { SubstituteExerciseSheet } from './_components/SubstituteExerciseSheet'
+import { SUBSTITUTION_REASON } from '@/services/workout/exercise-substitution'
+import type { SubstituteCandidate } from './_data/substitution.queries'
 import {
     buildStepModel,
     firstIncompleteStepIndex,
@@ -137,6 +140,26 @@ export type WorkoutSessionLog = {
     actual_avg_hr?: number | null
 }
 
+/**
+ * Sustitución activa de un bloque en la sesión (Fase L · workstream C). Snapshot de los datos del
+ * sustituto necesarios para el override de la card (nombre/gif/técnica) + el badge; `prescribedName`
+ * es el ejercicio original (para el badge "en vez de X" y la ficha del coach). Los campos de media
+ * pueden venir null tras una rehidratación desde logs (el log sólo guarda id + nombre + motivo).
+ */
+export type SessionSubstitution = {
+    id: string
+    name: string
+    gif_url: string | null
+    video_url: string | null
+    video_start_time: number | null
+    video_end_time: number | null
+    instructions: string[] | null
+    muscle_group: string | null
+    equipment: string | null
+    exercise_type: string | null
+    prescribedName: string
+}
+
 interface Props {
     plan: PlanType
     program: ProgramType | null
@@ -152,6 +175,10 @@ interface Props {
         actual_distance_m?: number | null
         actual_hold_sec?: number | null
         actual_avg_hr?: number | null
+        // Sustitución de máquina ocupada (Fase L · C): rehidratan `substitutionByBlock` tras reload.
+        substituted_exercise_id?: string | null
+        substituted_exercise_name?: string | null
+        substitution_reason?: string | null
     }>
     previousHistory?: Record<string, { weight_kg: number | null, reps_done: number | null, date: string }[]>
     coachSlug: string
@@ -998,6 +1025,42 @@ export function WorkoutExecutionClient({
     // celebración una sola vez en el recap colapsado (el check elástico + barrido del borde).
     const [justCompleted, setJustCompleted] = useState<{ id: string; nonce: number } | null>(null)
 
+    // Sustitución de máquina ocupada (Fase L · workstream C). Swap in-place SOLO de esta sesión: el
+    // plan/DB del bloque NO se toca. Estado por bloque → la card, el nombre, el gif y la técnica pasan
+    // a mostrar el sustituto (el padre hace el override de `exercise`), y cada serie logueada del
+    // bloque persiste las columnas dedicadas del log. Se rehidrata desde los logs de HOY tras reload.
+    const [substitutionByBlock, setSubstitutionByBlock] = useState<Record<string, SessionSubstitution>>({})
+    // Bloque cuyo bottom-sheet de sustitución está abierto (null = cerrado).
+    const [substituteSheetBlockId, setSubstituteSheetBlockId] = useState<string | null>(null)
+
+    // Rehidratación (AC-C4): tras un reload, si algún log de HOY del bloque trae `substituted_*`, la
+    // card arranca en modo sustituido. Reconstrucción liviana (id + nombre snapshot); el gif/técnica
+    // del sustituto no viaja en el log → se degradan a null (la card muestra nombre + badge y sigue
+    // persistiendo la sustitución en las series nuevas). Corre una sola vez, post-montaje.
+    useEffect(() => {
+        const initial: Record<string, SessionSubstitution> = {}
+        for (const log of logs) {
+            if (!log.substituted_exercise_id || initial[log.block_id]) continue
+            const block = plan.workout_blocks.find((b) => b.id === log.block_id)
+            const prescribed = block ? (Array.isArray(block.exercises) ? block.exercises[0] : block.exercises) : null
+            initial[log.block_id] = {
+                id: log.substituted_exercise_id,
+                name: log.substituted_exercise_name ?? 'Sustituto',
+                gif_url: null,
+                video_url: null,
+                video_start_time: null,
+                video_end_time: null,
+                instructions: null,
+                muscle_group: prescribed?.muscle_group ?? null,
+                equipment: null,
+                exercise_type: prescribed?.exercise_type ?? null,
+                prescribedName: prescribed?.name ?? 'Ejercicio',
+            }
+        }
+        if (Object.keys(initial).length > 0) setSubstitutionByBlock(initial)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
     // Wake lock de TODA la sesión (bug E2-1) — antes el lock solo cubría el descanso.
     useScreenWakeLock()
 
@@ -1143,6 +1206,54 @@ export function WorkoutExecutionClient({
         if (!exercise) return
         setSelectedExercise(exercise)
         setShowTechnique(true)
+    }
+    // Sustitución de máquina ocupada (Fase L · C): construye el `ExerciseType` del sustituto para el
+    // override de la card (nombre/gif/técnica). Su `id` es el del sustituto → `previousHistory` y
+    // `exerciseMaxes` (keyeados por id) quedan vacíos por construcción ⇒ guard anti-PR-falso gratis
+    // (no "Última vez", no umbral de PR inline en el slot prescrito).
+    const substitutionToExercise = (sub: SessionSubstitution): ExerciseType => ({
+        id: sub.id,
+        name: sub.name,
+        muscle_group: sub.muscle_group ?? '',
+        video_url: sub.video_url,
+        video_start_time: sub.video_start_time,
+        video_end_time: sub.video_end_time,
+        gif_url: sub.gif_url,
+        instructions: sub.instructions,
+        exercise_type: sub.exercise_type,
+    })
+    // Confirmar la elección del sheet → swap in-place SOLO de esta sesión (el plan NO se toca).
+    const confirmSubstitution = (option: SubstituteCandidate) => {
+        const blockId = substituteSheetBlockId
+        if (!blockId) return
+        const block = blocks.find((b) => b.id === blockId)
+        const prescribed = block ? getExercise(block) : null
+        setSubstitutionByBlock((prev) => ({
+            ...prev,
+            [blockId]: {
+                id: option.id,
+                name: option.name,
+                gif_url: option.gif_url,
+                video_url: option.video_url,
+                video_start_time: option.video_start_time,
+                video_end_time: option.video_end_time,
+                instructions: option.instructions,
+                muscle_group: option.muscle_group,
+                equipment: option.equipment,
+                exercise_type: option.exercise_type,
+                prescribedName: prescribed?.name ?? 'Ejercicio',
+            },
+        }))
+        setSubstituteSheetBlockId(null)
+    }
+    // Deshacer (solo antes del 1er set logueado del bloque — NG-5): el bloque vuelve al prescrito.
+    const undoSubstitution = (blockId: string) => {
+        setSubstitutionByBlock((prev) => {
+            if (!prev[blockId]) return prev
+            const next = { ...prev }
+            delete next[blockId]
+            return next
+        })
     }
     /** Scroll a la siguiente serie incompleta (superserie) o al siguiente bloque incompleto. */
     const scrollToNextIncomplete = (fromLogs: Props['logs']) => {
@@ -1342,8 +1453,13 @@ export function WorkoutExecutionClient({
         <div key={group.key} className="space-y-3">
             <div className="space-y-3">
                 {group.blocks.sort((a, b) => a.order_index - b.order_index).map((block, blockIndex) => {
-                    const exercise = getExercise(block)
-                    if (!exercise) return null
+                    const prescribed = getExercise(block)
+                    if (!prescribed) return null
+                    // Sustitución activa (Fase L · C): la card, el nombre, el gif y la técnica pasan al
+                    // sustituto. El `id` override vacía `previousHistory`/`exerciseMaxes` keyeados por id
+                    // ⇒ guard anti-PR-falso (no "Última vez", no umbral de PR) sin tocar el motor.
+                    const sub = substitutionByBlock[block.id]
+                    const exercise = sub ? substitutionToExercise(sub) : prescribed
                     const blockLogs = sessionLogs.filter((log) => log.block_id === block.id)
                     const complete = isBlockCompleted(block)
                     // Tipo efectivo (specs/movida-entrenamiento): strength ⇒ render
@@ -1444,6 +1560,10 @@ export function WorkoutExecutionClient({
                             toggleExpandDone={toggleExpandDone}
                             setFillByBlock={setFillByBlock}
                             openTechnique={openTechnique}
+                            substitution={sub ? { exerciseId: sub.id, exerciseName: sub.name, reason: SUBSTITUTION_REASON, prescribedName: sub.prescribedName } : null}
+                            canSubstitute={effType === 'strength' && doneCount === 0}
+                            onOpenSubstitute={() => setSubstituteSheetBlockId(block.id)}
+                            onUndoSubstitution={() => undoSubstitution(block.id)}
                             handleLogged={handleLogged}
                             handleResult={handleResult}
                         />
@@ -1686,6 +1806,9 @@ export function WorkoutExecutionClient({
                         durationSec={finishedElapsed ?? sessionElapsed}
                         programName={program?.name ?? null}
                         nextHint={nextHint}
+                        // Guard anti-PR-falso (DC-4/AC-C5): un bloque sustituido no marca PR en el slot
+                        // prescrito (su peso no cuenta como récord ni dispara la PRShareCardModal).
+                        substitutedBlockIds={Object.keys(substitutionByBlock)}
                         onDone={() => router.push(`${base}/dashboard`)}
                     />,
                     document.body
@@ -1804,6 +1927,22 @@ export function WorkoutExecutionClient({
                         </div>
                     </DialogContent>
                 </Dialog>
+
+                {/* Bottom-sheet de sustitución de máquina ocupada (Fase L · workstream C). */}
+                {(() => {
+                    const openBlock = substituteSheetBlockId ? blocks.find((b) => b.id === substituteSheetBlockId) : null
+                    const openEx = openBlock ? getExercise(openBlock) : null
+                    return (
+                        <SubstituteExerciseSheet
+                            open={substituteSheetBlockId != null}
+                            onOpenChange={(o) => { if (!o) setSubstituteSheetBlockId(null) }}
+                            blockId={substituteSheetBlockId}
+                            prescribedName={openEx?.name ?? 'Ejercicio'}
+                            muscleGroup={openEx?.muscle_group ?? ''}
+                            onConfirm={confirmSubstitution}
+                        />
+                    )
+                })()}
 
             </div>
           </WorkoutKeypadProvider>

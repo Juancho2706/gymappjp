@@ -95,6 +95,13 @@ interface Props {
         groupRestSeconds: number
         closesRound: () => boolean
     }
+    /**
+     * Sustitución de máquina ocupada (Fase L · workstream C): si el bloque tiene una sustitución
+     * activa, estos campos viajan con CADA serie logueada (FormData + cola offline) → el coach ve
+     * "hizo X · sustituyó Y" en la ficha. NUNCA toca `exercise_id` del log (AC-C7). null/undefined
+     * ⇒ serie normal (no envía las keys; los items legacy siguen parseando).
+     */
+    substitution?: { exerciseId: string; exerciseName: string; reason: string } | null
     onLogged?: (payload: {
         blockId: string
         setNumber: number
@@ -237,6 +244,7 @@ function StrengthLogSetForm({
     prefill,
     reopenNonce,
     supersetRest,
+    substitution,
     onLogged,
     onResult,
 }: Props) {
@@ -430,6 +438,10 @@ function StrengthLogSetForm({
             planId: params.planId,
             coachSlug: params.coach_slug,
             timestamp: Date.now(),
+            // Sustitución (Fase L · C): viaja con la serie si el bloque está sustituido (else null).
+            substitutedExerciseId: substitution?.exerciseId ?? null,
+            substitutedExerciseName: substitution?.exerciseName ?? null,
+            substitutionReason: substitution?.reason ?? null,
         })
         settleRef.current = true
         prRef.current = prThresholdKg != null && w != null && w > 0 && w >= prThresholdKg
@@ -573,6 +585,14 @@ function StrengthLogSetForm({
                 <input type="hidden" name="set_number" value={setNumber} />
                 {/* Nota (quick-win E2-6): mirror oculto — SIEMPRE montado → viaja en cada submit sin duplicar name. */}
                 <input type="hidden" name="note" value={note} />
+                {/* Sustitución de máquina ocupada (Fase L · C): sólo montados si el bloque está sustituido. */}
+                {substitution && (
+                    <>
+                        <input type="hidden" name="substituted_exercise_id" value={substitution.exerciseId} />
+                        <input type="hidden" name="substituted_exercise_name" value={substitution.exerciseName} />
+                        <input type="hidden" name="substitution_reason" value={substitution.reason} />
+                    </>
+                )}
 
                 <div className="flex items-center gap-2.5">
                     <span

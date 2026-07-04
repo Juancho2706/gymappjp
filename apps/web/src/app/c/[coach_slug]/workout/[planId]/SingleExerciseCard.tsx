@@ -2,7 +2,7 @@
 
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Info, ChevronDown, Play, CheckCircle2, TrendingUp, History, Quote } from 'lucide-react'
+import { Info, ChevronDown, Play, CheckCircle2, TrendingUp, History, Quote, ArrowRightLeft, Undo2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { springs } from '@/lib/animation-presets'
 import { formatRelativeDate } from '@/lib/date-utils'
@@ -91,6 +91,18 @@ interface SingleExerciseCardProps {
     setFillByBlock: Dispatch<SetStateAction<Record<string, FillEntry>>>
     /** Abre el modal de técnica. */
     openTechnique: (exercise: ExerciseType | null) => void
+    /**
+     * Sustitución de máquina ocupada (Fase L · C). `exercise` (prop de arriba) YA es el sustituto
+     * cuando hay una activa (el padre hace el override) → la card, el gif y la técnica muestran el
+     * sustituto sin cambios acá; estos campos sólo agregan el badge, el disparador y el thread al log.
+     */
+    substitution?: { exerciseId: string; exerciseName: string; reason: string; prescribedName: string } | null
+    /** ¿Se puede sustituir/deshacer? (solo strength, antes del 1er set logueado — NG-5). */
+    canSubstitute?: boolean
+    /** Abre el bottom-sheet de sustitución para este bloque. */
+    onOpenSubstitute?: () => void
+    /** Deshace la sustitución (solo si aún no hay sets logueados). */
+    onUndoSubstitution?: () => void
     /** Log optimista + guía/scroll (handler del padre). */
     handleLogged: (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null; note?: string | null }) => void
     /** Reconciliación del optimismo (resultado REAL del server). */
@@ -136,6 +148,10 @@ export function SingleExerciseCard({
     toggleExpandDone,
     setFillByBlock,
     openTechnique,
+    substitution,
+    canSubstitute,
+    onOpenSubstitute,
+    onUndoSubstitution,
     handleLogged,
     handleResult,
 }: SingleExerciseCardProps) {
@@ -182,6 +198,16 @@ export function SingleExerciseCard({
                                 <ChevronDown className={cn('h-3 w-3 transition-transform', detailsOpen && 'rotate-180')} />
                             </button>
                         )}
+                        {effType === 'strength' && canSubstitute && !substitution && onOpenSubstitute && (
+                            <button
+                                type="button"
+                                onClick={onOpenSubstitute}
+                                className="flex h-8 items-center gap-1 rounded-control px-2 text-[11px] font-semibold text-on-dark-muted transition-colors hover:text-on-dark"
+                                aria-label={`Cambiar ${exercise.name} — máquina ocupada`}
+                            >
+                                <ArrowRightLeft className="h-3.5 w-3.5" /> Cambiar
+                            </button>
+                        )}
                         {(exercise.gif_url || exercise.video_url) && (
                             <button
                                 type="button"
@@ -194,6 +220,28 @@ export function SingleExerciseCard({
                         )}
                     </div>
                 </div>
+                {/* Sustitución activa (Fase L · C): badge "Sustituido" + deshacer mientras no haya sets. */}
+                {substitution && (
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--ember-500)]/30 bg-[var(--ember-500)]/[0.12] px-2.5 py-1 text-[11px] font-bold text-[var(--ember-200)]">
+                            <ArrowRightLeft className="h-3 w-3" />
+                            Sustituido · máquina ocupada
+                        </span>
+                        <span className="text-[11px] text-on-dark-muted">
+                            en vez de <span className="font-semibold text-on-dark">{substitution.prescribedName}</span>
+                        </span>
+                        {canSubstitute && onUndoSubstitution && (
+                            <button
+                                type="button"
+                                onClick={onUndoSubstitution}
+                                className="ml-auto inline-flex h-8 items-center gap-1 rounded-control px-2 text-[11px] font-semibold text-on-dark-muted transition-colors hover:text-on-dark"
+                                aria-label="Deshacer la sustitución"
+                            >
+                                <Undo2 className="h-3.5 w-3.5" /> Deshacer
+                            </button>
+                        )}
+                    </div>
+                )}
                 {/* Nombre + dots de progreso de series (o check al completar) */}
                 <div className="flex items-start justify-between gap-3">
                     <h3 className="min-w-0 flex-1 font-display text-[22px] font-black leading-[1.1] tracking-[-0.02em] text-on-dark">{exercise.name}</h3>
@@ -365,6 +413,7 @@ export function SingleExerciseCard({
                                 isActive={setNumber === firstUnlogged}
                                 prefill={fillByBlock[block.id]?.setNumber === setNumber ? fillByBlock[block.id] : undefined}
                                 reopenNonce={reopenSignal?.blockId === block.id && reopenSignal?.setNumber === setNumber ? reopenSignal.nonce : undefined}
+                                substitution={substitution ? { exerciseId: substitution.exerciseId, exerciseName: substitution.exerciseName, reason: substitution.reason } : null}
                                 onLogged={handleLogged}
                                 onResult={handleResult}
                             />

@@ -255,6 +255,38 @@ describe('WorkoutLogSetSchema — espejo polimórfico (AC4)', () => {
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '11' }).success).toBe(false)
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rir: '11' }).success).toBe(false)
     })
+
+    // Sustitución de máquina ocupada (Fase L · workstream C) — 3 campos opcionales/aditivos.
+    it('log legacy SIN campos de sustitución sigue siendo válido', () => {
+        const result = WorkoutLogSetSchema.safeParse({ ...baseLog, weight_kg: '60', reps_done: '10' })
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.substituted_exercise_id).toBeUndefined()
+            expect(result.data.substituted_exercise_name).toBeUndefined()
+            expect(result.data.substitution_reason).toBeUndefined()
+        }
+    })
+
+    it('acepta los 3 campos de sustitución cuando el bloque está sustituido', () => {
+        const result = WorkoutLogSetSchema.safeParse({
+            ...baseLog,
+            weight_kg: '40',
+            reps_done: '12',
+            substituted_exercise_id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301',
+            substituted_exercise_name: 'Press con mancuernas',
+            substitution_reason: 'machine_busy',
+        })
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.substituted_exercise_id).toBe('3f2504e0-4f89-41d3-9a0c-0305e82c3301')
+            expect(result.data.substituted_exercise_name).toBe('Press con mancuernas')
+            expect(result.data.substitution_reason).toBe('machine_busy')
+        }
+    })
+
+    it('rechaza un substituted_exercise_id que no es uuid', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, substituted_exercise_id: 'no-es-uuid' }).success).toBe(false)
+    })
 })
 
 describe('CardioProfileUpdateSchema (AC9)', () => {

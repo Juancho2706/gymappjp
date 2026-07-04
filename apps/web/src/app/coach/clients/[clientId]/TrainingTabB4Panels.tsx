@@ -12,6 +12,7 @@ import {
     CalendarSearch,
     Moon,
     StickyNote,
+    ArrowRightLeft,
 } from 'lucide-react'
 import { MetricInfo } from '@/components/ui/metric-info'
 import { SectionTitle } from './_components/SectionTitle'
@@ -652,12 +653,27 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                         metaRir ? `· RIR ${metaRir}` : null,
                         metaTempo ? `· tempo ${metaTempo}` : null,
                     ].filter(Boolean)
+                    // Sustitución de máquina ocupada (Fase L · C, AC-C6): el alumno hizo el sustituto
+                    // en vez del prescrito. Snapshot del nombre → no requiere JOIN. Todas las series
+                    // del bloque comparten la sustitución; tomo el primer nombre presente.
+                    const substitutedName = sortedSets.find((s) => (s as WorkoutLog).substituted_exercise_name)
+                        ?.substituted_exercise_name as string | null | undefined
                     return (
                         <div key={name}>
                             <div className="mb-1 flex items-center gap-2">
                                 <span className="text-[13px] font-bold text-strong">{name}</span>
                                 {muscle && <span className="text-[11px] text-muted">{muscle}</span>}
                             </div>
+                            {substitutedName && (
+                                <div className="mb-1.5 flex items-start gap-1.5 rounded-[var(--radius-xs)] border border-[var(--warning-600)]/25 bg-[var(--warning-600)]/[0.08] px-2 py-1 text-[11px] leading-snug text-strong">
+                                    <ArrowRightLeft className="mt-[1px] h-3 w-3 shrink-0 text-[var(--warning-600)]" />
+                                    <span>
+                                        Hizo <span className="font-bold">{substitutedName}</span> · sustituyó{' '}
+                                        <span className="font-semibold">{name}</span>{' '}
+                                        <span className="text-muted">(máquina ocupada)</span>
+                                    </span>
+                                </div>
+                            )}
                             {/* Micro-línea de prescripción + progresión (una vez por ejercicio) */}
                             {(metaParts.length > 0 || prog) && (
                                 <div className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[10.5px]">

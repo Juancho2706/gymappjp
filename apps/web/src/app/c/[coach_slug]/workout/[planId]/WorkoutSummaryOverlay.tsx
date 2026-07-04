@@ -68,6 +68,12 @@ export interface WorkoutSummaryOverlayProps {
     programName?: string | null
     /** Sub-línea del contexto del programa (fase · día X de Y / "Programa semanal"). */
     nextHint?: string | null
+    /**
+     * Bloques con sustitución de máquina ocupada activa (Fase L · C). Guard anti-PR-falso
+     * (DC-4/AC-C5): su peso NO cuenta para detectar récords en el ejercicio PRESCRITO (el sustituto
+     * pesado no debe marcar un PR falso en el slot original). El volumen sí se cuenta (fue trabajo real).
+     */
+    substitutedBlockIds?: string[]
     onDone: () => void
 }
 
@@ -86,9 +92,11 @@ export function WorkoutSummaryOverlay({
     durationSec,
     programName = null,
     nextHint = null,
+    substitutedBlockIds = [],
     onDone,
 }: WorkoutSummaryOverlayProps) {
     const reducedMotion = useReducedMotion()
+    const substitutedSet = useMemo(() => new Set(substitutedBlockIds), [substitutedBlockIds])
 
     const exerciseBreakdown = useMemo(() => {
         type Row = {
@@ -108,6 +116,10 @@ export function WorkoutSummaryOverlay({
             const blockLogs = logs.filter((l) => l.block_id === block.id)
             if (blockLogs.length === 0) continue
 
+            // Bloque sustituido (máquina ocupada): cuenta el VOLUMEN (fue trabajo real) pero NO aporta
+            // al máx/1RM del ejercicio prescrito → nunca marca un PR falso en el slot original (AC-C5).
+            const isSubstituted = substitutedSet.has(block.id)
+
             let addVol = 0
             let addMaxW = 0
             let addBest1 = 0
@@ -115,6 +127,7 @@ export function WorkoutSummaryOverlay({
                 const w = l.weight_kg ?? 0
                 const r = l.reps_done ?? 0
                 addVol += w * r
+                if (isSubstituted) continue
                 if (w > addMaxW) addMaxW = w
                 const e1 = epleyOneRM(w, r)
                 if (e1 > addBest1) addBest1 = e1
@@ -140,7 +153,7 @@ export function WorkoutSummaryOverlay({
         }
 
         return [...byId.values()]
-    }, [blocks, logs])
+    }, [blocks, logs, substitutedSet])
 
     const detectedPRs = useMemo(() => {
         return exerciseBreakdown

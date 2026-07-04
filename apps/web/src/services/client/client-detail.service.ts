@@ -896,6 +896,7 @@ export async function getClientWorkoutForDate(clientId: string, date: string) {
         .select(`
             set_number, weight_kg, reps_done, rpe, rir, note, logged_at,
             target_weight_at_log, target_reps_at_log,
+            substituted_exercise_id, substituted_exercise_name, substitution_reason,
             workout_blocks (
                 section, order_index, target_weight_kg, reps, sets, rir,
                 progression_mode, progression_type, progression_value, tempo,

@@ -29,6 +29,16 @@ export async function logSetAction(
     const noteRaw = formData.get('note')
     const note = noteRaw === null || String(noteRaw).trim() === '' ? undefined : String(noteRaw)
 
+    // Sustitución de máquina ocupada (Fase L · C): texto/uuid — leídos CRUDOS (no por getOptional).
+    // Sólo llegan cuando el bloque tenía sustitución activa; una serie normal no envía estas keys.
+    const rawText = (key: string) => {
+        const v = formData.get(key)
+        return v === null || String(v).trim() === '' ? undefined : String(v).trim()
+    }
+    const substituted_exercise_id = rawText('substituted_exercise_id')
+    const substituted_exercise_name = rawText('substituted_exercise_name')
+    const substitution_reason = rawText('substitution_reason')
+
     const raw = {
         block_id: formData.get('block_id') as string,
         set_number: formData.get('set_number') as string,
@@ -44,6 +54,10 @@ export async function logSetAction(
         actual_pace_sec_per_km: getOptional('actual_pace_sec_per_km'),
         actual_hold_sec: getOptional('actual_hold_sec'),
         actual_avg_hr: getOptional('actual_avg_hr'),
+        // Sustitución (Fase L · C): NO sobreescriben exercise_id (AC-C7) — columnas dedicadas.
+        substituted_exercise_id,
+        substituted_exercise_name,
+        substitution_reason,
     }
 
     const parsed = WorkoutLogSetSchema.safeParse(raw)
@@ -83,6 +97,11 @@ export async function logSetAction(
         actual_pace_sec_per_km: parsed.data.actual_pace_sec_per_km ?? null,
         actual_hold_sec: parsed.data.actual_hold_sec ?? null,
         actual_avg_hr: parsed.data.actual_avg_hr ?? null,
+        // Sustitución de máquina ocupada (Fase L · C, DC-1): visible para el coach en la ficha.
+        // Snapshot del nombre → sobrevive al hard-delete del ejercicio. exercise_id NO se toca.
+        substituted_exercise_id: parsed.data.substituted_exercise_id ?? null,
+        substituted_exercise_name: parsed.data.substituted_exercise_name ?? null,
+        substitution_reason: parsed.data.substitution_reason ?? null,
     }
 
     if (existingRows && existingRows.length > 0) {
