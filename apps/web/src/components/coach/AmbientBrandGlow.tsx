@@ -21,18 +21,18 @@ export function AmbientBrandGlow() {
         >
             {/* Wash primario — sesgado al área superior */}
             <div
-                className="absolute left-[35%] top-[-45%] h-[420px] w-[min(520px,115vw)] -translate-x-1/2 opacity-[0.12] dark:opacity-[0.10]"
+                className="absolute left-[35%] top-[-45%] h-[420px] w-[min(520px,115vw)] -translate-x-1/2 opacity-[0.12] dark:opacity-[0.18]"
                 style={{
                     background:
-                        'radial-gradient(ellipse at center, rgb(var(--theme-primary-rgb) / 0.55) 0%, transparent 68%)',
+                        'radial-gradient(ellipse at center, rgba(var(--theme-primary-rgb), 0.55) 0%, transparent 68%)',
                 }}
             />
             {/* Wash secundario — hacia el borde derecho, más tenue */}
             <div
-                className="absolute -right-[5%] top-[-30%] h-[360px] w-[min(420px,95vw)] opacity-[0.09] dark:opacity-[0.06]"
+                className="absolute -right-[5%] top-[-30%] h-[360px] w-[min(420px,95vw)] opacity-[0.09] dark:opacity-[0.10]"
                 style={{
                     background:
-                        'radial-gradient(ellipse at 30% 40%, rgb(var(--theme-primary-rgb) / 0.35) 0%, transparent 65%)',
+                        'radial-gradient(ellipse at 30% 40%, rgba(var(--theme-primary-rgb), 0.35) 0%, transparent 65%)',
                 }}
             />
         </div>

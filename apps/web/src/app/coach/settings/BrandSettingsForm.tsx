@@ -778,7 +778,7 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                         <button
                             type="button"
                             onClick={() => setPreviewExpanded(true)}
-                            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl border border-border bg-card text-muted hover:text-strong hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 shadow-lg"
+                            className="hidden md:inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl border border-border bg-card text-muted hover:text-strong hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 shadow-lg"
                         >
                             <Maximize2 className="w-4 h-4" />
                             <span className="hidden sm:inline">Expandir vista</span>
