@@ -25,6 +25,7 @@ import { formatRelativeDate } from '@/lib/date-utils'
 import { springs } from '@/lib/animation-presets'
 import { useBasePath } from '@/components/client/BasePathProvider'
 import { useScreenWakeLock } from '@/lib/client/use-screen-wake-lock'
+import { markFirstWorkoutCompleted } from '@/lib/pwa/install-signals'
 import {
     groupContiguousSupersetRuns,
     type WorkoutSectionKey,
@@ -1180,6 +1181,7 @@ export function WorkoutExecutionClient({
                         action: {
                             label: 'Finalizar igual',
                             onClick: () => {
+                                markFirstWorkoutCompleted()
                                 setFinishedElapsed(sessionElapsed)
                                 setShowCompleted(true)
                             },
@@ -1189,6 +1191,8 @@ export function WorkoutExecutionClient({
                 return
             }
         }
+        // Señal de "primer workout completado" → arma el prompt de instalación PWA (gating por engagement).
+        markFirstWorkoutCompleted()
         setFinishedElapsed(sessionElapsed)
         setShowCompleted(true)
     }

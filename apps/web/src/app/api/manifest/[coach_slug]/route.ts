@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/admin-client';
 import { BRAND_APP_ICON_512, BRAND_APP_ICON_MASKABLE } from '@/lib/brand-assets';
 import { resolveBrandTheme } from '@eva/brand-kit';
+import { PWA_SCREENSHOT_SIZES } from '@/lib/pwa/screenshot-dimensions';
 
 type ManifestBrand = {
   brand_name: string
@@ -50,16 +51,34 @@ export async function GET(
     ? (brand?.splash_bg_color ?? brand?.primary_color ?? "#000000")
     : deriveSplashBackground(brand?.primary_color)
 
+  // Screenshots del manifest → Richer Install UI de Android. Generadas al vuelo con next/og
+  // (composiciones brandeadas, NO capturas reales; ver /api/pwa-screenshot). Ambas variantes
+  // comparten dimensiones EXACTAS (PWA_SCREENSHOT_SIZES) — si difirieran, Chrome descarta todo el
+  // richer UI en silencio. Apuntan al `slug` de la URL (el route resuelve marca coach/team igual
+  // que este manifest). El `description` de arriba ya alimenta el copy del diálogo.
+  const screenshots = [1, 2].map((v) => ({
+    src: `/api/pwa-screenshot/${slug}?v=${v}`,
+    sizes: PWA_SCREENSHOT_SIZES,
+    type: "image/png",
+    form_factor: "narrow",
+    label: v === 1 ? `Tu progreso con ${brand?.brand_name || 'tu coach'}` : `Tu plan de entrenamiento`,
+  }));
+
   const manifest = {
+    // `id` estable: sin `id`, Chrome usa el start_url como identidad — lo espejamos EXPLÍCITO
+    // para no cambiar la identidad de PWAs ya instaladas (id distinto = app "nueva" al reinstalar).
+    id: startUrl,
     name: brand?.brand_name || "EVA",
     short_name: brand?.brand_name || "EVA",
     description: `Entrena con ${brand?.brand_name || 'tu coach'}`,
     start_url: startUrl,
     scope,
     display: "standalone",
+    orientation: "portrait",
     background_color: backgroundColor,
     theme_color: brand?.primary_color || "#000000",
     icons: buildIcons(brand?.logo_url ?? null),
+    screenshots,
   };
 
   return NextResponse.json(manifest, {

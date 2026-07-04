@@ -13,7 +13,6 @@ import { resolveMetadataBase } from '@/lib/site-url'
 import { ClientNav } from '@/components/client/ClientNav'
 import { getStudentMovementNavEnabled, getStudentBodyCompositionNavEnabled, getStudentNutritionNavEnabled } from './_data/client-root.queries'
 import { BasePathProvider } from '@/components/client/BasePathProvider'
-import { AppDownloadBanner } from '@/components/AppDownloadBanner'
 import { NetworkProvider } from '@/components/client/OfflineScreen'
 import { OfflineNutritionQueueSync } from '@/app/c/[coach_slug]/_components/OfflineNutritionQueueSync'
 import { OfflineWorkoutQueueSync } from '@/app/c/[coach_slug]/_components/OfflineWorkoutQueueSync'
@@ -323,6 +322,8 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                 style={{ '--theme-primary-rgb': palette.primaryRgb } as React.CSSProperties}
                 data-coach-slug={coach_slug}
                 data-brand-name={brandName}
+                data-primary-color={primaryColor}
+                data-logo-url={logoUrl}
                 data-logo-dark={logoUrlDark || undefined}
                 data-loader-variant={loaderVariant}
             >
@@ -339,9 +340,10 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                         showBodyComposition={showBodyComposition}
                         showNutrition={showNutrition}
                     />
-                    {/* InstallPrompt is rendered once globally in the root app/layout.tsx —
-                        rendering a second one here stacked two banners for the student tree. */}
-                    <AppDownloadBanner brandName={brandName} primaryColor={primaryColor} />
+                    {/* InstallPrompt se renderiza una sola vez global (root app/layout.tsx) y se
+                        auto-brandea leyendo los data-* de este wrapper cuando está bajo /c.
+                        AppDownloadBanner se removió (decisión CEO: promos de app store fuera; los
+                        enlaces apuntaban a listados de tienda inexistentes). */}
 
                     <main className="relative z-0 flex-1 overflow-auto bg-muted/20 pb-[var(--mobile-content-bottom-offset)] dark:bg-background md:pb-0 has-[.is-workout-page]:pb-0">
                         {isOrphan && (
