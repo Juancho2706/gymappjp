@@ -3,7 +3,7 @@
 import { useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { getPostLoginRedirect } from '@/lib/auth/post-login-redirect'
+import { resolvePostGoogleAuthUrl } from '@/lib/auth/post-google-auth'
 import { Loader2 } from 'lucide-react'
 
 function ExchangeInner() {
@@ -30,48 +30,16 @@ function ExchangeInner() {
 
             // Password recovery (or any explicit internal next): the session is now set,
             // so send the user straight to that page (e.g. /reset-password) instead of the
-            // default post-login redirect. Guard against open redirects.
+            // default post-login redirect. resolvePostGoogleAuthUrl guards against open
+            // redirects and handles the coach/org lookup + no-account fallbacks.
             const next = searchParams.get('next')
-            if (next && next.startsWith('/') && !next.startsWith('//')) {
-                window.location.replace(next)
-                return
-            }
-
-            const { data: coach } = await supabase
-                .from('coaches')
-                .select('id, active_org_id')
-                .eq('id', data.user.id)
-                .maybeSingle()
-
-            if (coach) {
-                let activeOrgSlug: string | null = null
-                let activeOrgRole: string | null = null
-
-                if (coach.active_org_id) {
-                    const { data: membership } = await supabase
-                        .from('organization_members')
-                        .select('role, organizations(slug)')
-                        .eq('org_id', coach.active_org_id)
-                        .eq('user_id', data.user.id)
-                        .eq('status', 'active')
-                        .is('deleted_at', null)
-                        .maybeSingle()
-
-                    const organization = membership?.organizations as unknown as { slug?: string | null } | null
-                    activeOrgSlug = organization?.slug ?? null
-                    activeOrgRole = membership?.role ?? null
-                }
-
-                window.location.replace(getPostLoginRedirect({
-                    isCoach: true,
-                    activeOrgSlug,
-                    activeOrgRole,
-                }))
-            } else if (isLoginIntent) {
-                router.replace('/login?error=no_google_account')
-            } else {
-                window.location.replace('/register?from=google')
-            }
+            const url = await resolvePostGoogleAuthUrl({
+                supabase,
+                userId: data.user.id,
+                intent: isLoginIntent ? 'login' : 'register',
+                next,
+            })
+            window.location.replace(url)
         })
     }, [router, searchParams])
 

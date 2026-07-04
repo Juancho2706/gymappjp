@@ -413,6 +413,7 @@ Fórmula completa en `docs/plans/EXECUTION_PLAN.md` §3.4.
 | Variable | Valor en prod | Descripción |
 |----------|--------------|-------------|
 | `NEXT_PUBLIC_SITE_URL` | `https://eva-app.cl` | URL base del sitio. Usada en emails, og:url, sitemap |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client ID (tipo Web) — **el MISMO client ID** ya configurado en Supabase Auth → Providers → Google | Habilita el login/registro con Google via GIS (`signInWithIdToken`) desde nuestro dominio. **Opcional:** sin setear, el boton cae al flujo redirect legacy via `supabase.co`. Requiere que ese OAuth client tenga en **Authorized JavaScript origins**: `https://www.eva-app.cl`, `https://eva-app.cl` y `http://localhost:3000` |
 
 ---
 
