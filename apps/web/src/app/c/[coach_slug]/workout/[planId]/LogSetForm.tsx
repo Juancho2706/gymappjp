@@ -1,12 +1,11 @@
 'use client'
 
-import { useActionState, useEffect, useRef, useOptimistic, useState, startTransition } from 'react'
+import { useActionState, useEffect, useRef, useOptimistic, useState, startTransition, type RefObject } from 'react'
 import { useParams } from 'next/navigation'
-import { Check, Loader2, StickyNote, HelpCircle, CloudOff } from 'lucide-react'
+import { Check, Loader2, StickyNote, CloudOff } from 'lucide-react'
 import { useFormStatus } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
-import { Popover, PopoverContent, PopoverDescription, PopoverTrigger } from '@/components/ui/popover'
 import { logSetAction, type LogState } from './_actions/workout-log.actions'
 import { useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
 import {
@@ -20,6 +19,8 @@ import { triggerHaptic } from '@/lib/client/haptics'
 import { useCoarsePointer } from '@/lib/client/useCoarsePointer'
 import { formatWeightEsCl } from '@/lib/client/keypad-logic'
 import { useWorkoutKeypad } from './WorkoutKeypadProvider'
+import { ScaleDots, EffortHelp, RPE_HELP, RIR_HELP } from './EffortScale'
+import { typedKeypadFields, type TypedKeypadMode } from './typed-keypad'
 import { cn } from '@/lib/utils'
 import { springs } from '@/lib/animation-presets'
 
@@ -102,6 +103,11 @@ interface Props {
      * ⇒ serie normal (no envía las keys; los items legacy siguen parseando).
      */
     substitution?: { exerciseId: string; exerciseName: string; reason: string } | null
+    /**
+     * Objetivo prescrito del bloque tipado (cardio/movilidad/roller) ya formateado — alimenta el
+     * header del teclado numérico custom de las filas tipadas (DB-5). Sólo se usa en pointer coarse.
+     */
+    typedObjective?: string
     onLogged?: (payload: {
         blockId: string
         setNumber: number
@@ -140,91 +146,6 @@ export function LogSetForm(props: Props) {
         return <TypedLogSetRow {...props} mode={props.mode} />
     }
     return <StrengthLogSetForm {...props} />
-}
-
-const SCALE_OPTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const
-
-/** Ayuda 1-tap para el alumno — texto corto, sin jerga (quick-win E2-7). */
-const RPE_HELP = 'RPE = qué tan duro se sintió la serie. 1 = muy fácil · 10 = no podías hacer ni una repetición más.'
-const RIR_HELP = 'RIR = cuántas reps te quedaban en el tanque. Si te quedaba 1, es 1. Así de simple.'
-
-/**
- * Botoncito (?) accesible junto a los labels de RPE/RIR: Popover con explicación corta para
- * alumnos (mismo patrón que InfoTooltip de nutrición). El icono es chico pero el hit-area es
- * ≥44px (h-11 w-11) con márgenes negativos para no inflar la fila del label.
- */
-function EffortHelp({ label, text }: { label: string; text: string }) {
-    return (
-        <Popover>
-            <PopoverTrigger
-                type="button"
-                aria-label={`¿Qué es el ${label}?`}
-                className="-my-3 inline-flex h-11 w-11 items-center justify-center rounded-full text-on-dark-muted transition-colors hover:text-on-dark touch-manipulation"
-            >
-                <HelpCircle className="h-3.5 w-3.5" aria-hidden />
-            </PopoverTrigger>
-            <PopoverContent className="w-64">
-                <PopoverDescription className="text-xs leading-relaxed">{text}</PopoverDescription>
-            </PopoverContent>
-        </Popover>
-    )
-}
-
-/**
- * Escala segmentada 1-10 (dots) para registrar esfuerzo por serie (decisión CEO): la usan
- * RPE y RIR con UI idéntica. Los botones son `flex-1` para que los 10 segmentos quepan en la
- * fila activa sin volver a la "sopa" de inputs. `name`/payload los inyecta el submit — esto es
- * sólo la UI de captura (el valor viaja igual que antes).
- */
-function ScaleDots({
-    value,
-    onChange,
-    reducedMotion,
-    name,
-    compact = false,
-}: {
-    value: number | null
-    onChange: (v: number) => void
-    reducedMotion: boolean | null
-    name: string
-    compact?: boolean
-}) {
-    return (
-        <div
-            role="radiogroup"
-            aria-label={`${name} (escala 1 a 10)`}
-            className="flex items-center gap-0.5"
-        >
-            {SCALE_OPTS.map((n) => {
-                const filled = value != null && n <= value
-                const selected = value === n
-                return (
-                    <button
-                        key={n}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        aria-label={`${name} ${n}`}
-                        onClick={() => onChange(n)}
-                        className="flex h-11 flex-1 items-center justify-center"
-                    >
-                        <motion.span
-                            className={cn(
-                                'block rounded-full',
-                                filled ? 'bg-[var(--sport-500)]' : 'bg-white/15',
-                            )}
-                            animate={{ scale: selected ? 1.3 : filled ? 1 : 0.7 }}
-                            transition={reducedMotion ? { duration: 0 } : springs.snappy}
-                            style={{ width: compact ? 8 : 10, height: compact ? 8 : 10 }}
-                        />
-                    </button>
-                )
-            })}
-            <span className={cn('ml-1 w-5 shrink-0 text-center font-mono font-bold tabular-nums text-[var(--sport-300)]', compact ? 'text-[11px]' : 'text-xs')}>
-                {value != null ? value : '–'}
-            </span>
-        </div>
-    )
 }
 
 function StrengthLogSetForm({
@@ -393,8 +314,12 @@ function StrengthLogSetForm({
         const w = weightRef.current
         if (w && w.value.includes('.')) w.value = w.value.replace('.', ',')
         keypad.openKeypad({
+            fields: [
+                { key: 'weight', label: 'Kg', unit: 'kg', allowDecimal: true, weightChips: true },
+                { key: 'reps', label: 'Reps', unit: 'reps', allowDecimal: false },
+            ],
             fieldRefs: { weight: weightRef, reps: repsRef },
-            initialField,
+            initialFieldKey: initialField,
             target: {
                 sets: totalSets ?? null,
                 reps: targetReps ?? null,
@@ -403,7 +328,14 @@ function StrengthLogSetForm({
                 lastReps: lastSet?.reps ?? null,
                 exerciseName: nextUpLabel,
             },
-            allowDecimal: { weight: true, reps: false },
+            // Paso OPCIONAL de esfuerzo tras reps: los controles del teclado escriben el MISMO estado
+            // rpe/rir de esta fila (handleSubmit ya los inyecta al FormData) — cero pipeline nuevo.
+            effort: {
+                rpe,
+                rir,
+                onRpeChange: setRpe,
+                onRirChange: setRir,
+            },
             requestSubmit: () => formRef.current?.requestSubmit(),
         })
     }
@@ -730,17 +662,12 @@ function StrengthLogSetForm({
     )
 }
 
-const TYPED_INPUT_CLASS = (isLogged: boolean) =>
-    `h-11 md:h-9 px-1 md:px-2 text-center text-xs md:text-sm font-semibold font-mono rounded-control bg-white/[0.06] border transition-colors focus:outline-none focus:ring-1 ${
-        isLogged
-            ? 'text-primary border-primary/40 focus:border-primary focus:ring-primary'
-            : 'text-on-dark border-[var(--border-inverse)] focus:border-primary focus:ring-primary'
-    }`
-
 /**
  * Registro polimórfico: cardio (min/distancia/FC prom), movilidad (hold seg),
  * roller (seg o pasadas). Misma maquinaria: useActionState + useOptimistic +
- * useFormStatus + cola offline (AC4).
+ * useFormStatus + cola offline (AC4). Re-skin EVA DS dark (Fase L·CEO 2026-07-04): mismos tokens
+ * de input/foco (sport-500) que fuerza, RPE con la escala segmentada `ScaleDots` (adiós barra) y
+ * teclado numérico custom por campo en pointer coarse. El pipeline de submit tipado queda INTACTO.
  */
 function TypedLogSetRow({
     blockId,
@@ -750,11 +677,18 @@ function TypedLogSetRow({
     existingLog,
     autoTimerEnabled = true,
     mode,
+    isActive = false,
+    typedObjective,
     supersetRest,
     onLogged,
     onResult,
 }: Props & { mode: Exclude<LogSetMode, 'strength'> }) {
     const params = useParams<{ coach_slug: string; planId: string }>()
+    // Teclado numérico custom por campo (gate por puntero grueso, como fuerza). En desktop los inputs
+    // quedan EXACTAMENTE como hoy (type=number). El keypad muta `ref.value` → submit/offline intacto.
+    const coarse = useCoarsePointer()
+    const keypad = useWorkoutKeypad()
+    const useKeypad = coarse && keypad != null
     const [state, formAction] = useActionState(logSetAction, initialState)
     const [optimisticLogged, addOptimisticLogged] = useOptimistic(
         !!existingLog || state.success,
@@ -763,9 +697,53 @@ function TypedLogSetRow({
     const isLogged = optimisticLogged
     const { startRest, cancelRest } = useWorkoutTimer()
     const formRef = useRef<HTMLFormElement>(null)
+    // Un ref por eje posible (subconjunto usado por modo); el teclado apunta al `<input>` por `key`.
+    const cardioMinRef = useRef<HTMLInputElement>(null)
+    const distanceRef = useRef<HTMLInputElement>(null)
+    const hrRef = useRef<HTMLInputElement>(null)
+    const holdRef = useRef<HTMLInputElement>(null)
+    const durationRef = useRef<HTMLInputElement>(null)
+    const passesRef = useRef<HTMLInputElement>(null)
+    const refByKey: Record<string, RefObject<HTMLInputElement | null>> = {
+        cardio_min: cardioMinRef,
+        actual_distance_m: distanceRef,
+        actual_avg_hr: hrRef,
+        actual_hold_sec: holdRef,
+        actual_duration_sec: durationRef,
+        reps_done: passesRef,
+    }
     const [rpeLocal, setRpeLocal] = useState<number | null>(existingLog?.rpe ?? null)
-    const [rpeDraft, setRpeDraft] = useState(8)
     const reducedMotion = useReducedMotion()
+
+    // Abre el teclado custom en el campo tocado (solo pointer coarse). El objetivo tipado viaja en el
+    // header (DB-5); "Listo" reusa `requestSubmit()`. Reglas decimales por campo vienen de typedKeypadFields.
+    const openKeypadFor = (key: string) => {
+        if (!useKeypad || !keypad) return
+        const fieldDefs = typedKeypadFields(mode as TypedKeypadMode)
+        // Normaliza a coma es-CL los decimales que hayan montado como number (punto) antes del gate coarse.
+        for (const f of fieldDefs) {
+            if (!f.allowDecimal) continue
+            const el = refByKey[f.key]?.current
+            if (el && el.value.includes('.')) el.value = el.value.replace('.', ',')
+        }
+        const fieldRefs: Record<string, RefObject<HTMLInputElement | null>> = {}
+        for (const f of fieldDefs) fieldRefs[f.key] = refByKey[f.key]
+        keypad.openKeypad({
+            fields: fieldDefs,
+            fieldRefs,
+            initialFieldKey: key,
+            target: { exerciseName: nextUpLabel, objective: typedObjective },
+            requestSubmit: () => formRef.current?.requestSubmit(),
+        })
+    }
+
+    /** Default del input: es-CL (coma) en modo teclado; número crudo en desktop. */
+    const inputDefault = (n: number | null): string | number => (n == null ? '' : useKeypad ? formatWeightEsCl(n) : n)
+    /** Props del `<input>` según pointer: keypad (readonly text) o nativo (number + reglas). */
+    const fieldProps = (key: string, nativeInputMode: 'decimal' | 'numeric', nativeExtra: Record<string, string>) =>
+        useKeypad
+            ? ({ type: 'text', readOnly: true, inputMode: 'none', onFocus: () => openKeypadFor(key) } as const)
+            : ({ type: 'number', inputMode: nativeInputMode, ...nativeExtra } as const)
 
     const parseNum = (raw: FormDataEntryValue | null): number | null => {
         if (raw === null || raw === '') return null
@@ -897,8 +875,23 @@ function TypedLogSetRow({
                 ? 'grid-cols-[auto_3.5rem_3.5rem_auto] md:grid-cols-[auto_1fr_1fr_auto]'
                 : 'grid-cols-[auto_5rem_auto] md:grid-cols-[auto_1fr_auto]'
 
+    // Mismos tokens que la fila strength (sport-500 focus, on-dark, font-mono) — re-skin EVA DS.
+    const typedInputClass = cn(
+        'w-full h-11 md:h-10 rounded-control border bg-white/[0.06] px-1 text-center text-sm font-semibold font-mono text-on-dark transition-colors focus:outline-none focus:ring-1 focus:border-[var(--sport-500)] focus:ring-[var(--sport-500)]',
+        isLogged ? 'border-[var(--sport-500)]/40' : 'border-[var(--border-inverse)]',
+    )
+
     return (
-        <div className={`rounded-control transition-colors duration-[400ms] ${isLogged ? 'bg-primary/10' : 'bg-transparent'}`}>
+        <div
+            className={cn(
+                'rounded-control transition-colors duration-[400ms]',
+                isActive && !isLogged
+                    ? 'bg-[var(--sport-500)]/[0.06] ring-1 ring-[var(--sport-500)]/40'
+                    : isLogged
+                        ? 'bg-[var(--sport-500)]/10'
+                        : 'bg-transparent',
+            )}
+        >
             <form
                 key={existingLog ? `tlog-${existingLog.actual_duration_sec}-${existingLog.actual_hold_sec}-${existingLog.reps_done}` : 'new'}
                 ref={formRef}
@@ -910,81 +903,73 @@ function TypedLogSetRow({
                 <input type="hidden" name="set_number" value={setNumber} />
                 {rpeLocal != null && <input type="hidden" name="rpe" value={rpeLocal} />}
 
-                <div className={`w-4 md:w-5 text-center text-xs md:text-sm font-medium font-mono ${isLogged ? 'text-primary' : 'text-on-dark-muted'}`}>
+                <div className={cn('w-4 md:w-5 text-center text-xs md:text-sm font-bold font-mono tabular-nums', isLogged ? 'text-[var(--sport-300)]' : 'text-on-dark-muted')}>
                     {setNumber}
                 </div>
 
                 {mode === 'cardio' && (
                     <>
                         <input
+                            ref={cardioMinRef}
                             name="cardio_min"
-                            type="number"
-                            step="0.5"
-                            min="0"
-                            inputMode="decimal"
-                            defaultValue={existingLog?.actual_duration_sec != null ? Math.round((existingLog.actual_duration_sec / 60) * 10) / 10 : ''}
+                            {...fieldProps('cardio_min', 'decimal', { step: '0.5', min: '0' })}
+                            defaultValue={inputDefault(existingLog?.actual_duration_sec != null ? Math.round((existingLog.actual_duration_sec / 60) * 10) / 10 : null)}
                             placeholder="-"
                             aria-label="Minutos"
-                            className={TYPED_INPUT_CLASS(Boolean(isLogged))}
+                            className={typedInputClass}
                         />
                         <input
+                            ref={distanceRef}
                             name="actual_distance_m"
-                            type="number"
-                            min="0"
-                            inputMode="numeric"
-                            defaultValue={existingLog?.actual_distance_m ?? ''}
+                            {...fieldProps('actual_distance_m', 'decimal', { min: '0' })}
+                            defaultValue={inputDefault(existingLog?.actual_distance_m ?? null)}
                             placeholder="-"
                             aria-label="Metros"
-                            className={TYPED_INPUT_CLASS(Boolean(isLogged))}
+                            className={typedInputClass}
                         />
                         <input
+                            ref={hrRef}
                             name="actual_avg_hr"
-                            type="number"
-                            min="25"
-                            max="250"
-                            inputMode="numeric"
-                            defaultValue={existingLog?.actual_avg_hr ?? ''}
+                            {...fieldProps('actual_avg_hr', 'numeric', { min: '25', max: '250' })}
+                            defaultValue={inputDefault(existingLog?.actual_avg_hr ?? null)}
                             placeholder="-"
                             aria-label="FC promedio"
-                            className={TYPED_INPUT_CLASS(Boolean(isLogged))}
+                            className={typedInputClass}
                         />
                     </>
                 )}
 
                 {mode === 'mobility' && (
                     <input
+                        ref={holdRef}
                         name="actual_hold_sec"
-                        type="number"
-                        min="0"
-                        inputMode="numeric"
-                        defaultValue={existingLog?.actual_hold_sec ?? ''}
+                        {...fieldProps('actual_hold_sec', 'numeric', { min: '0' })}
+                        defaultValue={inputDefault(existingLog?.actual_hold_sec ?? null)}
                         placeholder="seg"
                         aria-label="Segundos de hold"
-                        className={TYPED_INPUT_CLASS(Boolean(isLogged))}
+                        className={typedInputClass}
                     />
                 )}
 
                 {mode === 'roller' && (
                     <>
                         <input
+                            ref={durationRef}
                             name="actual_duration_sec"
-                            type="number"
-                            min="0"
-                            inputMode="numeric"
-                            defaultValue={existingLog?.actual_duration_sec ?? ''}
+                            {...fieldProps('actual_duration_sec', 'numeric', { min: '0' })}
+                            defaultValue={inputDefault(existingLog?.actual_duration_sec ?? null)}
                             placeholder="seg"
                             aria-label="Segundos"
-                            className={TYPED_INPUT_CLASS(Boolean(isLogged))}
+                            className={typedInputClass}
                         />
                         <input
+                            ref={passesRef}
                             name="reps_done"
-                            type="number"
-                            min="0"
-                            inputMode="numeric"
-                            defaultValue={existingLog?.reps_done ?? ''}
+                            {...fieldProps('reps_done', 'numeric', { min: '0' })}
+                            defaultValue={inputDefault(existingLog?.reps_done ?? null)}
                             placeholder="pas."
                             aria-label="Pasadas"
-                            className={TYPED_INPUT_CLASS(Boolean(isLogged))}
+                            className={typedInputClass}
                         />
                     </>
                 )}
@@ -1015,29 +1000,21 @@ function TypedLogSetRow({
                         transition={reducedMotion ? { duration: 0 } : { duration: 0.25 }}
                         className="overflow-hidden px-2 pb-2"
                     >
-                        <div className="flex items-center gap-1 text-[10px] font-semibold text-on-dark-muted mb-1 mt-1">
-                            RPE {rpeLocal != null ? `· ${rpeLocal}` : '(opcional)'}
+                        {/* RPE post-registro con la MISMA escala segmentada de fuerza (adiós barra pre-rediseño) */}
+                        <div className="mb-1.5 mt-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">
+                            Esfuerzo · RPE
                             <EffortHelp label="RPE" text={RPE_HELP} />
                         </div>
-                        <input
-                            type="range"
-                            min={1}
-                            max={10}
-                            step={1}
-                            value={rpeDraft}
-                            className="w-full accent-[var(--sport-500)]"
-                            aria-label="RPE (escala 1 a 10)"
-                            onChange={(e) => setRpeDraft(Number(e.target.value))}
-                            onPointerUp={(e) => {
-                                const val = Number((e.currentTarget as HTMLInputElement).value)
-                                setRpeLocal(val)
-                                submitRpeUpdate(val)
+                        <ScaleDots
+                            name="RPE"
+                            value={rpeLocal}
+                            onChange={(v) => {
+                                setRpeLocal(v)
+                                submitRpeUpdate(v)
                             }}
+                            reducedMotion={reducedMotion}
+                            compact
                         />
-                        <div className="flex justify-between text-[10px] text-on-dark-muted">
-                            <span>1</span>
-                            <span>10</span>
-                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>

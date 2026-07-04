@@ -21,22 +21,47 @@ import {
   DEFAULT_KEYPAD_STEP,
   KEYPAD_MAX_DECIMALS,
 } from '@/lib/client/keypad-logic'
-import { NumericKeypadSheet, type KeypadField, type KeypadTarget } from './NumericKeypadSheet'
+import { NumericKeypadSheet, type KeypadTarget } from './NumericKeypadSheet'
 
-export type { KeypadField, KeypadTarget }
+export type { KeypadTarget }
+
+/** Definición de un campo del teclado (peso/reps de fuerza o duración/distancia/FC de tipados). */
+export interface KeypadFieldDef {
+  /** Identidad del campo = `name` del `<input>` uncontrolled al que apunta el teclado. */
+  key: string
+  /** Etiqueta de la pestaña (Kg · Reps · Min · Metros · FC …). */
+  label: string
+  /** Unidad mostrada junto al display (kg · reps · min · m · bpm …). */
+  unit?: string
+  /** ¿Admite coma decimal? (peso/min/distancia sí; reps/FC/seg no). */
+  allowDecimal: boolean
+  /** Sólo el campo de peso muestra los chips de incremento + engranaje del paso. */
+  weightChips?: boolean
+}
+
+/**
+ * Paso OPCIONAL de esfuerzo (RPE/RIR) tras el último campo — sólo fuerza (DB-5 del CEO). Los
+ * controles del teclado escriben el MISMO estado del `LogSetForm` vía estos callbacks → el valor
+ * viaja en el mismo submit sin pipeline nuevo. `rpe`/`rir` son la semilla al abrir.
+ */
+export interface KeypadEffortConfig {
+  rpe: number | null
+  rir: number | null
+  onRpeChange: (v: number) => void
+  onRirChange: (v: number) => void
+}
 
 export interface OpenKeypadConfig {
-  /** Refs de los `<input>` uncontrolled del `LogSetForm` activo (fuente de verdad). */
-  fieldRefs: {
-    weight?: React.RefObject<HTMLInputElement | null>
-    reps?: React.RefObject<HTMLInputElement | null>
-  }
+  /** Campos del teclado en el orden en que "Siguiente" los recorre. */
+  fields: KeypadFieldDef[]
+  /** Refs de los `<input>` uncontrolled del `LogSetForm` activo (fuente de verdad), por `key`. */
+  fieldRefs: Record<string, React.RefObject<HTMLInputElement | null>>
   /** Campo con el que abre (el que el alumno tocó). */
-  initialField: KeypadField
+  initialFieldKey: string
   /** Objetivo prescrito (viaja con el teclado — DB-5). */
   target?: KeypadTarget
-  /** Coma decimal por campo (default: peso sí, reps no). */
-  allowDecimal?: { weight?: boolean; reps?: boolean }
+  /** Paso de esfuerzo tras el último campo (sólo fuerza; null/undefined ⇒ "Listo" submitea directo). */
+  effort?: KeypadEffortConfig | null
   /** `form.requestSubmit()` del `LogSetForm` — "Listo" es el único submit. */
   requestSubmit: () => void
 }
@@ -77,18 +102,25 @@ function scrollInputAboveKeypad(el: HTMLElement | null, keypadH: number, smooth:
  * Provider del teclado numérico custom (Fase L · workstream B), análogo a `WorkoutTimerProvider`:
  * UNA sola instancia por sesión, portal a `document.body`. Gestiona el campo activo, el mirror del
  * display, la mutación de `ref.value` (mismo mecanismo del autofill "= última vez"), la háptica, el
- * paso configurable (localStorage `omni_keypad_step`) y publica `--keypad-h` + `body[data-exec-
- * keypad-open]` para que la exec oculte la barra "Finalizar" y reserve espacio (AC-B6).
+ * paso configurable (localStorage `omni_keypad_step`), el paso OPCIONAL de esfuerzo (RPE/RIR de
+ * fuerza) y publica `--keypad-h` + `body[data-exec-keypad-open]` para que la exec oculte la barra
+ * "Finalizar" y reserve espacio (AC-B6).
  *
  * El `<input>` real sigue siendo la fuente de verdad (uncontrolled, con su name/label) → el pipeline
- * submit/FormData/offline no se toca. En puntero fino el teclado NUNCA se abre (gate en `LogSetForm`).
+ * submit/FormData/offline no se toca. RPE/RIR viajan por callbacks al estado del `LogSetForm`. En
+ * puntero fino el teclado NUNCA se abre (gate en `LogSetForm`).
  */
 export function WorkoutKeypadProvider({ children }: { children: React.ReactNode }) {
   const reducedMotion = useReducedMotion()
   const [mounted, setMounted] = useState(false)
   const [config, setConfig] = useState<OpenKeypadConfig | null>(null)
-  const [field, setField] = useState<KeypadField>('weight')
+  const [activeKey, setActiveKey] = useState('')
   const [display, setDisplay] = useState('')
+  const [phase, setPhase] = useState<'input' | 'effort'>('input')
+  // Espejo local del esfuerzo: se siembra de `config.effort` al abrir y se empuja al `LogSetForm` en
+  // cada cambio (el config queda congelado al abrir, así que el mirror es la fuente viva del display).
+  const [effortRpe, setEffortRpe] = useState<number | null>(null)
+  const [effortRir, setEffortRir] = useState<number | null>(null)
   const [step, setStep] = useState(DEFAULT_KEYPAD_STEP)
   const [stepMenuOpen, setStepMenuOpen] = useState(false)
   const keypadH = useRef(320)
@@ -98,26 +130,23 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
     setStep(readKeypadStep())
   }, [])
 
-  const activeRefFor = useCallback(
-    (f: KeypadField, cfg: OpenKeypadConfig | null) =>
-      (f === 'weight' ? cfg?.fieldRefs.weight : cfg?.fieldRefs.reps)?.current ?? null,
+  const fields = config?.fields ?? []
+  const activeIndex = fields.findIndex((f) => f.key === activeKey)
+  const activeField = activeIndex >= 0 ? fields[activeIndex] : null
+  const isLastField = activeIndex >= 0 && activeIndex === fields.length - 1
+  const hasEffort = !!config?.effort
+  const allowDecimal = activeField?.allowDecimal ?? false
+  const showChips = !!activeField?.weightChips
+
+  const refFor = useCallback(
+    (key: string, cfg: OpenKeypadConfig | null) => cfg?.fieldRefs[key]?.current ?? null,
     [],
   )
-
-  const allowDecimalFor = useCallback(
-    (f: KeypadField, cfg: OpenKeypadConfig | null) => {
-      if (f === 'weight') return cfg?.allowDecimal?.weight ?? true
-      return cfg?.allowDecimal?.reps ?? false
-    },
-    [],
-  )
-
-  const hasReps = !!config?.fieldRefs.reps
 
   /** Escribe el valor en el `<input>` activo (mutación de ref) + refresca el mirror. */
   const writeActive = useCallback(
     (next: string) => {
-      const el = activeRefFor(field, config)
+      const el = refFor(activeKey, config)
       if (el) {
         el.value = next
         // Evento sintético por robustez futura (hoy no hay listeners que dependan de él).
@@ -125,50 +154,51 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
       }
       setDisplay(next)
     },
-    [activeRefFor, config, field],
+    [refFor, config, activeKey],
   )
 
   const openKeypad = useCallback((cfg: OpenKeypadConfig) => {
-    const el = (cfg.initialField === 'weight' ? cfg.fieldRefs.weight : cfg.fieldRefs.reps)?.current ?? null
+    const el = cfg.fieldRefs[cfg.initialFieldKey]?.current ?? null
     setConfig(cfg)
-    setField(cfg.initialField)
+    setActiveKey(cfg.initialFieldKey)
+    setPhase('input')
     setStepMenuOpen(false)
     setDisplay(el?.value ?? '')
+    setEffortRpe(cfg.effort?.rpe ?? null)
+    setEffortRir(cfg.effort?.rir ?? null)
     triggerHaptic(8)
   }, [])
 
   const closeKeypad = useCallback(() => {
     setConfig(null)
     setStepMenuOpen(false)
+    setPhase('input')
   }, [])
 
   const refreshDisplay = useCallback(() => {
     if (!config) return
-    const el = activeRefFor(field, config)
+    const el = refFor(activeKey, config)
     setDisplay(el?.value ?? '')
-  }, [config, field, activeRefFor])
+  }, [config, activeKey, refFor])
 
   const isOpen = useCallback(() => config != null, [config])
 
   /** Valor vigente del `<input>` activo (fuente de verdad — evita staleness del mirror). */
-  const readActive = useCallback(
-    () => activeRefFor(field, config)?.value ?? '',
-    [activeRefFor, field, config],
-  )
+  const readActive = useCallback(() => refFor(activeKey, config)?.value ?? '', [refFor, activeKey, config])
 
   const onDigit = useCallback(
     (d: string) => {
-      writeActive(appendKeypadDigit(readActive(), d, { allowDecimal: allowDecimalFor(field, config), maxDecimals: KEYPAD_MAX_DECIMALS }))
+      writeActive(appendKeypadDigit(readActive(), d, { allowDecimal, maxDecimals: KEYPAD_MAX_DECIMALS }))
       triggerHaptic(6)
     },
-    [writeActive, readActive, allowDecimalFor, field, config],
+    [writeActive, readActive, allowDecimal],
   )
 
   const onDecimal = useCallback(() => {
-    if (!allowDecimalFor(field, config)) return
+    if (!allowDecimal) return
     writeActive(appendKeypadDecimal(readActive()))
     triggerHaptic(6)
-  }, [allowDecimalFor, field, config, writeActive, readActive])
+  }, [allowDecimal, writeActive, readActive])
 
   const onBackspace = useCallback(() => {
     writeActive(keypadBackspace(readActive()))
@@ -182,7 +212,7 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
 
   const onIncrement = useCallback(
     (delta: number) => {
-      // Los incrementos son de peso; en reps el bloque de chips ni se renderiza.
+      // Los incrementos son de peso; sólo el campo de peso renderiza los chips.
       writeActive(applyKeypadIncrement(readActive(), delta))
       triggerHaptic(10)
     },
@@ -190,15 +220,16 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
   )
 
   const onSwitchField = useCallback(
-    (f: KeypadField) => {
-      if (f === 'reps' && !config?.fieldRefs.reps) return
-      const el = activeRefFor(f, config)
-      setField(f)
+    (key: string) => {
+      if (!config?.fieldRefs[key]) return
+      const el = refFor(key, config)
+      setActiveKey(key)
+      setPhase('input')
       setStepMenuOpen(false)
       setDisplay(el?.value ?? '')
       triggerHaptic(8)
     },
-    [config, activeRefFor],
+    [config, refFor],
   )
 
   const onDone = useCallback(() => {
@@ -210,9 +241,47 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
   }, [config, closeKeypad])
 
   const onNext = useCallback(() => {
-    if (field === 'weight' && config?.fieldRefs.reps) onSwitchField('reps')
-    else onDone()
-  }, [field, config, onSwitchField, onDone])
+    if (phase === 'effort') {
+      onDone()
+      return
+    }
+    if (!isLastField) {
+      const next = fields[activeIndex + 1]
+      if (next) onSwitchField(next.key)
+      return
+    }
+    // Último campo: si hay paso de esfuerzo, entra; si no, cierra la serie.
+    if (hasEffort) {
+      setPhase('effort')
+      setStepMenuOpen(false)
+      triggerHaptic(8)
+      return
+    }
+    onDone()
+  }, [phase, isLastField, hasEffort, fields, activeIndex, onSwitchField, onDone])
+
+  const onEffortBack = useCallback(() => {
+    setPhase('input')
+    triggerHaptic(6)
+  }, [])
+
+  const onEffortRpeChange = useCallback(
+    (v: number) => {
+      setEffortRpe(v)
+      config?.effort?.onRpeChange(v)
+      triggerHaptic(8)
+    },
+    [config],
+  )
+
+  const onEffortRirChange = useCallback(
+    (v: number) => {
+      setEffortRir(v)
+      config?.effort?.onRirChange(v)
+      triggerHaptic(8)
+    },
+    [config],
+  )
 
   const onStepChange = useCallback((next: number) => {
     setStep(next)
@@ -239,7 +308,7 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
       return
     }
     document.body.dataset.execKeypadOpen = 'true'
-    const el = activeRefFor(config.initialField, config)
+    const el = config.fieldRefs[config.initialFieldKey]?.current ?? null
     const id = window.requestAnimationFrame(() =>
       scrollInputAboveKeypad(el, keypadH.current, !reducedMotion),
     )
@@ -268,13 +337,21 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
             {config && (
               <NumericKeypadSheet
                 key="workout-keypad"
-                field={field}
+                fields={fields}
+                activeKey={activeKey}
+                unit={activeField?.unit ?? ''}
                 display={display}
                 target={config.target}
-                allowDecimal={allowDecimalFor(field, config)}
-                hasReps={hasReps}
+                allowDecimal={allowDecimal}
+                showChips={showChips}
+                phase={phase}
+                isLastField={isLastField}
+                hasEffort={hasEffort}
+                effortRpe={effortRpe}
+                effortRir={effortRir}
                 step={step}
                 stepMenuOpen={stepMenuOpen}
+                reducedMotion={reducedMotion}
                 onDigit={onDigit}
                 onDecimal={onDecimal}
                 onBackspace={onBackspace}
@@ -283,6 +360,9 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
                 onSwitchField={onSwitchField}
                 onNext={onNext}
                 onDone={onDone}
+                onEffortBack={onEffortBack}
+                onEffortRpeChange={onEffortRpeChange}
+                onEffortRirChange={onEffortRirChange}
                 onClose={closeKeypad}
                 onToggleStepMenu={() => setStepMenuOpen((o) => !o)}
                 onStepChange={onStepChange}

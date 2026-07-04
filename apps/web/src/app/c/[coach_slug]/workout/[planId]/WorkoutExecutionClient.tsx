@@ -10,6 +10,7 @@ import { ArrowLeft, Info, Dumbbell, HeartPulse, Move, GitCommit, Timer, Trending
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
 import { SingleExerciseCard } from './SingleExerciseCard'
+import { formatTypedObjective } from './typed-keypad'
 import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { STEPPER_MODE_KEY } from './rest-timer-preferences'
 import { SubstituteExerciseSheet } from './_components/SubstituteExerciseSheet'
@@ -890,6 +891,7 @@ function SupersetGroupCard({
                                             autoTimerEnabled={autoTimerEnabled}
                                             mode={m.effType}
                                             isActive={isNext}
+                                            typedObjective={m.effType !== 'strength' ? formatTypedObjective(m.block, m.effType) : undefined}
                                             supersetRest={{
                                                 groupRestSeconds,
                                                 closesRound: () => isRoundComplete(members, round, sessionLogs, m.block.id),

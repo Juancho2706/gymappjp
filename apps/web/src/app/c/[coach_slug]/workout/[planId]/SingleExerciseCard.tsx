@@ -9,6 +9,7 @@ import { formatRelativeDate } from '@/lib/date-utils'
 import type { ExerciseType as WorkoutKind } from '@/domain/workout/types'
 import type { SupersetGroupRow } from '@/lib/workout-block-grouping'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
+import { formatTypedObjective } from './typed-keypad'
 import type { ClientCardioView } from './_data/workout-execution.queries'
 // Primitivos/tipos compartidos con el resto de la exec (SupersetGroupCard los reusa) → se importan
 // del cliente padre. El import cruzado es render-time-only (ambos módulos solo los usan dentro del
@@ -439,6 +440,7 @@ export function SingleExerciseCard({
                                     autoTimerEnabled={autoTimerEnabled}
                                     mode={effType}
                                     isActive={setNumber === firstUnlogged}
+                                    typedObjective={formatTypedObjective(block, effType)}
                                     onLogged={handleLogged}
                                     onResult={handleResult}
                                 />
