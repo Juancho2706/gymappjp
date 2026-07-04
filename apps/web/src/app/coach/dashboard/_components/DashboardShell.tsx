@@ -223,7 +223,9 @@ export function DashboardShell({
 function HeaderBrandTile({ logoUrl, name }: { logoUrl?: string | null; name: string }) {
     if (logoUrl) {
         return (
-            <span className="relative size-10 shrink-0 overflow-hidden rounded-full border border-subtle bg-white dark:bg-[var(--surface-sunken)]">
+            // `block` obligatorio: un span inline ignora size-10 y colapsa a ~2px (el Image fill
+            // queda sin área) — así "desaparecía" el chip del workspace en el header móvil.
+            <span className="relative block size-10 shrink-0 overflow-hidden rounded-full border border-subtle bg-white dark:bg-[var(--surface-sunken)]">
                 <Image src={logoUrl} alt={name} fill sizes="40px" className="object-contain p-1.5" />
             </span>
         )

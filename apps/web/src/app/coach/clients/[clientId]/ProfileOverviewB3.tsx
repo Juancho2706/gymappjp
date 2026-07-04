@@ -477,7 +477,11 @@ export function ProfileOverviewB3({
                     (panel angosto) cae tras Módulos; en 2-col ocupa una fila propia
                     full-bleed (col-span-2) bajo ambas columnas (mismo aspecto que antes). ===== */}
                 <Link
-                    href={`/coach/builder/${clientId}`}
+                    href={
+                        activeProgram?.id
+                            ? `/coach/builder/${clientId}?programId=${activeProgram.id}`
+                            : `/coach/builder/${clientId}`
+                    }
                     className={cn(
                         buttonVariants({ variant: 'sport', size: 'lg' }),
                         'w-full @5xl/ficha:col-span-2'
