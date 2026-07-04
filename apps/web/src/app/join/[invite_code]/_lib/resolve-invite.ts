@@ -5,6 +5,16 @@ import type { Database } from '@/lib/database.types'
 type Admin = SupabaseClient<Database>
 
 /**
+ * C-KILL (2026-07-04): standalone (coaches.invite_code) auto-registration is OFF.
+ * The coach adds students manually from their panel — killing the max_clients gap at
+ * the root. Shown by BOTH the /join page (renders the disabled state instead of the
+ * form) and the join action (defense-in-depth: never creates auth.user / clients row).
+ * Team and org invites keep the self-signup flow intact.
+ */
+export const STANDALONE_REGISTRATION_DISABLED_MESSAGE =
+    'El registro directo está desactivado — pedile a tu coach que te agregue desde su panel.'
+
+/**
  * B-7 / A.bis2: an invite code ENCODES SCOPE.
  *  - organization_members.invite_code  → ENTERPRISE alumno (org_id set, org branding)
  *  - teams.invite_code                 → TEAM/pool alumno (team_id set, team branding, coach = owner)

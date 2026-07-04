@@ -4,7 +4,7 @@ import { headers } from 'next/headers'
 import { z } from 'zod/v4'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { rateLimitInviteAccept } from '@/lib/rate-limit'
-import { resolveInvite } from '../_lib/resolve-invite'
+import { resolveInvite, STANDALONE_REGISTRATION_DISABLED_MESSAGE } from '../_lib/resolve-invite'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
 
 const JoinSchema = z.object({
@@ -36,6 +36,15 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
     // code (coaches.invite_code) creates a standalone alumno. Single source of truth.
     const invite = await resolveInvite(admin, inviteCode)
     if (!invite) return { error: 'Código de invitación inválido' }
+
+    // C-KILL (2026-07-04): standalone auto-registration is OFF. A standalone code
+    // (coaches.invite_code) must NEVER create an auth.user or a clients row here — the
+    // coach adds students manually from their panel. The /join page already renders the
+    // disabled state for standalone, so this is defense-in-depth for a stray submit.
+    // Team and org invites keep the full self-signup flow below.
+    if (invite.scope === 'standalone') {
+        return { disabled: true as const, error: STANDALONE_REGISTRATION_DISABLED_MESSAGE }
+    }
 
     const { data: existing } = await admin
         .from('clients')
