@@ -39,6 +39,7 @@ import {
 } from './clientStatusUtils'
 import { ClientActionsSheet } from '../ClientActionsSheet'
 import { EditClientDataModal } from '../EditClientDataModal'
+import { GlowBorderCard } from '@/components/coach/GlowBorderCard'
 
 type HeroCompliance = {
     workoutsThisWeek?: number
@@ -235,8 +236,11 @@ export function ClientProfileHero({
                 </div>
             </div>
 
-            {/* Hero inverso: identidad + 4 chips (2×2) */}
-            <Card variant="inverse" padding="lg" className="gap-0">
+            {/* Hero inverso: identidad + 4 chips (2×2), con marco animado de marca
+                (GlowBorderCard). La Card lleva el borde en transparente para no
+                duplicar borde: el anillo del wrapper hace de borde visible. */}
+            <GlowBorderCard>
+            <Card variant="inverse" padding="lg" className="gap-0 !border-transparent">
                 <div className="flex items-start gap-4">
                     <span
                         className="relative flex h-16 w-16 flex-shrink-0 rounded-full md:h-20 md:w-20"
@@ -332,6 +336,7 @@ export function ClientProfileHero({
                     />
                 </div>
             </Card>
+            </GlowBorderCard>
 
             {/* WhatsApp + accesos a módulos: MOVIDOS (rediseño CD nuevo) — WhatsApp + check-in +
                 builder viven en la barra de acciones FLOTANTE (ProfileFloatingActions) y los módulos

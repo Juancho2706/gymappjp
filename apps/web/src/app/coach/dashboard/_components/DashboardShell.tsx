@@ -79,7 +79,10 @@ export function DashboardShell({
             {/* Glow ambiental brand-tinted detrás del hero/stats (decisión CEO 2026-07-04, revierte
                 el "fondo limpio sin tonalidad" del CD original): AmbientBrandGlow se auto-manda al
                 fondo con -z-10; `isolate` acota ese stacking context al dashboard para que el glow
-                no escape detrás del layout. El contenido (banners/hero/bento) queda por encima. */}
+                no escape detrás del layout. El contenido (banners/hero/bento + el header móvil de
+                abajo, todos hijos en flujo sin z negativo) queda por encima. El glow es full-bleed
+                (inset-y-0 + w-screen) → cubre el dashboard entero y llega a los bordes laterales de
+                pantalla escapando el gutter del wrapper; ver AmbientBrandGlow para la geometría. */}
             <div className="relative isolate z-10 mx-auto -mt-6 w-full pb-10 md:mt-0 md:pt-2">
                 <AmbientBrandGlow />
                 {/* Billing / tier banners (functional — not part of the design tree). `empty:hidden`

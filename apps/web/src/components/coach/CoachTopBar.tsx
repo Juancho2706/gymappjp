@@ -1,13 +1,15 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { ChevronRight, ArrowLeft, Table2, PanelLeft, ChevronsUpDown } from 'lucide-react'
+import { useTheme } from 'next-themes'
+import { ChevronRight, ArrowLeft, Table2, PanelLeft, ChevronsUpDown, Sun, Moon, LogOut, Loader2 } from 'lucide-react'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
 import { CoachGlobalSearch } from '@/components/coach/CoachGlobalSearch'
 import { useRosterView } from '@/components/coach/RosterViewContext'
+import { useCoachSignOut } from '@/app/coach/settings/_components/CoachSignOut'
 import { Avatar } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'
 import type { WorkspaceSummary } from '@/domain/auth/types'
@@ -120,6 +122,51 @@ function RosterViewToggle({
     )
 }
 
+/** Clases del botón-icono del topbar — calca la cápsula de la campana (NewsBellButton wrapper). */
+const TOPBAR_ICON_BTN =
+    'flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-sunken)] hover:text-[var(--text-strong)]'
+
+/**
+ * Switcher claro/oscuro — usa el mecanismo de tema existente (next-themes, `attribute="class"`
+ * montado en el layout raíz, `enableSystem={false}` → `resolvedTheme` es 'light' | 'dark').
+ * Guard `mounted` para evitar mismatch de hidratación (el server renderiza el tema por defecto).
+ * Desktop-only por vivir dentro del topbar (`hidden md:flex`).
+ */
+function ThemeToggleButton() {
+    const { resolvedTheme, setTheme } = useTheme()
+    const [mounted, setMounted] = useState(false)
+    useEffect(() => setMounted(true), [])
+    const isDark = mounted && resolvedTheme === 'dark'
+    return (
+        <button
+            type="button"
+            onClick={() => setTheme(isDark ? 'light' : 'dark')}
+            aria-label={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+            title={isDark ? 'Modo claro' : 'Modo oscuro'}
+            className={TOPBAR_ICON_BTN}
+        >
+            {isDark ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+    )
+}
+
+/** Cerrar sesión — reusa `useCoachSignOut` (supabase.auth.signOut + push a /login). */
+function TopBarLogoutButton() {
+    const { signOut, pending } = useCoachSignOut()
+    return (
+        <button
+            type="button"
+            onClick={signOut}
+            disabled={pending}
+            aria-label="Cerrar sesión"
+            title="Cerrar sesión"
+            className={cn(TOPBAR_ICON_BTN, 'disabled:opacity-60')}
+        >
+            {pending ? <Loader2 size={18} className="animate-spin" /> : <LogOut size={18} />}
+        </button>
+    )
+}
+
 export function CoachTopBar({ coachName, coachBrand, logoUrl, workspaces, currentWorkspaceLabel }: CoachTopBarProps) {
     const pathname = usePathname()
     const inputRef = useRef<HTMLInputElement>(null)
@@ -201,8 +248,10 @@ export function CoachTopBar({ coachName, coachBrand, logoUrl, workspaces, curren
                 <RosterViewToggle value={rosterMode} onChange={setRosterMode} />
             )}
 
-            {/* .dt-tb-actions — campana (reusada) + cuenta */}
+            {/* .dt-tb-actions — switcher tema + logout + campana (reusada) + cuenta */}
             <div className="ml-auto flex flex-shrink-0 items-center gap-1.5">
+                <ThemeToggleButton />
+                <TopBarLogoutButton />
                 <div className="relative flex h-10 w-10 items-center justify-center rounded-[var(--radius-md)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-sunken)] hover:text-[var(--text-strong)]">
                     <NewsBellButton />
                 </div>
