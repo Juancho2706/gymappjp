@@ -3,8 +3,9 @@
 import { Suspense, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Sparkles, Bell, ChevronDown } from 'lucide-react'
+import { Sparkles, ChevronDown } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
+import { NewsBellButton } from '@/components/coach/NewsBellButton'
 import { BillingBanners } from './banners/BillingBanners'
 import { FreeWelcomeModal } from './FreeWelcomeModal'
 import { PulseHero } from './PulseHero'
@@ -113,14 +114,12 @@ export function DashboardShell({
                             >
                                 <Sparkles className="size-[19px]" />
                             </button>
-                            <button
-                                type="button"
-                                aria-label="Notificaciones"
-                                className="relative flex size-10 shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-card text-[var(--text-strong)] transition-colors hover:bg-surface-sunken"
-                            >
-                                <Bell className="size-[19px]" />
-                                <span className="absolute right-[9px] top-2 size-2 rounded-full border-2 border-[var(--surface-card)] bg-[var(--danger-500)]" />
-                            </button>
+                            {/* Campana REAL: en móvil el único acceso a Novedades es este header
+                                (el CoachTopBar es `hidden md:flex`). Antes era un botón estático SIN
+                                onClick → la campana no hacía nada al tocarla y el feed era inalcanzable
+                                en móvil. NewsBellButton trae su propio Sheet + badge de no-leídos;
+                                `mobileTriggerClassName` lo viste como tile del header (igual a Insights). */}
+                            <NewsBellButton mobileTriggerClassName="size-10 shrink-0 rounded-control border border-border-subtle bg-surface-card text-[var(--text-strong)] [&_svg]:size-[19px] hover:bg-surface-sunken hover:text-[var(--text-strong)]" />
                             {/* Avatar de espacio. Con >1 workspace: botón con caret que abre el
                                 switcher de espacio (bottom-sheet). Con 1 solo: link a Opciones,
                                 sin caret. */}

@@ -9,7 +9,12 @@ import { useRouter } from 'next/navigation'
 import { ArrowLeft, Info, Dumbbell, HeartPulse, Move, GitCommit, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, Play, ChevronDown, type LucideIcon } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
-import { readWorkoutOfflineQueueForPlan } from '@/lib/workout-offline-queue'
+import { logSetAction } from './_actions/workout-log.actions'
+import {
+    flushWorkoutQueue,
+    readWorkoutOfflineQueueForPlan,
+    workoutLogToFormData,
+} from '@/lib/workout-offline-queue'
 import { WorkoutTimerProvider, useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import Image from 'next/image'
@@ -477,6 +482,25 @@ function findNextIncompleteInRounds(
     return null
 }
 
+/**
+ * Auto-scroll a la siguiente serie SÓLO si hace falta (forense W6, síntoma 1): antes cada cierre de
+ * serie disparaba un `scrollIntoView` incondicional a los 350 ms; si la fila destino ya estaba a la
+ * vista, ese scroll competía con la animación `layout` del colapso → la página "subía y bajaba" y se
+ * quedaba donde estaba (rebote). Ahora, si el objetivo ya está cómodamente dentro del viewport (bajo
+ * el header sticky y sobre la barra de finalizar), NO se mueve nada. Sólo se hace scroll suave cuando
+ * el objetivo está fuera de vista de verdad.
+ */
+function smoothScrollIntoViewIfNeeded(el: HTMLElement | null | undefined, block: ScrollLogicalPosition) {
+    if (!el || typeof window === 'undefined') return
+    const rect = el.getBoundingClientRect()
+    const vh = window.innerHeight || document.documentElement.clientHeight
+    const HEADER_H = 96 // header sticky aprox. (título + progreso)
+    const FOOTER_H = 88 // barra fija "Finalizar" aprox.
+    const alreadyVisible = rect.top >= HEADER_H && rect.bottom <= vh - FOOTER_H
+    if (alreadyVisible) return
+    el.scrollIntoView({ behavior: 'smooth', block })
+}
+
 /** Separador compacto (·) entre segmentos de la línea de prescripción. */
 const Sep = () => <span className="text-on-dark-muted/40">·</span>
 
@@ -892,6 +916,8 @@ export function WorkoutExecutionClient({
     const blockRefs = useRef<Map<string, HTMLDivElement>>(new Map())
     // Superserie (F2): refs por fila de serie (block:set) para el auto-scroll intercalado.
     const setRowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+    // Guard reentrante del gate de "Finalizar" (evita doble flush si el usuario toca dos veces).
+    const finishing = useRef(false)
     const [nextCue, setNextCue] = useState<{ blockId: string; set: number } | null>(null)
     const blocks = useMemo(() => [...plan.workout_blocks].sort((a, b) => a.order_index - b.order_index), [plan.workout_blocks])
     const [showTechnique, setShowTechnique] = useState(false)
@@ -994,6 +1020,17 @@ export function WorkoutExecutionClient({
         else setRowRefs.current.delete(key)
     }, [])
 
+    // Reconciliación del optimismo (contrato a + e): el hijo reporta el resultado REAL del server.
+    // 'error' → REVERTIR el log optimista de esta serie para que el bloque se re-expanda y el error
+    // (con "Reintentar") sea visible aunque el bloque se hubiera colapsado. El valor tipeado NO se
+    // pierde: sigue como respaldo en la cola (write-through) y el hijo reabre la fila editable.
+    // Declarado ANTES del early return "Rutina sin ejercicios" (rules-of-hooks).
+    const handleResult = useCallback((blockId: string, setNumber: number, result: SetSyncResult) => {
+        if (result === 'error') {
+            setSessionLogs((prev) => prev.filter((l) => !(l.block_id === blockId && l.set_number === setNumber)))
+        }
+    }, [])
+
     if (!blocks.length) {
         return (
             <div className="is-workout-page min-h-dvh bg-[var(--ink-950)] text-on-dark flex flex-col items-center justify-center p-6 text-center">
@@ -1024,7 +1061,6 @@ export function WorkoutExecutionClient({
     // discreto, opacidad PLENA); los completados colapsan a recap. Todas las cards se ven plenas.
     const activeBlockId = currentExerciseIdx === -1 ? null : blocks[currentExerciseIdx].id
 
-    const isSetLogged = (blockId: string, setNumber: number) => sessionLogs.some((log) => log.block_id === blockId && log.set_number === setNumber)
     const isBlockCompleted = (block: BlockType) => isBlockComplete(block, sessionLogs)
 
     const toggleAutoTimer = () => {
@@ -1046,11 +1082,11 @@ export function WorkoutExecutionClient({
             const order = buildRoundOrder(info.members)
             const pos = order.find((p) => !fromLogs.some((l) => l.block_id === p.blockId && l.set_number === p.set))
             if (pos) {
-                setRowRefs.current.get(`${pos.blockId}:${pos.set}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                smoothScrollIntoViewIfNeeded(setRowRefs.current.get(`${pos.blockId}:${pos.set}`), 'center')
                 return
             }
         }
-        blockRefs.current.get(nextIncomplete.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        smoothScrollIntoViewIfNeeded(blockRefs.current.get(nextIncomplete.id), 'start')
     }
 
     const handleLogged = (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null; note?: string | null }) => {
@@ -1075,9 +1111,7 @@ export function WorkoutExecutionClient({
                     toast.info(`Sin descanso — seguí con ${label}`)
                 }
                 setTimeout(() => {
-                    setRowRefs.current
-                        .get(`${nextPos.blockId}:${nextPos.set}`)
-                        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    smoothScrollIntoViewIfNeeded(setRowRefs.current.get(`${nextPos.blockId}:${nextPos.set}`), 'center')
                 }, 350)
             } else {
                 // Grupo completo → floreo del recap + saltar al siguiente bloque/serie incompleto.
@@ -1111,37 +1145,49 @@ export function WorkoutExecutionClient({
             setTimeout(() => scrollToNextIncomplete(nextLogs), 350)
         }
     }
-    // Reconciliación del optimismo (contrato a + e): el hijo reporta el resultado REAL del server.
-    // 'error' → REVERTIR el log optimista de esta serie para que el bloque se re-expanda y el error
-    // (con "Reintentar") sea visible aunque el bloque se hubiera colapsado. El valor tipeado NO se
-    // pierde: sigue como respaldo en la cola (write-through) y el hijo reabre la fila editable.
-    const handleResult = useCallback((blockId: string, setNumber: number, result: SetSyncResult) => {
-        if (result === 'error') {
-            setSessionLogs((prev) => prev.filter((l) => !(l.block_id === blockId && l.set_number === setNumber)))
-        }
-    }, [])
-
-    const handleFinish = () => {
-        // Contrato (c): no finalizar en falso si quedan series sin sincronizar. Avisar y dar la
-        // chance de esperar la sincronización (el flush corre solo al recuperar conexión / montar).
+    const handleFinish = async () => {
+        if (finishing.current) return
+        // Contrato (c): no finalizar en falso si quedan series sin sincronizar. PERO el write-through
+        // encola SIEMPRE antes de la red, y la reconciliación que saca el item de la cola vive en un
+        // efecto del hijo que NO corre si la fila colapsó/desmontó (última serie de un bloque/grupo)
+        // antes de que llegara `state.success` → el item queda HUÉRFANO aunque el server YA guardó.
+        // Por eso, si hay pendientes, intentamos un flush inmediato: los huérfanos ya-guardados se
+        // reenvían idempotente (last-wins por block/set/día) y salen de la cola; sólo si algo queda de
+        // verdad (sin red) avisamos. Esto mata el falso "1 serie sin sincronizar" con buena conexión.
         const pending = readWorkoutOfflineQueueForPlan(plan.id)
         if (pending.length > 0) {
-            const n = pending.length
-            toast.warning(
-                `${n} serie${n !== 1 ? 's' : ''} sin sincronizar`,
-                {
-                    description: 'Se guardarán cuando vuelva la conexión. Podés finalizar igual o esperar.',
-                    duration: 6000,
-                    action: {
-                        label: 'Finalizar igual',
-                        onClick: () => {
-                            setFinishedElapsed(sessionElapsed)
-                            setShowCompleted(true)
+            finishing.current = true
+            let stillPending = pending.length
+            try {
+                const res = await flushWorkoutQueue(
+                    (item) => logSetAction({}, workoutLogToFormData(item)),
+                    { planId: plan.id },
+                )
+                stillPending = res.remainingInScope
+                if (res.flushed > 0) router.refresh()
+            } catch {
+                // Flush no pudo correr (excepción global) → conservamos el conteo original y avisamos.
+            } finally {
+                finishing.current = false
+            }
+            if (stillPending > 0) {
+                const n = stillPending
+                toast.warning(
+                    `${n} serie${n !== 1 ? 's' : ''} sin sincronizar`,
+                    {
+                        description: 'Se guardarán cuando vuelva la conexión. Podés finalizar igual o esperar.',
+                        duration: 6000,
+                        action: {
+                            label: 'Finalizar igual',
+                            onClick: () => {
+                                setFinishedElapsed(sessionElapsed)
+                                setShowCompleted(true)
+                            },
                         },
                     },
-                },
-            )
-            return
+                )
+                return
+            }
         }
         setFinishedElapsed(sessionElapsed)
         setShowCompleted(true)
@@ -1394,7 +1440,7 @@ export function WorkoutExecutionClient({
                                                     return (
                                                         <Fragment key={block.id}>
                                                         <motion.div
-                                                            layout
+                                                            layout={!reducedMotion}
                                                             ref={(el) => {
                                                                 if (el) blockRefs.current.set(block.id, el)
                                                                 else blockRefs.current.delete(block.id)

@@ -29,6 +29,17 @@ export interface ShareCardBrand {
     displayFont: string
 }
 
+export interface ProgressCardData {
+    /** Nombre del alumno (para el subtítulo). */
+    fullName: string
+    /** Total de entrenos registrados (métrica hero). */
+    totalWorkouts: number
+    /** Racha en días. */
+    streak: number
+    /** Nombre del programa/plan activo (opcional). */
+    programName: string | null
+}
+
 /** "3 de julio de 2026" — el record se logró HOY (recién finalizada la sesión). */
 function todayLong(): string {
     return new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -282,6 +293,164 @@ export async function renderWorkoutPRCardToBlob(data: WorkoutPRCardData, brand: 
         textColor: 'rgba(255,255,255,0.82)',
         bg: 'rgba(255,255,255,0.06)',
     })
+
+    // ── Footer white-label ──
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(PAD_X, 1250)
+    ctx.lineTo(WIDTH - PAD_X, 1250)
+    ctx.stroke()
+
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'
+    ctx.font = `600 26px ${display}`
+    ctx.textAlign = 'left'
+    ctx.letterSpacing = '2px'
+    ctx.fillText(brand.brandName.toUpperCase(), PAD_X, 1306)
+    ctx.letterSpacing = '0px'
+
+    ctx.fillStyle = 'rgba(255,255,255,0.38)'
+    ctx.font = `600 24px ${display}`
+    ctx.textAlign = 'right'
+    ctx.fillText('vía EVA', WIDTH - PAD_X, 1306)
+
+    return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), 'image/png'))
+}
+
+/** Primer nombre del alumno (para el subtítulo). */
+function firstName(full: string): string {
+    return full.trim().split(/\s+/)[0] || full.trim()
+}
+
+/**
+ * Renderiza la share-card de PROGRESO del alumno a Blob PNG. Misma estética 1080×1350 que el récord,
+ * pero con las métricas que el perfil ya tiene (total de entrenos + racha). Zero-server: todo en
+ * <canvas> en el cliente. Espera document.fonts.ready para rasterizar con la fuente display.
+ */
+export async function renderProgressCardToBlob(data: ProgressCardData, brand: ShareCardBrand): Promise<Blob | null> {
+    if (typeof document === 'undefined') return null
+
+    const canvas = document.createElement('canvas')
+    canvas.width = WIDTH
+    canvas.height = HEIGHT
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+
+    const display = brand.displayFont || 'system-ui, sans-serif'
+    const accent = brand.accent || SPORT_500
+
+    try {
+        await (document as unknown as { fonts?: { ready?: Promise<unknown> } }).fonts?.ready
+    } catch {
+        /* rasteriza con lo que haya */
+    }
+
+    const { r, g, b } = toRgb(ctx, accent)
+    const accentRgb = (a: number) => `rgba(${r}, ${g}, ${b}, ${a})`
+
+    // Fondo dark del DS.
+    const bg = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT)
+    bg.addColorStop(0, INK_950)
+    bg.addColorStop(1, INK_900)
+    ctx.fillStyle = bg
+    ctx.fillRect(0, 0, WIDTH, HEIGHT)
+
+    // Glow de acento (marca) en la parte superior.
+    const glow = ctx.createRadialGradient(WIDTH / 2, 240, 0, WIDTH / 2, 240, 700)
+    glow.addColorStop(0, accentRgb(0.3))
+    glow.addColorStop(1, accentRgb(0))
+    ctx.fillStyle = glow
+    ctx.fillRect(0, 0, WIDTH, 960)
+
+    // ── Header: identidad de marca ──
+    const logo = brand.logoUrl ? await loadImage(brand.logoUrl) : null
+    ctx.save()
+    if (logo) {
+        ctx.beginPath()
+        ctx.roundRect(PAD_X, 88, 76, 76, 20)
+        ctx.clip()
+        ctx.drawImage(logo, PAD_X, 88, 76, 76)
+    } else {
+        ctx.beginPath()
+        ctx.roundRect(PAD_X, 88, 76, 76, 20)
+        ctx.fillStyle = accent
+        ctx.fill()
+        ctx.fillStyle = '#ffffff'
+        ctx.font = `800 42px ${display}`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(brand.brandName.charAt(0).toUpperCase(), PAD_X + 38, 88 + 40)
+        ctx.textBaseline = 'alphabetic'
+    }
+    ctx.restore()
+
+    ctx.fillStyle = 'rgba(255,255,255,0.88)'
+    ctx.font = `800 34px ${display}`
+    ctx.textAlign = 'left'
+    ctx.letterSpacing = '1px'
+    ctx.fillText(brand.brandName.toUpperCase(), PAD_X + 76 + 24, 140)
+    ctx.letterSpacing = '0px'
+
+    // Badge (emoji, coloreado por la fuente de sistema).
+    ctx.textAlign = 'right'
+    ctx.font = '92px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif'
+    ctx.fillText('💪', WIDTH - PAD_X, 172)
+
+    // ── Bloque central ──
+    ctx.textAlign = 'left'
+    ctx.fillStyle = accent
+    ctx.font = `800 38px ${display}`
+    ctx.letterSpacing = '6px'
+    ctx.fillText('MI PROGRESO', PAD_X, 470)
+    ctx.letterSpacing = '0px'
+
+    // Título "Mi progreso con <coach>" (hasta 2 líneas).
+    ctx.fillStyle = '#ffffff'
+    ctx.font = `800 68px ${display}`
+    const titleLines = wrapLines(ctx, `Constancia con ${brand.brandName}`, WIDTH - PAD_X * 2, 2)
+    titleLines.forEach((line, i) => ctx.fillText(line, PAD_X, 556 + i * 78))
+    const titleBottom = 556 + (titleLines.length - 1) * 78
+
+    // Nombre del alumno (subtítulo).
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'
+    ctx.font = `600 34px ${display}`
+    ctx.fillText(firstName(data.fullName), PAD_X, titleBottom + 52)
+
+    // Métrica hero: total de entrenos.
+    const totalStr = String(data.totalWorkouts)
+    ctx.fillStyle = accent
+    ctx.font = `800 230px ${display}`
+    ctx.letterSpacing = '-4px'
+    const heroBaseline = 900
+    ctx.fillText(totalStr, PAD_X - 4, heroBaseline)
+    const totalW = ctx.measureText(totalStr).width
+    ctx.letterSpacing = '0px'
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'
+    ctx.font = `800 60px ${display}`
+    ctx.fillText(data.totalWorkouts === 1 ? 'entreno' : 'entrenos', PAD_X - 4 + totalW + 24, heroBaseline - 12)
+
+    // Pill de racha.
+    const streakText = data.streak > 0 ? `Racha · ${data.streak} ${data.streak === 1 ? 'día' : 'días'}` : 'Recién empezando'
+    drawPill(ctx, PAD_X, 950, streakText, {
+        font: `600 34px ${display}`,
+        textColor: data.streak > 0 ? SUCCESS : 'rgba(255,255,255,0.7)',
+        bg: data.streak > 0 ? 'rgba(52,211,153,0.14)' : 'rgba(255,255,255,0.08)',
+    })
+
+    // Fecha.
+    ctx.fillStyle = 'rgba(255,255,255,0.58)'
+    ctx.font = `600 32px ${display}`
+    ctx.textAlign = 'left'
+    ctx.fillText(todayLong(), PAD_X, 1094)
+
+    // Pill del programa (si hay).
+    if (data.programName) {
+        drawPill(ctx, PAD_X, 1134, data.programName, {
+            font: `600 32px ${display}`,
+            textColor: 'rgba(255,255,255,0.82)',
+            bg: 'rgba(255,255,255,0.06)',
+        })
+    }
 
     // ── Footer white-label ──
     ctx.strokeStyle = 'rgba(255,255,255,0.1)'

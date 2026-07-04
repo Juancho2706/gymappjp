@@ -192,7 +192,13 @@ function BellIconWithBadge({ unreadCount }: { unreadCount: number }) {
   )
 }
 
-export function NewsBellButton() {
+export function NewsBellButton({
+  mobileTriggerClassName,
+}: {
+  /** Estilo extra del botón trigger MÓVIL (p.ej. el header del dashboard lo quiere como tile
+      cuadrado con borde, igual que los otros iconos). Se fusiona con `cn` (twMerge → override). */
+  mobileTriggerClassName?: string
+} = {}) {
   const { unreadCount, markAllAsRead } = useNewsFeed()
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [isDesktopOpen, setIsDesktopOpen] = useState(false)
@@ -225,7 +231,10 @@ export function NewsBellButton() {
           <button
             type="button"
             onClick={() => handleMobileOpen(true)}
-            className="relative flex items-center justify-center text-muted transition-colors hover:text-strong"
+            className={cn(
+              'relative flex items-center justify-center text-muted transition-colors hover:text-strong',
+              mobileTriggerClassName
+            )}
             aria-label="Novedades"
           >
             <BellIconWithBadge unreadCount={unreadCount} />

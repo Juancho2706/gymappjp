@@ -3,11 +3,13 @@ import {
     dedupeWorkoutQueue,
     dequeueWorkoutLog,
     enqueueWorkoutLog,
+    flushWorkoutQueue,
     isLikelyOfflineError,
     pruneOrphanWorkoutLogs,
     readWorkoutOfflineQueue,
     readWorkoutOfflineQueueForPlan,
     workoutLogKey,
+    workoutLogToFormData,
     writeWorkoutOfflineQueue,
     type WorkoutOfflineLog,
 } from './workout-offline-queue'
@@ -163,6 +165,107 @@ describe('workout-offline-queue', () => {
     describe('workoutLogKey', () => {
         it('builds the identity key (block:set)', () => {
             expect(workoutLogKey('abc', 3)).toBe('abc:3')
+        })
+    })
+
+    describe('workoutLogToFormData', () => {
+        it('serializes the core fields the action expects', () => {
+            const fd = workoutLogToFormData(make({ blockId: 'bX', setNumber: 3, weightKg: 42.5, repsDone: 8, rpe: 9, rir: 2, note: 'ok' }))
+            expect(fd.get('block_id')).toBe('bX')
+            expect(fd.get('set_number')).toBe('3')
+            expect(fd.get('weight_kg')).toBe('42.5')
+            expect(fd.get('reps_done')).toBe('8')
+            expect(fd.get('rpe')).toBe('9')
+            expect(fd.get('rir')).toBe('2')
+            expect(fd.get('note')).toBe('ok')
+        })
+
+        it('omits null / empty fields (no key rather than empty string)', () => {
+            const fd = workoutLogToFormData(make({ weightKg: null, repsDone: null, rpe: null, rir: null, note: '' }))
+            expect(fd.has('weight_kg')).toBe(false)
+            expect(fd.has('reps_done')).toBe(false)
+            expect(fd.has('rpe')).toBe(false)
+            expect(fd.has('note')).toBe(false)
+        })
+
+        it('serializes the polymorphic (cardio/mobility) mirror keys', () => {
+            const fd = workoutLogToFormData(make({ actualDurationSec: 600, actualDistanceM: 1200, actualHoldSec: 45, actualAvgHr: 150 }))
+            expect(fd.get('actual_duration_sec')).toBe('600')
+            expect(fd.get('actual_distance_m')).toBe('1200')
+            expect(fd.get('actual_hold_sec')).toBe('45')
+            expect(fd.get('actual_avg_hr')).toBe('150')
+        })
+    })
+
+    describe('flushWorkoutQueue', () => {
+        it('clears an already-saved orphan (last-wins re-send succeeds → out of queue)', async () => {
+            // Simula el bug W6: la fila colapsó antes de reconciliar → el item quedó en cola aunque el
+            // server ya lo guardó. El flush lo reenvía, el server responde success, y sale de la cola.
+            enqueueWorkoutLog(make({ setNumber: 1 }))
+            const sent: string[] = []
+            const res = await flushWorkoutQueue(async (item) => {
+                sent.push(workoutLogKey(item.blockId, item.setNumber))
+                return { success: true }
+            })
+            expect(sent).toEqual(['b1:1'])
+            expect(res.flushed).toBe(1)
+            expect(res.remainingInScope).toBe(0)
+            expect(readWorkoutOfflineQueue()).toHaveLength(0)
+        })
+
+        it('keeps items that fail with a transient error (stays for retry)', async () => {
+            enqueueWorkoutLog(make({ setNumber: 1 }))
+            const res = await flushWorkoutQueue(async () => ({ error: 'db down', code: 'db' }))
+            expect(res.flushed).toBe(0)
+            expect(res.remainingInScope).toBe(1)
+            expect(readWorkoutOfflineQueue()).toHaveLength(1)
+        })
+
+        it('keeps items when send throws (network exception)', async () => {
+            enqueueWorkoutLog(make({ setNumber: 1 }))
+            const res = await flushWorkoutQueue(async () => {
+                throw new Error('Failed to fetch')
+            })
+            expect(res.remainingInScope).toBe(1)
+            expect(readWorkoutOfflineQueue()).toHaveLength(1)
+        })
+
+        it('discards orphaned blocks (invalid_block) without keeping them', async () => {
+            enqueueWorkoutLog(make({ setNumber: 1, blockId: 'dead' }))
+            const res = await flushWorkoutQueue(async () => ({ error: 'gone', code: 'invalid_block' }))
+            expect(res.discarded).toBe(1)
+            expect(res.remainingInScope).toBe(0)
+            expect(readWorkoutOfflineQueue()).toHaveLength(0)
+        })
+
+        it('scopes sending to a planId and preserves other plans untouched', async () => {
+            enqueueWorkoutLog(make({ planId: 'p1', setNumber: 1, blockId: 'a' }))
+            enqueueWorkoutLog(make({ planId: 'p2', setNumber: 1, blockId: 'b' }))
+            const sent: string[] = []
+            const res = await flushWorkoutQueue(
+                async (item) => {
+                    sent.push(item.planId)
+                    return { success: true }
+                },
+                { planId: 'p1' },
+            )
+            expect(sent).toEqual(['p1'])
+            expect(res.flushed).toBe(1)
+            // p2 sigue en la cola (fuera de scope, intacto).
+            const left = readWorkoutOfflineQueue()
+            expect(left).toHaveLength(1)
+            expect(left[0].planId).toBe('p2')
+        })
+
+        it('dedupes before sending (one network call per block/set, last intention)', async () => {
+            enqueueWorkoutLog(make({ setNumber: 1, weightKg: 35 }))
+            enqueueWorkoutLog(make({ setNumber: 1, weightKg: 40 }))
+            const weights: (number | null)[] = []
+            await flushWorkoutQueue(async (item) => {
+                weights.push(item.weightKg)
+                return { success: true }
+            })
+            expect(weights).toEqual([40])
         })
     })
 

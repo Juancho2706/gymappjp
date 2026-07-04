@@ -17,13 +17,13 @@ import {
     Volume2,
     type LucideIcon,
 } from 'lucide-react'
-import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { playTimerSound, type TimerSound } from '@/lib/audioUtils'
 import { SectionTitle } from '../../dashboard/_components/shared/SectionTitle'
 import { SALES_EMAIL } from '@/lib/brand-assets'
+import { ProgressShareCardModal } from './ProgressShareCardModal'
 
 const REST_SOUND_LABELS: Record<TimerSound, string> = {
     digital: 'Digital (Beep)',
@@ -152,6 +152,7 @@ export function ProfileClient({
     // acá desde el viejo engranaje del dashboard. El volumen se mantiene (default 1.0) para la
     // preview; solo se expone el tipo de sonido, igual que el modal anterior.
     const [restSound, setRestSound] = useState<TimerSound>('digital')
+    const [shareOpen, setShareOpen] = useState(false)
 
     const hasModules = showMovement || showBodyComposition
 
@@ -172,25 +173,6 @@ export function ProfileClient({
         await supabase.auth.signOut()
         router.push(`${base}/login`)
         router.refresh()
-    }
-
-    async function handleShare() {
-        const parts = [`Entreno con ${brandName}`]
-        if (totalWorkouts > 0) parts.push(`${totalWorkouts} ${totalWorkouts === 1 ? 'entreno' : 'entrenos'} registrados`)
-        if (streak > 0) parts.push(`racha de ${streak} ${streak === 1 ? 'día' : 'días'}`)
-        const text = parts.join(' · ') + ' 💪'
-        try {
-            if (typeof navigator !== 'undefined' && navigator.share) {
-                await navigator.share({ title: brandName, text })
-            } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                await navigator.clipboard.writeText(text)
-                toast.success('Copiado — pegalo en tus redes')
-            } else {
-                toast.info(text)
-            }
-        } catch {
-            /* usuario canceló el share nativo — no-op */
-        }
     }
 
     return (
@@ -233,7 +215,7 @@ export function ProfileClient({
             {/* Compartí tu logro */}
             <button
                 type="button"
-                onClick={handleShare}
+                onClick={() => setShareOpen(true)}
                 className="mb-4 flex w-full items-center gap-3.5 rounded-card p-4 text-left transition-transform active:scale-[0.99]"
                 style={{ background: 'var(--sport-100)', border: '1px solid var(--sport-200)' }}
             >
@@ -361,6 +343,13 @@ export function ProfileClient({
             </div>
 
             <p className="mt-6 text-center text-[10px] text-text-muted">v1.2.0 · Hecho con ❤️ para tu progreso</p>
+
+            {shareOpen && (
+                <ProgressShareCardModal
+                    data={{ fullName, totalWorkouts, streak, programName }}
+                    onClose={() => setShareOpen(false)}
+                />
+            )}
         </div>
     )
 }

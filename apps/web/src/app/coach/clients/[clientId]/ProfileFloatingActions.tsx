@@ -1,8 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
-import { ClipboardCheck, Dumbbell } from 'lucide-react'
 
 function digitsForWhatsApp(phone: string) {
     const d = phone.replace(/\D/g, '')
@@ -30,15 +28,14 @@ type ProfileFloatingActionsProps = {
 }
 
 /**
- * Barra de acción persistente de la ficha (chrome) — 1:1 con coach-ficha.jsx:
- * botones flotantes sobre la nav (WhatsApp verde con label · check-in · builder),
+ * Barra de acción persistente de la ficha (chrome): botón WhatsApp verde flotante
+ * sobre la nav (full-width dentro del contenedor flotante — se eliminaron los
+ * botones-ícono de check-in y builder),
  * sticky abajo, contenedor `pointer-events:none` y los hijos `auto`. Se encoge/junta
  * al bajar el scroll (>8px) y vuelve al subir o al volver arriba (<36px). Sin banda
  * full-width que tape el contenido (los "Módulos" / "Editar plan" del Resumen).
  */
 export function ProfileFloatingActions({
-    clientId,
-    coachSlug,
     clientPhone,
 }: ProfileFloatingActionsProps) {
     // actMin = barra encogida (igual que la nav flotante del diseño).
@@ -65,27 +62,6 @@ export function ProfileFloatingActions({
 
     const waDigits = clientPhone ? digitsForWhatsApp(clientPhone) : null
     const waHref = waDigits ? `https://wa.me/${waDigits}` : null
-    const checkInHref = coachSlug ? `/c/${coachSlug}/check-in` : null
-    const builderHref = `/coach/builder/${clientId}`
-
-    // Botón-ícono (clipboard / dumbbell) — espejo de `fichaActBtn` del diseño.
-    const iconBtn: React.CSSProperties = {
-        width: actMin ? 38 : 50,
-        height: actMin ? 38 : 44,
-        flexShrink: 0,
-        borderRadius: 'var(--radius-control)',
-        border: '1px solid var(--border-default)',
-        background: 'var(--surface-card)',
-        color: 'var(--text-strong)',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        boxShadow: 'var(--shadow-md)',
-        pointerEvents: 'auto',
-        transition:
-            'width var(--dur-slow) var(--ease-spring), height var(--dur-base) var(--ease-out)',
-    }
 
     return (
         <div
@@ -172,39 +148,6 @@ export function ProfileFloatingActions({
                     WhatsApp
                 </button>
             )}
-
-            {/* Check-in del alumno (clipboard) */}
-            {checkInHref ? (
-                <Link
-                    href={checkInHref}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="Registrar check-in del alumno"
-                    className="eva-press"
-                    style={iconBtn}
-                >
-                    <ClipboardCheck size={20} />
-                </Link>
-            ) : (
-                <button
-                    type="button"
-                    disabled
-                    aria-label="Check-in no disponible"
-                    style={{ ...iconBtn, opacity: 0.5, cursor: 'not-allowed' }}
-                >
-                    <ClipboardCheck size={20} />
-                </button>
-            )}
-
-            {/* Builder de entrenamiento (dumbbell) */}
-            <Link
-                href={builderHref}
-                aria-label="Abrir builder de entrenamiento"
-                className="eva-press"
-                style={iconBtn}
-            >
-                <Dumbbell size={20} />
-            </Link>
         </div>
     )
 }

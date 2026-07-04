@@ -9,6 +9,7 @@ import {
     Timer,
     Gauge,
     Clock,
+    Loader2,
     PlayCircle,
     Target,
     Weight,
@@ -102,6 +103,56 @@ function DarkChip({ children }: { children: React.ReactNode }) {
         >
             {children}
         </span>
+    )
+}
+
+// Recuadro placeholder (sin GIF, o si el GIF falla al cargar).
+function GifPlaceholder() {
+    return (
+        <div
+            className="mb-3.5 flex flex-col items-center justify-center gap-1.5"
+            style={{
+                height: 150,
+                borderRadius: 'var(--radius-md)',
+                background: SUNKEN,
+                border: `1px dashed ${CARD_BORDER}`,
+                color: TXT_MUTED,
+            }}
+        >
+            <PlayCircle className="h-[30px] w-[30px]" />
+            <span className="text-xs">GIF demostración</span>
+        </div>
+    )
+}
+
+// GIF real del ejercicio — mismo patrón que el catálogo Aprender (next/image, lazy,
+// fade-in al cargar). En error cae al placeholder. Keyed por src en el padre → se
+// remonta al cambiar de ejercicio (resetea loaded/errored).
+function ExerciseGifDemo({ src, alt }: { src: string; alt: string }) {
+    const [loaded, setLoaded] = useState(false)
+    const [errored, setErrored] = useState(false)
+    if (errored) return <GifPlaceholder />
+    return (
+        <div
+            className="relative mb-3.5 w-full overflow-hidden"
+            style={{ height: 150, borderRadius: 'var(--radius-md)', background: SUNKEN, border: `1px solid ${CARD_BORDER}` }}
+        >
+            {!loaded && (
+                <div className="absolute inset-0 flex items-center justify-center" style={{ color: TXT_MUTED }}>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                </div>
+            )}
+            <Image
+                src={src}
+                alt={alt}
+                fill
+                loading="lazy"
+                onLoad={() => setLoaded(true)}
+                onError={() => setErrored(true)}
+                className={cn('object-contain transition-opacity duration-500', loaded ? 'opacity-100' : 'opacity-0')}
+                unoptimized
+            />
+        </div>
     )
 }
 
@@ -603,8 +654,15 @@ export function ProgramTabB7({
             </div>
 
             {/* ============ EDITAR EN BUILDER ============ */}
+            {/* Lleva el id del PROGRAMA ACTIVO → el builder lo abre cargado para editar
+                (sin ?programId= arrancaba en blanco). activeProgram está garantizado aquí
+                (return temprano en `!activeProgram`); el ?? cubre el caso sin id. */}
             <Link
-                href={`/coach/builder/${clientId}`}
+                href={
+                    activeProgram?.id
+                        ? `/coach/builder/${clientId}?programId=${activeProgram.id}`
+                        : `/coach/builder/${clientId}`
+                }
                 className={cn(buttonVariants({ variant: 'sport', size: 'lg' }), 'w-full')}
             >
                 <PencilLine className="h-5 w-5" />
@@ -659,28 +717,11 @@ export function ProgramTabB7({
                             )}
                         </SheetDescription>
 
-                        {/* GIF demostración (real si existe) */}
+                        {/* GIF demostración (real si existe; placeholder si no hay o si falla) */}
                         {ex?.gif_url ? (
-                            <div
-                                className="relative mb-3.5 w-full overflow-hidden"
-                                style={{ height: 150, borderRadius: 'var(--radius-md)', background: SUNKEN, border: `1px solid ${CARD_BORDER}` }}
-                            >
-                                <Image src={ex.gif_url} alt="" fill className="object-contain" unoptimized />
-                            </div>
+                            <ExerciseGifDemo key={ex.gif_url} src={ex.gif_url} alt={ex?.name || ''} />
                         ) : (
-                            <div
-                                className="mb-3.5 flex flex-col items-center justify-center gap-1.5"
-                                style={{
-                                    height: 150,
-                                    borderRadius: 'var(--radius-md)',
-                                    background: SUNKEN,
-                                    border: `1px dashed ${CARD_BORDER}`,
-                                    color: TXT_MUTED,
-                                }}
-                            >
-                                <PlayCircle className="h-[30px] w-[30px]" />
-                                <span className="text-xs">GIF demostración</span>
-                            </div>
+                            <GifPlaceholder />
                         )}
 
                         {/* tabla de prescripción */}

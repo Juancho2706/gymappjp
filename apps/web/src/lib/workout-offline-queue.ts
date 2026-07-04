@@ -101,6 +101,63 @@ export function readWorkoutOfflineQueueForPlan(planId: string): WorkoutOfflineLo
     return readWorkoutOfflineQueue().filter((i) => i.planId === planId)
 }
 
+/** Serializa un item de la cola al FormData que espera `logSetAction` (mismo shape que el submit online). */
+export function workoutLogToFormData(item: WorkoutOfflineLog): FormData {
+    const fd = new FormData()
+    fd.set('block_id', item.blockId)
+    fd.set('set_number', String(item.setNumber))
+    if (item.weightKg != null) fd.set('weight_kg', String(item.weightKg))
+    if (item.repsDone != null) fd.set('reps_done', String(item.repsDone))
+    if (item.rpe != null) fd.set('rpe', String(item.rpe))
+    if (item.rir != null) fd.set('rir', String(item.rir))
+    if (item.note != null && item.note !== '') fd.set('note', item.note)
+    // Polimórfico (AC4): los items legacy no traen estas keys — no-op.
+    if (item.actualDurationSec != null) fd.set('actual_duration_sec', String(item.actualDurationSec))
+    if (item.actualDistanceM != null) fd.set('actual_distance_m', String(item.actualDistanceM))
+    if (item.actualHoldSec != null) fd.set('actual_hold_sec', String(item.actualHoldSec))
+    if (item.actualAvgHr != null) fd.set('actual_avg_hr', String(item.actualAvgHr))
+    return fd
+}
+
+/** Resultado (parcial) de `logSetAction` que le importa al flush. */
+export type WorkoutLogSendResult = { success?: boolean; code?: string; error?: string }
+export type WorkoutLogSend = (item: WorkoutOfflineLog) => Promise<WorkoutLogSendResult>
+
+/**
+ * Flush transaccional de la cola (compartido por `OfflineWorkoutQueueSync` y por el gate de
+ * "Finalizar" del ejecutor). Dedup ANTES de enviar (última intención gana); reintenta transitorios,
+ * DESCARTA huérfanos (`invalid_block`), y RESUELVE el falso pendiente: una serie ya guardada en el
+ * server cuya reconciliación local nunca corrió (la fila colapsó/desmontó antes de `state.success`)
+ * queda huérfana en la cola — al reenviarla el upsert es last-wins/idempotente → `success` → sale de
+ * la cola. `opts.planId` acota el envío a un plan (preserva intactos los items de otros planes).
+ * `send` inyectado ⇒ testeable sin red. Escribe el remanente real de vuelta a localStorage.
+ */
+export async function flushWorkoutQueue(
+    send: WorkoutLogSend,
+    opts?: { planId?: string },
+): Promise<{ flushed: number; discarded: number; remainingInScope: number; remaining: WorkoutOfflineLog[] }> {
+    const all = dedupeWorkoutQueue(readWorkoutOfflineQueue())
+    const inScope = opts?.planId ? all.filter((i) => i.planId === opts.planId) : all
+    const outOfScope = opts?.planId ? all.filter((i) => i.planId !== opts.planId) : []
+    const remainingInScope: WorkoutOfflineLog[] = []
+    let flushed = 0
+    let discarded = 0
+    for (const item of inScope) {
+        try {
+            const res = await send(item)
+            if (res.success) flushed++
+            else if (res.code === 'invalid_block') discarded++
+            else remainingInScope.push(item)
+        } catch {
+            // Excepción (red caída al enviar) → transitorio: se reintenta luego.
+            remainingInScope.push(item)
+        }
+    }
+    const remaining = [...outOfScope, ...remainingInScope]
+    writeWorkoutOfflineQueue(remaining)
+    return { flushed, discarded, remainingInScope: remainingInScope.length, remaining }
+}
+
 /**
  * Heurística de "esto fue la red, no un rechazo del server" (espejo de nutrition-offline-queue):
  * en 4G/5G inestable `navigator.onLine` suele ser `true` (hay interfaz, no hay conectividad), así

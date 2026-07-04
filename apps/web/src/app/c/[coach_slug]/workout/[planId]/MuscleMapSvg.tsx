@@ -2,71 +2,26 @@
 
 import { motion } from 'framer-motion'
 import { useMemo } from 'react'
-import { muscleGroupsToRegionIntensity, type MuscleRegion } from './muscle-map'
+import {
+    muscleGroupsToRegionIntensity,
+    muscleGroupToRegion,
+    type MuscleRegion,
+} from './muscle-map'
+import { BODY_SHAPES, BODY_VIEWBOX, type BodyShape } from './body-anatomy'
 
 /**
- * Silueta humana estilizada (frente + espalda) para el resumen post-entreno (Fase M5).
- * Pinta las regiones trabajadas hoy en la rampa `--sport` según intensidad relativa por
- * volumen. Dark-inmersivo, trazos on-dark (NO theme-aware, decisión firme). NO anatómica:
- * bloques redondeados por región. Se alimenta del desglose de volumen que el overlay ya
- * tiene en memoria — cero queries.
+ * Mapa muscular anatomico del resumen post-entreno.
+ *
+ * Reemplaza la silueta de "bloques redondeados" por paths anatomicos organicos
+ * (frente + espalda) vendoreados de react-native-body-highlighter (MIT — ver
+ * `body-anatomy.ts`). Cada region de EVA se tinta con la rampa del tema segun la
+ * intensidad relativa por volumen (0..1). Se alimenta del desglose que el overlay
+ * ya tiene en memoria — cero queries. Contrato de props intacto.
+ *
+ * Intensidad: 4 niveles sobre `rgba(var(--theme-primary-rgb), a)`. El nivel maximo
+ * ademas lleva stroke marcado (accesibilidad: no solo color). Cuerpo base gris
+ * neutro theme-aware. Leyenda de niveles + aria-label por region con el volumen.
  */
-
-type Shape = {
-    region: MuscleRegion
-    /** Rect redondeado (x,y = esquina; en unidades del viewBox). */
-    x: number
-    y: number
-    w: number
-    h: number
-    rx: number
-}
-
-// viewBox 0 0 232 214. Frente centrada en x≈58, espalda en x≈162.
-const FRONT_SHAPES: Shape[] = [
-    // Hombros
-    { region: 'hombros', x: 37, y: 34, w: 13, h: 12, rx: 6 },
-    { region: 'hombros', x: 66, y: 34, w: 13, h: 12, rx: 6 },
-    // Pecho
-    { region: 'pecho', x: 44, y: 47, w: 13, h: 13, rx: 4 },
-    { region: 'pecho', x: 59, y: 47, w: 13, h: 13, rx: 4 },
-    // Brazos (bíceps + antebrazo, ambos lados)
-    { region: 'brazos', x: 30, y: 46, w: 9, h: 26, rx: 4 },
-    { region: 'brazos', x: 28, y: 73, w: 8, h: 20, rx: 4 },
-    { region: 'brazos', x: 77, y: 46, w: 9, h: 26, rx: 4 },
-    { region: 'brazos', x: 80, y: 73, w: 8, h: 20, rx: 4 },
-    // Core / abdomen
-    { region: 'core', x: 48, y: 61, w: 20, h: 24, rx: 5 },
-    // Cuádriceps
-    { region: 'cuadriceps', x: 46, y: 92, w: 13, h: 34, rx: 6 },
-    { region: 'cuadriceps', x: 57, y: 92, w: 13, h: 34, rx: 6 },
-    // Gemelos (frente)
-    { region: 'gemelos', x: 47, y: 130, w: 11, h: 30, rx: 5 },
-    { region: 'gemelos', x: 58, y: 130, w: 11, h: 30, rx: 5 },
-]
-
-const BACK_SHAPES: Shape[] = [
-    // Brazos (tríceps + antebrazo, ambos lados)
-    { region: 'brazos', x: 134, y: 46, w: 9, h: 26, rx: 4 },
-    { region: 'brazos', x: 132, y: 73, w: 8, h: 20, rx: 4 },
-    { region: 'brazos', x: 181, y: 46, w: 9, h: 26, rx: 4 },
-    { region: 'brazos', x: 184, y: 73, w: 8, h: 20, rx: 4 },
-    // Espalda (trapecios / dorsales / lumbar)
-    { region: 'espalda', x: 146, y: 33, w: 32, h: 13, rx: 6 },
-    { region: 'espalda', x: 148, y: 48, w: 28, h: 24, rx: 5 },
-    { region: 'espalda', x: 152, y: 73, w: 20, h: 12, rx: 4 },
-    // Glúteos
-    { region: 'gluteos', x: 150, y: 88, w: 13, h: 16, rx: 6 },
-    { region: 'gluteos', x: 161, y: 88, w: 13, h: 16, rx: 6 },
-    // Isquios
-    { region: 'isquios', x: 150, y: 106, w: 13, h: 32, rx: 6 },
-    { region: 'isquios', x: 161, y: 106, w: 13, h: 32, rx: 6 },
-    // Gemelos (espalda)
-    { region: 'gemelos', x: 151, y: 142, w: 11, h: 30, rx: 5 },
-    { region: 'gemelos', x: 162, y: 142, w: 11, h: 30, rx: 5 },
-]
-
-const ALL_SHAPES = [...FRONT_SHAPES, ...BACK_SHAPES]
 
 const REGION_LABEL: Record<MuscleRegion, string> = {
     pecho: 'Pecho',
@@ -80,19 +35,30 @@ const REGION_LABEL: Record<MuscleRegion, string> = {
     gemelos: 'Gemelos',
 }
 
-/** Head + neck neutrales (no son región muscular) — sostienen la lectura de "cuerpo". */
-function NeutralBody() {
-    return (
-        <g fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.08)" strokeWidth={1}>
-            {/* Frente */}
-            <circle cx={58} cy={18} r={11} />
-            <rect x={53} y={27} width={10} height={7} rx={3} />
-            {/* Espalda */}
-            <circle cx={162} cy={18} r={11} />
-            <rect x={157} y={27} width={10} height={7} rx={3} />
-        </g>
-    )
+// Alfa por nivel de intensidad (1 = menos, 4 = mas). Base del tema via --theme-primary-rgb.
+const TIER_ALPHA: Record<1 | 2 | 3 | 4, number> = { 1: 0.18, 2: 0.38, 3: 0.62, 4: 0.92 }
+
+/** Nivel discreto 0..4 a partir de la intensidad relativa continua 0..1. */
+function tierOf(t: number): 0 | 1 | 2 | 3 | 4 {
+    if (t <= 0) return 0
+    if (t <= 0.25) return 1
+    if (t <= 0.5) return 2
+    if (t <= 0.75) return 3
+    return 4
 }
+
+// Agrupa los shapes vendoreados por region una sola vez (BODY_SHAPES es estatico).
+const NEUTRAL_SHAPES: BodyShape[] = BODY_SHAPES.filter((s) => s.region === null)
+const REGION_SHAPES: Record<MuscleRegion, BodyShape[]> = (() => {
+    const acc = {} as Record<MuscleRegion, BodyShape[]>
+    for (const r of Object.keys(REGION_LABEL) as MuscleRegion[]) acc[r] = []
+    for (const s of BODY_SHAPES) {
+        if (s.region) acc[s.region].push(s)
+    }
+    return acc
+})()
+
+const REGION_ORDER = Object.keys(REGION_LABEL) as MuscleRegion[]
 
 export interface MuscleMapSvgProps {
     /** Desglose de volumen por grupo muscular (ES) — el overlay ya lo calcula. */
@@ -103,11 +69,19 @@ export interface MuscleMapSvgProps {
 export function MuscleMapSvg({ groups, reducedMotion }: MuscleMapSvgProps) {
     const intensity = useMemo(() => muscleGroupsToRegionIntensity(groups), [groups])
 
+    // Volumen (kg) agregado por region — solo para el aria-label ("Pecho: 1200 kg").
+    const regionVolume = useMemo(() => {
+        const acc = {} as Record<MuscleRegion, number>
+        for (const r of REGION_ORDER) acc[r] = 0
+        for (const { group, vol } of groups) {
+            const region = muscleGroupToRegion(group)
+            if (region && vol > 0) acc[region] += vol
+        }
+        return acc
+    }, [groups])
+
     const workedRegions = useMemo(
-        () =>
-            (Object.keys(REGION_LABEL) as MuscleRegion[])
-                .filter((r) => intensity[r] > 0)
-                .sort((a, b) => intensity[b] - intensity[a]),
+        () => REGION_ORDER.filter((r) => intensity[r] > 0).sort((a, b) => intensity[b] - intensity[a]),
         [intensity],
     )
 
@@ -116,65 +90,128 @@ export function MuscleMapSvg({ groups, reducedMotion }: MuscleMapSvgProps) {
             ? `Músculos trabajados: ${workedRegions.map((r) => REGION_LABEL[r]).join(', ')}`
             : 'Músculos trabajados'
 
-    // Delay incremental solo para las regiones que se encienden (pintado con stagger tenue).
     let litIndex = 0
 
     return (
-        <svg
-            viewBox="0 0 232 214"
-            className="w-full h-auto max-h-[220px]"
-            role="img"
-            aria-label={ariaLabel}
-        >
-            <NeutralBody />
-            {ALL_SHAPES.map((s, i) => {
-                const t = intensity[s.region]
-                const worked = t > 0
-                if (!worked) {
-                    return (
-                        <rect
-                            key={i}
-                            x={s.x}
-                            y={s.y}
-                            width={s.w}
-                            height={s.h}
-                            rx={s.rx}
-                            fill="rgba(255,255,255,0.045)"
-                            stroke="rgba(255,255,255,0.08)"
-                            strokeWidth={1}
-                        />
-                    )
+        <div className="eva-muscle-map">
+            {/* Neutro theme-aware para el cuerpo base (dark-inmersivo por defecto, light si el
+                overlay se reusa en tema claro). Los musculos trabajados usan la rampa del tema. */}
+            <style>{`
+                .eva-muscle-map {
+                    --mm-neutral-fill: rgba(255,255,255,0.055);
+                    --mm-neutral-stroke: rgba(255,255,255,0.10);
                 }
-                const targetOpacity = 0.24 + 0.72 * t
-                const delay = reducedMotion ? 0 : 0.18 + 0.045 * litIndex++
-                return (
-                    <motion.rect
-                        key={i}
-                        x={s.x}
-                        y={s.y}
-                        width={s.w}
-                        height={s.h}
-                        rx={s.rx}
-                        fill="var(--sport-500)"
-                        stroke="var(--sport-400)"
-                        strokeWidth={1}
-                        style={{ transformOrigin: `${s.x + s.w / 2}px ${s.y + s.h / 2}px` }}
-                        initial={reducedMotion ? false : { opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: targetOpacity, scale: 1 }}
-                        transition={reducedMotion ? { duration: 0 } : { duration: 0.34, delay }}
-                    />
-                )
-            })}
-            <g
-                fill="var(--on-dark-muted, rgba(255,255,255,0.55))"
-                fontSize={9}
-                fontWeight={700}
-                textAnchor="middle"
-                style={{ letterSpacing: '0.08em' }}
+                @media (prefers-color-scheme: light) {
+                    .eva-muscle-map {
+                        --mm-neutral-fill: rgba(15,23,42,0.06);
+                        --mm-neutral-stroke: rgba(15,23,42,0.14);
+                    }
+                }
+                :root[data-theme='dark'] .eva-muscle-map {
+                    --mm-neutral-fill: rgba(255,255,255,0.055);
+                    --mm-neutral-stroke: rgba(255,255,255,0.10);
+                }
+                :root[data-theme='light'] .eva-muscle-map {
+                    --mm-neutral-fill: rgba(15,23,42,0.06);
+                    --mm-neutral-stroke: rgba(15,23,42,0.14);
+                }
+            `}</style>
+
+            <svg
+                viewBox={BODY_VIEWBOX}
+                className="w-full h-auto max-h-[260px]"
+                role="img"
+                aria-label={ariaLabel}
             >
-                <text x={58} y={206}>FRENTE</text>
-                <text x={162} y={206}>ESPALDA</text>
-            </g>
-        </svg>
+                {/* Cuerpo base neutro (cuello / cabeza / manos / rodillas / tobillos / pies). */}
+                <g fill="var(--mm-neutral-fill)" stroke="var(--mm-neutral-stroke)" strokeWidth={2}>
+                    {NEUTRAL_SHAPES.map((s, i) => (
+                        <path key={`n${i}`} d={s.d} />
+                    ))}
+                </g>
+
+                {/* Una <g> por region, tintada segun intensidad. Regiones sin trabajo = neutro. */}
+                {REGION_ORDER.map((region) => {
+                    const t = intensity[region]
+                    const tier = tierOf(t)
+                    const worked = tier > 0
+                    const shapes = REGION_SHAPES[region]
+                    const vol = Math.round(regionVolume[region])
+
+                    if (!worked) {
+                        return (
+                            <g
+                                key={region}
+                                fill="var(--mm-neutral-fill)"
+                                stroke="var(--mm-neutral-stroke)"
+                                strokeWidth={2}
+                            >
+                                {shapes.map((s, i) => (
+                                    <path key={i} d={s.d} />
+                                ))}
+                            </g>
+                        )
+                    }
+
+                    const litTier = tier as 1 | 2 | 3 | 4 // worked ⇒ tier ∈ 1..4
+                    const fill = `rgba(var(--theme-primary-rgb), ${TIER_ALPHA[litTier]})`
+                    // Nivel maximo: stroke marcado del tema (canal no-cromatico de accesibilidad).
+                    const isMax = litTier === 4
+                    const stroke = isMax
+                        ? 'rgba(var(--theme-primary-rgb), 1)'
+                        : 'rgba(var(--theme-primary-rgb), 0.45)'
+                    const strokeWidth = isMax ? 6 : 2
+                    const delay = reducedMotion ? 0 : 0.16 + 0.05 * litIndex++
+
+                    return (
+                        <motion.g
+                            key={region}
+                            role="img"
+                            aria-label={`${REGION_LABEL[region]}: ${vol} kg`}
+                            fill={fill}
+                            stroke={stroke}
+                            strokeWidth={strokeWidth}
+                            initial={reducedMotion ? false : { opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={reducedMotion ? { duration: 0 } : { duration: 0.36, delay }}
+                        >
+                            {shapes.map((s, i) => (
+                                <path key={i} d={s.d} />
+                            ))}
+                        </motion.g>
+                    )
+                })}
+
+                <g
+                    fill="var(--on-dark-muted, rgba(255,255,255,0.55))"
+                    fontSize={44}
+                    fontWeight={700}
+                    textAnchor="middle"
+                    style={{ letterSpacing: '0.08em' }}
+                >
+                    <text x={362} y={1440}>FRENTE</text>
+                    <text x={1086} y={1440}>ESPALDA</text>
+                </g>
+            </svg>
+
+            {/* Leyenda de niveles (menos → mas). El ultimo lleva anillo = nivel maximo (stroke). */}
+            <div className="mt-1 flex items-center justify-center gap-2 text-[10px] text-on-dark-muted">
+                <span className="uppercase tracking-widest">Menos</span>
+                <div className="flex items-center gap-1" aria-hidden="true">
+                    {([1, 2, 3, 4] as const).map((lvl) => (
+                        <span
+                            key={lvl}
+                            className="h-3 w-4 rounded-[3px]"
+                            style={{
+                                backgroundColor: `rgba(var(--theme-primary-rgb), ${TIER_ALPHA[lvl]})`,
+                                boxShadow:
+                                    lvl === 4 ? 'inset 0 0 0 1.5px rgba(var(--theme-primary-rgb), 1)' : 'none',
+                            }}
+                        />
+                    ))}
+                </div>
+                <span className="uppercase tracking-widest">Más</span>
+            </div>
+        </div>
     )
 }
