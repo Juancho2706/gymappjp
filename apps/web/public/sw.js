@@ -55,9 +55,13 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Never intercept Supabase, Vercel internals, coach routes, or API
+  // Same-origin only. Passing cross-origin requests through the SW breaks them
+  // (Google Identity Services' script got a synthesized 408 here); the browser
+  // must handle Supabase, GIS, MercadoPago, analytics, etc. natively.
+  if (url.origin !== self.location.origin) return;
+
+  // Never intercept Vercel internals, coach routes, or API
   if (
-    url.hostname.includes('supabase.co') ||
     url.pathname.startsWith('/_vercel/') ||
     url.pathname.startsWith('/api/') ||
     url.pathname.startsWith('/coach')
