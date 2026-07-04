@@ -36,8 +36,17 @@ Ultima modificacion: 2026-06-15 (media de ejercicios — mirror de thumbnails + 
 |---|---|---|
 | Dashboard alumno | `/c/[coach_slug]/dashboard` | `WorkoutHeroCard`, `ActiveProgramSection` |
 | Ejecutar rutina | `/c/[coach_slug]/workout/[planId]` | `_data/workout-execution.queries.ts`, `WorkoutExecutionClient` |
+| Card de ejercicio | `SingleExerciseCard.tsx` | Card 1:1 del bloque suelto (extraída del render inline, prerequisito del stepper); componente puro (sin hooks) que consume `LogSetForm` por serie |
 | Log set | `LogSetForm.tsx` | `_actions/workout-log.actions.ts` |
+| Teclado numérico | `WorkoutKeypadProvider.tsx` + `NumericKeypadSheet.tsx` | Teclado in-app (solo fuerza) gate `pointer: coarse` (`lib/client/useCoarsePointer.ts`); muta `ref.value` del `<input>` uncontrolled — el objetivo prescrito viaja en el header (`--keypad-h`, `body[data-exec-keypad-open]`) |
+| Modo paso a paso | `StepperExecution.tsx` + `lib/workout-stepper.ts` | Pager opt-in "un ejercicio a la vez"; toggle "Lista / Paso a paso" en el header, device-scoped en `localStorage['omni_stepper']` (espejo de `omni_autotimer`) |
 | Cierre | `WorkoutSummaryOverlay.tsx` | PRs, volumen, resumen |
+
+**Presentación de la exec (`WorkoutExecutionClient`).** El orquestador calcula `sectioned` (secciones → grupos) y renderiza el MISMO card en ambos modos vía `renderGroup(group, { allowCollapse })` — una sola fuente de verdad, cero divergencia:
+
+- **Lista (default):** todos los grupos a la vez; los completados colapsan a `CollapsedExerciseBar`.
+- **Paso a paso (opt-in):** `StepperExecution` muestra UN paso a la vez. `lib/workout-stepper.ts` (puro, testeado) aplana `sectioned` en pasos — una **superserie = un paso** (rondas A1→B1 intactas dentro de su `SupersetGroupCard`). Navegación: swipe (framer-motion drag + `touch-action: pan-y`), botones prev/next, rail de progreso navegable; auto-avance suave al completar (reusa `scrollToNextIncomplete`, que en stepper hace `setCurrentStepIndex(stepIndexOfBlock(...))`). A11y: `aria-roledescription="carrusel de ejercicios"`, `aria-label="Ejercicio X de Y"`, `aria-live="polite"`, `useReducedMotion` → crossfade.
+- **Fuera del pager** (compartido, no se desmonta al cambiar de paso): `WorkoutTimerProvider`/`RestTimer`, `WorkoutKeypadProvider`, header de progreso y barra fija `.exec-finish-bar`. El motor (logging optimista, cola offline write-through, dedupe, descanso, progresión) vive en `LogSetForm` + handlers del padre — el stepper/keypad son 100% presentación/navegación.
 
 ## Flujo: nutricion alumno
 

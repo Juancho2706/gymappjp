@@ -6,10 +6,18 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Info, Dumbbell, HeartPulse, Move, GitCommit, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, type LucideIcon } from 'lucide-react'
+import { ArrowLeft, Info, Dumbbell, HeartPulse, Move, GitCommit, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal, type LucideIcon } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
 import { SingleExerciseCard } from './SingleExerciseCard'
+import { StepperExecution, type StepperStepView } from './StepperExecution'
+import { STEPPER_MODE_KEY } from './rest-timer-preferences'
+import {
+    buildStepModel,
+    firstIncompleteStepIndex,
+    isStepComplete,
+    stepIndexOfBlock,
+} from '@/lib/workout-stepper'
 import { logSetAction } from './_actions/workout-log.actions'
 import {
     flushWorkoutQueue,
@@ -633,12 +641,19 @@ function SupersetGroupCard({
                 ? computeEffectiveTarget(block, { currentWeek, weeksToRepeat, lastSession })
                 : null
             const suggestedWeightKg = eff?.weightKg ?? block.target_weight_kg
+            // Mejor sesión previa del miembro → alimenta el header "Última vez" del teclado custom
+            // (Fase L · workstream B) en el keypad de las filas de la superserie (DB-5).
+            const prevList = previousHistory[exercise.id] ?? []
+            const bestPrev = prevList.length
+                ? prevList.reduce((mx, s) => ((s.weight_kg ?? 0) > (mx.weight_kg ?? 0) ? s : mx), prevList[0])
+                : null
             return {
                 block,
                 exercise,
                 effType,
                 eff,
                 suggestedWeightKg,
+                bestPrev,
                 complete: isBlockComplete(block, sessionLogs),
                 letter: letterByBlock.get(block.id) ?? '?',
             }
@@ -843,6 +858,8 @@ function SupersetGroupCard({
                                             existingLog={existing}
                                             suggestedWeightKg={m.suggestedWeightKg}
                                             prThresholdKg={exerciseMaxes[m.exercise.id] ?? null}
+                                            targetReps={m.block.reps}
+                                            lastSet={m.bestPrev ? { weightKg: m.bestPrev.weight_kg, reps: m.bestPrev.reps_done } : null}
                                             autoTimerEnabled={autoTimerEnabled}
                                             mode={m.effType}
                                             isActive={isNext}
@@ -950,6 +967,11 @@ export function WorkoutExecutionClient({
     useEffect(() => {
         if (localStorage.getItem('omni_autotimer') === 'false') setAutoTimerEnabled(false)
     }, [])
+    // Modo "paso a paso" (Fase L · workstream A) — opt-in por dispositivo, mismo carril EXACTO que el
+    // auto-timer: localStorage 'omni_stepper', leído post-montaje (hidratación-safe), default OFF.
+    // `currentStepIndex` = paso visible del pager (swipe/rail/botones + auto-avance lo mueven).
+    const [stepperEnabled, setStepperEnabled] = useState(false)
+    const [currentStepIndex, setCurrentStepIndex] = useState(0)
     const [showTimerSettings, setShowTimerSettings] = useState(false)
     const [showCompleted, setShowCompleted] = useState(false)
     const [selectedExercise, setSelectedExercise] = useState<ExerciseType | null>(null)
@@ -1036,6 +1058,25 @@ export function WorkoutExecutionClient({
         return map
     }, [sectioned])
 
+    // Modelo de pasos del stepper (puro): cada grupo de `sectioned` = un paso (superserie = 1 paso).
+    const steps = useMemo(() => buildStepModel(sectioned), [sectioned])
+    // Mapa paso.key → { section, group } para pintar el MISMO card en lista y stepper (una sola verdad).
+    const groupCtxByKey = useMemo(() => {
+        const m = new Map<string, { section: (typeof sectioned)[number]; group: (typeof sectioned)[number]['groups'][number] }>()
+        for (const section of sectioned) for (const group of section.groups) m.set(group.key, { section, group })
+        return m
+    }, [sectioned])
+
+    // Lectura post-montaje del toggle (hidratación-safe, patrón `omni_autotimer`): si estaba activo,
+    // arranca en el primer paso incompleto (no en el 0).
+    useEffect(() => {
+        if (localStorage.getItem(STEPPER_MODE_KEY) === 'true') {
+            setStepperEnabled(true)
+            setCurrentStepIndex(firstIncompleteStepIndex(steps, logs))
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
     const registerRowRef = useCallback((blockId: string, setNumber: number, el: HTMLDivElement | null) => {
         const key = `${blockId}:${setNumber}`
         if (el) setRowRefs.current.set(key, el)
@@ -1090,6 +1131,14 @@ export function WorkoutExecutionClient({
         setAutoTimerEnabled(newValue)
         localStorage.setItem('omni_autotimer', String(newValue))
     }
+    // Toggle "Lista / Paso a paso" del header (mirror de `toggleAutoTimer`, persiste device-scoped).
+    // Al ENTRAR al modo stepper aterriza en el primer paso incompleto.
+    const setStepperMode = (on: boolean) => {
+        if (on === stepperEnabled) return
+        setStepperEnabled(on)
+        localStorage.setItem(STEPPER_MODE_KEY, String(on))
+        if (on) setCurrentStepIndex(firstIncompleteStepIndex(steps, sessionLogs))
+    }
     const openTechnique = (exercise: ExerciseType | null) => {
         if (!exercise) return
         setSelectedExercise(exercise)
@@ -1099,6 +1148,14 @@ export function WorkoutExecutionClient({
     const scrollToNextIncomplete = (fromLogs: Props['logs']) => {
         const nextIncomplete = blocks.find((b) => !isBlockComplete(b, fromLogs))
         if (!nextIncomplete) return
+        // Modo stepper: en vez de scrollear, avanzá de PASO (auto-avance suave). Dentro de una
+        // superserie este handler solo corre cuando el GRUPO cerró (nextPos == null en `handleLogged`),
+        // así que no rompe la guía interleaved A1→B1 (esa sigue con `nextCue` + toast, sin cambiar de paso).
+        if (stepperEnabled) {
+            const idx = stepIndexOfBlock(steps, nextIncomplete.id)
+            if (idx >= 0) setCurrentStepIndex(idx)
+            return
+        }
         const info = supersetInfo.get(nextIncomplete.id)
         if (info) {
             const order = buildRoundOrder(info.members)
@@ -1225,6 +1282,204 @@ export function WorkoutExecutionClient({
             : 'Programa semanal'}`
         : null
 
+    // Render de UN grupo (superserie o bloque suelto) → misma salida en lista y stepper (una sola
+    // verdad, cero divergencia visual). `allowCollapse`: true en la lista (los completados colapsan a
+    // recap para ahorrar espacio); false en el stepper (un paso a la vez, siempre card completa para
+    // poder editar). "Mover sin cambiar": el JSX y las keys son idénticos a los del render inline.
+    const renderGroup = (
+        group: (typeof sectioned)[number]['groups'][number],
+        { allowCollapse }: { allowCollapse: boolean },
+    ) => {
+        if (group.type === 'superset') {
+            const info = supersetInfo.get(group.blocks[0].id)!
+            const members = info.members
+            const groupComplete = members.every((m) => isBlockCompleted(m))
+            const groupActive = activeBlockId != null && members.some((m) => m.id === activeBlockId)
+            const groupFocus: 'active' | 'upcoming' | 'done' = groupComplete ? 'done' : groupActive ? 'active' : 'upcoming'
+            // Superserie completa → colapsa a recap (reexpandible con un tap). Solo en la lista.
+            if (allowCollapse && groupFocus === 'done' && !expandedDone[group.key]) {
+                const names = members.map((m) => getExercise(m)?.name).filter(Boolean).join(' + ')
+                return (
+                    <CollapsedExerciseBar
+                        key={group.key}
+                        name={names || 'Superserie'}
+                        sub={`Superserie · ${members.length} ejercicios`}
+                        reducedMotion={reducedMotion}
+                        celebrate={justCompleted != null && members.some((m) => m.id === justCompleted.id) && !reducedMotion}
+                        onExpand={() => toggleExpandDone(group.key)}
+                    />
+                )
+            }
+            return (
+                <motion.div
+                    key={group.key}
+                    layout={!reducedMotion}
+                    className="rounded-card"
+                    transition={reducedMotion ? { duration: 0 } : springs.smooth}
+                    style={groupFocus === 'active' ? { boxShadow: '0 8px 32px -14px color-mix(in srgb, var(--sport-500) 60%, transparent)' } : undefined}
+                >
+                    <SupersetGroupCard
+                        info={info}
+                        sessionLogs={sessionLogs}
+                        currentWeek={currentWeek}
+                        weeksToRepeat={program?.weeks_to_repeat}
+                        previousHistory={previousHistory}
+                        lastSessionByBlock={lastSessionByBlock}
+                        exerciseMaxes={exerciseMaxes}
+                        cardio={cardio}
+                        autoTimerEnabled={autoTimerEnabled}
+                        nextCue={nextCue}
+                        onLogged={handleLogged}
+                        onResult={handleResult}
+                        openTechnique={openTechnique}
+                        registerRowRef={registerRowRef}
+                        getExercise={getExercise}
+                    />
+                </motion.div>
+            )
+        }
+        return (
+        <div key={group.key} className="space-y-3">
+            <div className="space-y-3">
+                {group.blocks.sort((a, b) => a.order_index - b.order_index).map((block, blockIndex) => {
+                    const exercise = getExercise(block)
+                    if (!exercise) return null
+                    const blockLogs = sessionLogs.filter((log) => log.block_id === block.id)
+                    const complete = isBlockCompleted(block)
+                    // Tipo efectivo (specs/movida-entrenamiento): strength ⇒ render
+                    // EXACTAMENTE el de siempre; cardio/movilidad/roller ⇒ variantes.
+                    const effType = effectiveExerciseType(block, exercise)
+                    // Sobrecarga progresiva: peso objetivo EFECTIVO de hoy. weekly_linear usa la
+                    // semana; double (doble progresión) ancla en la última sesión registrada.
+                    const lastSession = (() => {
+                        const ls = lastSessionByBlock[block.id]
+                        if (!ls || ls.sets.length === 0) return null
+                        const weightKg = ls.sets.reduce<number | null>(
+                            (m, s) => (s.weight_kg != null && (m == null || s.weight_kg > m) ? s.weight_kg : m),
+                            null,
+                        )
+                        return { weightKg, repsDone: ls.sets.map((s) => s.reps_done) }
+                    })()
+                    const eff = effType === 'strength'
+                        ? computeEffectiveTarget(block, { currentWeek, weeksToRepeat: program?.weeks_to_repeat, lastSession })
+                        : null
+                    const suggestedWeightKg = eff?.weightKg ?? block.target_weight_kg
+                    const loggedSetNumbers = new Set(
+                        blockLogs.filter((l) => l.set_number >= 1 && l.set_number <= block.sets).map((l) => l.set_number),
+                    )
+                    const doneCount = loggedSetNumbers.size
+                    let firstUnlogged: number | null = null
+                    for (let i = 1; i <= block.sets; i += 1) { if (!loggedSetNumbers.has(i)) { firstUnlogged = i; break } }
+                    const detailsOpen = !!openDetails[block.id]
+                    // Cue de técnica inline (reusa la 1ra instrucción del ejercicio; el resto en Detalles).
+                    const cueLine = effType === 'strength'
+                        ? (exercise.instructions?.[0]?.replace(/^Step:\d+\s*/i, '') ?? null)
+                        : null
+                    const overloadLabel = effType === 'strength' ? overloadChipLabel(block, eff, currentWeek) : null
+                    const overloadDetail = effType === 'strength' ? overloadDetailText(block, eff, currentWeek) : null
+                    const prevList = previousHistory[exercise.id] ?? []
+                    const bestPrev = prevList.length
+                        ? prevList.reduce((m, s) => ((s.weight_kg ?? 0) > (m.weight_kg ?? 0) ? s : m), prevList[0])
+                        : null
+                    const beatIt = bestPrev?.weight_kg != null && bestPrev.weight_kg > 0 && suggestedWeightKg != null && suggestedWeightKg >= bestPrev.weight_kg
+                    const hasDetails =
+                        (effType === 'strength' && ((exercise.instructions?.length ?? 0) > 0 || !!overloadDetail)) ||
+                        (effType !== 'strength' && !!block.instructions) ||
+                        !!block.notes ||
+                        prevList.length > 0
+                    // Marcador de progreso (SIN atenuar — decisión CEO): la card activa (primer bloque
+                    // incompleto) sólo lleva borde sport + elevación (marcador discreto); las completadas
+                    // colapsan a recap. TODAS las cards a opacidad e iluminación plenas.
+                    const focus: 'active' | 'upcoming' | 'done' = complete
+                        ? 'done'
+                        : block.id === activeBlockId ? 'active' : 'upcoming'
+                    const recapWeight = suggestedWeightKg ?? block.target_weight_kg
+                    const recapSub = effType === 'strength'
+                        ? `${block.sets} × ${block.reps}${recapWeight != null ? ` · ${recapWeight} kg` : ''}`
+                        : `${block.sets} ${block.sets === 1 ? 'serie' : 'series'} · ${exercise.muscle_group}`
+                    // Completado → recap delgado; tap lo reexpande para editar una serie. Solo en la lista.
+                    if (allowCollapse && focus === 'done' && !expandedDone[block.id]) {
+                        return (
+                            <Fragment key={block.id}>
+                                <CollapsedExerciseBar
+                                    name={exercise.name}
+                                    sub={recapSub}
+                                    reducedMotion={reducedMotion}
+                                    celebrate={justCompleted?.id === block.id && !reducedMotion}
+                                    onExpand={() => toggleExpandDone(block.id)}
+                                />
+                            </Fragment>
+                        )
+                    }
+                    return (
+                        <Fragment key={block.id}>
+                        <SingleExerciseCard
+                            block={block}
+                            blockIndex={blockIndex}
+                            group={group}
+                            exercise={exercise}
+                            effType={effType}
+                            focus={focus}
+                            complete={complete}
+                            doneCount={doneCount}
+                            firstUnlogged={firstUnlogged}
+                            suggestedWeightKg={suggestedWeightKg}
+                            overloadLabel={overloadLabel}
+                            overloadDetail={overloadDetail}
+                            cueLine={cueLine}
+                            hasDetails={hasDetails}
+                            detailsOpen={detailsOpen}
+                            prevList={prevList}
+                            bestPrev={bestPrev}
+                            beatIt={beatIt}
+                            blockLogs={blockLogs}
+                            exerciseMaxes={exerciseMaxes}
+                            fillByBlock={fillByBlock}
+                            reopenSignal={reopenSignal}
+                            cardio={cardio}
+                            autoTimerEnabled={autoTimerEnabled}
+                            reducedMotion={reducedMotion}
+                            blockRefs={blockRefs}
+                            toggleDetails={toggleDetails}
+                            toggleExpandDone={toggleExpandDone}
+                            setFillByBlock={setFillByBlock}
+                            openTechnique={openTechnique}
+                            handleLogged={handleLogged}
+                            handleResult={handleResult}
+                        />
+                        </Fragment>
+                    )
+                })}
+            </div>
+        </div>
+        )
+    }
+
+    // Vistas del rail + anuncio a11y del stepper (nombre del ejercicio por paso, estado de completitud).
+    const stepTitle = (step: (typeof steps)[number]): string => {
+        if (step.kind === 'superset') {
+            const names = step.blocks.map((b) => getExercise(b)?.name).filter(Boolean)
+            return names.length ? `Superserie · ${names.join(' + ')}` : 'Superserie'
+        }
+        return getExercise(step.blocks[0])?.name ?? 'Ejercicio'
+    }
+    const stepViews: StepperStepView[] = steps.map((step) => ({
+        key: step.key,
+        kind: step.kind,
+        title: stepTitle(step),
+        sectionTitle: step.sectionTitle,
+        muted: step.muted,
+        complete: isStepComplete(step, sessionLogs),
+    }))
+    // Pinta el card del paso `index` reusando `renderGroup` (siempre completo — sin colapsar).
+    const renderStepNode = (index: number) => {
+        const step = steps[index]
+        if (!step) return null
+        const ctx = groupCtxByKey.get(step.key)
+        if (!ctx) return null
+        return renderGroup(ctx.group, { allowCollapse: false })
+    }
+
     return (
         <WorkoutTimerProvider>
           <WorkoutKeypadProvider>
@@ -1258,7 +1513,34 @@ export function WorkoutExecutionClient({
                                         : 'Programa semanal'}
                                 </p>
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                {/* Toggle "Lista / Paso a paso" (DA-3) — control segmentado, opt-in device-scoped. */}
+                                <div role="group" aria-label="Modo de ejecución" className="flex rounded-control bg-white/[0.06] p-0.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => setStepperMode(false)}
+                                        aria-pressed={!stepperEnabled}
+                                        title="Ver todos los ejercicios en lista"
+                                        className={cn(
+                                            'flex h-9 items-center gap-1 rounded-[10px] px-2 text-[11px] font-bold transition-colors',
+                                            !stepperEnabled ? 'bg-[var(--sport-500)] text-white' : 'text-on-dark-muted hover:text-on-dark',
+                                        )}
+                                    >
+                                        <List className="h-3.5 w-3.5" /> Lista
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setStepperMode(true)}
+                                        aria-pressed={stepperEnabled}
+                                        title="Un ejercicio a la vez"
+                                        className={cn(
+                                            'flex h-9 items-center gap-1 rounded-[10px] px-2 text-[11px] font-bold transition-colors',
+                                            stepperEnabled ? 'bg-[var(--sport-500)] text-white' : 'text-on-dark-muted hover:text-on-dark',
+                                        )}
+                                    >
+                                        <GalleryHorizontal className="h-3.5 w-3.5" /> Pasos
+                                    </button>
+                                </div>
                                 <button
                                     type="button"
                                     onClick={() => setShowTimerSettings(true)}
@@ -1316,6 +1598,17 @@ export function WorkoutExecutionClient({
                     </div>
                 )}
 
+                {stepperEnabled ? (
+                    /* Modo "paso a paso" — un ejercicio/superserie a la vez (Fase L · workstream A).
+                       El RestTimer/WorkoutTimerProvider/header/barra "Finalizar" quedan FUERA del pager. */
+                    <StepperExecution
+                        steps={stepViews}
+                        currentIndex={currentStepIndex}
+                        onIndexChange={setCurrentStepIndex}
+                        renderStep={renderStepNode}
+                        reducedMotion={reducedMotion}
+                    />
+                ) : (
                 <div className="px-4 py-6 md:px-8 max-w-5xl mx-auto pb-32">
                     <div className="space-y-6">
                         {sectioned.map((section) => (
@@ -1341,176 +1634,13 @@ export function WorkoutExecutionClient({
                                     )}
                                 </div>
                                 <div className="space-y-3">
-                                    {section.groups.map((group) => {
-                                        if (group.type === 'superset') {
-                                            const info = supersetInfo.get(group.blocks[0].id)!
-                                            const members = info.members
-                                            const groupComplete = members.every((m) => isBlockCompleted(m))
-                                            const groupActive = activeBlockId != null && members.some((m) => m.id === activeBlockId)
-                                            const groupFocus: 'active' | 'upcoming' | 'done' = groupComplete ? 'done' : groupActive ? 'active' : 'upcoming'
-                                            // Superserie completa → colapsa a recap (reexpandible con un tap).
-                                            if (groupFocus === 'done' && !expandedDone[group.key]) {
-                                                const names = members.map((m) => getExercise(m)?.name).filter(Boolean).join(' + ')
-                                                return (
-                                                    <CollapsedExerciseBar
-                                                        key={group.key}
-                                                        name={names || 'Superserie'}
-                                                        sub={`Superserie · ${members.length} ejercicios`}
-                                                        reducedMotion={reducedMotion}
-                                                        celebrate={justCompleted != null && members.some((m) => m.id === justCompleted.id) && !reducedMotion}
-                                                        onExpand={() => toggleExpandDone(group.key)}
-                                                    />
-                                                )
-                                            }
-                                            return (
-                                                <motion.div
-                                                    key={group.key}
-                                                    layout={!reducedMotion}
-                                                    className="rounded-card"
-                                                    transition={reducedMotion ? { duration: 0 } : springs.smooth}
-                                                    style={groupFocus === 'active' ? { boxShadow: '0 8px 32px -14px color-mix(in srgb, var(--sport-500) 60%, transparent)' } : undefined}
-                                                >
-                                                    <SupersetGroupCard
-                                                        info={info}
-                                                        sessionLogs={sessionLogs}
-                                                        currentWeek={currentWeek}
-                                                        weeksToRepeat={program?.weeks_to_repeat}
-                                                        previousHistory={previousHistory}
-                                                        lastSessionByBlock={lastSessionByBlock}
-                                                        exerciseMaxes={exerciseMaxes}
-                                                        cardio={cardio}
-                                                        autoTimerEnabled={autoTimerEnabled}
-                                                        nextCue={nextCue}
-                                                        onLogged={handleLogged}
-                                                        onResult={handleResult}
-                                                        openTechnique={openTechnique}
-                                                        registerRowRef={registerRowRef}
-                                                        getExercise={getExercise}
-                                                    />
-                                                </motion.div>
-                                            )
-                                        }
-                                        return (
-                                        <div key={group.key} className="space-y-3">
-                                            <div className="space-y-3">
-                                                {group.blocks.sort((a, b) => a.order_index - b.order_index).map((block, blockIndex) => {
-                                                    const exercise = getExercise(block)
-                                                    if (!exercise) return null
-                                                    const blockLogs = sessionLogs.filter((log) => log.block_id === block.id)
-                                                    const complete = isBlockCompleted(block)
-                                                    // Tipo efectivo (specs/movida-entrenamiento): strength ⇒ render
-                                                    // EXACTAMENTE el de siempre; cardio/movilidad/roller ⇒ variantes.
-                                                    const effType = effectiveExerciseType(block, exercise)
-                                                    // Sobrecarga progresiva: peso objetivo EFECTIVO de hoy. weekly_linear usa la
-                                                    // semana; double (doble progresión) ancla en la última sesión registrada.
-                                                    const lastSession = (() => {
-                                                        const ls = lastSessionByBlock[block.id]
-                                                        if (!ls || ls.sets.length === 0) return null
-                                                        const weightKg = ls.sets.reduce<number | null>(
-                                                            (m, s) => (s.weight_kg != null && (m == null || s.weight_kg > m) ? s.weight_kg : m),
-                                                            null,
-                                                        )
-                                                        return { weightKg, repsDone: ls.sets.map((s) => s.reps_done) }
-                                                    })()
-                                                    const eff = effType === 'strength'
-                                                        ? computeEffectiveTarget(block, { currentWeek, weeksToRepeat: program?.weeks_to_repeat, lastSession })
-                                                        : null
-                                                    const suggestedWeightKg = eff?.weightKg ?? block.target_weight_kg
-                                                    const loggedSetNumbers = new Set(
-                                                        blockLogs.filter((l) => l.set_number >= 1 && l.set_number <= block.sets).map((l) => l.set_number),
-                                                    )
-                                                    const doneCount = loggedSetNumbers.size
-                                                    let firstUnlogged: number | null = null
-                                                    for (let i = 1; i <= block.sets; i += 1) { if (!loggedSetNumbers.has(i)) { firstUnlogged = i; break } }
-                                                    const detailsOpen = !!openDetails[block.id]
-                                                    // Cue de técnica inline (reusa la 1ra instrucción del ejercicio; el resto en Detalles).
-                                                    const cueLine = effType === 'strength'
-                                                        ? (exercise.instructions?.[0]?.replace(/^Step:\d+\s*/i, '') ?? null)
-                                                        : null
-                                                    const overloadLabel = effType === 'strength' ? overloadChipLabel(block, eff, currentWeek) : null
-                                                    const overloadDetail = effType === 'strength' ? overloadDetailText(block, eff, currentWeek) : null
-                                                    const prevList = previousHistory[exercise.id] ?? []
-                                                    const bestPrev = prevList.length
-                                                        ? prevList.reduce((m, s) => ((s.weight_kg ?? 0) > (m.weight_kg ?? 0) ? s : m), prevList[0])
-                                                        : null
-                                                    const beatIt = bestPrev?.weight_kg != null && bestPrev.weight_kg > 0 && suggestedWeightKg != null && suggestedWeightKg >= bestPrev.weight_kg
-                                                    const hasDetails =
-                                                        (effType === 'strength' && ((exercise.instructions?.length ?? 0) > 0 || !!overloadDetail)) ||
-                                                        (effType !== 'strength' && !!block.instructions) ||
-                                                        !!block.notes ||
-                                                        prevList.length > 0
-                                                    // Marcador de progreso (SIN atenuar — decisión CEO): la card activa (primer bloque
-                                                    // incompleto) sólo lleva borde sport + elevación (marcador discreto); las completadas
-                                                    // colapsan a recap. TODAS las cards a opacidad e iluminación plenas.
-                                                    const focus: 'active' | 'upcoming' | 'done' = complete
-                                                        ? 'done'
-                                                        : block.id === activeBlockId ? 'active' : 'upcoming'
-                                                    const recapWeight = suggestedWeightKg ?? block.target_weight_kg
-                                                    const recapSub = effType === 'strength'
-                                                        ? `${block.sets} × ${block.reps}${recapWeight != null ? ` · ${recapWeight} kg` : ''}`
-                                                        : `${block.sets} ${block.sets === 1 ? 'serie' : 'series'} · ${exercise.muscle_group}`
-                                                    // Completado → recap delgado; tap lo reexpande para editar una serie.
-                                                    if (focus === 'done' && !expandedDone[block.id]) {
-                                                        return (
-                                                            <Fragment key={block.id}>
-                                                                <CollapsedExerciseBar
-                                                                    name={exercise.name}
-                                                                    sub={recapSub}
-                                                                    reducedMotion={reducedMotion}
-                                                                    celebrate={justCompleted?.id === block.id && !reducedMotion}
-                                                                    onExpand={() => toggleExpandDone(block.id)}
-                                                                />
-                                                            </Fragment>
-                                                        )
-                                                    }
-                                                    return (
-                                                        <Fragment key={block.id}>
-                                                        <SingleExerciseCard
-                                                            block={block}
-                                                            blockIndex={blockIndex}
-                                                            group={group}
-                                                            exercise={exercise}
-                                                            effType={effType}
-                                                            focus={focus}
-                                                            complete={complete}
-                                                            doneCount={doneCount}
-                                                            firstUnlogged={firstUnlogged}
-                                                            suggestedWeightKg={suggestedWeightKg}
-                                                            overloadLabel={overloadLabel}
-                                                            overloadDetail={overloadDetail}
-                                                            cueLine={cueLine}
-                                                            hasDetails={hasDetails}
-                                                            detailsOpen={detailsOpen}
-                                                            prevList={prevList}
-                                                            bestPrev={bestPrev}
-                                                            beatIt={beatIt}
-                                                            blockLogs={blockLogs}
-                                                            exerciseMaxes={exerciseMaxes}
-                                                            fillByBlock={fillByBlock}
-                                                            reopenSignal={reopenSignal}
-                                                            cardio={cardio}
-                                                            autoTimerEnabled={autoTimerEnabled}
-                                                            reducedMotion={reducedMotion}
-                                                            blockRefs={blockRefs}
-                                                            toggleDetails={toggleDetails}
-                                                            toggleExpandDone={toggleExpandDone}
-                                                            setFillByBlock={setFillByBlock}
-                                                            openTechnique={openTechnique}
-                                                            handleLogged={handleLogged}
-                                                            handleResult={handleResult}
-                                                        />
-                                                        </Fragment>
-                                                    )
-                                                })}
-                                            </div>
-                                        </div>
-                                        )
-                                    })}
+                                    {section.groups.map((group) => renderGroup(group, { allowCollapse: true }))}
                                 </div>
                             </section>
                         ))}
                     </div>
                 </div>
+                )}
 
                 <div className="exec-finish-bar fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[var(--ink-950)]/90 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl">
                     <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">

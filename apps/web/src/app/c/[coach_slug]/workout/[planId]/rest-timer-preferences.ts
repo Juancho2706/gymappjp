@@ -11,6 +11,11 @@ export const REST_TIMER_VOLUME_KEY = 'restTimerVolume'
 export const REST_TIMER_MUTED_KEY = 'restTimerMuted'
 /** localStorage: auto-iniciar cronómetro al guardar serie (gestionado en WorkoutExecutionClient) */
 export const OMNIAUTOTIMER_KEY = 'omni_autotimer'
+/**
+ * localStorage: modo "paso a paso" de la ejecución (Fase L · workstream A). Espejo EXACTO del carril
+ * de `omni_autotimer` — device-scoped, leído post-montaje (hidratación-safe), default OFF (opt-in).
+ */
+export const STEPPER_MODE_KEY = 'omni_stepper'
 
 const VALID_SOUNDS: TimerSound[] = ['digital', 'bell', 'classic', 'boxing']
 
