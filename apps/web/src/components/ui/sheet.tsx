@@ -61,7 +61,7 @@ function SheetContent({
         {...props}
       >
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/[0.06] to-transparent dark:bg-[radial-gradient(ellipse_at_center,rgba(0,122,255,0.03)_0%,transparent_70%)]" />
-        <div className="relative z-10 flex h-full flex-col">
+        <div className="relative z-10 flex h-full min-h-0 flex-col">
           {children}
         </div>
         {showCloseButton && (

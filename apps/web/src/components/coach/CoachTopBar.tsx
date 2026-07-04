@@ -155,7 +155,7 @@ export function CoachTopBar({ coachName, coachBrand, logoUrl, workspaces, curren
     const hasMultiWorkspace = (workspaces?.length ?? 0) > 1
 
     return (
-        <header className="z-[4] hidden h-[60px] flex-shrink-0 items-center gap-4 border-b border-[var(--border-subtle)] bg-[var(--surface-card)] px-[22px] font-ui md:flex">
+        <header className="z-[4] hidden h-[60px] flex-shrink-0 items-center gap-4 border-b border-[var(--border-subtle)] bg-[var(--surface-app)] px-[22px] font-ui md:flex">
             {/* .dt-tb-left — back + breadcrumb (solo en drill-down) */}
             <div className="flex min-w-0 flex-shrink-0 items-center gap-2.5">
                 {inStack && (

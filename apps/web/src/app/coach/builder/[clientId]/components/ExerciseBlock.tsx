@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 import { getMuscleColor } from '../muscle-colors'
 import { buildAreaVMs, type BuilderAreaVM } from '../area-ui'
 import { effectiveAreaKey } from '@/lib/workout-areas'
-import { EXERCISE_TYPE_LABEL, effectiveExerciseType, typedBlockSummary } from '@/lib/workout-exercise-type'
+import { EXERCISE_TYPE_LABEL, EXERCISE_TYPE_META, effectiveExerciseType, typedBlockSummary } from '@/lib/workout-exercise-type'
 import { exerciseThumbnailUrl } from '@/lib/youtube'
 import type { BuilderBlock } from '../types'
 
@@ -257,6 +257,10 @@ function ExerciseBlockInner({
                                         className="flex items-center gap-1 bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-[10px] font-bold text-foreground"
                                         title={`${EXERCISE_TYPE_LABEL[blockType]}: ${typedSummary}`}
                                     >
+                                        {(() => {
+                                            const TypeIcon = EXERCISE_TYPE_META[blockType].icon
+                                            return <TypeIcon className="h-3.5 w-3.5 shrink-0" style={{ color: EXERCISE_TYPE_META[blockType].color }} />
+                                        })()}
                                         <span>{typedSummary}</span>
                                     </div>
                                 ) : (block.sets || 0) > 0 && block.reps ? (

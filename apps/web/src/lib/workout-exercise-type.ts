@@ -10,6 +10,8 @@
  * Función pura, sin imports de Next/Supabase (patrón lib/workout-areas.ts).
  */
 
+import type { LucideIcon } from 'lucide-react'
+import { Dumbbell, GitCommit, HeartPulse, Move } from 'lucide-react'
 import type { DistanceUnit, ExerciseType, IntervalConfig, SideMode } from '@/domain/workout/types'
 
 export const EXERCISE_TYPES: readonly ExerciseType[] = ['strength', 'cardio', 'mobility', 'roller']
@@ -20,6 +22,21 @@ export const EXERCISE_TYPE_LABEL: Record<ExerciseType, string> = {
     cardio: 'Cardio',
     mobility: 'Movilidad',
     roller: 'Foam roller',
+}
+
+/**
+ * Meta visual por tipo (label corto + color + icono tipado). FUENTE ÚNICA consumida por
+ * el builder (segmented + chips del ExerciseBlock) y por el lado alumno (RUT_TYPE_META
+ * deriva de acá). Solo el mapa — sin JSX — para mantener el archivo client-safe y tree-shakeable.
+ *
+ * Blindaje white-label: `strength` usa `var(--sport-500)`, que hereda la marca del coach
+ * automáticamente cuando hay branding activo (no hardcodear un azul acá).
+ */
+export const EXERCISE_TYPE_META: Record<ExerciseType, { label: string; color: string; icon: LucideIcon }> = {
+    strength: { label: 'Fuerza', color: 'var(--sport-500)', icon: Dumbbell },
+    cardio: { label: 'Cardio', color: 'var(--ember-500)', icon: HeartPulse },
+    mobility: { label: 'Movilidad', color: '#14b8a6', icon: Move },
+    roller: { label: 'Roller', color: '#8b5cf6', icon: GitCommit },
 }
 
 function asExerciseType(raw: string | null | undefined): ExerciseType | null {

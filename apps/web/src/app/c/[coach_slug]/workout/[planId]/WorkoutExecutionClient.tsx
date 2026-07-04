@@ -6,7 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Info, Dumbbell, HeartPulse, Move, GitCommit, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal, type LucideIcon } from 'lucide-react'
+import { ArrowLeft, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
 import { SingleExerciseCard } from './SingleExerciseCard'
@@ -47,6 +47,7 @@ import {
     type WorkoutSectionKey,
 } from '@/lib/workout-block-grouping'
 import { executionAreaGroupsFor } from '@/lib/workout-areas'
+import { EXERCISE_TYPE_META } from '@/lib/workout-exercise-type'
 import type { IntervalConfig, WorkoutArea, ExerciseType as WorkoutKind } from '@/domain/workout/types'
 import { effectiveExerciseType, compactDistance, compactDuration } from '@/lib/workout-exercise-type'
 import { isTimeableInterval } from '@/lib/workout-interval'
@@ -208,13 +209,9 @@ const SIDE_LABEL: Record<string, string> = {
     alternating: 'Alternado',
 }
 
-/** Meta por tipo de bloque para el chip de tipo (color + label + icono tipado), estilo CD. */
-export const RUT_TYPE_META: Record<WorkoutKind, { label: string; color: string; icon: LucideIcon }> = {
-    strength: { label: 'Fuerza', color: 'var(--sport-500)', icon: Dumbbell },
-    cardio: { label: 'Cardio', color: 'var(--ember-500)', icon: HeartPulse },
-    mobility: { label: 'Movilidad', color: '#14b8a6', icon: Move },
-    roller: { label: 'Roller', color: '#8b5cf6', icon: GitCommit },
-}
+/** Meta por tipo de bloque para el chip de tipo (color + label + icono tipado). Deriva de la
+ *  fuente única del lib (`EXERCISE_TYPE_META`) para no duplicar el mapa con el builder. */
+export const RUT_TYPE_META = EXERCISE_TYPE_META
 
 /** Icono tipado por tipo de bloque, coloreado con el color del tipo (kit alumno-rutina §183). */
 export function TypeGlyph({ kind, className = 'h-3 w-3' }: { kind: WorkoutKind; className?: string }) {

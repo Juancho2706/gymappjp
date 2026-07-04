@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { Sparkles, ChevronDown } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
+import { AmbientBrandGlow } from '@/components/coach/AmbientBrandGlow'
 import { BillingBanners } from './banners/BillingBanners'
 import { FreeWelcomeModal } from './FreeWelcomeModal'
 import { PulseHero } from './PulseHero'
@@ -75,7 +76,12 @@ export function DashboardShell({
                 Estructural: la fuente real del gap vive en CoachMainWrapper.tsx:54 (pt-offset) +
                 CoachMainWrapper.tsx:72 (py-6) — al ser compartido con /c del alumno se neutraliza
                 acá en vez de tocar el wrapper. */}
-            <div className="relative z-10 mx-auto -mt-6 w-full pb-10 md:mt-0 md:pt-2">
+            {/* Glow ambiental brand-tinted detrás del hero/stats (decisión CEO 2026-07-04, revierte
+                el "fondo limpio sin tonalidad" del CD original): AmbientBrandGlow se auto-manda al
+                fondo con -z-10; `isolate` acota ese stacking context al dashboard para que el glow
+                no escape detrás del layout. El contenido (banners/hero/bento) queda por encima. */}
+            <div className="relative isolate z-10 mx-auto -mt-6 w-full pb-10 md:mt-0 md:pt-2">
+                <AmbientBrandGlow />
                 {/* Billing / tier banners (functional — not part of the design tree). `empty:hidden`
                     colapsa el bloque (y su margen) cuando no hay ningún banner que mostrar → sin
                     aire muerto extra bajo el notch para coaches sin avisos. */}

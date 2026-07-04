@@ -11,7 +11,7 @@ import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { getExerciseHistoryAction } from '../_actions/builder.actions'
 import type { BuilderBlock, BuilderCardioContext } from '../types'
 import type { ExerciseType, IntervalConfig, SideMode } from '@/domain/workout/types'
-import { EXERCISE_TYPE_LABEL, effectiveExerciseType } from '@/lib/workout-exercise-type'
+import { EXERCISE_TYPE_META, effectiveExerciseType } from '@/lib/workout-exercise-type'
 import { exerciseThumbnailUrl } from '@/lib/youtube'
 import { INTERVAL_TEMPLATES } from '@/lib/workout-interval'
 import { HR_ZONES } from '@/domain/cardio/zones'
@@ -593,25 +593,40 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                     </div>
                 </SheetHeader>
 
-                <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                <div className={isMobile
+                    ? 'max-h-[calc(92dvh-7rem)] overflow-y-auto overscroll-contain p-6 space-y-8'
+                    : 'min-h-0 flex-1 overflow-y-auto overscroll-contain p-6 space-y-8'}>
                     {/* Tipo de ejercicio (override del bloque — decisión #2 del PLAN) */}
                     <div className="space-y-2">
                         <label className={FIELD_LABEL_CLASS}>Tipo de ejercicio</label>
-                        <div className="grid grid-cols-4 overflow-hidden rounded-control border border-border text-[9px] font-bold uppercase tracking-widest dark:border-white/10">
-                            {(Object.keys(EXERCISE_TYPE_LABEL) as ExerciseType[]).map((type) => (
-                                <button
-                                    key={type}
-                                    type="button"
-                                    onClick={() => setOverride(type)}
-                                    className={`min-h-[44px] px-1 py-2 transition-colors md:min-h-[36px] ${
-                                        effectiveType === type
-                                            ? 'bg-primary text-primary-foreground'
-                                            : 'text-muted-foreground hover:bg-muted'
-                                    }`}
-                                >
-                                    {EXERCISE_TYPE_LABEL[type]}
-                                </button>
-                            ))}
+                        {/* Segmented tipado — 'Roller' (label corto del META) entra a 360px en 4 columnas */}
+                        <div className="grid grid-cols-4 gap-1.5">
+                            {(Object.keys(EXERCISE_TYPE_META) as ExerciseType[]).map((type) => {
+                                const meta = EXERCISE_TYPE_META[type]
+                                const Icon = meta.icon
+                                const active = effectiveType === type
+                                return (
+                                    <button
+                                        key={type}
+                                        type="button"
+                                        onClick={() => setOverride(type)}
+                                        aria-pressed={active}
+                                        className={`flex min-h-[44px] flex-col items-center justify-center gap-1 rounded-control border px-1 py-2 text-[11px] font-semibold transition-colors md:min-h-[40px] ${
+                                            active
+                                                ? ''
+                                                : 'border-border text-muted-foreground hover:bg-muted dark:border-[var(--border-default)]'
+                                        }`}
+                                        style={active ? {
+                                            backgroundColor: `color-mix(in srgb, ${meta.color} 18%, transparent)`,
+                                            borderColor: `color-mix(in srgb, ${meta.color} 35%, transparent)`,
+                                            color: meta.color,
+                                        } : undefined}
+                                    >
+                                        <Icon className="h-4 w-4" style={active ? { color: meta.color } : undefined} />
+                                        <span>{meta.label}</span>
+                                    </button>
+                                )
+                            })}
                         </div>
                         {block.exercise_type_override != null && (
                             <p className="text-[9px] text-muted-foreground/60 uppercase tracking-widest">

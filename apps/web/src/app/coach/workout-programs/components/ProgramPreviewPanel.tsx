@@ -183,7 +183,7 @@ export function ProgramPreviewBody({ program, areas = [] }: { program: ProgramLi
     const phases = program.program_phases ?? []
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain pb-4">
             {/* Phases bar */}
             {phases.length > 0 && (
                 <div className="space-y-1.5 border-b border-subtle px-4 py-3 sm:px-6">
@@ -319,7 +319,7 @@ const shellDialogClass =
     'flex w-full max-w-none flex-col gap-0 overflow-hidden border-subtle bg-surface-app p-0 text-body shadow-xl sm:max-w-2xl md:max-h-[min(92vh,800px)] max-md:fixed max-md:inset-0 max-md:h-[100dvh] max-md:max-h-[100dvh] max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none max-md:border-0'
 
 const shellSheetClass =
-    'flex h-[min(92dvh,720px)] max-h-[92dvh] flex-col gap-0 overflow-hidden rounded-t-sheet border-subtle bg-surface-app p-0 text-body shadow-lg'
+    'flex data-[side=bottom]:h-[min(92dvh,720px)] max-h-[92dvh] flex-col gap-0 overflow-hidden rounded-t-sheet border-subtle bg-surface-app p-0 text-body shadow-lg'
 
 /** Stat-tile sunken del preview (eva-app ProgramPreviewSheet · stat). */
 function PreviewStat({ value, label }: { value: number; label: string }) {

@@ -210,7 +210,7 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
             {/* ===================== DESKTOP SIDEBAR (.dt-side) ===================== */}
             <aside
                 className={cn(
-                    'hidden transition-[width,padding] duration-[240ms] ease-[cubic-bezier(.22,1,.36,1)] md:sticky md:top-0 md:z-[6] md:flex md:flex-col md:border-r md:border-[var(--border-subtle)] md:bg-[var(--surface-card)]',
+                    'hidden transition-[width,padding] duration-[240ms] ease-[cubic-bezier(.22,1,.36,1)] md:sticky md:top-0 md:z-[6] md:flex md:flex-col md:border-r md:border-[var(--border-subtle)] md:bg-[var(--surface-app)]',
                     isBuilder
                         ? 'md:h-full md:max-h-full md:min-h-0'
                         : 'md:h-dvh supports-[height:100dvh]:md:h-[100dvh]',
