@@ -452,7 +452,10 @@ export function ProfileClient({
                 />
             )}
             {activeShare === 'streak' && (
-                <StreakShareCardModal data={{ fullName, streak, brandName }} onClose={() => setActiveShare(null)} />
+                <StreakShareCardModal
+                    data={{ fullName, streak, brandName, sessionsThisMonth: monthlyRecap.sessions }}
+                    onClose={() => setActiveShare(null)}
+                />
             )}
             {activeShare === 'monthly' && (
                 <MonthlySummaryShareCardModal

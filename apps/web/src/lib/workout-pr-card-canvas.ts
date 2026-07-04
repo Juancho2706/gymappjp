@@ -32,10 +32,6 @@ export interface ShareCardBrand {
     /** Motivo "racha" del DS (--ember-500). */
     ember: string
     displayFont: string
-    /** Identificador público del coach en el URL (`data-coach-slug`); base de la URL corta. */
-    coachSlug: string | null
-    /** URL corta legible para el footer ("eva-app.cl/c/{slug}"); null si no hay slug. */
-    shortUrl: string | null
 }
 
 export interface ProgressCardData {
@@ -56,6 +52,11 @@ export interface StreakCardData {
     streak: number
     /** Marca del coach (opcional; la fuente de verdad tier-gateada es readShareCardBrand). */
     brandName?: string
+    /**
+     * Entrenos (días con series) del mes en curso — stat secundario ya disponible en el perfil
+     * (getMonthlyRecap). Cuando > 0 se pinta como contexto bajo el hero de la racha.
+     */
+    sessionsThisMonth?: number
 }
 
 export interface MonthlySummaryCardData {
@@ -111,24 +112,15 @@ export function readShareCardBrand(): ShareCardBrand {
             accent: SPORT_500,
             ember: EMBER_500,
             displayFont: 'system-ui, sans-serif',
-            coachSlug: null,
-            shortUrl: null,
         }
     }
     const root = document.querySelector('[data-brand-name]')
     const brandName = root?.getAttribute('data-brand-name')?.trim() || 'EVA'
     const logoUrl = root?.getAttribute('data-logo-dark')?.trim() || null
-    const coachSlug = root?.getAttribute('data-coach-slug')?.trim() || null
 
     const cs = getComputedStyle(document.documentElement)
     const accent = cs.getPropertyValue('--theme-primary').trim() || cs.getPropertyValue('--sport-500').trim() || SPORT_500
     const ember = cs.getPropertyValue('--ember-500').trim() || EMBER_500
-
-    // URL corta legible ("eva-app.cl/c/{slug}") — host desde NEXT_PUBLIC_SITE_URL, sin protocolo.
-    const host = (process.env.NEXT_PUBLIC_SITE_URL || 'https://eva-app.cl')
-        .replace(/^https?:\/\//, '')
-        .replace(/\/$/, '')
-    const shortUrl = coachSlug ? `${host}/c/${coachSlug}` : null
 
     // Resolver la familia de fuente display real (next/font hashea el nombre): probe con la clase DS.
     let displayFont = 'system-ui, sans-serif'
@@ -143,7 +135,7 @@ export function readShareCardBrand(): ShareCardBrand {
         /* fallback stack */
     }
 
-    return { brandName, logoUrl, accent, ember, displayFont, coachSlug, shortUrl }
+    return { brandName, logoUrl, accent, ember, displayFont }
 }
 
 /** Carga una imagen con CORS habilitado; si falla (403/CORS/red) resuelve null → fallback solo-texto. */
@@ -259,14 +251,14 @@ function drawCardBase(ctx: CanvasRenderingContext2D, glow: { r: number; g: numbe
     ctx.fillRect(0, 0, WIDTH, 960)
 }
 
-/** Header de identidad de marca: logo (o inicial), nombre en mayúsculas y badge emoji. */
-async function drawBrandHeader(
+/** Header de identidad de marca: logo (o inicial), nombre en mayúsculas y badge emoji. El logo se
+ * precarga UNA vez por render y se comparte con el footer (evita un segundo fetch). */
+function drawBrandHeader(
     ctx: CanvasRenderingContext2D,
     brand: ShareCardBrand,
-    opts: { display: string; accent: string; emoji: string }
-): Promise<void> {
-    const { display, accent, emoji } = opts
-    const logo = brand.logoUrl ? await loadImage(brand.logoUrl) : null
+    opts: { display: string; accent: string; emoji: string; logo: HTMLImageElement | null }
+): void {
+    const { display, accent, emoji, logo } = opts
     ctx.save()
     if (logo) {
         ctx.beginPath()
@@ -302,101 +294,115 @@ async function drawBrandHeader(
 }
 
 /**
- * Footer white-label compartido por las 4 cards. Línea divisoria + nombre de la marca + CTA de
- * texto "Entrená con {marca}" + URL corta (eva-app.cl/c/{slug}) para captar sin QR. Conserva
- * "vía EVA" a la derecha TAL CUAL hoy (co-branding por tier, sin gating nuevo).
+ * Footer white-label compartido por las 4 cards: SOLO firma de marca. Línea divisoria + chip con el
+ * logo del coach (o su inicial) + nombre de la marca a la izquierda, "vía EVA" a la derecha
+ * (co-branding por tier, TAL CUAL). Sin URL ni CTA (decisión CEO 2026-07). El logo llega precargado
+ * desde el render (compartido con el header) para no re-fetchear.
  */
 function drawBrandFooter(
     ctx: CanvasRenderingContext2D,
     brand: ShareCardBrand,
-    opts: { display: string; accent: string }
+    opts: { display: string; accent: string; logo: HTMLImageElement | null }
 ): void {
-    const { display, accent } = opts
+    const { display, accent, logo } = opts
 
+    // Divisor.
     ctx.strokeStyle = 'rgba(255,255,255,0.1)'
     ctx.lineWidth = 1
     ctx.beginPath()
-    ctx.moveTo(PAD_X, 1246)
-    ctx.lineTo(WIDTH - PAD_X, 1246)
+    ctx.moveTo(PAD_X, 1250)
+    ctx.lineTo(WIDTH - PAD_X, 1250)
     ctx.stroke()
 
-    // Fila 1: nombre de marca (izq) + "vía EVA" (der).
-    ctx.fillStyle = 'rgba(255,255,255,0.55)'
-    ctx.font = `700 26px ${display}`
+    const cy = 1300 // centro vertical de la fila de firma
+    const chip = 52
+
+    // Chip con el logo del coach (o su inicial sobre el acento) a la izquierda.
+    ctx.save()
+    ctx.beginPath()
+    ctx.roundRect(PAD_X, cy - chip / 2, chip, chip, 15)
+    if (logo) {
+        ctx.clip()
+        ctx.drawImage(logo, PAD_X, cy - chip / 2, chip, chip)
+    } else {
+        ctx.fillStyle = accent
+        ctx.fill()
+        ctx.fillStyle = '#ffffff'
+        ctx.font = `800 26px ${display}`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText(brand.brandName.charAt(0).toUpperCase(), PAD_X + chip / 2, cy + 1)
+    }
+    ctx.restore()
+
+    const textX = PAD_X + chip + 22
+
+    // Nombre de la marca a la derecha del chip, centrado con el logo.
+    ctx.fillStyle = 'rgba(255,255,255,0.72)'
+    ctx.font = `800 30px ${display}`
     ctx.textAlign = 'left'
-    ctx.letterSpacing = '2px'
-    ctx.fillText(ellipsize(ctx, brand.brandName.toUpperCase(), WIDTH - PAD_X * 2 - 160), PAD_X, 1288)
+    ctx.textBaseline = 'middle'
+    ctx.letterSpacing = '1px'
+    // Reservar ~150px a la derecha para "vía EVA".
+    ctx.fillText(ellipsize(ctx, brand.brandName.toUpperCase(), WIDTH - PAD_X - textX - 150), textX, cy + 1)
     ctx.letterSpacing = '0px'
 
-    ctx.fillStyle = 'rgba(255,255,255,0.38)'
+    // "vía EVA" (co-branding por tier) a la derecha.
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'
     ctx.font = `600 24px ${display}`
     ctx.textAlign = 'right'
-    ctx.fillText('vía EVA', WIDTH - PAD_X, 1288)
+    ctx.fillText('vía EVA', WIDTH - PAD_X, cy + 1)
 
-    // Fila 2: CTA de captación (izq, color de marca) + URL corta (der). Reservar el ancho de la
-    // URL para no solaparla con el CTA en marcas de nombre largo.
-    let urlW = 0
-    if (brand.shortUrl) {
-        ctx.font = `600 22px ${display}`
-        urlW = ctx.measureText(brand.shortUrl).width
-    }
-    ctx.fillStyle = accent
-    ctx.font = `700 25px ${display}`
-    ctx.textAlign = 'left'
-    const ctaMax = WIDTH - PAD_X * 2 - (urlW ? urlW + 32 : 0)
-    ctx.fillText(ellipsize(ctx, `Entrená con ${brand.brandName}`, ctaMax), PAD_X, 1326)
-
-    if (brand.shortUrl) {
-        ctx.fillStyle = 'rgba(255,255,255,0.42)'
-        ctx.font = `600 22px ${display}`
-        ctx.textAlign = 'right'
-        ctx.fillText(brand.shortUrl, WIDTH - PAD_X, 1326)
-    }
+    ctx.textBaseline = 'alphabetic'
     ctx.textAlign = 'left'
 }
 
-/** Tile de estadística (recap mensual): fondo tenue, emoji, valor (auto-fit) y label. */
+/**
+ * Tile de estadística (recap mensual): fondo tenue, emoji, valor (auto-fit) y label. Las posiciones
+ * son proporcionales a la altura del tile → sirve tanto para tiles altos como compactos. `valueColor`
+ * permite pintar el motivo del dato (p. ej. racha en ember) sin romper la paleta acotada del DS.
+ */
 function drawStatTile(
     ctx: CanvasRenderingContext2D,
     x: number,
     y: number,
     w: number,
     h: number,
-    opts: { emoji: string; value: string; label: string; accent: string; display: string }
+    opts: { emoji: string; value: string; label: string; valueColor: string; display: string }
 ): void {
-    const { emoji, value, label, accent, display } = opts
+    const { emoji, value, label, valueColor, display } = opts
 
     ctx.fillStyle = 'rgba(255,255,255,0.05)'
     ctx.beginPath()
-    ctx.roundRect(x, y, w, h, 28)
+    ctx.roundRect(x, y, w, h, 26)
     ctx.fill()
     ctx.strokeStyle = 'rgba(255,255,255,0.08)'
     ctx.lineWidth = 1
     ctx.beginPath()
-    ctx.roundRect(x, y, w, h, 28)
+    ctx.roundRect(x, y, w, h, 26)
     ctx.stroke()
 
     const cx = x + w / 2
-    const maxW = w - 32
+    const maxW = w - 28
 
     ctx.textAlign = 'center'
     ctx.textBaseline = 'alphabetic'
-    ctx.font = '54px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif'
-    ctx.fillText(emoji, cx, y + 92)
+    ctx.font = '46px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif'
+    ctx.fillText(emoji, cx, y + h * 0.32)
 
     // Valor con auto-fit al ancho del tile.
-    let fs = 72
+    let fs = 64
     ctx.font = `800 ${fs}px ${display}`
-    while (ctx.measureText(value).width > maxW && fs > 34) {
+    while (ctx.measureText(value).width > maxW && fs > 30) {
         fs -= 2
         ctx.font = `800 ${fs}px ${display}`
     }
-    ctx.fillStyle = accent
-    ctx.fillText(value, cx, y + 200)
+    ctx.fillStyle = valueColor
+    ctx.fillText(value, cx, y + h * 0.64)
 
-    ctx.fillStyle = 'rgba(255,255,255,0.6)'
-    ctx.font = `600 24px ${display}`
-    ctx.fillText(ellipsize(ctx, label, maxW), cx, y + 250)
+    ctx.fillStyle = 'rgba(255,255,255,0.62)'
+    ctx.font = `600 23px ${display}`
+    ctx.fillText(ellipsize(ctx, label, maxW), cx, y + h * 0.87)
     ctx.textAlign = 'left'
 }
 
@@ -433,9 +439,10 @@ export async function renderWorkoutPRCardToBlob(data: WorkoutPRCardData, brand: 
     const accent = brand.accent || SPORT_500
 
     await waitFonts()
+    const logo = brand.logoUrl ? await loadImage(brand.logoUrl) : null
 
     drawCardBase(ctx, toRgb(ctx, accent))
-    await drawBrandHeader(ctx, brand, { display, accent, emoji: '🏆' })
+    drawBrandHeader(ctx, brand, { display, accent, emoji: '🏆', logo })
 
     // ── Bloque central ──
     ctx.textAlign = 'left'
@@ -488,7 +495,7 @@ export async function renderWorkoutPRCardToBlob(data: WorkoutPRCardData, brand: 
         bg: 'rgba(255,255,255,0.06)',
     })
 
-    drawBrandFooter(ctx, brand, { display, accent })
+    drawBrandFooter(ctx, brand, { display, accent, logo })
 
     return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), 'image/png'))
 }
@@ -506,9 +513,10 @@ export async function renderProgressCardToBlob(data: ProgressCardData, brand: Sh
     const accent = brand.accent || SPORT_500
 
     await waitFonts()
+    const logo = brand.logoUrl ? await loadImage(brand.logoUrl) : null
 
     drawCardBase(ctx, toRgb(ctx, accent))
-    await drawBrandHeader(ctx, brand, { display, accent, emoji: '💪' })
+    drawBrandHeader(ctx, brand, { display, accent, emoji: '💪', logo })
 
     // ── Bloque central ──
     ctx.textAlign = 'left'
@@ -566,7 +574,7 @@ export async function renderProgressCardToBlob(data: ProgressCardData, brand: Sh
         })
     }
 
-    drawBrandFooter(ctx, brand, { display, accent })
+    drawBrandFooter(ctx, brand, { display, accent, logo })
 
     return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), 'image/png'))
 }
@@ -585,10 +593,11 @@ export async function renderStreakCardToBlob(data: StreakCardData, brand: ShareC
     const ember = brand.ember || EMBER_500
 
     await waitFonts()
+    const logo = brand.logoUrl ? await loadImage(brand.logoUrl) : null
 
     const emberRgb = toRgb(ctx, ember)
     drawCardBase(ctx, emberRgb)
-    await drawBrandHeader(ctx, brand, { display, accent, emoji: '🔥' })
+    drawBrandHeader(ctx, brand, { display, accent, emoji: '🔥', logo })
 
     const streak = Math.max(0, Math.round(data.streak))
 
@@ -617,7 +626,7 @@ export async function renderStreakCardToBlob(data: StreakCardData, brand: ShareC
     ctx.fillStyle = ember
     ctx.font = `800 230px ${display}`
     ctx.letterSpacing = '-4px'
-    const heroBaseline = 900
+    const heroBaseline = 890
     ctx.fillText(streakStr, PAD_X - 4, heroBaseline)
     const streakW = ctx.measureText(streakStr).width
     ctx.letterSpacing = '0px'
@@ -626,19 +635,29 @@ export async function renderStreakCardToBlob(data: StreakCardData, brand: ShareC
     ctx.fillText(streak === 1 ? 'día' : 'días', PAD_X - 4 + streakW + 24, heroBaseline - 12)
 
     // Copy: "seguidos activo" (junto al hero "N días" → "N días seguidos activo").
-    drawPill(ctx, PAD_X, 950, streak > 0 ? 'seguidos activo' : 'Empezá hoy tu racha', {
+    drawPill(ctx, PAD_X, 940, streak > 0 ? 'seguidos activo' : 'Empezá hoy tu racha', {
         font: `600 34px ${display}`,
         textColor: streak > 0 ? ember : 'rgba(255,255,255,0.7)',
         bg: streak > 0 ? `rgba(${emberRgb.r}, ${emberRgb.g}, ${emberRgb.b}, 0.14)` : 'rgba(255,255,255,0.08)',
     })
 
+    // Contexto del mes: entrenos ya registrados (dato disponible del perfil, sin query nueva).
+    const monthSessions = Math.max(0, Math.round(data.sessionsThisMonth ?? 0))
+    if (monthSessions > 0) {
+        drawPill(ctx, PAD_X, 1012, `🏋️ ${monthSessions} ${monthSessions === 1 ? 'entreno' : 'entrenos'} este mes`, {
+            font: `600 30px ${display}`,
+            textColor: 'rgba(255,255,255,0.82)',
+            bg: 'rgba(255,255,255,0.06)',
+        })
+    }
+
     // Fecha.
     ctx.fillStyle = 'rgba(255,255,255,0.58)'
     ctx.font = `600 32px ${display}`
     ctx.textAlign = 'left'
-    ctx.fillText(todayLong(), PAD_X, 1094)
+    ctx.fillText(todayLong(), PAD_X, monthSessions > 0 ? 1116 : 1064)
 
-    drawBrandFooter(ctx, brand, { display, accent })
+    drawBrandFooter(ctx, brand, { display, accent, logo })
 
     return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), 'image/png'))
 }
@@ -657,58 +676,67 @@ export async function renderMonthlySummaryCardToBlob(
 
     const display = brand.displayFont || 'system-ui, sans-serif'
     const accent = brand.accent || SPORT_500
+    const ember = brand.ember || EMBER_500
 
     await waitFonts()
+    const logo = brand.logoUrl ? await loadImage(brand.logoUrl) : null
 
     drawCardBase(ctx, toRgb(ctx, accent))
-    await drawBrandHeader(ctx, brand, { display, accent, emoji: '📅' })
+    drawBrandHeader(ctx, brand, { display, accent, emoji: '📅', logo })
 
-    // ── Bloque central ──
+    const sessions = Math.max(0, data.sessions)
+    const streak = Math.max(0, Math.round(data.streak))
+
+    // ── Jerarquía recap: eyebrow (mes) → subtítulo → hero (sesiones) → tiles secundarios ──
+    // Eyebrow = el mes, en acento y con tracking (el "cuándo").
     ctx.textAlign = 'left'
     ctx.fillStyle = accent
     ctx.font = `800 38px ${display}`
     ctx.letterSpacing = '5px'
-    ctx.fillText('RESUMEN DEL MES', PAD_X, 470)
+    ctx.fillText(ellipsize(ctx, data.monthLabel.toUpperCase(), WIDTH - PAD_X * 2), PAD_X, 456)
     ctx.letterSpacing = '0px'
 
-    // Título = etiqueta del mes ("Julio 2026").
+    // Subtítulo: "Resumen de {nombre}".
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'
+    ctx.font = `700 40px ${display}`
+    ctx.fillText(ellipsize(ctx, `Resumen de ${firstName(data.fullName)}`, WIDTH - PAD_X * 2), PAD_X, 520)
+
+    // Hero: sesiones del mes (el número grande que se lee de lejos).
+    const sessionsStr = String(sessions)
     ctx.fillStyle = '#ffffff'
-    ctx.font = `800 68px ${display}`
-    const titleLines = wrapLines(ctx, data.monthLabel, WIDTH - PAD_X * 2, 2)
-    titleLines.forEach((line, i) => ctx.fillText(line, PAD_X, 556 + i * 78))
-    const titleBottom = 556 + (titleLines.length - 1) * 78
+    ctx.font = `800 210px ${display}`
+    ctx.letterSpacing = '-4px'
+    const heroBaseline = 718
+    ctx.fillText(sessionsStr, PAD_X - 4, heroBaseline)
+    const heroW = ctx.measureText(sessionsStr).width
+    ctx.letterSpacing = '0px'
+    ctx.fillStyle = accent
+    ctx.font = `800 58px ${display}`
+    ctx.fillText(sessions === 1 ? 'entreno' : 'entrenos', PAD_X - 4 + heroW + 26, heroBaseline - 14)
 
-    // Nombre del alumno (subtítulo).
-    ctx.fillStyle = 'rgba(255,255,255,0.5)'
-    ctx.font = `600 34px ${display}`
-    ctx.fillText(firstName(data.fullName), PAD_X, titleBottom + 48)
-
-    // Grid de 3 tiles.
-    const gap = 28
+    // Tiles secundarios: Volumen · Promedio por sesión · Racha (todo ya disponible, sin queries).
+    const avgStr = sessions > 0 ? fmtVolume(data.volumeKg / sessions) : '—'
+    const gap = 26
     const tileW = (WIDTH - PAD_X * 2 - gap * 2) / 3
-    const tileH = 300
-    const tileY = 728
+    const tileH = 244
+    const tileY = 796
     const tiles = [
-        { emoji: '💪', value: String(Math.max(0, data.sessions)), label: 'Sesiones' },
-        { emoji: '🏋️', value: fmtVolume(data.volumeKg), label: 'Volumen' },
-        {
-            emoji: '🔥',
-            value: String(Math.max(0, Math.round(data.streak))),
-            label: data.streak === 1 ? 'Día de racha' : 'Días de racha',
-        },
+        { emoji: '🏋️', value: fmtVolume(data.volumeKg), label: 'Volumen', valueColor: accent },
+        { emoji: '📊', value: avgStr, label: 'Prom/sesión', valueColor: accent },
+        { emoji: '🔥', value: String(streak), label: streak === 1 ? 'Día de racha' : 'Racha', valueColor: ember },
     ]
     tiles.forEach((t, i) => {
         const x = PAD_X + i * (tileW + gap)
-        drawStatTile(ctx, x, tileY, tileW, tileH, { ...t, accent, display })
+        drawStatTile(ctx, x, tileY, tileW, tileH, { ...t, display })
     })
 
     // Fecha.
     ctx.fillStyle = 'rgba(255,255,255,0.58)'
     ctx.font = `600 32px ${display}`
     ctx.textAlign = 'left'
-    ctx.fillText(todayLong(), PAD_X, 1120)
+    ctx.fillText(todayLong(), PAD_X, 1118)
 
-    drawBrandFooter(ctx, brand, { display, accent })
+    drawBrandFooter(ctx, brand, { display, accent, logo })
 
     return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), 'image/png'))
 }
