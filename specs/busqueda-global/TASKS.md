@@ -1,6 +1,6 @@
 # Búsqueda global del topbar coach — TASKS
 
-**Status:** DRAFT
+**Status:** COMPLETADO 2026-07-04
 **Owner:** TBD
 **Last updated:** 2026-07-04
 **Spec:** `specs/busqueda-global/SPEC.md`
@@ -12,7 +12,7 @@
 
 ### Fase 1 — Capa de datos
 
-- [ ] **T1 (M) — Servicio agregador `searchCoachWorkspace`**
+- [x] **T1 (M) — Servicio agregador `searchCoachWorkspace`** *(extra posterior 2026-07-04: thumbnails estáticos en resultados de ejercicios)*
   - Scope: crear `apps/web/src/services/search/coach-search.service.ts` con
     `searchCoachWorkspace(supabase, { coachId, scope, query, limitPerGroup=5 })`
     → `CoachSearchResults`. `scope: CoachClientScope` (reusar tipo de
@@ -26,20 +26,20 @@
     - Recetas: llamar `searchCoachRecipes(scope, query)` (T2).
   - Construir `SearchHit.href` por grupo (ver PLAN → Sub-búsquedas).
   - Verification: `pnpm typecheck` verde; Vitest de T7 pasa.
-- [ ] **T2 (S) — `searchCoachRecipes(scope, q)`**
+- [x] **T2 (S) — `searchCoachRecipes(scope, q)`**
   - Scope: en `apps/web/src/services/nutrition-recipes.service.ts`, agregar
     `searchCoachRecipes(scope, q)` (o param `q` en `listCoachRecipes`) con
     `ilike name` y columnas mínimas (`id, name, image_url`). Respeta `RecipeScope`
     (coach XOR team).
   - Verification: `pnpm typecheck`; consumido por T1.
-- [ ] **T3 (S) — `rateLimitCoachSearch`**
+- [x] **T3 (S) — `rateLimitCoachSearch`**
   - Scope: en `apps/web/src/lib/rate-limit.ts`, agregar `rateLimitCoachSearch`
     como espejo de `rateLimitRecipesSearch`. Degrada a "permitir" sin Redis.
   - Verification: `pnpm typecheck`.
 
 ### Fase 2 — Route handler
 
-- [ ] **T4 (M) — `GET /api/coach/search`**
+- [x] **T4 (M) — `GET /api/coach/search`**
   - Scope: crear `apps/web/src/app/api/coach/search/route.ts` con el molde de
     `api/recipes/search/route.ts`: `clientIpFromRequest` + `rateLimitCoachSearch`
     + `jsonRateLimited`. Resolver identidad + scope **server-side** (`getCoach()`
@@ -51,7 +51,7 @@
 
 ### Fase 3 — Presentación
 
-- [ ] **T5 (L) — `CoachGlobalSearch.tsx` (combobox ARIA)**
+- [x] **T5 (L) — `CoachGlobalSearch.tsx` (combobox ARIA)**
   - Scope: crear `apps/web/src/components/coach/CoachGlobalSearch.tsx` (`'use client'`):
     - ARIA APG: `input role="combobox"` (`aria-autocomplete="list"`,
       `aria-expanded`, `aria-controls="coach-search-listbox"`,
@@ -66,7 +66,7 @@
     - Estados: idle / loading (spinner) / empty ("Sin resultados para …") /
       results. Grupos con cap 5. Dark mode con tokens `--surface-*`/`--text-*`/`--sport-*`.
   - Verification: `pnpm typecheck` + `pnpm lint`; smoke manual teclado + dark.
-- [ ] **T6 (S) — Montar en `CoachTopBar.tsx`**
+- [x] **T6 (S) — Montar en `CoachTopBar.tsx`**
   - Scope: en `apps/web/src/components/coach/CoachTopBar.tsx`, reemplazar el
     `<div>` de búsqueda (líneas 195-227) por `<CoachGlobalSearch/>`. Preservar el
     atajo `"/"` (useEffect 131-142) y los estilos de foco. Borrar el comentario de
@@ -76,7 +76,7 @@
 
 ### Tests
 
-- [ ] **T7 (S) — Tests unitarios del agregador**
+- [x] **T7 (S) — Tests unitarios del agregador**
   - Scope: Vitest sobre `searchCoachWorkspace` (función/composición pura testeable):
     scope 3-vías produce filtros distintos; cap por grupo respetado; query `<2`
     chars retorna vacío sin golpear DB; **no-fuga cross-workspace** (un scope de
@@ -86,7 +86,7 @@
 
 ### Fase 4 — QA (solo con OK del CEO)
 
-- [ ] **T8 (S) — QA visual + E2E**
+- [x] **T8 (S) — QA visual + E2E**
   - Scope: capturas light/dark (desktop 1440); smoke de teclado; E2E Playwright de
     no-fuga cross-workspace **solo si el CEO autoriza**. Cualquier SQL contra PROD
     requiere OK explícito.
@@ -94,18 +94,18 @@
 
 ## Universal Definition of Done
 
-- [ ] `pnpm typecheck`
-- [ ] Targeted tests for touched domain (Vitest del agregador)
-- [ ] No direct feature-data Supabase calls in `_data` (la búsqueda no usa `_data`;
+- [x] `pnpm typecheck`
+- [x] Targeted tests for touched domain (Vitest del agregador)
+- [x] No direct feature-data Supabase calls in `_data` (la búsqueda no usa `_data`;
   el acceso va por el servicio agregador)
-- [ ] Route handler valida con Zod (no hay server action en esta feature)
-- [ ] Sin mutaciones → no aplica `revalidatePath()`
-- [ ] Mobile viewport uses `dvh`, not `vh`/`h-screen` (feature desktop-only; no se
+- [x] Route handler valida con Zod (no hay server action en esta feature)
+- [x] Sin mutaciones → no aplica `revalidatePath()`
+- [x] Mobile viewport uses `dvh`, not `vh`/`h-screen` (feature desktop-only; no se
   introduce `100vh` fuera de `md:`)
-- [ ] Fixed edge UI uses safe-area utilities (n/a — dropdown anclado al topbar)
-- [ ] Dark mode checked (dropdown, grupos, opción activa, estados)
-- [ ] New atomic UI has Storybook story (n/a — componente route-local del coach)
-- [ ] Docs updated si cambian rutas/flows (registrar `/api/coach/search` en el mapa
+- [x] Fixed edge UI uses safe-area utilities (n/a — dropdown anclado al topbar)
+- [x] Dark mode checked (dropdown, grupos, opción activa, estados)
+- [x] New atomic UI has Storybook story (n/a — componente route-local del coach)
+- [x] Docs updated si cambian rutas/flows (registrar `/api/coach/search` en el mapa
   de flujos si corresponde)
 
 ## Notes

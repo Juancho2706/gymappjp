@@ -43,7 +43,8 @@ function FallbackButton({ intent }: GoogleSignInButtonProps) {
         <button
             type="button"
             onClick={onClick}
-            className="w-full h-11 flex items-center justify-center gap-2.5 rounded-xl border border-border bg-card hover:bg-secondary transition-colors text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            // EVA DS (rama rediseño): mismos tokens del botón Google inline previo de auth.
+            className="w-full h-14 flex items-center justify-center gap-2.5 rounded-control border-[1.5px] border-border-default bg-surface-card hover:bg-surface-sunken transition-colors text-[17px] font-semibold text-text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
         >
             <GoogleLogo />
             {label}
@@ -163,9 +164,9 @@ function GisButton({ intent, clientId }: GoogleSignInButtonProps & { clientId: s
                 className={`flex min-h-[44px] w-full items-center justify-center ${mode === 'exchanging' ? 'hidden' : ''}`}
             />
             {mode === 'exchanging' && (
-                <div className="w-full h-11 flex items-center justify-center gap-2.5 text-sm font-medium text-muted-foreground">
-                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                    Verificando sesion...
+                <div className="w-full h-14 flex items-center justify-center gap-2.5 text-[15px] font-semibold text-text-muted">
+                    <Loader2 className="h-5 w-5 animate-spin text-sport-500" />
+                    Verificando sesión...
                 </div>
             )}
             {error && (
