@@ -4461,6 +4461,9 @@ export type Database = {
           rir: number | null
           rpe: number | null
           set_number: number
+          substituted_exercise_id: string | null
+          substituted_exercise_name: string | null
+          substitution_reason: string | null
           target_reps_at_log: string | null
           target_weight_at_log: number | null
           weight_kg: number | null
@@ -4484,6 +4487,9 @@ export type Database = {
           rir?: number | null
           rpe?: number | null
           set_number: number
+          substituted_exercise_id?: string | null
+          substituted_exercise_name?: string | null
+          substitution_reason?: string | null
           target_reps_at_log?: string | null
           target_weight_at_log?: number | null
           weight_kg?: number | null
@@ -4507,6 +4513,9 @@ export type Database = {
           rir?: number | null
           rpe?: number | null
           set_number?: number
+          substituted_exercise_id?: string | null
+          substituted_exercise_name?: string | null
+          substitution_reason?: string | null
           target_reps_at_log?: string | null
           target_weight_at_log?: number | null
           weight_kg?: number | null
@@ -4524,6 +4533,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_logs_substituted_exercise_id_fkey"
+            columns: ["substituted_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
             referencedColumns: ["id"]
           },
         ]
