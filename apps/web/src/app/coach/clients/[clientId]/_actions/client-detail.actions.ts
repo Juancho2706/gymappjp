@@ -14,6 +14,7 @@ import {
     updateClientGoalWeight as updateClientGoalWeightService,
     upsertClientBiometrics as upsertClientBiometricsService,
     markCheckInReviewed as markCheckInReviewedService,
+    unmarkCheckInReviewed as unmarkCheckInReviewedService,
 } from '@/services/client/client-detail.service'
 import { assembleClientFichaPanel } from '../_data/ficha-panel.data'
 import { buildClientDossier } from '@/services/client/client-dossier'
@@ -66,6 +67,12 @@ export async function deletePayment(paymentId: string, clientId: string) {
 
 export async function markCheckInReviewed(clientId: string, checkInId: string) {
     const res = await markCheckInReviewedService(clientId, checkInId)
+    revalidatePath(`/coach/clients/${clientId}`)
+    return res
+}
+
+export async function unmarkCheckInReviewed(clientId: string, checkInId: string) {
+    const res = await unmarkCheckInReviewedService(clientId, checkInId)
     revalidatePath(`/coach/clients/${clientId}`)
     return res
 }

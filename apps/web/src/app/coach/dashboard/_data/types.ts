@@ -117,6 +117,8 @@ export interface DashboardV2Data {
     adherenceStats: AdherenceStat[]
     nutritionStats: NutritionStat[]
     recentActivities: ActivityItemClient[]
+    /** Check-ins recientes (ventana del feed) sin revisar por el coach. Alimenta el badge "por revisar". */
+    pendingCheckinsCount: number
     expiringPrograms: ExpiringProgramItem[]
     topRiskClients: RiskAlertItem[]
     areaData: ChartPoint[]

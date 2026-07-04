@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
-import { markCheckInReviewed } from './_actions/client-detail.actions'
+import { markCheckInReviewed, unmarkCheckInReviewed } from './_actions/client-detail.actions'
 import { SectionTitle } from './_components/SectionTitle'
 
 function subscribeMd(cb: () => void) {
@@ -100,13 +100,20 @@ export function ProfileCheckInSnapshot({ checkIn, clientId, onViewHistory }: Pro
     const photo =
         checkIn?.front_photo_url || checkIn?.side_photo_url || checkIn?.back_photo_url
 
-    function handleMarkReviewed() {
+    // Toggle optimista: pinta el nuevo estado al toque y revierte en catch (la accion
+    // revalida la ficha tras exito). mark <-> unmark segun el estado previo.
+    function handleToggleReviewed() {
         if (!checkIn?.id) return
+        const next = !reviewed
+        const checkInId = checkIn.id
+        setReviewed(next)
         startTransition(async () => {
             try {
-                await markCheckInReviewed(clientId, checkIn.id!)
-                setReviewed(true)
-            } catch { /* swallow — UI stays unreviewed */ }
+                if (next) await markCheckInReviewed(clientId, checkInId)
+                else await unmarkCheckInReviewed(clientId, checkInId)
+            } catch {
+                setReviewed(!next) // revert
+            }
         })
     }
 
@@ -218,25 +225,41 @@ export function ProfileCheckInSnapshot({ checkIn, clientId, onViewHistory }: Pro
                 </MetricRow>
             </div>
 
-            {/* Mark reviewed — enterprise response-time tracking */}
+            {/* Toggle revisado — cola del coach + response-time enterprise (reviewed_at/by) */}
             {checkIn.id && (
-                reviewed ? (
-                    <div className="mt-4 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-[var(--success-600)]">
+                <Button
+                    type="button"
+                    variant={reviewed ? 'ghost' : 'outline'}
+                    aria-pressed={reviewed}
+                    aria-label={
+                        reviewed
+                            ? 'Check-in revisado. Tocar para des-marcar.'
+                            : 'Marcar check-in como revisado.'
+                    }
+                    className={cn(
+                        'mt-4 h-auto gap-1.5 py-2 text-[10px] font-black uppercase tracking-widest',
+                        reviewed &&
+                            'text-[var(--success-600)] hover:bg-[var(--success-100)] hover:text-[var(--success-700)]'
+                    )}
+                    onClick={handleToggleReviewed}
+                    disabled={pending}
+                >
+                    {pending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
                         <CheckCircle2 className="h-3.5 w-3.5" />
-                        Revisado
-                    </div>
-                ) : (
-                    <Button
-                        type="button"
-                        variant="outline"
-                        className="mt-4 h-auto gap-1.5 py-2 text-[10px] font-black uppercase tracking-widest"
-                        onClick={handleMarkReviewed}
-                        disabled={pending}
-                    >
-                        {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                        Marcar como revisado
-                    </Button>
-                )
+                    )}
+                    {reviewed ? (
+                        <>
+                            Revisado
+                            <span className="font-bold normal-case tracking-normal text-muted">
+                                · des-marcar
+                            </span>
+                        </>
+                    ) : (
+                        'Marcar como revisado'
+                    )}
+                </Button>
             )}
 
             <Button

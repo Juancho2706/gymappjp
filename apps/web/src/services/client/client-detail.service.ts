@@ -1096,3 +1096,24 @@ export async function markCheckInReviewed(clientId: string, checkInId: string) {
     if (error) throw new Error(error.message)
     return { success: true }
 }
+
+/**
+ * Undo of {@link markCheckInReviewed}: clears `reviewed_at` + `reviewed_by` so the
+ * check-in vuelve a la cola de "por revisar" del coach. Mismo guard de scope
+ * (`assertCoachClientReadAccess`) y cliente `authenticated` (RLS `check_ins_coach`
+ * es la segunda capa). Scoped por `client_id` para que jamas limpie un check-in ajeno.
+ */
+export async function unmarkCheckInReviewed(clientId: string, checkInId: string) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Unauthorized')
+    await assertCoachClientReadAccess(supabase, user.id, clientId)
+
+    const { error } = await supabase
+        .from('check_ins')
+        .update({ reviewed_at: null, reviewed_by: null })
+        .eq('id', checkInId)
+        .eq('client_id', clientId)
+    if (error) throw new Error(error.message)
+    return { success: true }
+}

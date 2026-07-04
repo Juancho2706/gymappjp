@@ -33,6 +33,8 @@ export interface ActivityItemClient {
     photoUrl?: string | null
     /** Presentacional: nombre del alumno para el bold parcial de la fila (kit: solo el nombre en strong). */
     clientName?: string
+    /** Solo items `check-in`: `true` si el coach ya lo reviso (`reviewed_at != null`). Alimenta la senal + filtro del feed. */
+    reviewed?: boolean
 }
 
 /** Align with BillingTabB8: only completed / paid rows count toward coach revenue. */
@@ -294,7 +296,7 @@ async function getCoachDashboardDataInner(
         applyOrgScope(
             supabase
                 .from('check_ins')
-                .select('id, created_at, front_photo_url, back_photo_url, clients!inner(id, full_name, coach_id, org_id)')
+                .select('id, created_at, reviewed_at, front_photo_url, back_photo_url, clients!inner(id, full_name, coach_id, org_id)')
                 .eq('clients.coach_id', userId),
             'clients.org_id',
             orgId
@@ -375,7 +377,10 @@ async function getCoachDashboardDataInner(
             : 0
 
     const rawRecentClients = recentClientsRaw || []
-    const rawRecentCheckins = (recentCheckinsRaw.data as { id: string; created_at: string; front_photo_url: string | null; back_photo_url: string | null; clients: { id: string; full_name: string } }[] | null) || []
+    const rawRecentCheckins = (recentCheckinsRaw.data as { id: string; created_at: string; reviewed_at: string | null; front_photo_url: string | null; back_photo_url: string | null; clients: { id: string; full_name: string } }[] | null) || []
+    // "Por revisar": check-ins recientes sin reviewed_at (ventana acotada del feed, no COUNT global).
+    // Concepto DISTINTO del focus adherencia "alumno sin check-in >30d" (checkin_pendiente).
+    const pendingCheckinsCount = rawRecentCheckins.filter((c) => !c.reviewed_at).length
     // Firma el thumbnail del check-in (primer foto disponible: front -> side -> back) para que el
     // feed de actividad sobreviva al bucket `checkins` pasando a privado (resolveCheckinPhotoUrl
     // dual-lee URL publica legacy y path). Service-role: el coach no tiene policy de SELECT en
@@ -473,6 +478,7 @@ async function getCoachDashboardDataInner(
             date: c.created_at,
             href: `/coach/clients/${c.clients.id}`,
             photoUrl: signedCheckinPhotos.get(c.id) ?? null,
+            reviewed: !!c.reviewed_at,
         })
     })
 
@@ -593,6 +599,7 @@ async function getCoachDashboardDataInner(
         adherenceStats,
         nutritionStats,
         recentActivities,
+        pendingCheckinsCount,
         expiringPrograms,
         topRiskClients,
         areaData,
