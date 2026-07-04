@@ -1,44 +1,54 @@
 'use client'
 
 import Image from 'next/image'
-import { useEffect, useState } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import { BRAND_APP_ICON } from '@/lib/brand-assets'
 import { cn } from '@/lib/utils'
 import { EvaTreefrogLoader } from '@/components/loaders/EvaTreefrogLoader'
 import { LoaderVariantView, CompositeLoaderView } from '@/components/loaders/variants'
 import { resolveLoaderVariant } from '@/lib/brand-loaders'
-import { parseLoaderConfig, type LoaderComposite } from '@/lib/brand-composer'
+import { parseLoaderConfig } from '@/lib/brand-composer'
 import { generateBrandPalette } from '@/lib/color-utils'
 
 type IconMode = 'eva' | 'coach' | 'none'
 
-/** Lee la variante de loader del coach (--coach-loader-variant) post-mount (mounted-safe → 'eva' en SSR). */
-function useCoachLoaderVariant() {
-    const [variant, setVariant] = useState<ReturnType<typeof resolveLoaderVariant>>('eva')
-    useEffect(() => {
-        const raw = getComputedStyle(document.documentElement)
-            .getPropertyValue('--coach-loader-variant')
-            .trim()
-            .replace(/^['"]|['"]$/g, '')
-        setVariant(resolveLoaderVariant(raw))
-    }, [])
-    return variant
+// Las CSS vars del loader se leen SÍNCRONO en el primer render del cliente (useSyncExternalStore):
+// con useEffect el frame 1 pintaba el wordmark EVA y el frame 2 swapeaba al loader del coach —
+// el usuario veía "dos loaders" en cada navegación interna (bug QA CEO 2026-07-04). Las vars ya
+// están en el DOM cuando el fallback de loading.tsx se monta (las emite el <style> del layout /c).
+// En SSR (hard load) devuelve '' → default EVA; la hidratación corrige una sola vez sin mismatch.
+const subscribeNoop = () => () => {}
+
+function readLoaderCssVar(name: string): string {
+    return getComputedStyle(document.documentElement)
+        .getPropertyValue(name)
+        .trim()
+        .replace(/^['"]|['"]$/g, '')
 }
 
-/** Lee el loader COMPUESTO del coach (--coach-loader-config, jsonb) post-mount. Precede a la variante.
- *  Fail-closed: si la var está ausente o el JSON es inválido → null → cae a la variante/loader EVA. */
+/** Variante de loader del coach (--coach-loader-variant), leída síncrona en cliente. */
+function useCoachLoaderVariant() {
+    const raw = useSyncExternalStore(
+        subscribeNoop,
+        () => readLoaderCssVar('--coach-loader-variant'),
+        () => ''
+    )
+    return resolveLoaderVariant(raw)
+}
+
+/** Loader COMPUESTO del coach (--coach-loader-config, jsonb), leído síncrono. Precede a la variante.
+ *  Fail-closed: var ausente o JSON inválido → null → cae a la variante/loader EVA. */
 function useCoachLoaderConfig() {
-    const [config, setConfig] = useState<LoaderComposite | null>(null)
-    useEffect(() => {
-        const raw = getComputedStyle(document.documentElement)
-            .getPropertyValue('--coach-loader-config')
-            .trim()
-            .replace(/^['"]|['"]$/g, '')
-            // el <style> escapa comillas dobles como \\22 y las simples como \\27 al serializar el jsonb.
-            .replace(/\\22/g, '"').replace(/\\27/g, "'")
-        setConfig(parseLoaderConfig(raw))
-    }, [])
-    return config
+    const raw = useSyncExternalStore(
+        subscribeNoop,
+        () =>
+            readLoaderCssVar('--coach-loader-config')
+                // el <style> escapa comillas dobles como \22 y las simples como \27 al serializar el jsonb.
+                .replace(/\\22/g, '"')
+                .replace(/\\27/g, "'"),
+        () => ''
+    )
+    return useMemo(() => parseLoaderConfig(raw), [raw])
 }
 
 type EvaRouteLoaderProps = {

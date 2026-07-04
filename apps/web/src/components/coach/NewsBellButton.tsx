@@ -243,9 +243,13 @@ export function NewsBellButton({
             <SheetHeader className="pb-4">
               <SheetTitle className="font-display text-[17px] font-extrabold text-strong">Novedades</SheetTitle>
             </SheetHeader>
-            {/* min-h-0 + flex-1: sin esto el contenedor flex no acota su alto y el feed no
-                scrollea (gotcha del repo). pb-safe deja aire sobre el home-indicator. */}
-            <div className="min-h-0 flex-1 overflow-y-auto pb-safe">
+            {/* El wrapper interno de SheetContent (components/ui/sheet) es `h-full` SIN `min-h-0`,
+                así que la cadena flex NO acota el alto en móvil y `flex-1` no basta para scrollear
+                (por eso el fix anterior solo servía en desktop, que usa Popover sin ese wrapper).
+                Damos al feed un max-height propio relativo al viewport → scrollea por sí mismo,
+                independiente del flex. `overscroll-contain` evita el scroll-chaining/rubber-band que
+                se comía el gesto táctil. `-4.5rem` deja sitio al header dentro del cap de 80dvh. */}
+            <div className="max-h-[calc(80dvh-4.5rem)] overflow-y-auto overscroll-contain pb-safe">
               <NewsFeedList onNavigate={() => setIsMobileOpen(false)} />
             </div>
           </SheetContent>

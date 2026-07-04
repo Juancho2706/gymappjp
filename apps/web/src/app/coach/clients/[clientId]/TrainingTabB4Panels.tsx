@@ -238,22 +238,31 @@ export function TrainingTabB4Panels({
     const [activityDates, setActivityDates] = useState<Set<string>>(new Set())
     const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null)
 
-    useEffect(() => {
-        getClientWorkoutActivityDates(clientId).then((dates) => setActivityDates(new Set(dates)))
-    }, [clientId])
-
-    const handleHistoryDateChange = (date: string) => {
+    // Carga el detalle read-only de una fecha (INCLUIDO hoy). Antes hoy quedaba excluido
+    // → la sustitución de máquina ocupada registrada HOY nunca se pintaba (bug B.13).
+    const loadWorkoutForDate = (date: string) => {
         setHistoryDate(date)
-        if (!date || date === santiagoTodayIso) {
-            setHistoryData([])
-            setHistoryLoaded(false)
-            return
-        }
         startTransition(async () => {
             const data = await getClientWorkoutForDate(clientId, date)
             setHistoryData(data)
             setHistoryLoaded(true)
         })
+    }
+
+    useEffect(() => {
+        getClientWorkoutActivityDates(clientId).then((dates) => {
+            setActivityDates(new Set(dates))
+            // Auto-carga la sesión MÁS RECIENTE (puede ser HOY) → el detalle del día, incluida
+            // la sustitución, queda visible sin que el coach tenga que clickear una fecha.
+            const mostRecent = [...dates].sort().slice(-1)[0]
+            if (mostRecent) loadWorkoutForDate(mostRecent)
+        })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [clientId])
+
+    const handleHistoryDateChange = (date: string) => {
+        if (!date) return
+        loadWorkoutForDate(date)
     }
 
     const weeklyPRs = useMemo(
@@ -493,7 +502,7 @@ export function TrainingTabB4Panels({
                         <CalendarSearch className="h-[15px] w-[15px]" />
                         <input
                             type="date"
-                            value={historyDate !== santiagoTodayIso ? historyDate : ''}
+                            value={historyDate}
                             onChange={(e) => handleHistoryDateChange(e.target.value || santiagoTodayIso)}
                             style={{
                                 height: 32,
@@ -556,8 +565,9 @@ export function TrainingTabB4Panels({
                     </Card>
                 )}
 
-                {/* Detalle de sesión / empty-state */}
-                {historyDate !== santiagoTodayIso && (
+                {/* Detalle de sesión / empty-state — visible en cuanto se cargó (o carga) una
+                    fecha, HOY incluido (antes se ocultaba para hoy y ocultaba el badge). */}
+                {(isPending || historyLoaded) && (
                     <>
                         {isPending && (
                             <Card padding="lg">

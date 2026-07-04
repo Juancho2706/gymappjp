@@ -125,33 +125,69 @@ function GifPlaceholder() {
     )
 }
 
-// GIF real del ejercicio — mismo patrón que el catálogo Aprender (next/image, lazy,
-// fade-in al cargar). En error cae al placeholder. Keyed por src en el padre → se
-// remonta al cambiar de ejercicio (resetea loaded/errored).
-function ExerciseGifDemo({ src, alt }: { src: string; alt: string }) {
-    const [loaded, setLoaded] = useState(false)
-    const [errored, setErrored] = useState(false)
-    if (errored) return <GifPlaceholder />
+// Multimedia del ejercicio en el modal del programa. Poster ESTÁTICO (thumbnail_url = webp
+// espejado, liviano) visible al instante + GIF animado (gif_url) cargado ON-DEMAND encima,
+// con fade-in al terminar. Sin media → icono placeholder. PROHIBIDO render/image de Supabase:
+// se sirven las URLs crudas de Storage vía next/image unoptimized (1 vista puntual). Keyed por
+// ejercicio en el padre → se remonta al cambiar de bloque (resetea loaded/errored).
+function ExerciseMediaDemo({
+    gifSrc,
+    posterSrc,
+    alt,
+}: {
+    gifSrc?: string | null
+    posterSrc?: string | null
+    alt: string
+}) {
+    const [gifLoaded, setGifLoaded] = useState(false)
+    const [gifErrored, setGifErrored] = useState(false)
+
+    // Sin GIF ni poster → recuadro placeholder (icono).
+    if (!gifSrc && !posterSrc) return <GifPlaceholder />
+
+    const showGif = !!gifSrc && !gifErrored
+
     return (
         <div
             className="relative mb-3.5 w-full overflow-hidden"
             style={{ height: 150, borderRadius: 'var(--radius-md)', background: SUNKEN, border: `1px solid ${CARD_BORDER}` }}
         >
-            {!loaded && (
+            {/* Poster estático — instantáneo; se atenúa cuando el GIF ya cargó. */}
+            {posterSrc && (
+                <Image
+                    src={posterSrc}
+                    alt={alt}
+                    fill
+                    loading="lazy"
+                    className={cn(
+                        'object-contain transition-opacity duration-500',
+                        showGif && gifLoaded ? 'opacity-0' : 'opacity-100'
+                    )}
+                    unoptimized
+                />
+            )}
+            {/* GIF animado on-demand — encima del poster, fade-in al cargar. En error cae al poster. */}
+            {showGif && (
+                <Image
+                    src={gifSrc}
+                    alt={alt}
+                    fill
+                    loading="lazy"
+                    onLoad={() => setGifLoaded(true)}
+                    onError={() => setGifErrored(true)}
+                    className={cn(
+                        'object-contain transition-opacity duration-500',
+                        gifLoaded ? 'opacity-100' : 'opacity-0'
+                    )}
+                    unoptimized
+                />
+            )}
+            {/* Sin poster y GIF aún cargando → spinner (evita caja vacía). */}
+            {!posterSrc && showGif && !gifLoaded && (
                 <div className="absolute inset-0 flex items-center justify-center" style={{ color: TXT_MUTED }}>
                     <Loader2 className="h-5 w-5 animate-spin" />
                 </div>
             )}
-            <Image
-                src={src}
-                alt={alt}
-                fill
-                loading="lazy"
-                onLoad={() => setLoaded(true)}
-                onError={() => setErrored(true)}
-                className={cn('object-contain transition-opacity duration-500', loaded ? 'opacity-100' : 'opacity-0')}
-                unoptimized
-            />
         </div>
     )
 }
@@ -717,12 +753,14 @@ export function ProgramTabB7({
                             )}
                         </SheetDescription>
 
-                        {/* GIF demostración (real si existe; placeholder si no hay o si falla) */}
-                        {ex?.gif_url ? (
-                            <ExerciseGifDemo key={ex.gif_url} src={ex.gif_url} alt={ex?.name || ''} />
-                        ) : (
-                            <GifPlaceholder />
-                        )}
+                        {/* Multimedia del ejercicio: poster estático (thumbnail_url) + GIF (gif_url)
+                            on-demand; icono si no hay media. Keyed por ejercicio → remonta al cambiar de bloque. */}
+                        <ExerciseMediaDemo
+                            key={ex?.id ?? 'no-ex'}
+                            gifSrc={ex?.gif_url}
+                            posterSrc={ex?.thumbnail_url}
+                            alt={ex?.name || ''}
+                        />
 
                         {/* tabla de prescripción */}
                         {prescriptionRows.length > 0 && (
