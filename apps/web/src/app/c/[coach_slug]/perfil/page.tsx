@@ -11,6 +11,7 @@ import {
     getActiveProgram,
 } from '../dashboard/_data/dashboard.queries'
 import { getStudentMovementNavEnabled, getStudentBodyCompositionNavEnabled } from '../_data/client-root.queries'
+import { getMonthlyRecap } from './_data/monthly-recap.queries'
 import { ProfileClient } from './_components/ProfileClient'
 
 export const metadata: Metadata = { title: 'Mi perfil' }
@@ -29,13 +30,15 @@ export default async function ProfilePage({ params }: Props) {
     const { client } = await getClientProfile(user.id)
     if (!client) redirect(`${base}/login`)
 
-    const [streak, dayCounts, program, showMovement, showBodyComposition] = await Promise.all([
+    const [streak, dayCounts, program, showMovement, showBodyComposition, monthlyRecap] = await Promise.all([
         getDashboardStreak(client.id),
         // Cada dia con series registradas = un entreno (ventana 1 año, agregado en DB).
         getWorkoutHistoryDayCounts(client.id, 365),
         getActiveProgram(client.id),
         getStudentMovementNavEnabled(),
         getStudentBodyCompositionNavEnabled(),
+        // Resumen del mes calendario (Santiago) para la share-card mensual.
+        getMonthlyRecap(client.id),
     ])
 
     const headersList = await headers()
@@ -56,6 +59,7 @@ export default async function ProfilePage({ params }: Props) {
             totalWorkouts={dayCounts.length}
             showMovement={showMovement}
             showBodyComposition={showBodyComposition}
+            monthlyRecap={monthlyRecap}
         />
     )
 }

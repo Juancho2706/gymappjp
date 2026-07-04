@@ -108,3 +108,29 @@ export function formatLongDateSantiago(now = new Date()): string {
     const d = new Date(tzStr)
     return d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })
 }
+
+/**
+ * Prefijo `YYYY-MM` del mes calendario ACTUAL en America/Santiago. DST-safe: deriva los
+ * componentes con `Intl.DateTimeFormat` (no `new Date(toLocaleString(...))`, que depende de la
+ * TZ del host). Comparable por `startsWith()` contra los `day` (YYYY-MM-DD, ya en Santiago) que
+ * devuelven los RPC de agregación → filtra sesiones/volumen al borde correcto del mes.
+ */
+export function getSantiagoMonthPrefix(now = new Date()): string {
+    const parts = Object.fromEntries(
+        new Intl.DateTimeFormat('en-CA', { timeZone: SANTIAGO_TZ, year: 'numeric', month: '2-digit' })
+            .formatToParts(now)
+            .map((p) => [p.type, p.value])
+    )
+    return `${parts.year}-${parts.month}`
+}
+
+/** Etiqueta legible del mes calendario actual en Santiago: "Julio 2026" (mes capitalizado). */
+export function formatSantiagoMonthLabel(now = new Date()): string {
+    const parts = Object.fromEntries(
+        new Intl.DateTimeFormat('es-CL', { timeZone: SANTIAGO_TZ, month: 'long', year: 'numeric' })
+            .formatToParts(now)
+            .map((p) => [p.type, p.value])
+    )
+    const month = (parts.month || '').replace(/^\w/u, (c) => c.toUpperCase())
+    return `${month} ${parts.year}`
+}

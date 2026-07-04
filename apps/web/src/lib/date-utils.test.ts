@@ -3,6 +3,8 @@ import {
   getNutritionDayOfWeekFromIsoYmdInSantiago,
   getSantiagoIsoYmdForUtcInstant,
   getSantiagoUtcBoundsForDay,
+  getSantiagoMonthPrefix,
+  formatSantiagoMonthLabel,
   nutritionMealAppliesOnIsoYmdInSantiago,
 } from './date-utils'
 
@@ -64,5 +66,36 @@ describe('date-utils — getSantiagoUtcBoundsForDay (independiente de la TZ del 
     const { startIso, endIso } = getSantiagoUtcBoundsForDay('2026-06-10')
     const lateSet = '2026-06-11T00:14:00.000Z' // 20:14 del 10-jun en Chile
     expect(lateSet >= startIso && lateSet < endIso).toBe(true)
+  })
+})
+
+describe('date-utils — getSantiagoMonthPrefix (bordes de mes en Santiago, independiente del host)', () => {
+  it('invierno (UTC-4): 01-ago 02:00Z aún es JULIO en Santiago (jul-31 22:00)', () => {
+    // 2026-08-01T02:00:00Z → 2026-07-31 22:00 en Santiago (UTC-4) → mes = julio.
+    expect(getSantiagoMonthPrefix(new Date('2026-08-01T02:00:00.000Z'))).toBe('2026-07')
+  })
+
+  it('invierno (UTC-4): 01-ago 05:00Z ya es AGOSTO en Santiago (ago-01 01:00)', () => {
+    // 2026-08-01T05:00:00Z → 2026-08-01 01:00 en Santiago (UTC-4) → mes = agosto.
+    expect(getSantiagoMonthPrefix(new Date('2026-08-01T05:00:00.000Z'))).toBe('2026-08')
+  })
+
+  it('verano (UTC-3): 01-feb 02:00Z aún es ENERO en Santiago (ene-31 23:00)', () => {
+    // 2026-02-01T02:00:00Z → 2026-01-31 23:00 en Santiago (UTC-3) → mes = enero.
+    expect(getSantiagoMonthPrefix(new Date('2026-02-01T02:00:00.000Z'))).toBe('2026-01')
+  })
+
+  it('mediodía UTC del 15-jul cae en julio', () => {
+    expect(getSantiagoMonthPrefix(new Date('2026-07-15T12:00:00.000Z'))).toBe('2026-07')
+  })
+})
+
+describe('date-utils — formatSantiagoMonthLabel', () => {
+  it('capitaliza el mes y agrega el año ("Julio 2026")', () => {
+    expect(formatSantiagoMonthLabel(new Date('2026-07-15T12:00:00.000Z'))).toBe('Julio 2026')
+  })
+
+  it('respeta el borde de mes en Santiago (ago-01 02:00Z → Julio 2026)', () => {
+    expect(formatSantiagoMonthLabel(new Date('2026-08-01T02:00:00.000Z'))).toBe('Julio 2026')
   })
 })

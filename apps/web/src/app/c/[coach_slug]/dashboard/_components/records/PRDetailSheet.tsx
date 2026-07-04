@@ -1,13 +1,29 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
-import { Trophy, ArrowUpRight, TrendingUp } from 'lucide-react'
+import { Trophy, ArrowUpRight, TrendingUp, Share2, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
-import { SharePRButton } from '@/components/shared/SharePRButton'
+import { canShareFiles, share } from '@/lib/web-share'
+import { readShareCardBrand, renderWorkoutPRCardToBlob, type WorkoutPRCardData } from '@/lib/workout-pr-card-canvas'
 import { WeightSparkline } from '../weight/WeightSparkline'
 import type { ExercisePRDetail, PersonalRecordItem } from '../../_data/dashboard.queries'
+
+/** Slug seguro para el nombre de archivo del PNG. */
+function slugify(s: string): string {
+    return (
+        s
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/\p{Diacritic}/gu, '')
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 48) || 'record'
+    )
+}
 
 /** "12 jun" — fecha corta es-CL, día calendario Santiago. */
 function fmtShort(iso: string): string {
@@ -52,6 +68,56 @@ export function PRDetailSheet({ open, onOpenChange, pr, detail, loading, exercis
     // Hitos en orden descendente (el más reciente arriba).
     const milestones = [...(detail?.milestones ?? [])].reverse()
     const latest1RM = detail?.history.length ? detail.history[detail.history.length - 1].estimated1RM : null
+
+    // ── Compartir el record vía canvas cliente (dedupe B-D5: el flujo del alumno usa la vía canvas,
+    //    con el footer de marca unificado; /api/pr-card queda solo para el flujo coach). ──
+    const [sharing, setSharing] = useState(false)
+    // Salto previo → actual desde el hito que alcanzó el máximo actual (si lo hay).
+    const topMilestone = detail?.milestones.length ? detail.milestones[detail.milestones.length - 1] : null
+    const prevWeightKg = topMilestone && currentWeight != null && topMilestone.weightKg === currentWeight ? topMilestone.prevKg : 0
+    const pct =
+        prevWeightKg > 0 && currentWeight != null
+            ? Math.round(((currentWeight - prevWeightKg) / prevWeightKg) * 1000) / 10
+            : 0
+    const best1RM = (detail?.history ?? []).reduce((m, p) => Math.max(m, p.estimated1RM), 0)
+    const prCard: WorkoutPRCardData | null =
+        currentWeight != null
+            ? {
+                  exerciseName: name,
+                  newWeightKg: currentWeight,
+                  prevWeightKg,
+                  pct,
+                  estimated1RM: best1RM > 0 ? best1RM : latest1RM ?? currentWeight,
+              }
+            : null
+
+    async function handleShareRecord() {
+        if (sharing || !prCard) return
+        setSharing(true)
+        try {
+            const blob = await renderWorkoutPRCardToBlob(prCard, readShareCardBrand())
+            if (!blob) {
+                toast.error('No pudimos generar la imagen. Intentá de nuevo.')
+                return
+            }
+            const file = new File([blob], `record-${slugify(prCard.exerciseName)}.png`, { type: 'image/png' })
+            if (canShareFiles([file])) {
+                await share({ files: [file], title: 'Récord personal', text: `Nuevo récord personal en ${prCard.exerciseName}` })
+            } else {
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = file.name
+                document.body.appendChild(a)
+                a.click()
+                a.remove()
+                URL.revokeObjectURL(url)
+                toast.success('Imagen guardada')
+            }
+        } finally {
+            setSharing(false)
+        }
+    }
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
@@ -139,14 +205,17 @@ export function PRDetailSheet({ open, onOpenChange, pr, detail, loading, exercis
                         </div>
                     ) : null}
 
-                    {/* Compartir logro — genera la share-card de record y la comparte como imagen */}
-                    {exerciseId ? (
-                        <SharePRButton
-                            exerciseId={exerciseId}
-                            exerciseName={name}
-                            label="Compartir mi récord"
-                            className="mt-1 w-full"
-                        />
+                    {/* Compartir logro — genera la share-card de record (canvas cliente) y la comparte */}
+                    {prCard && exerciseId ? (
+                        <button
+                            type="button"
+                            onClick={handleShareRecord}
+                            disabled={sharing}
+                            className="mt-1 flex min-h-11 w-full items-center justify-center gap-2 rounded-control bg-sport-500 px-4 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                        >
+                            {sharing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Share2 className="h-4 w-4" />}
+                            Compartir mi récord
+                        </button>
                     ) : null}
 
                     {/* CTA técnica */}

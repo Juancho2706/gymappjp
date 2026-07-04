@@ -15,15 +15,20 @@ import {
     PersonStanding,
     Gauge,
     Volume2,
+    TrendingUp,
+    CalendarDays,
     type LucideIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { playTimerSound, type TimerSound } from '@/lib/audioUtils'
 import { SectionTitle } from '../../dashboard/_components/shared/SectionTitle'
 import { SALES_EMAIL } from '@/lib/brand-assets'
 import { ProgressShareCardModal } from './ProgressShareCardModal'
+import { StreakShareCardModal } from './StreakShareCardModal'
+import { MonthlySummaryShareCardModal } from './MonthlySummaryShareCardModal'
 
 const REST_SOUND_LABELS: Record<TimerSound, string> = {
     digital: 'Digital (Beep)',
@@ -42,7 +47,11 @@ interface Props {
     totalWorkouts: number
     showMovement: boolean
     showBodyComposition: boolean
+    monthlyRecap: { sessions: number; volumeKg: number; monthLabel: string }
 }
+
+/** Plantillas de share-card que el alumno puede compartir desde el perfil. */
+type ShareTemplate = 'progress' | 'streak' | 'monthly'
 
 function initials(name: string): string {
     const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -137,6 +146,46 @@ function Row({
     )
 }
 
+/** Opción del selector de share-cards: icono con acento, título, subtítulo y chevron (EVA DS). */
+function ShareTemplateOption({
+    icon: Icon,
+    title,
+    subtitle,
+    accentBg,
+    accentIconBg,
+    accentIconColor,
+    onSelect,
+}: {
+    icon: LucideIcon
+    title: string
+    subtitle: string
+    accentBg: string
+    accentIconBg: string
+    accentIconColor: string
+    onSelect: () => void
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onSelect}
+            className="flex w-full items-center gap-3.5 rounded-card p-3.5 text-left transition-transform active:scale-[0.99]"
+            style={{ background: accentBg, border: '1px solid var(--border-subtle)' }}
+        >
+            <span
+                className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-[var(--radius-md)]"
+                style={{ background: accentIconBg, color: accentIconColor }}
+            >
+                <Icon className="h-[20px] w-[20px]" />
+            </span>
+            <div className="min-w-0 flex-1">
+                <div className="text-[14.5px] font-extrabold text-text-strong">{title}</div>
+                <div className="text-[12.5px] text-text-muted">{subtitle}</div>
+            </div>
+            <ChevronRight className="h-[18px] w-[18px] flex-shrink-0 text-[var(--ink-300)]" />
+        </button>
+    )
+}
+
 export function ProfileClient({
     base,
     fullName,
@@ -146,15 +195,23 @@ export function ProfileClient({
     totalWorkouts,
     showMovement,
     showBodyComposition,
+    monthlyRecap,
 }: Props) {
     const router = useRouter()
     // Alarma de descanso (sonido del timer de rutina) — preferencia local (localStorage), movida
     // acá desde el viejo engranaje del dashboard. El volumen se mantiene (default 1.0) para la
     // preview; solo se expone el tipo de sonido, igual que el modal anterior.
     const [restSound, setRestSound] = useState<TimerSound>('digital')
-    const [shareOpen, setShareOpen] = useState(false)
+    // Selector de plantilla de share-card (Progreso / Racha / Resumen mensual) + modal activo.
+    const [pickerOpen, setPickerOpen] = useState(false)
+    const [activeShare, setActiveShare] = useState<ShareTemplate | null>(null)
 
     const hasModules = showMovement || showBodyComposition
+
+    function pickShare(template: ShareTemplate) {
+        setPickerOpen(false)
+        setActiveShare(template)
+    }
 
     useEffect(() => {
         const saved = localStorage.getItem('restTimerSound') as TimerSound | null
@@ -212,10 +269,10 @@ export function ProfileClient({
                 <StatCard label="Racha" value={streak} unit="días" icon={Flame} accent="var(--ember-500)" />
             </div>
 
-            {/* Compartí tu logro */}
+            {/* Compartí tu logro — abre el selector de plantilla */}
             <button
                 type="button"
-                onClick={() => setShareOpen(true)}
+                onClick={() => setPickerOpen(true)}
                 className="mb-4 flex w-full items-center gap-3.5 rounded-card p-4 text-left transition-transform active:scale-[0.99]"
                 style={{ background: 'var(--sport-100)', border: '1px solid var(--sport-200)' }}
             >
@@ -227,7 +284,7 @@ export function ProfileClient({
                 </span>
                 <div className="min-w-0 flex-1">
                     <div className="text-[14.5px] font-extrabold text-text-strong">Compartí tu logro</div>
-                    <div className="text-[12.5px] text-text-muted">Contá tu progreso con la marca de tu coach</div>
+                    <div className="text-[12.5px] text-text-muted">Elegí una tarjeta con la marca de tu coach</div>
                 </div>
                 <ChevronRight className="h-[18px] w-[18px] flex-shrink-0" style={{ color: 'var(--sport-600)' }} />
             </button>
@@ -344,10 +401,70 @@ export function ProfileClient({
 
             <p className="mt-6 text-center text-[10px] text-text-muted">v1.2.0 · Hecho con ❤️ para tu progreso</p>
 
-            {shareOpen && (
+            {/* Selector de plantilla — sheet EVA DS (no un dropdown pelado) */}
+            <Sheet open={pickerOpen} onOpenChange={setPickerOpen}>
+                <SheetContent side="bottom" className="max-h-[88dvh] sm:max-w-md" data-side="bottom">
+                    <SheetHeader>
+                        <SheetTitle className="flex items-center gap-2">
+                            <Share2 className="h-[18px] w-[18px] shrink-0 text-sport-500" />
+                            Compartí tu logro
+                        </SheetTitle>
+                    </SheetHeader>
+                    <div className="flex flex-col gap-2.5 px-5 pb-5 pt-1">
+                        <p className="mb-1 text-[12.5px] text-text-muted">
+                            Cada tarjeta lleva la marca de tu coach. Elegí cuál compartir:
+                        </p>
+                        <ShareTemplateOption
+                            icon={TrendingUp}
+                            title="Progreso"
+                            subtitle="Tus entrenos totales y tu racha"
+                            accentBg="var(--sport-100)"
+                            accentIconBg="var(--sport-500)"
+                            accentIconColor="#ffffff"
+                            onSelect={() => pickShare('progress')}
+                        />
+                        <ShareTemplateOption
+                            icon={Flame}
+                            title="Racha"
+                            subtitle={streak > 0 ? `${streak} ${streak === 1 ? 'día' : 'días'} seguidos activo` : 'Encendé tu racha'}
+                            accentBg="var(--ember-100, color-mix(in oklab, var(--ember-500) 12%, transparent))"
+                            accentIconBg="var(--ember-500)"
+                            accentIconColor="#ffffff"
+                            onSelect={() => pickShare('streak')}
+                        />
+                        <ShareTemplateOption
+                            icon={CalendarDays}
+                            title="Resumen mensual"
+                            subtitle={`${monthlyRecap.monthLabel} · sesiones y volumen`}
+                            accentBg="var(--surface-sunken)"
+                            accentIconBg="var(--surface-card)"
+                            accentIconColor="var(--sport-600)"
+                            onSelect={() => pickShare('monthly')}
+                        />
+                    </div>
+                </SheetContent>
+            </Sheet>
+
+            {activeShare === 'progress' && (
                 <ProgressShareCardModal
                     data={{ fullName, totalWorkouts, streak, programName }}
-                    onClose={() => setShareOpen(false)}
+                    onClose={() => setActiveShare(null)}
+                />
+            )}
+            {activeShare === 'streak' && (
+                <StreakShareCardModal data={{ fullName, streak, brandName }} onClose={() => setActiveShare(null)} />
+            )}
+            {activeShare === 'monthly' && (
+                <MonthlySummaryShareCardModal
+                    data={{
+                        fullName,
+                        monthLabel: monthlyRecap.monthLabel,
+                        sessions: monthlyRecap.sessions,
+                        volumeKg: monthlyRecap.volumeKg,
+                        streak,
+                        brandName,
+                    }}
+                    onClose={() => setActiveShare(null)}
                 />
             )}
         </div>
