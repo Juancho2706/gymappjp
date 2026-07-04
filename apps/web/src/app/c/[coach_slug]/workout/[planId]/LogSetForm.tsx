@@ -21,6 +21,7 @@ import { formatWeightEsCl } from '@/lib/client/keypad-logic'
 import { useWorkoutKeypad } from './WorkoutKeypadProvider'
 import { ScaleDots, EffortHelp, RPE_HELP, RIR_HELP } from './EffortScale'
 import { typedKeypadFields, type TypedKeypadMode } from './typed-keypad'
+import type { OptimisticLogPayload } from './session-logs.optimistic'
 import { cn } from '@/lib/utils'
 import { springs } from '@/lib/animation-presets'
 
@@ -115,15 +116,12 @@ interface Props {
      * header del teclado numérico custom de las filas tipadas (DB-5). Sólo se usa en pointer coarse.
      */
     typedObjective?: string
-    onLogged?: (payload: {
-        blockId: string
-        setNumber: number
-        weightKg: number | null
-        repsDone: number | null
-        rpe: number | null
-        rir: number | null
-        note?: string | null
-    }) => void
+    /**
+     * Reporta la serie recién confirmada al padre (optimismo de `sessionLogs`). Incluye los ejes
+     * polimórficos (actual_*) para las filas tipadas — sin ellos el optimismo pisaba el log de HOLD
+     * con NULLs y la fila se re-renderizaba vacía (bug forense hold, ver `session-logs.optimistic`).
+     */
+    onLogged?: (payload: OptimisticLogPayload) => void
     /**
      * Resultado REAL del guardado en server (reconciliación del optimismo del padre).
      * 'ok' = confirmado en DB · 'error' = falló (el padre debe REVERTIR su log optimista para que
@@ -852,6 +850,11 @@ function TypedLogSetRow({
             repsDone: values.repsDone,
             rpe: values.rpe,
             rir: null,
+            // Ejes tipados: el optimismo del padre los preserva → la fila de hold no se re-renderiza vacía.
+            actualDurationSec: values.actualDurationSec,
+            actualDistanceM: values.actualDistanceM,
+            actualHoldSec: values.actualHoldSec,
+            actualAvgHr: values.actualAvgHr,
         })
         formAction(formData)
     }
@@ -862,7 +865,19 @@ function TypedLogSetRow({
         const fd = new FormData(form)
         fd.set('rpe', String(rpe))
         normalizeFormData(fd)
-        onLogged?.({ blockId, setNumber, weightKg: null, repsDone: parseNum(fd.get('reps_done')), rpe, rir: null })
+        const rpeValues = collectValues(fd)
+        onLogged?.({
+            blockId,
+            setNumber,
+            weightKg: null,
+            repsDone: rpeValues.repsDone,
+            rpe,
+            rir: null,
+            actualDurationSec: rpeValues.actualDurationSec,
+            actualDistanceM: rpeValues.actualDistanceM,
+            actualHoldSec: rpeValues.actualHoldSec,
+            actualAvgHr: rpeValues.actualAvgHr,
+        })
         startTransition(() => {
             formAction(fd)
         })

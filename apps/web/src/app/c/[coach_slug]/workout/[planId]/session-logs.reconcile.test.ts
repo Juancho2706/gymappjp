@@ -81,6 +81,18 @@ describe('reconcileSessionLogs', () => {
         expect(out[0].note).toBeNull()
     })
 
+    it('reload: un log del SERVER de HOLD (peso/reps NULL, actual_hold_sec real) conserva el eje', () => {
+        // Camino de recarga (síntoma 2): tras reload el RSC trae la serie de hold con weight/reps NULL
+        // y actual_hold_sec=45. El reconcile debe preservar el eje para que la fila tipada lo pinte.
+        const server = [serverLog('b1', 1, { weight_kg: null, reps_done: null, rpe: null, actual_hold_sec: 45 })]
+        const out = reconcileSessionLogs(server, [])
+        expect(out).toHaveLength(1)
+        expect(out[0].actual_hold_sec).toBe(45)
+        expect(out[0].weight_kg).toBeNull()
+        expect(out[0].reps_done).toBeNull()
+        expect(out[0]._pending).toBe(false)
+    })
+
     it('preserva los ejes polimórficos + sustitución de una serie encolada', () => {
         const out = reconcileSessionLogs(
             [],

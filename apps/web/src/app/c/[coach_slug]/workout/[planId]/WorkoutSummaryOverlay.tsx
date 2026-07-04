@@ -240,14 +240,21 @@ export function WorkoutSummaryOverlay({
         }
     }, [planTitle, completedSets, totalReps, totalVolume, detectedPRs])
 
+    // Celebración con papelitos al completar la sesión. Respeta reduced-motion (sin confetti). El
+    // overlay se portalea a document.body con z-[9999] y un velo casi opaco; el canvas de
+    // canvas-confetti usa z-index 100 por defecto → quedaba DETRÁS del velo (papelitos invisibles,
+    // regresión del rework del resumen). Lo elevamos por encima del overlay con `zIndex`.
     useEffect(() => {
+        if (reducedMotion) return
+        const CONFETTI_Z = 10000
         if (detectedPRs.length > 0) {
-            fireConfetti({ particleCount: 200, spread: 100, origin: { y: 0.5 } })
-            setTimeout(() => fireConfetti({ particleCount: 80, spread: 60, origin: { x: 0.2, y: 0.6 } }), 300)
-            setTimeout(() => fireConfetti({ particleCount: 80, spread: 60, origin: { x: 0.8, y: 0.6 } }), 500)
+            fireConfetti({ particleCount: 200, spread: 100, origin: { y: 0.5 }, zIndex: CONFETTI_Z })
+            setTimeout(() => fireConfetti({ particleCount: 80, spread: 60, origin: { x: 0.2, y: 0.6 }, zIndex: CONFETTI_Z }), 300)
+            setTimeout(() => fireConfetti({ particleCount: 80, spread: 60, origin: { x: 0.8, y: 0.6 }, zIndex: CONFETTI_Z }), 500)
         } else {
-            fireConfetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } })
+            fireConfetti({ particleCount: 80, spread: 70, origin: { y: 0.6 }, zIndex: CONFETTI_Z })
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const motionOpts = reducedMotion ? { duration: 0 } : undefined

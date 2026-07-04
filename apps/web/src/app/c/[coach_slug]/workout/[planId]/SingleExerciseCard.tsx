@@ -9,6 +9,7 @@ import { formatRelativeDate } from '@/lib/date-utils'
 import type { ExerciseType as WorkoutKind } from '@/domain/workout/types'
 import type { SupersetGroupRow } from '@/lib/workout-block-grouping'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
+import type { OptimisticLogPayload } from './session-logs.optimistic'
 import { formatTypedObjective } from './typed-keypad'
 import type { ClientCardioView } from './_data/workout-execution.queries'
 // Primitivos/tipos compartidos con el resto de la exec (SupersetGroupCard los reusa) → se importan
@@ -105,7 +106,7 @@ interface SingleExerciseCardProps {
     /** Deshace la sustitución (solo si aún no hay sets logueados). */
     onUndoSubstitution?: () => void
     /** Log optimista + guía/scroll (handler del padre). */
-    handleLogged: (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null; note?: string | null }) => void
+    handleLogged: (payload: OptimisticLogPayload) => void
     /** Reconciliación del optimismo (resultado REAL del server). */
     handleResult: (blockId: string, setNumber: number, result: SetSyncResult) => void
 }

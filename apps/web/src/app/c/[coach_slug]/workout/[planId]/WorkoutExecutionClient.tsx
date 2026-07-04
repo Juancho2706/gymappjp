@@ -29,6 +29,7 @@ import {
     workoutLogToFormData,
 } from '@/lib/workout-offline-queue'
 import { reconcileSessionLogs, type ReconciledSessionLog } from './session-logs.reconcile'
+import { applyOptimisticSessionLog, type OptimisticLogPayload } from './session-logs.optimistic'
 import { WorkoutTimerProvider, useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
 import { WorkoutKeypadProvider } from './WorkoutKeypadProvider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
@@ -471,24 +472,6 @@ interface SupersetInfo {
     maxSets: number
 }
 
-/** Aplica un log optimista (dedup por block+set) — misma forma que empuja `handleLogged`. */
-function applyOptimisticLog<T extends SessionLog>(
-    prev: T[],
-    payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null; note?: string | null },
-): T[] {
-    const next = prev.filter((log) => !(log.block_id === payload.blockId && log.set_number === payload.setNumber))
-    next.push({
-        block_id: payload.blockId,
-        set_number: payload.setNumber,
-        weight_kg: payload.weightKg,
-        reps_done: payload.repsDone,
-        rpe: payload.rpe,
-        rir: payload.rir,
-        note: payload.note ?? null,
-    } as unknown as T)
-    return next
-}
-
 /** Orden de presentación intercalado: ronda 1 (A,B,C…), ronda 2 (A,B,C…)… saltando miembros sin serie. */
 function buildRoundOrder(members: BlockType[]): { blockId: string; set: number }[] {
     const maxSets = members.reduce((mx, m) => Math.max(mx, m.sets), 0)
@@ -609,7 +592,7 @@ interface SupersetGroupCardProps {
     cardio?: ClientCardioView
     autoTimerEnabled: boolean
     nextCue: { blockId: string; set: number } | null
-    onLogged: (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null; note?: string | null }) => void
+    onLogged: (payload: OptimisticLogPayload) => void
     onResult: (blockId: string, setNumber: number, result: SetSyncResult) => void
     openTechnique: (exercise: ExerciseType | null) => void
     registerRowRef: (blockId: string, setNumber: number, el: HTMLDivElement | null) => void
@@ -1316,16 +1299,17 @@ export function WorkoutExecutionClient({
         smoothScrollIntoViewIfNeeded(blockRefs.current.get(nextIncomplete.id), 'start')
     }
 
-    const handleLogged = (payload: { blockId: string; setNumber: number; weightKg: number | null; repsDone: number | null; rpe: number | null; rir: number | null; note?: string | null }) => {
+    const handleLogged = (payload: OptimisticLogPayload) => {
         // Marca de actividad (Fix A): al primer log, futuras REENTRADAS por atrás refrescan aunque el
         // snapshot del client Router Cache vuelva vacío.
         markWorkoutTouched()
-        // Estado (puro) — dedup por block+set, misma forma de siempre.
-        setSessionLogs((prev) => applyOptimisticLog(prev, payload))
+        // Estado (puro) — dedup por block+set, PRESERVANDO los ejes tipados (actual_*) del payload
+        // para que la fila de hold/cardio no se re-renderice vacía al confirmar (bug forense hold).
+        setSessionLogs((prev) => applyOptimisticSessionLog(prev, payload))
 
         // Guía/scroll (efectos) — calculados fuera del updater para no duplicarse en StrictMode.
         const prev = sessionLogs
-        const nextLogs = applyOptimisticLog(prev, payload)
+        const nextLogs = applyOptimisticSessionLog(prev, payload)
         const info = supersetInfo.get(payload.blockId)
 
         if (info) {
