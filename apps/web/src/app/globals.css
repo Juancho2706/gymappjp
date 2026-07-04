@@ -1018,6 +1018,25 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
+/* ============================================================
+   Fase L · teclado numérico custom de la exec (AC-B6)
+   Al abrir el keypad (WorkoutKeypadProvider marca body[data-exec-keypad-open]
+   y publica --keypad-h): se oculta la barra fija "Finalizar" para no apilar dos
+   barras, y se reserva espacio inferior para que la fila activa quede por encima
+   del teclado. Sin data-attribute (keypad cerrado) el layout queda EXACTO como hoy.
+   ============================================================ */
+.exec-finish-bar {
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+body[data-exec-keypad-open] .exec-finish-bar {
+  transform: translateY(140%);
+  opacity: 0;
+  pointer-events: none;
+}
+body[data-exec-keypad-open] {
+  padding-bottom: var(--keypad-h, 20rem);
+}
+
 /* Immersive Workout Mode */
 body.immersive-workout-mode nav.client-nav-mobile,
 body.immersive-workout-mode aside.client-nav-desktop {

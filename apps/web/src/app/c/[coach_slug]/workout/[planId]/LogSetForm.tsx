@@ -17,6 +17,9 @@ import {
     type WorkoutOfflineLog,
 } from '@/lib/workout-offline-queue'
 import { triggerHaptic } from '@/lib/client/haptics'
+import { useCoarsePointer } from '@/lib/client/useCoarsePointer'
+import { formatWeightEsCl } from '@/lib/client/keypad-logic'
+import { useWorkoutKeypad } from './WorkoutKeypadProvider'
 import { cn } from '@/lib/utils'
 import { springs } from '@/lib/animation-presets'
 
@@ -44,6 +47,13 @@ interface Props {
     /** Máximo histórico (kg) del ejercicio: si el peso registrado lo iguala o supera, la serie
      *  pulsa dorado (PR inline). Sólo presentación — no cambia el motor de logging. */
     prThresholdKg?: number | null
+    /**
+     * Objetivo del teclado numérico custom (Fase L · workstream B). Opcionales/aditivos: alimentan
+     * el header del keypad ("Objetivo {sets}×{reps} · {peso} kg" + "Última vez") que viaja con el
+     * teclado (DB-5). Sólo se usan en pointer coarse; en desktop son inertes.
+     */
+    targetReps?: number | string | null
+    lastSet?: { weightKg: number | null; reps: number | null } | null
     existingLog?: {
         weight_kg: number | null
         reps_done: number | null
@@ -219,6 +229,8 @@ function StrengthLogSetForm({
     nextUpLabel,
     suggestedWeightKg,
     prThresholdKg,
+    targetReps,
+    lastSet,
     existingLog,
     autoTimerEnabled = true,
     isActive = false,
@@ -229,6 +241,12 @@ function StrengthLogSetForm({
     onResult,
 }: Props) {
     const params = useParams<{ coach_slug: string; planId: string }>()
+    // Teclado numérico custom (Fase L · workstream B). Gate por puntero grueso: en desktop el input
+    // nativo queda EXACTAMENTE como hoy (Enter-no-cierra, Tab). El keypad muta `ref.value` (mismo
+    // mecanismo del autofill "= última vez") → el pipeline submit/offline no se toca.
+    const coarse = useCoarsePointer()
+    const keypad = useWorkoutKeypad()
+    const useKeypad = coarse && keypad != null
     const [state, formAction] = useActionState(logSetAction, initialState)
     // Item encolado (sin sincronizar) de ESTA serie tras un reload. Se hidrata en un EFECTO
     // post-montaje (no en el initializer) para evitar mismatch de hidratación: el server no ve
@@ -295,8 +313,13 @@ function StrengthLogSetForm({
     // Prefill "= última vez" (quick-win E2-3): escribe en los inputs uncontrolled al cambiar el nonce.
     useEffect(() => {
         if (!prefill) return
-        if (weightRef.current && prefill.weight != null) weightRef.current.value = String(prefill.weight)
+        // Con teclado custom el input es es-CL (coma decimal); si el keypad está abierto sobre esta
+        // fila, refresca su mirror con el valor autollenado.
+        if (weightRef.current && prefill.weight != null) {
+            weightRef.current.value = useKeypad ? formatWeightEsCl(prefill.weight) : String(prefill.weight)
+        }
         if (repsRef.current && prefill.reps != null) repsRef.current.value = String(prefill.reps)
+        keypad?.refreshDisplay()
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [prefill?.nonce])
 
@@ -352,6 +375,29 @@ function StrengthLogSetForm({
             if (parseRestTime(restStr) > 0) startRest(restStr, { label: nextUpLabel, warmup: useWarmup })
             else cancelRest()
         }
+    }
+
+    // Abre el teclado numérico custom en el campo tocado (solo pointer coarse + provider presente).
+    // El objetivo prescrito viaja en el header del keypad (DB-5); "Listo" reusa `requestSubmit()`.
+    const openKeypadFor = (initialField: 'weight' | 'reps') => {
+        if (!useKeypad || !keypad) return
+        // El input pudo montar como number (punto decimal) antes del gate coarse; normaliza a coma.
+        const w = weightRef.current
+        if (w && w.value.includes('.')) w.value = w.value.replace('.', ',')
+        keypad.openKeypad({
+            fieldRefs: { weight: weightRef, reps: repsRef },
+            initialField,
+            target: {
+                sets: totalSets ?? null,
+                reps: targetReps ?? null,
+                suggestedWeightKg: suggestedWeightKg ?? null,
+                lastWeightKg: lastSet?.weightKg ?? null,
+                lastReps: lastSet?.reps ?? null,
+                exerciseName: nextUpLabel,
+            },
+            allowDecimal: { weight: true, reps: false },
+            requestSubmit: () => formRef.current?.requestSubmit(),
+        })
     }
 
     const handleSubmit = (formData: FormData) => {
@@ -498,6 +544,14 @@ function StrengthLogSetForm({
         isActive ? 'h-14 text-2xl' : 'h-11 text-base',
     )
 
+    // Con teclado custom el input es `type=text` es-CL (coma decimal, `inputMode=none`, readOnly →
+    // no abre el teclado del SO, viaja igual en FormData); en desktop queda EXACTO como hoy.
+    const weightDefaultNum = existingLog?.weight_kg ?? queuedInit?.weightKg ?? suggestedWeightKg ?? null
+    const weightDefaultValue = useKeypad
+        ? (weightDefaultNum != null ? formatWeightEsCl(weightDefaultNum) : '')
+        : (weightDefaultNum ?? '')
+    const repsDefaultValue = existingLog?.reps_done ?? queuedInit?.repsDone ?? ''
+
     return (
         <motion.div
             layout={!reducedMotion}
@@ -537,12 +591,12 @@ function StrengthLogSetForm({
                             <input
                                 ref={weightRef}
                                 name="weight_kg"
-                                type="number"
-                                step="0.5"
-                                min="0"
-                                inputMode="decimal"
-                                defaultValue={existingLog?.weight_kg ?? queuedInit?.weightKg ?? suggestedWeightKg ?? ''}
+                                type={useKeypad ? 'text' : 'number'}
+                                {...(useKeypad ? { readOnly: true } : { step: '0.5', min: '0' })}
+                                inputMode={useKeypad ? 'none' : 'decimal'}
+                                defaultValue={weightDefaultValue}
                                 placeholder="-"
+                                onFocus={useKeypad ? () => openKeypadFor('weight') : undefined}
                                 // Enter NO cierra la serie (implicit submit) — pasa el foco a reps. Submit solo por "Listo".
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
@@ -559,11 +613,12 @@ function StrengthLogSetForm({
                             <input
                                 ref={repsRef}
                                 name="reps_done"
-                                type="number"
-                                min="0"
-                                inputMode="numeric"
-                                defaultValue={existingLog?.reps_done ?? queuedInit?.repsDone ?? ''}
+                                type={useKeypad ? 'text' : 'number'}
+                                {...(useKeypad ? { readOnly: true } : { min: '0' })}
+                                inputMode={useKeypad ? 'none' : 'numeric'}
+                                defaultValue={repsDefaultValue}
                                 placeholder="-"
+                                onFocus={useKeypad ? () => openKeypadFor('reps') : undefined}
                                 // Enter cierra el teclado (blur) sin submitear — deja meter RPE/RIR antes de "Listo".
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {

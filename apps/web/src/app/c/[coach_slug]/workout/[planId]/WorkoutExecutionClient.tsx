@@ -17,6 +17,7 @@ import {
     workoutLogToFormData,
 } from '@/lib/workout-offline-queue'
 import { WorkoutTimerProvider, useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
+import { WorkoutKeypadProvider } from './WorkoutKeypadProvider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
 import Image from 'next/image'
 import { WorkoutSummaryOverlay } from './WorkoutSummaryOverlay'
@@ -1226,6 +1227,7 @@ export function WorkoutExecutionClient({
 
     return (
         <WorkoutTimerProvider>
+          <WorkoutKeypadProvider>
             <div className="is-workout-page min-h-dvh bg-[var(--ink-950)] text-on-dark">
                 <motion.div
                     initial={{ y: -20, opacity: 0 }}
@@ -1510,7 +1512,7 @@ export function WorkoutExecutionClient({
                     </div>
                 </div>
 
-                <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[var(--ink-950)]/90 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl">
+                <div className="exec-finish-bar fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-[var(--ink-950)]/90 px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-xl">
                     <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
                         <ManualTimerButton defaultTime={'90'} />
                         <button
@@ -1674,6 +1676,7 @@ export function WorkoutExecutionClient({
                 </Dialog>
 
             </div>
+          </WorkoutKeypadProvider>
         </WorkoutTimerProvider>
     )
 }

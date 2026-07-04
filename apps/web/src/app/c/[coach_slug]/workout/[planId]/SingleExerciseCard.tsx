@@ -358,6 +358,8 @@ export function SingleExerciseCard({
                                 existingLog={log}
                                 suggestedWeightKg={suggestedWeightKg}
                                 prThresholdKg={exerciseMaxes[exercise.id] ?? null}
+                                targetReps={block.reps}
+                                lastSet={bestPrev ? { weightKg: bestPrev.weight_kg, reps: bestPrev.reps_done } : null}
                                 autoTimerEnabled={autoTimerEnabled}
                                 mode={effType}
                                 isActive={setNumber === firstUnlogged}
