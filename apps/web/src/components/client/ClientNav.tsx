@@ -441,6 +441,18 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, showM
                             <div className="flex flex-col gap-1 border-t border-subtle pt-2">
                                 <PwaNavButton />
                             </div>
+
+                            {/* Cerrar sesión — al final del sheet, tono danger sutil. Reusa el mismo
+                                signOut del sidebar desktop (Supabase → login del coach). */}
+                            <button
+                                type="button"
+                                onClick={handleSignOut}
+                                aria-label="Cerrar sesión"
+                                className="flex min-h-[44px] items-center gap-3 rounded-control border border-transparent px-3 py-2.5 text-sm font-semibold text-destructive/80 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                            >
+                                <LogOut className="h-5 w-5 flex-shrink-0" />
+                                <span className="truncate">Cerrar sesión</span>
+                            </button>
                         </motion.div>
                     </>
                 )}

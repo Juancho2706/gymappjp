@@ -243,15 +243,19 @@ export function NewsBellButton({
             <SheetHeader className="pb-4">
               <SheetTitle className="font-display text-[17px] font-extrabold text-strong">Novedades</SheetTitle>
             </SheetHeader>
-            <div className="overflow-y-auto pb-safe">
+            {/* min-h-0 + flex-1: sin esto el contenedor flex no acota su alto y el feed no
+                scrollea (gotcha del repo). pb-safe deja aire sobre el home-indicator. */}
+            <div className="min-h-0 flex-1 overflow-y-auto pb-safe">
               <NewsFeedList onNavigate={() => setIsMobileOpen(false)} />
             </div>
           </SheetContent>
         </Sheet>
       </div>
 
-      {/* Desktop: Popover */}
-      <div className="hidden md:block">
+      {/* Desktop: Popover. `md:flex md:items-center` (no `md:block`): un wrapper block crea
+          una caja de línea con baseline y el glifo del trigger inline-flex queda ~2px más
+          arriba que el avatar de al lado en el topbar. Como flex, el trigger se centra 1:1. */}
+      <div className="hidden md:flex md:items-center">
         <Popover open={isDesktopOpen} onOpenChange={handleDesktopOpen}>
           <PopoverTrigger
             className="relative inline-flex items-center justify-center text-muted transition-colors hover:text-strong"

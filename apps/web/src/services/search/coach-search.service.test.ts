@@ -208,6 +208,28 @@ describe('searchCoachWorkspace — forma y hrefs del resultado', () => {
         })
     })
 
+    it('ejercicio sin espejo estático (thumbnail_url null) → thumbUrl null, NUNCA el gif', async () => {
+        const { db } = makeSupabaseMock({
+            exercises: [
+                {
+                    id: 'e2',
+                    name: 'Peso muerto',
+                    muscle_group: 'Espalda',
+                    thumbnail_url: null,
+                    gif_url: 'https://cdn/e2-animado.gif',
+                    video_url: null,
+                },
+            ],
+        })
+        const res = await searchCoachWorkspace(db, {
+            coachId: COACH,
+            scope: { orgId: null, activeTeamId: null },
+            query: 'peso',
+        })
+        // El dropdown cae al ícono de grupo; jamás anima el gif crudo.
+        expect(res.exercises[0]?.thumbUrl).toBeNull()
+    })
+
     it('siempre devuelve las 4 claves como arrays', async () => {
         const { db } = makeSupabaseMock({})
         const res = await searchCoachWorkspace(db, {

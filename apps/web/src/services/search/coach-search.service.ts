@@ -2,7 +2,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import type { CoachClientScope } from '@/app/coach/clients/_data/clients.queries'
 import { buildExerciseSearchOr } from '@/app/c/[coach_slug]/exercises/_data/exercises.queries'
-import { exerciseGridThumb } from '@/lib/exercises/exercise-thumb'
 import { searchCoachRecipes } from '@/services/nutrition-recipes.service'
 
 /**
@@ -146,6 +145,10 @@ async function searchPrograms(
  * Ejercicios — reutiliza `buildExerciseSearchOr` (nombre/músculo/equipo/parte + sinónimos de
  * músculo) y el `scopeFilter` (system ∪ scope) idéntico a `getExerciseCatalog`. `href` al catálogo
  * del coach con el término pre-cargado (`?q=`).
+ *
+ * Miniatura: SOLO el espejo estático `thumbnail_url` (webp chico, ya materializado en el catálogo).
+ * Nunca el `gif_url` crudo — el dropdown no debe animar (queja del CEO). Si falta el espejo, el hit
+ * viaja SIN `thumbUrl` y el dropdown pinta el ícono de grupo (fallback).
  */
 async function searchExercises(
     supabase: DB,
@@ -168,7 +171,7 @@ async function searchExercises(
 
     const { data } = await supabase
         .from('exercises')
-        .select('id, name, muscle_group, thumbnail_url, gif_url, video_url')
+        .select('id, name, muscle_group, thumbnail_url')
         .or(scopeFilter)
         .is('deleted_at', null)
         .or(searchOr)
@@ -180,8 +183,6 @@ async function searchExercises(
         name: string
         muscle_group: string | null
         thumbnail_url: string | null
-        gif_url: string | null
-        video_url: string | null
     }
 
     return ((data ?? []) as ExerciseHitRow[]).map((ex) => ({
@@ -189,7 +190,7 @@ async function searchExercises(
         label: ex.name,
         sublabel: ex.muscle_group ?? undefined,
         href: `/coach/exercises?q=${encodeURIComponent(ex.name)}`,
-        thumbUrl: exerciseGridThumb(ex, 96),
+        thumbUrl: ex.thumbnail_url,
     }))
 }
 
