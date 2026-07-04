@@ -28,6 +28,12 @@ export interface WorkoutPRCardData {
 export interface ShareCardBrand {
     brandName: string
     logoUrl: string | null
+    /**
+     * true cuando `logoUrl` es el logo CLARO usado como fallback (no hay versión dark): se dibuja sobre
+     * un chip blanco/neutro para que no se pierda en el fondo oscuro de la card. false = logo dark/EVA
+     * (se dibuja a sangre) o sin logo (cae a la inicial).
+     */
+    logoNeedsBackplate: boolean
     accent: string
     /** Motivo "racha" del DS (--ember-500). */
     ember: string
@@ -100,6 +106,23 @@ function firstName(full: string): string {
 }
 
 /**
+ * Cadena de fallback del logo para las cards (fondo oscuro): logo DARK (dibujado a sangre) → logo
+ * CLARO (dibujado sobre chip blanco/neutro, `needsBackplate`) → sin logo (la card cae a la inicial).
+ * Pura y testeable — la razón del bug CEO: josefit tiene `logo_url` (claro) pero `logo_url_dark` NULL,
+ * y antes solo se leía el dark → caía a la "J". Ahora el claro se usa (con backplate para no perderse).
+ */
+export function resolveShareCardLogo(
+    logoDark: string | null | undefined,
+    logoLight: string | null | undefined
+): { logoUrl: string | null; logoNeedsBackplate: boolean } {
+    const dark = logoDark?.trim() || null
+    if (dark) return { logoUrl: dark, logoNeedsBackplate: false }
+    const light = logoLight?.trim() || null
+    if (light) return { logoUrl: light, logoNeedsBackplate: true }
+    return { logoUrl: null, logoNeedsBackplate: false }
+}
+
+/**
  * Lee la identidad white-label del alumno desde el DOM del layout /c (el overlay se portalea a
  * document.body, así que los data-attrs y las CSS vars viven en el árbol raíz, ya tier-gateados).
  * Fallbacks: marca "EVA", sin logo, acento sport por defecto, sin URL corta.
@@ -109,6 +132,7 @@ export function readShareCardBrand(): ShareCardBrand {
         return {
             brandName: 'EVA',
             logoUrl: null,
+            logoNeedsBackplate: false,
             accent: SPORT_500,
             ember: EMBER_500,
             displayFont: 'system-ui, sans-serif',
@@ -116,7 +140,12 @@ export function readShareCardBrand(): ShareCardBrand {
     }
     const root = document.querySelector('[data-brand-name]')
     const brandName = root?.getAttribute('data-brand-name')?.trim() || 'EVA'
-    const logoUrl = root?.getAttribute('data-logo-dark')?.trim() || null
+    // Fallback en cadena: logo dark (para fondo oscuro) → logo claro (data-logo-url, con backplate) →
+    // inicial. El layout /c emite `data-logo-dark` solo si el coach subió su versión dark.
+    const { logoUrl, logoNeedsBackplate } = resolveShareCardLogo(
+        root?.getAttribute('data-logo-dark'),
+        root?.getAttribute('data-logo-url')
+    )
 
     const cs = getComputedStyle(document.documentElement)
     const accent = cs.getPropertyValue('--theme-primary').trim() || cs.getPropertyValue('--sport-500').trim() || SPORT_500
@@ -135,7 +164,7 @@ export function readShareCardBrand(): ShareCardBrand {
         /* fallback stack */
     }
 
-    return { brandName, logoUrl, accent, ember, displayFont }
+    return { brandName, logoUrl, logoNeedsBackplate, accent, ember, displayFont }
 }
 
 /** Carga una imagen con CORS habilitado; si falla (403/CORS/red) resuelve null → fallback solo-texto. */
@@ -147,6 +176,184 @@ function loadImage(url: string): Promise<HTMLImageElement | null> {
         img.onerror = () => resolve(null)
         img.src = url
     })
+}
+
+/**
+ * Dibuja el logo del coach dentro de un chip redondeado. Si `needsBackplate` (es el logo CLARO usado
+ * como fallback porque no hay versión dark), se pinta sobre un chip BLANCO con padding para que no se
+ * pierda sobre el fondo oscuro de la card. Si es un logo pensado para dark (o el ícono EVA), se dibuja
+ * a sangre dentro del chip.
+ */
+function drawLogoChip(
+    ctx: CanvasRenderingContext2D,
+    logo: HTMLImageElement,
+    x: number,
+    y: number,
+    size: number,
+    radius: number,
+    needsBackplate: boolean
+): void {
+    ctx.save()
+    if (needsBackplate) {
+        ctx.beginPath()
+        ctx.roundRect(x, y, size, size, radius)
+        ctx.fillStyle = '#ffffff'
+        ctx.fill()
+        const pad = Math.round(size * 0.14)
+        const inner = size - pad * 2
+        const innerR = Math.max(4, radius - pad)
+        ctx.beginPath()
+        ctx.roundRect(x + pad, y + pad, inner, inner, innerR)
+        ctx.clip()
+        ctx.drawImage(logo, x + pad, y + pad, inner, inner)
+    } else {
+        ctx.beginPath()
+        ctx.roundRect(x, y, size, size, radius)
+        ctx.clip()
+        ctx.drawImage(logo, x, y, size, size)
+    }
+    ctx.restore()
+}
+
+/** Motivos de las cards, dibujados como paths vectoriales (cero emoji → cero tofu en <canvas>). */
+type ShareCardIcon = 'trophy' | 'progress' | 'flame' | 'calendar' | 'barbell' | 'barchart'
+
+/**
+ * Íconos vectoriales que reemplazan a los emojis (que en <canvas> rasterizan como tofu o con estilos
+ * inconsistentes entre plataformas). Se dibujan centrados en (cx, cy) dentro de un box de lado `size`.
+ * Aísla su estado con save/restore para no filtrar lineWidth/strokeStyle a los draws de texto vecinos.
+ */
+function drawVectorIcon(
+    ctx: CanvasRenderingContext2D,
+    name: ShareCardIcon,
+    cx: number,
+    cy: number,
+    size: number,
+    color: string
+): void {
+    const s = size
+    ctx.save()
+    ctx.fillStyle = color
+    ctx.strokeStyle = color
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
+    switch (name) {
+        case 'flame': {
+            ctx.beginPath()
+            ctx.moveTo(cx, cy - 0.5 * s)
+            ctx.bezierCurveTo(cx + 0.08 * s, cy - 0.22 * s, cx + 0.36 * s, cy - 0.16 * s, cx + 0.3 * s, cy + 0.14 * s)
+            ctx.bezierCurveTo(cx + 0.27 * s, cy + 0.4 * s, cx + 0.02 * s, cy + 0.5 * s, cx, cy + 0.5 * s)
+            ctx.bezierCurveTo(cx - 0.3 * s, cy + 0.48 * s, cx - 0.34 * s, cy + 0.14 * s, cx - 0.2 * s, cy - 0.02 * s)
+            ctx.bezierCurveTo(cx - 0.12 * s, cy - 0.14 * s, cx - 0.16 * s, cy - 0.3 * s, cx, cy - 0.5 * s)
+            ctx.closePath()
+            ctx.fill()
+            break
+        }
+        case 'trophy': {
+            // Copa
+            ctx.beginPath()
+            ctx.moveTo(cx - 0.26 * s, cy - 0.42 * s)
+            ctx.lineTo(cx + 0.26 * s, cy - 0.42 * s)
+            ctx.lineTo(cx + 0.22 * s, cy - 0.16 * s)
+            ctx.quadraticCurveTo(cx + 0.2 * s, cy + 0.04 * s, cx, cy + 0.08 * s)
+            ctx.quadraticCurveTo(cx - 0.2 * s, cy + 0.04 * s, cx - 0.22 * s, cy - 0.16 * s)
+            ctx.closePath()
+            ctx.fill()
+            // Asas
+            ctx.lineWidth = Math.max(3, 0.055 * s)
+            ctx.beginPath()
+            ctx.moveTo(cx - 0.26 * s, cy - 0.38 * s)
+            ctx.bezierCurveTo(cx - 0.46 * s, cy - 0.36 * s, cx - 0.44 * s, cy - 0.1 * s, cx - 0.22 * s, cy - 0.12 * s)
+            ctx.stroke()
+            ctx.beginPath()
+            ctx.moveTo(cx + 0.26 * s, cy - 0.38 * s)
+            ctx.bezierCurveTo(cx + 0.46 * s, cy - 0.36 * s, cx + 0.44 * s, cy - 0.1 * s, cx + 0.22 * s, cy - 0.12 * s)
+            ctx.stroke()
+            // Tallo + base
+            ctx.fillRect(cx - 0.05 * s, cy + 0.06 * s, 0.1 * s, 0.16 * s)
+            ctx.beginPath()
+            ctx.roundRect(cx - 0.22 * s, cy + 0.22 * s, 0.44 * s, 0.12 * s, 0.04 * s)
+            ctx.fill()
+            break
+        }
+        case 'calendar': {
+            const w = 0.78 * s
+            const h = 0.72 * s
+            const x = cx - w / 2
+            const y = cy - h / 2 + 0.05 * s
+            const r = 0.08 * s
+            ctx.lineWidth = Math.max(3, 0.055 * s)
+            ctx.beginPath()
+            ctx.roundRect(x, y, w, h, r)
+            ctx.stroke()
+            // Banda superior (solo esquinas de arriba redondeadas)
+            ctx.beginPath()
+            ctx.roundRect(x, y, w, 0.2 * s, [r, r, 0, 0])
+            ctx.fill()
+            // Anillas
+            ctx.fillRect(cx - 0.22 * s, y - 0.08 * s, 0.05 * s, 0.14 * s)
+            ctx.fillRect(cx + 0.17 * s, y - 0.08 * s, 0.05 * s, 0.14 * s)
+            // Puntos (días)
+            const dotR = 0.035 * s
+            for (const py of [y + 0.36 * s, y + 0.54 * s]) {
+                for (const px of [cx - 0.2 * s, cx, cx + 0.2 * s]) {
+                    ctx.beginPath()
+                    ctx.arc(px, py, dotR, 0, Math.PI * 2)
+                    ctx.fill()
+                }
+            }
+            break
+        }
+        case 'barbell': {
+            ctx.lineWidth = Math.max(3, 0.08 * s)
+            ctx.beginPath()
+            ctx.moveTo(cx - 0.32 * s, cy)
+            ctx.lineTo(cx + 0.32 * s, cy)
+            ctx.stroke()
+            const plate = (px: number, halfH: number, pw: number) => {
+                ctx.beginPath()
+                ctx.roundRect(px, cy - halfH, pw, halfH * 2, 0.03 * s)
+                ctx.fill()
+            }
+            plate(cx - 0.26 * s, 0.22 * s, 0.1 * s)
+            plate(cx + 0.16 * s, 0.22 * s, 0.1 * s)
+            plate(cx - 0.38 * s, 0.15 * s, 0.08 * s)
+            plate(cx + 0.3 * s, 0.15 * s, 0.08 * s)
+            break
+        }
+        case 'barchart': {
+            const bw = 0.16 * s
+            const baseY = cy + 0.34 * s
+            const bars = [
+                { x: cx - 0.3 * s, h: 0.32 * s },
+                { x: cx - 0.08 * s, h: 0.52 * s },
+                { x: cx + 0.14 * s, h: 0.72 * s },
+            ]
+            for (const b of bars) {
+                ctx.beginPath()
+                ctx.roundRect(b.x, baseY - b.h, bw, b.h, 0.03 * s)
+                ctx.fill()
+            }
+            break
+        }
+        case 'progress': {
+            ctx.lineWidth = Math.max(3, 0.09 * s)
+            ctx.beginPath()
+            ctx.moveTo(cx - 0.38 * s, cy + 0.24 * s)
+            ctx.lineTo(cx - 0.12 * s, cy - 0.02 * s)
+            ctx.lineTo(cx + 0.06 * s, cy + 0.12 * s)
+            ctx.lineTo(cx + 0.36 * s, cy - 0.24 * s)
+            ctx.stroke()
+            // Punta de flecha
+            ctx.beginPath()
+            ctx.moveTo(cx + 0.16 * s, cy - 0.24 * s)
+            ctx.lineTo(cx + 0.38 * s, cy - 0.26 * s)
+            ctx.lineTo(cx + 0.34 * s, cy - 0.04 * s)
+            ctx.stroke()
+            break
+        }
+    }
+    ctx.restore()
 }
 
 /** Normaliza cualquier color CSS (hex, rgb(), nombre) a {r,g,b} usando el propio canvas. */
@@ -251,21 +458,19 @@ function drawCardBase(ctx: CanvasRenderingContext2D, glow: { r: number; g: numbe
     ctx.fillRect(0, 0, WIDTH, 960)
 }
 
-/** Header de identidad de marca: logo (o inicial), nombre en mayúsculas y badge emoji. El logo se
- * precarga UNA vez por render y se comparte con el footer (evita un segundo fetch). */
+/** Header de identidad de marca: logo (o inicial), nombre en mayúsculas y badge de motivo (ícono
+ * vectorial, cero emoji). El logo se precarga UNA vez por render y se comparte con el footer (evita un
+ * segundo fetch). El logo claro-fallback se pinta sobre chip blanco (brand.logoNeedsBackplate). */
 function drawBrandHeader(
     ctx: CanvasRenderingContext2D,
     brand: ShareCardBrand,
-    opts: { display: string; accent: string; emoji: string; logo: HTMLImageElement | null }
+    opts: { display: string; accent: string; icon: ShareCardIcon; iconColor: string; logo: HTMLImageElement | null }
 ): void {
-    const { display, accent, emoji, logo } = opts
-    ctx.save()
+    const { display, accent, icon, iconColor, logo } = opts
     if (logo) {
-        ctx.beginPath()
-        ctx.roundRect(PAD_X, 88, 76, 76, 20)
-        ctx.clip()
-        ctx.drawImage(logo, PAD_X, 88, 76, 76)
+        drawLogoChip(ctx, logo, PAD_X, 88, 76, 20, brand.logoNeedsBackplate)
     } else {
+        ctx.save()
         ctx.beginPath()
         ctx.roundRect(PAD_X, 88, 76, 76, 20)
         ctx.fillStyle = accent
@@ -275,22 +480,19 @@ function drawBrandHeader(
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.fillText(brand.brandName.charAt(0).toUpperCase(), PAD_X + 38, 88 + 40)
-        ctx.textBaseline = 'alphabetic'
+        ctx.restore()
     }
-    ctx.restore()
 
     ctx.fillStyle = 'rgba(255,255,255,0.88)'
     ctx.font = `800 34px ${display}`
     ctx.textAlign = 'left'
+    ctx.textBaseline = 'alphabetic'
     ctx.letterSpacing = '1px'
     ctx.fillText(brand.brandName.toUpperCase(), PAD_X + 76 + 24, 140)
     ctx.letterSpacing = '0px'
 
-    // Badge (emoji, coloreado por la fuente de sistema).
-    ctx.textAlign = 'right'
-    ctx.font = '92px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif'
-    ctx.fillText(emoji, WIDTH - PAD_X, 172)
-    ctx.textAlign = 'left'
+    // Badge de motivo: ícono vectorial (reemplaza al emoji para evitar tofu en canvas).
+    drawVectorIcon(ctx, icon, WIDTH - PAD_X - 42, 126, 84, iconColor)
 }
 
 /**
@@ -318,13 +520,12 @@ function drawBrandFooter(
     const chip = 52
 
     // Chip con el logo del coach (o su inicial sobre el acento) a la izquierda.
-    ctx.save()
-    ctx.beginPath()
-    ctx.roundRect(PAD_X, cy - chip / 2, chip, chip, 15)
     if (logo) {
-        ctx.clip()
-        ctx.drawImage(logo, PAD_X, cy - chip / 2, chip, chip)
+        drawLogoChip(ctx, logo, PAD_X, cy - chip / 2, chip, 15, brand.logoNeedsBackplate)
     } else {
+        ctx.save()
+        ctx.beginPath()
+        ctx.roundRect(PAD_X, cy - chip / 2, chip, chip, 15)
         ctx.fillStyle = accent
         ctx.fill()
         ctx.fillStyle = '#ffffff'
@@ -332,8 +533,8 @@ function drawBrandFooter(
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.fillText(brand.brandName.charAt(0).toUpperCase(), PAD_X + chip / 2, cy + 1)
+        ctx.restore()
     }
-    ctx.restore()
 
     const textX = PAD_X + chip + 22
 
@@ -368,9 +569,9 @@ function drawStatTile(
     y: number,
     w: number,
     h: number,
-    opts: { emoji: string; value: string; label: string; valueColor: string; display: string }
+    opts: { icon: ShareCardIcon; value: string; label: string; valueColor: string; display: string }
 ): void {
-    const { emoji, value, label, valueColor, display } = opts
+    const { icon, value, label, valueColor, display } = opts
 
     ctx.fillStyle = 'rgba(255,255,255,0.05)'
     ctx.beginPath()
@@ -385,10 +586,10 @@ function drawStatTile(
     const cx = x + w / 2
     const maxW = w - 28
 
+    // Ícono de motivo (vectorial, cero emoji), coloreado como el valor para amarrar el tile.
     ctx.textAlign = 'center'
     ctx.textBaseline = 'alphabetic'
-    ctx.font = '46px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif'
-    ctx.fillText(emoji, cx, y + h * 0.32)
+    drawVectorIcon(ctx, icon, cx, y + h * 0.24, 52, valueColor)
 
     // Valor con auto-fit al ancho del tile.
     let fs = 64
@@ -442,7 +643,7 @@ export async function renderWorkoutPRCardToBlob(data: WorkoutPRCardData, brand: 
     const logo = brand.logoUrl ? await loadImage(brand.logoUrl) : null
 
     drawCardBase(ctx, toRgb(ctx, accent))
-    drawBrandHeader(ctx, brand, { display, accent, emoji: '🏆', logo })
+    drawBrandHeader(ctx, brand, { display, accent, icon: 'trophy', iconColor: accent, logo })
 
     // ── Bloque central ──
     ctx.textAlign = 'left'
@@ -516,7 +717,7 @@ export async function renderProgressCardToBlob(data: ProgressCardData, brand: Sh
     const logo = brand.logoUrl ? await loadImage(brand.logoUrl) : null
 
     drawCardBase(ctx, toRgb(ctx, accent))
-    drawBrandHeader(ctx, brand, { display, accent, emoji: '💪', logo })
+    drawBrandHeader(ctx, brand, { display, accent, icon: 'progress', iconColor: accent, logo })
 
     // ── Bloque central ──
     ctx.textAlign = 'left'
@@ -597,7 +798,7 @@ export async function renderStreakCardToBlob(data: StreakCardData, brand: ShareC
 
     const emberRgb = toRgb(ctx, ember)
     drawCardBase(ctx, emberRgb)
-    drawBrandHeader(ctx, brand, { display, accent, emoji: '🔥', logo })
+    drawBrandHeader(ctx, brand, { display, accent, icon: 'flame', iconColor: ember, logo })
 
     const streak = Math.max(0, Math.round(data.streak))
 
@@ -644,7 +845,7 @@ export async function renderStreakCardToBlob(data: StreakCardData, brand: ShareC
     // Contexto del mes: entrenos ya registrados (dato disponible del perfil, sin query nueva).
     const monthSessions = Math.max(0, Math.round(data.sessionsThisMonth ?? 0))
     if (monthSessions > 0) {
-        drawPill(ctx, PAD_X, 1012, `🏋️ ${monthSessions} ${monthSessions === 1 ? 'entreno' : 'entrenos'} este mes`, {
+        drawPill(ctx, PAD_X, 1012, `${monthSessions} ${monthSessions === 1 ? 'entreno' : 'entrenos'} este mes`, {
             font: `600 30px ${display}`,
             textColor: 'rgba(255,255,255,0.82)',
             bg: 'rgba(255,255,255,0.06)',
@@ -682,7 +883,7 @@ export async function renderMonthlySummaryCardToBlob(
     const logo = brand.logoUrl ? await loadImage(brand.logoUrl) : null
 
     drawCardBase(ctx, toRgb(ctx, accent))
-    drawBrandHeader(ctx, brand, { display, accent, emoji: '📅', logo })
+    drawBrandHeader(ctx, brand, { display, accent, icon: 'calendar', iconColor: accent, logo })
 
     const sessions = Math.max(0, data.sessions)
     const streak = Math.max(0, Math.round(data.streak))
@@ -720,10 +921,10 @@ export async function renderMonthlySummaryCardToBlob(
     const tileW = (WIDTH - PAD_X * 2 - gap * 2) / 3
     const tileH = 244
     const tileY = 796
-    const tiles = [
-        { emoji: '🏋️', value: fmtVolume(data.volumeKg), label: 'Volumen', valueColor: accent },
-        { emoji: '📊', value: avgStr, label: 'Prom/sesión', valueColor: accent },
-        { emoji: '🔥', value: String(streak), label: streak === 1 ? 'Día de racha' : 'Racha', valueColor: ember },
+    const tiles: { icon: ShareCardIcon; value: string; label: string; valueColor: string }[] = [
+        { icon: 'barbell', value: fmtVolume(data.volumeKg), label: 'Volumen', valueColor: accent },
+        { icon: 'barchart', value: avgStr, label: 'Prom/sesión', valueColor: accent },
+        { icon: 'flame', value: String(streak), label: streak === 1 ? 'Día de racha' : 'Racha', valueColor: ember },
     ]
     tiles.forEach((t, i) => {
         const x = PAD_X + i * (tileW + gap)
