@@ -11,7 +11,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { BRAND_APP_ICON } from '@/lib/brand-assets'
 import { cn } from '@/lib/utils'
-import { updateTeamBrandAction } from '../_actions/team.actions'
+import { compressLogo, putToSignedUrl } from '@/lib/uploads/logo-upload.client'
+import { updateTeamBrandAction, createTeamLogoUploadUrlAction } from '../_actions/team.actions'
 
 export type TeamBrandValues = {
     name: string
@@ -143,7 +144,7 @@ function ColorInput({ label, value, onChange, fallback, disabled, hint }: {
 }
 
 /** Dropzone de logo del kit (teams-equipo.jsx:24-40): 76px, logo centrado + "x" para quitar el pick local. */
-function LogoDrop({ label, hint, currentUrl, previewUrl, removed, onFile, onRemove, disabled, dark, inputName }: {
+function LogoDrop({ label, hint, currentUrl, previewUrl, removed, onFile, onRemove, disabled, dark, optimizing = false, error = null }: {
     label: string
     hint?: string
     currentUrl: string | null
@@ -153,7 +154,8 @@ function LogoDrop({ label, hint, currentUrl, previewUrl, removed, onFile, onRemo
     onRemove: () => void
     disabled: boolean
     dark?: boolean
-    inputName: string
+    optimizing?: boolean
+    error?: string | null
 }) {
     const ref = useRef<HTMLInputElement>(null)
     const shown = previewUrl ?? (removed ? null : currentUrl)
@@ -176,7 +178,7 @@ function LogoDrop({ label, hint, currentUrl, previewUrl, removed, onFile, onRemo
             <button
                 type="button"
                 onClick={() => ref.current?.click()}
-                disabled={disabled}
+                disabled={disabled || optimizing}
                 className={cn(
                     'relative flex h-[76px] w-full items-center justify-center overflow-hidden rounded-control p-2',
                     shown
@@ -194,7 +196,7 @@ function LogoDrop({ label, hint, currentUrl, previewUrl, removed, onFile, onRemo
                         <span className="text-[10.5px] font-semibold">Subir</span>
                     </span>
                 )}
-                {previewUrl && !disabled && (
+                {previewUrl && !disabled && !optimizing && (
                     <span
                         aria-label="Quitar imagen"
                         onClick={(e) => {
@@ -207,17 +209,23 @@ function LogoDrop({ label, hint, currentUrl, previewUrl, removed, onFile, onRemo
                         <X className="h-3 w-3" />
                     </span>
                 )}
+                {optimizing && (
+                    <span className="absolute inset-0 z-10 flex items-center justify-center gap-1.5 bg-black/55 text-[11px] font-semibold text-white">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Optimizando…
+                    </span>
+                )}
             </button>
             <input
                 ref={ref}
-                name={inputName}
                 type="file"
                 accept="image/jpeg,image/png"
                 disabled={disabled}
                 onChange={(e) => onFile(e.target.files?.[0] ?? null)}
                 className="hidden"
             />
-            {hint && <div className="mt-[5px] text-[10.5px] text-subtle">{hint}</div>}
+            {error
+                ? <div className="mt-[5px] text-[10.5px] font-semibold text-[var(--danger-600)]">{error}</div>
+                : hint && <div className="mt-[5px] text-[10.5px] text-subtle">{hint}</div>}
         </div>
     )
 }
@@ -261,10 +269,14 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
     const [saved, setSaved] = useState<Draft>(() => toDraft(brand))
     const [logoPreview, setLogoPreview] = useState<string | null>(null)
     const [logoDarkPreview, setLogoDarkPreview] = useState<string | null>(null)
+    const [logoFile, setLogoFile] = useState<File | null>(null)
+    const [logoDarkFile, setLogoDarkFile] = useState<File | null>(null)
     const [logoPicked, setLogoPicked] = useState(false)
     const [logoDarkPicked, setLogoDarkPicked] = useState(false)
     const [logoRemoved, setLogoRemoved] = useState(false)
     const [logoDarkRemoved, setLogoDarkRemoved] = useState(false)
+    const [logoBusy, setLogoBusy] = useState<{ light?: boolean; dark?: boolean }>({})
+    const [logoErr, setLogoErr] = useState<{ light?: string | null; dark?: string | null }>({})
     const [previewMode, setPreviewMode] = useState<'light' | 'dark'>('light')
     const [feedback, setFeedback] = useState<{ type: 'error' | 'success'; msg: string } | null>(null)
     const formRef = useRef<HTMLFormElement>(null)
@@ -315,12 +327,54 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
     const showSplashText = draft.use_custom_loader && (!!draft.loader_text || draft.loader_icon_mode === 'text')
     const splashLabel = (draft.loader_text || (draft.name || 'EVA')).toUpperCase().slice(0, 12)
 
+    // Al SELECCIONAR: comprimir/redimensionar a 512×512 PNG en el navegador y guardar el File liviano
+    // para la subida directa en submit. Errores de imagen se muestran inline en el slot.
+    const pickLogo = async (f: File | null, which: 'light' | 'dark') => {
+        const setPrev = which === 'light' ? setLogoPreview : setLogoDarkPreview
+        const setFile = which === 'light' ? setLogoFile : setLogoDarkFile
+        const setPicked = which === 'light' ? setLogoPicked : setLogoDarkPicked
+        const setRemoved = which === 'light' ? setLogoRemoved : setLogoDarkRemoved
+        if (!f) { setPrev(null); setFile(null); setPicked(false); setLogoErr((e) => ({ ...e, [which]: null })); return }
+        if (f.type && !f.type.startsWith('image/')) { setLogoErr((e) => ({ ...e, [which]: 'Elegí una imagen (PNG o JPG).' })); return }
+        if (f.size > 15 * 1024 * 1024) { setLogoErr((e) => ({ ...e, [which]: 'La imagen es muy pesada (máx 15 MB).' })); return }
+        setLogoErr((e) => ({ ...e, [which]: null }))
+        setLogoBusy((b) => ({ ...b, [which]: true }))
+        try {
+            const compressed = await compressLogo(f)
+            setFile(compressed)
+            setPrev(URL.createObjectURL(compressed))
+            setPicked(true)
+            setRemoved(false)
+        } catch {
+            setLogoErr((e) => ({ ...e, [which]: 'No pudimos procesar esta imagen. Probá con un PNG o JPG.' }))
+        } finally {
+            setLogoBusy((b) => ({ ...b, [which]: false }))
+        }
+    }
+
     function submit(fd: FormData) {
+        if (logoBusy.light || logoBusy.dark) { setFeedback({ type: 'error', msg: 'Esperá a que termine de optimizar el logo.' }); return }
         setFeedback(null)
         startTransition(async () => {
+            // Subir logos DIRECTO a Storage (signed URL, bypass Cloudflare WAF) y pasar los paths al
+            // action — el form ya no manda los bytes (inputs sin name), así que el POST es liviano.
+            if (logoFile) {
+                const t = await createTeamLogoUploadUrlAction(teamId, { variant: 'light', contentType: logoFile.type || 'image/png', size: logoFile.size })
+                if (!t.success) { setFeedback({ type: 'error', msg: t.error }); return }
+                if (!(await putToSignedUrl(t.signedUrl, logoFile))) { setFeedback({ type: 'error', msg: 'No se pudo subir el logo claro. Reintentá.' }); return }
+                fd.set('logo_path', t.path)
+            }
+            if (logoDarkFile) {
+                const t = await createTeamLogoUploadUrlAction(teamId, { variant: 'dark', contentType: logoDarkFile.type || 'image/png', size: logoDarkFile.size })
+                if (!t.success) { setFeedback({ type: 'error', msg: t.error }); return }
+                if (!(await putToSignedUrl(t.signedUrl, logoDarkFile))) { setFeedback({ type: 'error', msg: 'No se pudo subir el logo oscuro. Reintentá.' }); return }
+                fd.set('logo_dark_path', t.path)
+            }
             const res = await updateTeamBrandAction(teamId, fd)
             if (res?.error) { setFeedback({ type: 'error', msg: res.error }); return }
             setSaved(draft)
+            setLogoFile(null)
+            setLogoDarkFile(null)
             setLogoPicked(false)
             setLogoDarkPicked(false)
             setLogoRemoved(false)
@@ -443,22 +497,21 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                 <div className="mt-3.5 flex gap-3">
                     <LogoDrop
                         label="Logo claro"
-                        hint="PNG/JPEG · 512×512 · ≤2 MB"
+                        hint="PNG/JPEG · se ajusta a 512×512"
                         currentUrl={brand.logo_url}
                         previewUrl={logoPreview}
                         removed={logoRemoved}
-                        inputName="logo"
                         disabled={dis}
+                        optimizing={logoBusy.light}
+                        error={logoErr.light}
                         onRemove={() => {
                             setLogoRemoved(true)
                             setLogoPreview(null)
+                            setLogoFile(null)
                             setLogoPicked(false)
+                            setLogoErr((e) => ({ ...e, light: null }))
                         }}
-                        onFile={(f) => {
-                            setLogoPreview(f ? URL.createObjectURL(f) : null)
-                            setLogoPicked(!!f)
-                            if (f) setLogoRemoved(false)
-                        }}
+                        onFile={(f) => { void pickLogo(f, 'light') }}
                     />
                     <LogoDrop
                         label="Logo oscuro"
@@ -466,19 +519,18 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                         currentUrl={brand.logo_url_dark}
                         previewUrl={logoDarkPreview}
                         removed={logoDarkRemoved}
-                        inputName="logo_dark"
                         disabled={dis}
                         dark
+                        optimizing={logoBusy.dark}
+                        error={logoErr.dark}
                         onRemove={() => {
                             setLogoDarkRemoved(true)
                             setLogoDarkPreview(null)
+                            setLogoDarkFile(null)
                             setLogoDarkPicked(false)
+                            setLogoErr((e) => ({ ...e, dark: null }))
                         }}
-                        onFile={(f) => {
-                            setLogoDarkPreview(f ? URL.createObjectURL(f) : null)
-                            setLogoDarkPicked(!!f)
-                            if (f) setLogoDarkRemoved(false)
-                        }}
+                        onFile={(f) => { void pickLogo(f, 'dark') }}
                     />
                 </div>
 
@@ -682,10 +734,13 @@ export function TeamBrandStudio({ teamId, teamSlug, brand, canEdit }: Props) {
                             setDraft(saved)
                             setLogoPreview(null)
                             setLogoDarkPreview(null)
+                            setLogoFile(null)
+                            setLogoDarkFile(null)
                             setLogoPicked(false)
                             setLogoDarkPicked(false)
                             setLogoRemoved(false)
                             setLogoDarkRemoved(false)
+                            setLogoErr({})
                             formRef.current?.reset()
                         }}
                     >
