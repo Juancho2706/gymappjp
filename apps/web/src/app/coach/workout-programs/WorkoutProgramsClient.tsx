@@ -516,7 +516,7 @@ export function WorkoutProgramsClient({
                         )}
                     </div>
                 )}
-                <div className="max-h-[264px] space-y-2 overflow-y-auto overscroll-contain">
+                <div className="space-y-2 md:max-h-[264px] md:overflow-y-auto md:overscroll-contain">
                     {filteredAssignClients.length === 0 ? (
                         <div className="py-6 text-center text-sm text-muted">
                             No se encontraron alumnos.
