@@ -8,10 +8,14 @@
  *
  * Cobertura (fix CEO 2026-07-04, screenshots): el contenedor es **full-bleed vertical y
  * horizontal** para cubrir el dashboard ENTERO sin cortes visibles:
- *  - `-top-28 md:top-0` + `bottom-0` → alto = alto real del dashboard; en móvil se extiende
+ *  - `-top-28 md:-top-10` + `bottom-0` → alto = alto real del dashboard; en móvil se extiende
  *    112px por ENCIMA del contenedor para cubrir el padding-top del wrapper + safe-area y
- *    tocar el borde superior de la pantalla (en desktop el topbar opaco cubre esa zona)
- *    (antes `inset-y-0`, y antes un `h-[420px]` fijo que
+ *    tocar el borde superior de la pantalla. En DESKTOP `-top-10` (−40px) sube el glow para
+ *    cancelar el `md:py-10` (40px) de la reading column de CoachMainWrapper (su padding-top
+ *    empujaba el glow 40px bajo la línea del topbar = strip oscuro visible entre el color y el
+ *    `border-b` del CoachTopBar; fix CEO 2026-07-04 2da pasada). Ahora el morado llega hasta la
+ *    línea. El `<main>` (overflow-y-auto, md:pt-0) clipea arriba justo bajo el topbar → sin bleed.
+ *    (antes `md:top-0`, antes `inset-y-0`, y antes un `h-[420px]` fijo que
  *    cortaba el gradiente a media altura = línea horizontal dura).
  *  - `left-1/2 w-screen -translate-x-1/2` → escapa el gutter horizontal del wrapper
  *    (CoachMainWrapper px-4/md:px-8) y llega a los bordes laterales de la pantalla en móvil.
@@ -32,7 +36,7 @@
 export function AmbientBrandGlow() {
     return (
         <div
-            className="pointer-events-none absolute -top-28 bottom-0 left-1/2 -z-10 w-screen -translate-x-1/2 overflow-hidden md:top-0"
+            className="pointer-events-none absolute -top-28 bottom-0 left-1/2 -z-10 w-screen -translate-x-1/2 overflow-hidden md:-top-10"
             aria-hidden
         >
             {/* Wash primario — bloom central sobre el área hero. Centro ~180px bajo el top
