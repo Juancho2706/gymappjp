@@ -254,7 +254,7 @@ export function PageLoader() {
                 color: '#8A8A93',
               }}
             >
-              // preparando tu espacio
+              {'// preparando tu espacio'}
             </span>
             <span
               ref={pctRef}

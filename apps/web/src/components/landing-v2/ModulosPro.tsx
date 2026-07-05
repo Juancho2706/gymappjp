@@ -144,7 +144,7 @@ export default function ModulosPro() {
             transition: 'color 0.2s linear',
           }}
         >
-          // 02 · módulos profesionales
+          {'// 02 · módulos profesionales'}
         </div>
         <h2
           style={{
@@ -334,7 +334,7 @@ export default function ModulosPro() {
                   color: '#8A8A93',
                 }}
               >
-                // zonas de FC · alumno
+                {'// zonas de FC · alumno'}
               </span>
               <span style={{ fontFamily: MONO, fontSize: '9.5px', color: '#8A8A93' }}>
                 FC máx 186
@@ -637,7 +637,7 @@ export default function ModulosPro() {
                   color: '#8A8A93',
                 }}
               >
-                // fraccionamiento en 5 componentes · 78 kg
+                {'// fraccionamiento en 5 componentes · 78 kg'}
               </span>
               <div
                 style={{
@@ -809,7 +809,7 @@ export default function ModulosPro() {
                   color: '#8A8A93',
                 }}
               >
-                // app del alumno
+                {'// app del alumno'}
               </span>
               <span style={{ fontFamily: MONO, fontSize: '9.5px', color: '#8A8A93' }}>
                 1.860 kcal · día entreno

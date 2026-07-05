@@ -102,7 +102,7 @@ export default function TeamsSection() {
               transition: 'color 0.2s linear',
             }}
           >
-            // modo teams
+            {'// modo teams'}
           </div>
           <h2
             style={{

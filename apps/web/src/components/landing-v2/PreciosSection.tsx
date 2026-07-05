@@ -266,7 +266,7 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                         flexDirection: 'column',
                     }}
                 >
-                    <div style={planKicker}>// free</div>
+                    <div style={planKicker}>{'// free'}</div>
                     <h3 style={planName}>Free</h3>
                     <p style={planSub}>
                         {t('pf_sub', 'Prueba EVA sin tarjeta. Hasta 3 alumnos, para siempre.')}
@@ -362,7 +362,7 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                             transition: 'color 0.2s linear',
                         }}
                     >
-                        // pro
+                        {'// pro'}
                     </div>
                     <h3 style={{ ...planName, position: 'relative' }}>Pro</h3>
                     <p style={{ ...planSub, position: 'relative' }}>
@@ -435,7 +435,7 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                         flexDirection: 'column',
                     }}
                 >
-                    <div style={planKicker}>// elite</div>
+                    <div style={planKicker}>{'// elite'}</div>
                     <h3 style={planName}>Elite</h3>
                     <p style={planSub}>
                         {t('pe_sub', 'Para negocios consolidados con alto volumen de alumnos.')}

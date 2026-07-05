@@ -339,7 +339,7 @@ function MarcaShowcase() {
                 {/* today */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span style={{ fontFamily: FONT_MONO, fontSize: 8.5, color: '#8A8A93', letterSpacing: '0.18em', textTransform: 'uppercase' }}>
-                    // hoy · martes
+                    {'// hoy · martes'}
                   </span>
                   <span style={{ fontFamily: FONT_DISPLAY, fontWeight: 800, fontSize: 23, letterSpacing: '-0.03em' }}>Push Day · A</span>
                 </div>

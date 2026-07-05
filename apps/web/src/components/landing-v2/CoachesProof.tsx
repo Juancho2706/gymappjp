@@ -125,7 +125,7 @@ export default function CoachesProof() {
             transition: 'color 0.2s linear',
           }}
         >
-          // coaches que ya operan con eva
+          {'// coaches que ya operan con eva'}
         </div>
         <h2
           style={{

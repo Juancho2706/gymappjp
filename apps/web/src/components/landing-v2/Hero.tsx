@@ -381,7 +381,7 @@ function Hero() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '18px 20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontFamily: FONT_MONO, fontSize: 9.5, color: '#8A8A93', letterSpacing: '0.18em', textTransform: 'uppercase' }}>
-                  // centro de control · métricas en vivo
+                  {'// centro de control · métricas en vivo'}
                 </span>
                 <span
                   style={{

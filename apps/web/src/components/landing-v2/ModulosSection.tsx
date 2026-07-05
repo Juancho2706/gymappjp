@@ -190,7 +190,7 @@ export default function ModulosSection({ exerciseCount }: { exerciseCount: numbe
           marginBottom: '40px',
         }}
       >
-        <div style={kicker}>// 01 · panel coach</div>
+        <div style={kicker}>{'// 01 · panel coach'}</div>
         <h2
           style={{
             fontFamily: DISPLAY,

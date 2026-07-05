@@ -96,7 +96,7 @@ export function LandingFooter() {
           letterSpacing: '0.08em',
         }}
       >
-        // hecho en chile · pwa instalable · sin tracking de terceros
+        {'// hecho en chile · pwa instalable · sin tracking de terceros'}
       </div>
     </footer>
   )
