@@ -338,26 +338,40 @@ export async function updateTeamMemberRoleAction(teamId: string, memberId: strin
 const HEX_RE = /^#[0-9a-fA-F]{6}$/
 const LOADER_ICON_MODES = new Set(['logo', 'text', 'none', 'eva'])
 
-async function uploadTeamImage(
-    admin: Awaited<ReturnType<typeof import('@/lib/supabase/server').createClient>>,
+const TEAM_LOGO_CONTENT_TYPES: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }
+
+export type TeamLogoUploadUrlResult =
+    | { success: true; signedUrl: string; path: string }
+    | { success?: false; error: string }
+
+/**
+ * Signed upload URL para el logo del TEAM — el cliente comprime a 512×512 PNG y sube DIRECTO a
+ * Storage (bucket logos, carpeta teams/<id>), PUT a supabase.co. Reemplaza el POST multipart que el
+ * WAF managed de Cloudflare bloqueaba con 403 (incidente 2026-07-05). Se firma con service-role
+ * (admin): el path teams/<id>/ no cae bajo auth.uid(), así que la RLS de logos no habilita al user
+ * client — por eso el team siempre subió por admin. Gate: owner/co-gestor (resolveTeamManagerContext).
+ */
+export async function createTeamLogoUploadUrlAction(
     teamId: string,
-    file: File,
-    name: string
-): Promise<{ url?: string; error?: string }> {
-    if (file.size > 2 * 1024 * 1024) return { error: 'La imagen no puede superar 2 MB.' }
-    if (!file.type.startsWith('image/')) return { error: 'Solo se permiten imágenes.' }
-    const bytes = new Uint8Array((await file.arrayBuffer()).slice(0, 4))
-    const isJpeg = bytes[0] === 0xFF && bytes[1] === 0xD8
-    const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47
-    if (!isJpeg && !isPng) return { error: 'El archivo no es una imagen válida (JPEG o PNG).' }
-    const ext = file.name.split('.').pop() ?? 'png'
-    const path = `teams/${teamId}/${name}.${ext}`
-    const { error: uploadError } = await admin.storage
+    params: { variant: 'light' | 'dark'; contentType: string; size: number }
+): Promise<TeamLogoUploadUrlResult> {
+    const ext = TEAM_LOGO_CONTENT_TYPES[params.contentType]
+    if (!ext) return { error: 'Formato no permitido. Usá PNG, JPG o WebP.' }
+    if (params.size > 2 * 1024 * 1024) return { error: 'La imagen no puede superar 2 MB.' }
+
+    const ctx = await resolveTeamManagerContext(teamId)
+    if ('error' in ctx) return { error: ctx.error }
+    const { admin } = ctx
+
+    const path = `teams/${teamId}/${params.variant === 'dark' ? 'logo-dark' : 'logo'}.${ext}`
+    const { data: signed, error } = await admin.storage
         .from('logos')
-        .upload(path, file, { upsert: true, contentType: file.type })
-    if (uploadError) return { error: 'Error al subir la imagen: ' + uploadError.message }
-    const { data: { publicUrl } } = admin.storage.from('logos').getPublicUrl(path)
-    return { url: `${publicUrl}?t=${Date.now()}` }
+        .createSignedUploadUrl(path, { upsert: true })
+    if (error || !signed) {
+        console.error('createSignedUploadUrl (team logo) error:', error)
+        return { error: 'No se pudo preparar la subida del logo. Intentá de nuevo.' }
+    }
+    return { success: true, signedUrl: signed.signedUrl, path }
 }
 
 /**
@@ -411,22 +425,22 @@ export async function updateTeamBrandAction(teamId: string, formData: FormData) 
     if (formData.has('use_custom_loader')) updates.use_custom_loader = formData.get('use_custom_loader') === 'on' || formData.get('use_custom_loader') === 'true'
     if (formData.has('neutral_tint')) updates.neutral_tint = formData.get('neutral_tint') === 'on' || formData.get('neutral_tint') === 'true'
 
-    // Logos: claro + oscuro (upload service-role tras el gate de manager; bucket logos público).
-    // "Quitar logo" (remove_logo/_dark = 'true') nulea la columna. Espejo del standalone: se deja
-    // el archivo en el bucket (huérfano) — el path es fijo (upsert), así que un re-upload lo pisa.
-    const logoFile = formData.get('logo') as File | null
-    if (logoFile && logoFile.size > 0) {
-        const up = await uploadTeamImage(admin, teamId, logoFile, 'logo')
-        if (up.error) return { error: up.error }
-        updates.logo_url = up.url!
+    // Logos: subidos DIRECTO a Storage por el cliente (signed URL, bypass Cloudflare WAF — incidente
+    // 2026-07-05). Acá solo materializamos la URL pública desde el path (validado a teams/<id>/) con
+    // el cache-buster ?t=. "Quitar logo" (remove_logo/_dark = 'true') nulea la columna. Path fijo
+    // (upsert) → un objeto por slot, sin acumular archivos.
+    const ownsTeamLogoPath = (p: string) => p.startsWith(`teams/${teamId}/`) && !p.includes('..')
+    const logoPath = (formData.get('logo_path') as string | null)?.trim()
+    if (logoPath && ownsTeamLogoPath(logoPath)) {
+        const { data: { publicUrl } } = admin.storage.from('logos').getPublicUrl(logoPath)
+        updates.logo_url = `${publicUrl}?t=${Date.now()}`
     } else if (formData.get('remove_logo') === 'true') {
         updates.logo_url = null
     }
-    const logoDarkFile = formData.get('logo_dark') as File | null
-    if (logoDarkFile && logoDarkFile.size > 0) {
-        const up = await uploadTeamImage(admin, teamId, logoDarkFile, 'logo-dark')
-        if (up.error) return { error: up.error }
-        updates.logo_url_dark = up.url!
+    const logoDarkPath = (formData.get('logo_dark_path') as string | null)?.trim()
+    if (logoDarkPath && ownsTeamLogoPath(logoDarkPath)) {
+        const { data: { publicUrl } } = admin.storage.from('logos').getPublicUrl(logoDarkPath)
+        updates.logo_url_dark = `${publicUrl}?t=${Date.now()}`
     } else if (formData.get('remove_logo_dark') === 'true') {
         updates.logo_url_dark = null
     }

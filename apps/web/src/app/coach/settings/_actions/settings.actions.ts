@@ -135,6 +135,23 @@ export async function updateBrandSettingsAction(
         updatePayload.theme_preset_key = wl3.data.theme_preset_key || null
         updatePayload.login_layout_key = wl3.data.login_layout_key || null
         updatePayload.loader_config = loaderConfigParsed // objeto jsonb limpio o null
+
+        // Logos subidos DIRECTO a Storage (bypass Cloudflare WAF, incidente 2026-07-05): el cliente
+        // sube el archivo con createLogoUploadUrlAction y manda de vuelta el PATH resultante. Acá
+        // materializamos la URL pública server-side (sin confiar en una URL del cliente) con el
+        // cache-buster ?t= que esperan todos los consumers. Ownership: el path debe vivir en la
+        // carpeta del propio coach.
+        const lightPath = (formData.get('logo_light_path') as string | null)?.trim()
+        const darkPath = (formData.get('logo_dark_path') as string | null)?.trim()
+        const ownsLogoPath = (p: string) => p.startsWith(`${user.id}/`) && !p.includes('..')
+        if (lightPath && ownsLogoPath(lightPath)) {
+            const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(lightPath)
+            updatePayload.logo_url = `${publicUrl}?t=${Date.now()}`
+        }
+        if (darkPath && ownsLogoPath(darkPath)) {
+            const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(darkPath)
+            updatePayload.logo_url_dark = `${publicUrl}?t=${Date.now()}`
+        }
     }
 
     const { error } = await supabase
@@ -146,6 +163,54 @@ export async function updateBrandSettingsAction(
 
     revalidatePath('/coach/settings')
     return { success: true }
+}
+
+// ── Logo: signed upload URL (subida DIRECTA a Storage, bypass Cloudflare WAF) ────────────────
+// Reemplaza el POST multipart de updateLogoAction, que el WAF managed de Cloudflare bloqueaba con
+// 403 (incidente 2026-07-05: "Guardando…" infinito). El coach comprime el logo a 512×512 PNG en el
+// navegador y hace PUT directo a supabase.co con esta URL firmada. Path FIJO por slot (upsert) → un
+// solo objeto por coach, sin acumular archivos (cero crecimiento de Storage). La URL pública la
+// materializa updateBrandSettingsAction con el path que devuelve esta acción.
+const LOGO_BUCKET = 'logos'
+const LOGO_CONTENT_TYPES: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }
+
+export type LogoUploadUrlResult =
+    | { success: true; signedUrl: string; path: string }
+    | { success?: false; error: string }
+
+export async function createLogoUploadUrlAction(params: {
+    variant: 'light' | 'dark'
+    contentType: string
+    size: number
+}): Promise<LogoUploadUrlResult> {
+    const ext = LOGO_CONTENT_TYPES[params.contentType]
+    if (!ext) return { error: 'Formato no permitido. Usá PNG, JPG o WebP.' }
+    if (params.size > 2 * 1024 * 1024) return { error: 'El logo no puede superar 2 MB.' }
+
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'No autenticado.' }
+
+    // Gate Pro+ (mismo que updateLogoAction): un coach < Pro no sube logo (su app cae a EVA).
+    const { data: coach } = await supabase
+        .from('coaches')
+        .select('subscription_tier')
+        .eq('id', user.id)
+        .single()
+    if (!isBrandingAllowed((coach?.subscription_tier ?? 'free') as SubscriptionTier)) {
+        return { error: 'El branding personalizado está disponible desde el plan Pro.' }
+    }
+
+    // Path fijo bajo la carpeta del coach → satisface la RLS logos_owner_insert/_update.
+    const path = `${user.id}/${params.variant === 'dark' ? 'logo-dark' : 'logo'}.${ext}`
+    const { data: signed, error } = await supabase.storage
+        .from(LOGO_BUCKET)
+        .createSignedUploadUrl(path, { upsert: true })
+    if (error || !signed) {
+        console.error('createSignedUploadUrl (logo) error:', error)
+        return { error: 'No se pudo preparar la subida del logo. Intentá de nuevo.' }
+    }
+    return { success: true, signedUrl: signed.signedUrl, path }
 }
 
 export async function updateLogoAction(

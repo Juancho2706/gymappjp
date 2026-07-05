@@ -8,7 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Loader2, Save, ExternalLink, Copy, Check, Type, MessageSquare, QrCode, Play, FileText, Maximize2, X, ImagePlus, Moon } from 'lucide-react'
-import { updateBrandSettingsAction, updateLogoAction, updateLogoDarkAction, type BrandSettingsState } from './_actions/settings.actions'
+import { updateBrandSettingsAction, createLogoUploadUrlAction, type BrandSettingsState } from './_actions/settings.actions'
+import { compressLogo, putToSignedUrl } from '@/lib/uploads/logo-upload.client'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/database.types'
 import { hexToRgb } from '@/lib/color-utils'
@@ -28,7 +29,7 @@ import { BRAND_LOGO_WEB, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 type Coach = Tables<'coaches'>
 
 const initialState: BrandSettingsState = {}
-const MAX_LOGO = 2 * 1024 * 1024
+const MAX_LOGO_RAW = 15 * 1024 * 1024 // tope del archivo ORIGINAL; tras comprimir queda en ~512px PNG
 
 /** Colores "por defecto" de EVA: si el color guardado del coach es uno de estos, NO se considera
  *  una marca custom legacy (no mostramos el chip "Tema personalizado"). */
@@ -42,6 +43,8 @@ function LogoSlot({
     displayUrl,
     brandName,
     staged,
+    optimizing = false,
+    error = null,
     onPick,
     onClear,
 }: {
@@ -51,6 +54,8 @@ function LogoSlot({
     displayUrl: string | null
     brandName: string
     staged: boolean
+    optimizing?: boolean
+    error?: string | null
     onPick: (file: File) => void
     onClear: () => void
 }) {
@@ -82,15 +87,20 @@ function LogoSlot({
                 ) : (
                     <Image src={BRAND_LOGO_WEB} alt="EVA" fill sizes="220px" className="object-contain p-3" />
                 )}
-                {staged && (
+                {staged && !optimizing && (
                     <span className="absolute right-1.5 top-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[9px] font-bold text-white">Sin guardar</span>
+                )}
+                {optimizing && (
+                    <span className="absolute inset-0 z-10 flex items-center justify-center gap-1.5 bg-black/60 text-[11px] font-semibold text-white">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Optimizando…
+                    </span>
                 )}
                 <span className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-black/40 py-1 text-[10px] font-semibold text-white">
                     <ImagePlus className="h-3 w-3" /> {drag ? 'Suelta aquí' : 'Arrastra o haz clic'}
                 </span>
             </div>
             <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] text-muted">{hint}</p>
+                <p className={cn('text-[10px]', error ? 'text-destructive' : 'text-muted')}>{error || hint}</p>
                 {staged && (
                     <button type="button" onClick={onClear} className="shrink-0 text-[10px] font-semibold text-muted underline">
                         Descartar
@@ -154,6 +164,8 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
     const [stagedLogoUrl, setStagedLogoUrl] = useState<string | null>(null)
     const [stagedLogoDark, setStagedLogoDark] = useState<File | null>(null)
     const [stagedLogoDarkUrl, setStagedLogoDarkUrl] = useState<string | null>(null)
+    const [logoOptimizing, setLogoOptimizing] = useState<{ light?: boolean; dark?: boolean }>({})
+    const [logoErrors, setLogoErrors] = useState<{ light?: string | null; dark?: string | null }>({})
     const objectUrlsRef = useRef<string[]>([])
 
     const advancedValue: AdvancedBrandValue = { secondaryColor, accentLight, accentDark, neutralTint, fontKey, loaderVariant }
@@ -295,16 +307,34 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
         }
     }, []);
 
-    const stageLogo = (file: File, which: 'light' | 'dark') => {
-        if (file.size > MAX_LOGO) { toast.error('El archivo supera 2 MB'); return }
-        const url = URL.createObjectURL(file)
-        objectUrlsRef.current.push(url)
-        if (which === 'light') { setStagedLogo(file); setStagedLogoUrl(url) }
-        else { setStagedLogoDark(file); setStagedLogoDarkUrl(url) }
+    // Al SELECCIONAR: comprimir/redimensionar a 512×512 PNG en el navegador y STAGEar el archivo ya
+    // liviano. La subida real (directo a Storage, bypass Cloudflare) ocurre en handleSave. Errores de
+    // imagen se muestran inline en el slot (no toast) — red de seguridad del incidente 2026-07-05.
+    const stageLogo = async (file: File, which: 'light' | 'dark') => {
+        if (file.type && !file.type.startsWith('image/')) {
+            setLogoErrors((e) => ({ ...e, [which]: 'Elegí una imagen (PNG o JPG).' })); return
+        }
+        if (file.size > MAX_LOGO_RAW) {
+            setLogoErrors((e) => ({ ...e, [which]: 'La imagen es muy pesada (máx 15 MB). Probá con otra.' })); return
+        }
+        setLogoErrors((e) => ({ ...e, [which]: null }))
+        setLogoOptimizing((o) => ({ ...o, [which]: true }))
+        try {
+            const compressed = await compressLogo(file)
+            const url = URL.createObjectURL(compressed)
+            objectUrlsRef.current.push(url)
+            if (which === 'light') { setStagedLogo(compressed); setStagedLogoUrl(url) }
+            else { setStagedLogoDark(compressed); setStagedLogoDarkUrl(url) }
+        } catch {
+            setLogoErrors((e) => ({ ...e, [which]: 'No pudimos procesar esta imagen. Probá con un PNG o JPG.' }))
+        } finally {
+            setLogoOptimizing((o) => ({ ...o, [which]: false }))
+        }
     }
     const clearStagedLogos = () => {
         setStagedLogo(null); setStagedLogoUrl(null)
         setStagedLogoDark(null); setStagedLogoDarkUrl(null)
+        setLogoErrors({}); setLogoOptimizing({})
     }
 
     const handleCopyLink = async () => {
@@ -318,22 +348,38 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
         }
     }
 
-    // Guardado UNIFICADO: primero los logos staged (multipart inmediato), luego el resto del form.
+    // Sube un logo staged DIRECTO a Storage (signed URL, PUT a supabase.co) — esquiva el WAF de
+    // Cloudflare que mataba el POST multipart (incidente 2026-07-05). Devuelve el path o un error.
+    const uploadStagedLogo = async (blob: File, variant: 'light' | 'dark'): Promise<{ path?: string; error?: string }> => {
+        const ticket = await createLogoUploadUrlAction({ variant, contentType: blob.type || 'image/png', size: blob.size })
+        if (!ticket.success) return { error: ticket.error }
+        const ok = await putToSignedUrl(ticket.signedUrl, blob)
+        if (!ok) return { error: 'No se pudo subir el logo. Revisá tu conexión e intentá de nuevo.' }
+        return { path: ticket.path }
+    }
+
+    // Guardado UNIFICADO: sube los logos staged DIRECTO a Storage y luego postea el form (liviano,
+    // sin archivos → pasa Cloudflare) con los paths resultantes; updateBrandSettingsAction los persiste.
     const handleSave = async () => {
         if (isSaving) return
+        if (logoOptimizing.light || logoOptimizing.dark) { toast.error('Esperá a que termine de optimizar el logo.'); return }
         setIsSaving(true)
         try {
+            let lightPath: string | null = null
+            let darkPath: string | null = null
             if (stagedLogo) {
-                const fd = new FormData(); fd.set('logo', stagedLogo)
-                const r = await updateLogoAction(initialState, fd)
+                const r = await uploadStagedLogo(stagedLogo, 'light')
                 if (r.error) { setState({ error: r.error }); toast.error(r.error); return }
+                lightPath = r.path!
             }
             if (stagedLogoDark) {
-                const fd = new FormData(); fd.set('logo', stagedLogoDark)
-                const r = await updateLogoDarkAction(initialState, fd)
+                const r = await uploadStagedLogo(stagedLogoDark, 'dark')
                 if (r.error) { setState({ error: r.error }); toast.error(r.error); return }
+                darkPath = r.path!
             }
             const fd = new FormData(formRef.current!)
+            if (lightPath) fd.set('logo_light_path', lightPath)
+            if (darkPath) fd.set('logo_dark_path', darkPath)
             const r2 = await updateBrandSettingsAction(initialState, fd)
             if (r2.fieldErrors) { setState({ fieldErrors: r2.fieldErrors }); toast.error('Revisá los campos marcados.'); return }
             if (r2.error) { setState({ error: r2.error }); toast.error(r2.error); return }
@@ -421,8 +467,10 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                                 displayUrl={stagedLogoUrl ?? coach.logo_url}
                                 brandName={coach.brand_name}
                                 staged={stagedLogo !== null}
-                                onPick={(f) => stageLogo(f, 'light')}
-                                onClear={() => { setStagedLogo(null); setStagedLogoUrl(null) }}
+                                optimizing={logoOptimizing.light}
+                                error={logoErrors.light}
+                                onPick={(f) => { void stageLogo(f, 'light') }}
+                                onClear={() => { setStagedLogo(null); setStagedLogoUrl(null); setLogoErrors((e) => ({ ...e, light: null })) }}
                             />
                             <LogoSlot
                                 label="Logo oscuro"
@@ -431,8 +479,10 @@ export function BrandSettingsForm({ coach }: { coach: Coach }) {
                                 displayUrl={stagedLogoDarkUrl ?? coach.logo_url_dark}
                                 brandName={coach.brand_name}
                                 staged={stagedLogoDark !== null}
-                                onPick={(f) => stageLogo(f, 'dark')}
-                                onClear={() => { setStagedLogoDark(null); setStagedLogoDarkUrl(null) }}
+                                optimizing={logoOptimizing.dark}
+                                error={logoErrors.dark}
+                                onPick={(f) => { void stageLogo(f, 'dark') }}
+                                onClear={() => { setStagedLogoDark(null); setStagedLogoDarkUrl(null); setLogoErrors((e) => ({ ...e, dark: null })) }}
                             />
                         </div>
                     </div>
