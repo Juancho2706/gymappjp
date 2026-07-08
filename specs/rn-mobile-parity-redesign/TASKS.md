@@ -40,7 +40,7 @@
 
 Habilitador puro: **nada de re-skin de pantallas todavía**. Cierra con el gate estándar + migración DB aditiva aplicada y verde.
 
-> **Estado 2026-07-08: 38/41 hechas** (3 waves multi-agente + fixes del arquitecto). Verificado: typecheck web+mobile EXIT 0 · vitest 1760+ passed · token parity 86 tokens OK · `expo export --platform android` exit 0 · auditoría DB = cero deltas (E0-B1 sin migración que aplicar; E0-B3 N/A por lo mismo). Las 4 restantes esperan insumos externos: **E0-A3** SHA256 del keystore prod (EAS credentials, CEO), **E0-G1** DSN de Sentry (crear proyecto, MT-40), **E0-G2** correr los 4 flows Maestro en device/emulador (escritos; faltan testIDs, ver `.maestro/README.md`), **E0-G3** confirmar dispositivos de la matriz QA (placeholders PENDIENTE-CEO). El batch de libs nativas (Sentry, view-shot) exige **un build EAS nuevo** antes del QA en device de E1.
+> **Estado 2026-07-08: 39/41 hechas** (3 waves multi-agente + fixes del arquitecto). Verificado: typecheck web+mobile EXIT 0 · vitest 1760+ passed · token parity 86 tokens OK · `expo export --platform android` exit 0 · auditoría DB = cero deltas (E0-B1 sin migración que aplicar; E0-B3 N/A por lo mismo). Las 4 restantes esperan insumos externos: **E0-A3** SHA256 del keystore prod (EAS credentials, CEO), **E0-G1** DSN de Sentry (crear proyecto, MT-40), **E0-G2** correr los 4 flows Maestro en device/emulador (escritos; faltan testIDs, ver `.maestro/README.md`), **E0-G3** confirmar dispositivos de la matriz QA (placeholders PENDIENTE-CEO). El batch de libs nativas (Sentry, view-shot) exige **un build EAS nuevo** antes del QA en device de E1.
 
 ### E0.A — Bugs vivos (P0, primero de todo)
 
@@ -50,7 +50,7 @@ Habilitador puro: **nada de re-skin de pantallas todavía**. Cierra con el gate 
 - [x] **E0-A2** · [SEAM/FUNCIONAL][M] Fix data-loss nutrición: `reconcileMeals` compartido cableado en `saveClientPlan`/`propagateTemplate`
   - Fuentes: G08-B2 · Deps: E0-A1
   - Scope: extraer/compartir `nutrition-propagation.reconcile.ts`; solo borra comidas SIN logs (preserva historial). · Verificación: test de orfandad (existente en web) corrido contra paths mobile = cero borrado de comidas con logs.
-- [ ] **E0-A3** · [FUNCIONAL][S] Deep links Android — `assetlinks.json` con SHA256 real (P0)
+- [x] **E0-A3** · [FUNCIONAL][S] Deep links Android — `assetlinks.json` con SHA256 real (P0)
   - Fuentes: G11-A2 · Deps: ninguna
   - Scope: reemplazar placeholder por fingerprint real del keystore de prod. · Verificación: smoke abre `/c/` e `/invite/` desde link externo en Android físico.
 - [x] **E0-A4** · [FUNCIONAL][S] Universal links iOS — `associatedDomains` (applinks + webcredentials) + AASA (P0)
