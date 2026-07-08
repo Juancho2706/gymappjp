@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
     dedupeWorkoutQueue,
     dequeueWorkoutLog,
@@ -115,6 +115,45 @@ describe('workout-offline-queue', () => {
             enqueueWorkoutLog(make({ setNumber: 1, weightKg: 36 }))
             enqueueWorkoutLog(make({ setNumber: 1, weightKg: 40 }))
             expect(readWorkoutOfflineQueue()).toHaveLength(1)
+        })
+    })
+
+    // Resiliencia setItem (Safari private mode / quota llena): setItem LANZA (QuotaExceededError).
+    // Antes del fix, la excepción propagaba desde enqueue y abortaba el handleSubmit ANTES de tocar
+    // el server (write-through) → pérdida total silenciosa. Ahora se traga y se señaliza por retorno.
+    describe('setItem que lanza (QuotaExceededError)', () => {
+        const throwQuota = () => {
+            throw new DOMException('The quota has been exceeded.', 'QuotaExceededError')
+        }
+
+        it('enqueue devuelve true en el camino feliz (respaldó local)', () => {
+            expect(enqueueWorkoutLog(make({ setNumber: 1 }))).toBe(true)
+            expect(readWorkoutOfflineQueue()).toHaveLength(1)
+        })
+
+        it('enqueue devuelve false y NO propaga cuando setItem lanza', () => {
+            const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(throwQuota)
+            let ret: boolean | undefined
+            expect(() => {
+                ret = enqueueWorkoutLog(make({ setNumber: 1 }))
+            }).not.toThrow()
+            expect(ret).toBe(false)
+            spy.mockRestore()
+            // El respaldo no quedó, pero la app siguió viva (el server action es el camino real).
+            expect(readWorkoutOfflineQueue()).toHaveLength(0)
+        })
+
+        it('dequeue no lanza cuando setItem lanza (best-effort)', () => {
+            enqueueWorkoutLog(make({ setNumber: 1 }))
+            const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(throwQuota)
+            expect(() => dequeueWorkoutLog('b1', 1)).not.toThrow()
+            spy.mockRestore()
+        })
+
+        it('write no lanza cuando setItem lanza (best-effort)', () => {
+            const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(throwQuota)
+            expect(() => writeWorkoutOfflineQueue([make({ setNumber: 2 })])).not.toThrow()
+            spy.mockRestore()
         })
     })
 

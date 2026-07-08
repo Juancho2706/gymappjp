@@ -103,6 +103,20 @@ export function getSantiagoIsoYmdForUtcInstant(isoUtc: string): string {
     return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(local.getDate()).padStart(2, '0')}`
 }
 
+/**
+ * Días calendario (America/Santiago) transcurridos desde un INSTANTE UTC (p. ej. `check_ins.date`,
+ * un timestamptz) hasta `todayIso` (día YA en Santiago; por defecto hoy). Timezone-safe: mapea el
+ * instante al día calendario de Santiago ANTES de restar. Evita el off-by-one de comparar el
+ * prefijo UTC del instante (`utcInstant.split('T')[0]`) contra un día calculado en Santiago —
+ * cerca de la medianoche chilena el prefijo UTC ya saltó al día siguiente (bug del banner de
+ * check-in, jul-2026: el conteo se desalineaba de `getLastCheckIn`, que ordena por `date`).
+ */
+export function daysSinceSantiagoInstant(utcInstant: string, todayIso?: string): number {
+    const today = todayIso ?? getTodayInSantiago().iso
+    const lastDay = getSantiagoIsoYmdForUtcInstant(utcInstant)
+    return differenceInCalendarDays(parseISO(`${today}T12:00:00`), parseISO(`${lastDay}T12:00:00`))
+}
+
 export function formatLongDateSantiago(now = new Date()): string {
     const tzStr = now.toLocaleString('en-US', { timeZone: SANTIAGO_TZ })
     const d = new Date(tzStr)

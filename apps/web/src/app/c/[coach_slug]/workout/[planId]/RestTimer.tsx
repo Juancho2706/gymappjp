@@ -299,6 +299,9 @@ export function RestTimer({
   return (
     <AnimatePresence>
       <motion.div
+        // Marca para el gate del auto-scroll (BUG 2 · sub-fix 3): el ejecutor mide el borde superior de
+        // este sheet inferior para no disparar un scroll cuando la fila destino ya está a la vista.
+        data-exec-bottom-sheet=""
         initial={reducedMotion ? false : { y: 40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         exit={reducedMotion ? undefined : { y: 40, opacity: 0 }}

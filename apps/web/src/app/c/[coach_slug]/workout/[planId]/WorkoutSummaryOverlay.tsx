@@ -11,6 +11,8 @@ import { MuscleMapSvg } from './MuscleMapSvg'
 import { muscleGroupsToRegionIntensity, MUSCLE_REGIONS } from './muscle-map'
 import {
     summarizeSessionByKind,
+    formatSessionDuration,
+    formatClockDuration,
     type SummaryBlock,
     type SummaryLogLike,
     type CardioItem,
@@ -29,15 +31,9 @@ function fmtShortDate(iso: string): string {
     })
 }
 
-/** Duración de la sesión → "45:12" (mm:ss) o "1h 05" desde 1 hora. "—" si no llega el dato. */
-function fmtDuration(totalSec: number | undefined): string {
-    if (totalSec == null || totalSec <= 0) return '—'
-    const h = Math.floor(totalSec / 3600)
-    const m = Math.floor((totalSec % 3600) / 60)
-    const s = totalSec % 60
-    if (h > 0) return `${h}h ${String(m).padStart(2, '0')}`
-    return `${m}:${String(s).padStart(2, '0')}`
-}
+// Duración: dos formatos del módulo puro testeado (session-summary). El hero "Duración" usa
+// `formatSessionDuration` (explícita — el mm:ss anterior "0:40" se leía como 40 min siendo 40 s);
+// los tiles de cardio/hold usan `formatClockDuration` (mm:ss — ahí la precisión sub-minuto importa).
 
 // canvas-confetti uses CommonJS export=; bundler wraps it as { default: fn } at runtime
 const fireConfetti = (opts: object) =>
@@ -70,7 +66,7 @@ type SummaryTile = { value: string; unit?: string; label: string }
 /** Tiles de un bloque de cardio (tiempo/distancia/FC/rondas), sólo con lo registrado. */
 function cardioTiles(c: CardioItem): SummaryTile[] {
     const tiles: SummaryTile[] = []
-    if (c.durationSec != null && c.durationSec > 0) tiles.push({ value: fmtDuration(c.durationSec), label: 'Tiempo' })
+    if (c.durationSec != null && c.durationSec > 0) tiles.push({ value: formatClockDuration(c.durationSec), label: 'Tiempo' })
     if (c.distanceM != null && c.distanceM > 0) tiles.push({ value: compactDistance(c.distanceM, 'm'), label: 'Distancia' })
     if (c.avgHr != null && c.avgHr > 0) tiles.push({ value: String(c.avgHr), unit: 'bpm', label: 'FC media' })
     if (c.rounds > 1) tiles.push({ value: String(c.rounds), label: 'Rondas' })
@@ -82,7 +78,7 @@ function cardioTiles(c: CardioItem): SummaryTile[] {
 /** Tiles de un bloque de movilidad/roller (series completadas + hold total). */
 function mobilityTiles(m: MobilityItem): SummaryTile[] {
     const tiles: SummaryTile[] = [{ value: String(m.sets), label: m.sets === 1 ? 'Serie' : 'Series' }]
-    if (m.holdSec != null && m.holdSec > 0) tiles.push({ value: fmtDuration(m.holdSec), label: 'Hold total' })
+    if (m.holdSec != null && m.holdSec > 0) tiles.push({ value: formatClockDuration(m.holdSec), label: 'Hold total' })
     return tiles
 }
 
@@ -289,7 +285,7 @@ export function WorkoutSummaryOverlay({
                     {/* Hero: Duración + stat adaptativo (volumen kg / distancia / series) — CEO M5.1. */}
                     <div className="grid grid-cols-2 gap-2">
                         <div className="rounded-control border border-[var(--border-inverse)] bg-[var(--ink-900)] px-4 py-5 text-center">
-                            <p className="eva-metric text-[34px] leading-none text-[var(--sport-500)]">{fmtDuration(durationSec)}</p>
+                            <p className="eva-metric text-[34px] leading-none text-[var(--sport-500)]">{formatSessionDuration(durationSec)}</p>
                             <p className="text-[11px] font-semibold text-on-dark-muted mt-2">Duración</p>
                         </div>
                         <div className="rounded-control border border-[var(--border-inverse)] bg-[var(--ink-900)] px-4 py-5 text-center">

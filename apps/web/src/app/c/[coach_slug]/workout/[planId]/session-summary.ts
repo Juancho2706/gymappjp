@@ -110,6 +110,40 @@ const KIND_FALLBACK_NAME: Record<WorkoutKind, string> = {
  */
 const MOBILITY_SET_WORK = 20
 
+/**
+ * Duración de una sesión (o de un bloque) en un formato EXPLÍCITO y no ambiguo para el resumen
+ * post-entreno. El formato mm:ss anterior ("0:40") se leía de un vistazo como "40 minutos" cuando
+ * eran 40 SEGUNDOS (bug de lectura reportado por el CEO). Formato:
+ *   - `null`/`<= 0` → "—"
+ *   - `< 60s`       → "menos de 1 min"
+ *   - `< 1h`        → "X min"
+ *   - `>= 1h`       → "X h YY min"
+ * Pura y testeada (`session-summary.test.ts`).
+ */
+export function formatSessionDuration(totalSec: number | undefined | null): string {
+    if (totalSec == null || totalSec <= 0) return '—'
+    if (totalSec < 60) return 'menos de 1 min'
+    const h = Math.floor(totalSec / 3600)
+    const m = Math.floor((totalSec % 3600) / 60)
+    if (h > 0) return `${h} h ${String(m).padStart(2, '0')} min`
+    return `${m} min`
+}
+
+/**
+ * Duración estilo RELOJ para tiles donde la precisión sub-minuto SÍ importa (tiempo de un bloque de
+ * cardio, hold total de movilidad): "1:30" (mm:ss) y "1h 05" desde 1 hora. El hero "Duración" de la
+ * sesión usa `formatSessionDuration` (explícita, sin segundos); estos tiles NO — un hold de 90 s
+ * mostrado como "1 min" perdería el dato que el alumno registró.
+ */
+export function formatClockDuration(totalSec: number | undefined | null): string {
+    if (totalSec == null || totalSec <= 0) return '—'
+    const h = Math.floor(totalSec / 3600)
+    const m = Math.floor((totalSec % 3600) / 60)
+    const s = totalSec % 60
+    if (h > 0) return `${h}h ${String(m).padStart(2, '0')}`
+    return `${m}:${String(s).padStart(2, '0')}`
+}
+
 function normalizeExercise(ex: SummaryBlock['exercises']): SummaryExercise | null {
     if (Array.isArray(ex)) return ex[0] ?? null
     return ex ?? null

@@ -1,8 +1,7 @@
 import Link from 'next/link'
 import { ClipboardCheck, ChevronRight } from 'lucide-react'
 import { getLastCheckIn } from '../../_data/dashboard.queries'
-import { formatRelativeDate, getTodayInSantiago } from '@/lib/date-utils'
-import { differenceInCalendarDays, parseISO } from 'date-fns'
+import { formatRelativeDate, getTodayInSantiago, getSantiagoIsoYmdForUtcInstant, daysSinceSantiagoInstant } from '@/lib/date-utils'
 import { CheckInBannerFrame } from './CheckInBannerFrame'
 import { AppBadgeSync } from '@/components/client/AppBadgeSync'
 import { getClientBasePath } from '@/lib/client/base-path'
@@ -12,7 +11,7 @@ export async function CheckInBanner({ userId, coachSlug }: { userId: string; coa
     const last = await getLastCheckIn(userId)
     const { iso: todayIso } = getTodayInSantiago()
 
-    if (!last?.created_at) {
+    if (!last?.date) {
         return (
             <Link
                 href={`${base}/check-in`}
@@ -30,8 +29,11 @@ export async function CheckInBanner({ userId, coachSlug }: { userId: string; coa
         )
     }
 
-    const lastDay = last.created_at.split('T')[0]
-    const daysSince = differenceInCalendarDays(parseISO(`${todayIso}T12:00:00`), parseISO(`${lastDay}T12:00:00`))
+    // `check_ins.date` es un timestamptz (instante UTC). Mapearlo al día calendario de Santiago
+    // ANTES de contar alinea el banner con `getLastCheckIn` (que ordena por `date`) y evita el
+    // off-by-one de usar el prefijo UTC (`created_at.split('T')[0]`) cerca de la medianoche chilena.
+    const lastDay = getSantiagoIsoYmdForUtcInstant(last.date)
+    const daysSince = daysSinceSantiagoInstant(last.date, todayIso)
 
     if (daysSince < 3) {
         return null

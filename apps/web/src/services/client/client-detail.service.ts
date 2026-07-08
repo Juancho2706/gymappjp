@@ -1088,7 +1088,12 @@ export async function markCheckInReviewed(clientId: string, checkInId: string) {
     if (!user) throw new Error('Unauthorized')
     await assertCoachClientReadAccess(supabase, user.id, clientId)
 
-    const { error } = await supabase
+    // Service-role TRAS el assert de scope (capa 1, única capa de authz): la migración
+    // 20260707130000 dropeó las policies abiertas USING(true) de check_ins, y `check_ins_coach`
+    // sólo cubre al coach DIRECTO (c.coach_id = uid) — un coach de team/pool (alumno con
+    // coach_id NULL, acceso vía assignment) quedaría en no-op SILENCIOSO con el cliente
+    // authenticated. El write sigue scoped por client_id (jamás toca un check-in ajeno).
+    const { error } = await createServiceRoleClient()
         .from('check_ins')
         .update({ reviewed_at: new Date().toISOString(), reviewed_by: user.id })
         .eq('id', checkInId)
@@ -1101,8 +1106,8 @@ export async function markCheckInReviewed(clientId: string, checkInId: string) {
 /**
  * Undo of {@link markCheckInReviewed}: clears `reviewed_at` + `reviewed_by` so the
  * check-in vuelve a la cola de "por revisar" del coach. Mismo guard de scope
- * (`assertCoachClientReadAccess`) y cliente `authenticated` (RLS `check_ins_coach`
- * es la segunda capa). Scoped por `client_id` para que jamas limpie un check-in ajeno.
+ * (`assertCoachClientReadAccess`) y mismo write service-role scoped por `client_id`
+ * (ver nota en markCheckInReviewed: check_ins_coach no cubre coaches team/pool).
  */
 export async function unmarkCheckInReviewed(clientId: string, checkInId: string) {
     const supabase = await createClient()
@@ -1110,7 +1115,7 @@ export async function unmarkCheckInReviewed(clientId: string, checkInId: string)
     if (!user) throw new Error('Unauthorized')
     await assertCoachClientReadAccess(supabase, user.id, clientId)
 
-    const { error } = await supabase
+    const { error } = await createServiceRoleClient()
         .from('check_ins')
         .update({ reviewed_at: null, reviewed_by: null })
         .eq('id', checkInId)
