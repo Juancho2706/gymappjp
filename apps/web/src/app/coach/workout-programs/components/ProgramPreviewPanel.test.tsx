@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildLibrarySections } from './ProgramPreviewPanel'
-import { LEGACY_SECTION_AREA_ID } from '@/lib/workout-areas'
+import { LEGACY_SECTION_AREA_ID } from '@eva/workout-engine'
 import type { WorkoutArea } from '@/domain/workout/types'
 
 type Row = {

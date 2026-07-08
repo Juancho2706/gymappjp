@@ -9,8 +9,8 @@ import {
     effectiveAreaKey,
     legacyBucketFor,
     orderedAreaIds,
-} from '@/lib/workout-areas'
-import { sanitizeSupersets } from '@/lib/workout-block-grouping'
+    sanitizeSupersets,
+} from '@eva/workout-engine'
 import { arrayMove } from '@dnd-kit/sortable'
 
 export const DAYS_OF_WEEK = [

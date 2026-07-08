@@ -3,7 +3,7 @@
 import { useRef } from 'react'
 import { X, Printer } from 'lucide-react'
 import { getMuscleColor } from '../muscle-colors'
-import { groupContiguousSupersetRuns } from '@/lib/workout-block-grouping'
+import { groupContiguousSupersetRuns } from '@eva/workout-engine'
 import type { DayState, BuilderBlock } from '../types'
 
 interface PrintProgramDialogProps {

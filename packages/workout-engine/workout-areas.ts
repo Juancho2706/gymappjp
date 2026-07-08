@@ -5,7 +5,20 @@
  * (CHECK warmup/main/cooldown). NO tocar workout-block-grouping.ts (baseline F0).
  */
 
-import type { WorkoutArea } from '@/domain/workout/types'
+/**
+ * Area de entrenamiento (workout_section_templates): system (7 fijas, solo-lectura),
+ * custom de coach (coach_id) o custom de team (team_id). Espejo EXACTO de
+ * `@/domain/workout/types` (web) — re-declarado acá para que el motor quede self-contained.
+ */
+export interface WorkoutArea {
+    id: string
+    name: string
+    slug: string
+    sort_order: number
+    is_system: boolean
+    coach_id: string | null
+    team_id: string | null
+}
 
 /** UUIDs fijos de las areas system que mapean 1:1 al section legacy (seed 20260609062017). */
 export const LEGACY_SECTION_AREA_ID = {

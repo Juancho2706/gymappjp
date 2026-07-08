@@ -23,6 +23,11 @@ export interface BuilderBlock {
   progression_mode?: 'weekly_linear' | 'double' | 'session_linear' | 'adaptive' | null
   section?: BuilderSection
   is_override?: boolean
+  // Fila DB original del bloque (todas las columnas, incluidas las que el editor mobile
+  // no conoce: section_template_id + campos polimorficos). Se conserva al cargar y se
+  // usa como base del passthrough al guardar para no destruir esos campos. Undefined en
+  // bloques nuevos agregados desde el catalogo. Ver lib/plan-builder/serialize.ts.
+  _raw?: Record<string, unknown>
 }
 
 export interface DayState {

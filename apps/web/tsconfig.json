@@ -30,7 +30,9 @@
       "@eva/tiers": ["../../packages/tiers/index.ts"],
       "@eva/nutrition-engine": ["../../packages/nutrition-engine/index.ts"],
       "@eva/module-catalog": ["../../packages/module-catalog/catalog.ts"],
-      "@eva/feature-prefs": ["../../packages/feature-prefs/index.ts"]
+      "@eva/feature-prefs": ["../../packages/feature-prefs/index.ts"],
+      "@eva/workout-engine": ["../../packages/workout-engine/index.ts"],
+      "@eva/cardio": ["../../packages/cardio/index.ts"]
     }
   },
   "include": [

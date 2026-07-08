@@ -36,6 +36,7 @@ import { exportProgramPdf } from '../../lib/program-pdf'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
 import { usePlanBuilder } from '../../lib/plan-builder/reducer'
 import { buildDaySkeleton } from '../../lib/plan-builder/skeleton'
+import { serializeBlockInsert } from '../../lib/plan-builder/serialize'
 import type { BuilderBlock, BuilderSection, DayState, DurationType, ProgramStructureType } from '../../lib/plan-builder/types'
 
 const DAY_SHORT = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
@@ -93,12 +94,18 @@ function mapDbBlock(b: any): BuilderBlock {
     progression_mode: (b.progression_mode as BuilderBlock['progression_mode']) ?? null,
     section: (b.section as BuilderBlock['section']) ?? 'main',
     is_override: b.is_override ?? false,
+    // Passthrough: conservar la fila DB completa (incl. section_template_id + campos
+    // polimorficos) para no destruirlos al guardar. Ver lib/plan-builder/serialize.ts.
+    _raw: b && typeof b === 'object' ? (b as Record<string, unknown>) : undefined,
   }
 }
 
 // Columnas base (las que la prod standalone seguro tiene).
+// `workout_blocks ( * )` trae TODAS las columnas (incl. section_template_id + campos
+// polimorficos), necesarias para el passthrough. `*` es resiliente: en una prod
+// standalone sin esas columnas simplemente no las devuelve (no falla).
 const PROGRAM_SELECT =
-  'id, name, program_structure_type, duration_type, weeks_to_repeat, cycle_length, ab_mode, workout_plans ( id, title, day_of_week, week_variant, workout_blocks ( id, exercise_id, order_index, sets, reps, rir, rest_time, notes, target_weight_kg, tempo, superset_group, progression_type, progression_value, progression_mode, section, is_override, exercises ( name, muscle_group, gif_url, video_url ) ) )'
+  'id, name, program_structure_type, duration_type, weeks_to_repeat, cycle_length, ab_mode, workout_plans ( id, title, day_of_week, week_variant, workout_blocks ( *, exercises ( name, muscle_group, gif_url, video_url ) ) )'
 // Rico = base + meta extra (notas/fecha/phases). Si la columna falta, selectWithFallback usa el base.
 const PROGRAM_SELECT_RICH = PROGRAM_SELECT.replace(
   'ab_mode,',
@@ -122,25 +129,11 @@ type ProgramMetaPayload = {
   program_phases?: unknown
 }
 
+// Passthrough: mergea los campos editados en mobile SOBRE la fila original (`_raw`), de
+// modo que section_template_id y los campos polimorficos sobreviven el guardado aunque el
+// editor mobile no los conozca. Ver lib/plan-builder/serialize.ts.
 function blockInsert(b: BuilderBlock, i: number, planId: string) {
-  return {
-    plan_id: planId,
-    exercise_id: b.exercise_id,
-    order_index: i,
-    sets: b.sets ?? 3,
-    reps: b.reps || '8-10',
-    rir: b.rir || null,
-    rest_time: b.rest_time || null,
-    notes: b.notes || null,
-    target_weight_kg: b.target_weight_kg && b.target_weight_kg.trim() ? Number(b.target_weight_kg) : null,
-    tempo: b.tempo || null,
-    superset_group: b.superset_group || null,
-    progression_type: b.progression_type || null,
-    progression_value: b.progression_value ?? null,
-    progression_mode: b.progression_mode ?? 'weekly_linear',
-    section: b.section ?? 'main',
-    is_override: b.is_override ?? false,
-  }
+  return serializeBlockInsert(b, i, planId)
 }
 
 // Quita las columnas de meta extra (para prod que aún no las tiene).

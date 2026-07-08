@@ -8,7 +8,15 @@ import { MotiView } from 'moti'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, NativeDialog } from '../../components'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
-import { calcMacros, ACTIVITY_LABELS, GOAL_ADJUSTMENTS, type ActivityKey, type GoalKey } from '../../lib/macro-calculator'
+import {
+  computeMifflinStJeor,
+  computeTDEE,
+  deriveCalorieTarget,
+  deriveMacroTargets,
+  type ActivityLevel,
+  type Goal,
+  type Sex,
+} from '@eva/nutrition-engine'
 import { FoodSearchSheet } from '../../components/coach/FoodSearchSheet'
 import { FoodSwapSheet } from '../../components/coach/FoodSwapSheet'
 import {
@@ -31,6 +39,45 @@ import { getTemplateDraft, saveTemplate } from '../../lib/nutrition-templates'
 
 // Acento de dominio nutrición / intercambios (ember-500, fijo — token-contract).
 const EMBER = '#FF6A3D'
+
+// UI-facing keys → engine types (fuente de verdad única: @eva/nutrition-engine).
+type ActivityKey = ActivityLevel
+type GoalKey = Goal
+
+const GOAL_LABELS: Record<GoalKey, string> = {
+  lose: 'Déficit (bajar grasa)',
+  maintain: 'Mantención',
+  gain: 'Volumen (ganar músculo)',
+}
+
+const ACTIVITY_LABELS: Record<ActivityKey, string> = {
+  sedentary: 'Sedentario',
+  light: 'Ligero (1–3 d/sem)',
+  moderate: 'Moderado (3–5 d/sem)',
+  active: 'Activo (6–7 d/sem)',
+  very_active: 'Muy activo',
+}
+
+/**
+ * Objetivos Mifflin-St Jeor → TDEE → calorías → macros, delegando 100% en
+ * @eva/nutrition-engine (mismas firmas que el web PlanBuilderSidebar → mismos
+ * números para el mismo alumno/objetivo).
+ */
+function calcMacros(
+  weightKg: number,
+  heightCm: number,
+  ageYears: number,
+  gender: 'M' | 'F',
+  activity: ActivityKey,
+  goal: GoalKey
+): { calories: number; protein: number; carbs: number; fats: number } {
+  const sex: Sex = gender === 'M' ? 'male' : 'female'
+  const bmr = computeMifflinStJeor({ sex, weightKg, heightCm, age: ageYears })
+  const tdee = computeTDEE(bmr, activity)
+  const calories = deriveCalorieTarget(tdee, goal)
+  const macros = deriveMacroTargets(calories, weightKg, goal)
+  return { calories, protein: macros.protein_g, carbs: macros.carbs_g, fats: macros.fats_g }
+}
 
 function unitsForFood(item: { unit: string; serving_unit?: string; is_liquid?: boolean }) {
   const units = item.is_liquid || item.serving_unit === 'ml' ? ['ml', 'un'] : ['g', 'un']
@@ -389,7 +436,7 @@ export default function NutritionBuilderScreen() {
           </View>
           <CalcChips theme={theme} label="Sexo" value={calc.gender} options={[{ k: 'M', l: 'Hombre' }, { k: 'F', l: 'Mujer' }]} onPick={(k) => setCalc((c) => ({ ...c, gender: k as 'M' | 'F' }))} />
           <CalcChips theme={theme} label="Actividad" value={calc.activity} options={(Object.keys(ACTIVITY_LABELS) as ActivityKey[]).map((k) => ({ k, l: ACTIVITY_LABELS[k] }))} onPick={(k) => setCalc((c) => ({ ...c, activity: k as ActivityKey }))} />
-          <CalcChips theme={theme} label="Objetivo" value={calc.goal} options={(Object.keys(GOAL_ADJUSTMENTS) as GoalKey[]).map((k) => ({ k, l: GOAL_ADJUSTMENTS[k].label }))} onPick={(k) => setCalc((c) => ({ ...c, goal: k as GoalKey }))} />
+          <CalcChips theme={theme} label="Objetivo" value={calc.goal} options={(Object.keys(GOAL_LABELS) as GoalKey[]).map((k) => ({ k, l: GOAL_LABELS[k] }))} onPick={(k) => setCalc((c) => ({ ...c, goal: k as GoalKey }))} />
           <Button label="Aplicar metas sugeridas" onPress={() => {
             const w = Number(calc.weight), h = Number(calc.height), a = Number(calc.age)
             if (!(w > 0 && h > 0 && a > 0)) { Alert.alert('Datos incompletos', 'Indicá peso, altura y edad.'); return }

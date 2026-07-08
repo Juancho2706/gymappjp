@@ -7,7 +7,31 @@
  * fase cronometrable — la UI muestra la distancia objetivo y deshabilita el timer.
  */
 
-import type { IntervalConfig } from '@/domain/workout/types'
+/**
+ * Shape de workout_blocks.interval_config (jsonb) — espejo del IntervalConfigSchema de @eva/schemas
+ * y de `@/domain/workout/types` (web). Re-declarado acá para que el motor quede self-contained.
+ */
+export interface IntervalConfig {
+    warmup_sec?: number
+    cooldown_sec?: number
+    /** N repeticiones del paso work/recovery (M externo = block.sets). */
+    repeats: number
+    work: {
+        duration_sec?: number
+        distance_m?: number
+        target?: {
+            kind: 'hr_zone' | 'pace' | 'rpe' | 'none'
+            hr_zone?: 1 | 2 | 3 | 4 | 5
+            pace_sec_per_km?: number
+            rpe?: number
+        }
+    }
+    recovery?: {
+        duration_sec?: number
+        distance_m?: number
+        mode?: 'rest' | 'jog' | 'walk'
+    }
+}
 
 export type IntervalPhaseKind = 'warmup' | 'work' | 'recovery' | 'cooldown'
 

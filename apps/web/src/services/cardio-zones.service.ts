@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
-import type { CardioProfile, ResolvedClientZones } from '@/domain/cardio/types'
-import { resolveClientZones } from '@/domain/cardio/zones'
+import type { CardioProfile, ResolvedClientZones } from '@eva/cardio'
+import { resolveClientZones } from '@eva/cardio'
 import { hasModule } from '@/services/entitlements.service'
 import {
     findCardioClients,
@@ -14,7 +14,7 @@ type DB = SupabaseClient<Database>
 
 /**
  * Orquestación del módulo `cardio` (specs/movida-entrenamiento F7):
- * perfil del cliente (repository) → dominio puro (domain/cardio) → zonas resueltas.
+ * perfil del cliente (repository) → dominio puro (@eva/cardio) → zonas resueltas.
  * El gating se resuelve por el CONTEXTO DEL RECURSO (alumno de pool ⇒ su team;
  * si no ⇒ su coach) — regla LOCKED de entitlements.service.
  */

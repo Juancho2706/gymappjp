@@ -23,7 +23,7 @@ import {
     resolveEffectiveWeekVariant,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
-import { effectiveWorkoutSection } from '@/lib/workout-block-grouping'
+import { effectiveWorkoutSection } from '@eva/workout-engine'
 import { updateClientGoalWeight } from './_actions/client-detail.actions'
 import type { NutrientTargetRow } from '@/services/nutrient-targets.service'
 import type { PrivateNoteRow, MealCommentRow } from '@/services/nutrition-notes.service'

@@ -7,10 +7,8 @@ import { cn } from '@/lib/utils'
 import { springs } from '@/lib/animation-presets'
 import { formatRelativeDate } from '@/lib/date-utils'
 import type { ExerciseType as WorkoutKind } from '@/domain/workout/types'
-import type { SupersetGroupRow } from '@/lib/workout-block-grouping'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
-import type { OptimisticLogPayload } from './session-logs.optimistic'
-import { formatTypedObjective } from './typed-keypad'
+import { formatTypedObjective, type SupersetGroupRow, type OptimisticLogPayload } from '@eva/workout-engine'
 import type { ClientCardioView } from './_data/workout-execution.queries'
 // Primitivos/tipos compartidos con el resto de la exec (SupersetGroupCard los reusa) → se importan
 // del cliente padre. El import cruzado es render-time-only (ambos módulos solo los usan dentro del

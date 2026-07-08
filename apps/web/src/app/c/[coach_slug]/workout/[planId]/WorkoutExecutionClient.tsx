@@ -10,26 +10,32 @@ import { ArrowLeft, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settin
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
 import { SingleExerciseCard } from './SingleExerciseCard'
-import { formatTypedObjective } from './typed-keypad'
+import {
+    formatTypedObjective,
+    buildStepModel,
+    firstIncompleteStepIndex,
+    isStepComplete,
+    stepIndexOfBlock,
+    reconcileSessionLogs,
+    type ReconciledSessionLog,
+    applyOptimisticSessionLog,
+    type OptimisticLogPayload,
+    groupContiguousSupersetRuns,
+    type WorkoutSectionKey,
+    executionAreaGroupsFor,
+    isTimeableInterval,
+} from '@eva/workout-engine'
 import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { STEPPER_MODE_KEY } from './rest-timer-preferences'
 import { SubstituteExerciseSheet } from './_components/SubstituteExerciseSheet'
 import { SUBSTITUTION_REASON } from '@/services/workout/exercise-substitution'
 import type { SubstituteCandidate } from './_data/substitution.queries'
-import {
-    buildStepModel,
-    firstIncompleteStepIndex,
-    isStepComplete,
-    stepIndexOfBlock,
-} from '@/lib/workout-stepper'
 import { logSetAction, revalidateWorkoutViewAction } from './_actions/workout-log.actions'
 import {
     flushWorkoutQueue,
     readWorkoutOfflineQueueForPlan,
     workoutLogToFormData,
 } from '@/lib/workout-offline-queue'
-import { reconcileSessionLogs, type ReconciledSessionLog } from './session-logs.reconcile'
-import { applyOptimisticSessionLog, type OptimisticLogPayload } from './session-logs.optimistic'
 import { WorkoutTimerProvider, useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
 import { WorkoutKeypadProvider } from './WorkoutKeypadProvider'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
@@ -42,16 +48,10 @@ import { springs } from '@/lib/animation-presets'
 import { useBasePath } from '@/components/client/BasePathProvider'
 import { useScreenWakeLock } from '@/lib/client/use-screen-wake-lock'
 import { markFirstWorkoutCompleted } from '@/lib/pwa/install-signals'
-import {
-    groupContiguousSupersetRuns,
-    type WorkoutSectionKey,
-} from '@/lib/workout-block-grouping'
-import { executionAreaGroupsFor } from '@/lib/workout-areas'
 import { EXERCISE_TYPE_META } from '@/lib/workout-exercise-type'
 import type { IntervalConfig, WorkoutArea, ExerciseType as WorkoutKind } from '@/domain/workout/types'
 import { effectiveExerciseType, compactDistance, compactDuration } from '@/lib/workout-exercise-type'
-import { isTimeableInterval } from '@/lib/workout-interval'
-import { formatPace } from '@/domain/cardio/pace'
+import { formatPace } from '@eva/cardio'
 import { extractYoutubeVideoId } from '@/lib/youtube'
 import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import type { ClientCardioView } from './_data/workout-execution.queries'

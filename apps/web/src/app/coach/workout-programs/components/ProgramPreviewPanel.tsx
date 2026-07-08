@@ -22,8 +22,8 @@ import {
     groupContiguousSupersetRuns,
     type SupersetGroupRow,
     type WorkoutSectionKey,
-} from '@/lib/workout-block-grouping'
-import { executionAreaGroupsFor } from '@/lib/workout-areas'
+    executionAreaGroupsFor,
+} from '@eva/workout-engine'
 import { buildAreaVMs } from '@/app/coach/builder/[clientId]/area-ui'
 import type { WorkoutArea } from '@/domain/workout/types'
 import { useSyncExternalStore } from 'react'

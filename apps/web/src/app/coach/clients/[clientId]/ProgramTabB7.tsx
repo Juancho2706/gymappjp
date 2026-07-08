@@ -31,7 +31,7 @@ import {
     uniqueMuscleGroupsFromBlocks,
 } from './profileProgramStructureUtils'
 import { resolveEffectiveWeekVariant } from '@/lib/workout/programWeekVariant'
-import { groupContiguousSupersetRuns } from '@/lib/workout-block-grouping'
+import { groupContiguousSupersetRuns } from '@eva/workout-engine'
 import { cn } from '@/lib/utils'
 import { SectionTitle } from './_components/SectionTitle'
 

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { ArrowLeft, HeartPulse } from 'lucide-react'
 import { getCardioClientData } from '../_data/cardio.queries'
 import { CardioProfileForm } from '../_components/CardioProfileForm'
-import { resolveClientZones } from '@/domain/cardio/zones'
+import { resolveClientZones } from '@eva/cardio'
 
 export const metadata: Metadata = { title: 'Perfil cardio | EVA' }
 

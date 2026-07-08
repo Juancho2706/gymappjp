@@ -1,30 +1,12 @@
+import type { WorkoutOfflineLog } from '@eva/workout-engine'
+
 const QUEUE_KEY = 'eva:workout-offline-queue'
 
-export type WorkoutOfflineLog = {
-    blockId: string
-    setNumber: number
-    weightKg: number | null
-    repsDone: number | null
-    rpe: number | null
-    rir: number | null
-    /** Nota rápida por serie (quick-win E2-6) — opcional: los items legacy siguen parseando. */
-    note?: string | null
-    planId: string
-    coachSlug: string
-    timestamp: number
-    // ── Espejo polimórfico (specs/movida-entrenamiento, AC4) ──
-    // Opcionales: los items legacy ya encolados en localStorage siguen parseando.
-    actualDurationSec?: number | null
-    actualDistanceM?: number | null
-    actualHoldSec?: number | null
-    actualAvgHr?: number | null
-    // ── Sustitución de máquina ocupada (Fase L · workstream C, DC-1) ──
-    // Opcionales/aditivos: los items legacy encolados (sin estas keys) siguen parseando; el flush
-    // last-wins reenvía la serie con su marca de sustitución intacta.
-    substitutedExerciseId?: string | null
-    substitutedExerciseName?: string | null
-    substitutionReason?: string | null
-}
+/**
+ * Forma canónica de la serie encolada — fuente de verdad en `@eva/workout-engine` (compartida con
+ * mobile). Se re-exporta acá para no romper los imports existentes de este módulo.
+ */
+export type { WorkoutOfflineLog }
 
 /** Clave de identidad de una serie encolada: el motor es (block_id, set_number). */
 export function workoutLogKey(blockId: string, setNumber: number): string {

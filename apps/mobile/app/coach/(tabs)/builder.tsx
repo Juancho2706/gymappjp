@@ -34,6 +34,7 @@ import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { getCoachOrgContext } from '../../../lib/org'
 import { selectWithFallback } from '../../../lib/db-compat'
+import { passthroughBlockColumns } from '../../../lib/plan-builder/serialize'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, EmptyState, NativeDialog, ScreenHeader, SegmentedTabs } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -151,8 +152,7 @@ export default function BuilderScreen() {
           workout_plans (
             id, day_of_week, title, group_name, week_variant, assigned_date,
             workout_blocks (
-              id, exercise_id, order_index, sets, reps, target_weight_kg, section, tempo, rir, rest_time, notes,
-              superset_group, progression_type, progression_value, progression_mode, is_override,
+              *,
               exercise:exercises(name)
             )
           )`
@@ -975,6 +975,10 @@ function programInsertFromTemplate(program: ProgramItem, input: {
 
 function blockInsertFromSource(block: ProgramBlock, planId: string) {
   return {
+    // Passthrough: preserva section_template_id + campos polimorficos de la fila original
+    // (copiar/asignar/sincronizar no los debe destruir). Las columnas conocidas de abajo
+    // sobrescriben el spread, asi que el resultado para fuerza es identico al legacy.
+    ...passthroughBlockColumns(block as unknown as Record<string, unknown>),
     plan_id: planId,
     exercise_id: block.exercise_id,
     order_index: block.order_index ?? 0,
@@ -1022,7 +1026,9 @@ async function syncProgramFromTemplate(program: ProgramItem): Promise<{ ok: bool
   if (!program.client_id) return { ok: false, error: 'Solo los programas de alumno se sincronizan.' }
   if (!program.source_template_id) return { ok: false, error: 'Este programa no tiene plantilla base vinculada.' }
 
-  const tplSelect = `id, workout_plans ( id, day_of_week, title, group_name, week_variant, workout_blocks ( id, exercise_id, order_index, sets, reps, target_weight_kg, section, tempo, rir, rest_time, notes, superset_group, progression_type, progression_value, progression_mode, is_override ) )`
+  // `workout_blocks ( * )` para el passthrough: preserva section_template_id + campos
+  // polimorficos al re-insertar los bloques sincronizados desde la plantilla.
+  const tplSelect = `id, workout_plans ( id, day_of_week, title, group_name, week_variant, workout_blocks ( * ) )`
   const { data: tpl, error: tErr } = await supabase
     .from('workout_programs')
     .select(tplSelect)

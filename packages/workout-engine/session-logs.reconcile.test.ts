@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reconcileSessionLogs, sessionLogKey, type ReconciledSessionLog } from './session-logs.reconcile'
-import type { WorkoutOfflineLog } from '@/lib/workout-offline-queue'
+import { reconcileSessionLogs, sessionLogKey, type ReconciledSessionLog, type WorkoutOfflineLog } from './session-logs.reconcile'
 
 /** Server log mínimo (los opcionales quedan sin setear como en el payload real del RSC). */
 function serverLog(

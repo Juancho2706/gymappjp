@@ -7,7 +7,7 @@ import {
     legacyRepsSummaryFor,
     typedBlockSummary,
 } from './workout-exercise-type'
-import { buildIntervalPhases, intervalTotalDurationSec, isTimeableInterval } from './workout-interval'
+import { buildIntervalPhases, intervalTotalDurationSec, isTimeableInterval } from '@eva/workout-engine'
 import type { IntervalConfig } from '@/domain/workout/types'
 
 describe('effectiveExerciseType (decisión #2: override > exercise > strength)', () => {

@@ -7,7 +7,7 @@ import type {
     RepsUnit,
     SideMode,
 } from '@/domain/workout/types'
-import type { HrZoneRange } from '@/domain/cardio/types'
+import type { HrZoneRange } from '@eva/cardio'
 
 /** Contexto del módulo `cardio` resuelto server-side (RSC) para chips/plantillas del builder. */
 export interface BuilderCardioContext {

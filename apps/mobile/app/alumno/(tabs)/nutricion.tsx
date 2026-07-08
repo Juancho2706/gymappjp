@@ -24,7 +24,7 @@ import {
   portionPctMapFromMealLogs,
   sumMealMacros,
 } from '../../../lib/nutrition-utils'
-import type { MealWithFoodItems } from '../../../lib/nutrition-utils'
+import type { Json, MealWithFoodItems } from '../../../lib/nutrition-utils'
 import {
   getActiveNutritionPlanFull,
   getNutritionAdherence30d,
@@ -87,7 +87,7 @@ interface RawFoodItem {
   id: string
   quantity: number
   unit: string | null
-  swap_options: unknown
+  swap_options: Json | null
   foods: {
     id: string
     name: string

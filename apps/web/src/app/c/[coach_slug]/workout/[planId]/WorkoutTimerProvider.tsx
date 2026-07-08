@@ -6,7 +6,7 @@ import { RestTimer } from './RestTimer'
 import { HoldTimer } from './HoldTimer'
 import { IntervalTimer } from './IntervalTimer'
 import { Stopwatch } from './Stopwatch'
-import { buildIntervalPhases, type IntervalPhase } from '@/lib/workout-interval'
+import { buildIntervalPhases, type IntervalPhase } from '@eva/workout-engine'
 import type { IntervalConfig } from '@/domain/workout/types'
 
 /**

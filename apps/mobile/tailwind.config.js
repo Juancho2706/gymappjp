@@ -80,6 +80,12 @@ module.exports = {
         'accent-recovery': ch('accent-recovery'),
         'focus-ring': ch('focus-ring'),
         track: ch('track'),
+
+        // ---- Data-viz categorical palette (mirrors web globals.css --viz-1..6) ----
+        viz: {
+          1: ch('viz-1'), 2: ch('viz-2'), 3: ch('viz-3'),
+          4: ch('viz-4'), 5: ch('viz-5'), 6: ch('viz-6'),
+        },
       },
 
       // Semantic surfaces -> bg-surface-app / bg-surface-card / ...
@@ -119,6 +125,23 @@ module.exports = {
         sm: '7px', md: '10px', lg: '12px', xl: '17px', '2xl': '22px', '3xl': '26px',
         // DS semantic radii
         card: '20px', control: '14px', pill: '9999px', sheet: '28px',
+      },
+
+      // DS spacing — 4px grid (mirrors web globals.css --space-0..13 + sizing tokens).
+      // Namespaced as `space-*` / `gutter-*` / `control-*` / `icon-*` so these do NOT
+      // override Tailwind's default numeric spacing scale that existing screens use
+      // (p-4 stays 16px). Consume as p-space-5, gap-space-4, w-icon-lg, etc.
+      spacing: {
+        'space-0': '0px', 'space-1': '2px', 'space-2': '4px', 'space-3': '8px',
+        'space-4': '12px', 'space-5': '16px', 'space-6': '20px', 'space-7': '24px',
+        'space-8': '32px', 'space-9': '40px', 'space-10': '48px', 'space-11': '64px',
+        'space-12': '80px', 'space-13': '96px',
+        'gutter-screen': '20px', 'gutter-card': '16px',
+        'hit-min': '44px', 'control-sm': '36px', 'control-md': '48px', 'control-lg': '56px',
+        'icon-xs': '16px', 'icon-sm': '18px', 'icon-md': '20px', 'icon-lg': '24px', 'icon-xl': '32px',
+      },
+      maxWidth: {
+        content: '440px',
       },
       fontFamily: {
         // Existing entries (kept so current screens keep compiling)

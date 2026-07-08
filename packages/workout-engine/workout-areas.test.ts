@@ -8,8 +8,8 @@ import {
     nextCustomSortOrder,
     orderedAreaIds,
     slugifyAreaName,
+    type WorkoutArea,
 } from './workout-areas'
-import type { WorkoutArea } from '@/domain/workout/types'
 
 describe('slugifyAreaName', () => {
     it('quita diacríticos y kebab-casea', () => {

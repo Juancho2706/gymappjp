@@ -1,0 +1,105 @@
+-- ============================================================================
+-- BORRADOR (NO APLICAR) — RN parity E0 · GRANTs/policies para el alumno mobile.
+-- Extension .draft a proposito: fuera del pipeline de migraciones; nadie lo aplica.
+--
+-- RESULTADO DE LA AUDITORIA (2026-07-08, MODO SOLO-LECTURA sobre PROD via MCP):
+--   >>> CERO DELTAS. Todos los GRANTs y policies que la app RN necesita para las
+--   >>> 4 areas auditadas YA ESTAN VIVOS en produccion. Este archivo queda como
+--   >>> evidencia + patron idempotente listo por si un reset/rebase perdiera algo.
+--
+-- Detalle hallazgo-por-hallazgo + queries usadas:
+--   specs/rn-mobile-parity-redesign/research/e0-db-audit.md
+--
+-- Por lo tanto, este borrador NO contiene sentencias ejecutables. Los bloques de
+-- abajo son las RE-ASERCIONES idempotentes (ya satisfechas en LIVE) documentadas
+-- en COMENTARIO. Si en el futuro una verificacion detecta que falta ALGUNA, se
+-- descomenta SOLO la que falte, se le pone timestamp ISO real y recien ahi se aplica.
+-- ============================================================================
+
+
+-- ----------------------------------------------------------------------------
+-- (a) coaches — GRANT SELECT a `anon` de columnas de branding del login alumno.
+--     ESTADO: COMPLETO. Las 20 columnas que lee proxy.ts (coachBrandingPromise,
+--     corre como anon en el login pre-auth) tienen GRANT SELECT(col) a anon.
+--     Aplicado por las migraciones:
+--       20260617033845_coaches_restrict_anon_select_to_branding.sql
+--       20260621213600_grant_anon_select_whitelabel_v2_branding_cols.sql
+--       20260702210000_whitelabel_presets_login_loader_columns.sql
+--     Patron column-grant (gotcha CLAUDE.md: el REVOKE de columna es no-op; se
+--     revoca a nivel TABLA y se re-grantea la lista completa). Re-asercion segura:
+--
+-- GRANT SELECT (
+--   id, slug, full_name, brand_name, primary_color, logo_url, subscription_tier,
+--   use_brand_colors_coach, welcome_message, loader_text, use_custom_loader,
+--   loader_text_color, loader_icon_mode, brand_secondary_color, accent_light,
+--   accent_dark, neutral_tint, logo_url_dark, brand_font_key, loader_variant,
+--   theme_preset_key, login_layout_key, loader_config
+-- ) ON public.coaches TO anon;
+--   Reversa: REVOKE SELECT (<col>, ...) ON public.coaches FROM anon;  (o el REVOKE
+--   total + re-grant de la lista minima, patron de 20260617033845).
+
+
+-- ----------------------------------------------------------------------------
+-- (b.1) clients — GRANT UPDATE(col) a `authenticated` de biometria/perfil.
+--     ESTADO: COMPLETO. UPDATE a nivel TABLA revocado; 17 columnas re-grantadas
+--     por 20260612140001_clients_scoping_grants.sql (verificado vivo). Incluye la
+--     biometria que mobile escribe: birth_date, goal_weight_kg, resting_hr,
+--     max_hr_override, ref_5k_time_sec. RLS clients_self_update (id = auth.uid())
+--     deja al alumno escribir SU fila. Patron column-grant ya aplicado:
+--
+-- REVOKE UPDATE ON public.clients FROM authenticated, anon;
+-- GRANT UPDATE (
+--   age_confirmed_at, birth_date, created_at, email, force_password_change,
+--   full_name, goal_weight_kg, is_active, is_archived, max_hr_override,
+--   onboarding_completed, phone, ref_5k_time_sec, resting_hr,
+--   subscription_start_date, updated_at, use_coach_brand_colors
+-- ) ON public.clients TO authenticated;
+--   (id/org_id/team_id/coach_id quedan solo service-role: scoping no user-editable.)
+--   Reversa: GRANT UPDATE ON public.clients TO authenticated;  (vuelve a tabla-full)
+
+-- (b.2) client_intake.sex — GRANT SELECT/INSERT/UPDATE(sex) a `authenticated`.
+--     ESTADO: COMPLETO. Aplicado por 20260701120000_add_client_intake_sex.sql.
+--     RLS client_intake_client (client_id = auth.uid(), FOR ALL) deja al alumno
+--     escribir su propio sexo biologico (BMR/TDEE). Re-asercion segura:
+--
+-- GRANT SELECT (sex), INSERT (sex), UPDATE (sex) ON public.client_intake TO authenticated;
+--   Reversa: REVOKE INSERT (sex), UPDATE (sex) ON public.client_intake FROM authenticated;
+
+-- (b.3) workout_logs — columnas de sustitucion de maquina.
+--     ESTADO: COMPLETO / NO REQUIERE GRANT DE COLUMNA. workout_logs tiene GRANT de
+--     TABLA (SELECT/INSERT/UPDATE/DELETE) para authenticated, asi que las columnas
+--     substituted_exercise_id / substituted_exercise_name / substitution_reason
+--     (migracion 20260704160352_workout_logs_substitution_columns.sql) son
+--     escribibles sin grant extra. RLS client_manage_logs (client_id = auth.uid())
+--     deja al alumno escribir sus propios logs. Nada que agregar.
+
+
+-- ----------------------------------------------------------------------------
+-- (c) Bucket `checkins` — upload directo del alumno (storage.objects RLS).
+--     ESTADO: COMPLETO. Policies scoped a la carpeta propia del alumno
+--     ((storage.foldername(name))[1] = auth.uid()::text), TO authenticated:
+--       checkins_client_insert / _select / _update / _delete
+--       (20260525181500_storage_workspace_policies.sql)
+--     + legacy "Authenticated users can upload checkin images" (mismo predicado).
+--     Nada que agregar.
+
+
+-- ----------------------------------------------------------------------------
+-- (d) Lecturas del ALUMNO en bodycomp / movement / cardio (aislamiento client_id).
+--     ESTADO: COMPLETO en las tres.
+--     - body_composition_measurements.bcm_select (LIVE) YA incluye las ramas del
+--       alumno:  client_id = auth.uid()  OR  client_id IN (client_memberships
+--       activas del account). (OJO: el archivo de migracion 20260611092001 NO
+--       tiene estas ramas; una migracion posterior las agrego — verificado contra
+--       pg_policies en PROD, no contra el .sql.)
+--     - movement_assessments.movement_assessments_client_self_select +
+--       movement_assessment_items_client_self_select: SELECT de las propias FINALES
+--       (client_id = auth.uid() OR via client_memberships).
+--     - cardio: NO existe tabla dedicada. El modulo cardio = columnas de perfil en
+--       clients (leidas por clients_self_select, id = auth.uid()) + sesiones en
+--       workout_logs (leidas por client_manage_logs, client_id = auth.uid()).
+--     Nada que agregar.
+
+-- ============================================================================
+-- FIN — sin sentencias ejecutables. Auditoria E0-B1: 0 grants/policies faltantes.
+-- ============================================================================

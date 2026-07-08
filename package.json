@@ -14,6 +14,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
     "test:e2e:nutrition": "playwright test tests/nutrition-student-smoke.spec.ts",
+    "check:tokens": "node scripts/check-token-parity.mjs",
     "supa": "node_modules/.bin/supabase.cmd",
     "supabase:disable-signup": "node scripts/disable-supabase-signup.mjs",
     "audit:nutrition-empty-meals": "node scripts/audit-nutrition-empty-meals.mjs",

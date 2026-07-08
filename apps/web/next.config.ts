@@ -21,6 +21,17 @@ const nextConfig: NextConfig = {
         source: '/(.*)',
         headers: securityHeaders,
       },
+      // AASA/assetlinks se sirven sin extension (spec de Apple/Android) — Vercel infiere
+      // content-type por extension y sin una cae a octet-stream/plain. Forzamos JSON explicito
+      // para que swcd (iOS) y el verificador de App Links (Android) los acepten sin ambiguedad.
+      {
+        source: '/.well-known/apple-app-site-association',
+        headers: [{ key: 'Content-Type', value: 'application/json' }],
+      },
+      {
+        source: '/.well-known/assetlinks.json',
+        headers: [{ key: 'Content-Type', value: 'application/json' }],
+      },
     ]
   },
   // Enterprise archivado comercialmente (2026-06): la pagina de marketing /enterprise del dominio

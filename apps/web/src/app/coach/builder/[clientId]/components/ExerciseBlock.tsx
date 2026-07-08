@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import { getMuscleColor } from '../muscle-colors'
 import { buildAreaVMs, type BuilderAreaVM } from '../area-ui'
-import { effectiveAreaKey } from '@/lib/workout-areas'
+import { effectiveAreaKey } from '@eva/workout-engine'
 import { EXERCISE_TYPE_LABEL, EXERCISE_TYPE_META, effectiveExerciseType, typedBlockSummary } from '@/lib/workout-exercise-type'
 import { exerciseThumbnailUrl } from '@/lib/youtube'
 import type { BuilderBlock } from '../types'

@@ -1,4 +1,34 @@
-import type { WorkoutOfflineLog } from '@/lib/workout-offline-queue'
+/**
+ * Forma canónica de una serie encolada offline. Vive acá (motor puro) porque es la ENTRADA de
+ * `reconcileSessionLogs` y el shape que web (`lib/workout-offline-queue.ts`) y mobile
+ * (`lib/offline-cache.ts`) deben respetar al encolar. Web re-exporta este tipo desde su cola —
+ * fuente de verdad única del payload, sin depender de código browser (localStorage/FormData).
+ */
+export type WorkoutOfflineLog = {
+    blockId: string
+    setNumber: number
+    weightKg: number | null
+    repsDone: number | null
+    rpe: number | null
+    rir: number | null
+    /** Nota rápida por serie (quick-win E2-6) — opcional: los items legacy siguen parseando. */
+    note?: string | null
+    planId: string
+    coachSlug: string
+    timestamp: number
+    // ── Espejo polimórfico (specs/movida-entrenamiento, AC4) ──
+    // Opcionales: los items legacy ya encolados en localStorage siguen parseando.
+    actualDurationSec?: number | null
+    actualDistanceM?: number | null
+    actualHoldSec?: number | null
+    actualAvgHr?: number | null
+    // ── Sustitución de máquina ocupada (Fase L · workstream C, DC-1) ──
+    // Opcionales/aditivos: los items legacy encolados (sin estas keys) siguen parseando; el flush
+    // last-wins reenvía la serie con su marca de sustitución intacta.
+    substitutedExerciseId?: string | null
+    substitutedExerciseName?: string | null
+    substitutionReason?: string | null
+}
 
 /**
  * Log de una serie tal como lo consume la UI de ejecución (`sessionLogs`, `blockLogs`, `existingLog`).
