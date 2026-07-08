@@ -90,9 +90,20 @@ export function sweepOtherDaySessionStarts(dayIso: string): void {
 }
 
 /**
- * Segundos transcurridos desde el ancla, clampados a 0. El `Math.max(0, …)` protege contra un reloj
- * que RETROCEDE (ajuste NTP / cambio manual de hora) dando un elapsed negativo.
+ * Tope duro del cronómetro de sesión: 4 horas (decisión CEO 2026-07-07). El ancla persiste por
+ * (plan, día): si el alumno abre el entreno en la mañana, nunca toca "Finalizar" y vuelve en la
+ * noche del MISMO día, sin tope la duración diría ~12 h. Ninguna sesión real de gimnasio pasa de
+ * 4 h — todo lo que exceda es "dejó la sesión abierta", no entrenamiento. (Entre días no aplica:
+ * el sweep por día ya re-ancla.)
+ */
+export const SESSION_ELAPSED_CAP_SECONDS = 4 * 3600
+
+/**
+ * Segundos transcurridos desde el ancla, clampados a [0, 4 h]. El `Math.max(0, …)` protege contra
+ * un reloj que RETROCEDE (ajuste NTP / cambio manual de hora); el `Math.min(CAP, …)` es el tope de
+ * sesión (ver SESSION_ELAPSED_CAP_SECONDS). Única fuente del elapsed: el display en vivo y la
+ * duración congelada del resumen pasan ambos por acá → el tope aplica en los dos.
  */
 export function elapsedSecondsSince(startMs: number, nowMs: number): number {
-    return Math.max(0, Math.floor((nowMs - startMs) / 1000))
+    return Math.min(SESSION_ELAPSED_CAP_SECONDS, Math.max(0, Math.floor((nowMs - startMs) / 1000)))
 }

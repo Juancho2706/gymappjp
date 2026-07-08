@@ -6,6 +6,7 @@ import {
     clearSessionStart,
     sweepOtherDaySessionStarts,
     elapsedSecondsSince,
+    SESSION_ELAPSED_CAP_SECONDS,
 } from './session-clock'
 
 const PLAN = 'plan-abc'
@@ -129,5 +130,12 @@ describe('elapsedSecondsSince', () => {
 
     it('0 en el instante del ancla', () => {
         expect(elapsedSecondsSince(1000, 1000)).toBe(0)
+    })
+
+    it('tope de sesión: clampa a 4 h (sesión abierta todo el día sin Finalizar)', () => {
+        const H = 3600_000
+        expect(elapsedSecondsSince(0, 12 * H)).toBe(SESSION_ELAPSED_CAP_SECONDS) // 12 h reales → 4 h
+        expect(elapsedSecondsSince(0, 4 * H)).toBe(SESSION_ELAPSED_CAP_SECONDS) // justo en el tope
+        expect(elapsedSecondsSince(0, 4 * H - 1000)).toBe(SESSION_ELAPSED_CAP_SECONDS - 1) // bajo el tope, sin clamp
     })
 })
