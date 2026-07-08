@@ -40,7 +40,7 @@
 
 Habilitador puro: **nada de re-skin de pantallas todavía**. Cierra con el gate estándar + migración DB aditiva aplicada y verde.
 
-> **Estado 2026-07-08: 39/41 hechas** (3 waves multi-agente + fixes del arquitecto). Verificado: typecheck web+mobile EXIT 0 · vitest 1760+ passed · token parity 86 tokens OK · `expo export --platform android` exit 0 · auditoría DB = cero deltas (E0-B1 sin migración que aplicar; E0-B3 N/A por lo mismo). Las 4 restantes esperan insumos externos: **E0-A3** SHA256 del keystore prod (EAS credentials, CEO), **E0-G1** DSN de Sentry (crear proyecto, MT-40), **E0-G2** correr los 4 flows Maestro en device/emulador (escritos; faltan testIDs, ver `.maestro/README.md`), **E0-G3** confirmar dispositivos de la matriz QA (placeholders PENDIENTE-CEO). El batch de libs nativas (Sentry, view-shot) exige **un build EAS nuevo** antes del QA en device de E1.
+> **Estado 2026-07-08: 40/41 hechas (G1: DSN cableado; source maps difieren de SENTRY_AUTH_TOKEN)** (3 waves multi-agente + fixes del arquitecto). Verificado: typecheck web+mobile EXIT 0 · vitest 1760+ passed · token parity 86 tokens OK · `expo export --platform android` exit 0 · auditoría DB = cero deltas (E0-B1 sin migración que aplicar; E0-B3 N/A por lo mismo). Las 4 restantes esperan insumos externos: **E0-A3** SHA256 del keystore prod (EAS credentials, CEO), **E0-G1** DSN de Sentry (crear proyecto, MT-40), **E0-G2** correr los 4 flows Maestro en device/emulador (escritos; faltan testIDs, ver `.maestro/README.md`), **E0-G3** confirmar dispositivos de la matriz QA (placeholders PENDIENTE-CEO). El batch de libs nativas (Sentry, view-shot) exige **un build EAS nuevo** antes del QA en device de E1.
 
 ### E0.A — Bugs vivos (P0, primero de todo)
 
@@ -167,7 +167,7 @@ Habilitador puro: **nada de re-skin de pantallas todavía**. Cierra con el gate 
 
 ### E0.G — Infra QA / releases
 
-- [ ] **E0-G1** · [FUNCIONAL][M] Sentry RN + source maps EAS (P1)
+- [x] **E0-G1** · [FUNCIONAL][M] Sentry RN + source maps EAS (P1)
   - Fuentes: G11-A5 · Deps: batch EAS libs nativas E0
   - Scope: telemetría de crashes y errores de red en prod mobile. · Verificación: crash de prueba visible en Sentry con symbolication.
 - [ ] **E0-G2** · [FUNCIONAL][M] Maestro instalado + 4 smoke flows core `[NUEVO-PLAN]`

@@ -27,7 +27,7 @@ import { markWalkthroughSeen } from '../lib/walkthrough'
  * reach here (see `app/+native-intent.ts`). EVA DS: brand-tinted hero icons,
  * paged horizontal carousel, pill pagination, "Saltar" escape + final CTA.
  *
- * [COPY-PENDIENTE-CEO] — slide copy below is a proposal awaiting CEO sign-off.
+ * Slide copy APROBADO por CEO 2026-07-08 (4 slides).
  */
 
 interface Slide {
@@ -39,25 +39,25 @@ interface Slide {
 const SLIDES: Slide[] = [
   {
     icon: Dumbbell,
-    // [COPY-PENDIENTE-CEO]
+    // copy aprobado CEO 2026-07-08
     title: 'Bienvenido a EVA',
     body: 'Tu entrenamiento, en tu bolsillo. Todo lo que arma tu coach, siempre contigo.',
   },
   {
     icon: Activity,
-    // [COPY-PENDIENTE-CEO]
+    // copy aprobado CEO 2026-07-08
     title: 'Entrena guiado',
     body: 'Rutinas, timers y tu progreso en vivo. Cada serie registrada al instante.',
   },
   {
     icon: Utensils,
-    // [COPY-PENDIENTE-CEO]
+    // copy aprobado CEO 2026-07-08
     title: 'Nutricion y check-in',
     body: 'Tu plan de comidas, adherencia y check-ins semanales, todo en un lugar.',
   },
   {
     icon: KeyRound,
-    // [COPY-PENDIENTE-CEO]
+    // copy aprobado CEO 2026-07-08
     title: 'Empieza con tu codigo',
     body: 'Tu coach te dio un codigo o un link. Ingresalo y accede a tu plan.',
   },

@@ -108,7 +108,7 @@
       [
         "@sentry/react-native/expo",
         {
-          "organization": "SENTRY_ORG_PENDIENTE",
+          "organization": "eva-nextjs",
           "project": "eva-mobile"
         }
       ]
