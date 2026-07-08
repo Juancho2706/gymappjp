@@ -22,6 +22,7 @@ import {
   KEYPAD_MAX_DECIMALS,
 } from '@/lib/client/keypad-logic'
 import { NumericKeypadSheet, type KeypadTarget } from './NumericKeypadSheet'
+import { resolveKeypadCloseScroll } from './keypad-scroll'
 
 export type { KeypadTarget }
 
@@ -124,6 +125,10 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
   const [step, setStep] = useState(DEFAULT_KEYPAD_STEP)
   const [stepMenuOpen, setStepMenuOpen] = useState(false)
   const keypadH = useRef(320)
+  // BUG-4: distingue el cierre REAL del teclado (config→null) de un re-open (config→otro config, raro)
+  // para compensar el scroll SOLO cuando el teclado se va de verdad. `closeKeypad` lo sube, `openKeypad`
+  // lo baja; el cleanup del efecto [config] lo lee (y lo resetea) para decidir si re-ancla la vista.
+  const closingRef = useRef(false)
 
   useEffect(() => {
     setMounted(true)
@@ -159,6 +164,9 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
 
   const openKeypad = useCallback((cfg: OpenKeypadConfig) => {
     const el = cfg.fieldRefs[cfg.initialFieldKey]?.current ?? null
+    // No es un cierre: un re-open directo (config→config) NO debe compensar scroll — el propio efecto
+    // reubica la fila nueva por encima del teclado.
+    closingRef.current = false
     setConfig(cfg)
     setActiveKey(cfg.initialFieldKey)
     setPhase('input')
@@ -170,6 +178,9 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
   }, [])
 
   const closeKeypad = useCallback(() => {
+    // Cierre REAL (Listo / tocar fuera): marca para que el cleanup del efecto [config] compense el
+    // "rebote" al quitar el padding del teclado (BUG-4).
+    closingRef.current = true
     setConfig(null)
     setStepMenuOpen(false)
     setPhase('input')
@@ -314,8 +325,41 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
     )
     return () => {
       window.cancelAnimationFrame(id)
+      // BUG-4: quitar el dataset/`--keypad-h` achica el documento ~keypad-h; si el scroll quedó bajo el
+      // nuevo máximo el navegador CLAMPA hacia arriba = "rebote" de toda la página en el tick del
+      // submit. Compensamos SOLO en el cierre real (closeKeypad); un re-open bajó `closingRef` y salta.
+      const compensate = closingRef.current
+      closingRef.current = false
+
+      // (a) Medidas ANTES de quitar el padding. Ancla = input activo (mismo `el` que subimos al abrir;
+      //     ambos inputs de la fila comparten `top`). Si la fila ya colapsó a chip por el optimismo del
+      //     submit, `el` quedó desconectado → rama fallback (no re-ancla, fija el scroll).
+      const anchorAlive =
+        compensate && el != null && el.isConnected && el.getBoundingClientRect().height > 0
+      const anchorTopBefore = anchorAlive ? el!.getBoundingClientRect().top : 0
+      const prevScrollY = typeof window !== 'undefined' ? window.scrollY : 0
+
       delete document.body.dataset.execKeypadOpen
       document.body.style.removeProperty('--keypad-h')
+
+      if (!compensate || typeof window === 'undefined') return
+
+      // (b) Reflow forzado (leer rect/scrollHeight aplica el clamp) + scroll instantáneo en el MISMO
+      //     tick síncrono → el navegador nunca pinta el estado colapsado sin compensar (cero flash).
+      const anchorTopAfter = anchorAlive ? el!.getBoundingClientRect().top : 0
+      const maxScrollAfter = Math.max(
+        0,
+        document.documentElement.scrollHeight - window.innerHeight,
+      )
+      const move = resolveKeypadCloseScroll({
+        anchorAlive,
+        anchorTopBefore,
+        anchorTopAfter,
+        prevScrollY,
+        maxScrollAfter,
+      })
+      if (move.kind === 'by') window.scrollBy({ top: move.top, behavior: 'instant' })
+      else if (move.kind === 'to') window.scrollTo({ top: move.top, behavior: 'instant' })
     }
   // Solo reacciona a la apertura/cierre (no a cada cambio de campo).
   // eslint-disable-next-line react-hooks/exhaustive-deps
