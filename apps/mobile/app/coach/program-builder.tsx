@@ -15,6 +15,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from '
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { toast } from '../../components/Toast'
 import { supabase } from '../../lib/supabase'
 import { isMissingColumnError, selectWithFallback } from '../../lib/db-compat'
 import { getCoachProfile } from '../../lib/coach'
@@ -678,9 +679,9 @@ export default function ProgramBuilderScreen() {
         await persistProgram({ coachId: coach.id, clientId: cid, programId: null, meta: buildMeta(true), variantSets: currentVariantSets(), orgId })
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
-      Alert.alert('Listo', `Programa asignado a ${clientIds.length} alumno${clientIds.length === 1 ? '' : 's'}.`)
+      toast.success(`Programa asignado a ${clientIds.length} alumno${clientIds.length === 1 ? '' : 's'}.`)
     } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'No se pudo asignar.')
+      toast.error(e?.message ?? 'No se pudo asignar.')
     } finally {
       setSaving(false)
     }
@@ -780,7 +781,7 @@ export default function ProgramBuilderScreen() {
       AsyncStorage.removeItem(draftKey).catch(() => {})
       router.back()
     } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'No se pudo guardar.')
+      toast.error(e?.message ?? 'No se pudo guardar.')
     } finally {
       setSaving(false)
     }

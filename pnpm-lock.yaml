@@ -306,6 +306,9 @@ importers:
       '@gorhom/bottom-sheet':
         specifier: ^5.2.14
         version: 5.2.14(@types/react@19.1.17)(react-native-gesture-handler@2.28.0(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-reanimated@4.1.7(react-native-worklets@0.8.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      '@hookform/resolvers':
+        specifier: ^5.2.2
+        version: 5.2.2(react-hook-form@7.72.0(react@19.1.0))
       '@react-native-async-storage/async-storage':
         specifier: 3.1.1
         version: 3.1.1(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -408,6 +411,9 @@ importers:
       expo-updates:
         specifier: ~29.0.17
         version: 29.0.17(expo@54.0.34)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      expo-video:
+        specifier: ~3.0.11
+        version: 3.0.16(expo@54.0.34)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       lucide-react-native:
         specifier: ^1.16.0
         version: 1.16.0(react-native-svg@15.12.1(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -420,6 +426,9 @@ importers:
       react:
         specifier: 19.1.0
         version: 19.1.0
+      react-hook-form:
+        specifier: ^7.72.0
+        version: 7.72.0(react@19.1.0)
       react-native:
         specifier: 0.81.5
         version: 0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0)
@@ -453,6 +462,9 @@ importers:
       react-native-url-polyfill:
         specifier: ^2.0.0
         version: 2.0.0(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))
+      react-native-view-shot:
+        specifier: ~4.0.3
+        version: 4.0.3(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       react-native-webview:
         specifier: 13.13.5
         version: 13.13.5(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -5488,6 +5500,13 @@ packages:
       react: 19.1.0
       react-native: '*'
 
+  expo-video@3.0.16:
+    resolution: {integrity: sha512-H1HlxcHGomZItqisGfW3YL/G9BHtNBfVSimDJcLuyxyU87wFnV8loO9tCjuhufkfh/aTa2sW5BYAjLjg9DvnBQ==}
+    peerDependencies:
+      expo: '*'
+      react: 19.1.0
+      react-native: '*'
+
   expo@54.0.34:
     resolution: {integrity: sha512-XkVHguZZDC8BcTQxHAd14/TQFbDp1Wt0Z/KApO9t68Ll5A127hLCPzU+a9gytfCIiyL/V1IpF1vIcOLKEVAoNQ==}
     hasBin: true
@@ -7375,6 +7394,12 @@ packages:
   react-native-url-polyfill@2.0.0:
     resolution: {integrity: sha512-My330Do7/DvKnEvwQc0WdcBnFPploYKp9CYlefDXzIdEaA+PAhDYllkvGeEroEzvc4Kzzj2O4yVdz8v6fjRvhA==}
     peerDependencies:
+      react-native: '*'
+
+  react-native-view-shot@4.0.3:
+    resolution: {integrity: sha512-USNjYmED7C0me02c1DxKA0074Hw+y/nxo+xJKlffMvfUWWzL5ELh/TJA/pTnVqFurIrzthZDPtDM7aBFJuhrHQ==}
+    peerDependencies:
+      react: 19.1.0
       react-native: '*'
 
   react-native-webview@13.13.5:
@@ -13497,7 +13522,6 @@ snapshots:
   css-line-break@2.1.0:
     dependencies:
       utrie: 1.0.2
-    optional: true
 
   css-select@5.2.2:
     dependencies:
@@ -14461,6 +14485,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  expo-video@3.0.16(expo@54.0.34)(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
+    dependencies:
+      expo: 54.0.34(@babel/core@7.29.7)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(react-native-webview@13.13.5(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
+      react: 19.1.0
+      react-native: 0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0)
+
   expo@54.0.34(@babel/core@7.29.7)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(react-native-webview@13.13.5(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3):
     dependencies:
       '@babel/runtime': 7.28.6
@@ -14866,7 +14896,6 @@ snapshots:
     dependencies:
       css-line-break: 2.1.0
       text-segmentation: 1.0.3
-    optional: true
 
   http-errors@2.0.1:
     dependencies:
@@ -16659,6 +16688,12 @@ snapshots:
       react-native: 0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0)
       whatwg-url-without-unicode: 8.0.0-3
 
+  react-native-view-shot@4.0.3(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
+    dependencies:
+      html2canvas: 1.4.1
+      react: 19.1.0
+      react-native: 0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0)
+
   react-native-webview@13.13.5(react-native@0.81.5(@babel/core@7.29.7)(@react-native/metro-config@0.85.3(@babel/core@7.29.7))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
     dependencies:
       escape-string-regexp: 4.0.0
@@ -17540,7 +17575,6 @@ snapshots:
   text-segmentation@1.0.3:
     dependencies:
       utrie: 1.0.2
-    optional: true
 
   thenify-all@1.6.0:
     dependencies:
@@ -17802,7 +17836,6 @@ snapshots:
   utrie@1.0.2:
     dependencies:
       base64-arraybuffer: 1.0.2
-    optional: true
 
   uuid@7.0.3: {}
 

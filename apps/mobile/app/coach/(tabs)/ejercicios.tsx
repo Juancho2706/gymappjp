@@ -11,6 +11,7 @@ import { useTheme } from '../../../context/ThemeContext'
 import { ScreenHeader, Badge, EmptyState, Card, Input } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { toast } from '../../../components/Toast'
 import { ExerciseFormSheet } from '../../../components/coach/ExerciseFormSheet'
 import { ExercisePreviewSheet } from '../../../components/coach/ExercisePreviewSheet'
 import { canCreateCustomExercises, cloneExercise, exerciseThumb, filterExercises, listCoachExercises, MUSCLE_GROUPS, type ExerciseRow } from '../../../lib/exercises'
@@ -134,8 +135,8 @@ export default function EjerciciosScreen() {
     }
     previewRef.current?.dismiss()
     const r = await cloneExercise(row)
-    if (!r.ok) { Alert.alert('No se pudo duplicar', r.error ?? 'Intenta nuevamente.'); return }
-    Alert.alert('Ejercicio duplicado', 'Se copió a tus ejercicios. Ahora podés editarlo.')
+    if (!r.ok) { toast.error(r.error ?? 'No se pudo duplicar. Intenta nuevamente.'); return }
+    toast.success('Ejercicio duplicado. Se copió a tus ejercicios.')
     load('refresh')
   }
 

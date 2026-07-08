@@ -52,6 +52,7 @@ import { supabase } from '../lib/supabase'
 import { ThemeProvider } from '../context/ThemeContext'
 import { configurePushHandler, setupAndroidChannel, syncPushToken } from '../lib/push'
 import { EvaSplash } from '../components/EvaSplash'
+import { Toaster } from '../components/Toast'
 import { AppErrorBoundary } from '../components/AppErrorBoundary'
 import { BiometricLock } from '../components/BiometricLock'
 import { isBiometricLockEnabled } from '../lib/biometric'
@@ -241,6 +242,8 @@ export default function RootLayout() {
             >
               <RootLayoutNav />
             </MotiView>
+            {/* Transient feedback overlay — single mount point (parity with web <Toaster/>). */}
+            <Toaster />
             {!splashDone && <EvaSplash onFinish={() => setSplashDone(true)} />}
           </ThemeProvider>
         </BottomSheetModalProvider>

@@ -34,7 +34,9 @@ export async function setupAndroidChannel(): Promise<void> {
     name: 'EVA',
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 250, 250, 250],
-    lightColor: '#007AFF',
+    // EVA DS brand accent (sport-500 = rgb 38 128 255). Mirrors --color-brand /
+    // --color-sport-500; replaces the legacy system blue #007AFF.
+    lightColor: '#2680FF',
   })
 }
 

@@ -3,7 +3,7 @@ declare module 'react-native-webview' {
   import type { ViewProps } from 'react-native'
 
   export interface WebViewProps extends ViewProps {
-    source?: { uri?: string; html?: string }
+    source?: { uri?: string; html?: string; baseUrl?: string }
     allowsFullscreenVideo?: boolean
     allowsInlineMediaPlayback?: boolean
     javaScriptEnabled?: boolean
