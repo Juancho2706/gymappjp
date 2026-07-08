@@ -45,6 +45,14 @@ import {
     sweepOtherDaySessionStarts,
     elapsedSecondsSince,
 } from './session-clock'
+import { clearAllDrafts, sweepStaleDrafts } from './workout-draft-store'
+import {
+    readSessionSnapshot,
+    writeSessionSnapshot,
+    clearSessionSnapshot,
+    sweepOtherDaySnapshots,
+} from './session-logs.snapshot'
+import { bottomVisibilityBoundary, isTargetWithinViewport } from './scroll-visibility'
 import { springs } from '@/lib/animation-presets'
 import { useBasePath } from '@/components/client/BasePathProvider'
 import { useScreenWakeLock } from '@/lib/client/use-screen-wake-lock'
@@ -534,9 +542,19 @@ function smoothScrollIntoViewIfNeeded(el: HTMLElement | null | undefined, block:
     const rect = el.getBoundingClientRect()
     const vh = window.innerHeight || document.documentElement.clientHeight
     const HEADER_H = 96 // header sticky aprox. (título + progreso)
-    const FOOTER_H = 88 // barra fija "Finalizar" aprox.
-    const alreadyVisible = rect.top >= HEADER_H && rect.bottom <= vh - FOOTER_H
-    if (alreadyVisible) return
+    const FOOTER_H = 88 // barra fija "Finalizar" aprox. — fallback si no se pudo medir.
+    // Sub-fix 3: la obstrucción inferior REAL se mide al momento de disparar. Cuando el RestTimer
+    // (sheet inferior, arranca al guardar) está montado, tapa MÁS que la barra "Finalizar" sola → sin
+    // medirlo el gate se equivocaba y disparaba un scroll = "se mueve solo". Medimos el borde superior
+    // de la barra Finalizar y del sheet del RestTimer; la frontera es el más alto (pura, testeada).
+    const obstructionTops: number[] = []
+    const finishBar = document.querySelector('.exec-finish-bar')
+    if (finishBar) obstructionTops.push(finishBar.getBoundingClientRect().top)
+    document.querySelectorAll('[data-exec-bottom-sheet]').forEach((sheet) => {
+        obstructionTops.push(sheet.getBoundingClientRect().top)
+    })
+    const bottomBoundary = bottomVisibilityBoundary(vh, FOOTER_H, obstructionTops)
+    if (isTargetWithinViewport({ rectTop: rect.top, rectBottom: rect.bottom, headerH: HEADER_H, bottomBoundary })) return
     el.scrollIntoView({ behavior: 'smooth', block })
 }
 
@@ -1068,9 +1086,30 @@ export function WorkoutExecutionClient({
     // handleLogged, intacto). En sesión normal `logs` no cambia (no hay revalidate por serie) → el
     // efecto no vuelve a correr y el optimismo en vuelo se preserva.
     useEffect(() => {
-        setSessionLogs(reconcileSessionLogs(logs, readWorkoutOfflineQueueForPlan(plan.id)))
+        // Snapshot local (BUG 2 · sub-fix 2): re-inyecta las series ya confirmadas en esta sesión donde
+        // el server stale (logs=[]) y la cola drenada no aportan → la pantalla nunca colapsa a vacío. El
+        // día ISO vive en sessionDayIsoRef (Wave B), pero ESTE efecto corre ANTES que el del cronómetro
+        // en el primer montaje (orden de declaración) → si el ref aún no está seteado lo calculamos acá.
+        const dayIso = sessionDayIsoRef.current || getTodayInSantiago().iso
+        setSessionLogs(
+            reconcileSessionLogs(
+                logs,
+                readWorkoutOfflineQueueForPlan(plan.id),
+                readSessionSnapshot(plan.id, dayIso),
+            ),
+        )
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [logs])
+
+    // Persistencia del snapshot (BUG 2 · sub-fix 2): cada vez que `sessionLogs` cambia guardamos las
+    // filas CONFIRMADAS (writeSessionSnapshot filtra `_pending`) por (plan, día). Ligero (pocas filas,
+    // 1 write por serie) → sin debounce. Es lo que el reconcile de arriba re-inyecta al reentrar con red
+    // mala. Al desmontar por finalizar, handleFinish limpia la clave (abajo).
+    useEffect(() => {
+        const dayIso = sessionDayIsoRef.current || getTodayInSantiago().iso
+        writeSessionSnapshot(plan.id, dayIso, sessionLogs)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sessionLogs])
 
     // Frescura al (re)entrar (informe forense 2026-07-04, Root Cause A). En back/forward Next reutiliza
     // el snapshot cacheado del client Router Cache IGNORANDO `staleTimes` (doc oficial) → el ejecutor
@@ -1119,6 +1158,10 @@ export function WorkoutExecutionClient({
         sessionDayIsoRef.current = dayIso
         // Higiene: borra anclas de OTROS días (sesiones abandonadas que nunca se finalizaron/limpiaron).
         sweepOtherDaySessionStarts(dayIso)
+        // Higiene BUG 2: borradores viejos (>24h) del plan y snapshots de OTROS días (sesiones
+        // abandonadas). No borra los borradores del día en curso ni el snapshot de hoy.
+        sweepStaleDrafts(plan.id, Date.now())
+        sweepOtherDaySnapshots(dayIso)
 
         const persisted = readSessionStart(plan.id, dayIso)
         const anchor = persisted ?? Date.now()
@@ -1464,6 +1507,9 @@ export function WorkoutExecutionClient({
                                 // sesión del mismo día arranca de cero (BUG 1).
                                 setFinishedElapsed(elapsedSecondsSince(sessionAnchorRef.current, Date.now()))
                                 clearSessionStart(plan.id, sessionDayIsoRef.current)
+                                // BUG 2: la sesión terminó → los borradores y el snapshot local ya no aplican.
+                                clearAllDrafts(plan.id)
+                                clearSessionSnapshot(plan.id, sessionDayIsoRef.current)
                                 setShowCompleted(true)
                             },
                         },
@@ -1482,6 +1528,9 @@ export function WorkoutExecutionClient({
         // ancla persistido → una 2ª sesión del mismo día arranca de cero (BUG 1).
         setFinishedElapsed(elapsedSecondsSince(sessionAnchorRef.current, Date.now()))
         clearSessionStart(plan.id, sessionDayIsoRef.current)
+        // BUG 2: la sesión terminó → los borradores y el snapshot local ya no aplican.
+        clearAllDrafts(plan.id)
+        clearSessionSnapshot(plan.id, sessionDayIsoRef.current)
         setShowCompleted(true)
     }
     // Contexto del programa para el nudge "lo que viene" del resumen (reusa la sub-línea del header;

@@ -122,4 +122,51 @@ describe('reconcileSessionLogs', () => {
         expect(out[0]).not.toBe(original)
         expect(original).not.toHaveProperty('_pending')
     })
+
+    // ── Snapshot local (forense RC3/RC4): monotonía server > cola > snapshot ──────────────────
+    it('server VACÍO + cola VACÍA + snapshot 3 filas → 3 filas confirmadas (la pantalla no colapsa a vacío)', () => {
+        const snap = [serverLog('b1', 1), serverLog('b1', 2), serverLog('b2', 1)]
+        const out = reconcileSessionLogs([], [], snap)
+        expect(out).toHaveLength(3)
+        expect(out.every((l) => l._pending === false)).toBe(true)
+        expect(out.map((l) => sessionLogKey(l.block_id, l.set_number)).sort()).toEqual(['b1:1', 'b1:2', 'b2:1'])
+    })
+
+    it('server FRESCO pisa el snapshot (mismo (block,set), valor distinto → gana el server)', () => {
+        const server = [serverLog('b1', 1, { weight_kg: 105, reps_done: 6 })]
+        const snap = [serverLog('b1', 1, { weight_kg: 999, reps_done: 99 })]
+        const out = reconcileSessionLogs(server, [], snap)
+        expect(out).toHaveLength(1)
+        expect(out[0].weight_kg).toBe(105)
+        expect(out[0].reps_done).toBe(6)
+        expect(out[0]._pending).toBe(false)
+    })
+
+    it('el snapshot NO resucita una fila que el server SÍ reporta distinta (no duplica ni pisa)', () => {
+        // server tiene b1:1 (105kg); snapshot trae b1:1 (viejo, 90kg) + b1:2 (que el server aún no reporta).
+        const server = [serverLog('b1', 1, { weight_kg: 105 })]
+        const snap = [serverLog('b1', 1, { weight_kg: 90 }), serverLog('b1', 2, { weight_kg: 88 })]
+        const out = reconcileSessionLogs(server, [], snap)
+        const byKey = new Map(out.map((l) => [sessionLogKey(l.block_id, l.set_number), l]))
+        expect(out).toHaveLength(2)
+        expect(byKey.get('b1:1')?.weight_kg).toBe(105) // server manda
+        expect(byKey.get('b1:2')?.weight_kg).toBe(88) // snapshot rellena el hueco
+        expect(byKey.get('b1:2')?._pending).toBe(false)
+    })
+
+    it('la cola (pending) gana sobre el snapshot para el mismo (block,set)', () => {
+        const snap = [serverLog('b1', 1, { weight_kg: 90 })]
+        const out = reconcileSessionLogs([], [queued('b1', 1, { weightKg: 61 })], snap)
+        expect(out).toHaveLength(1)
+        expect(out[0].weight_kg).toBe(61)
+        expect(out[0]._pending).toBe(true) // sin sincronizar, no lo pisa el snapshot confirmado
+    })
+
+    it('mezcla server + snapshot: server confirma unas y el snapshot rellena OTRAS', () => {
+        const server = [serverLog('b1', 1)]
+        const snap = [serverLog('b1', 1, { weight_kg: 1 }), serverLog('b1', 2), serverLog('b2', 1)]
+        const out = reconcileSessionLogs(server, [], snap)
+        expect(out).toHaveLength(3)
+        expect(out.every((l) => l._pending === false)).toBe(true)
+    })
 })
