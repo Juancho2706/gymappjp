@@ -1117,6 +1117,11 @@ export function WorkoutExecutionClient({
     // Fix B los pinta; `visibilitychange` cubre el retorno al tab/PWA. GATEADO: sólo refresca si hay
     // indicios de actividad previa (logs del server, cola pendiente, o la marca de sesión) — una
     // primera visita 100% limpia no paga un fetch extra.
+    // Y NUNCA offline (QA CEO 2026-07-07, modo avión): un `router.refresh()` sin red hace que Next
+    // falle el fetch RSC y caiga a NAVEGACIÓN COMPLETA del browser ("falling back to browser
+    // navigation") → el service worker no puede resolverla y sirve su página "Sin conexión",
+    // expulsando al alumno del entreno que justo estaba protegido por la cola offline. Con red de
+    // vuelta, el evento 'online' (OfflineWorkoutQueueSync) flushea y refresca — no se pierde frescura.
     useEffect(() => {
         if (logs.length > 0) markWorkoutTouched()
         const readTouched = () => {
@@ -1124,9 +1129,10 @@ export function WorkoutExecutionClient({
         }
         const hasPriorData = () =>
             logs.length > 0 || readWorkoutOfflineQueueForPlan(plan.id).length > 0 || readTouched()
-        if (hasPriorData()) router.refresh()
+        const online = () => typeof navigator === 'undefined' || navigator.onLine
+        if (online() && hasPriorData()) router.refresh()
         const onVisible = () => {
-            if (document.visibilityState === 'visible' && hasPriorData()) router.refresh()
+            if (document.visibilityState === 'visible' && online() && hasPriorData()) router.refresh()
         }
         document.addEventListener('visibilitychange', onVisible)
         return () => document.removeEventListener('visibilitychange', onVisible)
