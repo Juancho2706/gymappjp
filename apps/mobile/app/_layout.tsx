@@ -46,6 +46,8 @@ import {
 import type { Session } from '@supabase/supabase-js'
 import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated'
 import { MotiView } from 'moti'
+import * as Sentry from '@sentry/react-native'
+import type { ErrorBoundaryProps } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { ThemeProvider } from '../context/ThemeContext'
 import { configurePushHandler, setupAndroidChannel, syncPushToken } from '../lib/push'
@@ -53,12 +55,33 @@ import { EvaSplash } from '../components/EvaSplash'
 import { AppErrorBoundary } from '../components/AppErrorBoundary'
 import { BiometricLock } from '../components/BiometricLock'
 import { isBiometricLockEnabled } from '../lib/biometric'
+import { checkForOtaUpdate } from '../lib/ota'
 import { AppState } from 'react-native'
 
 SplashScreen.preventAutoHideAsync()
 
+// Telemetría de errores (E0-G1 / G11 §1.8). Gateado por env: sin DSN es no-op TOTAL
+// (cero llamadas de red, cero riesgo de crash). El DSN se inyecta vía EAS build
+// (EXPO_PUBLIC_SENTRY_DSN); sin él la app corre exactamente igual que hoy.
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    debug: false,
+    enabled: !__DEV__,
+    tracesSampleRate: 0,
+  })
+}
+
 // Expo Router: fallback global ante un throw no atrapado (en vez de pantalla blanca).
-export { AppErrorBoundary as ErrorBoundary }
+// Envolvemos el boundary de marca para reportar el error a Sentry (si hay DSN).
+function ReportingErrorBoundary(props: ErrorBoundaryProps) {
+  useEffect(() => {
+    if (SENTRY_DSN && props.error) Sentry.captureException(props.error)
+  }, [props.error])
+  return <AppErrorBoundary {...props} />
+}
+export { ReportingErrorBoundary as ErrorBoundary }
 
 configurePushHandler()
 
@@ -109,6 +132,16 @@ function RootLayoutNav() {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setSession(s))
     return () => subscription.unsubscribe()
+  }, [])
+
+  // OTA en foreground (E0-G6): chequea al abrir y al volver de background.
+  // No-op en __DEV__; throttled a 1 check/hora dentro de lib/ota.ts.
+  useEffect(() => {
+    checkForOtaUpdate()
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') checkForOtaUpdate()
+    })
+    return () => sub.remove()
   }, [])
 
   useEffect(() => {

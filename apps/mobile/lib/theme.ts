@@ -1,7 +1,34 @@
 import type { ViewStyle } from 'react-native'
 import { resolveBrandTheme, deriveSportTokens } from '@eva/brand-kit'
+import { GLOWS } from './shadows'
+import { FONT } from './typography'
+
+/**
+ * ⚠️ THEMING FRONTIER — this imperative `Theme` object is a READ-ONLY SHIM and
+ * a DEPRECATED second source of color. DO NOT add new consumers.
+ *
+ * Mobile has two theming mechanisms; the canonical one is NativeWind classes
+ * (var-driven, dark-aware + white-label-aware at runtime via `brandVars`).
+ * This StyleSheet `Theme` object exists ONLY for the handful of things
+ * NativeWind classes cannot express in RN:
+ *   - literal `shadowColor` (RN shadows need a concrete color)
+ *   - color props of native libs (@gorhom/bottom-sheet backgroundStyle, etc.)
+ *   - lucide icon `color`, `placeholderTextColor`, `ActivityIndicator color`
+ *
+ * Everything else — background / border / text of a <View>/<Text> — MUST come
+ * from `className` so dark mode and the coach's white-label brand resolve
+ * automatically. A color hardcoded from this object for something the brand
+ * ramp should drive diverges from the coach accent.
+ *
+ * The objects below are frozen (Object.freeze) so no consumer can mutate them,
+ * and every literal is derived from the SINGLE `DS` palette source (no hex is
+ * written twice). Values mirror EVA DS (token-contract.md / web globals.css).
+ * Shadows/glows live in `./shadows`; type faces in `./typography`.
+ */
 
 export interface Theme {
+  /** Resolved appearance of this theme instance (drives scheme-aware elevation). */
+  scheme: 'light' | 'dark'
   // Core (used across all screens)
   primary: string
   background: string
@@ -31,102 +58,118 @@ export interface Theme {
     '2xl': number
     '3xl': number
   }
-  // Shadows / glow
+  // Shadows / glow (sourced from ./shadows — single source)
   shadowGlowBlue: ViewStyle
   shadowGlowCyan: ViewStyle
-  // Typography
+  shadowGlowEmber: ViewStyle
+  // Typography (face names — see ./typography FONT)
   fontSans: string
   fontDisplay: string
 }
 
-const radius = {
+/**
+ * Single palette source for the imperative shim. Every literal hex below is
+ * written ONCE here and referenced by both themes — no duplication. Names/values
+ * mirror the DS tokens (token-contract.md / web globals.css).
+ */
+const DS = {
+  sport500: '#2680FF', // brand (applyCoachBranding overrides at runtime)
+  danger500: '#F4365A',
+  success500: '#1FB877',
+  aqua500: '#18ABD4', // recovery
+  white: '#FFFFFF',
+  // Light neutrals
+  inkStrong: '#0B0E13', // ink-950 / text-strong (light)
+  inkMuted: '#5A6573', // ink-500 / text-muted (light)
+  paper: '#FBFCFD', // surface-app (light)
+  sunkenLight: '#F4F6F8', // ink-50 / surface-sunken (light)
+  borderLight: '#E6E9ED', // ink-100 / border-subtle (light)
+  // Dark neutrals
+  textStrongDark: '#F4F6F8',
+  textMutedDark: '#8A95A3',
+  surfaceAppDark: '#0A0D12',
+  surfaceCardDark: '#161B22',
+  surfaceSunkenDark: '#1F262F',
+  borderDark: 'rgba(255,255,255,0.07)', // border-subtle (dark)
+} as const
+
+const radius = Object.freeze({
   sm: 7,
   md: 10,
   lg: 12,
   xl: 17,
   '2xl': 22,
   '3xl': 26,
+})
+
+/** Shallow-freeze a Theme plus its nested style objects so it stays read-only. */
+function freezeTheme(t: Theme): Theme {
+  Object.freeze(t.radius)
+  Object.freeze(t.shadowGlowBlue)
+  Object.freeze(t.shadowGlowCyan)
+  Object.freeze(t.shadowGlowEmber)
+  return Object.freeze(t)
 }
 
-export const lightTheme: Theme = {
-  // Core (backward compat) — values from EVA DS (token-contract.md, light)
-  primary: '#2680FF',           // sport-500 (brand); applyCoachBranding() overrides at runtime
-  background: '#FBFCFD',        // surface-app (paper)
-  card: '#FFFFFF',              // surface-card
-  text: '#0B0E13',             // text-strong (ink-950)
-  textSecondary: '#5A6573',    // text-muted (ink-500)
-  muted: '#F4F6F8',            // surface-sunken (ink-50)
-  border: '#E6E9ED',           // border-subtle (ink-100)
-  destructive: '#F4365A',      // danger-500
-  success: '#1FB877',          // success-500
+export const lightTheme: Theme = freezeTheme({
+  scheme: 'light',
+  // Core (backward compat)
+  primary: DS.sport500,
+  background: DS.paper,
+  card: DS.white,
+  text: DS.inkStrong,
+  textSecondary: DS.inkMuted,
+  muted: DS.sunkenLight,
+  border: DS.borderLight,
+  destructive: DS.danger500,
+  success: DS.success500,
   // Extended
-  primaryForeground: '#FFFFFF',// text-on-sport
-  foreground: '#0B0E13',       // text-strong
-  mutedForeground: '#5A6573',  // text-muted
-  secondary: '#F4F6F8',        // surface-sunken
-  secondaryForeground: '#0B0E13',
-  accent: '#F4F6F8',           // subtle surface
-  accentForeground: '#2680FF', // brand; applyCoachBranding() overrides
-  cyan: '#18ABD4',             // aqua-500 (recovery)
+  primaryForeground: DS.white, // text-on-sport
+  foreground: DS.inkStrong,
+  mutedForeground: DS.inkMuted,
+  secondary: DS.sunkenLight,
+  secondaryForeground: DS.inkStrong,
+  accent: DS.sunkenLight,
+  accentForeground: DS.sport500, // brand; applyCoachBranding() overrides
+  cyan: DS.aqua500,
   input: 'rgba(0,0,0,0.05)',
   radius,
-  shadowGlowBlue: {
-    shadowColor: '#2680FF',    // glow-sport
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.42,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  shadowGlowCyan: {
-    shadowColor: '#18ABD4',    // aqua glow (recovery)
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 15,
-    elevation: 8,
-  },
-  fontSans: 'HankenGrotesk_400Regular',
-  fontDisplay: 'Archivo_700Bold',
-}
+  shadowGlowBlue: GLOWS.sport,
+  shadowGlowCyan: GLOWS.aqua,
+  shadowGlowEmber: GLOWS.ember,
+  fontSans: FONT.ui,
+  fontDisplay: FONT.display,
+})
 
-export const darkTheme: Theme = {
-  // Core (backward compat) — values from EVA DS (token-contract.md, dark)
-  primary: '#2680FF',           // sport-500 (brand); applyCoachBranding() overrides at runtime
-  background: '#0A0D12',        // surface-app (dark)
-  card: '#161B22',             // surface-card (dark)
-  text: '#F4F6F8',            // text-strong (dark)
-  textSecondary: '#8A95A3',   // text-muted (dark)
-  muted: '#1F262F',           // surface-sunken (dark)
-  border: 'rgba(255,255,255,0.07)', // border-subtle (dark)
-  destructive: '#F4365A',     // danger-500
-  success: '#1FB877',         // success-500
+export const darkTheme: Theme = freezeTheme({
+  scheme: 'dark',
+  // Core (backward compat)
+  primary: DS.sport500,
+  background: DS.surfaceAppDark,
+  card: DS.surfaceCardDark,
+  text: DS.textStrongDark,
+  textSecondary: DS.textMutedDark,
+  muted: DS.surfaceSunkenDark,
+  border: DS.borderDark,
+  destructive: DS.danger500,
+  success: DS.success500,
   // Extended
-  primaryForeground: '#FFFFFF',
-  foreground: '#F4F6F8',      // text-strong (dark)
-  mutedForeground: '#8A95A3', // text-muted (dark)
-  secondary: '#1F262F',       // surface-sunken (dark)
-  secondaryForeground: '#F4F6F8',
-  accent: '#1F262F',          // subtle surface (dark)
-  accentForeground: '#2680FF',// brand; applyCoachBranding() overrides
-  cyan: '#18ABD4',            // aqua-500 (recovery)
+  primaryForeground: DS.white,
+  foreground: DS.textStrongDark,
+  mutedForeground: DS.textMutedDark,
+  secondary: DS.surfaceSunkenDark,
+  secondaryForeground: DS.textStrongDark,
+  accent: DS.surfaceSunkenDark,
+  accentForeground: DS.sport500, // brand; applyCoachBranding() overrides
+  cyan: DS.aqua500,
   input: 'rgba(255,255,255,0.05)',
   radius,
-  shadowGlowBlue: {
-    shadowColor: '#2680FF',   // glow-sport
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.42,
-    shadowRadius: 20,
-    elevation: 8,
-  },
-  shadowGlowCyan: {
-    shadowColor: '#18ABD4',   // aqua glow (recovery)
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 15,
-    elevation: 8,
-  },
-  fontSans: 'HankenGrotesk_400Regular',
-  fontDisplay: 'Archivo_700Bold',
-}
+  shadowGlowBlue: GLOWS.sport,
+  shadowGlowCyan: GLOWS.aqua,
+  shadowGlowEmber: GLOWS.ember,
+  fontSans: FONT.ui,
+  fontDisplay: FONT.display,
+})
 
 const DEFAULT_BRAND = '#007AFF'
 

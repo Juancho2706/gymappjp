@@ -104,7 +104,14 @@
       "./plugins/with-android-cleartext",
       "./plugins/with-gradle-jvmargs",
       "./plugins/with-privacy-manifest",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "SENTRY_ORG_PENDIENTE",
+          "project": "eva-mobile"
+        }
+      ]
     ],
     "updates": {
       "url": "https://u.expo.dev/a5f4f7c0-861c-48b1-9ed6-fc46e7843844",

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../context/ThemeContext'
+import { useEntitlements } from '../../lib/entitlements'
 
 type TabRoute = {
   key: string
@@ -87,16 +88,24 @@ export function AlumnoMobileChrome({
 }) {
   const insets = useSafeAreaInsets()
   const { theme, mode } = useTheme()
+  const { nutritionEnabled } = useEntitlements()
   const isDark = mode !== 'light'
   const [moreOpen, setMoreOpen] = useState(false)
+
+  // E0-C3: gate del tab "Plan" (nutrición) — si el coach apagó el dominio Nutrición para este
+  // alumno (master switch feature-prefs, espejo del nav web /c), se OCULTA del nav (render-only;
+  // la ruta sigue existiendo). Fail-open: nutritionEnabled default true (nada se oculta ante
+  // config sin resolver / error de red).
+  const hidden = nutritionEnabled ? HIDDEN_FROM_OVERFLOW : [...HIDDEN_FROM_OVERFLOW, 'nutricion']
 
   const routes = state.routes
   const activeName = routes[state.index]?.name
   const primary = PRIMARY_TABS
+    .filter((name) => !hidden.includes(name))
     .map((name) => routes.find((r) => r.name === name))
     .filter(Boolean) as TabRoute[]
   const overflow = routes.filter(
-    (r) => !PRIMARY_TABS.includes(r.name) && !HIDDEN_FROM_OVERFLOW.includes(r.name),
+    (r) => !PRIMARY_TABS.includes(r.name) && !hidden.includes(r.name),
   )
   const overflowActive = !PRIMARY_TABS.includes(activeName)
 

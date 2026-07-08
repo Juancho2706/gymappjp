@@ -1,0 +1,39 @@
+# Flow: alumno abre Nutrición y marca la primera comida del día como completada.
+# Requiere sesión ya iniciada (correr después de alumno-login.yaml o con estado persistido).
+# Pantallas: apps/mobile/app/alumno/(tabs)/nutricion.tsx,
+#            apps/mobile/components/MealCardExpandable.tsx
+#
+# GOTCHA: sin testID en ninguna de estas pantallas (verificado E0-G2, 2026-07-08). El nombre
+# de cada comida es contenido dinámico (meal.name) — no hay texto estático para anclar un
+# selector determinista, así que este flow ancla por regex sobre el resumen de macros
+# ("... kcal ...", MealCardExpandable.tsx L86-88) y toma la PRIMERA coincidencia (index: 0).
+# testIDs faltantes a agregar en mobile:
+#   - MealCardExpandable.tsx: header TouchableOpacity (toggle completar) -> testID=`meal-toggle-${meal.id}`
+#     (L67-104), boton expandir/colapsar -> testID=`meal-expand-${meal.id}` (L93-102)
+#   - MealCardExpandable.tsx: portionBtn (25/50/75/100%) -> testID=`meal-portion-${pct}` (L132-144)
+#   - MealCardExpandable.tsx: satisfactionBtn (emoji) -> testID=`meal-satisfaction-${score}` (L162-177)
+#   - nutricion.tsx: contenedor raiz -> testID="alumno-nutricion-screen" (ancla de arribo)
+appId: cl.evaapp.eva
+---
+- launchApp:
+    clearState: false
+
+# Paso 1: tab Nutrición (alumno/(tabs)/_layout.tsx L57, título "Nutrición")
+- tapOn: "Nutrición"
+
+# Paso 2: pantalla cargó — o hay comidas del plan, o el empty-state explícito (nutricion.tsx L496)
+- assertVisible:
+    text: "(kcal|Sin comidas para este día)"
+
+# Paso 3: marcar la primera comida visible como completada (tap sobre el resumen de macros,
+# que propaga al TouchableOpacity padre = handleToggle, MealCardExpandable.tsx L67-104).
+# Se omite si hoy no hay comidas (empty-state) — condicional no soportado nativamente en
+# Maestro sin `runFlow` con `when`, se documenta como limitación conocida del flow.
+- runFlow:
+    when:
+      visible:
+        text: ".*kcal.*"
+    commands:
+      - tapOn:
+          text: ".*kcal.*"
+          index: 0

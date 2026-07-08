@@ -1,6 +1,7 @@
 import { Pressable, View } from 'react-native'
 import type { PressableProps, ViewProps, ViewStyle } from 'react-native'
 import { useTheme } from '../context/ThemeContext'
+import { SHADOWS } from '../lib/shadows'
 
 /**
  * EVA Card — base surface container (RN port of the DS `Card`).
@@ -71,23 +72,6 @@ const PAD_TOKEN: Record<'none' | 'sm' | 'md' | 'lg', number> = {
   lg: 20,
 }
 
-// Cool-tinted DS elevations (rgba 13 18 28). RN shadowColor must be a literal
-// color; these are neutral shadow tints, not brand/surface tokens.
-const SHADOW_SM: ViewStyle = {
-  shadowColor: '#0D121C',
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.05,
-  shadowRadius: 2,
-  elevation: 1,
-}
-const SHADOW_MD: ViewStyle = {
-  shadowColor: '#0D121C',
-  shadowOffset: { width: 0, height: 6 },
-  shadowOpacity: 0.1,
-  shadowRadius: 12,
-  elevation: 5,
-}
-
 export function Card({
   variant = 'default',
   padding = 16,
@@ -103,13 +87,15 @@ export function Card({
   const pad = typeof padding === 'number' ? padding : PAD_TOKEN[padding]
   const containerClass = `${VARIANT_CLASS[variant]} ${RADIUS_CLASS[radius]}`
 
+  // Centralized DS elevation, retuned per scheme (see lib/shadows).
+  const S = SHADOWS[theme.scheme]
   const shadow: ViewStyle | null =
     variant === 'highlighted'
       ? theme.shadowGlowBlue
       : variant === 'inverse'
-      ? SHADOW_MD
+      ? S.md
       : variant === 'default' || variant === 'sport'
-      ? SHADOW_SM
+      ? S.sm
       : null
 
   const baseStyle: ViewStyle = { padding: pad }

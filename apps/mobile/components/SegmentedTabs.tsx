@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native'
-import type { ViewStyle } from 'react-native'
 import { useTheme } from '../context/ThemeContext'
+import { SHADOWS } from '../lib/shadows'
+import { FONT, TYPE_SCALE } from '../lib/typography'
 import { HapticPressable } from './HapticPressable'
 
 /**
@@ -29,18 +30,9 @@ interface SegmentedTabsProps<T extends string> {
   size?: 'sm' | 'md'
 }
 
-// DS `--shadow-sm` (cool-tinted rgba 13 18 28) — lift for the active pill.
-const SHADOW_SM: ViewStyle = {
-  shadowColor: '#0D121C',
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.05,
-  shadowRadius: 2,
-  elevation: 1,
-}
-
 const SIZE: Record<'sm' | 'md', { height: number; fontSize: number }> = {
-  sm: { height: 34, fontSize: 13 },
-  md: { height: 42, fontSize: 14 },
+  sm: { height: 34, fontSize: TYPE_SCALE.xs },
+  md: { height: 42, fontSize: TYPE_SCALE.sm },
 }
 
 export function SegmentedTabs<T extends string>({ items, value, onChange, size = 'md' }: SegmentedTabsProps<T>) {
@@ -58,14 +50,14 @@ export function SegmentedTabs<T extends string>({ items, value, onChange, size =
             style={[
               styles.item,
               { height: sz.height, backgroundColor: active ? theme.card : 'transparent' },
-              active ? SHADOW_SM : null,
+              active ? SHADOWS[theme.scheme].sm : null,
             ]}
           >
             <Text
               numberOfLines={1}
               style={{
                 color: active ? theme.foreground : theme.mutedForeground,
-                fontFamily: active ? 'HankenGrotesk_700Bold' : 'HankenGrotesk_600SemiBold',
+                fontFamily: active ? FONT.uiBold : FONT.uiSemibold,
                 fontSize: sz.fontSize,
               }}
             >

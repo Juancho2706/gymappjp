@@ -887,6 +887,29 @@ Al quedar inscrita la sociedad (EVA Technology SpA, en proceso jun-2026), revisa
 
 ---
 
+## MT-40 — Sentry RN (app mobile) + source maps EAS · ⏳ Antes del primer build EAS de E0
+
+Telemetría de errores para `apps/mobile` (E0-G1). El código ya está cableado y **gateado por env**:
+sin `EXPO_PUBLIC_SENTRY_DSN` es no-op total (cero red, cero riesgo de crash). Falta la config manual:
+
+**Pasos:**
+1. En [sentry.io](https://sentry.io) → New Project → **React Native** → nombre `eva-mobile` (proyecto
+   separado del web `eva-web` de MT-30; distinto SDK y volumen de eventos).
+2. Copiar el DSN (formato `https://abc123@o123456.ingest.sentry.io/789`).
+3. En **EAS** (env vars del build, `eas.json` o EAS dashboard → Environment variables):
+   - `EXPO_PUBLIC_SENTRY_DSN` = el DSN → Production (y Preview si se quiere telemetría en staging).
+   - **No** setearlo en dev local: el init ya ignora `__DEV__` (`enabled: !__DEV__`), pero mantenerlo
+     fuera del entorno de desarrollo evita ruido.
+4. `@sentry/react-native` es **lib nativa** → requiere un **build EAS nuevo** (batch nativo de E0,
+   junto con las demás libs nativas de la etapa). No llega por OTA.
+
+**Pendiente aparte — source maps EAS (requiere el DSN del paso 2, por eso se difiere):**
+- Configurar upload de source maps en el build EAS (plugin `@sentry/react-native/expo` +
+  `SENTRY_AUTH_TOKEN`/`SENTRY_ORG`/`SENTRY_PROJECT` como secrets del build). Sin esto, los stack
+  traces en Sentry salen minificados. Hacerlo una vez que exista el proyecto y el DSN.
+
+---
+
 ## Nota — Search Console y páginas /enterprise
 
 Search Console removal de `/enterprise` y `/legal/contrato-enterprise`: **INNECESARIO** (verificado 2026-06-11, Google no tiene nada indexado de esas rutas). El `noindex` agregado en ambas páginas queda como cinturón de seguridad preventivo.

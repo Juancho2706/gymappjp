@@ -144,10 +144,16 @@ module.exports = {
         content: '440px',
       },
       fontFamily: {
-        // Existing entries (kept so current screens keep compiling)
-        medium: ['Inter_500Medium'],
-        semibold: ['Inter_600SemiBold'],
-        'display-extra': ['Montserrat_800ExtraBold'],
+        // Legacy weight-utility aliases (font-medium / font-semibold / font-display-extra).
+        // On web these are Hanken (UI/body) and Archivo (display) at the given weight —
+        // NOT Inter/Montserrat. Remapped to the EVA families so a re-skin writing
+        // className="font-semibold" gets Hanken, and "font-display-extra" gets Archivo
+        // (mirrors --font-ui=Hanken / --font-display=Archivo in web globals.css).
+        // Duplicates of sans-medium / sans-semibold / display-bold; kept as aliases so
+        // current screens keep compiling. Purge with the Inter/Montserrat legacy sweep.
+        medium: ['HankenGrotesk_500Medium'],
+        semibold: ['HankenGrotesk_600SemiBold'],
+        'display-extra': ['Archivo_800ExtraBold'],
         // DS families (Archivo display / Hanken Grotesk UI / JetBrains mono)
         sans: ['HankenGrotesk_400Regular'],
         'sans-medium': ['HankenGrotesk_500Medium'],

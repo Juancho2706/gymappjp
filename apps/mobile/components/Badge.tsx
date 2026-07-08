@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Text, View } from 'react-native'
 import type { ViewStyle } from 'react-native'
+import { FONT, TYPE_SCALE } from '../lib/typography'
 
 // Legacy tones already consumed across the app (keep — public API).
 type LegacyTone = 'primary' | 'success' | 'destructive' | 'muted' | 'cyan'
@@ -63,8 +64,8 @@ const PALETTE: Record<
 }
 
 const SIZE: Record<Size, { height: number; paddingHorizontal: number; gap: number; fontSize: number; dot: number; icon: number }> = {
-  sm: { height: 20, paddingHorizontal: 8, gap: 4, fontSize: 11, dot: 6, icon: 12 },
-  md: { height: 24, paddingHorizontal: 10, gap: 6, fontSize: 12, dot: 6, icon: 14 },
+  sm: { height: 20, paddingHorizontal: 8, gap: 4, fontSize: TYPE_SCALE['3xs'], dot: 6, icon: 12 },
+  md: { height: 24, paddingHorizontal: 10, gap: 6, fontSize: TYPE_SCALE['2xs'], dot: 6, icon: 14 },
 }
 
 export function Badge({
@@ -137,7 +138,7 @@ export function Badge({
       <Text
         numberOfLines={1}
         className={usesToneColor ? undefined : textColor}
-        style={[{ fontSize: s.fontSize, letterSpacing: 0.2, fontFamily: 'HankenGrotesk_700Bold' }, toneTextColor ? { color: toneTextColor } : null]}
+        style={[{ fontSize: s.fontSize, letterSpacing: 0.2, fontFamily: FONT.uiBold }, toneTextColor ? { color: toneTextColor } : null]}
       >
         {children ?? label}
       </Text>

@@ -11,8 +11,14 @@ interface ThemeContextValue {
   theme: Theme
   branding: CoachBranding | null
   setBranding: (b: CoachBranding | null) => void
+  /** User preference: 'system' follows the OS, 'light'/'dark' pin the appearance. */
   mode: ThemeMode
+  /** Appearance actually applied right now (mode resolved against the OS). */
+  resolvedScheme: 'light' | 'dark'
+  /** Binary flip (light↔dark) — pins an explicit mode. Kept for the existing toggle UI. */
   toggleTheme: () => void
+  /** Set the preference explicitly. Pass 'system' to hand control back to the OS. */
+  setThemeMode: (mode: ThemeMode) => void
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
@@ -21,7 +27,10 @@ const THEME_MODE_KEY = 'eva_theme_mode'
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const colorScheme = useColorScheme()
   const [branding, setBranding] = useState<CoachBranding | null>(null)
-  const [mode, setMode] = useState<ThemeMode>('light')
+  // Default follows the OS (parity with web next-themes). Migration: a user who
+  // previously pinned an appearance has 'light'/'dark' stored → respected below;
+  // absence (never toggled, or 'system') falls through to this OS-following default.
+  const [mode, setMode] = useState<ThemeMode>('system')
 
   useEffect(() => {
     loadStoredBranding().then(setBranding)
@@ -32,6 +41,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     })
   }, [])
 
+  // `useColorScheme()` is reactive, so 'system' tracks OS changes live.
   const resolvedScheme: 'light' | 'dark' = (mode === 'system' ? colorScheme : mode) === 'dark' ? 'dark' : 'light'
   const base = resolvedScheme === 'dark' ? darkTheme : lightTheme
   const theme = applyCoachBranding(base, branding?.primaryColor)
@@ -44,14 +54,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Live brand accent for Tailwind classes (bg-primary, text-accent…).
   const themeVars = { ...vars(brandVars(branding?.primaryColor, resolvedScheme)) }
 
-  function toggleTheme() {
-    const next: ThemeMode = resolvedScheme === 'dark' ? 'light' : 'dark'
+  function setThemeMode(next: ThemeMode) {
     setMode(next)
-    AsyncStorage.setItem(THEME_MODE_KEY, next)
+    void AsyncStorage.setItem(THEME_MODE_KEY, next)
+  }
+
+  function toggleTheme() {
+    setThemeMode(resolvedScheme === 'dark' ? 'light' : 'dark')
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, branding, setBranding, mode, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, branding, setBranding, mode, resolvedScheme, toggleTheme, setThemeMode }}>
       <View style={[{ flex: 1 }, themeVars]}>{children}</View>
     </ThemeContext.Provider>
   )
