@@ -1,16 +1,16 @@
 import { useEffect, useRef } from 'react'
 import { AppState, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Tabs, useRouter } from 'expo-router'
 import { supabase } from '../../../lib/supabase'
 import { flushLogQueue, flushNutritionQueue, getPendingLogCount, getPendingNutritionCount } from '../../../lib/offline-cache'
 import { getClientProfile } from '../../../lib/client'
 import { sessionFlags } from '../../../lib/session-flags'
-import { useTheme } from '../../../context/ThemeContext'
-import { AlumnoMobileChrome } from '../../../components/alumno/AlumnoMobileChrome'
+import { AlumnoMobileChrome, ALUMNO_TABBAR_CLEARANCE } from '../../../components/alumno/AlumnoMobileChrome'
 
 export default function AlumnoTabsLayout() {
-  const { theme } = useTheme()
   const router = useRouter()
+  const insets = useSafeAreaInsets()
   const appState = useRef(AppState.currentState)
 
   // Ola 0: gate de acceso a nivel navegación (cubre TODAS las tabs, no solo Home).
@@ -42,15 +42,18 @@ export default function AlumnoTabsLayout() {
     return () => sub.remove()
   }, [])
 
-  // 6→4+Más: barra docked DS (espejo del coach). Inicio · Plan · Aprender · Check-in + "Más"
-  // (Historial, Perfil). El tint activo / inactivo lo resuelve la chrome desde theme.primary.
+  // Capsula flotante DS (E1-01, espejo del ClientNav mobile web): Inicio ·
+  // Nutrición · Aprender · Check-in + "Más" (Historial, Perfil). El tabBar es
+  // absoluto/flotante (altura 0 en el flujo), asi que reservamos el espacio
+  // inferior via sceneStyle para que el contenido nunca quede tapado por la
+  // capsula. El branding activo lo resuelve la chrome via tokens NativeWind.
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <View className="flex-1 bg-surface-app">
       <Tabs
         tabBar={(props) => <AlumnoMobileChrome {...props} />}
         screenOptions={{
           headerShown: false,
-          sceneStyle: { backgroundColor: theme.background },
+          sceneStyle: { paddingBottom: insets.bottom + ALUMNO_TABBAR_CLEARANCE },
         }}
       >
         <Tabs.Screen name="home" options={{ title: 'Inicio' }} />

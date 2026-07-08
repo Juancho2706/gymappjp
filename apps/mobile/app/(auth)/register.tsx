@@ -75,9 +75,8 @@ export default function RegisterScreen() {
         acceptHealthData: true,
         acceptMarketing,
       })
-      Alert.alert('Revisa tu correo', 'Confirma tu email para activar tu cuenta free.', [
-        { text: 'OK', onPress: () => router.replace('/(auth)/login?role=coach') },
-      ])
+      // E1-20: pantalla dedicada de "revisá tu email" (espejo web), en vez del Alert efímero.
+      router.replace(`/(auth)/verify-email?email=${encodeURIComponent(parsed.data.email)}`)
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Intenta nuevamente.'
       Alert.alert('No se pudo crear la cuenta', message)

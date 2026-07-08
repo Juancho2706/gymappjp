@@ -141,3 +141,79 @@ export async function getPersonalRecords(clientId: string) {
   }
   return prs.sort((a, b) => b.weightKg - a.weightKg).slice(0, 5)
 }
+
+// ── PR detail (progresion de un lift) — E1-04 PRDetailSheet. Espejo del web
+//    getExercisePRHistory: agrupa por dia Santiago (top peso + mejor 1RM Epley),
+//    hitos = cada vez que el peso tope supero el maximo acumulado. ──
+export interface PRHistoryPoint { date: string; topWeightKg: number; estimated1RM: number }
+export interface PRMilestone { date: string; weightKg: number; prevKg: number; deltaKg: number }
+export interface ExercisePRDetail {
+  exerciseId: string
+  exerciseName: string
+  currentPr: { weightKg: number; achievedAt: string }
+  history: PRHistoryPoint[]
+  milestones: PRMilestone[]
+}
+
+function epleyOneRM(weight: number, reps: number): number {
+  return reps <= 1 ? weight : weight * (1 + reps / 30)
+}
+
+export async function getExercisePRHistory(clientId: string, exerciseId: string): Promise<ExercisePRDetail | null> {
+  const [{ data: logs }, { data: exRow }] = await Promise.all([
+    supabase
+      .from('workout_logs')
+      .select('weight_kg, reps_done, logged_at')
+      .eq('client_id', clientId)
+      .eq('exercise_id', exerciseId)
+      .not('weight_kg', 'is', null)
+      .order('logged_at', { ascending: true })
+      .limit(2000),
+    supabase.from('exercises').select('name').eq('id', exerciseId).maybeSingle(),
+  ])
+
+  const rows = (logs ?? []) as { weight_kg: number | null; reps_done: number | null; logged_at: string }[]
+  if (rows.length === 0) return null
+
+  type DayAgg = { topWeightKg: number; best1RM: number; topAt: string }
+  const byDate = new Map<string, DayAgg>()
+  for (const r of rows) {
+    if (r.weight_kg == null) continue
+    const ymd = getSantiagoIsoYmdForUtcInstant(r.logged_at)
+    const reps = Math.max(1, r.reps_done ?? 1)
+    const oneRm = epleyOneRM(r.weight_kg, reps)
+    const cur = byDate.get(ymd)
+    if (!cur) {
+      byDate.set(ymd, { topWeightKg: r.weight_kg, best1RM: oneRm, topAt: r.logged_at })
+    } else {
+      if (r.weight_kg > cur.topWeightKg) { cur.topWeightKg = r.weight_kg; cur.topAt = r.logged_at }
+      if (oneRm > cur.best1RM) cur.best1RM = oneRm
+    }
+  }
+
+  const history: PRHistoryPoint[] = [...byDate.entries()]
+    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    .map(([date, v]) => ({ date, topWeightKg: v.topWeightKg, estimated1RM: Math.round(v.best1RM * 10) / 10 }))
+  if (history.length === 0) return null
+
+  const milestones: PRMilestone[] = []
+  let runningMax = 0
+  for (const p of history) {
+    if (p.topWeightKg > runningMax) {
+      milestones.push({ date: p.date, weightKg: p.topWeightKg, prevKg: runningMax, deltaKg: Math.round((p.topWeightKg - runningMax) * 10) / 10 })
+      runningMax = p.topWeightKg
+    }
+  }
+
+  let best = history[0]
+  for (const p of history) if (p.topWeightKg > best.topWeightKg) best = p
+  const bestDay = byDate.get(best.date)!
+
+  return {
+    exerciseId,
+    exerciseName: exRow?.name ?? 'Ejercicio',
+    currentPr: { weightKg: best.topWeightKg, achievedAt: bestDay.topAt },
+    history,
+    milestones,
+  }
+}

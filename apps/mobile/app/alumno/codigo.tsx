@@ -80,6 +80,7 @@ export default function CodigoScreen() {
             autoCapitalize="none"
             autoCorrect={false}
             autoFocus
+            testID="codigo-input"
           />
 
           {error ? (
@@ -100,6 +101,7 @@ export default function CodigoScreen() {
             full
             size="lg"
             style={{ marginTop: 8 }}
+            testID="codigo-submit"
           />
         </MotiView>
       </KeyboardAvoidingView>

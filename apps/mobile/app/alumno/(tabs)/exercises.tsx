@@ -1,27 +1,24 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   FlatList,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native'
-import { BookOpen, Play, Search, X } from 'lucide-react-native'
+import { Image } from 'expo-image'
+import { BookOpen, Dumbbell, Play, Search, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
-import type { BottomSheetModal } from '@gorhom/bottom-sheet'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { useTheme } from '../../../context/ThemeContext'
-import { BottomSheet, Button, EmptyState, Input, ScreenHeader } from '../../../components'
+import { Button, EmptyState, Input, Sheet, VideoPlayer } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AppBackground } from '../../../components/AppBackground'
-
-const FONT_BOLD = 'HankenGrotesk_700Bold'
-const FONT_SEMI = 'HankenGrotesk_600SemiBold'
-const FONT_DISPLAY = 'Archivo_800ExtraBold'
+import { FONT, TYPE, textStyle } from '../../../lib/typography'
+import { GLOWS, SHADOWS } from '../../../lib/shadows'
 
 interface Exercise {
   id: string
@@ -32,16 +29,27 @@ interface Exercise {
   gif_url: string | null
 }
 
+// Detección YouTube — mismo contrato que VideoPlayer / la web (lib/youtube).
+const YT_RE = /(?:youtu\.be\/|v=|\/embed\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/
+
+/** Miniatura utilizable del ejercicio: gif propio o, si el video es de YouTube, su thumb. */
+function mediaThumb(ex: Exercise): string | null {
+  if (ex.gif_url) return ex.gif_url
+  const m = ex.video_url?.match(YT_RE)
+  return m ? `https://img.youtube.com/vi/${m[1]}/hqdefault.jpg` : null
+}
+
 export default function ExercisesScreen() {
-  const { theme } = useTheme()
-  const sheetRef = useRef<BottomSheetModal>(null)
+  const { theme, resolvedScheme } = useTheme()
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null)
   const [selected, setSelected] = useState<Exercise | null>(null)
 
-  useEffect(() => { load().catch(() => setLoading(false)) }, [])
+  useEffect(() => {
+    load().catch(() => setLoading(false))
+  }, [])
 
   async function load() {
     setLoading(true)
@@ -63,14 +71,10 @@ export default function ExercisesScreen() {
     setLoading(false)
   }
 
-  function openDetail(exercise: Exercise) {
-    setSelected(exercise)
-    sheetRef.current?.expand()
-  }
-
-  const muscleGroups = ['Todos', ...Array.from(
-    new Set(exercises.map((e) => e.muscle_group).filter(Boolean) as string[])
-  ).sort()]
+  const muscleGroups = [
+    'Todos',
+    ...Array.from(new Set(exercises.map((e) => e.muscle_group).filter(Boolean) as string[])).sort(),
+  ]
 
   const filtered = exercises.filter((e) => {
     const matchSearch = !search || e.name.toLowerCase().includes(search.toLowerCase())
@@ -78,13 +82,33 @@ export default function ExercisesScreen() {
     return matchSearch && matchMuscle
   })
 
+  // Ejercicio destacado: primero con media utilizable, solo en la vista por defecto
+  // (sin búsqueda ni filtro de músculo) — espeja FeaturedExerciseCard de la web.
+  const isDefaultView = !search.trim() && (selectedMuscle === null || selectedMuscle === 'Todos')
+  const featured = isDefaultView ? (filtered.find((e) => mediaThumb(e)) ?? null) : null
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} testID="exercises-screen">
       <AppBackground />
-      <ScreenHeader title="Aprender Técnica" subtitle="Catálogo de ejercicios" />
+
+      {/* Header branded — icono Dumbbell sport + "Aprender · Técnica de cada ejercicio" */}
+      <View style={styles.header}>
+        <View style={[styles.headerIcon, { backgroundColor: theme.primary + '1A', borderRadius: theme.radius.lg }]}>
+          <Dumbbell size={22} color={theme.primary} strokeWidth={2.2} />
+        </View>
+        <View style={styles.headerText}>
+          <Text style={[TYPE.h3, { color: theme.foreground }]} numberOfLines={1}>
+            Aprender
+          </Text>
+          <Text style={[TYPE.caption, { color: theme.mutedForeground }]} numberOfLines={1}>
+            Técnica de cada ejercicio
+          </Text>
+        </View>
+      </View>
 
       <View style={styles.searchWrap}>
         <Input
+          testID="exercises-search-input"
           leftIcon={Search}
           rightIcon={search.length > 0 ? X : undefined}
           onRightIconPress={() => setSearch('')}
@@ -106,6 +130,7 @@ export default function ExercisesScreen() {
             return (
               <TouchableOpacity
                 key={group}
+                testID={`muscle-chip-${group}`}
                 onPress={() => setSelectedMuscle(group === 'Todos' ? null : group)}
                 activeOpacity={0.75}
                 style={[
@@ -116,7 +141,12 @@ export default function ExercisesScreen() {
                   },
                 ]}
               >
-                <Text style={[styles.muscleChipText, { color: isSelected ? theme.primaryForeground : theme.foreground, fontFamily: FONT_BOLD }]}>
+                <Text
+                  style={[
+                    textStyle('xs', FONT.uiBold),
+                    { color: isSelected ? theme.primaryForeground : theme.foreground },
+                  ]}
+                >
                   {group}
                 </Text>
               </TouchableOpacity>
@@ -137,6 +167,14 @@ export default function ExercisesScreen() {
           columnWrapperStyle={styles.column}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            featured ? (
+              <View style={styles.featuredHeader}>
+                <FeaturedCard exercise={featured} theme={theme} scheme={resolvedScheme} onPress={() => setSelected(featured)} />
+                <Text style={[TYPE.title, { color: theme.foreground }]}>Biblioteca</Text>
+              </View>
+            ) : null
+          }
           renderItem={({ item, index }) => (
             <MotiView
               from={{ opacity: 0, translateY: 10 }}
@@ -144,117 +182,210 @@ export default function ExercisesScreen() {
               transition={{ type: 'timing', duration: 300, delay: Math.min(index * 30, 300) }}
               style={styles.cardWrap}
             >
-              <TouchableOpacity
-                style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}
-                onPress={() => openDetail(item)}
-                activeOpacity={0.85}
-              >
-                <View style={styles.banner}>
-                  {item.gif_url ? (
-                    <Image source={{ uri: item.gif_url }} style={styles.bannerImg} resizeMode="cover" />
-                  ) : null}
-                  <View style={styles.bannerPlay}>
-                    <Play size={16} color="#FFFFFF" />
-                  </View>
-                  {item.muscle_group ? (
-                    <View style={styles.bannerChip}>
-                      <Text style={[styles.bannerChipText, { color: theme.primary }]}>
-                        {item.muscle_group}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
-                <View style={styles.cardContent}>
-                  <Text style={[styles.exerciseName, { color: theme.foreground, fontFamily: FONT_SEMI }]} numberOfLines={2}>
-                    {item.name}
-                  </Text>
-                </View>
-              </TouchableOpacity>
+              <ExerciseCard item={item} theme={theme} scheme={resolvedScheme} onPress={() => setSelected(item)} />
             </MotiView>
           )}
         />
       )}
 
-      <BottomSheet ref={sheetRef} title={selected?.name} snapPoints={['55%', '90%']}>
-        {selected && <ExerciseDetail exercise={selected} theme={theme} onClose={() => sheetRef.current?.close()} />}
-      </BottomSheet>
+      <Sheet
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        snapPoints={['72%', '92%']}
+        footer={
+          <Button label="Cerrar" variant="sport" size="lg" onPress={() => setSelected(null)} full testID="exercise-detail-close" />
+        }
+      >
+        {selected && <ExerciseDetail exercise={selected} theme={theme} />}
+      </Sheet>
     </SafeAreaView>
   )
 }
 
-function ExerciseDetail({ exercise, theme, onClose }: { exercise: Exercise; theme: any; onClose: () => void }) {
-  const instructions = (exercise.instructions ?? '').split('\n').filter(Boolean)
+/* -------------------------------------------------------------------------- */
+
+/** Hero "Destacado" — banner grande + play sport-glow + nombre display. */
+function FeaturedCard({
+  exercise,
+  theme,
+  scheme,
+  onPress,
+}: {
+  exercise: Exercise
+  theme: any
+  scheme: 'light' | 'dark'
+  onPress: () => void
+}) {
+  const thumb = mediaThumb(exercise)
+  return (
+    <TouchableOpacity
+      testID="featured-exercise-card"
+      activeOpacity={0.9}
+      onPress={onPress}
+      style={[styles.featCard, { backgroundColor: theme.card, borderColor: theme.border }, SHADOWS[scheme].sm]}
+    >
+      <View style={styles.featBanner}>
+        {thumb ? (
+          <>
+            <Image source={{ uri: thumb }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
+            <View style={styles.featScrim} />
+          </>
+        ) : null}
+        <View style={[styles.featPlay, { backgroundColor: theme.primary }, GLOWS.sport]}>
+          <Play size={26} color={theme.primaryForeground} fill={theme.primaryForeground} />
+        </View>
+        <View style={[styles.featBadge, { backgroundColor: theme.primary }]}>
+          <Text style={[TYPE.eyebrow, { color: theme.primaryForeground }]}>Destacado</Text>
+        </View>
+      </View>
+      <View style={styles.featContent}>
+        <Text style={[TYPE.h3, { color: theme.foreground }]} numberOfLines={2}>
+          {exercise.name}
+        </Text>
+        {exercise.muscle_group ? (
+          <Text style={[TYPE.caption, { color: theme.mutedForeground, marginTop: 2 }]}>{exercise.muscle_group}</Text>
+        ) : null}
+      </View>
+    </TouchableOpacity>
+  )
+}
+
+/** Card de grilla: banner + badge músculo + nombre. */
+function ExerciseCard({
+  item,
+  theme,
+  scheme,
+  onPress,
+}: {
+  item: Exercise
+  theme: any
+  scheme: 'light' | 'dark'
+  onPress: () => void
+}) {
+  const thumb = mediaThumb(item)
+  return (
+    <TouchableOpacity
+      testID={`exercise-card-${item.id}`}
+      style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }, SHADOWS[scheme].sm]}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
+      <View style={styles.banner}>
+        {thumb ? (
+          <Image source={{ uri: thumb }} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
+        ) : (
+          <View style={[styles.bannerPlay, { backgroundColor: 'rgba(255,255,255,0.12)' }]}>
+            <Play size={17} color="#FFFFFF" />
+          </View>
+        )}
+        {item.muscle_group ? (
+          <View style={styles.bannerChip}>
+            <Text style={[textStyle('3xs', FONT.uiExtra, { ls: 'wide' }), styles.bannerChipText, { color: theme.primary }]}>
+              {item.muscle_group}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={styles.cardContent}>
+        <Text style={[textStyle('xs', FONT.uiBold, { lh: 'snug' }), { color: theme.foreground }]} numberOfLines={2}>
+          {item.name}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  )
+}
+
+/** Contenido del sheet de detalle: banner media + nombre + eyebrow músculo + instrucciones. */
+function ExerciseDetail({ exercise, theme }: { exercise: Exercise; theme: any }) {
+  const instructions = (exercise.instructions ?? '')
+    .split('\n')
+    .map((l) => l.replace(/^Step:\d+\s*/i, '').trim())
+    .filter(Boolean)
 
   return (
     <View style={styles.detail}>
-      <View style={[styles.detailBanner, { borderRadius: theme.radius.lg }]}>
+      {/* Banner media (full-bleed dentro del padding del Sheet) */}
+      <View style={styles.detailBanner}>
         {exercise.gif_url ? (
-          <Image source={{ uri: exercise.gif_url }} style={styles.detailGif} resizeMode="contain" />
+          <View style={styles.detailGifWrap}>
+            <Image source={{ uri: exercise.gif_url }} style={styles.detailGif} contentFit="contain" transition={200} />
+          </View>
+        ) : exercise.video_url ? (
+          <VideoPlayer url={exercise.video_url} autoPlay muted loop title={exercise.name} />
         ) : (
-          <View style={styles.detailPlay}>
-            <Play size={24} color="#FFFFFF" />
+          <View style={[styles.detailFallback, { backgroundColor: theme.card }]}>
+            <View style={[styles.detailFallbackPlay, { backgroundColor: theme.primary }, GLOWS.sport]}>
+              <Play size={24} color={theme.primaryForeground} fill={theme.primaryForeground} />
+            </View>
           </View>
         )}
       </View>
 
-      {exercise.muscle_group && (
-        <Text style={[styles.detailEyebrow, { color: theme.primary }]}>
-          {exercise.muscle_group}
-        </Text>
-      )}
+      <View>
+        <Text style={[TYPE.h2, { color: theme.foreground }]}>{exercise.name}</Text>
+        {exercise.muscle_group ? (
+          <Text style={[TYPE.eyebrow, { color: theme.primary, marginTop: 5 }]}>{exercise.muscle_group}</Text>
+        ) : null}
+      </View>
 
       {instructions.length > 0 ? (
         <View style={styles.instructionsList}>
           {instructions.map((line, i) => (
             <View key={i} style={styles.instructionRow}>
               <View style={[styles.instructionNum, { backgroundColor: theme.primary + '1A', borderRadius: theme.radius.sm }]}>
-                <Text style={[styles.instructionNumText, { color: theme.primary, fontFamily: FONT_DISPLAY }]}>
-                  {i + 1}
-                </Text>
+                <Text style={[textStyle('xs', FONT.displayBold), { color: theme.primary }]}>{i + 1}</Text>
               </View>
-              <Text style={[styles.instructionText, { color: theme.foreground, fontFamily: theme.fontSans }]}>
-                {line}
-              </Text>
+              <Text style={[textStyle('sm', FONT.ui, { lh: 'relaxed' }), { color: theme.foreground, flex: 1 }]}>{line}</Text>
             </View>
           ))}
         </View>
       ) : (
-        <Text style={[styles.detailHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        <Text style={[TYPE.body, { color: theme.mutedForeground }]}>
           El entrenador aún no ha añadido instrucciones específicas para este ejercicio.
         </Text>
       )}
-
-      <Button label="Cerrar" variant="sport" size="lg" onPress={onClose} full style={{ marginTop: 6 }} />
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 14,
+  },
+  headerIcon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerText: { flex: 1, minWidth: 0 },
   searchWrap: { paddingHorizontal: 16, paddingBottom: 10 },
   muscleScroll: { paddingHorizontal: 16, gap: 8, paddingBottom: 12 },
   muscleChip: { borderWidth: 1.5, paddingHorizontal: 15, height: 34, justifyContent: 'center', borderRadius: 999 },
-  muscleChipText: { fontSize: 13 },
   list: { paddingHorizontal: 16, paddingBottom: 32 },
   column: { gap: 12 },
+  featuredHeader: { gap: 14, marginBottom: 14 },
+  featCard: { borderWidth: 1, borderRadius: 20, overflow: 'hidden' },
+  featBanner: { height: 150, backgroundColor: '#12161D', alignItems: 'center', justifyContent: 'center' },
+  featScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.28)' },
+  featPlay: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
+  featBadge: { position: 'absolute', top: 12, left: 12, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
+  featContent: { padding: 16 },
   cardWrap: { flex: 1, marginBottom: 12 },
   card: { flex: 1, borderWidth: 1, borderRadius: 20, overflow: 'hidden' },
-  banner: { height: 92, backgroundColor: '#12161D', alignItems: 'center', justifyContent: 'center' },
-  bannerImg: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
-  bannerPlay: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  banner: { height: 96, backgroundColor: '#12161D', alignItems: 'center', justifyContent: 'center' },
+  bannerPlay: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   bannerChip: { position: 'absolute', bottom: 7, left: 7, backgroundColor: 'rgba(0,0,0,0.45)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
-  bannerChipText: { fontSize: 9.5, fontFamily: 'HankenGrotesk_800ExtraBold', letterSpacing: 0.5, textTransform: 'uppercase' },
+  bannerChipText: { textTransform: 'uppercase' },
   cardContent: { padding: 11 },
-  exerciseName: { fontSize: 13.5, lineHeight: 17 },
-  detail: { gap: 14, paddingTop: 4 },
-  detailBanner: { height: 180, backgroundColor: '#12161D', overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  detailGif: { width: '100%', height: 180 },
-  detailPlay: { width: 58, height: 58, borderRadius: 29, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
-  detailEyebrow: { fontSize: 11, fontFamily: 'HankenGrotesk_800ExtraBold', letterSpacing: 0.8, textTransform: 'uppercase' },
+  detail: { gap: 16, paddingTop: 4 },
+  detailBanner: { marginHorizontal: -20 },
+  detailGifWrap: { height: 200, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  detailGif: { width: '100%', height: 200 },
+  detailFallback: { height: 200, alignItems: 'center', justifyContent: 'center' },
+  detailFallbackPlay: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
   instructionsList: { gap: 12 },
   instructionRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   instructionNum: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  instructionNumText: { fontSize: 12 },
-  instructionText: { flex: 1, fontSize: 14.5, lineHeight: 21 },
-  detailHint: { fontSize: 14, lineHeight: 20 },
 })

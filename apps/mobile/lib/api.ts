@@ -102,3 +102,15 @@ export function signCheckinPhotos(clientId: string, refs: string[]) {
     body: { clientId, refs },
   })
 }
+
+/**
+ * E1-18: limpieza AUTORITATIVA (service-role) del flag force_password_change del alumno tras
+ * cambiar la contraseña. Reemplaza el UPDATE best-effort por PostgREST directo (que una policy
+ * puede bloquear → loop del gate). Ver apps/web/.../api/mobile/auth/clear-force-password.
+ */
+export function clearForcePasswordChange() {
+  return apiFetch<{ ok: true }>('/api/mobile/auth/clear-force-password', {
+    method: 'POST',
+    authenticated: true,
+  })
+}

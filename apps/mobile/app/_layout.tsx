@@ -51,7 +51,7 @@ import type { ErrorBoundaryProps } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { ThemeProvider } from '../context/ThemeContext'
 import { configurePushHandler, setupAndroidChannel, syncPushToken } from '../lib/push'
-import { EvaSplash } from '../components/EvaSplash'
+import { BrandedSplash } from '../components/alumno/BrandedSplash'
 import { Toaster } from '../components/Toast'
 import { AppErrorBoundary } from '../components/AppErrorBoundary'
 import { BiometricLock } from '../components/BiometricLock'
@@ -244,7 +244,7 @@ export default function RootLayout() {
             </MotiView>
             {/* Transient feedback overlay — single mount point (parity with web <Toaster/>). */}
             <Toaster />
-            {!splashDone && <EvaSplash onFinish={() => setSplashDone(true)} />}
+            {!splashDone && <BrandedSplash onFinish={() => setSplashDone(true)} />}
           </ThemeProvider>
         </BottomSheetModalProvider>
       </SafeAreaProvider>

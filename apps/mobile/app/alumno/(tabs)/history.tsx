@@ -1,12 +1,7 @@
 import { useEffect, useState } from 'react'
-import {
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
-import { ChevronDown, Dumbbell, History } from 'lucide-react-native'
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { MotiView } from 'moti'
+import { Calendar, ChevronDown, Dumbbell } from 'lucide-react-native'
 import { getClientProfile } from '../../../lib/client'
 import {
   getWorkoutDaySummaries,
@@ -15,7 +10,9 @@ import {
   type DaySummary,
 } from '../../../lib/history.queries'
 import { useTheme } from '../../../context/ThemeContext'
-import { EmptyState, ScreenHeader } from '../../../components'
+import { ScreenHeader } from '../../../components'
+import { Card } from '../../../components/Card'
+import { EmptyState } from '../../../components/EmptyState'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AppBackground } from '../../../components/AppBackground'
@@ -53,13 +50,15 @@ export default function HistoryScreen() {
     }
   }
 
-  const monthsLabel = daysBack >= HISTORY_DAYS_EXTENDED ? '6 meses' : '3 meses'
+  const extended = daysBack >= HISTORY_DAYS_EXTENDED
+  const monthsLabel = extended ? '6 meses' : '3 meses'
+  const subtitle = `Días con series registradas (últimos ${monthsLabel})`
 
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <AppBackground />
-        <ScreenHeader title="Historial" subtitle="Tus entrenamientos" />
+        <ScreenHeader title="Historial de entrenos" subtitle={subtitle} />
         <EvaLoaderScreen subtitle="Cargando historial…" />
       </SafeAreaView>
     )
@@ -69,8 +68,12 @@ export default function HistoryScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <AppBackground />
-        <ScreenHeader title="Historial" subtitle="Tus entrenamientos" />
-        <EmptyState icon={History} title="Sin historial" subtitle="Completá tu primer entrenamiento para verlo aquí." />
+        <ScreenHeader title="Historial de entrenos" subtitle={subtitle} />
+        <EmptyState
+          icon={Calendar}
+          title="Aún no hay series registradas"
+          subtitle="Cuando completes entrenos en este periodo, aparecerán aquí."
+        />
       </SafeAreaView>
     )
   }
@@ -78,88 +81,78 @@ export default function HistoryScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
-      <FlatList
-        data={summaries}
-        keyExtractor={(d) => d.dayKey}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.list}
-        ListHeaderComponent={
-          <ScreenHeader title="Historial" subtitle={`${summaries.length} días de entrenamiento`} />
-        }
-        renderItem={({ item, index }) => {
-          const isFirst = index === 0
-          const isLast = index === summaries.length - 1
-          return (
-            <View
-              style={[
-                styles.row,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: theme.border,
-                  borderTopWidth: isFirst ? 1 : 0,
-                  borderTopLeftRadius: isFirst ? 20 : 0,
-                  borderTopRightRadius: isFirst ? 20 : 0,
-                  borderBottomLeftRadius: isLast ? 20 : 0,
-                  borderBottomRightRadius: isLast ? 20 : 0,
-                },
-              ]}
-            >
-              <View style={[styles.dayChip, { backgroundColor: theme.muted, borderRadius: theme.radius.sm }]}>
-                <Dumbbell size={17} color={theme.primary} strokeWidth={2} />
-              </View>
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[styles.dayLabel, { color: theme.foreground, fontFamily: FONT_BOLD }]} numberOfLines={1}>
-                  {item.dateLabel}
-                </Text>
-                <Text style={[styles.daySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
-                  {item.subtitle}
-                </Text>
-              </View>
-              <View style={[styles.setsPill, { backgroundColor: theme.muted }]}>
-                <Text style={[styles.setsPillText, { color: theme.foreground, fontFamily: FONT_MONO }]}>
-                  {item.sets === 1 ? '1 serie' : `${item.sets} series`}
-                </Text>
-              </View>
-            </View>
-          )
-        }}
-        ListFooterComponent={
-          <View>
-            {daysBack < HISTORY_DAYS_EXTENDED ? (
-              <TouchableOpacity
-                activeOpacity={0.82}
-                onPress={showMore}
-                disabled={expanding}
-                style={[styles.moreBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <ScreenHeader title="Historial de entrenos" subtitle={subtitle} />
+
+        <View style={styles.body}>
+          {/* Un solo Card con filas y divisores hairline — 1:1 con WorkoutHistoryList (web). */}
+          <Card padding="none" style={{ overflow: 'hidden' }}>
+            {summaries.map((item, index) => (
+              <MotiView
+                key={item.dayKey}
+                from={{ opacity: 0, translateY: 8 }}
+                animate={{ opacity: 1, translateY: 0 }}
+                transition={{ type: 'timing', duration: 280, delay: Math.min(index, 12) * 40 }}
               >
-                <ChevronDown size={16} color={theme.primary} strokeWidth={2.25} />
-                <Text style={[styles.moreTxt, { color: theme.foreground, fontFamily: FONT_BOLD }]}>
-                  {expanding ? 'Cargando…' : 'Ver últimos 6 meses'}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-            <Text style={[styles.disclaimer, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              Solo ves tus propios registros. Mostrando los últimos {monthsLabel}.
-            </Text>
-          </View>
-        }
-      />
+                {index > 0 ? (
+                  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginHorizontal: 14 }} />
+                ) : null}
+                <View style={styles.row}>
+                  <View style={[styles.dayChip, { backgroundColor: theme.muted, borderRadius: theme.radius.sm }]}>
+                    <Dumbbell size={17} color={theme.primary} strokeWidth={2} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[styles.dayLabel, { color: theme.foreground, fontFamily: FONT_BOLD }]} numberOfLines={1}>
+                      {item.dateLabel}
+                    </Text>
+                    <Text style={[styles.daySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={1}>
+                      {item.subtitle}
+                    </Text>
+                  </View>
+                  <View style={[styles.setsPill, { backgroundColor: theme.muted }]}>
+                    <Text style={[styles.setsPillText, { color: theme.foreground, fontFamily: FONT_MONO }]}>
+                      {item.sets === 1 ? '1 serie' : `${item.sets} series`}
+                    </Text>
+                  </View>
+                </View>
+              </MotiView>
+            ))}
+          </Card>
+
+          {!extended ? (
+            <TouchableOpacity
+              testID="history-show-more"
+              activeOpacity={0.82}
+              onPress={showMore}
+              disabled={expanding}
+              style={[styles.moreBtn, { borderColor: theme.border, backgroundColor: theme.card }]}
+            >
+              <ChevronDown size={16} color={theme.primary} strokeWidth={2.25} />
+              <Text style={[styles.moreTxt, { color: theme.foreground, fontFamily: FONT_BOLD }]}>
+                {expanding ? 'Cargando…' : 'Ver últimos 6 meses'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          <Text style={[styles.disclaimer, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            Solo ves tus propios registros. Mostrando los últimos {monthsLabel}.
+          </Text>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  list: { paddingHorizontal: 16, paddingBottom: 40 },
+  scroll: { paddingBottom: 40 },
+  body: { paddingHorizontal: 20 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 14,
     paddingVertical: 13,
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderBottomWidth: 1,
   },
   dayChip: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   dayLabel: { fontSize: 14.5, letterSpacing: -0.1, textTransform: 'capitalize' },
@@ -173,7 +166,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderRadius: 999,
   },
   moreTxt: { fontSize: 13.5 },

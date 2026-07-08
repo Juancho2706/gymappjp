@@ -4,33 +4,36 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useRouter } from 'expo-router'
 import * as FileSystem from 'expo-file-system'
 import * as ImageManipulator from 'expo-image-manipulator'
 import * as ImagePicker from 'expo-image-picker'
 import { decode } from 'base64-arraybuffer'
-import { ArrowLeft, ArrowRight, Camera, Check, History, Scale, X, Zap } from 'lucide-react-native'
+import { ArrowRight, Camera, Check, ChevronLeft, History, Lock, Minus, Plus, ShieldAlert, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
+import { Confetti } from 'react-native-fast-confetti'
 import { supabase } from '../../../lib/supabase'
 import { getClientProfile } from '../../../lib/client'
 import { getTodayInSantiago, formatRelativeDate } from '../../../lib/date-utils'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, ScreenHeader } from '../../../components'
+import { useEvaMotion } from '../../../lib/motion'
+import { TYPE, FONT, textStyle } from '../../../lib/typography'
+import { SHADOWS } from '../../../lib/shadows'
+import { Button, Card, Textarea } from '../../../components'
 import { AppBackground } from '../../../components/AppBackground'
 
 const MAX_BYTES = 5 * 1024 * 1024
 
-const FONT_BOLD = 'HankenGrotesk_700Bold'
-const FONT_SEMI = 'HankenGrotesk_600SemiBold'
-const FONT_DISPLAY = 'Archivo_800ExtraBold'
-const FONT_MONO = 'JetBrainsMono_700Bold'
+// Fixed DS neutrals for lucide `color` props (the shim/className cannot express
+// a literal icon color) — mirror of the constants used across alumno screens.
+const ICON_WHITE = '#FFFFFF'
 
 interface LastCheckIn {
   weight: number | null
@@ -39,16 +42,21 @@ interface LastCheckIn {
 }
 
 export default function CheckInScreen() {
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
+  const motion = useEvaMotion()
+  const router = useRouter()
   const [step, setStep] = useState<1 | 2 | 3>(1)
-  const [weight, setWeight] = useState('')
-  const [energyLevel, setEnergyLevel] = useState<number | null>(null)
+  // Peso: stepper +/- 0.1kg con default 70.0 (espejo web); se prellenar con el
+  // ultimo check-in cuando carga (una sola vez, sin pisar edicion del alumno).
+  const [weight, setWeight] = useState('70.0')
+  const [energyLevel, setEnergyLevel] = useState<number | null>(7)
   const [frontPhotoUri, setFrontPhotoUri] = useState<string | null>(null)
   const [backPhotoUri, setBackPhotoUri] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [lastCheckIn, setLastCheckIn] = useState<LastCheckIn | null>(null)
+  const prefilledRef = useRef(false)
   const scrollRef = useRef<ScrollView>(null)
 
   const { iso: todayIso } = getTodayInSantiago()
@@ -71,7 +79,16 @@ export default function CheckInScreen() {
       .order('date', { ascending: false })
       .limit(1)
       .maybeSingle()
-    if (data) setLastCheckIn(data as LastCheckIn)
+    if (data) {
+      setLastCheckIn(data as LastCheckIn)
+      // Prefill una vez desde el ultimo check-in (parity web: arranca en el ultimo peso/energia).
+      if (!prefilledRef.current) {
+        prefilledRef.current = true
+        const d = data as LastCheckIn
+        if (d.weight != null) setWeight(d.weight.toFixed(1))
+        if (d.energy_level != null) setEnergyLevel(d.energy_level)
+      }
+    }
   }
 
   // Comprime + valida tamaño + setea (se re-encoda a JPEG, así que la fuente puede ser cámara o galería).
@@ -208,13 +225,12 @@ export default function CheckInScreen() {
     if (error) {
       Alert.alert('Error', 'No se pudo guardar el check-in. Intenta de nuevo.')
     } else {
-      setDone(true)
+      setDone(true) // celebración: confetti + pantalla de éxito se montan con `done`
       setStep(1)
-      setWeight('')
-      setEnergyLevel(null)
       setFrontPhotoUri(null)
       setBackPhotoUri(null)
       setNotes('')
+      prefilledRef.current = false
       loadLastCheckIn()
       // El check-in NUNCA se aborta por una foto, pero sí avisamos si alguna no subió.
       if (droppedPhotos > 0) {
@@ -228,9 +244,8 @@ export default function CheckInScreen() {
     }
   }
 
-  function canGoNext() {
-    if (step === 1) return weight.length > 0
-    return true
+  function adjustWeight(delta: number) {
+    setWeight((w) => Math.max(0, (parseFloat(w) || 0) + delta).toFixed(1))
   }
 
   function goNext() {
@@ -244,23 +259,79 @@ export default function CheckInScreen() {
     else if (step === 3) setStep(2)
   }
 
+  // ---- Pantalla de éxito (espejo web: wave + confetti + volver al inicio) ----
+  if (done) {
+    return (
+      <SafeAreaView style={styles.container} className="bg-surface-app">
+        <AppBackground />
+        {!motion.reduced ? (
+          <Confetti autoplay fadeOutOnEnd colors={[theme.primary, '#F59E0B', '#10B981', theme.cyan]} />
+        ) : null}
+        <View style={styles.successWrap}>
+          <MotiView
+            from={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', damping: 13, stiffness: 180 }}
+            className="bg-success-500"
+            style={[styles.successCircle, SHADOWS[resolvedScheme].lg]}
+          >
+            <Check size={44} color={ICON_WHITE} strokeWidth={2.5} />
+          </MotiView>
+          <Text className="text-strong" style={[TYPE.h2, styles.successTitle]}>
+            ¡Check-in enviado!
+          </Text>
+          <Text className="text-muted" style={[TYPE.body, styles.successMsg]}>
+            Tu coach recibió tu actualización. Ajustará tu plan según tu progreso.
+          </Text>
+          <Button
+            label="Volver al inicio"
+            variant="sport"
+            size="lg"
+            onPress={() => {
+              setDone(false)
+              router.push('/alumno/home')
+            }}
+            style={styles.successBtn}
+            testID="checkin-success-home"
+          />
+        </View>
+      </SafeAreaView>
+    )
+  }
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <SafeAreaView style={styles.container} className="bg-surface-app">
       <AppBackground />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScreenHeader title="Check-in" subtitle="Registrá tu progreso semanal" />
+        {/* TopBar: eyebrow "Paso X de 3" + titulo (espejo web) */}
+        <View style={styles.topBar}>
+          <Text className="text-muted" style={TYPE.eyebrow}>
+            Paso {step} de 3
+          </Text>
+          <Text className="text-strong" style={textStyle('2xl', FONT.displayBold, { lh: 'tight', ls: 'tighter' })}>
+            Check-in mensual
+          </Text>
+        </View>
 
-        {/* Stepper (3 segmentos, activo más ancho) */}
+        {/* Stepper (3 barras, activa mas ancha) */}
         <View style={styles.stepperRow}>
           {([1, 2, 3] as const).map((s) => (
-            <View
+            <MotiView
               key={s}
-              style={[
-                styles.stepSeg,
-                { flex: s === step ? 1.6 : 1, backgroundColor: s <= step ? theme.primary : theme.border },
-              ]}
+              animate={{ flex: s === step ? 1.6 : 1 }}
+              transition={{ type: 'spring', damping: 18, stiffness: 200 }}
+              className={s <= step ? 'bg-sport-500' : 'bg-surface-sunken'}
+              style={styles.stepSeg}
             />
           ))}
+        </View>
+
+        {/* Disclaimer medico */}
+        <View className="border border-warning-500 bg-warning-100" style={styles.disclaimer}>
+          <ShieldAlert size={15} color={resolvedScheme === 'dark' ? '#FFC861' : '#A8690A'} strokeWidth={2} />
+          <Text className="text-warning-600" style={[textStyle('3xs', FONT.uiMedium, { lh: 'snug' }), { flex: 1 }]}>
+            EVA no es un dispositivo médico ni sustituye consejo profesional.
+          </Text>
         </View>
 
         <ScrollView
@@ -269,190 +340,188 @@ export default function CheckInScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {done && (
-            <MotiView
-              from={{ opacity: 0, scale: 0.94 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ type: 'spring', damping: 14 }}
-              style={[
-                styles.successBanner,
-                { backgroundColor: theme.success + '1A', borderColor: theme.success + '40', borderRadius: theme.radius.lg },
-              ]}
-            >
-              <Check size={16} color={theme.success} strokeWidth={2.5} />
-              <Text style={[styles.successText, { color: theme.success, fontFamily: FONT_BOLD }]}>
-                Check-in registrado
-              </Text>
-            </MotiView>
-          )}
-
           {step === 1 && (
             <StepOne
               theme={theme}
               lastCheckIn={lastCheckIn}
               todayIso={todayIso}
               weight={weight}
-              setWeight={setWeight}
+              adjustWeight={adjustWeight}
               energyLevel={energyLevel}
               setEnergyLevel={setEnergyLevel}
+              onNext={goNext}
             />
           )}
 
           {step === 2 && (
             <StepTwo
               theme={theme}
+              resolvedScheme={resolvedScheme}
               frontPhotoUri={frontPhotoUri}
               backPhotoUri={backPhotoUri}
               onPickFront={() => choosePhotoSource('front')}
               onPickBack={() => choosePhotoSource('back')}
               onClearFront={() => setFrontPhotoUri(null)}
               onClearBack={() => setBackPhotoUri(null)}
+              onNext={goNext}
+              onPrev={goPrev}
             />
           )}
 
           {step === 3 && (
             <StepThree
-              theme={theme}
               weight={weight}
               energyLevel={energyLevel}
               frontPhotoUri={frontPhotoUri}
               backPhotoUri={backPhotoUri}
               notes={notes}
               setNotes={setNotes}
+              submitting={submitting}
+              onSubmit={goNext}
+              onPrev={goPrev}
             />
           )}
         </ScrollView>
-
-        {/* Bottom nav */}
-        <View style={[styles.navBar, { borderTopColor: theme.border, backgroundColor: theme.background }]}>
-          {step > 1 ? (
-            <TouchableOpacity
-              style={[styles.navBtnSecondary, { borderColor: theme.border, borderRadius: 14 }]}
-              onPress={goPrev}
-              activeOpacity={0.75}
-            >
-              <ArrowLeft size={16} color={theme.foreground} strokeWidth={2} />
-              <Text style={[styles.navBtnText, { color: theme.foreground, fontFamily: FONT_BOLD }]}>Anterior</Text>
-            </TouchableOpacity>
-          ) : (
-            <View style={{ flex: 1 }} />
-          )}
-          <Button
-            label={step === 3 ? 'Enviar check-in' : 'Continuar'}
-            rightIcon={step === 3 ? Check : ArrowRight}
-            variant="sport"
-            onPress={goNext}
-            loading={submitting}
-            disabled={!canGoNext()}
-            size="lg"
-            style={{ flex: 1 }}
-          />
-        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   )
 }
 
 function StepOne({
-  theme, lastCheckIn, todayIso, weight, setWeight, energyLevel, setEnergyLevel,
+  theme, lastCheckIn, todayIso, weight, adjustWeight, energyLevel, setEnergyLevel, onNext,
 }: {
   theme: any
   lastCheckIn: LastCheckIn | null
   todayIso: string
   weight: string
-  setWeight: (v: string) => void
+  adjustWeight: (delta: number) => void
   energyLevel: number | null
   setEnergyLevel: (v: number | null) => void
+  onNext: () => void
 }) {
   return (
-    <View style={{ gap: 20 }}>
-      {lastCheckIn && (
-        <View style={[styles.lastCard, { backgroundColor: theme.muted, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-          <View style={[styles.lastChip, { backgroundColor: theme.card, borderRadius: 999 }]}>
-            <History size={17} color={theme.primary} strokeWidth={2} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.lastCardLabel, { color: theme.mutedForeground, fontFamily: FONT_SEMI }]}>
-              Último check-in — {formatRelativeDate(lastCheckIn.date.slice(0, 10), todayIso)}
-            </Text>
-            <View style={styles.lastCardRow}>
-              {lastCheckIn.weight != null && (
-                <View style={styles.lastCardItem}>
-                  <Scale size={13} color={theme.mutedForeground} strokeWidth={2} />
-                  <Text style={[styles.lastCardValue, { color: theme.foreground, fontFamily: FONT_BOLD }]}>
-                    {lastCheckIn.weight} kg
-                  </Text>
-                </View>
-              )}
-              {lastCheckIn.energy_level != null && (
-                <View style={styles.lastCardItem}>
-                  <Zap size={13} color={theme.mutedForeground} strokeWidth={2} />
-                  <Text style={[styles.lastCardValue, { color: theme.foreground, fontFamily: FONT_BOLD }]}>
-                    Energía {lastCheckIn.energy_level}/10
-                  </Text>
-                </View>
-              )}
-            </View>
-          </View>
+    <View style={{ gap: 14 }}>
+      {/* Ultimo check-in (o primer check-in) */}
+      <Card variant="sunken" padding="md" style={styles.lastCard}>
+        <View className="bg-surface-card" style={styles.lastChip}>
+          <History size={18} color={theme.primary} strokeWidth={2} />
         </View>
-      )}
+        <View style={{ flex: 1 }}>
+          {lastCheckIn ? (
+            <>
+              <Text className="text-muted" style={textStyle('3xs', FONT.uiBold)}>Tu último check-in</Text>
+              <Text className="text-strong" style={textStyle('xs', FONT.uiSemibold)}>
+                {lastCheckIn.weight != null ? `${lastCheckIn.weight} kg` : '—'} · Energía{' '}
+                {lastCheckIn.energy_level ?? '—'}/10 · {formatRelativeDate(lastCheckIn.date.slice(0, 10), todayIso)}
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text className="text-muted" style={textStyle('3xs', FONT.uiBold)}>Tu primer check-in</Text>
+              <Text className="text-strong" style={textStyle('xs', FONT.uiSemibold)}>
+                Registra peso y energía para empezar.
+              </Text>
+            </>
+          )}
+        </View>
+      </Card>
 
-      <Field label="Peso (kg) *" icon={Scale} theme={theme}>
-        <TextInput
-          style={[styles.input, { borderColor: theme.border, color: theme.foreground, backgroundColor: theme.card, borderRadius: 14, fontFamily: FONT_MONO }]}
-          placeholder="75.5"
-          placeholderTextColor={theme.mutedForeground}
-          value={weight}
-          onChangeText={setWeight}
-          keyboardType="decimal-pad"
-          autoFocus
-        />
-      </Field>
+      {/* Peso actual */}
+      <Card padding="lg" style={{ gap: 14 }}>
+        <Text className="text-strong" style={textStyle('xs', FONT.uiSemibold)}>Peso actual</Text>
+        <View style={styles.weightRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Menos"
+            onPress={() => adjustWeight(-0.1)}
+            className="bg-surface-card border-[1.5px] border-default"
+            style={styles.stepBtn}
+            testID="weight-minus"
+          >
+            <Minus size={20} color={theme.foreground} strokeWidth={2} />
+          </Pressable>
+          <View style={styles.weightValueRow}>
+            <Text className="text-strong" style={[TYPE.display, { fontVariant: ['tabular-nums'] }]}>{weight}</Text>
+            <Text className="text-muted" style={textStyle('lg', FONT.uiSemibold)}>kg</Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Más"
+            onPress={() => adjustWeight(0.1)}
+            className="bg-surface-card border-[1.5px] border-default"
+            style={styles.stepBtn}
+            testID="weight-plus"
+          >
+            <Plus size={20} color={theme.foreground} strokeWidth={2} />
+          </Pressable>
+        </View>
+      </Card>
 
-      <Field label="Nivel de energía (1–10)" icon={Zap} theme={theme}>
+      {/* Nivel de energia */}
+      <Card padding="lg" style={{ gap: 14 }}>
+        <View style={styles.energyHead}>
+          <Text className="text-strong" style={textStyle('xs', FONT.uiSemibold)}>Nivel de energía</Text>
+          <Text className="text-sport-600" style={textStyle('md', FONT.displayBold, { ls: 'tighter' })}>
+            {energyLevel ?? '—'}
+            <Text className="text-muted" style={textStyle('2xs', FONT.uiSemibold)}>/10</Text>
+          </Text>
+        </View>
+        {/* RN no tiene primitiva Slider en el DS → selector segmentado 1-10 (mismo rango que el slider web). */}
         <View style={styles.energyRow}>
           {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => {
             const selected = energyLevel === n
             return (
-              <TouchableOpacity
+              <Pressable
                 key={n}
-                style={[
-                  styles.energyBtn,
-                  { borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? theme.primary : theme.card, borderRadius: theme.radius.md },
-                ]}
                 onPress={() => setEnergyLevel(selected ? null : n)}
-                activeOpacity={0.7}
+                className={selected ? 'bg-sport-500 border-[1.5px] border-sport-500' : 'bg-surface-card border-[1.5px] border-default'}
+                style={styles.energyBtn}
+                testID={`energy-${n}`}
               >
-                <Text style={[styles.energyBtnText, { color: selected ? theme.primaryForeground : theme.foreground, fontFamily: FONT_BOLD }]}>
+                <Text
+                  className={selected ? 'text-on-sport' : 'text-strong'}
+                  style={textStyle('sm', FONT.uiBold)}
+                >
                   {n}
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
             )
           })}
         </View>
-      </Field>
+      </Card>
+
+      <Button
+        label="Continuar"
+        rightIcon={ArrowRight}
+        variant="sport"
+        size="lg"
+        full
+        onPress={onNext}
+        disabled={!weight}
+        testID="checkin-continue"
+      />
     </View>
   )
 }
 
 function StepTwo({
-  theme, frontPhotoUri, backPhotoUri, onPickFront, onPickBack, onClearFront, onClearBack,
+  theme, resolvedScheme, frontPhotoUri, backPhotoUri, onPickFront, onPickBack, onClearFront, onClearBack, onNext, onPrev,
 }: {
   theme: any
+  resolvedScheme: 'light' | 'dark'
   frontPhotoUri: string | null
   backPhotoUri: string | null
   onPickFront: () => void
   onPickBack: () => void
   onClearFront: () => void
   onClearBack: () => void
+  onNext: () => void
+  onPrev: () => void
 }) {
   return (
-    <View style={{ gap: 16 }}>
-      <Text style={[styles.stepHeading, { color: theme.foreground, fontFamily: FONT_DISPLAY }]}>
-        Fotos de progreso
-      </Text>
-      <Text style={[styles.stepSubtext, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-        Las fotos son opcionales pero ayudan a visualizar tu progreso.
+    <View style={{ gap: 14 }}>
+      <Text className="text-muted" style={[TYPE.body, { lineHeight: 21 }]}>
+        Las fotos son opcionales pero ayudan a tu coach a ver tu evolución.
       </Text>
 
       <View style={styles.photoRow}>
@@ -462,196 +531,173 @@ function StepTwo({
           uri={frontPhotoUri}
           onPick={onPickFront}
           onClear={onClearFront}
+          testID="photo-front"
         />
         <PhotoPickerSlot
           theme={theme}
-          label="Foto espalda"
+          label="Espalda o perfil"
           uri={backPhotoUri}
           onPick={onPickBack}
           onClear={onClearBack}
+          testID="photo-back"
         />
+      </View>
+
+      {/* Nota de privacidad */}
+      <View style={styles.privacyRow}>
+        <Lock size={13} color={theme.mutedForeground} strokeWidth={2} />
+        <Text className="text-subtle" style={textStyle('3xs', FONT.ui)}>
+          JPG, PNG o WEBP · máx 5 MB · privadas, solo tu coach las ve.
+        </Text>
+      </View>
+
+      <View style={styles.navRow}>
+        <Button label="Atrás" leftIcon={ChevronLeft} variant="secondary" size="lg" onPress={onPrev} testID="checkin-back" />
+        <Button label="Continuar" rightIcon={ArrowRight} variant="sport" size="lg" onPress={onNext} style={{ flex: 1 }} testID="checkin-continue" />
       </View>
     </View>
   )
 }
 
 function PhotoPickerSlot({
-  theme, label, uri, onPick, onClear,
+  theme, label, uri, onPick, onClear, testID,
 }: {
   theme: any
   label: string
   uri: string | null
   onPick: () => void
   onClear: () => void
+  testID?: string
 }) {
   return (
-    <TouchableOpacity
-      style={[
-        styles.photoSlot,
-        {
-          backgroundColor: uri ? '#0B0E13' : theme.muted,
-          borderColor: uri ? theme.primary : theme.border,
-          borderStyle: uri ? 'solid' : 'dashed',
-          borderRadius: 14,
-        },
-      ]}
-      activeOpacity={uri ? 1 : 0.8}
+    <Pressable
+      className={uri ? 'border-2 border-sport-500' : 'border-2 border-dashed border-default bg-surface-sunken'}
+      style={styles.photoSlot}
       onPress={uri ? undefined : onPick}
+      testID={testID}
     >
       {uri ? (
         <>
           <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-          <TouchableOpacity
-            style={[styles.clearBtn, { backgroundColor: theme.destructive }]}
+          <Pressable
+            className="bg-danger-500"
+            style={styles.clearBtn}
             onPress={onClear}
-            activeOpacity={0.85}
             hitSlop={8}
+            testID={`${testID}-clear`}
           >
-            <X size={16} color="#fff" strokeWidth={2.5} />
-          </TouchableOpacity>
+            <X size={16} color={ICON_WHITE} strokeWidth={2.5} />
+          </Pressable>
           <View style={styles.photoLabelStrip}>
-            <Text style={[styles.photoLabelStripText, { fontFamily: FONT_BOLD }]}>{label}</Text>
+            <Text style={[textStyle('3xs', FONT.uiBold), { color: ICON_WHITE }]}>{label}</Text>
           </View>
         </>
       ) : (
         <>
           <Camera size={28} color={theme.mutedForeground} strokeWidth={2} />
-          <Text style={[styles.photoBtnText, { color: theme.foreground, fontFamily: FONT_BOLD }]}>
-            {label}
-          </Text>
-          <Text style={[styles.photoBtnHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            Opcional · toca para subir
-          </Text>
+          <Text className="text-body" style={textStyle('2xs', FONT.uiBold)}>{label}</Text>
+          <Text className="text-subtle" style={textStyle('3xs', FONT.ui)}>Opcional · toca para subir</Text>
         </>
       )}
-    </TouchableOpacity>
+    </Pressable>
   )
 }
 
 function StepThree({
-  theme, weight, energyLevel, frontPhotoUri, backPhotoUri, notes, setNotes,
+  weight, energyLevel, frontPhotoUri, backPhotoUri, notes, setNotes, submitting, onSubmit, onPrev,
 }: {
-  theme: any
   weight: string
   energyLevel: number | null
   frontPhotoUri: string | null
   backPhotoUri: string | null
   notes: string
   setNotes: (v: string) => void
+  submitting: boolean
+  onSubmit: () => void
+  onPrev: () => void
 }) {
   const photoCount = [frontPhotoUri, backPhotoUri].filter(Boolean).length
   return (
     <View style={{ gap: 16 }}>
-      <Text style={[styles.stepHeading, { color: theme.foreground, fontFamily: FONT_DISPLAY }]}>
-        Resumen y notas
-      </Text>
+      <Textarea
+        label="Notas para tu coach"
+        placeholder="Cómo te sentiste, sueño, comentarios…"
+        value={notes}
+        onChangeText={setNotes}
+        maxLength={1000}
+        showCount
+        minRows={4}
+        testID="notes-input"
+      />
 
-      <Field label="Notas (opcional)" theme={theme}>
-        <TextInput
-          style={[styles.notesInput, { borderColor: theme.border, color: theme.foreground, backgroundColor: theme.card, borderRadius: 14, fontFamily: theme.fontSans }]}
-          placeholder="¿Cómo te sentiste esta semana?"
-          placeholderTextColor={theme.mutedForeground}
-          value={notes}
-          onChangeText={setNotes}
-          multiline
-          numberOfLines={4}
-          textAlignVertical="top"
-        />
-      </Field>
-
-      {/* Summary card */}
-      <View style={[styles.summaryCard, { backgroundColor: theme.muted, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-        <Text style={[styles.summaryTitle, { color: theme.mutedForeground, fontFamily: FONT_BOLD }]}>Resumen</Text>
+      {/* Resumen */}
+      <Card variant="sunken" padding="md" style={{ gap: 10 }}>
+        <Text className="text-muted" style={TYPE.eyebrow}>Resumen</Text>
         <View style={styles.summaryRow}>
-          <SummaryMetric theme={theme} label="Peso" value={weight ? `${weight} kg` : '—'} />
-          <SummaryMetric theme={theme} label="Energía" value={energyLevel != null ? `${energyLevel}/10` : '—'} />
-          <SummaryMetric theme={theme} label="Fotos" value={`${photoCount} adj.`} />
+          <SummaryMetric label="Peso" value={weight ? `${weight} kg` : '—'} />
+          <SummaryMetric label="Energía" value={energyLevel != null ? `${energyLevel}/10` : '—'} />
+          <SummaryMetric label="Fotos" value={`${photoCount} adj.`} />
         </View>
+      </Card>
+
+      <View style={styles.navRow}>
+        <Button label="Atrás" leftIcon={ChevronLeft} variant="secondary" size="lg" disabled={submitting} onPress={onPrev} testID="checkin-back" />
+        <Button
+          label="Enviar check-in"
+          rightIcon={Check}
+          variant="sport"
+          size="lg"
+          loading={submitting}
+          onPress={onSubmit}
+          style={{ flex: 1 }}
+          testID="checkin-submit"
+        />
       </View>
     </View>
   )
 }
 
-function SummaryMetric({ theme, label, value }: { theme: any; label: string; value: string }) {
+function SummaryMetric({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.summaryMetric}>
-      <Text style={[styles.summaryValue, { color: theme.foreground, fontFamily: FONT_MONO }]}>{value}</Text>
-      <Text style={[styles.summaryLabel, { color: theme.mutedForeground, fontFamily: FONT_SEMI }]}>{label}</Text>
-    </View>
-  )
-}
-
-function Field({
-  label,
-  icon: Icon,
-  theme,
-  children,
-}: {
-  label: string
-  icon?: React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>
-  theme: any
-  children: React.ReactNode
-}) {
-  return (
-    <View style={styles.field}>
-      <View style={styles.labelRow}>
-        {Icon ? <Icon size={14} color={theme.mutedForeground} strokeWidth={2} /> : null}
-        <Text style={[styles.label, { color: theme.foreground, fontFamily: FONT_SEMI }]}>{label}</Text>
-      </View>
-      {children}
+      <Text className="text-strong" style={[textStyle('lg', FONT.displayBold, { ls: 'tighter' }), { fontVariant: ['tabular-nums'] }]}>{value}</Text>
+      <Text className="text-muted" style={textStyle('3xs', FONT.uiSemibold)}>{label}</Text>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 12 },
+  topBar: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 6, gap: 2 },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 10 },
   stepSeg: { height: 6, borderRadius: 999 },
-  scroll: { paddingHorizontal: 20, paddingBottom: 24, gap: 0 },
-  successBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1,
-    paddingVertical: 14, paddingHorizontal: 16, justifyContent: 'center', marginBottom: 20,
+  disclaimer: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 20, marginBottom: 12,
+    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14,
   },
-  successText: { fontSize: 14, letterSpacing: 0.3 },
-  stepHeading: { fontSize: 20, letterSpacing: -0.3 },
-  stepSubtext: { fontSize: 13, lineHeight: 20, marginTop: -8 },
-  lastCard: { borderWidth: 1, padding: 14, gap: 12, flexDirection: 'row', alignItems: 'center' },
-  lastChip: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  lastCardLabel: { fontSize: 12 },
-  lastCardRow: { flexDirection: 'row', gap: 16, marginTop: 2 },
-  lastCardItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  lastCardValue: { fontSize: 13 },
-  field: { gap: 8 },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  label: { fontSize: 14 },
-  input: { borderWidth: 1.5, height: 52, paddingHorizontal: 16, fontSize: 16 },
+  scroll: { paddingHorizontal: 20, paddingBottom: 32 },
+  lastCard: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  lastChip: { width: 38, height: 38, borderRadius: 999, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  weightRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
+  weightValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+  stepBtn: { width: 48, height: 48, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  energyHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   energyRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  energyBtn: { width: 42, height: 42, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  energyBtnText: { fontSize: 14 },
+  energyBtn: { width: 42, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   photoRow: { flexDirection: 'row', gap: 10 },
   photoSlot: {
-    flex: 1, aspectRatio: 3 / 4, borderWidth: 2, overflow: 'hidden',
+    flex: 1, aspectRatio: 3 / 4, borderRadius: 14, overflow: 'hidden',
     alignItems: 'center', justifyContent: 'center', gap: 8,
   },
-  photoBtnText: { fontSize: 12.5, letterSpacing: 0.2 },
-  photoBtnHint: { fontSize: 10.5 },
   clearBtn: { position: 'absolute', top: 8, right: 8, width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   photoLabelStrip: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center' },
-  photoLabelStripText: { color: '#fff', fontSize: 11.5 },
-  summaryCard: { borderWidth: 1, padding: 14, gap: 10 },
-  summaryTitle: { fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.6 },
+  privacyRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
   summaryMetric: { flex: 1, alignItems: 'center', gap: 2 },
-  summaryLabel: { fontSize: 11 },
-  summaryValue: { fontSize: 18 },
-  notesInput: { borderWidth: 1.5, padding: 14, fontSize: 14, minHeight: 110 },
-  navBar: {
-    flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingVertical: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  navBtnSecondary: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, borderWidth: 1.5, paddingVertical: 14,
-  },
-  navBtnText: { fontSize: 15 },
+  navRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  successWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 48 },
+  successCircle: { width: 88, height: 88, borderRadius: 44, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  successTitle: { textAlign: 'center' },
+  successMsg: { textAlign: 'center', marginTop: 8, maxWidth: 300 },
+  successBtn: { marginTop: 28, width: '100%', maxWidth: 300 },
 })
