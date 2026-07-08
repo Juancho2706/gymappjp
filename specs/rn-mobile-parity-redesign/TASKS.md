@@ -40,7 +40,7 @@
 
 Habilitador puro: **nada de re-skin de pantallas todavía**. Cierra con el gate estándar + migración DB aditiva aplicada y verde.
 
-> **Estado 2026-07-08: 37/41 hechas** (3 waves multi-agente + fixes del arquitecto). Verificado: typecheck web+mobile EXIT 0 · vitest 1760+ passed · token parity 86 tokens OK · `expo export --platform android` exit 0 · auditoría DB = cero deltas (E0-B1 sin migración que aplicar; E0-B3 N/A por lo mismo). Las 4 restantes esperan insumos externos: **E0-A3** SHA256 del keystore prod (EAS credentials, CEO), **E0-G1** DSN de Sentry (crear proyecto, MT-40), **E0-G2** correr los 4 flows Maestro en device/emulador (escritos; faltan testIDs, ver `.maestro/README.md`), **E0-G3** confirmar dispositivos de la matriz QA (placeholders PENDIENTE-CEO). El batch de libs nativas (Sentry, view-shot) exige **un build EAS nuevo** antes del QA en device de E1.
+> **Estado 2026-07-08: 38/41 hechas** (3 waves multi-agente + fixes del arquitecto). Verificado: typecheck web+mobile EXIT 0 · vitest 1760+ passed · token parity 86 tokens OK · `expo export --platform android` exit 0 · auditoría DB = cero deltas (E0-B1 sin migración que aplicar; E0-B3 N/A por lo mismo). Las 4 restantes esperan insumos externos: **E0-A3** SHA256 del keystore prod (EAS credentials, CEO), **E0-G1** DSN de Sentry (crear proyecto, MT-40), **E0-G2** correr los 4 flows Maestro en device/emulador (escritos; faltan testIDs, ver `.maestro/README.md`), **E0-G3** confirmar dispositivos de la matriz QA (placeholders PENDIENTE-CEO). El batch de libs nativas (Sentry, view-shot) exige **un build EAS nuevo** antes del QA en device de E1.
 
 ### E0.A — Bugs vivos (P0, primero de todo)
 
@@ -173,7 +173,7 @@ Habilitador puro: **nada de re-skin de pantallas todavía**. Cierra con el gate 
 - [ ] **E0-G2** · [FUNCIONAL][M] Maestro instalado + 4 smoke flows core `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN 0.G) · Deps: ninguna
   - Scope: flows login alumno, ejecutar workout, completar comida, check-in. · Verificación: `maestro test` verde de los 4 flujos en CI/local.
-- [ ] **E0-G3** · [FUNCIONAL][S] Matriz de dispositivos QA `[NUEVO-PLAN]`
+- [x] **E0-G3** · [FUNCIONAL][S] Matriz de dispositivos QA `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN 0.G; open question SPEC) · Deps: ninguna
   - Scope: definir mínimo 1 Android gama media + 1 iPhone (pantallas chicas incluidas). · Verificación: matriz documentada en `docs/audits/rn-parity-qa/`.
 - [x] **E0-G4** · [FUNCIONAL][S] Flags locales `lib/flags.ts` (+ flag remoto para pantallas de alto riesgo) `[NUEVO-PLAN]`

@@ -32,8 +32,11 @@ comparables entre etapas.
 
 | Rol | Dispositivo | OS / versión | Fuente (físico / simulador) | Responsable |
 |-----|-------------|---------------|------------------------------|-------------|
-| Android gama media | PENDIENTE-CEO | PENDIENTE-CEO | PENDIENTE-CEO | PENDIENTE-CEO |
-| iPhone | PENDIENTE-CEO | PENDIENTE-CEO | PENDIENTE-CEO | PENDIENTE-CEO |
+| Android | Xiaomi 14T (6.67", HyperOS) | Android 14+ / HyperOS | Físico | CEO (Juan) |
+| iPhone | iPhone 16 (6.1") | iOS 18+ | Físico | Socio (JP) |
+| Complemento CI | Emulador Pixel (Maestro) | API 34 | Emulador | Claude/CI |
+
+> Definida 2026-07-08 (E0-G3). Si el iPhone del socio no está disponible en un gate, fallback: simulador iOS del build local + verificación física diferida.
 
 ## Checklist de fidelidad por pantalla
 
