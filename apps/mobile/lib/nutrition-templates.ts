@@ -1,7 +1,9 @@
 import { supabase } from './supabase'
 import { getCoachOrgContext } from './org'
 import { selectWithFallback } from './db-compat'
-import { emptyPlanDraft, parseSwapOptions, serializeSwapOptions, type DraftMeal, type PlanDraft } from './nutrition-builder'
+import { emptyPlanDraft, fetchLoggedMealIds, parseSwapOptions, serializeSwapOptions, type DraftMeal, type PlanDraft } from './nutrition-builder'
+import { reconcileMeals } from '@eva/nutrition-engine'
+import { buildMealReconcileInput } from './nutrition-reconcile'
 
 // Coach nutrition TEMPLATES — mirrors web `nutrition.service.ts`
 // (createOrUpdateTemplateFromJson / propagateTemplateChanges). Templates live in
@@ -282,11 +284,20 @@ async function propagateTemplate(templateId: string, coachId: string): Promise<v
         )
       }
     }
-    // Borrar comidas sobrantes (plantilla con menos comidas que el plan previo).
-    const surplus = oldMeals.slice(mealsSorted.length).map((m: any) => m.id)
-    if (surplus.length) {
-      await supabase.from('food_items').delete().in('meal_id', surplus)
-      await supabase.from('nutrition_meals').delete().in('id', surplus)
+    // CASCADE-SAFETY (G08 §2.2): antes borraba las comidas sobrantes INCONDICIONALMENTE al
+    // propagar una plantilla más corta -> destruía nutrition_meal_logs (adherencia del alumno).
+    // Ahora `reconcileMeals` (fn pura compartida con web) decide: solo se borran las sobrantes
+    // SIN logs; las que tienen historial se CONSERVAN. `oldMeals` matchea por POSICIÓN (el loop
+    // de arriba usa oldMeals[i]), así que el input de reconcile usa la posición como order_index.
+    const { existingMeals, templateMeals, removalCandidates } = buildMealReconcileInput(
+      oldMeals.map((m: any, i: number) => ({ id: m.id as string, order_index: i })),
+      mealsSorted.map((t: any) => ({ name: t.name as string, description: (t.description ?? '') as string, day_of_week: (t.day_of_week ?? null) as number | null }))
+    )
+    const loggedMealIds = await fetchLoggedMealIds(removalCandidates)
+    const { toDelete } = reconcileMeals(existingMeals, templateMeals, loggedMealIds)
+    if (toDelete.length) {
+      await supabase.from('food_items').delete().in('meal_id', toDelete)
+      await supabase.from('nutrition_meals').delete().in('id', toDelete)
     }
   }
 }

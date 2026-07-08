@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { reconcileMeals, type ReconcileTemplateMeal } from './nutrition-propagation.reconcile'
+import { reconcileMeals, type ReconcileTemplateMeal } from './nutrition-sync'
 
 const tmeal = (order_index: number, name = `meal-${order_index}`): ReconcileTemplateMeal => ({
     order_index,

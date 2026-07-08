@@ -1,6 +1,8 @@
 import { supabase } from './supabase'
 import { getCoachOrgContext } from './org'
 import { getTodayInSantiago, isoDateAddDays } from './date-utils'
+import { reconcileMeals } from '@eva/nutrition-engine'
+import { buildMealReconcileInput } from './nutrition-reconcile'
 
 // Coach nutrition plan builder — mirrors the web `upsertClientNutritionPlanJson`
 // (apps/web .../coach/nutrition-plans). Writes nutrition_plans → nutrition_meals
@@ -528,9 +530,18 @@ export async function saveClientPlan(clientId: string, draft: PlanDraft): Promis
         .order('order_index', { ascending: true })
 
       const existingByIndex = new Map<number, string>((existing ?? []).map((m: any) => [m.order_index, m.id]))
-      const newIndices = new Set(sorted.map((_, i) => i))
 
-      const toDelete = (existing ?? []).filter((m: any) => !newIndices.has(m.order_index)).map((m: any) => m.id)
+      // CASCADE-SAFETY (G08 §2.2): antes borraba las comidas sobrantes INCONDICIONALMENTE ->
+      // destruía nutrition_meal_logs (FK meal_id ON DELETE CASCADE/SET NULL) = pérdida de
+      // adherencia del alumno. Ahora la decisión de qué borrar la toma `reconcileMeals`
+      // (fn pura compartida con web): solo borra las huérfanas SIN logs; las que tienen
+      // historial se CONSERVAN (quedan más allá del nuevo conteo de comidas).
+      const { existingMeals, templateMeals, removalCandidates } = buildMealReconcileInput(
+        (existing ?? []).map((m: any) => ({ id: m.id as string, order_index: m.order_index as number })),
+        sorted.map((meal) => ({ name: meal.name, description: meal.notes ?? '', day_of_week: meal.day_of_week ?? null }))
+      )
+      const loggedMealIds = await fetchLoggedMealIds(removalCandidates)
+      const { toDelete } = reconcileMeals(existingMeals, templateMeals, loggedMealIds)
       if (toDelete.length) {
         await supabase.from('food_items').delete().in('meal_id', toDelete)
         await supabase.from('nutrition_meals').delete().in('id', toDelete)
@@ -574,6 +585,17 @@ export async function saveClientPlan(clientId: string, draft: PlanDraft): Promis
   } catch (e: any) {
     return { ok: false, error: e?.message ?? 'Error al guardar el plan.' }
   }
+}
+
+/**
+ * meal_ids que YA tienen registros de adherencia (`nutrition_meal_logs`). `reconcileMeals` NO
+ * borra las comidas que aparezcan acá (cascade-safety). Réplica PostgREST del fetch de la web
+ * (`nutrition.service.ts`): solo se consultan los candidatos a borrar para acotar la query.
+ */
+export async function fetchLoggedMealIds(mealIds: string[]): Promise<Set<string>> {
+  if (!mealIds.length) return new Set()
+  const { data } = await supabase.from('nutrition_meal_logs').select('meal_id').in('meal_id', mealIds)
+  return new Set(((data ?? []) as any[]).map((r) => r.meal_id as string).filter(Boolean))
 }
 
 async function insertItems(mealId: string, items: DraftFoodItem[]): Promise<void> {

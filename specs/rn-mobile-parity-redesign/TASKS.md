@@ -40,126 +40,128 @@
 
 Habilitador puro: **nada de re-skin de pantallas todavía**. Cierra con el gate estándar + migración DB aditiva aplicada y verde.
 
+> **Estado 2026-07-08: 37/41 hechas** (3 waves multi-agente + fixes del arquitecto). Verificado: typecheck web+mobile EXIT 0 · vitest 1760+ passed · token parity 86 tokens OK · `expo export --platform android` exit 0 · auditoría DB = cero deltas (E0-B1 sin migración que aplicar; E0-B3 N/A por lo mismo). Las 4 restantes esperan insumos externos: **E0-A3** SHA256 del keystore prod (EAS credentials, CEO), **E0-G1** DSN de Sentry (crear proyecto, MT-40), **E0-G2** correr los 4 flows Maestro en device/emulador (escritos; faltan testIDs, ver `.maestro/README.md`), **E0-G3** confirmar dispositivos de la matriz QA (placeholders PENDIENTE-CEO). El batch de libs nativas (Sentry, view-shot) exige **un build EAS nuevo** antes del QA en device de E1.
+
 ### E0.A — Bugs vivos (P0, primero de todo)
 
-- [ ] **E0-A1** · [SEAM][M] Adoptar `@eva/nutrition-engine` (tdee+macros) y borrar copias locales
+- [x] **E0-A1** · [SEAM][M] Adoptar `@eva/nutrition-engine` (tdee+macros) y borrar copias locales
   - Fuentes: G04-B1, G08-B1, G10-T6 · Deps: ninguna
   - Scope: reexport de `nutrition-utils` desde el engine + borrar `lib/macro-calculator.ts` (como hace web); fix drift de macros coach↔alumno. · Verificación: mismo alumno arroja macros idénticos en web y app (test comparativo) + vitest engine verde.
-- [ ] **E0-A2** · [SEAM/FUNCIONAL][M] Fix data-loss nutrición: `reconcileMeals` compartido cableado en `saveClientPlan`/`propagateTemplate`
+- [x] **E0-A2** · [SEAM/FUNCIONAL][M] Fix data-loss nutrición: `reconcileMeals` compartido cableado en `saveClientPlan`/`propagateTemplate`
   - Fuentes: G08-B2 · Deps: E0-A1
   - Scope: extraer/compartir `nutrition-propagation.reconcile.ts`; solo borra comidas SIN logs (preserva historial). · Verificación: test de orfandad (existente en web) corrido contra paths mobile = cero borrado de comidas con logs.
 - [ ] **E0-A3** · [FUNCIONAL][S] Deep links Android — `assetlinks.json` con SHA256 real (P0)
   - Fuentes: G11-A2 · Deps: ninguna
   - Scope: reemplazar placeholder por fingerprint real del keystore de prod. · Verificación: smoke abre `/c/` e `/invite/` desde link externo en Android físico.
-- [ ] **E0-A4** · [FUNCIONAL][S] Universal links iOS — `associatedDomains` (applinks + webcredentials) + AASA (P0)
+- [x] **E0-A4** · [FUNCIONAL][S] Universal links iOS — `associatedDomains` (applinks + webcredentials) + AASA (P0)
   - Fuentes: G11-A3, G02-B8 · Deps: ninguna
   - Scope: `associatedDomains` en config + `.well-known/apple-app-site-association` servido. · Verificación: smoke abre `/c/`+`/invite/` desde link externo en iPhone físico.
-- [ ] **E0-A5** · [FUNCIONAL][S] Verificación tabla `checkins` vs `check_ins` (nombre correcto) `[NUEVO-PLAN]`
+- [x] **E0-A5** · [FUNCIONAL][S] Verificación tabla `checkins` vs `check_ins` (nombre correcto) `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN 0.A) · Deps: ninguna
   - Scope: auditar referencias mobile a la tabla de check-ins y alinear al nombre canónico de prod. · Verificación: query de check-in del alumno devuelve filas en device (no 404/relation-not-found).
 
 ### E0.B — Prerrequisitos DB (auditoría + 1 migración aditiva)
 
-- [ ] **E0-B1** · [FUNCIONAL][M] Migración aditiva única: GRANT anon branding + GRANT UPDATE write-paths + RLS bucket/módulos `[NUEVO-PLAN]`
+- [x] **E0-B1** · [FUNCIONAL][M] Migración aditiva única: GRANT anon branding + GRANT UPDATE write-paths + RLS bucket/módulos `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN 0.B) · Deps: ninguna
   - Scope: GRANT a `anon` de columnas branding; GRANT UPDATE de columnas nuevas (biometría, `client_intake.sex`, sustitución máquina); RLS bucket `checkins`; RLS lecturas alumno bodycomp/movement; protocolo snapshot + tx-rollback + advisors en LIVE (NUNCA branches). · Verificación: advisors 0 críticos; reversa (REVOKE) documentada en la misma migración.
-- [ ] **E0-B2** · [FUNCIONAL][S] Verificar/agregar GRANTs de columna por feature (checklist vivo)
+- [x] **E0-B2** · [FUNCIONAL][S] Verificar/agregar GRANTs de columna por feature (checklist vivo)
   - Fuentes: G11-C2 · Deps: E0-B1
   - Scope: por cada write-path nuevo, confirmar `GRANT UPDATE(col)` antes de mergear (anti-42501). · Verificación: suite `module-grants.sql`-style contra `information_schema.column_privileges` sin drift.
-- [ ] **E0-B3** · [FUNCIONAL][S] Regenerar `database.types.ts` tras 0.B `[NUEVO-PLAN]`
+- [x] **E0-B3** · [FUNCIONAL][S] Regenerar `database.types.ts` tras 0.B `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN Data Model) · Deps: E0-B1
   - Scope: `supabase db pull` + regen de tipos; propagar a web y mobile. · Verificación: `pnpm typecheck` verde en web y mobile con los tipos nuevos.
 
 ### E0.C — Entitlements foundation (UNA sola vez; los dominios solo consumen)
 
-- [ ] **E0-C1** · [SEAM/FUNCIONAL][L] Foundation de entitlements + adopción `@eva/feature-prefs`/`@eva/module-catalog` + wiring de packages
+- [x] **E0-C1** · [SEAM/FUNCIONAL][L] Foundation de entitlements + adopción `@eva/feature-prefs`/`@eva/module-catalog` + wiring de packages
   - Fuentes: G10-T4 (dueño), G10-T3, G10-T5, G11-A1, G11-A4, G09-T8, G06-B2, G05-T8, G04-B3, G08-C1 · Deps: E0-C es habilitador; usa `/api/mobile/config`
   - Scope: `useEntitlements()` (fetch `enabled_modules` + kill-switch `EVA_DISABLED_MODULES` vía `/api/mobile/config`, cache + revalidación al foreground); espejo de `MODULE_KEYS` desde `@eva/feature-prefs`; paths tsconfig + Metro + reexport shims de todos los `@eva/*`; contrato server-side (mutaciones→`assertModule`, lecturas→RLS verificada). · Verificación: un coach SIN módulo no accede ni por PostgREST directo; `hasModuleClient` unit-tested; web verde tras el wiring.
-- [ ] **E0-C2** · [VISUAL][S] `ModuleOffNotice` RN (primitiva DS)
+- [x] **E0-C2** · [VISUAL][S] `ModuleOffNotice` RN (primitiva DS)
   - Fuentes: G10-T9 · Deps: E0-C1
   - Scope: aviso reutilizable de "módulo no disponible" con CTA contextual. · Verificación: render en device claro/oscuro + safe-area.
-- [ ] **E0-C3** · [FUNCIONAL][S] Gate de tab Nutrición en nav alumno (ocultar "Plan" si OFF)
+- [x] **E0-C3** · [FUNCIONAL][S] Gate de tab Nutrición en nav alumno (ocultar "Plan" si OFF)
   - Fuentes: G02-B4 · Deps: E0-C1
   - Scope: consumir entitlement para ocultar la sección de nutrición en el nav. · Verificación: alumno de coach sin nutrición no ve el tab; con nutrición sí.
 
 ### E0.D — Theming consolidation (gate de orden ANTES de cualquier re-skin)
 
-- [ ] **E0-D1** · [SEAM/VISUAL][S] Reconciliar 3 mismatches de token dark + duraciones de motion (ruling D3)
+- [x] **E0-D1** · [SEAM/VISUAL][S] Reconciliar 3 mismatches de token dark + duraciones de motion (ruling D3)
   - Fuentes: G01-F0.1 · Deps: ninguna
   - Scope: `surface-inverse` dark = neutro web; alinear los 3 tokens divergentes. · Verificación: test de paridad de tokens (E0-G5) pasa esos 3.
-- [ ] **E0-D2** · [FUNCIONAL][S] Frontera de theming (className vs objeto `theme`) + shim read-only
+- [x] **E0-D2** · [FUNCIONAL][S] Frontera de theming (className vs objeto `theme`) + shim read-only
   - Fuentes: G01-F0.2 · Deps: ninguna
   - Scope: documentar la frontera; convertir `lib/theme.ts` en shim de solo-lectura sobre los mismos tokens. · Verificación: lint/regla que impide escritura al objeto `theme`.
-- [ ] **E0-D3** · [VISUAL][M] Tokens formales de tipografía: escala + roles como helper RN
+- [x] **E0-D3** · [VISUAL][M] Tokens formales de tipografía: escala + roles como helper RN
   - Fuentes: G01-F0.3 · Deps: E0-D1
   - Scope: escala y roles tipográficos como helper (mata números mágicos por componente). · Verificación: componentes DS usan el helper; sin literales de fontSize sueltos en primitivas.
-- [ ] **E0-D4** · [VISUAL][S] Fix mapeo tipográfico `tailwind.config.js` (gate anti-reseed Inter/Montserrat) `[NUEVO-PLAN]`
+- [x] **E0-D4** · [VISUAL][S] Fix mapeo tipográfico `tailwind.config.js` (gate anti-reseed Inter/Montserrat) `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN §Theming, gate de orden) · Deps: E0-D3
   - Scope: `font-semibold`/`font-medium`/`font-display-extra` dejan de resembrar Inter/Montserrat → familias EVA (Archivo/Hanken). · Verificación: grep de re-skin no reintroduce fuentes legacy; render con familia correcta.
-- [ ] **E0-D5** · [VISUAL][S] Escala de sombras/elevación centralizada + glow-ember + retune dark
+- [x] **E0-D5** · [VISUAL][S] Escala de sombras/elevación centralizada + glow-ember + retune dark
   - Fuentes: G01-F0.4 · Deps: E0-D2
   - Scope: escala de sombras + glow-ember como tokens. · Verificación: primitivas Card/Sheet consumen la escala; dark retuneado.
-- [ ] **E0-D6** · [VISUAL][S] Declarar paleta `--viz-1..6` en global.css + tailwind.config.js
+- [x] **E0-D6** · [VISUAL][S] Declarar paleta `--viz-1..6` en global.css + tailwind.config.js
   - Fuentes: G01-F0.5 · Deps: E0-D1
   - Scope: tokens de viz para charts (paridad web). · Verificación: presentes en `apps/mobile/global.css` y verificados por el test de paridad.
-- [ ] **E0-D7** · [FUNCIONAL][S] Dark mode: restaurar modo "system" + `ThemeToggle` DS + migración AsyncStorage
+- [x] **E0-D7** · [FUNCIONAL][S] Dark mode: restaurar modo "system" + `ThemeToggle` DS + migración AsyncStorage
   - Fuentes: G01-F0.10 · Deps: E0-D2
   - Scope: modo `system` (hoy solo light/dark) + migración de usuarios ya fijados. · Verificación: cambiar tema del OS refleja en la app; usuarios previos no pierden preferencia.
-- [ ] **E0-D8** · [VISUAL][S] Tokens de spacing 4px como escala formal
+- [x] **E0-D8** · [VISUAL][S] Tokens de spacing 4px como escala formal
   - Fuentes: G01-F1.8 · Deps: E0-D1
   - Scope: escala 4px formal (mata paddings mágicos). · Verificación: primitivas consumen la escala.
 
 ### E0.E — Primitivas DS faltantes (fundación del re-skin; batch de libs nativas al inicio)
 
-- [ ] **E0-E1** · [FUNCIONAL][M] Toast/Sonner provider + `useToast`
+- [x] **E0-E1** · [FUNCIONAL][M] Toast/Sonner provider + `useToast`
   - Fuentes: G01-F0.6 (dueño), G05-T1 · Deps: E0-D3, E0-D5
   - Scope: provider canónico de feedback (paridad Sonner). · Verificación: toasts de éxito/error en device; un solo provider (sin fork).
-- [ ] **E0-E2** · [FUNCIONAL][M] Switch DS + Select/Picker DS
+- [x] **E0-E2** · [FUNCIONAL][M] Switch DS + Select/Picker DS
   - Fuentes: G01-F0.7 · Deps: E0-D3
   - Scope: primitivas canónicas (Base UI Select quirk: `Value` con children explícitos). · Verificación: usadas por Mi Marca (E7) y Funciones sin reimplementar Switch.
-- [ ] **E0-E3** · [VISUAL][S] Subcomponentes de Card (Header/Content/Footer/Title/Description/Action)
+- [x] **E0-E3** · [VISUAL][S] Subcomponentes de Card (Header/Content/Footer/Title/Description/Action)
   - Fuentes: G01-F0.8 · Deps: E0-D3, E0-D5
   - Scope: subcomponentes de Card paridad web. · Verificación: Cards del re-skin los usan.
-- [ ] **E0-E4** · [FUNCIONAL][M] Unificar Sheet/Dialog + quitar Montserrat del título
+- [x] **E0-E4** · [FUNCIONAL][M] Unificar Sheet/Dialog + quitar Montserrat del título
   - Fuentes: G01-F0.9 · Deps: E0-D3
   - Scope: Sheet/Dialog único; título con fuente DS. · Verificación: sheets del árbol usan el mismo componente.
-- [ ] **E0-E5** · [FUNCIONAL][M] DropdownMenu / Popover / ActionSheet
+- [x] **E0-E5** · [FUNCIONAL][M] DropdownMenu / Popover / ActionSheet
   - Fuentes: G01-F1.1 · Deps: E0-E4
   - Scope: primitivas de overlay. · Verificación: usadas por filtros/menús del re-skin.
-- [ ] **E0-E6** · [FUNCIONAL][M] Textarea + Form wrapper (rhf + zod)
+- [x] **E0-E6** · [FUNCIONAL][M] Textarea + Form wrapper (rhf + zod)
   - Fuentes: G01-F1.2 · Deps: E0-E2
   - Scope: wrapper de formularios con validación Zod en cliente. · Verificación: un form del re-skin valida en cliente y servidor.
-- [ ] **E0-E7** · [VISUAL][S] GlassButton + unificar GlassCard con variantes web
+- [x] **E0-E7** · [VISUAL][S] GlassButton + unificar GlassCard con variantes web
   - Fuentes: G01-F1.4 · Deps: E0-D5
   - Scope: GlassButton + variantes de GlassCard. · Verificación: paridad visual con web md.
-- [ ] **E0-E8** · [VISUAL][M] `AmbientBrandGlow` / `GlowBorderCard` RN (Skia/gradiente)
+- [x] **E0-E8** · [VISUAL][M] `AmbientBrandGlow` / `GlowBorderCard` RN (Skia/gradiente)
   - Fuentes: G01-F1.5 · Deps: E0-D5, E0-D6
   - Scope: primitiva de glow de marca (la piden G06-A4/G09-T16/G03-A5 — se hace UNA vez acá). · Verificación: consumida por ClientHero (E3) y Mi Marca (E7) sin duplicar.
-- [ ] **E0-E9** · [FUNCIONAL][M] Command palette / búsqueda global base RN
+- [x] **E0-E9** · [FUNCIONAL][M] Command palette / búsqueda global base RN
   - Fuentes: G01-F1.6 · Deps: E0-E2
   - Scope: primitiva de command palette (base de búsqueda global coach G06-B8). · Verificación: abre/filtra/navega en device.
-- [ ] **E0-E10** · [VISUAL][S] InfoTooltip / MetricInfo touch (popover on tap)
+- [x] **E0-E10** · [VISUAL][S] InfoTooltip / MetricInfo touch (popover on tap)
   - Fuentes: G01-F1.7 · Deps: E0-E5
   - Scope: tooltip táctil. · Verificación: tap muestra info en métricas.
-- [ ] **E0-E11** · [FUNCIONAL][M] `ShareCard` motor único (react-native-view-shot) `[NUEVO-PLAN]`
+- [x] **E0-E11** · [FUNCIONAL][M] `ShareCard` motor único (react-native-view-shot) `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN §Primitivas; lo piden G03-B10/G05-T13/G06) · Deps: E0-D5 (batch EAS de libs nativas E0)
   - Scope: renderer de canvas nativo para share-cards branded (UNA implementación). · Verificación: exporta imagen; consumido por E2-16 (workout) y E4-21 (perfil).
-- [ ] **E0-E12** · [FUNCIONAL][M] Player de video inline compartido (webview YouTube / expo-video) `[NUEVO-PLAN]`
+- [x] **E0-E12** · [FUNCIONAL][M] Player de video inline compartido (webview YouTube / expo-video) `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN §Primitivas; lo piden G03-B13/G05-T12/G07-D2) · Deps: E0-D3
   - Scope: player inline reutilizable (YouTube webview / mp4 expo-video), soporta recorte. · Verificación: reproduce inline en técnica ejecución, catálogo y preview coach.
-- [ ] **E0-E13** · [VISUAL][S] Token color canal Android + re-skin estados transversales (OfflineBanner/SyncStatusPill/BiometricLock/error)
+- [x] **E0-E13** · [VISUAL][S] Token color canal Android + re-skin estados transversales (OfflineBanner/SyncStatusPill/BiometricLock/error)
   - Fuentes: G11-B3 · Deps: E0-D1, E0-D5
   - Scope: color de canal de notificación Android + re-skin de estados transversales. · Verificación: banners y locks en DS claro/oscuro.
 
 ### E0.F — Seams wave 1 (extracciones; web verde tras cada seam)
 
-- [ ] **E0-F1** · [SEAM][L] Extraer `@eva/workout-engine` (+ shim web)
+- [x] **E0-F1** · [SEAM][L] Extraer `@eva/workout-engine` (+ shim web)
   - Fuentes: G03-B0 · Deps: ninguna (bloquea E2)
   - Scope: session-logs reconcile/optimistic, workout-stepper, typed-keypad (lógica), timers, **workout-block-grouping**, **workout-areas**, duración/cap 4h; web migra imports en el mismo PR. · Verificación: web verde (typecheck+vitest+build); tests del engine viajan con el código.
-- [ ] **E0-F2** · [SEAM][S] Extraer `domain/cardio` → `@eva/cardio`
+- [x] **E0-F2** · [SEAM][S] Extraer `domain/cardio` → `@eva/cardio`
   - Fuentes: G10-T1 · Deps: ninguna
   - Scope: zonas (Tanaka/Karvonen), pace, plantillas de intervalos, `hrRangeForZone`. · Verificación: web verde consumiendo el package.
-- [ ] **E0-F3** · [FUNCIONAL][M] Passthrough de campos desconocidos en el guardado del builder mobile (anti round-trip destructivo) `[NUEVO-PLAN]`
+- [x] **E0-F3** · [FUNCIONAL][M] Passthrough de campos desconocidos en el guardado del builder mobile (anti round-trip destructivo) `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN 0.F; riesgo SPEC) · Deps: ninguna (ANTES de que nadie toque el builder)
   - Scope: preservar `section_template_id` y campos polimórficos no editados al guardar. · Verificación: round-trip test — guardar un plan no borra campos no editados.
 
@@ -174,13 +176,13 @@ Habilitador puro: **nada de re-skin de pantallas todavía**. Cierra con el gate 
 - [ ] **E0-G3** · [FUNCIONAL][S] Matriz de dispositivos QA `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN 0.G; open question SPEC) · Deps: ninguna
   - Scope: definir mínimo 1 Android gama media + 1 iPhone (pantallas chicas incluidas). · Verificación: matriz documentada en `docs/audits/rn-parity-qa/`.
-- [ ] **E0-G4** · [FUNCIONAL][S] Flags locales `lib/flags.ts` (+ flag remoto para pantallas de alto riesgo) `[NUEVO-PLAN]`
+- [x] **E0-G4** · [FUNCIONAL][S] Flags locales `lib/flags.ts` (+ flag remoto para pantallas de alto riesgo) `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN 0.G / Rollback) · Deps: E0-C1 (flag remoto lee `/api/mobile/config`)
   - Scope: ocultar pantallas incompletas dentro de una etapa; flag remoto apagable para el ejecutor (E2). · Verificación: toggle oculta pantalla sin release; flag remoto apaga E2 sin deploy.
-- [ ] **E0-G5** · [SEAM][S] Test de paridad de tokens en CI `[NUEVO-PLAN]`
+- [x] **E0-G5** · [SEAM][S] Test de paridad de tokens en CI `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN §Theming / AC SPEC) · Deps: E0-D1
   - Scope: script compara `apps/web/src/app/globals.css` vs `apps/mobile/global.css` contra `specs/redesign-eva-ds/token-contract.md`. · Verificación: divergencia = CI rojo.
-- [ ] **E0-G6** · [FUNCIONAL][S] Hook de OTA en foreground (`checkForUpdateAsync` + prompt) + política EAS/OTA documentada (P3)
+- [x] **E0-G6** · [FUNCIONAL][S] Hook de OTA en foreground (`checkForUpdateAsync` + prompt) + política EAS/OTA documentada (P3)
   - Fuentes: G11-D1 · Deps: ninguna
   - Scope: chequeo de OTA al foreground; `runtimeVersion: appVersion`. · Verificación: OTA JS-only se aplica; política escrita en docs de operaciones.
 

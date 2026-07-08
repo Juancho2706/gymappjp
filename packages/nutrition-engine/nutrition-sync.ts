@@ -1,16 +1,17 @@
 /**
- * Lógica PURA de reconciliación de comidas al propagar una plantilla de nutrición
- * a los planes de los alumnos. Extraída de NutritionService.propagateTemplateChanges
- * para poder testearla sin tocar la DB (el codebase testea funciones puras, no el
- * chain de Supabase).
+ * Lógica PURA de reconciliación de comidas al propagar una plantilla / guardar un plan de
+ * nutrición a los planes de los alumnos. Extraída de NutritionService.propagateTemplateChanges
+ * para poder testearla sin tocar la DB (el codebase testea funciones puras, no el chain de
+ * Supabase). Vive en @eva/nutrition-engine para ser CONSUMIDA por web (@eva/web) y mobile
+ * (apps/mobile) — una sola fuente de verdad de la cascade-safety, no una copia por app.
  *
  * Invariantes que protege:
  *  - E1 / preservación de IDs: una comida existente cuyo `order_index` sigue en la
  *    plantilla se UPDATEa in-place (mismo `id`) -> nutrition_meal_logs sobreviven.
  *  - Cascade-safety (CRÍTICO): nutrition_meal_logs.meal_id -> nutrition_meals es
- *    ON DELETE CASCADE. Borrar una comida con historial elimina la adherencia del
- *    alumno. Por eso una comida "huérfana" (order_index ya no en la plantilla) SOLO
- *    se borra si NO tiene logs; si los tiene, se CONSERVA (preservedWithLogs).
+ *    ON DELETE CASCADE / SET NULL. Borrar una comida con historial elimina/orfaniza la
+ *    adherencia del alumno. Por eso una comida "huérfana" (order_index ya no en la plantilla)
+ *    SOLO se borra si NO tiene logs; si los tiene, se CONSERVA (preservedWithLogs).
  *
  * Limitación conocida (decisión de producto pendiente): el match es por `order_index`.
  * Si el coach REORDENA comidas, una comida con logs en el índice N puede quedar con el
