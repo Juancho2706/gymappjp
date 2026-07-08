@@ -13,9 +13,11 @@ interface Props {
 export default async function ClientCheckInPage({ params }: Props) {
     const { coach_slug } = await params
     const base = await getClientBasePath(coach_slug)
-    const { user, coachPrimaryColor, lastCheckIn } = await getCheckInPageData(coach_slug)
+    const { user, isClient, coachPrimaryColor, lastCheckIn } = await getCheckInPageData()
     if (!user) redirect(`${base}/login`)
-    if (!coachPrimaryColor) redirect(`${base}/dashboard`)
+    // Gate por `isClient`, NUNCA por color: el alumno con coach_id NULL (team/pool/enterprise) tiene
+    // color fallback pero es un alumno válido y debe poder ingresar (bug P0 jul-2026).
+    if (!isClient) redirect(`${base}/dashboard`)
 
     return (
         <div className="min-h-dvh bg-surface-app pb-24 pt-safe">
