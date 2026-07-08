@@ -370,7 +370,7 @@ function StrengthLogSetForm({
         // request abortada/tragada en 4G inestable (navigator.onLine=true pero sin conectividad real)
         // NUNCA pierde lo tipeado (bug forense: "valores que jamás llegaron a la DB"). Confirmar el
         // guardado lo saca de la cola (efecto de reconciliación). Dedup por (block,set): última gana.
-        enqueueWorkoutLog({
+        const backedUp = enqueueWorkoutLog({
             blockId,
             setNumber,
             weightKg: w,
@@ -392,6 +392,13 @@ function StrengthLogSetForm({
 
         // Offline guard: encolado y en estado PENDIENTE (nunca "guardado ✔"), sin tocar el server.
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            // Respaldo local falló (Safari private / quota llena) Y estamos offline: la serie no tiene
+            // NINGÚN camino — ni cola local ni `formAction` (offline). Avisar y NO marcarla como guardada
+            // (sin optimismo ni colapso), para que el alumno reintente con conexión antes de salir.
+            if (!backedUp) {
+                toast.error('No se pudo guardar localmente — revisa tu conexión antes de salir')
+                return
+            }
             addOptimisticLogged(true)
             setSyncStatus('pending')
             setNoteOpen(false)
@@ -803,7 +810,7 @@ function TypedLogSetRow({
 
         // Write-through SIEMPRE: el registro entra a la cola antes de tocar la red (respaldo ante
         // request abortada en red inestable). Confirmar el guardado lo saca (efecto de arriba).
-        enqueueWorkoutLog({
+        const backedUp = enqueueWorkoutLog({
             blockId,
             setNumber,
             weightKg: null,
@@ -820,6 +827,12 @@ function TypedLogSetRow({
         })
 
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            // Respaldo local falló (Safari private / quota) Y estamos offline: sin cola ni `formAction`,
+            // la serie se perdería. Avisar y NO marcarla como guardada (ni optimismo ni pending).
+            if (!backedUp) {
+                toast.error('No se pudo guardar localmente — revisa tu conexión antes de salir')
+                return
+            }
             addOptimisticLogged(true)
             onResult?.(blockId, setNumber, 'pending')
             toast.info('Sin conexión — el registro se guardará al reconectar')
