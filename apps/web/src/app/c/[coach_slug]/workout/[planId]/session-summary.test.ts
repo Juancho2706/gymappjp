@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
     summarizeSessionByKind,
+    formatSessionDuration,
+    formatClockDuration,
     type SummaryBlock,
     type SummaryLogLike,
 } from './session-summary'
@@ -141,5 +143,48 @@ describe('summarizeSessionByKind', () => {
         expect(out.mobility[0].kind).toBe('roller')
         expect(out.mobility[0].sets).toBe(2)
         expect(out.muscleWork[0].group).toBe('Cuádriceps')
+    })
+})
+
+describe('formatSessionDuration', () => {
+    it('null / 0 / negativo → "—"', () => {
+        expect(formatSessionDuration(undefined)).toBe('—')
+        expect(formatSessionDuration(null)).toBe('—')
+        expect(formatSessionDuration(0)).toBe('—')
+        expect(formatSessionDuration(-5)).toBe('—')
+    })
+
+    it('< 60s → "menos de 1 min" (mata el ambiguo "0:40")', () => {
+        expect(formatSessionDuration(40)).toBe('menos de 1 min')
+        expect(formatSessionDuration(59)).toBe('menos de 1 min')
+    })
+
+    it('< 1h → "X min"', () => {
+        expect(formatSessionDuration(60)).toBe('1 min')
+        expect(formatSessionDuration(47 * 60)).toBe('47 min')
+        expect(formatSessionDuration(59 * 60 + 59)).toBe('59 min')
+    })
+
+    it('>= 1h → "X h YY min" (minutos con dos dígitos)', () => {
+        expect(formatSessionDuration(3900)).toBe('1 h 05 min') // 1h05
+        expect(formatSessionDuration(2 * 3600)).toBe('2 h 00 min') // 2h00
+    })
+})
+
+describe('formatClockDuration (tiles cardio/hold — precisión sub-minuto)', () => {
+    it('null / 0 / negativo → "—"', () => {
+        expect(formatClockDuration(undefined)).toBe('—')
+        expect(formatClockDuration(null)).toBe('—')
+        expect(formatClockDuration(0)).toBe('—')
+    })
+
+    it('conserva los segundos bajo 1h (un hold de 90 s NO es "1 min")', () => {
+        expect(formatClockDuration(45)).toBe('0:45')
+        expect(formatClockDuration(90)).toBe('1:30')
+        expect(formatClockDuration(12 * 60 + 7)).toBe('12:07')
+    })
+
+    it('>= 1h → "Xh MM"', () => {
+        expect(formatClockDuration(3900)).toBe('1h 05')
     })
 })

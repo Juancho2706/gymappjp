@@ -37,7 +37,14 @@ import Image from 'next/image'
 import { WorkoutSummaryOverlay } from './WorkoutSummaryOverlay'
 import { WorkoutTimerSettingsPanel } from './WorkoutTimerSettingsPanel'
 import { cn } from '@/lib/utils'
-import { formatRelativeDate } from '@/lib/date-utils'
+import { formatRelativeDate, getTodayInSantiago } from '@/lib/date-utils'
+import {
+    readSessionStart,
+    persistSessionStart,
+    clearSessionStart,
+    sweepOtherDaySessionStarts,
+    elapsedSecondsSince,
+} from './session-clock'
 import { springs } from '@/lib/animation-presets'
 import { useBasePath } from '@/components/client/BasePathProvider'
 import { useScreenWakeLock } from '@/lib/client/use-screen-wake-lock'
@@ -233,10 +240,12 @@ function currentPhaseName(
     return phases[phases.length - 1]?.name ?? null
 }
 
-/** mm:ss desde segundos (cronómetro de sesión). */
+/** mm:ss desde segundos (cronómetro de sesión); desde 1h rueda a H:MM:SS (ej. "1:05:32"). */
 function fmtElapsed(totalSec: number): string {
-    const m = Math.floor(totalSec / 60)
+    const h = Math.floor(totalSec / 3600)
+    const m = Math.floor((totalSec % 3600) / 60)
     const s = totalSec % 60
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
     return `${m}:${String(s).padStart(2, '0')}`
 }
 
@@ -990,6 +999,13 @@ export function WorkoutExecutionClient({
     // Duración congelada al finalizar → el resumen post-entreno muestra el tiempo real de la
     // sesión (el cronómetro sigue corriendo detrás del overlay; sin congelar, "Duración" tickearía).
     const [finishedElapsed, setFinishedElapsed] = useState<number | null>(null)
+    // Ancla del cronómetro de sesión (BUG 1). Epoch ms del inicio real, PERSISTIDO en localStorage por
+    // (plan, día) para sobrevivir remontajes (atrás+volver, reload, kill de la PWA) — antes era un
+    // `Date.now()` solo-en-memoria que se reseteaba a 0 en cada montaje. El día ISO Santiago y el flag
+    // "ya persistido" viven en refs porque los tocan el efecto del intervalo, handleLogged y handleFinish.
+    const sessionAnchorRef = useRef<number>(0)
+    const sessionDayIsoRef = useRef<string>('')
+    const sessionAnchorPersistedRef = useRef(false)
     // Disclosure "Detalles" por ejercicio (instrucciones + nota + historial detrás de un tap).
     const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({})
     const toggleDetails = useCallback((id: string) => setOpenDetails((prev) => ({ ...prev, [id]: !prev[id] })), [])
@@ -1092,11 +1108,49 @@ export function WorkoutExecutionClient({
         }
     }, [])
 
-    // Cronómetro de sesión (32:14) — solo display, arranca al montar la pantalla.
+    // Cronómetro de sesión (32:14) anclado a un timestamp PERSISTIDO (BUG 1). El ancla es el `Date.now()`
+    // del montaje, pero SÓLO se persiste cuando la sesión está "activa": ya hay ≥1 serie de hoy al montar
+    // (rehidratación) o el alumno loguea la 1ª serie de este montaje (ver handleLogged). Un montaje "de
+    // paseo" (mirar la rutina en la mañana, 0 series, salir) NO persiste nada → no infla la duración del
+    // entreno real de la tarde. El intervalo RECALCULA desde el ancla (nunca acumula) → inmune a un tick
+    // perdido cuando el tab está en background.
     useEffect(() => {
-        const start = Date.now()
-        const id = window.setInterval(() => setSessionElapsed(Math.floor((Date.now() - start) / 1000)), 1000)
-        return () => window.clearInterval(id)
+        const { iso: dayIso } = getTodayInSantiago()
+        sessionDayIsoRef.current = dayIso
+        // Higiene: borra anclas de OTROS días (sesiones abandonadas que nunca se finalizaron/limpiaron).
+        sweepOtherDaySessionStarts(dayIso)
+
+        const persisted = readSessionStart(plan.id, dayIso)
+        const anchor = persisted ?? Date.now()
+        sessionAnchorRef.current = anchor
+        sessionAnchorPersistedRef.current = persisted != null
+
+        // Rehidratación: si YA había actividad de hoy (logs del server o cola no vacía) pero NO había ancla
+        // persistida, la persistimos ahora. Es "mejor tarde que resetear a 0": la sesión claramente ya
+        // estaba corriendo. OJO — el ancla tardío SUBCUENTA (arranca en este montaje, no en la 1ª serie
+        // real); es el fallback aceptado frente al reset del bug original.
+        if (!sessionAnchorPersistedRef.current) {
+            const hasTodayActivity = logs.length > 0 || readWorkoutOfflineQueueForPlan(plan.id).length > 0
+            if (hasTodayActivity) {
+                sessionAnchorPersistedRef.current = persistSessionStart(plan.id, dayIso, anchor)
+            }
+        }
+
+        const tick = () => setSessionElapsed(elapsedSecondsSince(sessionAnchorRef.current, Date.now()))
+        tick() // pinta inmediato al montar/rehidratar (no esperar el primer segundo)
+        const id = window.setInterval(tick, 1000)
+        // visibilitychange → visible: recalcular YA para que el número no se vea congelado al volver del
+        // lock de pantalla / cambio de tab (no esperar el próximo tick). Listener propio; el otro listener
+        // de visibilitychange (frescura de logs) queda intacto.
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') tick()
+        }
+        document.addEventListener('visibilitychange', onVisible)
+        return () => {
+            window.clearInterval(id)
+            document.removeEventListener('visibilitychange', onVisible)
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const phaseName = currentPhaseName(program?.program_phases, currentWeek)
@@ -1300,6 +1354,16 @@ export function WorkoutExecutionClient({
         // Marca de actividad (Fix A): al primer log, futuras REENTRADAS por atrás refrescan aunque el
         // snapshot del client Router Cache vuelva vacío.
         markWorkoutTouched()
+        // Cronómetro (BUG 1): al PRIMER log de este montaje materializamos el ancla en localStorage si aún
+        // no lo estaba → la duración sobrevive un remontaje posterior (atrás/reload/kill de la PWA).
+        // Idempotente: montajes "de paseo" (sin logs) nunca escriben, así no inflan el entreno real.
+        if (!sessionAnchorPersistedRef.current) {
+            sessionAnchorPersistedRef.current = persistSessionStart(
+                plan.id,
+                sessionDayIsoRef.current,
+                sessionAnchorRef.current,
+            )
+        }
         // Estado (puro) — dedup por block+set, PRESERVANDO los ejes tipados (actual_*) del payload
         // para que la fila de hold/cardio no se re-renderice vacía al confirmar (bug forense hold).
         setSessionLogs((prev) => applyOptimisticSessionLog(prev, payload))
@@ -1395,7 +1459,11 @@ export function WorkoutExecutionClient({
                                 // terminar (defensa complementaria a A+B, no sustituto). Fire-and-forget.
                                 void revalidateWorkoutViewAction(coachSlug, plan.id).catch(() => {})
                                 markFirstWorkoutCompleted()
-                                setFinishedElapsed(sessionElapsed)
+                                // Duración final desde el ancla EN ESTE INSTANTE (no el último tick del
+                                // estado, que puede ir ~1s atrasado). Luego limpiamos el ancla → una 2ª
+                                // sesión del mismo día arranca de cero (BUG 1).
+                                setFinishedElapsed(elapsedSecondsSince(sessionAnchorRef.current, Date.now()))
+                                clearSessionStart(plan.id, sessionDayIsoRef.current)
                                 setShowCompleted(true)
                             },
                         },
@@ -1410,7 +1478,10 @@ export function WorkoutExecutionClient({
         void revalidateWorkoutViewAction(coachSlug, plan.id).catch(() => {})
         // Señal de "primer workout completado" → arma el prompt de instalación PWA (gating por engagement).
         markFirstWorkoutCompleted()
-        setFinishedElapsed(sessionElapsed)
+        // Duración final desde el ancla EN ESTE INSTANTE (no el último tick del estado) + limpieza del
+        // ancla persistido → una 2ª sesión del mismo día arranca de cero (BUG 1).
+        setFinishedElapsed(elapsedSecondsSince(sessionAnchorRef.current, Date.now()))
+        clearSessionStart(plan.id, sessionDayIsoRef.current)
         setShowCompleted(true)
     }
     // Contexto del programa para el nudge "lo que viene" del resumen (reusa la sub-línea del header;
