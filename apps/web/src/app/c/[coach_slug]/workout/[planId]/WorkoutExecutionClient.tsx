@@ -1153,6 +1153,36 @@ export function WorkoutExecutionClient({
         }
     }, [])
 
+    // Precache de ESTA página en el NAV_CACHE del service worker (QA CEO 2026-07-07, modo avión).
+    // La entrada al workout es navegación SPA → la URL nunca pasaba por el handler de navegaciones
+    // duras del SW y NAV_CACHE quedaba sin ella: si el browser descartaba la pestaña en background y
+    // la recargaba OFFLINE, el SW caía a offline.html ("No puedes entrenar sin internet") y expulsaba
+    // al alumno del entreno. El SW fetchea el HTML completo y lo guarda; la recarga offline bootea la
+    // página real y el estado local (cola/drafts/snapshot/ancla) restaura la sesión. Best-effort:
+    // sin SW controlando (primera visita) o sin red, no hace nada; reintenta al volver la conexión.
+    useEffect(() => {
+        const cacheNav = () => {
+            try {
+                if (!navigator.onLine) return
+                navigator.serviceWorker?.controller?.postMessage({
+                    type: 'eva:cache-nav',
+                    url: window.location.href,
+                })
+            } catch {
+                /* best-effort */
+            }
+        }
+        cacheNav()
+        window.addEventListener('online', cacheNav)
+        // controllerchange: si el SW NUEVO toma control con esta pestaña ya abierta (deploy en
+        // caliente), el postMessage del montaje se lo mandó al SW viejo (o a nadie) — reintentar.
+        navigator.serviceWorker?.addEventListener('controllerchange', cacheNav)
+        return () => {
+            window.removeEventListener('online', cacheNav)
+            navigator.serviceWorker?.removeEventListener('controllerchange', cacheNav)
+        }
+    }, [])
+
     // Cronómetro de sesión (32:14) anclado a un timestamp PERSISTIDO (BUG 1). El ancla es el `Date.now()`
     // del montaje, pero SÓLO se persiste cuando la sesión está "activa": ya hay ≥1 serie de hoy al montar
     // (rehidratación) o el alumno loguea la 1ª serie de este montaje (ver handleLogged). Un montaje "de
