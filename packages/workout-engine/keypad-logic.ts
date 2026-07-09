@@ -111,17 +111,6 @@ export function keypadBackspace(current: string): string {
   return (current ?? '').slice(0, -1)
 }
 
-/** Lee el paso persistido (kg), validado contra los presets; default `DEFAULT_KEYPAD_STEP`. */
-export function readKeypadStep(): number {
-  if (typeof window === 'undefined') return DEFAULT_KEYPAD_STEP
-  const raw = localStorage.getItem(KEYPAD_STEP_KEY)
-  const n = raw == null ? NaN : Number(raw)
-  return (KEYPAD_STEP_PRESETS as readonly number[]).includes(n) ? n : DEFAULT_KEYPAD_STEP
-}
-
-/** Persiste el paso (kg) si es un preset válido. No-op fuera del browser o con valor inválido. */
-export function writeKeypadStep(step: number): void {
-  if (typeof window === 'undefined') return
-  if (!(KEYPAD_STEP_PRESETS as readonly number[]).includes(step)) return
-  localStorage.setItem(KEYPAD_STEP_KEY, String(step))
-}
+// Persistencia del paso: por plataforma, fuera del package (sin APIs de browser acá).
+// Web: apps/web/src/lib/client/keypad-step.ts (localStorage).
+// Mobile: apps/mobile/components/alumno/workout/keypad-step-preference.ts (AsyncStorage).

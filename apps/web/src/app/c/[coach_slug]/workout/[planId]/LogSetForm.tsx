@@ -17,10 +17,9 @@ import {
 } from '@/lib/workout-offline-queue'
 import { triggerHaptic } from '@/lib/client/haptics'
 import { useCoarsePointer } from '@/lib/client/useCoarsePointer'
-import { formatWeightEsCl } from '@/lib/client/keypad-logic'
 import { useWorkoutKeypad } from './WorkoutKeypadProvider'
 import { ScaleDots, EffortHelp, RPE_HELP, RIR_HELP } from './EffortScale'
-import { typedKeypadFields, type TypedKeypadMode, type OptimisticLogPayload } from '@eva/workout-engine'
+import { typedKeypadFields, formatWeightEsCl, type TypedKeypadMode, type OptimisticLogPayload } from '@eva/workout-engine'
 import { cn } from '@/lib/utils'
 import { springs } from '@/lib/animation-presets'
 

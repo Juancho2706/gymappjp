@@ -1,14 +1,30 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useKeepAwake } from 'expo-keep-awake'
 import { useRouter } from 'expo-router'
 import { Confetti } from 'react-native-fast-confetti'
 import { CheckCircle2, Timer, Trophy } from 'lucide-react-native'
-import type { OptimisticLogPayload } from '@eva/workout-engine'
+import {
+  buildStepModel,
+  effectiveExerciseType,
+  firstIncompleteStepIndex,
+  formatTypedObjective,
+  isStepComplete,
+  typedKeypadFields,
+  type OptimisticLogPayload,
+  type SummaryBlock,
+  type TypedKeypadMode,
+} from '@eva/workout-engine'
 import { useTheme } from '../../../context/ThemeContext'
 import { useEvaMotion } from '../../../lib/motion'
+import { useEntitlements } from '../../../lib/entitlements'
+import { useClientCardioZones } from '../../../lib/cardio-zones'
 import { haptics } from '../../../lib/haptics'
+import { supabase } from '../../../lib/supabase'
+import { getTodayInSantiago, formatRelativeDate } from '../../../lib/date-utils'
+import { computeCheckInReminder } from '../../../lib/checkin-thresholds'
 import { computeEffectiveTarget, type EffectiveTarget } from '../../../lib/workout/progression'
 import {
   resolveExercise,
@@ -20,13 +36,17 @@ import {
 import { Button } from '../../Button'
 import { OfflineBanner } from '../../OfflineBanner'
 import { EvaLoaderScreen } from '../../EvaLoader'
-import { SessionHeader } from './SessionHeader'
+import { SessionHeader, type WorkoutViewMode } from './SessionHeader'
 import { SingleExerciseCard } from './SingleExerciseCard'
 import { SupersetGroupCard } from './SupersetGroupCard'
+import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { KeypadHost, type KeypadTarget } from './KeypadHost'
 import { TechniqueSheet } from './TechniqueSheet'
-import { WorkoutSummaryModal } from '../../workout/WorkoutSummaryModal'
+import { WorkoutSummaryOverlay } from './WorkoutSummaryOverlay'
 import { bestPrevOf, fmtElapsed, fmtVolume, parseRestTime } from './workout-ui'
+
+/** Carril device-scoped del modo de vista (Lista/Pasos), igual que `STEPPER_MODE_KEY` de web. */
+const VIEW_MODE_KEY = 'eva_workout_view_mode'
 // Contrato de la ola (otros workers): provider de timers + sheet de sustitución. Importados con la
 // firma exacta del contrato; el orquestador integra. NO stubear.
 import { WorkoutTimerProvider, useWorkoutTimers } from './timers/TimerProvider'
@@ -66,12 +86,29 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [prCelebration, setPrCelebration] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [viewMode, setViewMode] = useState<WorkoutViewMode>('list')
+  const [stepIndex, setStepIndex] = useState(0)
+  const autoAdvancedRef = useRef<Set<string>>(new Set())
+
+  // Modo de vista device-scoped (persiste Lista/Pasos entre sesiones, como web STEPPER_MODE_KEY).
+  useEffect(() => {
+    void AsyncStorage.getItem(VIEW_MODE_KEY).then((v) => {
+      if (v === 'steps' || v === 'list') setViewMode(v)
+    })
+  }, [])
 
   const {
-    loading, planTitle, activeWeekVariant, currentWeek, weeksToRepeat, programStructure, cycleLength,
-    dayOfWeek, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastSessionByBlock,
-    elapsedSec, capped, isOnline, restoredDraft, refresh, saveDraft, logSet,
+    loading, planTitle, programName, activeWeekVariant, currentWeek, weeksToRepeat, programStructure, cycleLength,
+    dayOfWeek, clientId, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastSessionByBlock,
+    exerciseMaxes, elapsedSec, capped, isOnline, restoredDraft, refresh, saveDraft, logSet,
   } = session
+
+  // Zona FC personalizada (E2-11): SOLO si el módulo `cardio` está habilitado (visibilidad de pago)
+  // Y el plan tiene bloques cardio con hr_zone → se leen los bpm del alumno (client-side, RLS own-row).
+  // Sin módulo o sin bloques cardio → hrZones null y `useClientCardioZones` NO pega a la DB (AC3).
+  const { hasModule } = useEntitlements()
+  const planHasHrZone = useMemo(() => blocks.some((b) => b.hr_zone != null), [blocks])
+  const hrZones = useClientCardioZones(hasModule('cardio') && planHasHrZone)
 
   // Peso objetivo efectivo por bloque (sobrecarga progresiva) — mismo motor que web.
   const effByBlock = useMemo(() => {
@@ -136,24 +173,46 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
   const subline =
     programStructure === 'cycle' ? `Dia ${dayOfWeek || 1} de ${cycleLength || '?'}` : programStructure === 'weekly' ? 'Programa semanal' : null
 
-  // ── Abrir teclado para una serie ──────────────────────────────────────────
+  // ── Abrir teclado para una serie (strength o tipado según effType) ──────────
   const openSet = useCallback(
     (blockId: string, setNumber: number, prefill?: { weight: number | null; reps: number | null }) => {
       const block = blocks.find((b) => b.id === blockId)
       if (!block) return
-      const eff = effByBlock.get(blockId) ?? null
-      const suggested = eff?.weightKg ?? block.target_weight_kg
+      const exercise = resolveExercise(block)
+      const effType = effectiveExerciseType(block, exercise)
+      const exerciseName = exercise?.name ?? 'Ejercicio'
       const restored =
         !prefill && restoredDraft && restoredDraft.blockId === blockId && restoredDraft.setNumber === setNumber
           ? restoredDraft
           : null
+
+      // Bloques tipados (cardio/movilidad/roller): keypad por campos tipados (E2-10).
+      if (effType !== 'strength') {
+        const mode = effType as TypedKeypadMode
+        setKeypadTarget({
+          blockId,
+          setNumber,
+          exerciseName,
+          targetReps: '',
+          suggestedWeight: null,
+          effortKind: null,
+          initialValues: restored?.values,
+          initialFieldIndex: restored?.fieldIndex,
+          typed: { mode, fields: typedKeypadFields(mode), objective: formatTypedObjective(block, mode) },
+        })
+        haptics.tap()
+        return
+      }
+
+      const eff = effByBlock.get(blockId) ?? null
+      const suggested = eff?.weightKg ?? block.target_weight_kg
       const initialValues = prefill
         ? { weight: prefill.weight != null ? String(prefill.weight) : '', reps: prefill.reps != null ? String(prefill.reps) : '' }
         : restored?.values
       setKeypadTarget({
         blockId,
         setNumber,
-        exerciseName: resolveExercise(block)?.name ?? 'Ejercicio',
+        exerciseName,
         targetReps: block.reps,
         suggestedWeight: suggested ?? null,
         effortKind: block.rir ? 'rir' : 'rpe',
@@ -201,30 +260,197 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
     setRefreshing(false)
   }, [refresh])
 
-  // Adaptador para el WorkoutSummaryModal legacy (Wave B lo reemplaza por el overlay rico:
-  // PR share cards + mapa muscular + conteo polimórfico — WAVE-B-SEAM).
-  const summaryBlocks = useMemo(
+  // Adaptador para el WorkoutSummaryOverlay (E2-15): bloques → SummaryBlock (arrastra los ejes
+  // tipados cardio/movilidad para el conteo polimórfico). Los logs (sessionLogs) ya cumplen
+  // SummaryLogLike (snake_case + actual_*), se pasan directo.
+  const summaryBlocks = useMemo<SummaryBlock[]>(
     () =>
       blocks.map((b) => {
         const ex = resolveExercise(b)
-        return { id: b.id, sets: b.sets, exercises: ex ? { id: ex.id, name: ex.name, muscle_group: ex.muscle_group } : null }
+        return {
+          id: b.id,
+          exercises: ex ? { id: ex.id, name: ex.name, muscle_group: ex.muscle_group ?? '', exercise_type: ex.exercise_type } : null,
+          exercise_type_override: b.exercise_type_override ?? null,
+          sets: b.sets,
+          duration_sec: b.duration_sec ?? null,
+          distance_value: b.distance_value ?? null,
+          distance_unit: b.distance_unit ?? null,
+          hr_zone: b.hr_zone ?? null,
+          target_pace_sec_per_km: b.target_pace_sec_per_km ?? null,
+        }
       }),
     [blocks],
   )
-  const summaryLogs = useMemo(() => {
-    const out: Record<string, { blockId: string; setNumber: number; weightKg: string; repsDone: string }[]> = {}
-    for (const l of sessionLogs) {
-      ;(out[l.block_id] ||= []).push({
-        blockId: l.block_id,
-        setNumber: l.set_number,
-        weightKg: l.weight_kg != null ? String(l.weight_kg) : '',
-        repsDone: l.reps_done != null ? String(l.reps_done) : '',
-      })
+
+  // Fecha del máximo histórico por ejercicio → "superaste tus 80 kg del 12 jun" (E2-15).
+  const exerciseMaxDates = useMemo(() => {
+    const out: Record<string, string> = {}
+    for (const [exId, list] of Object.entries(previousHistory)) {
+      let best = -Infinity
+      let bestDate: string | null = null
+      for (const s of list) {
+        const w = s.weight_kg ?? 0
+        if (w > best) { best = w; bestDate = s.date }
+      }
+      if (bestDate) out[exId] = bestDate
     }
     return out
-  }, [sessionLogs])
+  }, [previousHistory])
+
+  // Guard anti-PR-falso: bloques con sustitución activa (estado en sesión o log con substituted_*).
+  const substitutedBlockIds = useMemo(() => {
+    const ids = new Set<string>(Object.keys(substitutionByBlock))
+    for (const l of sessionLogs) if (l.substituted_exercise_id) ids.add(l.block_id)
+    return [...ids]
+  }, [substitutionByBlock, sessionLogs])
+
+  // Check-in post-entreno (E2-18): último check-in del alumno → recordatorio por umbrales compartidos.
+  const [lastCheckInDate, setLastCheckInDate] = useState<string | null | undefined>(undefined)
+  useEffect(() => {
+    if (!clientId) return
+    let active = true
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from('check_ins')
+          .select('date')
+          .eq('client_id', clientId)
+          .order('date', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (active) setLastCheckInDate((data as { date?: string } | null)?.date ?? null)
+      } catch {
+        if (active) setLastCheckInDate(null)
+      }
+    })()
+    return () => { active = false }
+  }, [clientId])
+  const todayIso = getTodayInSantiago().iso
+  const checkInReminder = useMemo(
+    () => (lastCheckInDate === undefined ? null : computeCheckInReminder(lastCheckInDate, todayIso)),
+    [lastCheckInDate, todayIso],
+  )
+  const checkInLastRelative = checkInReminder?.lastDay ? formatRelativeDate(checkInReminder.lastDay, todayIso) : null
 
   const substituteBlock = substituteBlockId ? blocks.find((b) => b.id === substituteBlockId) : null
+
+  // Render de un grupo (bloque suelto o superserie) — reutilizado por la lista Y el modo Pasos.
+  const renderGroup = useCallback(
+    (group: { key: string; type: 'single' | 'superset'; blocks: SessionBlock[] }) => {
+      if (group.type === 'superset') {
+        const members = supersetMembersByBlock.get(group.blocks[0].id) ?? group.blocks
+        return (
+          <SupersetGroupCard
+            key={group.key}
+            members={members}
+            sessionLogs={sessionLogs}
+            effByBlock={effByBlock}
+            currentWeek={currentWeek}
+            onOpenTechnique={(b) => setTechniqueExercise(resolveExercise(b))}
+            onOpenSet={openSet}
+          />
+        )
+      }
+      const block = group.blocks[0]
+      const prescribed = resolveExercise(block)
+      if (!prescribed) return null
+      const effType = effectiveExerciseType(block, prescribed)
+      const isStrengthBlock = effType === 'strength'
+      // La sustitución es strength-only (máquina ocupada) — los tipados no la ofrecen.
+      const sub = isStrengthBlock ? getSubstitution(block) : null
+      const exercise: SessionExercise = sub
+        ? { ...prescribed, id: sub.exerciseId ?? prescribed.id, name: sub.name, gif_url: null, video_url: null, instructions: null }
+        : prescribed
+      const blockLogs = sessionLogs.filter((l) => l.block_id === block.id)
+      const doneCount = new Set(blockLogs.filter((l) => l.set_number >= 1 && l.set_number <= block.sets).map((l) => l.set_number)).size
+      const complete = doneCount >= block.sets
+      const focus: 'active' | 'upcoming' | 'done' = complete ? 'done' : block.id === activeBlockId ? 'active' : 'upcoming'
+      const prevList: PrevSet[] = sub ? [] : previousHistory[exercise.id] ?? []
+      return (
+        <SingleExerciseCard
+          key={block.id}
+          block={block}
+          exercise={exercise}
+          effType={effType}
+          eff={effByBlock.get(block.id) ?? null}
+          currentWeek={currentWeek}
+          blockLogs={blockLogs}
+          prevList={prevList}
+          focus={focus}
+          detailsOpen={!!openDetails[block.id]}
+          substitution={sub ? { name: sub.name, prescribedName: sub.prescribedName } : null}
+          canSubstitute={doneCount === 0 && isStrengthBlock}
+          hrZones={hrZones}
+          onToggleDetails={() => setOpenDetails((p) => ({ ...p, [block.id]: !p[block.id] }))}
+          onOpenTechnique={() => setTechniqueExercise(exercise)}
+          onOpenSet={(setNumber) => openSet(block.id, setNumber)}
+          onAutofillLast={(setNumber, best) => openSet(block.id, setNumber, { weight: best.weight_kg, reps: best.reps_done })}
+          onOpenSubstitute={() => setSubstituteBlockId(block.id)}
+          onUndoSubstitution={() => setSubstitutionByBlock((p) => { const n = { ...p }; delete n[block.id]; return n })}
+        />
+      )
+    },
+    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones],
+  )
+
+  // ── Modo Paso a paso (E2-04): modelo de pasos + vistas del rail + auto-avance ──
+  const steps = useMemo(
+    () =>
+      buildStepModel(
+        sections.map((s) => ({
+          sectionKey: s.key,
+          title: s.title,
+          subtitle: s.subtitle,
+          muted: s.muted,
+          groups: s.groups.map((g) => ({ key: g.key, type: g.type, blocks: g.blocks })),
+        })),
+      ),
+    [sections],
+  )
+  const stepViews = useMemo<StepperStepView[]>(
+    () =>
+      steps.map((st) => ({
+        key: st.key,
+        title: st.blocks.map((b) => resolveExercise(b)?.name ?? 'Ejercicio').join(' + '),
+        sectionTitle: st.sectionTitle,
+        muted: st.muted,
+        complete: isStepComplete(st, sessionLogs),
+      })),
+    [steps, sessionLogs],
+  )
+  const renderStep = useCallback(
+    (index: number) => {
+      const st = steps[index]
+      if (!st) return null
+      return renderGroup({ key: st.key, type: st.kind, blocks: st.blocks })
+    },
+    [steps, renderGroup],
+  )
+  const handleToggleMode = useCallback(
+    (mode: WorkoutViewMode) => {
+      haptics.tap()
+      setViewMode(mode)
+      void AsyncStorage.setItem(VIEW_MODE_KEY, mode).catch(() => {})
+      if (mode === 'steps') {
+        autoAdvancedRef.current = new Set()
+        setStepIndex(firstIncompleteStepIndex(steps, sessionLogs))
+      }
+    },
+    [steps, sessionLogs],
+  )
+  // Auto-avance: al completar el paso activo, avanza al siguiente (una sola vez por paso).
+  useEffect(() => {
+    if (viewMode !== 'steps' || steps.length === 0) return
+    const active = steps[Math.min(stepIndex, steps.length - 1)]
+    if (!active || autoAdvancedRef.current.has(active.key)) return
+    if (isStepComplete(active, sessionLogs) && stepIndex < steps.length - 1) {
+      autoAdvancedRef.current.add(active.key)
+      const t = setTimeout(() => setStepIndex((i) => (i === stepIndex ? Math.min(i + 1, steps.length - 1) : i)), 650)
+      return () => clearTimeout(t)
+    }
+  }, [sessionLogs, stepIndex, viewMode, steps])
+
+  const stepperActive = viewMode === 'steps' && steps.length > 0
 
   return (
     <SafeAreaView edges={['top']} className="flex-1 bg-ink-950">
@@ -251,11 +477,20 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         volumeLabel={volumeLabel}
         elapsedLabel={fmtElapsed(elapsedSec)}
         capped={capped}
+        viewMode={viewMode}
+        onToggleMode={handleToggleMode}
         onBack={() => router.back()}
       />
 
       {loading ? (
         <EvaLoaderScreen subtitle="Cargando rutina…" />
+      ) : stepperActive ? (
+        <StepperExecution
+          steps={stepViews}
+          currentIndex={stepIndex}
+          onIndexChange={setStepIndex}
+          renderStep={renderStep}
+        />
       ) : (
         <ScrollView
           contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 120, gap: 20 }}
@@ -284,55 +519,7 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
                 <Text className="border-l-2 border-white/10 pl-4 text-[12px] text-on-dark-muted">{section.subtitle}</Text>
               )}
               <View className="gap-3">
-                {section.groups.map((group) => {
-                  if (group.type === 'superset') {
-                    const members = supersetMembersByBlock.get(group.blocks[0].id) ?? group.blocks
-                    return (
-                      <SupersetGroupCard
-                        key={group.key}
-                        members={members}
-                        sessionLogs={sessionLogs}
-                        effByBlock={effByBlock}
-                        currentWeek={currentWeek}
-                        onOpenTechnique={(b) => setTechniqueExercise(resolveExercise(b))}
-                        onOpenSet={openSet}
-                      />
-                    )
-                  }
-                  const block = group.blocks[0]
-                  const prescribed = resolveExercise(block)
-                  if (!prescribed) return null
-                  const sub = getSubstitution(block)
-                  const exercise: SessionExercise = sub
-                    ? { ...prescribed, id: sub.exerciseId ?? prescribed.id, name: sub.name, gif_url: null, video_url: null, instructions: null }
-                    : prescribed
-                  const blockLogs = sessionLogs.filter((l) => l.block_id === block.id)
-                  const doneCount = new Set(blockLogs.filter((l) => l.set_number >= 1 && l.set_number <= block.sets).map((l) => l.set_number)).size
-                  const complete = doneCount >= block.sets
-                  const focus: 'active' | 'upcoming' | 'done' = complete ? 'done' : block.id === activeBlockId ? 'active' : 'upcoming'
-                  const prevList: PrevSet[] = sub ? [] : previousHistory[exercise.id] ?? []
-                  return (
-                    <SingleExerciseCard
-                      key={block.id}
-                      block={block}
-                      exercise={exercise}
-                      eff={effByBlock.get(block.id) ?? null}
-                      currentWeek={currentWeek}
-                      blockLogs={blockLogs}
-                      prevList={prevList}
-                      focus={focus}
-                      detailsOpen={!!openDetails[block.id]}
-                      substitution={sub ? { name: sub.name, prescribedName: sub.prescribedName } : null}
-                      canSubstitute={doneCount === 0}
-                      onToggleDetails={() => setOpenDetails((p) => ({ ...p, [block.id]: !p[block.id] }))}
-                      onOpenTechnique={() => setTechniqueExercise(exercise)}
-                      onOpenSet={(setNumber) => openSet(block.id, setNumber)}
-                      onAutofillLast={(setNumber, best) => openSet(block.id, setNumber, { weight: best.weight_kg, reps: best.reps_done })}
-                      onOpenSubstitute={() => setSubstituteBlockId(block.id)}
-                      onUndoSubstitution={() => setSubstitutionByBlock((p) => { const n = { ...p }; delete n[block.id]; return n })}
-                    />
-                  )
-                })}
+                {section.groups.map((group) => renderGroup(group))}
               </View>
             </View>
           ))}
@@ -404,13 +591,21 @@ function ExecutorV2Inner({ planId }: { planId: string }) {
         }}
       />
 
-      {/* WAVE-B-SEAM: WorkoutSummaryOverlay (PR share cards + mapa muscular + next hint) reemplaza
-          este modal legacy. */}
-      <WorkoutSummaryModal
+      {/* Cierre de sesión rico (E2-15/16/18): resumen a paridad web + share-cards + prompt check-in. */}
+      <WorkoutSummaryOverlay
         visible={summaryOpen}
         planTitle={planTitle}
         blocks={summaryBlocks}
-        logs={summaryLogs}
+        logs={sessionLogs}
+        exerciseMaxes={exerciseMaxes}
+        exerciseMaxDates={exerciseMaxDates}
+        durationSec={elapsedSec}
+        programName={programName}
+        nextHint={subline}
+        substitutedBlockIds={substitutedBlockIds}
+        checkInReminder={checkInReminder}
+        checkInLastRelative={checkInLastRelative}
+        onCheckIn={() => router.replace('/alumno/check-in')}
         onDone={() => router.replace('/alumno/home')}
         onClose={() => setSummaryOpen(false)}
       />

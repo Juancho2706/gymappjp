@@ -10,12 +10,14 @@ import {
   TrendingUp,
   Undo2,
 } from 'lucide-react-native'
-import type { ReconciledSessionLog } from '@eva/workout-engine'
+import type { ExerciseType, ReconciledSessionLog, TypedKeypadMode } from '@eva/workout-engine'
+import type { HrZoneRange } from '@eva/cardio'
 import { TYPE } from '../../../lib/typography'
 import type { EffectiveTarget } from '../../../lib/workout/progression'
 import type { PrevSet, SessionBlock, SessionExercise } from '../../../lib/workout-session'
 import { formatRelativeDate } from '../../../lib/date-utils'
 import { SetRow } from './SetRow'
+import { TypedBlockTimerButton, TypedTargetGrid } from './TypedTargetGrid'
 import { bestPrevOf, overloadChipLabel, overloadDetailText } from './workout-ui'
 
 // Fixed DS hues for lucide icon `color` props (mirrors Button/VideoPlayer literal-color pattern).
@@ -27,12 +29,14 @@ const EMBER_300 = '#FFB199'
 /**
  * Card de un ejercicio suelto (mobile) — re-skin del `SingleExerciseCard` de web (E2-07): fila
  * tipo·músculo + acciones, dots de progreso de series, chip de sobrecarga, "Última vez" tap-autofill
- * (E2-17), cue de técnica y disclosure de Detalles. Sólo strength por ahora; los tipos
- * cardio/mobility/roller (TypedTargetGrid) llegan en la Wave B (seam abajo).
+ * (E2-17), cue de técnica y disclosure de Detalles. Los bloques TIPADOS (cardio/movilidad/roller,
+ * `effType !== 'strength'`) reemplazan la prescripción strength por `TypedTargetGrid` + botón de timer
+ * y registran por columnas `actual_*`/`reps_done` (E2-10).
  */
 export function SingleExerciseCard({
   block,
   exercise,
+  effType,
   eff,
   currentWeek,
   blockLogs,
@@ -41,6 +45,7 @@ export function SingleExerciseCard({
   detailsOpen,
   substitution,
   canSubstitute,
+  hrZones,
   onToggleDetails,
   onOpenTechnique,
   onOpenSet,
@@ -50,6 +55,7 @@ export function SingleExerciseCard({
 }: {
   block: SessionBlock
   exercise: SessionExercise
+  effType: ExerciseType
   eff: EffectiveTarget | null
   currentWeek: number | null
   blockLogs: ReconciledSessionLog[]
@@ -58,6 +64,8 @@ export function SingleExerciseCard({
   detailsOpen: boolean
   substitution: { name: string; prescribedName: string } | null
   canSubstitute: boolean
+  /** Rangos bpm por zona del alumno (E2-11, cardio gated); null si el módulo cardio está OFF. */
+  hrZones?: HrZoneRange[] | null
   onToggleDetails: () => void
   onOpenTechnique: () => void
   onOpenSet: (setNumber: number) => void
@@ -65,6 +73,8 @@ export function SingleExerciseCard({
   onOpenSubstitute: () => void
   onUndoSubstitution: () => void
 }) {
+  const isStrength = effType === 'strength'
+  const typedMode: TypedKeypadMode | null = isStrength ? null : (effType as TypedKeypadMode)
   const loggedSetNumbers = new Set(
     blockLogs.filter((l) => l.set_number >= 1 && l.set_number <= block.sets).map((l) => l.set_number),
   )
@@ -81,9 +91,12 @@ export function SingleExerciseCard({
   const bestPrev = bestPrevOf(prevList)
   const beatIt =
     bestPrev?.weight_kg != null && bestPrev.weight_kg > 0 && suggestedWeightKg != null && suggestedWeightKg >= bestPrev.weight_kg
-  const cueLine = exercise.instructions?.[0]?.replace(/^Step:\d+\s*/i, '') ?? null
+  const cueLine = isStrength ? exercise.instructions?.[0]?.replace(/^Step:\d+\s*/i, '') ?? null : null
   const hasDetails =
-    (exercise.instructions?.length ?? 0) > 0 || !!overloadDetail || !!block.notes || prevList.length > 0
+    (isStrength ? (exercise.instructions?.length ?? 0) > 0 : !!block.instructions) ||
+    (isStrength && !!overloadDetail) ||
+    !!block.notes ||
+    prevList.length > 0
   const hasTechnique = !!(exercise.gif_url || exercise.video_url)
 
   const borderClass =
@@ -177,27 +190,37 @@ export function SingleExerciseCard({
         )}
       </View>
 
-      {/* Línea de prescripción + chip de sobrecarga */}
-      <View className="flex-row flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-        <View className="flex-row flex-wrap items-center gap-x-2">
-          <Text style={TYPE.mono} className="text-[13px] text-on-dark font-mono-bold">{block.sets} × {block.reps}</Text>
-          {block.target_weight_kg != null && (
-            <Text style={TYPE.mono} className="text-[13px] text-on-dark font-mono-bold">· {suggestedWeightKg ?? block.target_weight_kg} kg</Text>
-          )}
-          {block.rest_time && <Text style={TYPE.mono} className="text-[13px] text-on-dark-muted">· desc {block.rest_time}</Text>}
-          {block.tempo && <Text style={TYPE.mono} className="text-[13px] text-on-dark-muted">· tempo {block.tempo}</Text>}
-          {block.rir && <Text style={TYPE.mono} className="text-[13px] text-on-dark-muted">· RIR {block.rir}</Text>}
+      {/* Bloques tipados (cardio/movilidad/roller): grilla de objetivos + botón de timer (E2-10) */}
+      {!isStrength && (
+        <View className="gap-2">
+          <TypedTargetGrid block={block} kind={effType} hrZones={hrZones} />
+          <TypedBlockTimerButton block={block} kind={effType} />
         </View>
-        {overloadLabel && (
-          <View className="flex-row items-center gap-1 rounded-full border border-sport-500/30 bg-sport-500/[0.10] px-2 py-0.5">
-            <TrendingUp size={12} color={SPORT_400} />
-            <Text style={TYPE.caption} className="text-[11px] text-sport-300 font-sans-bold">{overloadLabel}</Text>
-          </View>
-        )}
-      </View>
+      )}
 
-      {/* "Última vez" tap-autofill (E2-17) + "Supera tu marca" */}
-      {bestPrev && (
+      {/* Línea de prescripción + chip de sobrecarga (strength) */}
+      {isStrength && (
+        <View className="flex-row flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+          <View className="flex-row flex-wrap items-center gap-x-2">
+            <Text style={TYPE.mono} className="text-[13px] text-on-dark font-mono-bold">{block.sets} × {block.reps}</Text>
+            {block.target_weight_kg != null && (
+              <Text style={TYPE.mono} className="text-[13px] text-on-dark font-mono-bold">· {suggestedWeightKg ?? block.target_weight_kg} kg</Text>
+            )}
+            {block.rest_time && <Text style={TYPE.mono} className="text-[13px] text-on-dark-muted">· desc {block.rest_time}</Text>}
+            {block.tempo && <Text style={TYPE.mono} className="text-[13px] text-on-dark-muted">· tempo {block.tempo}</Text>}
+            {block.rir && <Text style={TYPE.mono} className="text-[13px] text-on-dark-muted">· RIR {block.rir}</Text>}
+          </View>
+          {overloadLabel && (
+            <View className="flex-row items-center gap-1 rounded-full border border-sport-500/30 bg-sport-500/[0.10] px-2 py-0.5">
+              <TrendingUp size={12} color={SPORT_400} />
+              <Text style={TYPE.caption} className="text-[11px] text-sport-300 font-sans-bold">{overloadLabel}</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* "Última vez" tap-autofill (E2-17) + "Supera tu marca" (strength) */}
+      {isStrength && bestPrev && (
         <Pressable
           testID="btn-autofill-last"
           disabled={firstUnlogged == null}
@@ -235,12 +258,18 @@ export function SingleExerciseCard({
           animate={{ opacity: 1, translateY: 0 }}
           className="gap-3 rounded-card border border-inverse/50 bg-white/[0.02] p-3"
         >
-          {exercise.instructions && exercise.instructions.length > 0 && (
+          {isStrength && exercise.instructions && exercise.instructions.length > 0 && (
             <View>
               <Text style={TYPE.eyebrow} className="mb-1 text-on-dark-muted">Tecnica</Text>
               {exercise.instructions.map((step, i) => (
                 <Text key={i} style={TYPE.caption} className="text-[12px] text-on-dark/90">{i + 1}. {step.replace(/^Step:\d+\s*/i, '')}</Text>
               ))}
+            </View>
+          )}
+          {!isStrength && block.instructions && (
+            <View>
+              <Text style={TYPE.eyebrow} className="mb-1 text-on-dark-muted">Instrucciones</Text>
+              <Text style={TYPE.caption} className="text-[12px] text-on-dark/90">{block.instructions}</Text>
             </View>
           )}
           {block.notes && (
@@ -249,7 +278,7 @@ export function SingleExerciseCard({
               <Text style={TYPE.caption} className="text-[12px] text-on-dark/90">{block.notes}</Text>
             </View>
           )}
-          {overloadDetail && (
+          {isStrength && overloadDetail && (
             <View>
               <Text style={TYPE.eyebrow} className="mb-1 text-on-dark-muted">Sobrecarga progresiva</Text>
               <Text style={TYPE.caption} className="text-[12px] text-on-dark/90">{overloadDetail}</Text>
@@ -269,10 +298,7 @@ export function SingleExerciseCard({
         </MotiView>
       )}
 
-      {/* WAVE-B-SEAM: para bloques tipados (cardio/mobility/roller) acá se enchufa
-          <TypedTargetGrid/> + <TypedBlockTimerButton/> + tabla tipada en vez de las SetRow strength. */}
-
-      {/* Series (tap → TypedKeypad) */}
+      {/* Series (tap → TypedKeypad; strength o tipado según effType) */}
       <View className="gap-1.5">
         {Array.from({ length: block.sets }).map((_, i) => {
           const setNumber = i + 1
@@ -283,6 +309,7 @@ export function SingleExerciseCard({
               setNumber={setNumber}
               log={log}
               isActive={setNumber === firstUnlogged}
+              typedMode={typedMode}
               onPress={() => onOpenSet(setNumber)}
             />
           )

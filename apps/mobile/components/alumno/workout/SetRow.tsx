@@ -1,30 +1,38 @@
 import { Pressable, Text, View } from 'react-native'
 import { Check, ChevronRight } from 'lucide-react-native'
-import type { ReconciledSessionLog } from '@eva/workout-engine'
+import type { ReconciledSessionLog, TypedKeypadMode } from '@eva/workout-engine'
 import { TYPE } from '../../../lib/typography'
+import { fmtTypedLoggedLine } from './workout-ui'
 
 /**
  * Fila de una serie (mobile). Espeja la fila de `LogSetForm` de web pero adaptada al patrón mobile:
  * la serie logueada muestra su marca (verde) y la activa es un tap que abre el TypedKeypad. Cero
  * `TextInput` crudo — el registro pasa 100% por el teclado tipado (contrato de la ola).
+ *
+ * `typedMode` (cardio/movilidad/roller) muta la línea de valores a las columnas `actual_*`/`reps_done`
+ * (E2-10). Ausente ⇒ strength (kg × reps · RPE/RIR).
  */
 export function SetRow({
   setNumber,
   log,
   isActive,
+  typedMode,
   onPress,
 }: {
   setNumber: number
   log?: ReconciledSessionLog
   isActive: boolean
+  typedMode?: TypedKeypadMode | null
   onPress: () => void
 }) {
   const logged = !!log
   const pending = log?._pending === true
 
-  const valueLine = logged
-    ? `${log?.reps_done ?? '-'} reps${log?.weight_kg != null ? ` · ${log.weight_kg} kg` : ''}${log?.rpe != null ? ` · RPE ${log.rpe}` : ''}${log?.rir != null ? ` · RIR ${log.rir}` : ''}`
-    : 'Tocá para registrar'
+  const valueLine = !logged
+    ? 'Tocá para registrar'
+    : typedMode
+      ? fmtTypedLoggedLine(log, typedMode)
+      : `${log?.reps_done ?? '-'} reps${log?.weight_kg != null ? ` · ${log.weight_kg} kg` : ''}${log?.rpe != null ? ` · RPE ${log.rpe}` : ''}${log?.rir != null ? ` · RIR ${log.rir}` : ''}`
 
   return (
     <Pressable

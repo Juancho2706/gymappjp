@@ -1,19 +1,19 @@
 import { Pressable, Text, View } from 'react-native'
-import { ChevronLeft } from 'lucide-react-native'
+import { ChevronLeft, List, Rows3 } from 'lucide-react-native'
 import { ProgressBar } from '../../ProgressBar'
 import { TYPE } from '../../../lib/typography'
 
 const SPORT_500 = '#2680FF'
 const W10 = 'rgba(255,255,255,0.10)'
 const ON_DARK = '#F4F6F8'
+const ON_DARK_MUTED = '#939DAB'
+
+export type WorkoutViewMode = 'list' | 'steps'
 
 /**
- * Header de ejecución (E2-08) — back + título + badge de semana + sublínea de programa, barra de
- * progreso DS y la línea "Ejercicio X de Y · N/M series · volumen · tiempo · %". Espeja el header
- * sticky de `WorkoutExecutionClient` de web.
- *
- * WAVE-B-SEAM: el toggle segmentado "Lista / Pasos" y la tuerca de ajustes de descanso van acá cuando
- * lleguen StepperExecution y WorkoutTimerSettingsPanel.
+ * Header de ejecución (E2-08) — back + título + badge de semana + sublínea de programa, toggle
+ * segmentado "Lista / Pasos" (E2-04), barra de progreso DS y la línea "Ejercicio X de Y · N/M series ·
+ * volumen · tiempo · %". Espeja el header sticky de `WorkoutExecutionClient` de web.
  */
 export function SessionHeader({
   planTitle,
@@ -27,6 +27,8 @@ export function SessionHeader({
   volumeLabel,
   elapsedLabel,
   capped,
+  viewMode,
+  onToggleMode,
   onBack,
 }: {
   planTitle: string
@@ -40,6 +42,8 @@ export function SessionHeader({
   volumeLabel: string | null
   elapsedLabel: string
   capped: boolean
+  viewMode: WorkoutViewMode
+  onToggleMode: (mode: WorkoutViewMode) => void
   onBack: () => void
 }) {
   return (
@@ -63,6 +67,31 @@ export function SessionHeader({
           {subline && (
             <Text style={TYPE.eyebrow} className="text-on-dark-muted" numberOfLines={1}>{subline}</Text>
           )}
+        </View>
+        {/* Toggle segmentado Lista / Pasos (E2-04) */}
+        <View className="flex-row items-center gap-0.5 rounded-control border border-inverse/50 bg-white/[0.04] p-0.5">
+          <Pressable
+            testID="toggle-view-list"
+            onPress={() => onToggleMode('list')}
+            hitSlop={4}
+            className={`h-8 w-8 items-center justify-center rounded-control ${viewMode === 'list' ? 'bg-sport-500' : ''}`}
+            accessibilityRole="button"
+            accessibilityLabel="Ver como lista"
+            accessibilityState={{ selected: viewMode === 'list' }}
+          >
+            <List size={16} color={viewMode === 'list' ? ON_DARK : ON_DARK_MUTED} />
+          </Pressable>
+          <Pressable
+            testID="toggle-view-steps"
+            onPress={() => onToggleMode('steps')}
+            hitSlop={4}
+            className={`h-8 w-8 items-center justify-center rounded-control ${viewMode === 'steps' ? 'bg-sport-500' : ''}`}
+            accessibilityRole="button"
+            accessibilityLabel="Ver paso a paso"
+            accessibilityState={{ selected: viewMode === 'steps' }}
+          >
+            <Rows3 size={16} color={viewMode === 'steps' ? ON_DARK : ON_DARK_MUTED} />
+          </Pressable>
         </View>
       </View>
 

@@ -7,10 +7,6 @@ import {
   appendKeypadDigit,
   appendKeypadDecimal,
   keypadBackspace,
-  readKeypadStep,
-  writeKeypadStep,
-  KEYPAD_STEP_KEY,
-  DEFAULT_KEYPAD_STEP,
 } from './keypad-logic'
 
 const WEIGHT = { allowDecimal: true } as const
@@ -122,22 +118,5 @@ describe('keypadBackspace', () => {
   })
 })
 
-describe('readKeypadStep / writeKeypadStep', () => {
-  beforeEach(() => {
-    localStorage.clear()
-  })
-  it('defaults to 2.5 when unset', () => {
-    expect(readKeypadStep()).toBe(DEFAULT_KEYPAD_STEP)
-  })
-  it('round-trips a valid preset', () => {
-    writeKeypadStep(1.25)
-    expect(localStorage.getItem(KEYPAD_STEP_KEY)).toBe('1.25')
-    expect(readKeypadStep()).toBe(1.25)
-  })
-  it('ignores an invalid preset on write and read', () => {
-    writeKeypadStep(3.3)
-    expect(localStorage.getItem(KEYPAD_STEP_KEY)).toBeNull()
-    localStorage.setItem(KEYPAD_STEP_KEY, '999')
-    expect(readKeypadStep()).toBe(DEFAULT_KEYPAD_STEP)
-  })
-})
+// Persistencia (readKeypadStep/writeKeypadStep): tests en
+// apps/web/src/lib/client/keypad-step.test.ts (localStorage es capa web).

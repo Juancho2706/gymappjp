@@ -13,7 +13,8 @@ import { WelcomeModal } from '../../../components/WelcomeModal'
 import { DashboardHeader } from '../../../components/alumno/home/DashboardHeader'
 import { SectionTitle } from '../../../components/alumno/home/SectionTitle'
 import { StreakRibbon } from '../../../components/alumno/home/StreakRibbon'
-import { CheckInBanner, type CheckInVariant } from '../../../components/alumno/home/CheckInBanner'
+import { CheckInBanner } from '../../../components/alumno/home/CheckInBanner'
+import { computeCheckInReminder } from '../../../lib/checkin-thresholds'
 import { HeroSection } from '../../../components/alumno/home/HeroSection'
 import { CoachPresenceCard } from '../../../components/alumno/home/CoachPresenceCard'
 import { MomentumCard, type MomentumDay } from '../../../components/alumno/home/MomentumCard'
@@ -240,20 +241,13 @@ export default function AlumnoHomeScreen() {
     const nutritionCompliance = data ? Math.min(1, (data.nutritionDates.size ?? 0) / 30) : 0
     const checkInCompliance = data ? Math.min(1, (data.checkIns.length ?? 0) / 4) : 0
 
-    // Racha + check-in variant.
+    // Racha + check-in variant (umbrales compartidos con el prompt post-entreno → lib/checkin-thresholds).
     const streak = calculateStreak(workoutDates)
     const checkIns = data?.checkIns ?? []
-    let ciVariant: CheckInVariant | null = null
-    let ciDays: number | null = null
-    let ciRelative: string | null = null
-    if (checkIns.length === 0) {
-      ciVariant = 'first'
-    } else {
-      const lastDay = checkIns[checkIns.length - 1].date.slice(0, 10)
-      ciDays = Math.max(0, Math.round((Date.parse(`${todayIso}T12:00:00`) - Date.parse(`${lastDay}T12:00:00`)) / MS_DAY))
-      ciRelative = formatRelativeDate(lastDay, todayIso)
-      ciVariant = ciDays > 7 ? 'overdue' : ciDays >= 3 ? 'warning' : null
-    }
+    const ci = computeCheckInReminder(checkIns.length ? checkIns[checkIns.length - 1].date : null, todayIso)
+    const ciVariant = ci.variant
+    const ciDays = ci.daysSince
+    const ciRelative = ci.lastDay ? formatRelativeDate(ci.lastDay, todayIso) : null
 
     const doneToday = !!todayPlan && workoutDates.has(todayIso)
 

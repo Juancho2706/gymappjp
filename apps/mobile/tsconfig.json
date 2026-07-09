@@ -4,6 +4,7 @@
     "strict": true,
     "paths": {
       "@/*": ["./*"],
+      "@eva/cardio": ["../../packages/cardio/index.ts"],
       "@eva/schemas": ["../../packages/schemas/index.ts"],
       "@eva/brand-kit": ["../../packages/brand-kit/index.ts"],
       "@eva/tiers": ["../../packages/tiers/index.ts"],

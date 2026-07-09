@@ -16,11 +16,10 @@ import {
   appendKeypadDigit,
   appendKeypadDecimal,
   keypadBackspace,
-  readKeypadStep,
-  writeKeypadStep,
   DEFAULT_KEYPAD_STEP,
   KEYPAD_MAX_DECIMALS,
 } from '@eva/workout-engine'
+import { readKeypadStep, writeKeypadStep } from '@/lib/client/keypad-step'
 import { NumericKeypadSheet, type KeypadTarget } from './NumericKeypadSheet'
 
 export type { KeypadTarget }

@@ -14,6 +14,7 @@
     "@expo-google-fonts/inter": "^0.2.3",
     "@expo-google-fonts/jetbrains-mono": "^0.2.3",
     "@expo-google-fonts/montserrat": "^0.2.3",
+    "@eva/cardio": "workspace:*",
     "@eva/feature-prefs": "workspace:*",
     "@eva/nutrition-engine": "workspace:*",
     "@eva/workout-engine": "workspace:*",

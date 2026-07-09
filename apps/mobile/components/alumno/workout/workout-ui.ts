@@ -3,6 +3,7 @@
  * `WorkoutExecutionClient`/`SingleExerciseCard` de web (chip de sobrecarga, formato de
  * volumen/cronómetro, parse de descanso). Puros y compartidos por las cards + el header.
  */
+import { compactDuration, type ReconciledSessionLog, type TypedKeypadMode } from '@eva/workout-engine'
 import type { EffectiveTarget } from '../../../lib/workout/progression'
 import type { PrevSet } from '../../../lib/workout-session'
 
@@ -83,4 +84,27 @@ export function fmtVolume(kg: number): string | null {
   if (kg <= 0) return null
   if (kg >= 1000) return `${(kg / 1000).toFixed(kg >= 10000 ? 0 : 1)} t`
   return `${Math.round(kg)} kg`
+}
+
+/**
+ * Línea de valores de una serie TIPADA ya registrada (para la SetRow de cardio/movilidad/roller).
+ * Lee las columnas `actual_*` / `reps_done` del log — mismo formato que el objetivo del keypad.
+ * "20 min · 5000 m · 150 bpm" · "45 s" · "30 s · 10 pasadas". Vacío ⇒ "Registrado".
+ */
+export function fmtTypedLoggedLine(
+  log: Pick<ReconciledSessionLog, 'actual_duration_sec' | 'actual_distance_m' | 'actual_avg_hr' | 'actual_hold_sec' | 'reps_done'>,
+  mode: TypedKeypadMode,
+): string {
+  const parts: string[] = []
+  if (mode === 'cardio') {
+    if (log.actual_duration_sec != null && log.actual_duration_sec > 0) parts.push(compactDuration(log.actual_duration_sec))
+    if (log.actual_distance_m != null && log.actual_distance_m > 0) parts.push(`${log.actual_distance_m} m`)
+    if (log.actual_avg_hr != null && log.actual_avg_hr > 0) parts.push(`${log.actual_avg_hr} bpm`)
+  } else if (mode === 'mobility') {
+    if (log.actual_hold_sec != null && log.actual_hold_sec > 0) parts.push(`${log.actual_hold_sec} s`)
+  } else {
+    if (log.actual_duration_sec != null && log.actual_duration_sec > 0) parts.push(`${log.actual_duration_sec} s`)
+    if (log.reps_done != null && log.reps_done > 0) parts.push(`${log.reps_done} pasadas`)
+  }
+  return parts.length ? parts.join(' · ') : 'Registrado'
 }

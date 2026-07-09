@@ -175,6 +175,7 @@ function clampIntInRange(v: number | null | undefined, min: number, max: number)
 export interface WorkoutSessionState {
   loading: boolean
   planTitle: string
+  programName: string | null
   activeWeekVariant: string | null
   currentWeek: number | null
   weeksToRepeat: number | null
@@ -211,6 +212,7 @@ export interface LogSetOptions {
 export function useWorkoutSession(planId: string): WorkoutSessionState {
   const [loading, setLoading] = useState(true)
   const [planTitle, setPlanTitle] = useState('')
+  const [programName, setProgramName] = useState<string | null>(null)
   const [activeWeekVariant, setActiveWeekVariant] = useState<string | null>(null)
   const [currentWeek, setCurrentWeek] = useState<number | null>(null)
   const [weeksToRepeat, setWeeksToRepeat] = useState<number | null>(null)
@@ -429,10 +431,11 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
     if (programId) {
       const { data: prog } = await supabase
         .from('workout_programs')
-        .select('start_date, weeks_to_repeat, program_structure_type, cycle_length')
+        .select('name, start_date, weeks_to_repeat, program_structure_type, cycle_length')
         .eq('id', programId)
         .maybeSingle()
       if (prog) {
+        setProgramName((prog as { name?: string | null }).name ?? null)
         setWeeksToRepeat((prog as { weeks_to_repeat?: number | null }).weeks_to_repeat ?? null)
         setCurrentWeek(programWeekIndex1Based(prog as { start_date?: string | null; weeks_to_repeat?: number | null }))
         setProgramStructure((prog as { program_structure_type?: 'weekly' | 'cycle' | null }).program_structure_type ?? null)
@@ -619,6 +622,7 @@ export function useWorkoutSession(planId: string): WorkoutSessionState {
   return {
     loading,
     planTitle,
+    programName,
     activeWeekVariant,
     currentWeek,
     weeksToRepeat,

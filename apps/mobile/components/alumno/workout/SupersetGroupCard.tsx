@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from 'react-native'
 import { CheckCircle2, Info } from 'lucide-react-native'
-import type { ReconciledSessionLog } from '@eva/workout-engine'
+import { effectiveExerciseType, type ReconciledSessionLog, type TypedKeypadMode } from '@eva/workout-engine'
 import { TYPE } from '../../../lib/typography'
 import type { EffectiveTarget } from '../../../lib/workout/progression'
 import { resolveExercise, type SessionBlock } from '../../../lib/workout-session'
@@ -62,6 +62,8 @@ export function SupersetGroupCard({
         }
         const overload = overloadChipLabel(block, eff, currentWeek)
         const hasTechnique = !!(exercise.gif_url || exercise.video_url)
+        const effType = effectiveExerciseType(block, exercise)
+        const typedMode: TypedKeypadMode | null = effType === 'strength' ? null : (effType as TypedKeypadMode)
 
         return (
           <View key={block.id} className="gap-2 rounded-card border border-inverse/50 bg-white/[0.03] p-3">
@@ -100,6 +102,7 @@ export function SupersetGroupCard({
                     setNumber={setNumber}
                     log={log}
                     isActive={setNumber === firstUnlogged}
+                    typedMode={typedMode}
                     onPress={() => onOpenSet(block.id, setNumber)}
                   />
                 )
