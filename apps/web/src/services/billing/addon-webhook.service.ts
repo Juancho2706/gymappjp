@@ -9,6 +9,7 @@ import {
 } from '@/lib/constants'
 import type { ModuleKey } from '@/services/entitlements.service'
 import type { CoachAddon } from '@/domain/billing/types'
+import type { PaymentProvider } from '@/domain/coach/types'
 import {
     getAddonCycleAmountClp,
     getCompositeAmountClp,
@@ -60,7 +61,8 @@ export function buildAddonBreakdown(
 
 /**
  * Inserta el snapshot del desglose congelado de un cobro aprobado (recurrente u one-shot).
- * Idempotente por `provider_payment_id` (UNIQUE en DB): un reintento del webhook no duplica.
+ * Idempotente por `(provider, provider_payment_id)` (UNIQUE compuesto en DB, pagos-multigateway
+ * Ola 1): un reintento del webhook no duplica y un id de Flow no colisiona con uno de MP.
  * Evidencia SERNAC de qué se cobró y por qué (F1.4).
  */
 export async function insertBillingSnapshot(
@@ -75,6 +77,8 @@ export async function insertBillingSnapshot(
         baseClp: number
         addons: AddonSnapshotLine[]
         totalClp: number
+        /** Gateway del cobro (evidencia SERNAC). Ausente ⇒ 'mercadopago' (cero regresion: hoy solo MP). */
+        provider?: PaymentProvider
         // F4 (cupones): evidencia del descuento. total_clp = honrado (descontado); base_before_discount =
         // lista. Nullable/defaulted → snapshots sin cupón quedan idénticos (back-compat).
         baseBeforeDiscountClp?: number
@@ -98,10 +102,15 @@ export async function insertBillingSnapshot(
         ...(input.couponCode ? { coupon_code: input.couponCode } : {}),
         ...(input.couponRedemptionId ? { coupon_redemption_id: input.couponRedemptionId } : {}),
     }
-    // upsert con ignoreDuplicates: reintento del webhook = no-op (idempotente por provider_payment_id).
+    // upsert con ignoreDuplicates: reintento del webhook = no-op (idempotente por el UNIQUE compuesto
+    // (provider, provider_payment_id)). Default 'mercadopago' = cero regresion (hoy solo el webhook MP
+    // escribe snapshots; Flow escribe 'flow' desde Ola 3).
     const { error } = await db
         .from('billing_snapshots')
-        .upsert(row, { onConflict: 'provider_payment_id', ignoreDuplicates: true })
+        .upsert(
+            { ...row, provider: input.provider ?? 'mercadopago' },
+            { onConflict: 'provider,provider_payment_id', ignoreDuplicates: true }
+        )
     if (error) throw new Error(`insertBillingSnapshot: ${error.message}`)
     return { inserted: true }
 }

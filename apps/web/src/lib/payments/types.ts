@@ -19,6 +19,12 @@ export type CreateCheckoutInput = {
      * add-ons, plan 05 F3.3). Ausente ⇒ preapproval de 3 partes (backward compatible).
      */
     addons?: ModuleKey[]
+    /**
+     * Flow-only: `customerId` ya enrolado del coach (`coaches.provider_customer_id`). Si viene, la
+     * Fase 1 de Flow reusa ese customer (no crea uno nuevo) antes del enrolamiento de tarjeta. MP lo
+     * ignora (no aplica). Ausente ⇒ Flow crea el customer.
+     */
+    existingCustomerId?: string
 }
 
 /** Input del pago one-shot prorrateado (Checkout Pro clásico — alta in-app trim/anual, plan 05 F3.2). */
@@ -151,7 +157,7 @@ export type ProviderPaymentSnapshot = {
 }
 
 export interface PaymentsProvider {
-    name: 'mercadopago' | 'stripe'
+    name: 'mercadopago' | 'stripe' | 'flow'
     createCheckout(input: CreateCheckoutInput): Promise<CreateCheckoutResult>
     processWebhook(payload: unknown): Promise<WebhookProcessResult>
     /** Fetch current state of a recurring checkout / preapproval by provider id. */

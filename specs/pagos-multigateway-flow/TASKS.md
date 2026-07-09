@@ -78,11 +78,12 @@ Ola 7 (go-live + re-inscripcion MP) ── REQUIERE Ola 6 verde + autorizacion C
   - Scope: `lib/payments/provider.ts` -> firma `getPaymentsProvider(gateway?: PaymentProvider): PaymentsProvider`. `gateway==='flow'` -> `new FlowProvider()` (import perezoso / stub temporal hasta Ola 2); `'mercadopago'` o ausente/invalido -> `MercadoPagoProvider` (default = MP, cero regresion; `PAYMENT_PROVIDER` sigue como fallback historico de stripe).
   - Verification: test unitario del factory (`provider.test.ts`) — flow/mp/ausente/invalido devuelven la clase correcta; `pnpm typecheck` verde.
 - [ ] T1.4 - Escribir migracion aditiva DB
-  - Scope: `supabase/migrations/<ts>_payments_multigateway_flow.sql`. `coaches`: `subscription_provider text NOT NULL DEFAULT 'mercadopago'`, `subscription_provider_external_id text`, `provider_customer_id text`, `provider_plan_id text` (todas `IF NOT EXISTS`, service-role-only, **SIN** `GRANT UPDATE` a `authenticated` — grant invertido a proposito). `billing_snapshots`: `provider text NOT NULL DEFAULT 'mercadopago'`; reemplazar unique por compuesto (`DROP CONSTRAINT IF EXISTS billing_snapshots_provider_payment_id_key; CREATE UNIQUE INDEX IF NOT EXISTS billing_snapshots_provider_paymentid_ux ON billing_snapshots(provider, provider_payment_id)`). `coach_addons`: sin columnas nuevas en v1.
+  - Scope: `supabase/migrations/<ts>_payments_multigateway_flow.sql`. `coaches`: `subscription_provider text NOT NULL DEFAULT 'mercadopago'`, `subscription_provider_external_id text`, `provider_customer_id text`, `provider_plan_id text` (todas `IF NOT EXISTS`, service-role-only, **SIN** `GRANT UPDATE` a `authenticated` — grant invertido a proposito). `billing_snapshots`: `provider text NOT NULL DEFAULT 'mercadopago'`; **SOLO AGREGAR** el unique compuesto (`CREATE UNIQUE INDEX IF NOT EXISTS billing_snapshots_provider_paymentid_ux ON billing_snapshots(provider, provider_payment_id)`) **SIN dropear** el UNIQUE simple `billing_snapshots_provider_payment_id_key` (money-safety: código y migración son relojes no atómicos; dropear deja ventana de pérdida silenciosa — ver PLAN §Data Model. Con Flow OFF ambos índices coexisten. El DROP se difiere a Ola 7 → T7.5). `coach_addons`: sin columnas nuevas en v1.
   - Verification: migracion **idempotente** (re-ejecutable sin error/efecto destructivo); revisada localmente con `EXPLAIN`/dry-run; sin DROP/rename destructivo.
-- [ ] T1.5 - Aplicar migracion por flujo canonico y regenerar tipos
+- [x] T1.5 - Aplicar migracion por flujo canonico y regenerar tipos ✅ 2026-07-05
   - Scope: aplicar via snapshot prod (`_bak_*`) + tx-rollback + `get_advisors` (sin branches, ver CLAUDE.md); `npx supabase db pull`; regenerar `lib/database.types.ts`.
   - Verification: `get_advisors` (security+performance) 0 criticos; `database.types.ts` muestra las columnas nuevas; suite `tests/separation/module-grants.sql` **sin drift** (las columnas nuevas NO aparecen con UPDATE para `authenticated`).
+  - HECHO: MCP Supabase — snapshot _bak (31 coaches + 2 snapshots) → apply_migration aditiva (sin DROP) → verificado cero perdida + backfill 'mercadopago' + constraint simple viva + indice compuesto + sin UPDATE grant en cols nuevas → advisors 0 criticos (los 2 ERROR eran las _bak, dropeadas) → types regenerados (insercion quirurgica) + casts Ola 1 limpiados. 265 tests verdes.
 - [ ] T1.6 - `insertBillingSnapshot` con `provider` + onConflict compuesto
   - Scope: `services/billing/addon-webhook.service.ts` — `insertBillingSnapshot` escribe `provider` y usa `onConflict: 'provider,provider_payment_id'`. Barrer cualquier otro `onConflict: 'provider_payment_id'` (webhook route) al compuesto.
   - Verification: `pnpm test` de `addon-webhook.service` verde; grep confirma cero `onConflict: 'provider_payment_id'` residual.
@@ -125,24 +126,27 @@ Ola 7 (go-live + re-inscripcion MP) ── REQUIERE Ola 6 verde + autorizacion C
 
 > REQUIERE Ola 2.
 
-- [ ] T3.1 - Auth del webhook Flow (round-trip firmado)
+- [x] T3.1 - Auth del webhook Flow (round-trip firmado) ✅ 2026-07-05 (9 tests; gate + extractFlowToken)
   - Scope: `lib/payments/flow-webhook-authorization.ts` (+ `.test.ts`). Exigir `?token=<FLOW_WEBHOOK_TOKEN>` (fail-closed en prod). **No confiar en el body**: la autorizacion real es re-fetch firmado (`payment/getStatus`/`invoice/get`) — la respuesta autenticada es el payload.
   - Verification: `.test.ts` — token invalido/ausente rechaza (fail-closed prod); el payload de confianza proviene del re-fetch firmado, no del POST crudo; `npx vitest run` verde.
-- [ ] T3.2 - Normalizacion invoice/payment/refund -> `WebhookProcessResult` (puras)
+- [x] T3.2 - Normalizacion invoice/payment/refund -> `WebhookProcessResult` (puras) ✅ Ola 2 (flow-normalize) + parseFlowRecurringCommerceOrder Ola 3
   - Scope: `lib/payments/providers/flow-normalize.ts` (+ `.test.ts`). Funciones puras: `invoice status=1` -> `{eventKind:'payment', isRecurringAuthorizedPayment:true, providerStatus:'approved', coachId, providerPaymentId, paidAt, currentPeriodEnd}`; `payment/getStatus` one-shot -> `oneShotAddon|tierUpgrade` (parsea `commerceOrder` con `parseCheckoutExternalReference`); lifecycle sub -> `{eventKind:'preapproval', providerAmountClp, providerStatus}`; refund/chargeback -> `{eventKind:'payment', providerStatus:'refunded'|'charged_back'}`. **Resolucion coachId:** one-shots via `commerceOrder`; recurrentes via `subscriptionId -> coaches.subscription_provider_external_id` o `customerId -> coaches.provider_customer_id`.
   - Verification: `.test.ts` cubre cada forma (invoice paid, one-shot addon, one-shot tier, sub lifecycle, refund) + resolucion de coachId por ambos fallbacks; `npx vitest run flow-normalize.test.ts` verde.
-- [ ] T3.3 - `FlowProvider.processWebhook`
-  - Scope: en `flow.ts`: POST `token` -> `payment/getStatus`/`invoice/get` firmado -> `flow-normalize` -> `WebhookProcessResult`. `provider_event_id` estable namespaced (`flow:invoice:<id>`, `flow:payment:<flowOrder>`).
+- [x] T3.3 - `FlowProvider.processWebhook` ✅ 2026-07-05 (re-fetch firmado + coachId por DB; 6 tests; panel-fix: throw ante error de lookup)
+  - Scope: en `flow.ts`: POST `token` -> `payment/getStatus`/`invoice/get` firmado -> `flow-normalize` -> `WebhookProcessResult`. Discrimina one-shot (ref propio) vs recurrente (ref Flow sus_<subId>_<invId>_ → resolveCoachIdBySubscriptionId por DB).
   - Verification: dado un token de sandbox, produce un `WebhookProcessResult` bien poblado que el pipeline procesa; idempotencia por `provider_event_id`.
-- [ ] T3.4 - Ruta webhook Flow
+- [x] T3.4 - Ruta webhook Flow ✅ 2026-07-05 (auth + parseo urlencoded + delega pipeline; 4 tests)
   - Scope: `app/api/payments/flow/webhook/route.ts` (POST+GET) -> auth Flow (T3.1) -> construye payload -> `runWebhookPipeline(getPaymentsProvider('flow'), ...)`. Ruta separada de la de MP (aislamiento).
-  - Verification: un cobro recurrente sandbox produce **exactamente un** `billing_snapshot` con `provider='flow'`, avanza `current_period_end`, y prende el modulo via trigger D1; replay del webhook y confirm+webhook simultaneos son idempotentes (guard `subscription_events.provider_event_id` + `billing_snapshots(provider,provider_payment_id)`).
-- [ ] T3.5 - Cron reconcile Flow (backstop diario)
-  - Scope: `app/api/cron/flow-reconcile/route.ts` (espejo de `mp-reconcile`). Coaches con `subscription_provider='flow'` -> `invoice/get`/`payment/getStatus` firmado -> reconcilia cobros no notificados. Protegido por `CRON_SECRET`.
-  - Verification: sobre un cobro sandbox **no notificado** (webhook suprimido), el cron lo concilia (snapshot + periodo) sin doble-cobro; 401 sin `CRON_SECRET`.
-- [ ] T3.6 - confirm-* eligen provider por `subscription_provider` (no por body)
-  - Scope: `app/api/payments/confirm-subscription/route.ts`, `confirm-addon/route.ts`, `confirm-upgrade/route.ts` -> provider por `coaches.subscription_provider` persistido, NUNCA del body.
-  - Verification: confirm sincrono de una sub Flow usa `FlowProvider` sin confiar en el cliente; MP sin regresion (una sub MP usa MP).
+  - Verification: un cobro recurrente sandbox produce **exactamente un** `billing_snapshot` con `provider='flow'`, avanza `current_period_end`, y prende el modulo via trigger D1; replay del webhook y confirm+webhook simultaneos son idempotentes. (⚠️ el e2e completo del cobro recurrente entrante = PIN Ola 6: falta capturar el payload real del urlCallback recurrente.)
+- [x] T3.5 - Cron reconcile Flow (backstop diario) ✅ 2026-07-05 (ALERT-ONLY, 6 tests; revisar en proximo gate)
+  - Scope: `app/api/cron/flow-reconcile/route.ts` (espejo de `mp-reconcile`, ALERT-ONLY nunca auto-fix). Coaches con `subscription_provider='flow'` -> `fetchCheckoutSnapshot` firmado -> alerta divergencia de estado + periodo-no-avanzado (webhook perdido). Protegido por `CRON_SECRET`.
+  - Verification: 401 sin `CRON_SECRET`; detecta divergencia de estado y de periodo; un fetch que tira no tumba el cron. (Auto-reconcile snapshot+periodo = refinamiento futuro; el primer corte alerta, no auto-escribe.)
+- [~] T3.6 - confirm-* eligen provider por `subscription_provider` (no por body) — PARCIAL: helper `getPaymentsProviderForCoach` HECHO + tests; cableado de rutas confirm-*/cancel/change-card = Ola 4/5 (el confirm-subscription de Flow ademas CREA la sub, flujo de dos fases)
+  - Scope: `lib/payments/provider.ts` helper por `coaches.subscription_provider` persistido, NUNCA del body. Cableo de rutas cuando esas rutas tengan logica Flow (Ola 4/5).
+  - Verification: helper cubre flow/mercadopago/null; default MP = cero regresion con Flow OFF.
+- [ ] T3.7 - ⚠️ MONEY-SAFETY: refund/chargeback de Flow DEBE cancelar la sub en el provider (panel Ola 2, D1)
+  - Scope: en la ruta/processWebhook de Flow, ante un refund `refunded` (o chargeback), llamar EXPLICITAMENTE `provider.cancelCheckoutAtProvider(coach.subscription_provider_external_id)` (= Flow `subscription/cancel`) + escribir la fila de auditoria `coach.payment_refunded_or_chargeback`, ANTES de que el pipeline expire al coach y nulee sus ids. Motivo: el camino canonico de expire NO cancela en el provider, y la rama FIX-7 es MP-shaped (matchea `subscription_mp_id`, columna que un coach Flow NO tiene) → INALCANZABLE para Flow. Sin esto, la sub Flow sigue VIVA y RE-COBRA la tarjeta el proximo ciclo (P1-3). Ver docstring de `normalizeFlowRefund`.
+  - Verification: test que dado un refund `refunded` de un coach Flow, se llama `subscription/cancel` en Flow + se escribe la fila de auditoria + el coach queda expired; NO se re-cobra el proximo ciclo (reconcile no revive).
 
 **DoD transversal Ola 3:** `pnpm typecheck` + `pnpm test` (flow-normalize, flow-webhook-authorization) verdes; un cobro recurrente = un snapshot `provider='flow'` + avance de periodo + modulo prendido por trigger; replay/doble-confirm idempotentes; cron reconcile funcional; cero secretos hardcodeados.
 
@@ -236,6 +240,9 @@ Ola 7 (go-live + re-inscripcion MP) ── REQUIERE Ola 6 verde + autorizacion C
 - [ ] T7.4 - Actualizar docs canonicos
   - Scope: `docs/architecture/FLOWS_AND_COMPONENTS.md` (flujo dual de pago), `docs/operations/RUNBOOK.md` (incidentes Flow: reconcile, webhook caido, error -1/-8), `docs/operations/MANUAL_TASKS.md` (envs + cutover).
   - Verification: docs reflejan el estado dual-gateway; incluido en el PR de Ola 7.
+- [ ] T7.5 - DROP diferido del UNIQUE simple de `billing_snapshots` (destructivo, atomico)
+  - Scope: migracion `... _drop_billing_snapshots_simple_unique.sql` con `ALTER TABLE billing_snapshots DROP CONSTRAINT IF EXISTS billing_snapshots_provider_payment_id_key;` (el compuesto ya existe desde Ola 1). Se difiere hasta ACA porque con Flow LIVE un `provider_payment_id` de Flow SI puede colisionar con uno de MP → el simple debe morir. **NO es aditiva ni revertible por solo-codigo:** migracion + deploy del codigo (que ya usa `onConflict` compuesto desde Ola 1) deben ir **atomicos** en un release monitoreado; el codigo compuesto ya vive en prod desde Ola 1, asi que aca solo se dropea el simple (sin ventana: el compuesto cubre el arbiter en todo momento).
+  - Verification: `\d billing_snapshots` sin el constraint simple; un replay de cobro MP sigue deduplicando por el compuesto; snapshot writes MP y Flow OK post-drop; snapshot + `get_advisors` (0 criticos).
 
 **DoD transversal Ola 7:** primer coach real cobra por Flow con snapshot+entitlement correctos; subs MP re-inscritas renovando; rollback probado (flag OFF = cero regresion); docs canonicos actualizados.
 

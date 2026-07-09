@@ -243,11 +243,12 @@ describe('insertBillingSnapshot', () => {
         const [row, opts] = upsert.mock.calls[0]
         expect(row).toMatchObject({
             coach_id: 'coach-1',
+            provider: 'mercadopago',
             provider_payment_id: 'pay-123',
             kind: 'recurring',
             total_clp: base.totalClp,
         })
-        expect(opts).toMatchObject({ onConflict: 'provider_payment_id', ignoreDuplicates: true })
+        expect(opts).toMatchObject({ onConflict: 'provider,provider_payment_id', ignoreDuplicates: true })
     })
 
     it('reentrega del mismo cobro = mismo upsert idempotente (no duplica por DB unique)', async () => {

@@ -59,7 +59,7 @@ Las suscripciones que YA están cobrando viven en la cuenta **vieja**. Apenas ca
 **Qué logramos:** tener Flow listo para que aparezca el botón "Pagar con Webpay". Primero el mundo de juguete (sandbox) para probar, después el real.
 
 ## B1. Crear cuenta SANDBOX (juguete — hacé ESTO primero)
-1. Andá a **https://sandbox.flow.cl/app/web/register.php**.
+1. Andá a **https://dashboard.sandbox.flow.cl/register**.
 2. Registrate (podés usar tu email; es un ambiente de prueba, no cobra nada).
 3. Adentro del panel sandbox, buscá **"Mis datos"** (o "Integración") → ahí están tu **apiKey** y **secretKey** de sandbox. Copialas y guardalas en un lugar seguro (NO las pegues en chats).
 

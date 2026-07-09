@@ -2,7 +2,7 @@
 // domain/ RE-EXPORTA del paquete (mismo patrón que packages/schemas; respeta "domain no importa de lib/").
 export type { BillingCycle, SubscriptionTier, SaleTier, TierConfig, TierCapabilities } from '@eva/tiers'
 
-export type PaymentProvider = 'mercadopago' | 'stripe' | 'admin'
+export type PaymentProvider = 'mercadopago' | 'stripe' | 'admin' | 'flow'
 
 export type SubscriptionStatus =
     | 'active'

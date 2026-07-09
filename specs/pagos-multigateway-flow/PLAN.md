@@ -208,11 +208,19 @@ La escritura pasa solo por service-role (checkout + webhook + confirm + cron).
 - `provider text NOT NULL DEFAULT 'mercadopago'` — desambigua gateway (evidencia SERNAC).
 - **Unique compuesto** `(provider, provider_payment_id)` (resuelve Open Question del SPEC): evita
   colision de ids entre gateways (un id numerico de MP podria chocar con un id de Flow).
-  Idempotente: `DROP CONSTRAINT IF EXISTS billing_snapshots_provider_payment_id_key;
-  CREATE UNIQUE INDEX IF NOT EXISTS billing_snapshots_provider_paymentid_ux ON billing_snapshots(provider, provider_payment_id);`
+  **Ola 1 = SOLO ADITIVO** (⚠️ money-safety, panel adversarial): `CREATE UNIQUE INDEX IF NOT EXISTS
+  billing_snapshots_provider_paymentid_ux ON billing_snapshots(provider, provider_payment_id);` **sin
+  dropear** el UNIQUE simple `billing_snapshots_provider_payment_id_key`. Motivo: codigo (deploy Vercel)
+  y migracion (MCP a mano) son relojes NO atomicos; dropear el simple deja una ventana donde el
+  `onConflict` no resuelve → el snapshot tira → la rama recurrente lo traga y ackea 200 → cobro sin
+  snapshot ni avance de periodo (perdida SILENCIOSA). Con Flow OFF, `provider` es siempre `'mercadopago'`
+  ⇒ simple y compuesto COEXISTEN (el compuesto es 1:1 con el simple) y `ON CONFLICT (provider,
+  provider_payment_id) DO NOTHING` nunca llega a violar el simple. El `DROP CONSTRAINT` del simple se
+  **DIFIERE al go-live de Flow (Ola 7)**, con migracion+codigo desplegados atomicos.
   Backfill: filas MP existentes toman `provider='mercadopago'` por el default.
   **Consecuencia de codigo:** todo `onConflict: 'provider_payment_id'` (webhook + `insertBillingSnapshot`)
-  pasa a `onConflict: 'provider,provider_payment_id'`. Se cambia en Ola 1 junto con la migracion.
+  pasa a `onConflict: 'provider,provider_payment_id'` en Ola 1 — seguro porque el indice compuesto ya
+  existe y el simple sigue vivo (rollback solo-codigo tambien seguro).
 - RLS: intacta (SELECT propio, escritura solo service-role).
 
 **`coach_addons`**: **sin columnas nuevas en v1** (resuelve Open Question del SPEC). Con line-items en
@@ -390,8 +398,14 @@ Revert mas chico y seguro, en capas:
    codigo Flow desplegado.
 3. **Webhook Flow:** la ruta `app/api/payments/flow/webhook` puede quedar desplegada sin trafico si no
    hay subs Flow; no afecta a MP (rutas separadas).
-4. **Migracion:** aditiva -> **no requiere revert**; las columnas quedan sin uso si Flow esta OFF. El
-   composite unique de `billing_snapshots` es superset del anterior (no rompe MP).
+4. **Migracion:** en Ola 1 es **100% aditiva** (solo `ADD COLUMN IF NOT EXISTS` + `CREATE UNIQUE INDEX
+   IF NOT EXISTS`, **cero DROP**) -> **no requiere revert** y el **rollback solo-codigo es seguro**: como
+   NO dropeamos el UNIQUE simple `billing_snapshots_provider_payment_id_key`, tanto el `onConflict` viejo
+   (`'provider_payment_id'`) como el nuevo (`'provider,provider_payment_id'`) resuelven → volver a la
+   release anterior no rompe la idempotencia MP. Las columnas nuevas quedan sin uso si Flow esta OFF.
+   ⚠️ El `DROP CONSTRAINT` del simple se DIFIERE a la migracion de go-live de Flow (Ola 7); esa SI es
+   destructiva y debe viajar atomica con el codigo (migracion+deploy en un solo release monitoreado),
+   NO es aditiva ni revertible por solo-codigo.
 5. **Envs:** `FLOW_*` sin setear -> `FlowProvider` falla en la primera llamada, pero nunca se invoca con
    el flag OFF.
 

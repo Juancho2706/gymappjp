@@ -19,13 +19,16 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 //        provider_payment_id. Idempotent. (It does NOT physically reverse the billing_snapshot.)
 // ════════════════════════════════════════════════════════════════════════════════════
 
-// ── webhook-authorization: token + signature always valid here; notification id is the
-//    DEDUP key (FIX-5). We thread it through a module-level var so each test can set it. ──
+// ── webhook-authorization: token + signature default to valid; notification id is the DEDUP
+//    key (FIX-5). All three are threaded through module-level vars so each test can flip them
+//    (the 401 tests set tokenValid/sigValid to false). ──
 let notificationId: string | null = 'notif-1'
+let tokenValid = true
+let sigValid = true
 vi.mock('@/lib/payments/webhook-authorization', () => ({
     extractMercadoPagoNotificationId: () => notificationId,
-    isPaymentsWebhookTokenValid: () => true,
-    verifyMercadoPagoSignatureIfConfigured: () => true,
+    isPaymentsWebhookTokenValid: () => tokenValid,
+    verifyMercadoPagoSignatureIfConfigured: () => sigValid,
 }))
 
 // ── Stateful service-role admin. Tracks subscription_events by provider_event_id (the
@@ -213,6 +216,8 @@ beforeEach(() => {
     auditLogInserts.length = 0
     fakeAdmin = makeAdmin()
     notificationId = 'notif-1'
+    tokenValid = true
+    sigValid = true
     coachRow = { ...PAID_COACH }
     cancelAllForCoach.mockResolvedValue(0)
     listLive.mockResolvedValue([])
@@ -221,6 +226,29 @@ beforeEach(() => {
     })
     getUserById.mockResolvedValue({ data: { user: { email: 'juan@evatest.cl' } } })
     sendTransactionalEmail.mockResolvedValue({ ok: true, providerMessageId: 'm1' })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────────────
+// AUTH BOUNDARY: tras la extracción de Ola 1, la única responsabilidad restante de la ruta
+// es rechazar token/firma inválidos (401) ANTES de delegar en runWebhookPipeline. Sin estos
+// tests, invertir/borrar un guard en un merge dejaría la suite verde mientras el webhook
+// procesa payloads forjados sin auth (un atacante manejaría subscription_status/tier/billing).
+// ─────────────────────────────────────────────────────────────────────────────────────
+describe('POST /api/payments/webhook — auth boundary (401 en token/firma inválidos)', () => {
+    it('token inválido → 401 y NO invoca el pipeline (processWebhook nunca corre)', async () => {
+        tokenValid = false
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(401)
+        expect(processWebhook).not.toHaveBeenCalled()
+    })
+
+    it('firma inválida → 401 y NO invoca el pipeline (processWebhook nunca corre)', async () => {
+        // token válido, firma no → el segundo guard debe cortar igual.
+        sigValid = false
+        const res = await POST(makeRequest())
+        expect(res.status).toBe(401)
+        expect(processWebhook).not.toHaveBeenCalled()
+    })
 })
 
 // ─────────────────────────────────────────────────────────────────────────────────────
