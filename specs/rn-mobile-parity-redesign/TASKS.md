@@ -485,73 +485,73 @@ Cuello de botella: endpoints web nuevos (notas, shopping, off-plan, micros, reca
 
 Reconstrucción funcional del builder (≠ re-skin E3). Batch EAS de la etapa: Google Sign-In coach.
 
-- [ ] **E5-01** · [SEAM][L] Extraer `builderReducer` + tipos → `@eva/plan-builder` (importa grouping/areas de workout-engine)
+- [x] **E5-01** · [SEAM][L] Extraer `builderReducer` + tipos → `@eva/plan-builder` (importa grouping/areas de workout-engine)
   - Fuentes: G07-B1 · Deps: E0-F1 (workout-engine dueño de grouping/areas)
   - Scope: `builderReducer` puro + tipos; NO duplica grouping/areas (los importa de `@eva/workout-engine`). · Verificación: web verde consumiendo el package.
-- [ ] **E5-02** · [SEAM][M] Mobile adopta `@eva/plan-builder` (borra fork reducer/types)
+- [x] **E5-02** · [SEAM][M] Mobile adopta `@eva/plan-builder` (borra fork reducer/types)
   - Fuentes: G07-B2 · Deps: E5-01
   - Scope: reemplazar el fork local por el package. · Verificación: sin reducer/types locales; typecheck mobile verde.
-- [ ] **E5-03** · [FUNCIONAL][M] Cargar `areas: WorkoutArea[]` en el builder mobile
+- [x] **E5-03** · [FUNCIONAL][M] Cargar `areas: WorkoutArea[]` en el builder mobile
   - Fuentes: G07-C1 · Deps: E5-02
   - Scope: fetch de áreas dinámicas. · Verificación: áreas cargan correcto.
-- [ ] **E5-04** · [FUNCIONAL][L] Reemplazar agrupación 3 secciones por ÁREAS (AreaDropZone + buildAreaVMs + draggable-flatlist)
+- [x] **E5-04** · [FUNCIONAL][L] Reemplazar agrupación 3 secciones por ÁREAS (AreaDropZone + buildAreaVMs + draggable-flatlist)
   - Fuentes: G07-C2 · Deps: E5-03
   - Scope: áreas dinámicas con drag-to-area. · Verificación: drag entre áreas persiste `section_template_id`.
-- [ ] **E5-05** · [FUNCIONAL][L] Reconstruir BlockEditorSheet como editor polimórfico (strength/cardio/mobility/roller)
+- [x] **E5-05** · [FUNCIONAL][L] Reconstruir BlockEditorSheet como editor polimórfico (strength/cardio/mobility/roller)
   - Fuentes: G07-C3 · Deps: E5-02, E0-C1 (gate cardio), E0-F2
   - Scope: bloques polimórficos typed (duration/distance/pace/HR/interval/side_mode/load); paridad web (1009L vs mobile 272L). · Verificación: cada tipo edita y guarda correcto; cardio gated.
-- [ ] **E5-06** · [FUNCIONAL][M] Chip resumen typed en BuilderBlockCard (typedBlockSummary + icono + "Incompleto")
+- [x] **E5-06** · [FUNCIONAL][M] Chip resumen typed en BuilderBlockCard (typedBlockSummary + icono + "Incompleto")
   - Fuentes: G07-C4 · Deps: E5-05
   - Scope: chip de resumen por tipo. · Verificación: resumen e "Incompleto" correctos.
-- [ ] **E5-07** · [FUNCIONAL][M] Validación de guardado por TIPO + serialización `effectiveAreaKey` + conflicto `expectedUpdatedAt`
+- [x] **E5-07** · [FUNCIONAL][M] Validación de guardado por TIPO + serialización `effectiveAreaKey` + conflicto `expectedUpdatedAt`
   - Fuentes: G07-C5 · Deps: E5-05
   - Scope: validación typed + conflicto de versión. · Verificación: guardado con `expectedUpdatedAt` desactualizado rechaza; round-trip test verde.
-- [ ] **E5-08** · [FUNCIONAL][S] Añadir `exercise_type` (EXERCISE_TYPE_OPTIONS) al ExerciseFormSheet
+- [x] **E5-08** · [FUNCIONAL][S] Añadir `exercise_type` (EXERCISE_TYPE_OPTIONS) al ExerciseFormSheet
   - Fuentes: G07-D1 · Deps: E5-01 (tipos)
   - Scope: campo de tipo de ejercicio. · Verificación: tipo persiste.
-- [ ] **E5-09** · [FUNCIONAL][M] Recorte de video (start/end) + reproducción INLINE con recorte
+- [x] **E5-09** · [FUNCIONAL][M] Recorte de video (start/end) + reproducción INLINE con recorte
   - Fuentes: G07-D2 · Deps: E3-11, E0-E12
   - Scope: trim de video + inline con recorte (si viable). · Verificación: recorte se aplica en reproducción.
-- [ ] **E5-10** · [FUNCIONAL][S] Alinear gate de creación de ejercicios con regla workspace (no por tier) (ruling D1)
+- [x] **E5-10** · [FUNCIONAL][S] Alinear gate de creación de ejercicios con regla workspace (no por tier) (ruling D1)
   - Fuentes: G07-D3 · Deps: E0-C1
   - Scope: gate por workspace (regla web). · Verificación: gate coincide con web.
-- [ ] **E5-11** · [FUNCIONAL][S] Cablear historial del ejercicio en el editor de bloque
+- [x] **E5-11** · [FUNCIONAL][S] Cablear historial del ejercicio en el editor de bloque
   - Fuentes: G07-D4 · Deps: E5-05
   - Scope: historial del ejercicio en el editor. · Verificación: historial correcto por ejercicio.
-- [ ] **E5-12** · [FUNCIONAL][M] Editores de ficha: biometría (altura/sexo/peso inicial) + goal weight con línea objetivo
+- [x] **E5-12** · [FUNCIONAL][M] Editores de ficha: biometría (altura/sexo/peso inicial) + goal weight con línea objetivo
   - Fuentes: G06-B5 · Deps: E3-06, E0-B1 (GRANTs)
   - Scope: write-paths de biometría + goal weight. · Verificación: sin 42501; línea objetivo en el chart.
-- [ ] **E5-13** · [FUNCIONAL][M] Export dossier PDF (portar buildClientDossier o formalizar progress-pdf; spike D6)
+- [x] **E5-13** · [FUNCIONAL][M] Export dossier PDF (portar buildClientDossier o formalizar progress-pdf; spike D6)
   - Fuentes: G06-B6 · Deps: E3-06
   - Scope: spike expo-print/share nativo; si fidelidad insuficiente → link-out web documentado (ruling D6). · Verificación: dossier con fotos o link-out funcional.
-- [ ] **E5-14** · [FUNCIONAL][M] Import wizard de clientes multi-paso (mapeo columnas + preview + confirm + tier-gate)
+- [x] **E5-14** · [FUNCIONAL][M] Import wizard de clientes multi-paso (mapeo columnas + preview + confirm + tier-gate)
   - Fuentes: G06-B7 · Deps: E3-03
   - Scope: wizard 4 pasos (parser ya portado, sin UI). · Verificación: import mapea/previsualiza/confirma; tier-gate aplica.
-- [ ] **E5-15** · [FUNCIONAL][S] Alinear forma MobileDashboardData vs DashboardV2Data (bridge si hace falta)
+- [x] **E5-15** · [FUNCIONAL][S] Alinear forma MobileDashboardData vs DashboardV2Data (bridge si hace falta)
   - Fuentes: G06-B10 · Deps: ninguna
   - Scope: verificar/alinear la shape del dashboard V2. · Verificación: dashboard coach con datos V2 correctos.
-- [ ] **E5-16** · [FUNCIONAL][S] Check-ins: firmar/mostrar `side_photo_url` + "Marcar como revisado" (toggle + badge/filtro)
+- [x] **E5-16** · [FUNCIONAL][S] Check-ins: firmar/mostrar `side_photo_url` + "Marcar como revisado" (toggle + badge/filtro)
   - Fuentes: G08-B3 · Deps: E3-18
   - Scope: snapshot en ficha con 3 fotos (side incluida — hoy se pierde) + toggle revisado optimista. · Verificación: 3 fotos visibles; toggle persiste.
-- [ ] **E5-17** · [FUNCIONAL][S] Builder: surface de alérgenos/intolerancias/disgustos en FoodSearchSheet (bloqueante)
+- [x] **E5-17** · [FUNCIONAL][S] Builder: surface de alérgenos/intolerancias/disgustos en FoodSearchSheet (bloqueante)
   - Fuentes: G08-B4 · Deps: E3-17
   - Scope: alérgenos/intolerancias visibles y bloqueantes (correctness). · Verificación: alimento con alérgeno bloquea/advierte.
-- [ ] **E5-18** · [FUNCIONAL][M] Pantalla Grupos de comidas + acción "guardar comida como grupo"
+- [x] **E5-18** · [FUNCIONAL][M] Pantalla Grupos de comidas + acción "guardar comida como grupo"
   - Fuentes: G08-C3 · Deps: E3-17
   - Scope: meal-groups + guardar como grupo. · Verificación: grupo se crea y reutiliza.
-- [ ] **E5-19** · [FUNCIONAL][M] Tab/pantalla Recetas (RecipeLibrary, crear/asignar/editar)
+- [x] **E5-19** · [FUNCIONAL][M] Tab/pantalla Recetas (RecipeLibrary, crear/asignar/editar)
   - Fuentes: G08-C4 · Deps: E3-16
   - Scope: librería de recetas coach. · Verificación: crear/asignar/editar receta funciona.
-- [ ] **E5-20** · [FUNCIONAL][S] Panel Pro "objetivos por composición corporal" (goals_bodycomp)
+- [x] **E5-20** · [FUNCIONAL][S] Panel Pro "objetivos por composición corporal" (goals_bodycomp)
   - Fuentes: G08-C6 · Deps: E0-C1
   - Scope: targets de nutrición por composición (gated Pro). · Verificación: solo visible con entitlement.
-- [ ] **E5-21** · [FUNCIONAL][S] Medidas caseras completas (household_grams/label) en custom-food-form + cálculo
+- [x] **E5-21** · [FUNCIONAL][S] Medidas caseras completas (household_grams/label) en custom-food-form + cálculo
   - Fuentes: G08-C7 · Deps: E0-A1
   - Scope: medidas caseras en food custom. · Verificación: cálculo de gramos por medida correcto.
-- [ ] **E5-22** · [FUNCIONAL][M] Google Sign-In coach nativo (signInWithIdToken + client IDs) (P1)
+- [x] **E5-22** · [FUNCIONAL][M] Google Sign-In coach nativo (signInWithIdToken + client IDs) (P1)
   - Fuentes: G11-B1 · Deps: build EAS nuevo (batch de la etapa)
   - Scope: SDK nativo + `signInWithIdToken` (NO iframe GIS). · Verificación: login Google coach funciona en device.
-- [ ] **E5-23** · [FUNCIONAL][M] `coach/onboarding` + `complete` (port del intake post-registro) `[NUEVO-PLAN]`
+- [x] **E5-23** · [FUNCIONAL][M] `coach/onboarding` + `complete` (port del intake post-registro) `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN huérfanas, dueño E5) · Deps: E0-E6
   - Scope: portar el intake post-registro del coach. · Verificación: onboarding coach completa y persiste.
 
