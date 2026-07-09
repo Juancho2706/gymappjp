@@ -644,6 +644,9 @@ export async function POST(request: Request) {
         })
     } catch (error) {
         const message = error instanceof Error ? error.message : 'No se pudo iniciar el flujo de suscripción.'
+        // Diagnosticabilidad (incidente go-live 2026-07-09): el 500 devolvia el mensaje al cliente pero
+        // NO quedaba en los logs de Vercel → imposible saber que paso server-side. Money path: loguear.
+        console.error('[payments.create-preference] failed', { message })
         // Flow VALIDA la entregabilidad real del email del pagador (no solo el formato) en
         // customer/create — confirmado en QA E2E: un buzon no entregable devuelve
         // `code=501 "email is not valid"`. Sin este mapeo el coach ve un 500 opaco; con el, un

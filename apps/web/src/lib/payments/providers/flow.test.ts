@@ -151,6 +151,30 @@ describe('FlowProvider.createCheckout (Fase 1 — enrolamiento)', () => {
         expect(callAt(0).params.get('customerId')).toBe('cus_existing')
         expect(r.checkoutId).toBe('cus_existing')
     })
+
+    it('customer HUERFANO (externalId duplicado): recupera el customerId via customer/list y sigue al register', async () => {
+        fetchMock
+            // customer/create → 401 code 501 duplicado (mensaje REAL de prod, incidente go-live 2026-07-09)
+            .mockResolvedValueOnce({ ok: false, status: 401, text: async () => JSON.stringify({ code: 501, message: 'Internal Server Error - There is a customer with this externalId: coach-uuid' }) })
+            // customer/list pagina 1 → el huerfano esta ahi
+            .mockResolvedValueOnce(ok({ total: 2, hasMore: false, data: [
+                { customerId: 'cus_otro', externalId: 'otro-coach' },
+                { customerId: 'cus_huerfano', externalId: 'coach-uuid' },
+            ] }))
+            // customer/register con el recuperado
+            .mockResolvedValueOnce(ok({ url: 'https://sandbox.flow.cl/app/customer/register.php', token: 'RGX' }))
+        const r = await new FlowProvider().createCheckout(input)
+        expect(fetchMock).toHaveBeenCalledTimes(3)
+        expect(callAt(1).url.startsWith(`${BASE}/customer/list?`)).toBe(true)
+        expect(callAt(2).params.get('customerId')).toBe('cus_huerfano')
+        expect(r.checkoutId).toBe('cus_huerfano')
+    })
+
+    it('customer/create falla por OTRA razon (no duplicado) → rethrow sin recovery', async () => {
+        fetchMock.mockResolvedValueOnce({ ok: false, status: 401, text: async () => JSON.stringify({ code: 501, message: 'Internal Server Error - email is not valid' }) })
+        await expect(new FlowProvider().createCheckout(input)).rejects.toThrow('email is not valid')
+        expect(fetchMock).toHaveBeenCalledTimes(1) // no intento customer/list
+    })
 })
 
 describe('FlowProvider.startCardReenrollment (T5.5 — cambio de tarjeta por redirect)', () => {
