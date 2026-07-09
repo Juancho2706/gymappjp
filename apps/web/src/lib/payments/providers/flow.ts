@@ -109,6 +109,24 @@ export class FlowProvider implements PaymentsProvider {
         return (await res.json().catch(() => ({}))) as Record<string, unknown>
     }
 
+    /**
+     * Busca el customerId de un customer YA creado en Flow por nuestro `externalId` (= coachId).
+     * Recuperacion del caso "customer huerfano": creado en Flow pero nunca persistido en coaches.
+     * `customer/list` pagina con {total, hasMore, data[]}; su `filter` NO matchea externalId ni email
+     * (validado en sandbox: el name ademas se guarda sin guiones) → se escanea data[] por externalId.
+     * Cap de 10 paginas x 100 (bastan por anos; si algun dia se supera, el throw original burbujea).
+     */
+    private async findCustomerIdByExternalId(externalId: string): Promise<string | null> {
+        for (let page = 0; page < 10; page++) {
+            const res = await this.flowGet('customer/list', { start: page * 100, limit: 100 })
+            const data = Array.isArray(res.data) ? (res.data as Array<Record<string, unknown>>) : []
+            const hit = data.find((c) => String(c.externalId ?? '') === externalId)
+            if (hit?.customerId != null) return String(hit.customerId)
+            if (!res.hasMore || data.length === 0) break
+        }
+        return null
+    }
+
     /** GET firmado (params + `s` en el query string). El `apiKey` se inyecta acá. */
     private async flowGet(service: string, params: FlowParams): Promise<Record<string, unknown>> {
         const { apiKey, secretKey, apiBase } = this.config()
@@ -179,12 +197,26 @@ export class FlowProvider implements PaymentsProvider {
         // Reusar el customer ya enrolado si viene; si no, crearlo.
         let customerId = input.existingCustomerId?.trim() || null
         if (!customerId) {
-            const created = await this.flowPost('customer/create', {
-                name: input.coachId,
-                email: input.coachEmail,
-                externalId: input.coachId,
-            })
-            customerId = created.customerId != null ? String(created.customerId) : null
+            try {
+                const created = await this.flowPost('customer/create', {
+                    name: input.coachId,
+                    email: input.coachEmail,
+                    externalId: input.coachId,
+                })
+                customerId = created.customerId != null ? String(created.customerId) : null
+            } catch (error) {
+                // HOTFIX (incidente go-live 2026-07-09): si un intento previo creo el customer en Flow
+                // pero el request murio ANTES de persistir provider_customer_id (fallo posterior del
+                // route / doble-click), Flow rechaza el externalId duplicado (code 501 "There is a
+                // customer with this externalId") y el coach quedaba BRICKEADO. Recuperamos el customer
+                // huerfano escaneando customer/list por externalId (validado: el filter de Flow NO
+                // matchea por externalId ni email → hay que escanear data[]).
+                const message = error instanceof Error ? error.message : String(error)
+                if (/customer with this externalId/i.test(message)) {
+                    customerId = await this.findCustomerIdByExternalId(input.coachId)
+                }
+                if (!customerId) throw error
+            }
             if (!customerId) throw new Error('Flow customer/create: sin customerId en la respuesta')
         }
         // url_return: a donde Flow devuelve el browser Y postea el `token` del enrolamiento; ahi la
