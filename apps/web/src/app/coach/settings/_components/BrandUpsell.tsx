@@ -22,7 +22,7 @@ export function BrandUpsell({ tier }: { tier: SubscriptionTier }) {
                     Tus alumnos entran a <span style={{ color: 'var(--sport-600)' }}>tu</span> app
                 </h1>
                 <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-body">
-                    Con tu logo, tus colores y tu nombre. Tu marca, no la nuestra — disponible desde Starter.
+                    Con tu logo, tus colores y tu nombre. Tu marca, no la nuestra — disponible desde Pro.
                 </p>
             </div>
 
@@ -64,7 +64,7 @@ export function BrandUpsell({ tier }: { tier: SubscriptionTier }) {
                         </div>
                         <div className="h-6 w-full rounded-lg bg-[var(--sport-500)]" />
                     </div>
-                    <p className="px-3 pb-3 text-[10px] font-bold" style={{ color: 'var(--sport-600)' }}>Con Starter ✓</p>
+                    <p className="px-3 pb-3 text-[10px] font-bold" style={{ color: 'var(--sport-600)' }}>Con Pro ✓</p>
                 </div>
             </div>
 
@@ -90,12 +90,12 @@ export function BrandUpsell({ tier }: { tier: SubscriptionTier }) {
 
             {/* Pricing + CTA */}
             <div className="rounded-card p-6 text-center bg-[var(--surface-inverse)]">
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-on-dark-muted">Disponible en Starter</p>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-on-dark-muted">Disponible en Pro</p>
                 <div className="mt-1.5 flex flex-wrap items-baseline justify-center gap-x-2 gap-y-1">
-                    <span className="font-display text-3xl font-black tabular-nums text-on-dark">$19.990</span>
+                    <span className="font-display text-3xl font-black tabular-nums text-on-dark">$29.990</span>
                     <span className="text-sm text-on-dark-muted">/mes</span>
                     <span className="text-on-dark-muted">·</span>
-                    <span className="text-sm font-semibold" style={{ color: 'var(--sport-400)' }}>$15.992/mes anual</span>
+                    <span className="text-sm font-semibold" style={{ color: 'var(--sport-400)' }}>$23.992/mes anual</span>
                     <span className="rounded-md px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'rgba(255,255,255,0.12)', color: 'var(--success-500)' }}>−20%</span>
                 </div>
 
@@ -104,7 +104,7 @@ export function BrandUpsell({ tier }: { tier: SubscriptionTier }) {
                         'Tu logo en la app del alumno',
                         'Colores y nombre de tu marca',
                         'Loader y pantalla de carga personalizados',
-                        'Hasta 10 alumnos activos',
+                        'Hasta 30 alumnos activos',
                     ].map((feat) => (
                         <li key={feat} className="flex items-start gap-2.5 text-sm text-on-dark-muted">
                             <Check className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--sport-400)' }} />
@@ -114,10 +114,10 @@ export function BrandUpsell({ tier }: { tier: SubscriptionTier }) {
                 </ul>
 
                 <Link
-                    href="/coach/subscription?upgrade=starter"
+                    href="/coach/subscription?upgrade=pro"
                     className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-control px-6 text-sm font-bold transition-all bg-[var(--sport-500)] text-[var(--text-on-sport)] shadow-[var(--glow-sport)] hover:bg-[var(--cta-fill)]"
                 >
-                    Personalizá tu app con Starter
+                    Personalizá tu app con Pro
                     <ArrowRight className="h-4 w-4" />
                 </Link>
                 <p className="mt-3 text-xs text-on-dark-muted">Sin permanencia · Cancelá cuando quieras</p>
