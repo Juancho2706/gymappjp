@@ -20,7 +20,7 @@ import {
   writeKeypadStep,
   DEFAULT_KEYPAD_STEP,
   KEYPAD_MAX_DECIMALS,
-} from '@/lib/client/keypad-logic'
+} from '@eva/workout-engine'
 import { NumericKeypadSheet, type KeypadTarget } from './NumericKeypadSheet'
 
 export type { KeypadTarget }

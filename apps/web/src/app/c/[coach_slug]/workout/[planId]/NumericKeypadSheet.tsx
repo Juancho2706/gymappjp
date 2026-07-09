@@ -5,7 +5,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { Delete, SlidersHorizontal, Check, ArrowRight, ArrowLeft, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { springsSheet } from '@/lib/animation-presets'
-import { incrementChipsForStep, formatWeightEsCl, KEYPAD_STEP_PRESETS } from '@/lib/client/keypad-logic'
+import { incrementChipsForStep, formatWeightEsCl, KEYPAD_STEP_PRESETS } from '@eva/workout-engine'
 import { ScaleDots, EffortHelp, RPE_HELP, RIR_HELP } from './EffortScale'
 
 /** Objetivo prescrito que viaja CON el teclado (DB-5: siempre visible mientras se tipea). */

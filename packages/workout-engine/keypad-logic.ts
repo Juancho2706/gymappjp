@@ -1,15 +1,21 @@
 /**
  * Lógica pura del teclado numérico custom de la exec (Fase L · workstream B).
  *
- * Toda la manipulación de texto (append de dígitos, coma decimal es-CL, backspace, incrementos)
- * vive acá como funciones puras → testeable sin DOM y reusable por el provider. El teclado escribe
- * `es-CL` (coma decimal) en el `<input>` uncontrolled; `LogSetForm.handleSubmit` ya normaliza
- * `,`→`.` antes de leer, así que el pipeline de submit/offline queda intacto.
+ * Extraído a `@eva/workout-engine` en la ola de paridad RN (specs/rn-mobile-parity-redesign) para
+ * que web (`WorkoutKeypadProvider`/`NumericKeypadSheet`) y mobile (`TypedKeypad`) compartan la
+ * MISMA manipulación de texto sin drift: append de dígitos, coma decimal es-CL, backspace e
+ * incrementos son funciones puras → testeables sin DOM y reusables por ambas superficies. El
+ * teclado escribe `es-CL` (coma decimal); el submit normaliza `,`→`.` antes de leer, así que el
+ * pipeline de submit/offline queda intacto.
  *
  * Regla de negocio (DB-4, ampliada por CEO 2026-07-04): el paso de los chips de incremento es
- * CONFIGURABLE (presets 0.25/0.5/1/1.25/2.5/5 kg) persistido por-dispositivo en
- * `localStorage['omni_keypad_step']` (mismo carril que `omni_autotimer`). El tipeo libre de
+ * CONFIGURABLE (presets 0.25/0.5/1/1.25/2.5/5 kg) persistido por-dispositivo. El tipeo libre de
  * cualquier decimal queda SIEMPRE disponible — los chips son atajos, no restricción.
+ *
+ * Persistencia por plataforma: `readKeypadStep`/`writeKeypadStep` usan `localStorage` (web, síncrono
+ * — carril `omni_keypad_step`, mismo que `omni_autotimer`). Mobile NO los usa: persiste el mismo
+ * `omni_keypad_step` vía AsyncStorage (ver `apps/mobile/.../keypad-step-preference.ts`) reutilizando
+ * los presets/paso default de acá. Ambos helpers son no-op fuera del browser (guard `window`).
  */
 
 /** localStorage: paso configurable de los chips de incremento (kg). Espejo de `omni_autotimer`. */
