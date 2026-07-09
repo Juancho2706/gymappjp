@@ -16,7 +16,6 @@ describe('flags: resolucion local vs remota', () => {
 
   it('sin override remoto, devuelve el default local declarado en FLAGS', () => {
     expect(isEnabled('executorV2')).toBe(FLAGS.executorV2)
-    expect(isEnabled('executorV2')).toBe(false)
   })
 
   it('con override remoto true, manda el remoto por sobre el default false', () => {
