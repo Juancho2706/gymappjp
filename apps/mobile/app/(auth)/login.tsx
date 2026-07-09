@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { Image } from 'expo-image'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ArrowRight, Check, Eye, EyeOff, Lock, Mail, Sparkles } from 'lucide-react-native'
+import { ArrowRight, Check, ChevronLeft, Eye, EyeOff, Lock, Mail, Sparkles } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import { LoginSchema } from '@eva/schemas'
@@ -22,10 +22,17 @@ import { resolveBrandTheme, resolvePresetBranding } from '@eva/brand-kit'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { supabase } from '../../lib/supabase'
 import { translateAuthError } from '../../lib/auth-errors'
+import {
+  GoogleSignInError,
+  isGoogleSignInAvailable,
+  resolveGoogleCoachDestination,
+  signInWithGoogleCoach,
+  signOutGoogleAndSupabase,
+} from '../../lib/auth/google-signin'
 import { useTheme } from '../../context/ThemeContext'
 import { FONT, TYPE } from '../../lib/typography'
 import { SHADOWS } from '../../lib/shadows'
-import { Card, Input } from '../../components'
+import { AuthDivider, Card, GoogleSignInButton, Input } from '../../components'
 import { EvaLoader } from '../../components/EvaLoader'
 
 const REMEMBER_KEY = 'eva_remember_email'
@@ -60,7 +67,7 @@ function mixBlack(hex: string, amount: number): string {
 }
 
 export default function LoginScreen() {
-  const { role } = useLocalSearchParams<{ role: 'coach' | 'alumno' }>()
+  const { role, switch: canSwitch } = useLocalSearchParams<{ role: 'coach' | 'alumno'; switch?: string }>()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { theme, branding, resolvedScheme } = useTheme()
@@ -69,9 +76,12 @@ export default function LoginScreen() {
   const [showPwd, setShowPwd] = useState(false)
   const [remember, setRemember] = useState(true)
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const isAlumno = role === 'alumno'
+  // Google login SOLO coach (alumno DIFERIDO por CEO) y solo si hay webClientId (fail-closed).
+  const showGoogle = !isAlumno && isGoogleSignInAvailable()
 
   useEffect(() => {
     AsyncStorage.getItem(REMEMBER_KEY).then((v) => {
@@ -151,6 +161,30 @@ export default function LoginScreen() {
     else await AsyncStorage.removeItem(REMEMBER_KEY)
     await AsyncStorage.setItem('eva_user_role', role ?? 'coach')
     router.replace(isAlumno ? '/alumno/home' : '/coach/home')
+  }
+
+  // ── Google Sign-In nativo (coach) — espejo del GoogleSignInButton web (intent=login) ──
+  async function handleGoogleCoach() {
+    setGoogleLoading(true)
+    setError(null)
+    try {
+      await signInWithGoogleCoach()
+      const dest = await resolveGoogleCoachDestination('login')
+      if (dest.kind === 'home') {
+        await AsyncStorage.setItem('eva_user_role', 'coach')
+        router.replace('/coach/home')
+        return
+      }
+      // Google válido pero sin cuenta coach: cortamos la sesión (como web → /login?error=no_google_account).
+      await signOutGoogleAndSupabase()
+      setError('No hay una cuenta de coach vinculada a este Google. Registrate primero.')
+    } catch (err) {
+      // Cancelar no es un error para el usuario.
+      if (err instanceof GoogleSignInError && err.code === 'cancelled') return
+      setError(err instanceof GoogleSignInError ? err.message : 'No se pudo iniciar sesión con Google.')
+    } finally {
+      setGoogleLoading(false)
+    }
   }
 
   // ── Bloque de campos (compartido coach/alumno) ──
@@ -308,6 +342,12 @@ export default function LoginScreen() {
             >
               <Card variant="default" padding={20} radius="card">
                 {renderFields(theme.primary, theme.primaryForeground, 'Ingresar al panel')}
+                {showGoogle ? (
+                  <View style={{ gap: 14, marginTop: 16 }}>
+                    <AuthDivider />
+                    <GoogleSignInButton intent="login" onPress={handleGoogleCoach} loading={googleLoading} disabled={loading} />
+                  </View>
+                ) : null}
               </Card>
             </MotiView>
 
@@ -490,6 +530,26 @@ export default function LoginScreen() {
           {body}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Flujo inteligente: si el arranque saltó directo acá por el coach cacheado
+          (`?switch=1`), un escape discreto de vuelta al selector de rol. `?pick=1`
+          fuerza el selector en index (evita el auto-salto de vuelta al login). */}
+      {canSwitch === '1' ? (
+        <Pressable
+          testID="login-role-switch"
+          accessibilityRole="button"
+          hitSlop={10}
+          onPress={() => router.replace('/?pick=1')}
+          className="bg-surface-card border border-subtle rounded-pill flex-row items-center"
+          style={[
+            { position: 'absolute', top: insets.top + 10, left: 20, gap: 4, paddingLeft: 10, paddingRight: 14, paddingVertical: 8 },
+            SHADOWS[resolvedScheme].sm,
+          ]}
+        >
+          <ChevronLeft size={16} color={theme.mutedForeground} strokeWidth={2.25} />
+          <Text className="text-body font-sans-semibold" style={{ fontSize: 12 }}>Elegir otro rol</Text>
+        </Pressable>
+      ) : null}
     </View>
   )
 }

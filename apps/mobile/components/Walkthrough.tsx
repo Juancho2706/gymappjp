@@ -13,10 +13,9 @@ import { ArrowRight, Activity, Dumbbell, KeyRound, Utensils } from 'lucide-react
 import type { LucideIcon } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../context/ThemeContext'
-import { AppBackground } from './AppBackground'
-import { AmbientBrandGlow } from './AmbientBrandGlow'
 import { Button } from './Button'
 import { TYPE } from '../lib/typography'
+import { shadow } from '../lib/shadows'
 import { markWalkthroughSeen } from '../lib/walkthrough'
 
 /**
@@ -24,8 +23,9 @@ import { markWalkthroughSeen } from '../lib/walkthrough'
  *
  * Shown ONCE on the first cold start (gated by the `walkthrough_seen` flag in
  * `lib/walkthrough.ts`), before the role selector. Deep-link launches never
- * reach here (see `app/+native-intent.ts`). EVA DS: brand-tinted hero icons,
- * paged horizontal carousel, pill pagination, "Saltar" escape + final CTA.
+ * reach here (see `app/+native-intent.ts`). EVA DS: superficie limpia clara
+ * (bg-surface-app, dark-aware), hero en tile sport suave, paginación de
+ * píldoras sport, "Saltar" discreto + CTA final. Micro-transiciones por página.
  *
  * Slide copy APROBADO por CEO 2026-07-08 (4 slides).
  */
@@ -69,7 +69,8 @@ interface Props {
 }
 
 export function Walkthrough({ onDone }: Props) {
-  const { theme } = useTheme()
+  const { theme, mode } = useTheme()
+  const scheme = mode === 'light' ? 'light' : 'dark'
   const { width } = useWindowDimensions()
   const scrollRef = useRef<ScrollView>(null)
   const [index, setIndex] = useState(0)
@@ -95,8 +96,6 @@ export function Walkthrough({ onDone }: Props) {
 
   return (
     <View className="bg-surface-app" style={{ flex: 1 }}>
-      <AppBackground />
-      <AmbientBrandGlow />
       <SafeAreaView style={{ flex: 1 }}>
         {/* Skip — top right, hidden on the last slide (CTA becomes "Empezar"). */}
         <View style={{ height: 44, justifyContent: 'center', alignItems: 'flex-end', paddingHorizontal: 20 }}>
@@ -125,16 +124,17 @@ export function Walkthrough({ onDone }: Props) {
         >
           {SLIDES.map((slide, i) => {
             const Icon = slide.icon
+            const active = i === index
             return (
               <View
                 key={slide.title}
                 testID={`walkthrough-slide-${i}`}
                 style={{ width, paddingHorizontal: 32, alignItems: 'center', justifyContent: 'center', flex: 1 }}
               >
+                {/* Micro-transición: fade+slide suave según la página activa. */}
                 <MotiView
-                  from={{ opacity: 0, translateY: 18 }}
-                  animate={{ opacity: 1, translateY: 0 }}
-                  transition={{ type: 'timing', duration: 480 }}
+                  animate={{ opacity: active ? 1 : 0.35, translateY: active ? 0 : 14 }}
+                  transition={{ type: 'timing', duration: 360 }}
                   style={{ alignItems: 'center' }}
                 >
                   <View
@@ -145,13 +145,14 @@ export function Walkthrough({ onDone }: Props) {
                       borderRadius: theme.radius['3xl'],
                       alignItems: 'center',
                       justifyContent: 'center',
-                      marginBottom: 28,
+                      marginBottom: 32,
+                      ...shadow('md', scheme),
                     }}
                   >
-                    <Icon size={44} color={theme.primary} strokeWidth={1.75} />
+                    <Icon size={46} color={theme.primary} strokeWidth={1.75} />
                   </View>
-                  <Text className="text-strong" style={[TYPE.h2, { textAlign: 'center' }]}>{slide.title}</Text>
-                  <Text className="text-muted" style={[TYPE.body, { textAlign: 'center', marginTop: 12, maxWidth: 320 }]}>
+                  <Text className="text-strong" style={[TYPE.h1, { textAlign: 'center' }]}>{slide.title}</Text>
+                  <Text className="text-muted" style={[TYPE.body, { textAlign: 'center', marginTop: 14, maxWidth: 320 }]}>
                     {slide.body}
                   </Text>
                 </MotiView>
@@ -168,7 +169,7 @@ export function Walkthrough({ onDone }: Props) {
                 key={s.title}
                 animate={{ width: i === index ? 24 : 8, opacity: i === index ? 1 : 0.4 }}
                 transition={{ type: 'timing', duration: 240 }}
-                className={i === index ? 'bg-primary' : 'bg-ink-400'}
+                className={i === index ? 'bg-sport-500' : 'bg-ink-300'}
                 style={{ height: 8, borderRadius: 9999 }}
               />
             ))}
