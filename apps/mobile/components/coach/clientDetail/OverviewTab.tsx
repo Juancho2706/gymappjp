@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
 import { Activity, CalendarDays, Check, Dumbbell, Flame, LayoutGrid, Pencil, Ruler } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, ComplianceRing, ProgressBar } from '../../../components'
+import { Button, ComplianceRing, Input, ProgressBar, SegmentedTabs, Sheet } from '../../../components'
 import { CalendarHeatmap } from '../charts/CalendarHeatmap'
 import { StatCard, CardHeader, MetricBox, Pill, cd, formatDate, dayName } from './shared'
 import {
@@ -14,8 +14,26 @@ import { getProfileTopAlert, type ProfileAlertType } from '../../../lib/profile-
 import {
   markCoachCheckInReviewed,
   updateCoachClient,
+  upsertClientBiometrics,
+  type ClientSex,
   type CoachClientDetailData,
 } from '../../../lib/coach-client-detail'
+
+const SEX_LABEL: Record<ClientSex, string> = { male: 'Masculino', female: 'Femenino', other: 'Otro' }
+type SexSeg = ClientSex | 'none'
+const SEX_SEGMENTS: { value: SexSeg; label: string }[] = [
+  { value: 'male', label: 'Masculino' },
+  { value: 'female', label: 'Femenino' },
+  { value: 'other', label: 'Otro' },
+  { value: 'none', label: 'Sin esp.' },
+]
+// Parse "175" / "80,5" → number|null (coma decimal → punto).
+function parseBio(raw: string): number | null {
+  const t = raw.trim().replace(',', '.')
+  if (t === '') return null
+  const n = Number(t)
+  return Number.isFinite(n) ? n : null
+}
 
 function resolveProgramWeek(program: NonNullable<CoachClientDetailData['activeProgram']>): number | null {
   if (!program.start_date) return null
@@ -174,7 +192,7 @@ export function OverviewTab({
           <CardHeader icon={Activity} title="Evolución de fotos" />
           <View style={styles.photoRow}>
             {recentPhotos.map((c) => {
-              const photos = [c.front_photo_url, c.back_photo_url].filter(Boolean) as string[]
+              const photos = [c.front_photo_url, c.side_photo_url, c.back_photo_url].filter(Boolean) as string[]
               return (
                 <TouchableOpacity key={c.id} activeOpacity={0.85} onPress={() => onOpenPhoto(photos, 0)} style={{ alignItems: 'center', gap: 4 }}>
                   <Image source={{ uri: c.front_photo_url! }} style={[styles.photo, { borderColor: theme.border }]} contentFit="cover" transition={150} />
@@ -209,7 +227,7 @@ function Ring({ label, hint, value, color, delta, unit }: { label: string; hint:
 
 function CheckInSnapshot({ checkIn, clientId, reload, onOpenPhoto }: { checkIn: CoachClientDetailData['checkIns'][number]; clientId: string; reload: () => void; onOpenPhoto: (photos: string[], index: number) => void }) {
   const { theme } = useTheme()
-  const photos = [checkIn.front_photo_url, checkIn.back_photo_url].filter(Boolean) as string[]
+  const photos = [checkIn.front_photo_url, checkIn.side_photo_url, checkIn.back_photo_url].filter(Boolean) as string[]
   async function review() {
     const r = await markCoachCheckInReviewed(clientId, checkIn.id)
     if (!r.ok) Alert.alert('Error', r.error ?? 'No se pudo marcar.')
@@ -243,65 +261,83 @@ function CheckInSnapshot({ checkIn, clientId, reload, onOpenPhoto }: { checkIn: 
   )
 }
 
+// Biometría del alumno: talla/peso inicial/sexo (write-path client_intake vía
+// upsertClientBiometrics, espejo del editor web) + peso objetivo (clients.goal_weight_kg
+// vía updateCoachClient). Editor en Sheet DS.
 function BiometriaCard({ client, currentWeight, reload }: { client: NonNullable<CoachClientDetailData['client']>; currentWeight: number | null; reload: () => void }) {
   const { theme } = useTheme()
-  const [editing, setEditing] = useState(false)
-  const [height, setHeight] = useState(client.height_cm != null ? String(client.height_cm) : '')
-  const [initial, setInitial] = useState(client.initial_weight_kg != null ? String(client.initial_weight_kg) : '')
-  const [goal, setGoal] = useState(client.goal_weight_kg != null ? String(client.goal_weight_kg) : '')
+  const [open, setOpen] = useState(false)
+  const [height, setHeight] = useState('')
+  const [initial, setInitial] = useState('')
+  const [goal, setGoal] = useState('')
+  const [sex, setSex] = useState<SexSeg>('none')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Precarga el form con los datos vigentes al abrir (evita valores viejos).
+  function openEditor() {
+    setHeight(client.height_cm != null ? String(client.height_cm) : '')
+    setInitial(client.initial_weight_kg != null ? String(client.initial_weight_kg) : '')
+    setGoal(client.goal_weight_kg != null ? String(client.goal_weight_kg) : '')
+    setSex(client.sex ?? 'none')
+    setError(null)
+    setOpen(true)
+  }
 
   async function save() {
+    setError(null)
     setSaving(true)
-    const r = await updateCoachClient(client.id, {
-      height_cm: height.trim() ? Number(height.replace(',', '.')) : null,
-      initial_weight_kg: initial.trim() ? Number(initial.replace(',', '.')) : null,
-      goal_weight_kg: goal.trim() ? Number(goal.replace(',', '.')) : null,
+    const bio = await upsertClientBiometrics(client.id, {
+      heightCm: parseBio(height),
+      weightKg: parseBio(initial),
+      sex: sex === 'none' ? null : sex,
     })
+    if (!bio.ok) { setSaving(false); setError(bio.error ?? 'No se pudo guardar la biometría.'); return }
+    const goalRes = await updateCoachClient(client.id, { goal_weight_kg: goal.trim() ? parseBio(goal) : null })
     setSaving(false)
-    if (!r.ok) { Alert.alert('Error', r.error ?? 'No se pudo guardar.'); return }
-    setEditing(false)
+    if (!goalRes.ok) { setError(goalRes.error ?? 'No se pudo guardar el peso objetivo.'); return }
+    setOpen(false)
     reload()
   }
 
   return (
-    <StatCard>
-      <CardHeader icon={Ruler} title="Biometría" right={
-        <TouchableOpacity onPress={() => setEditing((v) => !v)} hitSlop={8}><Pencil size={16} color={theme.primary} /></TouchableOpacity>
-      } />
-      {editing ? (
-        <View style={{ gap: 10 }}>
-          <BioField label="Altura (cm)" value={height} onChangeText={setHeight} placeholder="175" />
-          <BioField label="Peso inicial (kg)" value={initial} onChangeText={setInitial} placeholder="80" />
-          <BioField label="Peso objetivo (kg)" value={goal} onChangeText={setGoal} placeholder="75" />
-          <Button label={saving ? 'Guardando…' : 'Guardar'} onPress={save} disabled={saving} full />
-        </View>
-      ) : (
+    <>
+      <StatCard>
+        <CardHeader icon={Ruler} title="Biometría" right={
+          <TouchableOpacity onPress={openEditor} hitSlop={8} accessibilityRole="button" accessibilityLabel="Editar biometría" testID="ficha-edit-biometria"><Pencil size={16} color={theme.primary} /></TouchableOpacity>
+        } />
         <View style={cd.grid2}>
           <MetricBox value={client.height_cm != null ? `${client.height_cm} cm` : '—'} label="Altura" />
           <MetricBox value={client.initial_weight_kg != null ? `${client.initial_weight_kg} kg` : '—'} label="Peso inicial" />
           <MetricBox value={currentWeight != null ? `${currentWeight} kg` : '—'} label="Peso actual" />
           <MetricBox value={client.goal_weight_kg != null ? `${client.goal_weight_kg} kg` : '—'} label="Objetivo" color={theme.primary} />
+          <MetricBox value={client.sex ? SEX_LABEL[client.sex] : '—'} label="Sexo" />
         </View>
-      )}
-    </StatCard>
-  )
-}
+      </StatCard>
 
-function BioField({ label, value, onChangeText, placeholder }: { label: string; value: string; onChangeText: (t: string) => void; placeholder: string }) {
-  const { theme } = useTheme()
-  return (
-    <View style={{ gap: 5 }}>
-      <Text style={{ fontSize: 12, color: theme.mutedForeground, fontFamily: theme.fontSans }}>{label}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        keyboardType="decimal-pad"
-        placeholder={placeholder}
-        placeholderTextColor={theme.mutedForeground}
-        style={{ height: 44, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.lg, backgroundColor: theme.secondary, color: theme.foreground, paddingHorizontal: 12, fontFamily: theme.fontSans }}
-      />
-    </View>
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Editar biometría"
+        description="Necesario para calcular IMC y gasto energético (TDEE)."
+        snapPoints={['88%']}
+        footer={
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <Button label="Cancelar" variant="secondary" onPress={() => setOpen(false)} disabled={saving} style={{ flex: 1 }} />
+            <Button label={saving ? 'Guardando…' : 'Guardar'} onPress={save} disabled={saving} style={{ flex: 1 }} />
+          </View>
+        }
+      >
+        <Input label="Altura (cm)" value={height} onChangeText={setHeight} keyboardType="numeric" placeholder="175" testID="bio-height" />
+        <Input label="Peso inicial (kg)" value={initial} onChangeText={setInitial} keyboardType="decimal-pad" placeholder="80" testID="bio-weight" />
+        <View style={{ gap: 6 }}>
+          <Text style={{ fontSize: 13, color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }}>Sexo</Text>
+          <SegmentedTabs items={SEX_SEGMENTS} value={sex} onChange={setSex} size="sm" />
+        </View>
+        <Input label="Peso objetivo (kg)" value={goal} onChangeText={setGoal} keyboardType="decimal-pad" placeholder="75" hint="Dibuja la línea objetivo en el chart de peso." testID="bio-goal" />
+        {error ? <Text style={{ color: theme.destructive, fontSize: 13, fontFamily: theme.fontSans }}>{error}</Text> : null}
+      </Sheet>
+    </>
   )
 }
 

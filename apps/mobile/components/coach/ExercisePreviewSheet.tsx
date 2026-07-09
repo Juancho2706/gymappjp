@@ -59,7 +59,13 @@ export const ExercisePreviewSheet = forwardRef<BottomSheetModal, Props>(function
           <>
             {/* Media */}
             {yt && exercise.video_url ? (
-              <VideoPlayer url={exercise.video_url} poster={poster} title={exercise.name} />
+              <VideoPlayer
+                url={exercise.video_url}
+                poster={poster}
+                title={exercise.name}
+                start={exercise.video_start_time}
+                end={exercise.video_end_time}
+              />
             ) : thumb ? (
               <View className="bg-surface-sunken border border-subtle rounded-2xl items-center justify-center" style={styles.media}>
                 <Image source={{ uri: thumb }} style={styles.mediaImg} contentFit="contain" transition={180} />

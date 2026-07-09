@@ -36,9 +36,13 @@ export interface CoachClientDetail {
   goal_weight_kg: number | null
   height_cm: number | null
   initial_weight_kg: number | null
+  sex: ClientSex | null
   subscription_start_date: string | null
   created_at: string
 }
+
+export const SEX_VALUES = ['male', 'female', 'other'] as const
+export type ClientSex = (typeof SEX_VALUES)[number]
 
 export interface CheckInEntry {
   id: string
@@ -48,6 +52,7 @@ export interface CheckInEntry {
   energy_level: number | null
   notes: string | null
   front_photo_url: string | null
+  side_photo_url: string | null
   back_photo_url: string | null
   reviewed_at: string | null
 }
@@ -591,7 +596,7 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     .eq('id', clientId)
     .maybeSingle()
   const baseClient: CoachClientDetail | null = clientData
-    ? ({ ...(clientData as any), height_cm: null, initial_weight_kg: null } as CoachClientDetail)
+    ? ({ ...(clientData as any), height_cm: null, initial_weight_kg: null, sex: null } as CoachClientDetail)
     : null
   const EMPTY = {
     client: baseClient,
@@ -639,7 +644,7 @@ export async function getCoachClientDetail(clientId: string): Promise<{
   `
 
   const [
-    clientRes,
+    intakeRes,
     checkInRes,
     paymentRes,
     programRes,
@@ -656,13 +661,19 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     setsLogsRes,
     favoriteFoodsRes,
   ] = await Promise.all([
+      // Biometria (talla/peso inicial/sexo) vive en client_intake, NO en clients (esas
+      // columnas no existen en clients). El coach la lee por RLS (client_intake_coach FOR ALL).
+      // El INSERT placeholder (alumnos sin intake) mete 0 en height/weight NOT NULL → 0 = "sin dato".
+      supabase.from('client_intake').select('height_cm, weight_kg, sex').eq('client_id', clientId).maybeSingle(),
+      // Tiers defensivos (columna faltante = 400 al select entero → degradar en orden):
+      //  1) reviewed_at + side_photo_url  (side = 3ra foto opcional, hoy inexistente en prod)
+      //  2) reviewed_at                    (prod actual)  3) base (DB legacy)
       selectWithFallback<any>(
-        () => supabase.from('clients').select('id, full_name, email, phone, is_active, is_archived, goal_weight_kg, height_cm, initial_weight_kg, subscription_start_date, created_at').eq('id', clientId).maybeSingle(),
-        () => supabase.from('clients').select('id, full_name, email, phone, is_active, is_archived, goal_weight_kg, subscription_start_date, created_at').eq('id', clientId).maybeSingle()
-      ),
-      selectWithFallback<any>(
-        () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url, reviewed_at').eq('client_id', clientId).order('date', { ascending: false }).limit(200),
-        () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url').eq('client_id', clientId).order('date', { ascending: false }).limit(200)
+        () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, side_photo_url, back_photo_url, reviewed_at').eq('client_id', clientId).order('date', { ascending: false }).limit(200),
+        () => selectWithFallback<any>(
+          () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url, reviewed_at').eq('client_id', clientId).order('date', { ascending: false }).limit(200),
+          () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url').eq('client_id', clientId).order('date', { ascending: false }).limit(200)
+        )
       ),
       selectWithFallback<any>(
         () => supabase.from('client_payments').select('id, amount, payment_date, service_description, status, period_months, receipt_url').eq('client_id', clientId).order('payment_date', { ascending: false }).limit(20),
@@ -833,9 +844,13 @@ export async function getCoachClientDetail(clientId: string): Promise<{
     activityByDate.get(day) && (activityByDate.get(day)!.checkIn = true)
   }
 
-  const richClient = clientRes.data as any
+  const intake = intakeRes.data as { height_cm?: number | null; weight_kg?: number | null; sex?: string | null } | null
+  // Placeholder 0 (INSERT sin dato) → null al leer (se muestra "—").
+  const intakeNum = (v: unknown): number | null => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null }
+  const rawSex = intake?.sex
+  const intakeSex: ClientSex | null = rawSex === 'male' || rawSex === 'female' || rawSex === 'other' ? rawSex : null
   const client: CoachClientDetail | null = baseClient
-    ? { ...baseClient, height_cm: richClient?.height_cm ?? null, initial_weight_kg: richClient?.initial_weight_kg ?? null }
+    ? { ...baseClient, height_cm: intakeNum(intake?.height_cm), initial_weight_kg: intakeNum(intake?.weight_kg), sex: intakeSex }
     : null
 
   return {
@@ -968,11 +983,61 @@ export async function getCoachClientDayDetail(clientId: string, date: string): P
   }
 }
 
+// Columnas editables de `clients` (allowlist grantada a authenticated: full_name/phone/
+// goal_weight_kg/subscription_start_date). height_cm/initial_weight_kg NO existen en clients
+// (viven en client_intake) → biometria va por upsertClientBiometrics, no por aca.
 export async function updateCoachClient(
   clientId: string,
-  fields: { full_name?: string; phone?: string | null; goal_weight_kg?: number | null; height_cm?: number | null; initial_weight_kg?: number | null; subscription_start_date?: string | null }
+  fields: { full_name?: string; phone?: string | null; goal_weight_kg?: number | null; subscription_start_date?: string | null }
 ): Promise<{ ok: boolean; error?: string }> {
   const { error } = await supabase.from('clients').update(fields).eq('id', clientId)
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
+// Espejo del write-path web `upsertClientBiometrics` (services/client/client-detail.service.ts):
+// el coach edita talla/peso inicial/sexo de la intake de SU alumno como `authenticated`
+// (RLS `client_intake_coach` FOR ALL; grants de columna confirmados por la auditoria E0-B1).
+// UPSERT manual: ~15 alumnos no tienen fila y height_cm/weight_kg/goals/experience_level/
+// availability son NOT NULL sin default → INSERT con placeholders (0 / '') en lo no editado.
+export async function upsertClientBiometrics(
+  clientId: string,
+  input: { heightCm: number | null; weightKg: number | null; sex: ClientSex | null }
+): Promise<{ ok: boolean; error?: string }> {
+  const { heightCm, weightKg, sex } = input
+  if (heightCm != null && (!Number.isFinite(heightCm) || heightCm < 50 || heightCm > 260)) {
+    return { ok: false, error: 'La altura debe estar entre 50 y 260 cm.' }
+  }
+  if (weightKg != null && (!Number.isFinite(weightKg) || weightKg < 20 || weightKg > 400)) {
+    return { ok: false, error: 'El peso debe estar entre 20 y 400 kg.' }
+  }
+  if (sex != null && !SEX_VALUES.includes(sex)) return { ok: false, error: 'Sexo invalido.' }
+
+  const { data: existing, error: readErr } = await supabase
+    .from('client_intake')
+    .select('id')
+    .eq('client_id', clientId)
+    .maybeSingle()
+  if (readErr) return { ok: false, error: readErr.message }
+
+  if (existing) {
+    // UPDATE parcial: height/weight solo si vienen (null = "no tocar", igual que web); sex sí se limpia.
+    const { error } = await supabase
+      .from('client_intake')
+      .update({ height_cm: heightCm ?? undefined, weight_kg: weightKg ?? undefined, sex })
+      .eq('client_id', clientId)
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+  }
+  const { error } = await supabase.from('client_intake').insert({
+    client_id: clientId,
+    height_cm: heightCm ?? 0,
+    weight_kg: weightKg ?? 0,
+    sex,
+    goals: '',
+    experience_level: '',
+    availability: '',
+  })
   if (error) return { ok: false, error: error.message }
   return { ok: true }
 }

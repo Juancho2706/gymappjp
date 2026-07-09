@@ -140,7 +140,11 @@ export default function CoachHomeScreen() {
         <MobileTodayAgenda items={data.agenda} />
 
         {/* Novedades — programas por vencer + actividad reciente */}
-        <MobileNovedades expiringPrograms={data.expiringPrograms} activities={data.recentActivities} />
+        <MobileNovedades
+          expiringPrograms={data.expiringPrograms}
+          activities={data.recentActivities}
+          pendingCheckins={data.pendingCheckinsCount}
+        />
 
         {/* P3 — Guia de inicio como chip expandible */}
         <MobileOnboardingGuideChip

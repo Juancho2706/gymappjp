@@ -18,6 +18,7 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { MUSCLE_GROUPS } from '@/lib/constants'
+import { EXERCISE_TYPE_OPTIONS } from '@eva/workout-engine'
 import {
     createExerciseAction,
     updateExerciseAction,
@@ -63,14 +64,6 @@ const DIFFICULTY_OPTIONS = [
     { value: 'beginner', label: 'Principiante' },
     { value: 'intermediate', label: 'Intermedio' },
     { value: 'advanced', label: 'Avanzado' },
-]
-
-/** Tipos polimórficos (specs/movida-entrenamiento): deciden los ejes del builder/alumno. */
-const EXERCISE_TYPE_OPTIONS = [
-    { value: 'strength', label: 'Fuerza (series × reps)' },
-    { value: 'cardio', label: 'Cardio (duración / distancia / zona FC)' },
-    { value: 'mobility', label: 'Movilidad (holds por lado)' },
-    { value: 'roller', label: 'Foam roller (duración o pasadas)' },
 ]
 
 interface Props {

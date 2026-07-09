@@ -14,8 +14,7 @@ import { AppBackground } from '../../../components/AppBackground'
 import { toast } from '../../../components/Toast'
 import { ExerciseFormSheet } from '../../../components/coach/ExerciseFormSheet'
 import { ExercisePreviewSheet } from '../../../components/coach/ExercisePreviewSheet'
-import { canCreateCustomExercises, cloneExercise, exerciseThumb, filterExercises, listCoachExercises, MUSCLE_GROUPS, youtubeId, type ExerciseRow } from '../../../lib/exercises'
-import { getCoachProfile } from '../../../lib/coach'
+import { resolveCanCreateExercises, cloneExercise, exerciseThumb, filterExercises, listCoachExercises, MUSCLE_GROUPS, youtubeId, type ExerciseRow } from '../../../lib/exercises'
 
 const DIFFICULTY_LABEL: Record<string, string> = {
   beginner: 'Principiante',
@@ -58,9 +57,9 @@ export default function EjerciciosScreen() {
     if (mode === 'initial') setLoading(true)
     else setRefreshing(true)
     try {
-      const [{ exercises: rows }, profile] = await Promise.all([listCoachExercises(), getCoachProfile()])
+      const [{ exercises: rows }, allowed] = await Promise.all([listCoachExercises(), resolveCanCreateExercises()])
       setExercises(rows)
-      setCanCreate(canCreateCustomExercises(profile?.subscriptionTier))
+      setCanCreate(allowed)
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -111,7 +110,7 @@ export default function EjerciciosScreen() {
 
   function openCreate() {
     if (!canCreate) {
-      Alert.alert('Función Pro', 'Crear ejercicios personalizados requiere un plan de pago. Gestioná tu plan desde la web.')
+      Alert.alert('Sin permiso', 'Tu rol en la organización no permite crear ejercicios. Pedí acceso a un administrador.')
       return
     }
     setEditTarget(null)
@@ -133,7 +132,7 @@ export default function EjerciciosScreen() {
   // E-F8: duplicar un ejercicio del sistema a uno propio editable.
   async function handleCloneFromPreview(row: ExerciseRow) {
     if (!canCreate) {
-      Alert.alert('Función Pro', 'Duplicar ejercicios a tu biblioteca requiere un plan de pago.')
+      Alert.alert('Sin permiso', 'Tu rol en la organización no permite duplicar ejercicios.')
       return
     }
     previewRef.current?.dismiss()

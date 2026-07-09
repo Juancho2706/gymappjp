@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
-import { Activity, GitCompare, Scale, TrendingUp, Zap } from 'lucide-react-native'
+import { Activity, GitCompare, Pencil, Scale, Target, TrendingUp, Zap } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
-import { EmptyState } from '../../../components'
+import { Button, EmptyState, Input, Sheet } from '../../../components'
 import { AreaTrend, type AreaPoint } from '../charts/AreaTrend'
 import { RadialGauge } from '../charts/RadialGauge'
 import { StatCard, CardHeader, MetricBox, Pill, cd, formatDate } from './shared'
@@ -14,7 +14,7 @@ import {
   avgEnergySince,
   energyColorHex,
 } from '../../../lib/profile-analytics'
-import type { CoachClientDetailData, CheckInEntry } from '../../../lib/coach-client-detail'
+import { updateCoachClient, type CoachClientDetailData, type CheckInEntry } from '../../../lib/coach-client-detail'
 
 const BMI_MIN = 15
 const BMI_MAX = 40
@@ -25,7 +25,7 @@ const BMI_SEGMENTS = [
   { upTo: 40, color: '#EF4444' },
 ]
 
-export function ProgresoTab({ data, onOpenPhoto }: { data: CoachClientDetailData; onOpenPhoto: (photos: string[], index: number) => void }) {
+export function ProgresoTab({ data, onOpenPhoto, reload }: { data: CoachClientDetailData; onOpenPhoto: (photos: string[], index: number) => void; reload: () => void }) {
   const { theme } = useTheme()
   const { client, checkIns } = data
   const [activeIdx, setActiveIdx] = useState<number | null>(null)
@@ -61,7 +61,7 @@ export function ProgresoTab({ data, onOpenPhoto }: { data: CoachClientDetailData
       {points.length >= 2 ? (
         <StatCard>
           <CardHeader icon={Scale} title="Evolución de peso" right={
-            client?.goal_weight_kg != null ? <Pill label={`Objetivo ${client.goal_weight_kg} kg`} /> : null
+            client ? <GoalWeightEditor client={client} reload={reload} /> : null
           } />
           <AreaTrend
             points={points}
@@ -129,6 +129,71 @@ export function ProgresoTab({ data, onOpenPhoto }: { data: CoachClientDetailData
         ))}
       </View>
     </View>
+  )
+}
+
+// Editor de peso objetivo (clients.goal_weight_kg) anclado al chart de peso: al fijarlo,
+// AreaTrend dibuja la línea punteada de objetivo (referenceY). Espejo del editor web de Progreso.
+function GoalWeightEditor({ client, reload }: { client: NonNullable<CoachClientDetailData['client']>; reload: () => void }) {
+  const { theme } = useTheme()
+  const [open, setOpen] = useState(false)
+  const [goal, setGoal] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const hasGoal = client.goal_weight_kg != null
+
+  function openEditor() {
+    setGoal(client.goal_weight_kg != null ? String(client.goal_weight_kg) : '')
+    setError(null)
+    setOpen(true)
+  }
+
+  async function save() {
+    setError(null)
+    const t = goal.trim().replace(',', '.')
+    const val = t === '' ? null : Number(t)
+    if (val != null && (!Number.isFinite(val) || val < 20 || val > 400)) { setError('El peso debe estar entre 20 y 400 kg.'); return }
+    setSaving(true)
+    const r = await updateCoachClient(client.id, { goal_weight_kg: val })
+    setSaving(false)
+    if (!r.ok) { setError(r.error ?? 'No se pudo guardar.'); return }
+    setOpen(false)
+    reload()
+  }
+
+  return (
+    <>
+      <TouchableOpacity onPress={openEditor} hitSlop={8} accessibilityRole="button" accessibilityLabel="Editar peso objetivo" testID="ficha-edit-goal-weight" style={styles.goalTrigger}>
+        {hasGoal ? (
+          <>
+            <Pill label={`Objetivo ${client.goal_weight_kg} kg`} />
+            <Pencil size={13} color={theme.mutedForeground} />
+          </>
+        ) : (
+          <View style={[styles.goalAdd, { borderColor: theme.border }]}>
+            <Target size={13} color={theme.primary} />
+            <Text style={{ fontSize: 11.5, color: theme.primary, fontFamily: 'HankenGrotesk_700Bold' }}>Definir objetivo</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+
+      <Sheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Peso objetivo"
+        description="Dibuja la línea de objetivo en el chart de peso."
+        snapPoints={['55%']}
+        footer={
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <Button label="Cancelar" variant="secondary" onPress={() => setOpen(false)} disabled={saving} style={{ flex: 1 }} />
+            <Button label={saving ? 'Guardando…' : 'Guardar'} onPress={save} disabled={saving} style={{ flex: 1 }} />
+          </View>
+        }
+      >
+        <Input label="Peso objetivo (kg)" value={goal} onChangeText={setGoal} keyboardType="decimal-pad" placeholder="75" hint="Dejalo vacío para quitar el objetivo." testID="goal-weight-input" />
+        {error ? <Text style={{ color: theme.destructive, fontSize: 13, fontFamily: theme.fontSans }}>{error}</Text> : null}
+      </Sheet>
+    </>
   )
 }
 
@@ -222,7 +287,7 @@ function SelChip({ label, on, onPress }: { label: string; on: boolean; onPress: 
 
 function CheckInRow({ c, onOpenPhoto }: { c: CheckInEntry; onOpenPhoto: (photos: string[], index: number) => void }) {
   const { theme } = useTheme()
-  const photos = [c.front_photo_url, c.back_photo_url].filter(Boolean) as string[]
+  const photos = [c.front_photo_url, c.side_photo_url, c.back_photo_url].filter(Boolean) as string[]
   return (
     <View style={[styles.ciCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
       <View style={cd.headerRow}>
@@ -253,6 +318,8 @@ function CheckInRow({ c, onOpenPhoto }: { c: CheckInEntry; onOpenPhoto: (photos:
 }
 
 const styles = StyleSheet.create({
+  goalTrigger: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  goalAdd: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   tooltip: { flexDirection: 'row', gap: 10, borderWidth: 1, padding: 10 },
   tipPhoto: { width: 48, height: 60, borderRadius: 8, borderWidth: 1 },
   tipDate: { fontSize: 13 },

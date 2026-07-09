@@ -105,6 +105,12 @@
       "./plugins/with-privacy-manifest",
       "expo-secure-store",
       [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.REEMPLAZAR_CON_IOS_CLIENT_ID_INVERTIDO"
+        }
+      ],
+      [
         "@sentry/react-native/expo",
         {
           "organization": "eva-zs",

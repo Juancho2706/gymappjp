@@ -10,6 +10,7 @@ import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { signCheckinPhotos } from '../../../lib/api'
 import { markCoachCheckInReviewed } from '../../../lib/coach-client-detail'
+import { isMissingColumnError } from '../../../lib/db-compat'
 import { formatRelativeDate } from '../../../lib/date-utils'
 import { useTheme } from '../../../context/ThemeContext'
 import { TYPE, FONT, textStyle } from '../../../lib/typography'
@@ -29,6 +30,7 @@ interface CheckIn {
   weight: number | null
   energy_level: number | null
   front_photo_url: string | null
+  side_photo_url: string | null
   back_photo_url: string | null
   notes: string | null
   reviewed_at: string | null
@@ -113,24 +115,25 @@ export default function CheckInsScreen() {
 
     const baseCols =
       'id, client_id, date, weight, energy_level, front_photo_url, back_photo_url, notes, clients ( full_name )'
-    // reviewed_at puede faltar en DBs legacy → intento con la columna y hago
-    // fallback sin ella (mismo patrón defensivo que coach-client-detail).
-    const withReviewed = await supabase
-      .from('check_ins')
-      .select(`${baseCols}, reviewed_at`)
-      .in('client_id', clientIds)
-      .order('date', { ascending: false })
-      .limit(40)
-    const rawRows: Record<string, unknown>[] = withReviewed.error
-      ? ((
-          await supabase
-            .from('check_ins')
-            .select(baseCols)
-            .in('client_id', clientIds)
-            .order('date', { ascending: false })
-            .limit(40)
-        ).data ?? [])
-      : (withReviewed.data ?? [])
+    const fetchRows = (extra: string) =>
+      supabase
+        .from('check_ins')
+        .select(`${baseCols}${extra}`)
+        .in('client_id', clientIds)
+        .order('date', { ascending: false })
+        .limit(40)
+    // Tiers defensivos por columnas opcionales, de mayor a menor (una columna faltante
+    // hace 400 al select entero → hay que degradar en orden):
+    //  1) reviewed_at + side_photo_url  (side = 3ra foto, columna futura/opcional que hoy
+    //     no existe en prod → normalmente cae al tier 2, igual que la web que la lee con `*`)
+    //  2) reviewed_at                    (prod actual)
+    //  3) base                           (DB legacy sin reviewed_at)
+    let res = await fetchRows(', reviewed_at, side_photo_url')
+    if (res.error && isMissingColumnError(res.error)) res = await fetchRows(', reviewed_at')
+    if (res.error && isMissingColumnError(res.error)) res = await fetchRows('')
+    // El select con relacion embebida (`clients ( full_name )`) via string dinamico hace que
+    // supabase-js infiera un tipo de error de parseo → se normaliza a filas planas manualmente.
+    const rawRows: Record<string, unknown>[] = (res.data as unknown as Record<string, unknown>[] | null) ?? []
 
     const rows: CheckIn[] = rawRows.map((row) => {
       const c = (row.clients as { full_name: string }[] | { full_name: string } | null) ?? null
@@ -141,6 +144,7 @@ export default function CheckInsScreen() {
         weight: (row.weight as number | null) ?? null,
         energy_level: (row.energy_level as number | null) ?? null,
         front_photo_url: (row.front_photo_url as string | null) ?? null,
+        side_photo_url: (row.side_photo_url as string | null) ?? null,
         back_photo_url: (row.back_photo_url as string | null) ?? null,
         notes: (row.notes as string | null) ?? null,
         reviewed_at: (row.reviewed_at as string | null) ?? null,
@@ -153,7 +157,7 @@ export default function CheckInsScreen() {
     // falla, la foto se omite (queda null) pero el resto del check-in se muestra igual.
     const refsByClient = new Map<string, Set<string>>()
     for (const r of rows) {
-      const refs = [r.front_photo_url, r.back_photo_url].filter(Boolean) as string[]
+      const refs = [r.front_photo_url, r.side_photo_url, r.back_photo_url].filter(Boolean) as string[]
       if (!refs.length) continue
       const set = refsByClient.get(r.client_id) ?? new Set<string>()
       refs.forEach((ref) => set.add(ref))
@@ -171,6 +175,7 @@ export default function CheckInsScreen() {
     const resolved = rows.map((r) => ({
       ...r,
       front_photo_url: r.front_photo_url ? signedByRef.get(r.front_photo_url) ?? null : null,
+      side_photo_url: r.side_photo_url ? signedByRef.get(r.side_photo_url) ?? null : null,
       back_photo_url: r.back_photo_url ? signedByRef.get(r.back_photo_url) ?? null : null,
     }))
 
@@ -217,7 +222,7 @@ export default function CheckInsScreen() {
   }
 
   function renderCheckIn({ item, index }: { item: CheckIn; index: number }) {
-    const photos = [item.front_photo_url, item.back_photo_url].filter(Boolean) as string[]
+    const photos = [item.front_photo_url, item.side_photo_url, item.back_photo_url].filter(Boolean) as string[]
     const reviewed = reviewedIds.has(item.id)
     const pending = pendingId === item.id
 

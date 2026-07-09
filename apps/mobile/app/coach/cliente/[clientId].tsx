@@ -32,6 +32,7 @@ import {
   formatTrainingAgeLabel,
   longestActivityStreak,
 } from '../../../lib/profile-analytics'
+import { exportClientDossierPdf } from '../../../lib/client-dossier-pdf'
 import { getTodayInSantiago } from '../../../lib/date-utils'
 
 const round1 = (n: number) => Math.round(n * 10) / 10
@@ -70,6 +71,7 @@ export default function ClientDetailScreen() {
   const [moreOpen, setMoreOpen] = useState(false)
   const [compact, setCompact] = useState(false)
   const [lightbox, setLightbox] = useState<{ photos: string[]; index: number } | null>(null)
+  const [exportingPdf, setExportingPdf] = useState(false)
   const lastY = useRef(0)
 
   async function load() {
@@ -227,6 +229,28 @@ export default function ClientDetailScreen() {
 
   function onOpenPhoto(photos: string[], index: number) { setLightbox({ photos, index }) }
 
+  // Export dossier PDF (E5-13): arma el dossier oscuro desde el modelo mobile + fotos firmadas
+  // y abre el share sheet nativo. Cierra sobre statusLevel/statusLabel/derived del render actual.
+  async function handleExportPdf() {
+    if (!data || !client || !derived || exportingPdf) return
+    setExportingPdf(true)
+    try {
+      await exportClientDossierPdf(clientId, data, {
+        statusLabel,
+        statusLevel,
+        streak: derived.streak,
+        trainingAge: derived.trainingAge,
+        lastActivityIso: derived.lastActivityIso,
+        planCurrentWeek: derived.planCurrentWeek,
+      })
+    } catch (e) {
+      console.warn('[dossier-pdf] export failed', e)
+      Alert.alert('No se pudo exportar', 'Hubo un problema generando el dossier. Intenta de nuevo.')
+    } finally {
+      setExportingPdf(false)
+    }
+  }
+
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
@@ -247,6 +271,8 @@ export default function ClientDetailScreen() {
           trainingAge={derived.trainingAge}
           chips={heroChips}
           onMore={() => setMoreOpen(true)}
+          onExportPdf={handleExportPdf}
+          exportingPdf={exportingPdf}
         />
 
         {/* 1 — Tab bar (sticky) */}
@@ -257,7 +283,7 @@ export default function ClientDetailScreen() {
           {tab === 'overview' ? (
             <OverviewTab data={data} reload={load} onOpenPhoto={onOpenPhoto} onEditProgram={openBuilder} />
           ) : tab === 'progreso' ? (
-            <ProgresoTab data={data} onOpenPhoto={onOpenPhoto} />
+            <ProgresoTab data={data} onOpenPhoto={onOpenPhoto} reload={load} />
           ) : tab === 'analisis' ? (
             <AnalisisTab data={data} selectedDate={selectedDate} onSelectDate={setSelectedDate} dayDetail={dayDetail} dayLoading={dayLoading} />
           ) : tab === 'plan' ? (

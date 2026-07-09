@@ -6,12 +6,15 @@
  * reconstruccion del dia, ruptura de superseries al mover de seccion y regla de
  * superserie misma-seccion. NO asertar aqui section_template_id: la sincronizacion
  * section<->area es el cambio intencional de F2.
+ *
+ * Migrado desde apps/web/.../hooks/usePlanBuilder.test.ts en E5-01 (los tests viajan con
+ * el reducer al paquete @eva/plan-builder).
  */
 import { describe, it, expect } from 'vitest'
-import { builderReducer } from './usePlanBuilder'
+import { builderReducer } from './reducer'
 import { LEGACY_SECTION_AREA_ID } from '@eva/workout-engine'
-import type { WorkoutArea } from '@/domain/workout/types'
-import type { BuilderBlock, BuilderSection, DayState } from '../types'
+import type { WorkoutArea } from '@eva/workout-engine'
+import type { BuilderBlock, BuilderSection, DayState } from './types'
 
 let uidSeq = 0
 function mkBlock(overrides: Partial<BuilderBlock> & { uid?: string } = {}): BuilderBlock {

@@ -170,3 +170,110 @@ describe('serializeBlockInsert (round-trip cargar -> editar 1 campo -> guardar)'
     expect(payload.rir).toBe('1')
   })
 })
+
+// ── Casos TIPADOS (E5-05/E5-07): el editor mobile ahora hidrata/edita campos polimorficos.
+// Verifican que (a) los campos tipados DEFINIDOS en el bloque ganan sobre `_raw`, (b) `reps`
+// se recomputa como resumen legacy por tipo, y (c) los campos tipados NO tocados siguen
+// viniendo de `_raw` (passthrough intacto).
+
+/** Bloque cardio hidratado (como mapDbBlock): campos tipados DEFINIDOS + `_raw`. */
+function hydratedCardioBlock(): BuilderBlock {
+  const raw = cardioRow()
+  return {
+    uid: 'block-blk-1',
+    exercise_id: raw.exercise_id as string,
+    exercise_name: 'Trote',
+    muscle_group: 'Cardio',
+    sets: 3,
+    reps: '10',
+    section: 'main',
+    section_template_id: 'sect-tmpl-abc',
+    is_override: false,
+    exercise_type: 'cardio',
+    exercise_type_override: 'cardio',
+    side_mode: 'per_side',
+    reps_value: null,
+    reps_unit: null,
+    load_type: 'none',
+    load_unit: null,
+    distance_value: '',
+    distance_unit: 'km',
+    duration_sec: 1800,
+    target_pace_sec_per_km: 330,
+    hr_zone: 2,
+    interval_config: null,
+    is_unilateral: false,
+    extra_targets: ['calves'],
+    warmup_rest_time: '45',
+    _raw: raw,
+  }
+}
+
+describe('serializeBlockInsert — bloques tipados (cardio/movilidad/roller)', () => {
+  it('cardio editado: los campos tipados del bloque ganan y reps es el resumen legacy', () => {
+    const block = hydratedCardioBlock()
+    // El coach edita la duracion a 20 min (1200s).
+    block.duration_sec = 1200
+
+    const payload = serializeBlockInsert(block, 0, 'plan-new')
+
+    // Tipo/area/tipados editados o hidratados ganan sobre `_raw`.
+    expect(payload.exercise_type_override).toBe('cardio')
+    expect(payload.section_template_id).toBe('sect-tmpl-abc')
+    expect(payload.duration_sec).toBe(1200) // editado (no el 1800 de _raw)
+    expect(payload.hr_zone).toBe(2) // hidratado como numero (no el 'z2' de _raw)
+    expect(payload.side_mode).toBe('per_side')
+    // reps = resumen legacy por tipo (cardio: duracion + zona), NO el texto de fuerza.
+    expect(payload.reps).toBe('20min Z2')
+    // distance_value vaciado en el editor ⇒ null (gana sobre el 5 de _raw).
+    expect(payload.distance_value).toBeNull()
+    expect(payload.distance_unit).toBeNull()
+    expect(payload.order_index).toBe(0)
+    expect(payload.plan_id).toBe('plan-new')
+  })
+
+  it('cardio nuevo (sin _raw) escribe columnas tipadas y resumen, sin passthrough', () => {
+    const block: BuilderBlock = {
+      uid: 'block-new-cardio',
+      exercise_id: 'ex-77',
+      exercise_name: 'Bici',
+      muscle_group: 'Cardio',
+      sets: 1,
+      section: 'main',
+      section_template_id: '0000a5ec-0000-0000-0000-000000000010',
+      exercise_type_override: 'cardio',
+      duration_sec: 1200,
+      hr_zone: 3,
+      distance_value: '',
+    }
+    const payload = serializeBlockInsert(block, 4, 'plan-new')
+
+    expect(payload.exercise_type_override).toBe('cardio')
+    expect(payload.section_template_id).toBe('0000a5ec-0000-0000-0000-000000000010')
+    expect(payload.duration_sec).toBe(1200)
+    expect(payload.hr_zone).toBe(3)
+    expect(payload.reps).toBe('20min Z3')
+    // sin _raw ⇒ sin columnas fantasma de identidad
+    expect(payload).not.toHaveProperty('id')
+    expect(payload).not.toHaveProperty('created_at')
+    expect(payload.order_index).toBe(4)
+  })
+
+  it('roller: pasadas → reps resumen "N pasadas"', () => {
+    const block: BuilderBlock = {
+      uid: 'block-roller',
+      exercise_id: 'ex-88',
+      exercise_name: 'Foam roll cuadriceps',
+      muscle_group: 'Piernas',
+      section: 'cooldown',
+      exercise_type_override: 'roller',
+      reps_value: 10,
+      reps_unit: 'passes',
+    }
+    const payload = serializeBlockInsert(block, 0, 'plan-new')
+    expect(payload.exercise_type_override).toBe('roller')
+    expect(payload.reps_value).toBe(10)
+    expect(payload.reps_unit).toBe('passes')
+    expect(payload.reps).toBe('10 pasadas')
+  })
+})

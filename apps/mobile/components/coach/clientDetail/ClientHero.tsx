@@ -1,11 +1,10 @@
 import type { ReactNode } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { MotiView } from 'moti'
 import { Activity, Calendar, Download, Flame, Minus, MoreVertical, Target, TrendingDown, TrendingUp } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Badge, Card } from '../../../components'
 import { GlowBorderCard } from '../../../components/GlowBorderCard'
-import { Popover, PopoverDescription, PopoverTitle } from '../../../components/Popover'
 import { HapticPressable } from '../../../components/HapticPressable'
 import { FONT } from '../../../lib/typography'
 
@@ -61,6 +60,10 @@ export interface ClientHeroProps {
   trainingAge: string
   chips: HeroChips
   onMore: () => void
+  /** Genera y comparte el dossier PDF del alumno (E5-13). */
+  onExportPdf?: () => void
+  /** Muestra spinner en el botón mientras se genera el dossier. */
+  exportingPdf?: boolean
 }
 
 function initialsOf(name: string): string {
@@ -88,6 +91,8 @@ export function ClientHero({
   trainingAge,
   chips,
   onMore,
+  onExportPdf,
+  exportingPdf = false,
 }: ClientHeroProps) {
   const { theme, resolvedScheme } = useTheme()
   const iconStrong = STRONG_ICON[resolvedScheme]
@@ -101,19 +106,25 @@ export function ClientHero({
           <Text numberOfLines={2} className="text-strong" style={styles.name}>{name}</Text>
         </View>
         <View style={styles.topActions}>
-          {/* Export PDF — solo-visual (dossier = E5). Tap abre tooltip "Proximamente". */}
-          <Popover
-            side="bottom"
-            width={220}
-            trigger={
-              <View className="rounded-control border border-default bg-surface-card" style={[styles.iconBtn, { opacity: 0.55 }]} testID="ficha-export-pdf">
+          {/* Export PDF — genera y comparte el dossier del alumno (E5-13, expo-print). */}
+          {onExportPdf ? (
+            <HapticPressable
+              onPress={exportingPdf ? undefined : onExportPdf}
+              disabled={exportingPdf}
+              accessibilityRole="button"
+              accessibilityLabel="Exportar dossier PDF"
+              accessibilityState={{ disabled: exportingPdf, busy: exportingPdf }}
+              testID="ficha-export-pdf"
+              className="rounded-control border border-default bg-surface-card"
+              style={[styles.iconBtn, exportingPdf ? { opacity: 0.6 } : null]}
+            >
+              {exportingPdf ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
                 <Download size={18} color={iconStrong} strokeWidth={2} />
-              </View>
-            }
-          >
-            <PopoverTitle>Exportar PDF</PopoverTitle>
-            <PopoverDescription>Próximamente. El dossier del alumno llega en una próxima versión.</PopoverDescription>
-          </Popover>
+              )}
+            </HapticPressable>
+          ) : null}
           <HapticPressable onPress={onMore} accessibilityRole="button" accessibilityLabel="Más opciones" testID="ficha-more" className="rounded-control border border-default bg-surface-card" style={styles.iconBtn}>
             <MoreVertical size={18} color={iconStrong} strokeWidth={2} />
           </HapticPressable>

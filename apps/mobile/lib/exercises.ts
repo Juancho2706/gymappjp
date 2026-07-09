@@ -2,7 +2,6 @@ import * as ImageManipulator from 'expo-image-manipulator'
 import { decode } from 'base64-arraybuffer'
 import { supabase } from './supabase'
 import { selectWithFallback } from './db-compat'
-import { getCoachProfile } from './coach'
 import { getCoachOrgContext } from './org'
 
 // Coach exercise library. Reads via Supabase (RLS: system exercises +
@@ -50,6 +49,8 @@ export interface ExerciseRow {
   id: string
   name: string
   muscle_group: string
+  /** Tipo polimórfico (strength/cardio/mobility/roller). Default 'strength' en DB. */
+  exercise_type: string | null
   equipment: string | null
   difficulty: string | null
   body_part: string | null
@@ -58,6 +59,9 @@ export interface ExerciseRow {
   video_url: string | null
   gif_url: string | null
   image_url: string | null
+  /** Recorte del video de YouTube (segundos). El player loopea [start, end]. */
+  video_start_time: number | null
+  video_end_time: number | null
   coach_id: string | null
   org_id: string | null
   /** true when owned by the current coach (custom), false for system catalog. */
@@ -67,6 +71,7 @@ export interface ExerciseRow {
 export interface ExerciseInput {
   name: string
   muscle_group: string
+  exercise_type?: string | null
   equipment?: string | null
   difficulty?: string | null
   body_part?: string | null
@@ -75,6 +80,8 @@ export interface ExerciseInput {
   video_url?: string | null
   gif_url?: string | null
   image_url?: string | null
+  video_start_time?: number | null
+  video_end_time?: number | null
 }
 
 /** Extrae el ID (11 chars) de una URL de YouTube (watch, youtu.be, embed, shorts). */
@@ -143,14 +150,41 @@ export function filterExercises<T extends {
 }
 
 const SELECT_COLUMNS =
-  'id, name, muscle_group, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, coach_id, org_id'
+  'id, name, muscle_group, exercise_type, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, video_start_time, video_end_time, coach_id, org_id'
 // Sin columnas enterprise (org_id) — para prod standalone que aún no las tiene.
 const SELECT_COLUMNS_MIN =
-  'id, name, muscle_group, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, coach_id'
+  'id, name, muscle_group, exercise_type, equipment, difficulty, body_part, secondary_muscles, instructions, video_url, gif_url, image_url, video_start_time, video_end_time, coach_id'
 
-/** Free tier cannot create custom exercises (mirrors web getTierCapabilities). */
-export function canCreateCustomExercises(tier: string | null | undefined): boolean {
-  return (tier ?? 'free') !== 'free'
+/**
+ * ¿El workspace activo permite crear/editar ejercicios? (E5-10, ruling D1).
+ *
+ * Regla WORKSPACE exacta de la web (`coach/exercises/page.tsx`):
+ *   canCreate = activeTeam ? true : (!isOrgUser || isOrgAdmin)
+ * — en un TEAM el pool manda (cualquier miembro crea); en ENTERPRISE un coach
+ * (role='coach') NO crea, pero org_admin/org_owner sí; el coach STANDALONE (sin org)
+ * siempre crea. NO se gatea por tier (se abandona el antiguo gate por plan).
+ */
+export function canCreateExercises(ctx: {
+  isOrgUser: boolean
+  isOrgAdmin: boolean
+  isTeamMember?: boolean
+}): boolean {
+  if (ctx.isTeamMember) return true
+  return !ctx.isOrgUser || ctx.isOrgAdmin
+}
+
+/**
+ * Resuelve `canCreateExercises` desde el contexto de organización del coach (JWT).
+ * El lado coach de mobile no tiene todavía workspace de TEAM activo → isTeamMember=false;
+ * un coach standalone o un org_admin/owner puede crear, un coach de org no.
+ */
+export async function resolveCanCreateExercises(): Promise<boolean> {
+  const ctx = await getCoachOrgContext().catch(() => null)
+  if (!ctx) return true // sin contexto → standalone, como la web
+  return canCreateExercises({
+    isOrgUser: !!ctx.orgId,
+    isOrgAdmin: ctx.orgRole === 'org_owner' || ctx.orgRole === 'org_admin',
+  })
 }
 
 async function currentCoachId(): Promise<string | null> {
@@ -185,7 +219,23 @@ function validateExerciseMedia(input: ExerciseInput): string | null {
   if (input.video_url && !youtubeId(input.video_url)) return 'El video debe ser un enlace de YouTube válido.'
   if (input.gif_url && !/^https?:\/\//i.test(input.gif_url)) return 'La URL del GIF debe empezar con http.'
   if (input.image_url && !/^https?:\/\//i.test(input.image_url)) return 'La URL de la imagen debe empezar con http.'
+  const s = input.video_start_time
+  const e = input.video_end_time
+  if (s != null && e != null && e <= s) return 'El tiempo de fin del video debe ser mayor que el de inicio.'
   return null
+}
+
+/**
+ * E5-09: el recorte start/end solo aplica cuando hay un video de YouTube válido
+ * (1:1 con la web — con GIF/imagen los tiempos van NULL). Devuelve segundos o null.
+ */
+function videoTrimFor(input: ExerciseInput): { start: number | null; end: number | null } {
+  const isYt = !!input.video_url && !!youtubeId(input.video_url)
+  if (!isYt) return { start: null, end: null }
+  return {
+    start: input.video_start_time ?? null,
+    end: input.video_end_time ?? null,
+  }
 }
 
 export async function createExercise(input: ExerciseInput): Promise<{ ok: boolean; id?: string; error?: string }> {
@@ -194,10 +244,11 @@ export async function createExercise(input: ExerciseInput): Promise<{ ok: boolea
   const mediaErr = validateExerciseMedia(input)
   if (mediaErr) return { ok: false, error: mediaErr }
 
-  // E-F7: enforce tier en la mutación (no solo en UI). Free no crea ejercicios propios.
-  const profile = await getCoachProfile()
-  if (!canCreateCustomExercises(profile?.subscriptionTier)) {
-    return { ok: false, error: 'Tu plan no permite crear ejercicios propios. Actualizá a Starter o superior.' }
+  // E5-10 (ruling D1): gate por WORKSPACE, no por tier. Un coach de org (role='coach')
+  // no puede crear; standalone / org_admin / org_owner sí. Enforcement server-side
+  // (no solo UI) — RLS es el techo real, esto espeja el gate de la web.
+  if (!(await resolveCanCreateExercises())) {
+    return { ok: false, error: 'Tu rol en la organización no permite crear ejercicios. Pedí acceso a un administrador.' }
   }
 
   const name = input.name.trim()
@@ -212,6 +263,7 @@ export async function createExercise(input: ExerciseInput): Promise<{ ok: boolea
     .ilike('name', name)
   if ((count ?? 0) > 0) return { ok: false, error: 'Ya existe un ejercicio con ese nombre.' }
 
+  const trim = videoTrimFor(input)
   const { data, error } = await supabase
     .from('exercises')
     .insert({
@@ -219,6 +271,7 @@ export async function createExercise(input: ExerciseInput): Promise<{ ok: boolea
       org_id: null,
       name,
       muscle_group: input.muscle_group,
+      exercise_type: input.exercise_type ?? 'strength',
       equipment: input.equipment ?? null,
       difficulty: input.difficulty ?? null,
       body_part: input.body_part ?? null,
@@ -227,6 +280,8 @@ export async function createExercise(input: ExerciseInput): Promise<{ ok: boolea
       video_url: input.video_url ?? null,
       gif_url: input.gif_url ?? null,
       image_url: input.image_url ?? null,
+      video_start_time: trim.start,
+      video_end_time: trim.end,
       source: 'coach',
     })
     .select('id')
@@ -256,11 +311,13 @@ export async function updateExercise(
     .neq('id', id)
   if ((count ?? 0) > 0) return { ok: false, error: 'Ya existe un ejercicio con ese nombre.' }
 
+  const trim = videoTrimFor(input)
   const { error } = await supabase
     .from('exercises')
     .update({
       name,
       muscle_group: input.muscle_group,
+      exercise_type: input.exercise_type ?? 'strength',
       equipment: input.equipment ?? null,
       difficulty: input.difficulty ?? null,
       body_part: input.body_part ?? null,
@@ -269,6 +326,8 @@ export async function updateExercise(
       video_url: input.video_url ?? null,
       gif_url: input.gif_url ?? null,
       image_url: input.image_url ?? null,
+      video_start_time: trim.start,
+      video_end_time: trim.end,
     })
     .eq('id', id)
     .eq('coach_id', coachId)
@@ -306,6 +365,7 @@ export async function cloneExercise(row: ExerciseRow): Promise<{ ok: boolean; id
   return createExercise({
     name: `${row.name} (copia)`,
     muscle_group: row.muscle_group ?? '',
+    exercise_type: row.exercise_type ?? 'strength',
     equipment: row.equipment ?? null,
     difficulty: (row.difficulty as ExerciseInput['difficulty']) ?? null,
     body_part: row.body_part ?? null,
@@ -313,6 +373,8 @@ export async function cloneExercise(row: ExerciseRow): Promise<{ ok: boolean; id
     instructions: row.instructions ?? [],
     video_url: row.video_url ?? null,
     gif_url: row.gif_url ?? null,
+    video_start_time: row.video_start_time ?? null,
+    video_end_time: row.video_end_time ?? null,
   })
 }
 

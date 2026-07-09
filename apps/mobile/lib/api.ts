@@ -88,6 +88,31 @@ export function registerCoachFree(payload: RegisterCoachFreePayload) {
   })
 }
 
+// E5-23: completa el intake OAuth del coach (Google) que ya está autenticado pero sin fila `coaches`.
+// Espejo mobile de la rama FREE de `coach/onboarding/complete` (web). Authenticated: el server crea el
+// perfil con service-role sobre `auth.uid()` del bearer. Free-tier — planes pagos se activan en la web.
+export interface CompleteCoachOnboardingPayload {
+  fullName: string
+  brandName: string
+  acceptLegal: true
+  acceptHealthData: true
+  acceptMarketing?: boolean
+}
+
+export interface CompleteCoachOnboardingResponse {
+  ok: true
+  slug: string
+  alreadyOnboarded?: boolean
+}
+
+export function completeCoachOnboarding(payload: CompleteCoachOnboardingPayload) {
+  return apiFetch<CompleteCoachOnboardingResponse>('/api/mobile/auth/complete-coach-onboarding', {
+    method: 'POST',
+    authenticated: true,
+    body: payload,
+  })
+}
+
 // P2: firmar (signed URLs) las fotos de check-in de un alumno. El bucket `checkins` es
 // privado y el coach no tiene policy de storage → la firma se hace server-side. `refs` acepta
 // tanto paths nuevos como URLs públicas legacy (el route normaliza con toCheckinPath).

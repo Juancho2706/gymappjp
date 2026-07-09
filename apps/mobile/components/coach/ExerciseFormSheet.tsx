@@ -4,8 +4,9 @@ import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
 import { ImagePlus, Trash2, X } from 'lucide-react-native'
+import { EXERCISE_TYPE_OPTIONS } from '@eva/workout-engine'
 import { useTheme } from '../../context/ThemeContext'
-import { Button, Input, SegmentedTabs, Textarea } from '../index'
+import { Button, Input, SegmentedTabs, Textarea, VideoPlayer } from '../index'
 import {
   DIFFICULTY_OPTIONS,
   EQUIPMENT_OPTIONS,
@@ -14,8 +15,32 @@ import {
   deleteExercise,
   updateExercise,
   uploadExerciseImage,
+  youtubeId,
   type ExerciseRow,
 } from '../../lib/exercises'
+
+/** Segundos → "m:ss" para los inputs de recorte (vacío si null). 1:1 con la web. */
+function secondsToMmss(sec: number | null | undefined): string {
+  if (sec == null) return ''
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+/** "m:ss" o segundos sueltos → segundos (null si vacío/inválido). 1:1 con la web. */
+function mmssToSeconds(str: string): number | null {
+  const t = str.trim()
+  if (!t) return null
+  if (t.includes(':')) {
+    const [m, s] = t.split(':')
+    const mi = parseInt(m, 10)
+    const se = parseInt(s, 10)
+    if (isNaN(mi) || isNaN(se)) return null
+    return mi * 60 + se
+  }
+  const n = parseInt(t, 10)
+  return isNaN(n) ? null : n
+}
 
 interface Props {
   /** Exercise being edited; null = create mode. */
@@ -33,11 +58,14 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
 
   const [name, setName] = useState('')
   const [muscle, setMuscle] = useState('')
+  const [exerciseType, setExerciseType] = useState('strength')
   const [equipment, setEquipment] = useState<string | null>(null)
   const [difficulty, setDifficulty] = useState<string | null>(null)
   const [secondary, setSecondary] = useState('')
   const [instructions, setInstructions] = useState('')
   const [videoUrl, setVideoUrl] = useState('')
+  const [videoStart, setVideoStart] = useState('')
+  const [videoEnd, setVideoEnd] = useState('')
   const [gifUrl, setGifUrl] = useState('')
   const [imageUrl, setImageUrl] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -64,11 +92,14 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
     setSaving(false)
     setName(exercise?.name ?? '')
     setMuscle(exercise?.muscle_group ?? '')
+    setExerciseType(exercise?.exercise_type ?? 'strength')
     setEquipment(exercise?.equipment ?? null)
     setDifficulty(exercise?.difficulty ?? null)
     setSecondary(exercise?.secondary_muscles?.join(', ') ?? '')
     setInstructions(exercise?.instructions?.join('\n') ?? '')
     setVideoUrl(exercise?.video_url ?? '')
+    setVideoStart(secondsToMmss(exercise?.video_start_time))
+    setVideoEnd(secondsToMmss(exercise?.video_end_time))
     setGifUrl(exercise?.gif_url ?? '')
     setImageUrl(exercise?.image_url ?? '')
   }, [exercise])
@@ -77,10 +108,16 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
     setError(null)
     if (name.trim().length < 2) { setError('El nombre debe tener al menos 2 caracteres.'); return }
     if (!muscle) { setError('Seleccioná un grupo muscular.'); return }
+    const startSec = mmssToSeconds(videoStart)
+    const endSec = mmssToSeconds(videoEnd)
+    if (startSec != null && endSec != null && endSec <= startSec) {
+      setError('El tiempo de fin del video debe ser mayor que el de inicio.'); return
+    }
     setSaving(true)
     const input = {
       name: name.trim(),
       muscle_group: muscle,
+      exercise_type: exerciseType,
       equipment,
       difficulty,
       secondary_muscles: secondary.split(',').map((s) => s.trim()).filter(Boolean),
@@ -88,6 +125,8 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
       video_url: videoUrl.trim() || null,
       gif_url: gifUrl.trim() || null,
       image_url: imageUrl.trim() || null,
+      video_start_time: startSec,
+      video_end_time: endSec,
     }
     const res = editing ? await updateExercise(exercise!.id, input) : await createExercise(input)
     setSaving(false)
@@ -135,6 +174,27 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
         <Label>Grupo muscular *</Label>
         <Chips options={MUSCLE_GROUPS as readonly string[]} value={muscle} onSelect={setMuscle} />
 
+        {/* E5-08: tipo de ejercicio polimórfico (define los ejes del builder/alumno). */}
+        <Label>Tipo de ejercicio</Label>
+        <View style={styles.chips}>
+          {EXERCISE_TYPE_OPTIONS.map((o) => {
+            const active = o.value === exerciseType
+            return (
+              <TouchableOpacity
+                key={o.value}
+                testID={`exercise-type-${o.value}`}
+                onPress={() => setExerciseType(o.value)}
+                activeOpacity={0.8}
+                className={`rounded-pill ${active ? 'bg-sport-500' : 'bg-surface-card border border-default'}`}
+                style={styles.chip}
+              >
+                <Text className={`${active ? 'text-on-sport' : 'text-body'} font-sans-bold`} style={styles.chipText}>{o.label}</Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+        <Text className="text-muted font-sans" style={styles.hint}>Define qué campos muestra el builder y la app del alumno.</Text>
+
         <Label>Equipo</Label>
         <Chips options={EQUIPMENT_OPTIONS as readonly string[]} value={equipment} onSelect={(v) => setEquipment(v === equipment ? null : v)} />
 
@@ -148,6 +208,29 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
         <Input label="Músculos secundarios" value={secondary} onChangeText={setSecondary} placeholder="Tríceps, Deltoides (separados por coma)" />
 
         <Input label="Video (YouTube)" value={videoUrl} onChangeText={setVideoUrl} placeholder="https://youtu.be/..." autoCapitalize="none" keyboardType="url" />
+
+        {/* E5-09: recorte start/end del video (solo YouTube válido). El player loopea [start,end]. */}
+        {youtubeId(videoUrl) ? (
+          <>
+            <View style={styles.trimRow}>
+              <View style={styles.trimCol}>
+                <Input label="Empieza en (m:ss)" value={videoStart} onChangeText={setVideoStart} placeholder="0:20" keyboardType="numbers-and-punctuation" />
+              </View>
+              <View style={styles.trimCol}>
+                <Input label="Termina en (opcional)" value={videoEnd} onChangeText={setVideoEnd} placeholder="1:30" keyboardType="numbers-and-punctuation" />
+              </View>
+            </View>
+            <Text className="text-muted font-sans" style={styles.hint}>El video loopea ese tramo (salta intro/charla). Vacío = video completo.</Text>
+            <VideoPlayer
+              url={videoUrl}
+              start={mmssToSeconds(videoStart)}
+              end={mmssToSeconds(videoEnd)}
+              title={name || 'Preview del video'}
+              style={styles.trimPreview}
+            />
+          </>
+        ) : null}
+
         <Input label="GIF (URL)" value={gifUrl} onChangeText={setGifUrl} placeholder="https://..." autoCapitalize="none" keyboardType="url" />
 
         {/* E-F1: imagen desde el device */}
@@ -241,6 +324,10 @@ const styles = StyleSheet.create({
   errorBox: { paddingHorizontal: 12, paddingVertical: 10 },
   errorText: { fontSize: 13 },
   label: { fontSize: 13, marginTop: 4 },
+  hint: { fontSize: 12, marginTop: -4 },
+  trimRow: { flexDirection: 'row', gap: 12 },
+  trimCol: { flex: 1 },
+  trimPreview: { marginTop: 4 },
   imgRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   imgThumb: { width: 64, height: 64, borderRadius: 14, borderWidth: 1 },
   imgClear: { position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10 },

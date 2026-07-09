@@ -41,6 +41,11 @@ import { usePlanBuilder } from '../../lib/plan-builder/reducer'
 import { buildDaySkeleton } from '../../lib/plan-builder/skeleton'
 import { serializeBlockInsert } from '../../lib/plan-builder/serialize'
 import type { BuilderBlock, BuilderSection, DayState, DurationType, ProgramStructureType } from '../../lib/plan-builder/types'
+import { listBuilderAreas } from '../../lib/workout-areas'
+import type { WorkoutArea } from '@eva/workout-engine'
+import { classicSlugForAreaId, effectiveAreaKey, effectiveExerciseType, LEGACY_SECTION_AREA_ID, legacyBucketFor, orderedAreaIds, sanitizeSupersets } from '@eva/workout-engine'
+import { buildMobileAreaVMs, type MobileAreaVM } from '../../lib/builder-area-vm'
+import { useEntitlements } from '../../lib/entitlements'
 
 // DS token constants (imperativos: RN shadowColor / gradiente literal no expresables por className).
 const WARNING_500 = '#F5A524' // --color-warning-500 (badge SIN GUARDAR + tuerca Configurar + ping)
@@ -50,21 +55,23 @@ const SIMPLE_GLOW = '#8B5CF6' // sombra del FAB Modo Normal (violeta de la super
 
 const DAY_SHORT = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const SLIDE = Math.round(Dimensions.get('window').width * 0.22) // desplazamiento del slide de día
-const SECTION_ORDER: BuilderSection[] = ['warmup', 'main', 'cooldown']
-const SECTION_LABEL: Record<BuilderSection, string> = { warmup: 'Calentamiento', main: 'Principal', cooldown: 'Enfriamiento' }
 
-// Una superserie no puede cruzar secciones → limpiar grupos que quedaron repartidos.
-function clearCrossSectionSupersets(blocks: BuilderBlock[]): BuilderBlock[] {
-  const groups = new Map<string, Set<BuilderSection>>()
-  for (const b of blocks) {
-    if (!b.superset_group) continue
-    const secs = groups.get(b.superset_group) ?? new Set<BuilderSection>()
-    secs.add(b.section ?? 'main')
-    groups.set(b.superset_group, secs)
+// Completitud POR TIPO (E5-07, espejo de WeeklyPlanBuilder.blockIncomplete de web): strength
+// exige sets+reps; cardio duración/distancia/intervalos; movilidad sets + (duración/reps);
+// roller duración/reps. Evita persistir bloques tipados sin prescripción mínima.
+function blockIncomplete(b: BuilderBlock): boolean {
+  const type = effectiveExerciseType(b, { exercise_type: b.exercise_type })
+  if (type === 'cardio') {
+    const dist = parseFloat((b.distance_value || '').replace(',', '.'))
+    return !((b.duration_sec ?? 0) > 0 || (Number.isFinite(dist) && dist > 0) || !!b.interval_config)
   }
-  const bad = new Set([...groups].filter(([, secs]) => secs.size > 1).map(([g]) => g))
-  if (!bad.size) return blocks
-  return blocks.map((b) => (b.superset_group && bad.has(b.superset_group) ? { ...b, superset_group: null } : b))
+  if (type === 'mobility') {
+    return !b.sets || b.sets < 1 || !((b.duration_sec ?? 0) > 0 || (b.reps_value ?? 0) > 0 || !!b.reps?.trim())
+  }
+  if (type === 'roller') {
+    return !((b.duration_sec ?? 0) > 0 || (b.reps_value ?? 0) > 0 || !!b.reps?.trim())
+  }
+  return !b.sets || b.sets < 1 || !b.reps?.trim()
 }
 
 function emptyDays(): DayState[] {
@@ -75,7 +82,7 @@ function dayLabel(structure: ProgramStructureType, d: DayState): string {
 }
 
 // PostgREST puede devolver la FK `exercises` como objeto o como array de un elemento.
-function embeddedExerciseRow(raw: any): { name?: string; muscle_group?: string; gif_url?: string; video_url?: string } | null {
+function embeddedExerciseRow(raw: any): { name?: string; muscle_group?: string; gif_url?: string; video_url?: string; exercise_type?: string } | null {
   if (raw == null) return null
   if (Array.isArray(raw)) return raw[0] && typeof raw[0] === 'object' ? raw[0] : null
   return typeof raw === 'object' ? raw : null
@@ -102,9 +109,32 @@ function mapDbBlock(b: any): BuilderBlock {
     progression_value: b.progression_value ?? null,
     progression_mode: (b.progression_mode as BuilderBlock['progression_mode']) ?? null,
     section: (b.section as BuilderBlock['section']) ?? 'main',
+    section_template_id: b.section_template_id ?? null,
     is_override: b.is_override ?? false,
-    // Passthrough: conservar la fila DB completa (incl. section_template_id + campos
-    // polimorficos) para no destruirlos al guardar. Ver lib/plan-builder/serialize.ts.
+    // Polimorfico (E5-05): hidratar los campos tipados para que el editor los vea y el
+    // guardado los persista via serialize.ts. `exercise_type` viene del catalogo (embed);
+    // el resto son columnas de workout_blocks. distance/load/warmup_rest = strings (input).
+    exercise_type: (ex?.exercise_type as BuilderBlock['exercise_type']) ?? (b.exercise_type as BuilderBlock['exercise_type']) ?? null,
+    exercise_type_override: (b.exercise_type_override as BuilderBlock['exercise_type_override']) ?? null,
+    side_mode: (b.side_mode as BuilderBlock['side_mode']) ?? null,
+    reps_value: b.reps_value ?? null,
+    reps_unit: (b.reps_unit as BuilderBlock['reps_unit']) ?? null,
+    load_type: (b.load_type as BuilderBlock['load_type']) ?? null,
+    load_value: b.load_value != null ? String(b.load_value) : undefined,
+    load_unit: (b.load_unit as BuilderBlock['load_unit']) ?? null,
+    distance_value: b.distance_value != null ? String(b.distance_value) : undefined,
+    distance_unit: (b.distance_unit as BuilderBlock['distance_unit']) ?? null,
+    duration_sec: b.duration_sec ?? null,
+    target_pace_sec_per_km: b.target_pace_sec_per_km ?? null,
+    hr_zone: b.hr_zone ?? null,
+    instructions: b.instructions ?? undefined,
+    interval_config: b.interval_config ?? null,
+    is_unilateral: b.is_unilateral ?? null,
+    extra_targets: b.extra_targets ?? null,
+    warmup_rest_time: b.warmup_rest_time != null ? String(b.warmup_rest_time) : undefined,
+    thumbnail_url: b.thumbnail_url ?? undefined,
+    // Passthrough: conservar la fila DB completa (incl. columnas futuras que el editor no
+    // conoce) para no destruirlas al guardar. Ver lib/plan-builder/serialize.ts.
     _raw: b && typeof b === 'object' ? (b as Record<string, unknown>) : undefined,
   }
 }
@@ -114,7 +144,7 @@ function mapDbBlock(b: any): BuilderBlock {
 // polimorficos), necesarias para el passthrough. `*` es resiliente: en una prod
 // standalone sin esas columnas simplemente no las devuelve (no falla).
 const PROGRAM_SELECT =
-  'id, name, program_structure_type, duration_type, weeks_to_repeat, cycle_length, ab_mode, workout_plans ( id, title, day_of_week, week_variant, workout_blocks ( *, exercises ( name, muscle_group, gif_url, video_url ) ) )'
+  'id, name, program_structure_type, duration_type, weeks_to_repeat, cycle_length, ab_mode, workout_plans ( id, title, day_of_week, week_variant, workout_blocks ( *, exercises ( name, muscle_group, gif_url, video_url, exercise_type ) ) )'
 // Rico = base + meta extra (notas/fecha/phases). Si la columna falta, selectWithFallback usa el base.
 const PROGRAM_SELECT_RICH = PROGRAM_SELECT.replace(
   'ab_mode,',
@@ -247,6 +277,10 @@ export default function ProgramBuilderScreen() {
   // Catálogo completo precargado (1:1 web): alimenta el sheet de añadir + enriquece media de bloques.
   const [catalog, setCatalog] = useState<ExerciseRow[]>([])
   const catById = useMemo(() => new Map(catalog.map((e) => [e.id, e])), [catalog])
+  // E5-03: areas del builder (workout_section_templates) — mismo scope que web. Solo el
+  // DATO + tipos disponibles para el reducer (superserie/orden por area); la UI de areas
+  // la agrega otro worker. Vacio ⇒ el reducer cae al orden clasico W→M→C.
+  const [areas, setAreas] = useState<WorkoutArea[]>([])
 
   // Program meta
   const [name, setName] = useState('Programa principal')
@@ -289,10 +323,29 @@ export default function ProgramBuilderScreen() {
   const [editingUid, setEditingUid] = useState<string | null>(null)
   const [copyOpen, setCopyOpen] = useState(false)
   const [durationDays, setDurationDays] = useState<number | null>(null) // para duración async / días corridos
-  const [pendingSection, setPendingSection] = useState<BuilderSection>('main') // sección destino al agregar ejercicio
+  const [pendingAreaId, setPendingAreaId] = useState<string>(LEGACY_SECTION_AREA_ID.main) // área destino al agregar ejercicio
 
-  const builder = usePlanBuilder(initial)
-  const { days, addExercise, removeBlock, updateBlock, setDayBlocks, transferBlock, updateDayTitle, toggleRestDay, copyDay, toggleSuperset, setBlockSection, toggleBlockOverride, undo, redo, canUndo, canRedo, setDays } = builder
+  const builder = usePlanBuilder(initial, areas)
+  const { days, addExercise, removeBlock, updateBlock, setDayBlocks, transferBlock, updateDayTitle, toggleRestDay, copyDay, toggleSuperset, setBlockArea, toggleBlockOverride, undo, redo, canUndo, canRedo, setDays } = builder
+
+  // Entitlements: el editor de bloque gatea el tipo `cardio` por hasModule('cardio') (paridad
+  // web: sin el modulo, cardio no es seleccionable). Visibilidad only; el gate de dinero vive
+  // en el server. Fail-open (0 modulos) hasta la primera resolucion.
+  const { hasModule } = useEntitlements()
+  const cardioEnabled = hasModule('cardio')
+
+  // Areas dinamicas (E5-04): VM con color/label por area + set de ids conocidos para resolver
+  // la clave efectiva de cada bloque (section_template_id o area system del section legacy).
+  const areaVMs = useMemo<MobileAreaVM[]>(() => buildMobileAreaVMs(areas), [areas])
+  const knownAreaIds = useMemo(() => new Set(orderedAreaIds(areas)), [areas])
+  const areaKeyOf = useCallback((b: BuilderBlock) => effectiveAreaKey(b, knownAreaIds), [knownAreaIds])
+  // Bucket legacy (warmup/main/cooldown) que le corresponde a un area (para setear `section`
+  // al agregar un ejercicio a esa area).
+  const sectionForArea = useCallback((areaId: string): BuilderSection => {
+    const a = areas.find((x) => x.id === areaId)
+    if (a) return legacyBucketFor(a)
+    return classicSlugForAreaId(areaId) ?? 'main'
+  }, [areas])
 
   const liveDays = useRef(days)
   useEffect(() => { liveDays.current = days }, [days])
@@ -317,6 +370,23 @@ export default function ProgramBuilderScreen() {
   // Precarga del catálogo de ejercicios (una vez). Resiliente: si falla, queda vacío.
   useEffect(() => {
     listCoachExercises().then(({ exercises }) => setCatalog(exercises)).catch(() => {})
+  }, [])
+
+  // E5-03: precarga de areas del builder segun el workspace del coach (standalone ⇒ system
+  // + propias; enterprise ⇒ solo system). Mismo query que web. Resiliente: [] ante error.
+  useEffect(() => {
+    (async () => {
+      try {
+        const [coach, { orgId }] = await Promise.all([
+          getCoachProfile(),
+          getCoachOrgContext().catch(() => ({ orgId: null as string | null })),
+        ])
+        const scope = orgId
+          ? { coachId: null, teamId: null }
+          : { coachId: coach?.id ?? null, teamId: null }
+        setAreas(await listBuilderAreas(scope))
+      } catch { /* degradar a orden clasico */ }
+    })()
   }, [])
 
   function variantDays(plans: any[], v: 'A' | 'B', structure: ProgramStructureType, len: number): DayState[] {
@@ -477,102 +547,118 @@ export default function ProgramBuilderScreen() {
     )
   }
 
-  // P8: bloques de una sección (orden estable). El drag SOLO reordena dentro de su sección;
-  // el cambio de sección se hace con los botones CAL/PRI/ENF (setBlockSection) → invariante imposible de romper.
-  const blocksInSection = useCallback(
-    (section: BuilderSection) => (currentDay?.blocks ?? []).filter((b) => (b.section ?? 'main') === section),
-    [currentDay],
-  )
+  // E5-04: color efectivo de un area VM (main = marca / theme.primary; resto = color fijo).
+  const areaColor = useCallback((vm: MobileAreaVM) => vm.color ?? theme.primary, [theme.primary])
 
-  // Al soltar dentro de una sección: recomponer el día preservando el orden del resto de secciones.
-  function reorderSection(section: BuilderSection, reordered: BuilderBlock[]) {
+  // Bloques del dia agrupados por AREA en orden de render (sort_order). Cada grupo es la
+  // fuente de la lista draggable de esa area; el drag SOLO reordena dentro del area (mover
+  // de area es via el selector del bloque → setBlockArea, persiste section_template_id).
+  const areaGroups = useMemo(() => {
+    const blocks = currentDay?.blocks ?? []
+    return areaVMs
+      .map((vm) => ({ vm, blocks: blocks.filter((b) => areaKeyOf(b) === vm.id) }))
+      .filter((g) => g.blocks.length > 0)
+  }, [currentDay, areaVMs, areaKeyOf])
+
+  // Al soltar dentro de un area: recomponer el dia preservando el orden del resto de areas y
+  // renormalizar superseries (sanitizeSupersets, misma resolucion de area que el reducer).
+  function reorderArea(areaId: string, reordered: BuilderBlock[]) {
     if (!currentDay) return
-    const rebuilt: BuilderBlock[] = []
-    for (const sec of SECTION_ORDER) {
-      rebuilt.push(...(sec === section ? reordered : (currentDay.blocks ?? []).filter((b) => (b.section ?? 'main') === sec)))
+    const groups = new Map<string, BuilderBlock[]>()
+    for (const b of currentDay.blocks) {
+      const key = areaKeyOf(b)
+      const g = groups.get(key)
+      if (g) g.push(b); else groups.set(key, [b])
     }
-    setDayBlocks(currentDay.id, clearCrossSectionSupersets(rebuilt))
+    groups.set(areaId, reordered)
+    const order = orderedAreaIds(areas)
+    const rebuilt: BuilderBlock[] = []
+    const used = new Set<string>()
+    for (const id of order) { const g = groups.get(id); if (g) { rebuilt.push(...g); used.add(id) } }
+    for (const [id, g] of groups) if (!used.has(id)) rebuilt.push(...g)
+    setDayBlocks(currentDay.id, sanitizeSupersets(rebuilt, areaKeyOf))
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
   }
 
-  function addToSection(section: BuilderSection) {
-    setPendingSection(section)
+  function addToArea(areaId: string) {
+    setPendingAreaId(areaId)
     searchRef.current?.snapToIndex(2)
   }
 
-  // P8: render de un bloque dentro de su sección (incluye el conector de superserie).
-  function renderSectionBlock({ item, drag, isActive }: { item: BuilderBlock; drag: () => void; isActive: boolean }) {
-    const block = item
-    const section = block.section ?? 'main'
-    const cat = catById.get(block.exercise_id)
-    const secBlocks = (currentDay?.blocks ?? []).filter((b) => (b.section ?? 'main') === section)
-    const pos = secBlocks.findIndex((b) => b.uid === block.uid)
-    const next = secBlocks[pos + 1]
-    const isLastInSec = pos === secBlocks.length - 1
-    const linkedToNext = !!block.superset_group && block.superset_group === next?.superset_group
-    return (
-      <View>
-        <BuilderBlockCard
-          block={block}
-          drag={drag}
-          isActive={isActive}
-          onEdit={openEditor}
-          onRemove={(uid) => removeBlock(activeDayId, uid)}
-          onUpdate={updateBlock}
-          onSetSection={(uid, s) => setBlockSection(activeDayId, uid, s)}
-          onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)}
-          catGif={cat?.gif_url}
-          catImage={cat?.image_url}
-          catVideo={cat?.video_url}
-        />
-        {!isLastInSec ? (
-          linkedToNext ? (
-            <View style={styles.ssConnector}>
-              <View style={[styles.ssLine, { backgroundColor: theme.primary + '33' }]} />
-              <TouchableOpacity onPress={() => toggleSuperset(activeDayId, block.uid)} activeOpacity={0.8} style={[styles.ssPill, { borderColor: theme.primary + '33', backgroundColor: theme.primary + '1A' }]}>
-                <Text style={[styles.ssPillTxt, { color: theme.primary, fontFamily: FONT.uiBold }]}>SS · {block.superset_group}</Text>
-              </TouchableOpacity>
-              <View style={[styles.ssLine, { backgroundColor: theme.primary + '33' }]} />
-            </View>
-          ) : (
-            <View style={styles.ssConnector}>
-              <TouchableOpacity onPress={() => toggleSuperset(activeDayId, block.uid)} activeOpacity={0.8} style={[styles.ssLinkBtn, { borderColor: theme.border }]}>
-                <Link2 size={13} color={theme.mutedForeground} />
-                <Text style={[styles.ssLinkTxt, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>Superserie</Text>
-              </TouchableOpacity>
-            </View>
-          )
-        ) : null}
-      </View>
-    )
+  // Render de un bloque dentro de su area (incluye el conector de superserie con el siguiente
+  // de la MISMA area). Mover de area: BuilderBlockCard → onSetArea → setBlockArea (reducer).
+  function renderAreaBlock(areaBlocks: BuilderBlock[]) {
+    return ({ item, drag, isActive }: { item: BuilderBlock; drag: () => void; isActive: boolean }) => {
+      const block = item
+      const cat = catById.get(block.exercise_id)
+      const pos = areaBlocks.findIndex((b) => b.uid === block.uid)
+      const next = areaBlocks[pos + 1]
+      const isLastInArea = pos === areaBlocks.length - 1
+      const linkedToNext = !!block.superset_group && block.superset_group === next?.superset_group
+      return (
+        <View>
+          <BuilderBlockCard
+            block={block}
+            drag={drag}
+            isActive={isActive}
+            areaVMs={areaVMs}
+            currentAreaId={areaKeyOf(block)}
+            onEdit={openEditor}
+            onRemove={(uid) => removeBlock(activeDayId, uid)}
+            onUpdate={updateBlock}
+            onSetArea={(uid, areaId) => setBlockArea(activeDayId, uid, areaId)}
+            onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)}
+            catGif={cat?.gif_url}
+            catImage={cat?.image_url}
+            catVideo={cat?.video_url}
+          />
+          {!isLastInArea ? (
+            linkedToNext ? (
+              <View style={styles.ssConnector}>
+                <View style={[styles.ssLine, { backgroundColor: theme.primary + '33' }]} />
+                <TouchableOpacity onPress={() => toggleSuperset(activeDayId, block.uid)} activeOpacity={0.8} style={[styles.ssPill, { borderColor: theme.primary + '33', backgroundColor: theme.primary + '1A' }]}>
+                  <Text style={[styles.ssPillTxt, { color: theme.primary, fontFamily: FONT.uiBold }]}>SS · {block.superset_group}</Text>
+                </TouchableOpacity>
+                <View style={[styles.ssLine, { backgroundColor: theme.primary + '33' }]} />
+              </View>
+            ) : (
+              <View style={styles.ssConnector}>
+                <TouchableOpacity onPress={() => toggleSuperset(activeDayId, block.uid)} activeOpacity={0.8} style={[styles.ssLinkBtn, { borderColor: theme.border }]}>
+                  <Link2 size={13} color={theme.mutedForeground} />
+                  <Text style={[styles.ssLinkTxt, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>Superserie</Text>
+                </TouchableOpacity>
+              </View>
+            )
+          ) : null}
+        </View>
+      )
+    }
   }
 
-  // P8: encabezado fijo + lista draggable acotada a una sola sección.
-  function renderSection(section: BuilderSection) {
-    const secColor = section === 'warmup' ? WARNING_500 : section === 'cooldown' ? theme.cyan : theme.primary
-    const blocks = blocksInSection(section)
+  // E5-04: encabezado de area (dot + nombre + conteo + añadir) + lista draggable acotada al area.
+  function renderArea(group: { vm: MobileAreaVM; blocks: BuilderBlock[] }) {
+    const { vm, blocks } = group
+    const c = areaColor(vm)
     return (
-      <View key={section} style={{ gap: 8 }}>
-        <View style={[styles.sectionHeader, { borderColor: secColor + '55', backgroundColor: secColor + '12' }]}>
-          <View style={[styles.sectionDot, { backgroundColor: secColor }]} />
-          <Text style={[styles.sectionTitle, { color: secColor, fontFamily: FONT.display }]}>{SECTION_LABEL[section].toUpperCase()}</Text>
-          <View style={[styles.sectionCount, { borderColor: secColor + '55' }]}>
-            <Text style={[styles.sectionCountText, { color: secColor, fontFamily: theme.fontSans }]}>{blocks.length}</Text>
+      <View key={vm.id} style={{ gap: 8 }}>
+        <View style={[styles.sectionHeader, { borderColor: c + '55', backgroundColor: c + '12' }]}>
+          <View style={[styles.sectionDot, { backgroundColor: c }]} />
+          <Text style={[styles.sectionTitle, { color: c, fontFamily: FONT.display }]}>{vm.name.toUpperCase()}</Text>
+          <View style={[styles.sectionCount, { borderColor: c + '55' }]}>
+            <Text style={[styles.sectionCountText, { color: c, fontFamily: theme.fontSans }]}>{blocks.length}</Text>
           </View>
-          <TouchableOpacity onPress={() => addToSection(section)} hitSlop={8} activeOpacity={0.8} style={[styles.sectionAdd, { borderColor: secColor + '55' }]}>
-            <Plus size={14} color={secColor} />
+          <TouchableOpacity onPress={() => addToArea(vm.id)} hitSlop={8} activeOpacity={0.8} style={[styles.sectionAdd, { borderColor: c + '55' }]}>
+            <Plus size={14} color={c} />
           </TouchableOpacity>
         </View>
-        {blocks.length ? (
-          <NestableDraggableFlatList
-            data={blocks}
-            keyExtractor={(b) => b.uid}
-            onDragBegin={() => Haptics.selectionAsync().catch(() => {})}
-            onDragEnd={({ data }) => reorderSection(section, data)}
-            activationDistance={14}
-            renderItem={renderSectionBlock}
-          />
-        ) : null}
+        <NestableDraggableFlatList
+          data={blocks}
+          keyExtractor={(b) => b.uid}
+          onDragBegin={() => Haptics.selectionAsync().catch(() => {})}
+          onDragEnd={({ data }) => reorderArea(vm.id, data)}
+          activationDistance={14}
+          renderItem={renderAreaBlock(blocks)}
+        />
       </View>
     )
   }
@@ -767,10 +853,11 @@ export default function ProgramBuilderScreen() {
     if (!name.trim()) { Alert.alert('Nombre requerido', 'Ingresa un nombre para el programa.'); return }
     const hasAny = days.some((d) => d.blocks.length > 0) || (abMode && otherDays.some((d) => d.blocks.length > 0))
     if (!hasAny) { Alert.alert('Sin ejercicios', 'Agrega al menos un ejercicio en algún día.'); return }
-    // P-F5: guard de bloques (web bloquea save si sets<1 o reps vacío) — evita persistir incompletos.
+    // P-F5 (E5-07): guard de bloques POR TIPO — evita persistir incompletos (strength: series+reps;
+    // cardio/movilidad/roller: su prescripción mínima). Espeja el blockIncomplete de la web.
     const allBlocks = [...days, ...(abMode ? otherDays : [])].flatMap((d) => d.blocks)
-    const invalid = allBlocks.find((b) => !b.sets || b.sets < 1 || !String(b.reps ?? '').trim())
-    if (invalid) { Alert.alert('Ejercicio incompleto', `Revisá "${invalid.exercise_name}": necesita series (≥1) y reps.`); return }
+    const invalid = allBlocks.find(blockIncomplete)
+    if (invalid) { Alert.alert('Ejercicio incompleto', `Revisá "${invalid.exercise_name}": faltan datos (series/reps, duración o distancia según el tipo).`); return }
     setSaving(true)
     try {
       const coach = await getCoachProfile()
@@ -970,8 +1057,15 @@ export default function ProgramBuilderScreen() {
             </View>
           ) : (
             <View style={{ gap: 14 }}>
-              {SECTION_ORDER.map(renderSection)}
-              <TouchableOpacity onPress={() => addToSection('main')} activeOpacity={0.8}
+              {areaGroups.length ? (
+                areaGroups.map(renderArea)
+              ) : (
+                <View style={styles.emptyDayHint}>
+                  <Text style={[styles.emptyDayTitle, { color: theme.foreground, fontFamily: FONT.display }]}>Día vacío</Text>
+                  <Text style={[styles.emptyDaySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Agrega ejercicios y organízalos por área (Calentamiento, Principal, Enfriamiento…).</Text>
+                </View>
+              )}
+              <TouchableOpacity onPress={() => addToArea(LEGACY_SECTION_AREA_ID.main)} activeOpacity={0.8}
                 style={[styles.addBtn, { borderColor: theme.border, backgroundColor: theme.card }]}>
                 <Plus size={18} color={theme.primary} />
                 <Text style={[styles.addText, { color: theme.primary, fontFamily: FONT.display }]}>Agregar ejercicio a {currentDay.name}</Text>
@@ -989,10 +1083,11 @@ export default function ProgramBuilderScreen() {
         dayBlockCount={currentDay?.blocks.length ?? 0}
         dayName={currentDay?.name ?? ''}
         simpleMode={isSimpleMode}
-        onSelect={(block) => { addExercise(activeDayId, { ...block, dayId: activeDayId, section: pendingSection }); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}) }}
+        onSelect={(block) => { addExercise(activeDayId, { ...block, dayId: activeDayId, section: sectionForArea(pendingAreaId), section_template_id: pendingAreaId }); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}) }}
       />
       <BlockEditorSheet ref={editorRef} block={editingBlock} onChange={updateBlock} onRemove={(uid) => { removeBlock(activeDayId, uid); editorRef.current?.dismiss() }}
-        onSetSection={setBlockSection.bind(null, activeDayId)} onToggleOverride={toggleBlockOverride} onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)} onClose={() => setEditingUid(null)}
+        areaVMs={areaVMs} onSetArea={(uid, areaId) => setBlockArea(activeDayId, uid, areaId)} cardioEnabled={cardioEnabled}
+        onToggleOverride={toggleBlockOverride} onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)} onClose={() => setEditingUid(null)}
         days={days.map((d) => ({ id: d.id, name: d.name }))} currentDayId={activeDayId} clientId={isTemplate ? undefined : clientId}
         onMoveToDay={(uid, target) => { transferBlock(uid, activeDayId, target); setActiveDayId(target); editorRef.current?.dismiss(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}) }} />
 
@@ -1059,7 +1154,7 @@ export default function ProgramBuilderScreen() {
 
       {/* FAB "+" verde (solo en Simple) */}
       {isSimpleMode ? (
-        <TouchableOpacity onPress={() => addToSection('main')} activeOpacity={0.85} style={[styles.fabAdd, { backgroundColor: theme.primary, shadowColor: theme.primary }]}>
+        <TouchableOpacity onPress={() => addToArea(LEGACY_SECTION_AREA_ID.main)} activeOpacity={0.85} style={[styles.fabAdd, { backgroundColor: theme.primary, shadowColor: theme.primary }]}>
           <Plus size={26} color={theme.primaryForeground} strokeWidth={3} />
         </TouchableOpacity>
       ) : null}
@@ -1216,6 +1311,9 @@ const styles = StyleSheet.create({
   reorder: { gap: 2 },
   addBtn: { height: 48, borderWidth: 1, borderStyle: 'dashed', borderRadius: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4 },
   addText: { fontSize: 14 },
+  emptyDayHint: { alignItems: 'center', paddingVertical: 28, gap: 6 },
+  emptyDayTitle: { fontSize: 15, letterSpacing: 0.4 },
+  emptyDaySub: { fontSize: 12.5, textAlign: 'center', lineHeight: 18, opacity: 0.85, paddingHorizontal: 24 },
   blockCardCompact: { padding: 9 },
   // Elevación aplicada inline (glow violeta en Normal / lift neutro DS en Simple).
   fabMode: { position: 'absolute', right: 16, bottom: 28, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },

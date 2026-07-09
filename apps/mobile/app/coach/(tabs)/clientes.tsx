@@ -93,6 +93,7 @@ export default function ClientesScreen() {
   const [pulseById, setPulseById] = useState<Map<string, PulseRow>>(new Map())
   const [pulseError, setPulseError] = useState(false)
   const [coachSlug, setCoachSlug] = useState<string>('')
+  const [maxClients, setMaxClients] = useState<number>(0)
   const scrollY = useSharedValue(0)
   const [headerH, setHeaderH] = useState(0)
   const onScroll = useAnimatedScrollHandler((e) => { scrollY.value = e.contentOffset.y })
@@ -100,7 +101,7 @@ export default function ClientesScreen() {
   useEffect(() => { load() }, [])
   useEffect(() => {
     AsyncStorage.getItem('eva_alumnos_view').then((v) => { if (v === 'cards' || v === 'list') setViewMode(v) })
-    getCoachProfile().then((c) => { if (c?.slug) setCoachSlug(c.slug) }).catch(() => {})
+    getCoachProfile().then((c) => { if (c?.slug) setCoachSlug(c.slug); if (c?.maxClients) setMaxClients(c.maxClients) }).catch(() => {})
   }, [])
   function toggleView() {
     const next = viewMode === 'list' ? 'cards' : 'list'
@@ -424,7 +425,13 @@ export default function ClientesScreen() {
       />
 
       <NativeDialog open={showImport} title="Importar alumnos" onClose={() => setShowImport(false)}>
-        <ImportClientsForm theme={theme} onDone={() => { setShowImport(false); load() }} onCancel={() => setShowImport(false)} />
+        <ImportClientsForm
+          theme={theme}
+          maxClients={maxClients}
+          activeCount={clients.filter((c) => !c.isArchived).length}
+          onDone={() => { setShowImport(false); load() }}
+          onCancel={() => setShowImport(false)}
+        />
       </NativeDialog>
     </SafeAreaView>
   )

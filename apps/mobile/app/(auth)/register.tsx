@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
 import {
   ArrowRight,
@@ -35,9 +36,15 @@ import {
   type SaleTier,
 } from '@eva/tiers'
 import { useTheme } from '../../context/ThemeContext'
-import { Button, Card, HapticPressable, Input } from '../../components'
+import { AuthDivider, Button, Card, GoogleSignInButton, HapticPressable, Input } from '../../components'
 import { toast } from '../../components/Toast'
-import { ApiError, registerCoachFree } from '../../lib/api'
+import { ApiError, completeCoachOnboarding, registerCoachFree } from '../../lib/api'
+import {
+  GoogleSignInError,
+  isGoogleSignInAvailable,
+  resolveGoogleCoachDestination,
+  signInWithGoogleCoach,
+} from '../../lib/auth/google-signin'
 
 type Step = 1 | 2 | 3
 
@@ -59,7 +66,12 @@ export default function RegisterScreen() {
   const [acceptHealthData, setAcceptHealthData] = useState(false)
   const [acceptMarketing, setAcceptMarketing] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Onboarding Google: cuando el coach entra por Google sin fila `coaches`, el auth user YA existe
+  // (signInWithIdToken). En este modo NO pedimos email/password (los toma la sesión) — solo la marca.
+  const [googleMode, setGoogleMode] = useState(false)
+  const showGoogle = isGoogleSignInAvailable()
 
   const pwdChecks = useMemo(
     () => [password.length >= 8, /\d/.test(password), /[a-zA-Z]/.test(password)],
@@ -68,12 +80,38 @@ export default function RegisterScreen() {
   const pwdScore = pwdChecks.filter(Boolean).length
   const caps = useMemo(() => getTierCapabilities(REGISTRABLE_TIER), [])
 
-  const canContinueStep1 =
-    fullName.trim().length >= 2 &&
-    brandName.trim().length >= 2 &&
-    email.trim().length > 0 &&
-    password.length >= 8
+  const canContinueStep1 = googleMode
+    ? fullName.trim().length >= 2 && brandName.trim().length >= 2
+    : fullName.trim().length >= 2 &&
+      brandName.trim().length >= 2 &&
+      email.trim().length > 0 &&
+      password.length >= 8
   const canSubmit = acceptLegal && acceptHealthData
+
+  // ── Google Sign-In nativo (coach) — espejo del GoogleSignInButton web (intent=register) ──
+  async function handleGoogleRegister() {
+    setGoogleLoading(true)
+    setError(null)
+    try {
+      const result = await signInWithGoogleCoach()
+      const dest = await resolveGoogleCoachDestination('register')
+      if (dest.kind === 'home') {
+        // Coach ya existente: entra directo (no re-registrar).
+        router.replace('/coach/home')
+        return
+      }
+      // Sin fila coaches → completar alta con la marca. Prefill del nombre que reporta Google.
+      if (result.fullName && !fullName.trim()) setFullName(result.fullName)
+      if (result.email) setEmail(result.email)
+      setGoogleMode(true)
+      setStep(1)
+    } catch (err) {
+      if (err instanceof GoogleSignInError && err.code === 'cancelled') return
+      setError(err instanceof GoogleSignInError ? err.message : 'No se pudo continuar con Google.')
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
 
   function goNext() {
     setError(null)
@@ -112,6 +150,34 @@ export default function RegisterScreen() {
   async function handleCreate() {
     if (!canSubmit) {
       setError('Debes aceptar los terminos y el tratamiento de datos de salud para crear tu cuenta.')
+      return
+    }
+
+    // ── Modo Google: el auth user ya existe; solo materializamos la fila `coaches` (free) ──
+    if (googleMode) {
+      if (fullName.trim().length < 2 || brandName.trim().length < 2) {
+        setError('Ingresa tu nombre y el de tu marca (minimo 2 caracteres).')
+        return
+      }
+      setError(null)
+      setLoading(true)
+      try {
+        await completeCoachOnboarding({
+          fullName: fullName.trim(),
+          brandName: brandName.trim(),
+          acceptLegal: true,
+          acceptHealthData: true,
+          acceptMarketing,
+        })
+        await AsyncStorage.setItem('eva_user_role', 'coach')
+        router.replace('/coach/home')
+      } catch (err) {
+        const message = err instanceof ApiError ? err.message : 'Intenta nuevamente en unos momentos.'
+        setError(message)
+        toast.error('No se pudo crear la cuenta', { description: message })
+      } finally {
+        setLoading(false)
+      }
       return
     }
 
@@ -244,55 +310,70 @@ export default function RegisterScreen() {
                   hint="Tu enlace para alumnos se genera con un codigo unico en tu panel."
                   testID="register-brand-input"
                 />
-                <Input
-                  label="Email"
-                  leftIcon={Mail}
-                  placeholder="coach@ejemplo.com"
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  autoComplete="email"
-                  editable={!loading}
-                  testID="register-email-input"
-                />
-                <View>
-                  <Input
-                    label="Contrasena"
-                    leftIcon={Lock}
-                    placeholder="Minimo 8 caracteres"
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    autoComplete="new-password"
-                    editable={!loading}
-                    testID="register-password-input"
-                  />
-                  {password.length > 0 ? (
-                    <View style={styles.pwdMeter}>
-                      <View style={styles.pwdBars}>
-                        {[0, 1, 2].map((i) => (
-                          <View
-                            key={i}
-                            className={
-                              i < pwdScore
-                                ? pwdScore === 3
-                                  ? 'bg-success-500'
-                                  : pwdScore === 2
-                                    ? 'bg-warning-500'
-                                    : 'bg-danger-500'
-                                : 'bg-surface-sunken'
-                            }
-                            style={styles.pwdBar}
-                          />
-                        ))}
-                      </View>
-                      <Text className="text-muted font-sans" style={styles.pwdHint}>
-                        {pwdScore === 3 ? 'Contrasena segura' : '8+ caracteres con letras y numeros.'}
-                      </Text>
+                {googleMode ? (
+                  <View
+                    className="rounded-control bg-success-100 flex-row items-center"
+                    style={{ gap: 8, paddingHorizontal: 14, paddingVertical: 11 }}
+                    testID="register-google-connected"
+                  >
+                    <CheckCircle2 size={16} color={theme.success} />
+                    <Text className="text-success-600 font-sans-semibold" style={{ fontSize: 12.5, flex: 1 }} numberOfLines={1}>
+                      Conectado con Google{email ? ` · ${email}` : ''}
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    <Input
+                      label="Email"
+                      leftIcon={Mail}
+                      placeholder="coach@ejemplo.com"
+                      value={email}
+                      onChangeText={setEmail}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      autoComplete="email"
+                      editable={!loading}
+                      testID="register-email-input"
+                    />
+                    <View>
+                      <Input
+                        label="Contrasena"
+                        leftIcon={Lock}
+                        placeholder="Minimo 8 caracteres"
+                        value={password}
+                        onChangeText={setPassword}
+                        secureTextEntry
+                        autoComplete="new-password"
+                        editable={!loading}
+                        testID="register-password-input"
+                      />
+                      {password.length > 0 ? (
+                        <View style={styles.pwdMeter}>
+                          <View style={styles.pwdBars}>
+                            {[0, 1, 2].map((i) => (
+                              <View
+                                key={i}
+                                className={
+                                  i < pwdScore
+                                    ? pwdScore === 3
+                                      ? 'bg-success-500'
+                                      : pwdScore === 2
+                                        ? 'bg-warning-500'
+                                        : 'bg-danger-500'
+                                    : 'bg-surface-sunken'
+                                }
+                                style={styles.pwdBar}
+                              />
+                            ))}
+                          </View>
+                          <Text className="text-muted font-sans" style={styles.pwdHint}>
+                            {pwdScore === 3 ? 'Contrasena segura' : '8+ caracteres con letras y numeros.'}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
-                  ) : null}
-                </View>
+                  </>
+                )}
 
                 <Button
                   label="Continuar"
@@ -304,6 +385,18 @@ export default function RegisterScreen() {
                   size="lg"
                   testID="register-continue"
                 />
+
+                {showGoogle && !googleMode ? (
+                  <View style={{ gap: 14 }}>
+                    <AuthDivider />
+                    <GoogleSignInButton
+                      intent="register"
+                      onPress={handleGoogleRegister}
+                      loading={googleLoading}
+                      disabled={loading}
+                    />
+                  </View>
+                ) : null}
 
                 <Pressable onPress={() => router.replace('/(auth)/login?role=coach')} hitSlop={8} testID="register-login-link">
                   <Text className="font-sans" style={styles.loginLine}>

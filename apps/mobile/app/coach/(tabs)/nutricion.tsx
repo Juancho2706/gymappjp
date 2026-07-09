@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, FlatList, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, Alert, FlatList, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { Image } from 'expo-image'
+import * as ImagePicker from 'expo-image-picker'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Apple,
@@ -11,9 +13,12 @@ import {
   ChevronRight,
   Globe,
   HelpCircle,
+  ImagePlus,
+  Layers,
   Pencil,
   Plus,
   Search,
+  Share2,
   SlidersHorizontal,
   Sparkles,
   Star,
@@ -21,12 +26,13 @@ import {
   UserPlus,
   Users,
   Utensils,
+  X,
 } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { useTheme } from '../../../context/ThemeContext'
-import { Badge, Button, EmptyState, Input, MacroPill, NativeDialog, Sheet } from '../../../components'
+import { Badge, Button, EmptyState, Input, MacroPill, NativeDialog, Sheet, Textarea } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { FONT } from '../../../lib/typography'
@@ -46,6 +52,15 @@ import {
   type NutritionBoardRow,
 } from '../../../lib/nutrition-builder'
 import { assignTemplateToClients, deleteTemplate, listTemplates, type TemplateSummary } from '../../../lib/nutrition-templates'
+import {
+  assignRecipeToClients,
+  createCoachRecipe,
+  deleteCoachRecipe,
+  listCoachRecipes,
+  updateCoachRecipe,
+  uploadRecipeImage,
+  type CoachRecipeRow,
+} from '../../../lib/recipes-coach'
 import { canUseNutrition, type SubscriptionTier } from '../../../lib/coach-tiers'
 import { getApiBaseUrl } from '../../../lib/api'
 
@@ -84,6 +99,7 @@ export default function CoachNutricionScreen() {
   )
   const [clients, setClients] = useState<Client[]>([])
   const [templates, setTemplates] = useState<TemplateSummary[]>([])
+  const [recipes, setRecipes] = useState<CoachRecipeRow[]>([])
   const [foodsCount, setFoodsCount] = useState(0)
   const [board, setBoard] = useState<NutritionBoardRow[]>([])
   const [planMeta, setPlanMeta] = useState<Map<string, PlanMeta>>(new Map())
@@ -104,15 +120,17 @@ export default function CoachNutricionScreen() {
     if (!coach) { setLoading(false); return }
     setTier(coach.subscriptionTier)
     if (!canUseNutrition(coach.subscriptionTier)) { setLoading(false); return }
-    const [{ data: cl }, tpl, foods, { data: activePlans }] = await Promise.all([
+    const [{ data: cl }, tpl, foods, rec, { data: activePlans }] = await Promise.all([
       supabase.from('clients').select('id, full_name').eq('coach_id', coach.id).eq('is_archived', false).eq('is_active', true).order('full_name'),
       listTemplates(),
       listCoachFoods().catch(() => []),
+      listCoachRecipes().catch(() => []),
       // Plan activo por alumno → set "con plan" + meta (planId + sync/custom) para el board.
       supabase.from('nutrition_plans').select('id, client_id, is_custom').eq('coach_id', coach.id).eq('is_active', true),
     ])
     setClients((cl ?? []) as Client[])
     setTemplates(tpl)
+    setRecipes(rec)
     setFoodsCount(foods.length)
     const meta = new Map<string, PlanMeta>()
     const withPlan = new Set<string>()
@@ -134,6 +152,10 @@ export default function CoachNutricionScreen() {
 
   const refreshFoodsCount = useCallback(() => {
     listCoachFoods().then((f) => setFoodsCount(f.length)).catch(() => {})
+  }, [])
+
+  const refreshRecipes = useCallback(() => {
+    listCoachRecipes().then(setRecipes).catch(() => {})
   }, [])
 
   async function doAssign() {
@@ -162,7 +184,7 @@ export default function CoachNutricionScreen() {
     { key: 'templates', label: 'Plantillas', count: templates.length },
     { key: 'clients', label: 'Alumnos', count: board.length },
     { key: 'foods', label: 'Alimentos', count: foodsCount },
-    { key: 'recipes', label: 'Recetas', count: 0 },
+    { key: 'recipes', label: 'Recetas', count: recipes.length },
   ]
   const showCreate = tab === 'clients' || tab === 'templates'
 
@@ -177,6 +199,14 @@ export default function CoachNutricionScreen() {
           <Text style={[styles.hSub, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>Planes, alimentos y recetas</Text>
         </View>
         <View style={styles.hActions}>
+          <TouchableOpacity
+            testID="nutricion-meal-groups-open"
+            onPress={() => router.push('/coach/meal-groups')}
+            activeOpacity={0.85}
+            style={[styles.hIconBtn, { backgroundColor: theme.card, borderColor: theme.border }]}
+          >
+            <Layers size={18} color={theme.foreground} />
+          </TouchableOpacity>
           <TouchableOpacity
             testID="nutricion-guide-open"
             onPress={() => setGuideOpen(true)}
@@ -252,7 +282,7 @@ export default function CoachNutricionScreen() {
           ) : tab === 'foods' ? (
             <FoodsTab theme={theme} onFoodsChanged={refreshFoodsCount} />
           ) : (
-            <RecipesTab theme={theme} />
+            <RecipesTab theme={theme} recipes={recipes} clients={clients} onReload={refreshRecipes} />
           )}
         </View>
       )}
@@ -791,17 +821,246 @@ function FField({ theme, label, center, ...rest }: any) {
   )
 }
 
-// ─── Tab: Recetas (placeholder — la library llega en E5) ──────────────────────────
-function RecipesTab({ theme }: { theme: any }) {
+// ─── Tab: Recetas (RecipeLibrary — E5-19) ─────────────────────────────────────────
+// Espejo de apps/web .../nutrition-plans/_components/recipes/RecipeLibrary. Ideas
+// inspiracionales (Base): crear/editar/borrar/compartir. NO afectan macros ni adherencia.
+function RecipesTab({
+  theme, recipes, clients, onReload,
+}: {
+  theme: any; recipes: CoachRecipeRow[]; clients: Client[]; onReload: () => void
+}) {
+  const [query, setQuery] = useState('')
+  const [formOpen, setFormOpen] = useState(false)
+  const [editing, setEditing] = useState<CoachRecipeRow | null>(null)
+  const [assignTarget, setAssignTarget] = useState<CoachRecipeRow | null>(null)
+
+  const list = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return recipes
+    return recipes.filter((r) => r.name.toLowerCase().includes(q) || (r.ingredients_text?.toLowerCase().includes(q) ?? false))
+  }, [recipes, query])
+
+  function openCreate() { setEditing(null); setFormOpen(true) }
+  function openEdit(r: CoachRecipeRow) { setEditing(r); setFormOpen(true) }
+
+  function confirmDelete(r: CoachRecipeRow) {
+    Alert.alert('Eliminar receta', `¿Eliminar "${r.name}"?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: async () => {
+        const res = await deleteCoachRecipe(r.id)
+        if (!res.ok) { Alert.alert('Error', res.error ?? 'No se pudo eliminar.'); return }
+        onReload()
+      } },
+    ])
+  }
+
   return (
     <View style={{ flex: 1 }}>
       <View style={[styles.baseBanner, { backgroundColor: theme.secondary }]}>
         <Badge tone="aqua" variant="soft" size="sm">Base</Badge>
         <Text style={{ flex: 1, fontSize: 12, lineHeight: 17, color: theme.mutedForeground, fontFamily: FONT.ui }}>
-          Vienen incluidas en el módulo. Son inspiración — no afectan macros ni adherencia.
+          Ideas de recetas — inspiración para tus alumnos. No afectan macros ni adherencia.
         </Text>
       </View>
-      <EmptyState icon={ChefHat} title="Recetas — próximamente" subtitle="La biblioteca de recetas para compartir con tus alumnos llegará pronto a la app." />
+
+      <View style={styles.recipesHead}>
+        <TouchableOpacity testID="nutricion-recipe-new" onPress={openCreate} activeOpacity={0.9} style={[styles.foodAddBtn, { backgroundColor: theme.primary }]}>
+          <ChefHat size={15} color={theme.primaryForeground} />
+          <Text style={[styles.foodAddTxt, { color: theme.primaryForeground, fontFamily: FONT.uiBold }]}>Nueva receta</Text>
+        </TouchableOpacity>
+      </View>
+
+      {recipes.length > 0 ? (
+        <SearchFilterBar theme={theme} value={query} onChange={setQuery} placeholder="Buscar receta…" />
+      ) : null}
+
+      {recipes.length === 0 ? (
+        <View style={{ paddingTop: 20 }}>
+          <EmptyState icon={ChefHat} title="Todavía no tienes recetas" subtitle="Creá ideas de recetas para inspirar a tus alumnos. Toma unos 30 segundos."
+            action={<Button label="Nueva receta" leftIcon={ChefHat} variant="sport" onPress={openCreate} style={{ marginTop: 8 }} />} />
+        </View>
+      ) : (
+        <FlatList
+          data={list}
+          keyExtractor={(r) => r.id}
+          contentContainerStyle={styles.recipesList}
+          ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={{ paddingTop: 24 }}>
+              <EmptyState icon={Search} title="Sin recetas" subtitle={`Ninguna receta coincide con «${query.trim()}».`} />
+            </View>
+          }
+          renderItem={({ item: r }) => (
+            <View style={[styles.recipeCard, { borderColor: theme.border, backgroundColor: theme.card, borderRadius: theme.radius.xl }, SHADOWS[theme.scheme as Scheme].sm]}>
+              <View style={[styles.recipeThumb, { backgroundColor: theme.secondary }]}>
+                {r.image_url ? (
+                  <Image source={{ uri: r.image_url }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                ) : (
+                  <ChefHat size={26} color={EMBER} />
+                )}
+              </View>
+              <View style={{ flex: 1, minWidth: 0, gap: 8 }}>
+                <Text style={[styles.recipeName, { color: theme.foreground, fontFamily: FONT.displayBold }]} numberOfLines={2}>{r.name}</Text>
+                {r.ingredients_text ? (
+                  <Text style={{ fontSize: 12, lineHeight: 17, color: theme.mutedForeground, fontFamily: FONT.ui }} numberOfLines={2}>{r.ingredients_text}</Text>
+                ) : null}
+                <View style={styles.recipeActions}>
+                  <TouchableOpacity testID={`nutricion-recipe-share-${r.id}`} onPress={() => setAssignTarget(r)} activeOpacity={0.85} style={[styles.recipeShareBtn, { backgroundColor: theme.primary }]}>
+                    <Share2 size={14} color={theme.primaryForeground} />
+                    <Text style={{ fontSize: 12, color: theme.primaryForeground, fontFamily: FONT.uiBold }}>Compartir</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity testID={`nutricion-recipe-edit-${r.id}`} onPress={() => openEdit(r)} activeOpacity={0.8} style={[styles.recipeIconBtn, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+                    <Pencil size={15} color={theme.foreground} />
+                  </TouchableOpacity>
+                  <TouchableOpacity testID={`nutricion-recipe-delete-${r.id}`} onPress={() => confirmDelete(r)} activeOpacity={0.8} style={[styles.recipeIconBtn, { borderColor: theme.destructive + '33', backgroundColor: theme.destructive + '14' }]}>
+                    <Trash2 size={15} color={theme.destructive} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+        />
+      )}
+
+      <NativeDialog open={formOpen} title={editing ? 'Editar receta' : 'Nueva receta'} onClose={() => setFormOpen(false)}>
+        <RecipeForm theme={theme} recipe={editing} onCancel={() => setFormOpen(false)} onDone={() => { setFormOpen(false); onReload() }} />
+      </NativeDialog>
+
+      <NativeDialog open={!!assignTarget} title={`Compartir "${assignTarget?.name ?? ''}"`} onClose={() => setAssignTarget(null)}>
+        {assignTarget ? (
+          <RecipeAssign theme={theme} recipe={assignTarget} clients={clients} onClose={() => setAssignTarget(null)} />
+        ) : null}
+      </NativeDialog>
+    </View>
+  )
+}
+
+function RecipeForm({ theme, recipe, onCancel, onDone }: { theme: any; recipe: CoachRecipeRow | null; onCancel: () => void; onDone: () => void }) {
+  const [name, setName] = useState(recipe?.name ?? '')
+  const [ingredients, setIngredients] = useState(recipe?.ingredients_text ?? '')
+  const [instructions, setInstructions] = useState(recipe?.instructions ?? '')
+  const [imageUrl, setImageUrl] = useState(recipe?.image_url ?? '')
+  const [uploading, setUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function pickImage() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!perm.granted) { setError('Permiso de galería denegado.'); return }
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 })
+    if (res.canceled || !res.assets?.[0]?.uri) return
+    setUploading(true)
+    setError(null)
+    const up = await uploadRecipeImage(res.assets[0].uri)
+    setUploading(false)
+    if (!up.ok || !up.url) { setError(up.error ?? 'No se pudo subir la imagen.'); return }
+    setImageUrl(up.url)
+  }
+
+  async function submit() {
+    if (!name.trim()) { setError('El nombre es obligatorio.'); return }
+    setError(null)
+    setSaving(true)
+    const input = { name, ingredients_text: ingredients, instructions, image_url: imageUrl }
+    const res = recipe ? await updateCoachRecipe(recipe.id, input) : await createCoachRecipe(input)
+    setSaving(false)
+    if (!res.ok) { setError(res.error ?? 'No se pudo guardar la receta.'); return }
+    onDone()
+  }
+
+  return (
+    <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 14 }}>
+      {error ? <Text style={{ color: theme.destructive, fontSize: 13, fontFamily: FONT.ui }}>{error}</Text> : null}
+      <Input label="Nombre" value={name} onChangeText={setName} placeholder="Ej: Bowl de pollo y quinoa" maxLength={160} />
+      <Textarea label="Ingredientes" value={ingredients} onChangeText={setIngredients} placeholder={'Ej:\n- 150 g pechuga\n- 1 taza de quinoa'} maxLength={8000} minRows={3} />
+      <Textarea label="Instrucciones" value={instructions} onChangeText={setInstructions} placeholder="Pasos para preparar la receta…" maxLength={8000} minRows={3} />
+
+      <View style={{ gap: 6 }}>
+        <Text style={{ fontSize: 13, color: theme.foreground, fontFamily: FONT.uiSemibold }}>Imagen (opcional)</Text>
+        {imageUrl ? (
+          <View style={[styles.recipeImgPreview, { borderColor: theme.border }]}>
+            <Image source={{ uri: imageUrl }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+            {uploading ? (
+              <View style={styles.recipeImgOverlay}><ActivityIndicator color="#fff" /></View>
+            ) : (
+              <TouchableOpacity testID="nutricion-recipe-img-remove" onPress={() => setImageUrl('')} activeOpacity={0.85} style={styles.recipeImgRemove}>
+                <X size={16} color="#fff" />
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <TouchableOpacity testID="nutricion-recipe-img-pick" onPress={pickImage} disabled={uploading || saving} activeOpacity={0.85}
+            style={[styles.recipeImgPick, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+            {uploading ? <ActivityIndicator color={theme.mutedForeground} /> : (
+              <>
+                <ImagePlus size={20} color={theme.mutedForeground} />
+                <Text style={{ fontSize: 12, color: theme.mutedForeground, fontFamily: FONT.uiSemibold }}>Subir imagen</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+        <Text style={{ fontSize: 10.5, color: theme.mutedForeground, fontFamily: FONT.ui }}>Se optimiza a JPEG automáticamente. Hasta 2 MB.</Text>
+      </View>
+
+      <View style={styles.formActions}>
+        <TouchableOpacity onPress={onCancel} disabled={saving || uploading} style={[styles.cancelBtn, { borderColor: theme.border }]} activeOpacity={0.8}>
+          <Text style={{ color: theme.mutedForeground, fontFamily: FONT.uiSemibold, fontSize: 14 }}>Cancelar</Text>
+        </TouchableOpacity>
+        <TouchableOpacity testID="nutricion-recipe-save" onPress={submit} disabled={saving || uploading} style={[styles.saveBtn, { backgroundColor: theme.primary, opacity: saving || uploading ? 0.6 : 1 }]} activeOpacity={0.85}>
+          <Text style={{ color: theme.primaryForeground, fontFamily: FONT.uiBold, fontSize: 14 }}>{saving ? 'Guardando…' : recipe ? 'Guardar' : 'Crear receta'}</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  )
+}
+
+function RecipeAssign({ theme, recipe, clients, onClose }: { theme: any; recipe: CoachRecipeRow; clients: Client[]; onClose: () => void }) {
+  const [assignIds, setAssignIds] = useState<string[]>([])
+  const [search, setSearch] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return q ? clients.filter((c) => c.full_name.toLowerCase().includes(q)) : clients
+  }, [clients, search])
+
+  async function submit() {
+    if (!assignIds.length) return
+    setBusy(true)
+    const res = await assignRecipeToClients(recipe.id, assignIds)
+    setBusy(false)
+    if (!res.ok) { Alert.alert('Error', res.error ?? 'No se pudo compartir la receta.'); return }
+    Alert.alert('Receta compartida', `Compartida con ${assignIds.length} alumno(s) como inspiración.`)
+    onClose()
+  }
+
+  return (
+    <View style={{ gap: 10 }}>
+      <Text style={[styles.hint, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>La receta aparece como inspiración en el perfil del alumno. No afecta macros ni adherencia.</Text>
+      {clients.length > 0 ? (
+        <TouchableOpacity testID="nutricion-recipe-select-all" onPress={() => setAssignIds((ids) => ids.length === clients.length ? [] : clients.map((c) => c.id))} activeOpacity={0.8} style={styles.selectAllRow}>
+          <Text style={[styles.selectAllTxt, { color: theme.primary, fontFamily: FONT.uiBold }]}>
+            {assignIds.length === clients.length ? 'Quitar selección' : 'Seleccionar todos'}
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+      <Input leftIcon={Search} placeholder="Buscar por nombre…" value={search} onChangeText={setSearch} autoCapitalize="none" autoCorrect={false} />
+      <ScrollView style={{ maxHeight: 300 }} contentContainerStyle={{ gap: 8 }} showsVerticalScrollIndicator={false}>
+        {filtered.length === 0 ? (
+          <Text style={{ fontSize: 13, color: theme.mutedForeground, fontFamily: FONT.ui, textAlign: 'center', paddingVertical: 16 }}>No hay alumnos que coincidan.</Text>
+        ) : filtered.map((c) => {
+          const on = assignIds.includes(c.id)
+          return (
+            <TouchableOpacity key={c.id} testID={`nutricion-recipe-client-${c.id}`} activeOpacity={0.8} onPress={() => setAssignIds((ids) => on ? ids.filter((x) => x !== c.id) : [...ids, c.id])}
+              style={[styles.copyRow, { borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary + '1A' : theme.secondary, borderRadius: theme.radius.lg }]}>
+              <Text style={[styles.copyName, { color: theme.foreground, fontFamily: FONT.uiSemibold }]} numberOfLines={2}>{c.full_name}</Text>
+              {on ? <CheckCircle2 size={16} color={theme.primary} /> : <View style={{ width: 16 }} />}
+            </TouchableOpacity>
+          )
+        })}
+      </ScrollView>
+      <Button label={busy ? 'Compartiendo…' : `Compartir (${assignIds.length})`} onPress={submit} disabled={busy || assignIds.length === 0} full />
     </View>
   )
 }
@@ -935,6 +1194,18 @@ const styles = StyleSheet.create({
 
   // Recipes
   baseBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 16, marginBottom: 8, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 14 },
+  recipesHead: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 16, paddingBottom: 12 },
+  recipesList: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 120 },
+  recipeCard: { flexDirection: 'row', gap: 12, borderWidth: 1, padding: 12 },
+  recipeThumb: { width: 84, height: 84, borderRadius: 14, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  recipeName: { fontSize: 15.5, letterSpacing: -0.2 },
+  recipeActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+  recipeShareBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 34, paddingHorizontal: 12, borderRadius: 10 },
+  recipeIconBtn: { width: 34, height: 34, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  recipeImgPreview: { height: 150, borderWidth: 1, borderRadius: 14, overflow: 'hidden' },
+  recipeImgOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)' },
+  recipeImgRemove: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
+  recipeImgPick: { height: 110, borderWidth: 1, borderStyle: 'dashed', borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 6 },
 
   // Upsell
   upsellWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },

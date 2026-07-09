@@ -72,6 +72,17 @@ export const RegisterCoachFreeSchema = z.object({
 })
 export type RegisterCoachFreeInput = z.infer<typeof RegisterCoachFreeSchema>
 
+// Intake OAuth post-signup del coach (mobile `app/coach/onboarding.tsx` + web `coach/onboarding/complete`).
+// A diferencia de RegisterCoachFree (crea auth + coach con email/password), acá el usuario YA existe
+// (autenticado por Google) y solo falta materializar su fila `coaches`: nombre + marca. Los consentimientos
+// (legal/salud, obligatorios; marketing opcional) se gatean en la UI y se validan literal-true en el server.
+// Free-tier: los planes pagos se activan en eva-app.cl (money-safety, mismo criterio que RegisterCoachFree).
+export const CompleteCoachOnboardingSchema = z.object({
+    full_name: z.string().min(2, 'Nombre requerido').max(100),
+    brand_name: z.string().min(2, 'Nombre de marca requerido').max(100),
+})
+export type CompleteCoachOnboardingInput = z.infer<typeof CompleteCoachOnboardingSchema>
+
 export const AdminCreateCoachSchema = z.object({
     full_name: z.string().min(2).max(100),
     email: z.string().email(),

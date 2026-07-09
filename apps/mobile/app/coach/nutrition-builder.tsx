@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, S
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { ArrowLeftRight, Calculator, ChevronDown, ChevronLeft, ChevronUp, Plus, Trash2, Utensils, UtensilsCrossed, X } from 'lucide-react-native'
+import { ArrowLeftRight, Calculator, ChevronDown, ChevronLeft, ChevronUp, Lock, Plus, Sparkles, Trash2, Utensils, UtensilsCrossed, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, Input, NativeDialog, Textarea } from '../../components'
@@ -14,22 +14,28 @@ import {
   computeTDEE,
   deriveCalorieTarget,
   deriveMacroTargets,
+  gramsToHousehold,
   type ActivityLevel,
   type Goal,
   type Sex,
 } from '@eva/nutrition-engine'
 import { FoodSearchSheet } from '../../components/coach/FoodSearchSheet'
 import { FoodSwapSheet } from '../../components/coach/FoodSwapSheet'
+import { BodyCompGoalsSheet } from '../../components/coach/BodyCompGoalsSheet'
+import { useEntitlements } from '../../lib/entitlements'
 import {
   DAY_OF_WEEK,
   draftItemMacros,
   draftTotals,
   emptyPlanDraft,
+  emptyRestrictionSets,
   foodToDraftItem,
   getClientFoodFavorites,
+  getClientFoodRestrictions,
   getPlanDraft,
   newMeal,
   saveClientPlan,
+  type ClientFoodRestrictionSets,
   type DraftMeal,
   type FoodRow,
   type PlanDraft,
@@ -90,6 +96,7 @@ function unitsForFood(item: { unit: string; serving_unit?: string; is_liquid?: b
 
 export default function NutritionBuilderScreen() {
   const { theme, resolvedScheme } = useTheme()
+  const { hasModule } = useEntitlements()
   const router = useRouter()
   const { clientId, clientName, planId, templateId, mode } = useLocalSearchParams<{ clientId?: string; clientName?: string; planId?: string; templateId?: string; mode?: string }>()
   const isTemplate = mode === 'template' || !!templateId
@@ -105,12 +112,17 @@ export default function NutritionBuilderScreen() {
   // Objetivos = suma de alimentos automáticamente, salvo que el coach los edite a mano.
   const [macrosManual, setMacrosManual] = useState(false)
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
+  // E5-17: restricciones dietarias del alumno (alergia/intolerancia/disgusto) — correctness de salud.
+  const [restrictions, setRestrictions] = useState<ClientFoodRestrictionSets>(emptyRestrictionSets())
   // Target del editor de intercambios (qué alimento de qué comida).
   const [swapTarget, setSwapTarget] = useState<{ mealUid: string; itemUid: string } | null>(null)
   const [showEmptyWarn, setShowEmptyWarn] = useState(false)
   // N-F3: calculadora de metas (Mifflin-St Jeor).
   const [calcOpen, setCalcOpen] = useState(false)
   const [calc, setCalc] = useState({ weight: '', height: '', age: '', gender: 'M' as 'M' | 'F', activity: 'moderate' as ActivityKey, goal: 'maintain' as GoalKey })
+  // E5-20: panel Pro "objetivos por composición corporal" (gated body_composition, solo plan de alumno).
+  const [bodyCompOpen, setBodyCompOpen] = useState(false)
+  const bodyCompModule = hasModule('body_composition')
 
   useEffect(() => {
     (async () => {
@@ -132,6 +144,12 @@ export default function NutritionBuilderScreen() {
   useEffect(() => {
     if (isTemplate || !clientId) return
     getClientFoodFavorites(clientId).then(setFavoriteIds).catch(() => {})
+  }, [clientId, isTemplate])
+
+  // E5-17: restricciones del alumno (solo plan de alumno) → badges + bloqueo de alérgenos.
+  useEffect(() => {
+    if (isTemplate || !clientId) { setRestrictions(emptyRestrictionSets()); return }
+    getClientFoodRestrictions(clientId).then(setRestrictions).catch(() => {})
   }, [clientId, isTemplate])
 
   const totals = draftTotals(draft.meals)
@@ -301,6 +319,25 @@ export default function NutritionBuilderScreen() {
 
           <Button label="Calcular metas (Mifflin-St Jeor)" variant="outline" leftIcon={Calculator} onPress={() => setCalcOpen(true)} full />
 
+          {/* E5-20: objetivos por composición corporal (Pro, solo plan de alumno) */}
+          {!isTemplate ? (
+            <TouchableOpacity
+              testID="bodycomp-open"
+              onPress={() => setBodyCompOpen(true)}
+              activeOpacity={0.85}
+              className="border-sport-500/40 bg-sport-500/5 rounded-control"
+              style={styles.bodyCompBtn}
+            >
+              {bodyCompModule ? <Sparkles size={15} color={theme.foreground} /> : <Lock size={14} color={theme.mutedForeground} />}
+              <Text className="font-sans-semibold text-sport-700" style={styles.bodyCompBtnText}>
+                Objetivos por composición corporal
+              </Text>
+              <View className="bg-sport-500/15 rounded-pill" style={styles.proBadge}>
+                <Text className="font-sans-bold text-sport-600" style={styles.proBadgeText}>PRO</Text>
+              </View>
+            </TouchableOpacity>
+          ) : null}
+
           {/* Live totals from foods */}
           <View className="bg-surface-sunken border border-subtle rounded-lg" style={styles.totals}>
             <Text className="font-sans text-muted" style={styles.totalsLabel}>Suma de alimentos</Text>
@@ -359,6 +396,12 @@ export default function NutritionBuilderScreen() {
                           <Text className="font-mono text-muted" style={styles.itemMacro}>
                             {Math.round(im.calories)} kcal · P{Math.round(im.protein)} C{Math.round(im.carbs)} G{Math.round(im.fats)}
                           </Text>
+                          {/* E5-21: medida casera '120 g (1 taza)' — solo en gramos y si el alimento la trae. */}
+                          {(it.unit || 'g').toLowerCase() === 'g' && it.household_grams && it.household_label ? (
+                            <Text className="font-sans text-muted" style={styles.itemHousehold}>
+                              ≈ {gramsToHousehold({ household_grams: it.household_grams, household_label: it.household_label }, it.quantity)}
+                            </Text>
+                          ) : null}
                         </View>
                         <TextInput
                           testID="item-qty"
@@ -433,9 +476,23 @@ export default function NutritionBuilderScreen() {
         onSelect={handleFoodSelected}
         excludedIds={searchMode === 'swap' ? swapExcluded : undefined}
         favoriteIds={!isTemplate && favoriteIds.size ? favoriteIds : undefined}
+        allergyIds={!isTemplate ? restrictions.allergyIds : undefined}
+        intoleranceIds={!isTemplate ? restrictions.intoleranceIds : undefined}
+        dislikeIds={!isTemplate ? restrictions.dislikeIds : undefined}
         title={searchMode === 'swap' ? 'Agregar alternativa' : undefined}
       />
       <FoodSwapSheet ref={swapSheetRef} item={swapItem} onAddPress={onAddSwapPress} onUpdateSwap={updateSwap} onRemoveSwap={removeSwap} />
+
+      {/* E5-20: sheet Pro de objetivos por composición corporal */}
+      <BodyCompGoalsSheet
+        open={bodyCompOpen}
+        onClose={() => setBodyCompOpen(false)}
+        hasModule={bodyCompModule}
+        onApply={(g) => {
+          setMacrosManual(true)
+          patch({ daily_calories: g.calories, protein_g: g.protein, carbs_g: g.carbs, fats_g: g.fats })
+        }}
+      />
 
       {/* N-F3: calculadora de metas (Mifflin-St Jeor) */}
       <NativeDialog open={calcOpen} title="Calcular metas" onClose={() => setCalcOpen(false)}>
@@ -524,6 +581,10 @@ const styles = StyleSheet.create({
   macroInput: { height: 46, borderRadius: 10, paddingHorizontal: 8, fontSize: 15, textAlign: 'center' },
   calcChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7 },
   calcChipText: { fontSize: 12 },
+  bodyCompBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 11 },
+  bodyCompBtnText: { flex: 1, fontSize: 13 },
+  proBadge: { paddingHorizontal: 7, paddingVertical: 2 },
+  proBadgeText: { fontSize: 9, letterSpacing: 0.5 },
   totals: { paddingHorizontal: 14, paddingVertical: 10, gap: 3 },
   totalsLabel: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8 },
   totalsValue: { fontSize: 15 },
@@ -538,6 +599,7 @@ const styles = StyleSheet.create({
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 10, paddingVertical: 8 },
   itemName: { fontSize: 13 },
   itemMacro: { fontSize: 11, marginTop: 2 },
+  itemHousehold: { fontSize: 11, marginTop: 1 },
   qtyInput: { width: 62, height: 44, borderRadius: 9, textAlign: 'center', fontSize: 16, lineHeight: 20, paddingTop: 0, paddingBottom: 0, paddingHorizontal: 6, includeFontPadding: false },
   unitWrap: { flexDirection: 'row', gap: 2 },
   unitChip: { paddingHorizontal: 7, paddingVertical: 6, borderRadius: 7 },

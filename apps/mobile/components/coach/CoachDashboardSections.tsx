@@ -1877,9 +1877,10 @@ export function MobilePulseHero({
 }) {
   const { theme } = useTheme()
 
-  // Spark derivado de la adherencia actual (curva suave que termina en el valor real).
-  const a = kpi.avgAdherence
-  const adherenceSpark = [a - 6, a - 3, a - 4, a - 1, a - 2, a + 1, a].map((v) => Math.max(0, Math.min(100, v)))
+  // Serie suave terminando en el valor real (1:1 con sparkSeries de PulseHero.tsx web:
+  // mismo wiggle → misma curva). La pipeline no expone histórico agregado (placeholder).
+  const base = Math.max(0, Math.min(100, kpi.avgAdherence))
+  const adherenceSpark = [-9, -5, -7, -2, -4, 1, 0].map((w) => Math.max(0, Math.min(100, base + w)))
 
   const stats: Array<{
     key: string
@@ -2551,31 +2552,36 @@ export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
 
 type NovedadesFilter = 'todos' | 'pendientes' | 'revisados'
 
-/** El shape mobile aun no expone `reviewed` (llega con el shape V2 en E5); se lee defensivo. */
+/** `reviewed` llega en el shape V2 (E5-15): check-ins con `reviewed_at != null`. Se lee defensivo. */
 function activityReviewed(it: MobileActivityItem): boolean {
-  return Boolean((it as { reviewed?: boolean }).reviewed)
+  return Boolean(it.reviewed)
 }
 
 /**
  * Novedades (NewsFeed) — programas por vencer + actividad reciente en una sola card,
  * con la cola de check-ins encima: badge "por revisar" (ember) + filtro segmentado
  * (Todos / Por revisar / Revisados) que aparece SOLO si hay check-ins y acota el feed
- * client-side por estado. 1:1 con NewsFeed.tsx (web). Sin `reviewed` en la data (E5),
- * todos los check-ins cuentan como "por revisar" y "Revisados" queda vacio.
+ * client-side por estado. 1:1 con NewsFeed.tsx (web). El badge usa el conteo server-side
+ * `pendingCheckins` (ventana del feed, misma semantica que DashboardV2Data.pendingCheckinsCount);
+ * el filtro/senal por fila usan `reviewed` del propio item.
  */
 export function MobileNovedades({
   expiringPrograms,
   activities,
+  pendingCheckins: pendingCheckinsProp,
 }: {
   expiringPrograms: MobileExpiringProgramItem[]
   activities: MobileActivityItem[]
+  /** Conteo server-side de check-ins por revisar (V2). Fallback: derivado de `activities`. */
+  pendingCheckins?: number
 }) {
   const router = useRouter()
   const { theme } = useTheme()
   const [filter, setFilter] = useState<NovedadesFilter>('todos')
 
   const hasCheckins = activities.some((a) => a.type === 'check-in')
-  const pendingCheckins = activities.filter((a) => a.type === 'check-in' && !activityReviewed(a)).length
+  const pendingCheckins =
+    pendingCheckinsProp ?? activities.filter((a) => a.type === 'check-in' && !activityReviewed(a)).length
 
   // "todos" = programas + toda la actividad; estados de cola = solo check-ins del estado.
   const showPrograms = filter === 'todos'
