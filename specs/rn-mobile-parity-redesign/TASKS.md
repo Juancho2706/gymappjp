@@ -265,66 +265,68 @@ Excluido explícito: el **ejecutor** (lo reemplaza E2, no se re-skinea dos veces
 
 Rewrite del monolito `workout/[planId].tsx` (~934L, paleta propia) a ~15 componentes DS sobre `@eva/workout-engine` (E0-F1). Pantalla de alto riesgo → flag remoto (E0-G4).
 
+> **Estado 2026-07-08: 18/18 construidas** (Waves A+B, commits 25796663→11623d5d). ExecutorV2 detrás del flag `executorV2` (default OFF; legacy intacto = rollback instantáneo). Promovidos al engine en el camino: keypad-logic, workout-exercise-type, body-anatomy, muscle-map, session-summary (web migrado, cero copias). Desviaciones conocidas para QA: sustitución es strength-only (como web); offline no persiste columnas de sustitución (se resuelve con idempotencia E4); orden intercalado de rondas en superseries = pulido pendiente. **Gate de etapa pendiente de: build EAS + QA CEO en device con el flag ON + screenshots de paridad + Maestro.**
+
 ### E2.A — Core fuerza
 
-- [ ] **E2-01** · [FUNCIONAL][M] Keypad numérico tipado RPE/RIR + flujo peso→reps→(RPE/RIR)
+- [x] **E2-01** · [FUNCIONAL][M] Keypad numérico tipado RPE/RIR + flujo peso→reps→(RPE/RIR)
   - Fuentes: G03-B1 · Deps: E0-F1
   - Scope: keypad custom RN con flujo tipado. · Verificación: entrada numérica y validación RPE/RIR en device.
-- [ ] **E2-02** · [FUNCIONAL][M] EffortScale / ScaleDots RN + chips de incremento de peso
+- [x] **E2-02** · [FUNCIONAL][M] EffortScale / ScaleDots RN + chips de incremento de peso
   - Fuentes: G03-B2 · Deps: E2-01
   - Scope: escala de esfuerzo + chips de incremento. · Verificación: paridad con web.
-- [ ] **E2-03** · [FUNCIONAL][L] Resiliencia de sesión (draft/snapshot + recuperación + cap 4h + duración)
+- [x] **E2-03** · [FUNCIONAL][L] Resiliencia de sesión (draft/snapshot + recuperación + cap 4h + duración)
   - Fuentes: G03-B3 · Deps: E0-F1
   - Scope: drafts/snapshot/optimistic (resiliencia PR #113), duración + cap 4h. · Verificación: cerrar la app a mitad de set recupera progreso; sesión >4h capada.
-- [ ] **E2-04** · [FUNCIONAL][L] Modo Paso a paso (StepperExecution + toggle Lista/Pasos)
+- [x] **E2-04** · [FUNCIONAL][L] Modo Paso a paso (StepperExecution + toggle Lista/Pasos)
   - Fuentes: G03-B4 · Deps: E0-F1, E2-08
   - Scope: modo paso-a-paso con toggle. · Verificación: paridad de navegación con web.
-- [ ] **E2-05** · [FUNCIONAL][M] Sustitución de ejercicio (SubstituteExerciseSheet + columnas log)
+- [x] **E2-05** · [FUNCIONAL][M] Sustitución de ejercicio (SubstituteExerciseSheet + columnas log)
   - Fuentes: G03-B5 · Deps: E0-F1, E0-B1 (GRANTs columnas sustitución)
   - Scope: sheet de sustitución + columnas de log de máquina. · Verificación: sustitución persiste; sin 42501.
-- [ ] **E2-06** · [VISUAL][S] Migrar ejecución (planId/RestTimer/SummaryModal) a tokens DS
+- [x] **E2-06** · [VISUAL][S] Migrar ejecución (planId/RestTimer/SummaryModal) a tokens DS
   - Fuentes: G03-A1 · Deps: E0-D (theming)
   - Scope: reemplazar hex/fuentes literales por tokens DS. · Verificación: sin literales de color/fuente legacy.
-- [ ] **E2-07** · [VISUAL][M] Re-skin BlockCard → SingleExerciseCard (dots, chip sobrecarga, cue técnica)
+- [x] **E2-07** · [VISUAL][M] Re-skin BlockCard → SingleExerciseCard (dots, chip sobrecarga, cue técnica)
   - Fuentes: G03-A2 · Deps: E2-06
   - Scope: forma de SingleExerciseCard con dots + chip de sobrecarga + cue. · Verificación: paridad con web md.
-- [ ] **E2-08** · [VISUAL][S] Header de ejecución: "Ejercicio X de Y · volumen · tiempo" + barra DS
+- [x] **E2-08** · [VISUAL][S] Header de ejecución: "Ejercicio X de Y · volumen · tiempo" + barra DS
   - Fuentes: G03-A3 · Deps: E2-06
   - Scope: header + barra de progreso DS. · Verificación: métricas coinciden con web.
 
 ### E2.B — Polimórfico
 
-- [ ] **E2-09** · [FUNCIONAL][L] Timers polimórficos (Hold/Interval/Stopwatch + Provider + Settings + RestTimer protagonista)
+- [x] **E2-09** · [FUNCIONAL][L] Timers polimórficos (Hold/Interval/Stopwatch + Provider + Settings + RestTimer protagonista)
   - Fuentes: G03-B6 · Deps: E0-F1
   - Scope: timers + provider + settings; descanso + celebraciones + audio (Fase M), háptica + wake-lock (Fase S). · Verificación: cada tipo de timer funciona; audio/háptica en device.
-- [ ] **E2-10** · [FUNCIONAL][XL] Ejecución polimórfica cardio/mobility/roller (query tipada + TypedTargetGrid)
+- [x] **E2-10** · [FUNCIONAL][XL] Ejecución polimórfica cardio/mobility/roller (query tipada + TypedTargetGrid)
   - Fuentes: G03-B7 · Deps: E0-F1, E2-09
   - Scope: tipos cardio/mobility/roller con TypedTargetGrid. · Verificación: cada tipo se ejecuta y loguea correcto.
-- [ ] **E2-11** · [FUNCIONAL][L] HR zones cardio (entitlement + `@eva/cardio` + endpoint + zonas FC)
+- [x] **E2-11** · [FUNCIONAL][L] HR zones cardio (entitlement + `@eva/cardio` + endpoint + zonas FC)
   - Fuentes: G03-B8 · Deps: E0-C1 (gate), E0-F2, E2-10
   - Scope: zonas HR vía `@eva/cardio`, gated por módulo cardio. · Verificación: alumno sin módulo no ve zonas ni por API.
-- [ ] **E2-12** · [FUNCIONAL][S] Superseries end-to-end (consumiendo `workout-block-grouping` compartido)
+- [x] **E2-12** · [FUNCIONAL][S] Superseries end-to-end (consumiendo `workout-block-grouping` compartido)
   - Fuentes: G03-B11 · Deps: E0-F1
   - Scope: superseries robustas sobre el grouping del engine. · Verificación: agrupación idéntica a web.
-- [ ] **E2-13** · [FUNCIONAL][S] Áreas custom en ejecución (`workout-areas` + fetch)
+- [x] **E2-13** · [FUNCIONAL][S] Áreas custom en ejecución (`workout-areas` + fetch)
   - Fuentes: G03-B12 · Deps: E0-F1
   - Scope: leer áreas en ejecución. · Verificación: áreas custom se muestran agrupadas.
-- [ ] **E2-14** · [FUNCIONAL][S] Técnica video INLINE en modal
+- [x] **E2-14** · [FUNCIONAL][S] Técnica video INLINE en modal
   - Fuentes: G03-B13 · Deps: E0-E12, E2-07
   - Scope: video de técnica inline (player compartido). · Verificación: reproduce YouTube/mp4 sin salir de la app.
-- [ ] **E2-15** · [FUNCIONAL][M] WorkoutSummary a paridad (PR guard + mapa muscular SVG + conteo polimórfico + next hint)
+- [x] **E2-15** · [FUNCIONAL][M] WorkoutSummary a paridad (PR guard + mapa muscular SVG + conteo polimórfico + next hint)
   - Fuentes: G03-B9 · Deps: E0-F1, E2-05, E2-10
   - Scope: MuscleMapSvg + resumen con conteo polimórfico. · Verificación: resumen coincide con web para la misma sesión.
 
 ### E2.C — Periferia
 
-- [ ] **E2-16** · [FUNCIONAL][M] Share-cards de workout branded (PR/progreso/racha/resumen)
+- [x] **E2-16** · [FUNCIONAL][M] Share-cards de workout branded (PR/progreso/racha/resumen)
   - Fuentes: G03-B10 · Deps: E0-E11 (ShareCard motor), E2-15
   - Scope: share-cards tras finalizar rutina (canvas nativo). · Verificación: exporta imagen branded correcta.
-- [ ] **E2-17** · [FUNCIONAL][S] "Última vez" tap-to-autofill + "Supera tu marca" inline
+- [x] **E2-17** · [FUNCIONAL][S] "Última vez" tap-to-autofill + "Supera tu marca" inline
   - Fuentes: G03-B14 · Deps: E2-07
   - Scope: autofill de último registro + hint de superación. · Verificación: autofill correcto por ejercicio.
-- [ ] **E2-18** · [FUNCIONAL][M] Check-in P0 post-workout + banner de umbrales `[NUEVO-PLAN]`
+- [x] **E2-18** · [FUNCIONAL][M] Check-in P0 post-workout + banner de umbrales `[NUEVO-PLAN]`
   - Fuentes: NEW (PLAN E2.C; seam con E4) · Deps: E2-15
   - Scope: disparo de check-in P0 al terminar + banner de umbrales. · Verificación: umbrales disparan el banner igual que web.
 
