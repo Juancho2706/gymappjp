@@ -277,3 +277,39 @@ No hay flujo self-service para resucitar un tier muerto. Opciones:
 - Cobrar un servicio que el operador apagó es exposición SERNAC directa (servicio no provisto). El kill-switch NO pausa el cobro por sí mismo.
 - **Acción del CEO:** kill prolongado → compensar al coach. Opciones: pausar el add-on (bajar su monto del preapproval con un PUT manual mientras dure el incidente) o convertirlo en cortesía (`source='admin_grant'`, price 0, vía el override del CEO en `/admin/coaches`). Registrar la compensación.
 - El kill-switch sigue siendo palanca de incidentes (no bloquea compra): la compensación es operativa, no automática. Ver también `docs/operations/MANUAL_TASKS.md`.
+
+## Pagos Flow (Webpay) — incidentes y procedimientos
+
+> Dual-gateway desde `feat/pagos-flow-mercadopago`. Flow detras de `NEXT_PUBLIC_FLOW_ENABLED` (build-time; flip = redeploy). La DB manda; Flow se reconcilia. Webhook: `/api/payments/flow/webhook?token=FLOW_WEBHOOK_TOKEN` (fail-closed en prod). Backstop diario: cron `flow-reconcile` (ALERT-ONLY, audit `coach.flow_*`).
+
+### REFUND / CHARGEBACK de una sub Flow (procedimiento MANUAL — T3.7)
+
+⚠️ Los refunds hechos desde el PANEL de Flow **no emiten webhook** y **no cancelan la suscripcion**: si solo devolves la plata, la sub sigue VIVA y re-cobra la tarjeta el proximo ciclo. Orden OBLIGATORIO:
+
+1. **Cancelar la suscripcion en el panel de Flow PRIMERO** (o via API `subscription/cancel` con `at_period_end=0`). El `subscriptionId` esta en `coaches.subscription_provider_external_id`.
+2. Devolver el cobro (panel Flow → el pago → reembolsar, o `refund/create`).
+3. En EVA (service-role): marcar al coach segun la politica (`subscription_status='expired'` + cancelar add-ons si corresponde — espejo de la rama FIX-7 de MP) y dejar fila de auditoria en `admin_audit_logs` (`action: coach.flow_refund_manual`).
+4. Verificar al dia siguiente que `flow-reconcile` NO alerte `coach.flow_status_divergence` para ese coach.
+
+**Backstop automatico:** si alguien refundea sin cancelar, `flow-reconcile` alerta `flow_status_divergence` (coach no-activo en DB con sub activa en Flow, o viceversa) dentro de 24h → aplicar los pasos 1 y 3.
+
+### Webhook Flow caido / notificacion perdida
+
+Sintoma: `coach.flow_period_not_advanced` en el audit (el coach pago pero su periodo no avanzo). Accion: verificar el cobro en el panel de Flow (invoice pagada) → re-disparar la notificacion posteando el token al webhook, o ajustar `current_period_end` por service-role con la invoice como evidencia (snapshot idempotente por `(provider,'invoice:<id>')`, no duplica).
+
+### Drift de monto (`coach.flow_amount_drift`)
+
+El monto vive HORNEADO en el `provider_plan_id` (`eva_<tier>_<cycle>_<monto>`). Drift esperado y benigno: ventana de una baja de add-on regla-4 (el changePlan-down corre DIFERIDO al corte via cron). Drift persistente = revisar: el fix es `updateCheckoutAmount` del FlowProvider (changePlan al compuesto de `getCompositeAmountClp`).
+
+### Alta Flow falla con "email is not valid" (code 501)
+
+Flow valida la ENTREGABILIDAD real del buzon del pagador. El endpoint ya mapea a 400 `GATEWAY_EMAIL_REJECTED`. Accion con un coach real: que corrija su email de cuenta o use Mercado Pago.
+
+### Coach atascado en "pago en proceso" (Flow pending)
+
+La 1ra invoice del sandbox/Flow puede generarse asincrona → coach queda `pending_payment` y el webhook de la invoice pagada lo activa. Si no llega en horas: panel Flow → estado de la invoice → si pagada, re-disparar webhook o activar por service-role (ver "webhook caido").
+
+### Codigos de error de intento de pago (referencia)
+
+`-1` tarjeta invalida · `-2` conexion · `-3` excede monto max · `-4` expiracion invalida · `-5` autenticacion · `-6` rechazo general · `-7` bloqueada · `-8` vencida · `-9` no soportada · `-10` problema trx · `-11` limite de reintentos · `999` desconocido. Aparecen en `payment/getStatusExtended.lastError` y `invoice.chargeAttemps[]` (otro keyspace: codigos tipo 1605 = nivel gateway).
+

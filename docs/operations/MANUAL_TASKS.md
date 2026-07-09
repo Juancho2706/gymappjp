@@ -890,3 +890,16 @@ Al quedar inscrita la sociedad (EVA Technology SpA, en proceso jun-2026), revisa
 ## Nota — Search Console y páginas /enterprise
 
 Search Console removal de `/enterprise` y `/legal/contrato-enterprise`: **INNECESARIO** (verificado 2026-06-11, Google no tiene nada indexado de esas rutas). El `noindex` agregado en ambas páginas queda como cinturón de seguridad preventivo.
+
+## MT-41 — Env vars de Flow (dual-gateway Webpay) · ⏳ Preview HECHO 2026-07-09 · Production = go-live Ola 7
+
+| Variable | Preview (HECHO) | Production (go-live) | Sensitive |
+|---|---|---|---|
+| `FLOW_API_KEY` | apiKey SANDBOX | apiKey de la cuenta PROD (panel Flow → Mis datos) | ✔ |
+| `FLOW_SECRET_KEY` | secretKey SANDBOX | secretKey PROD | ✔ |
+| `FLOW_API_BASE` | `https://sandbox.flow.cl/api` | `https://www.flow.cl/api` (EXPLICITO — el default del codigo es sandbox, fail-safe) | ✗ |
+| `FLOW_WEBHOOK_TOKEN` | secreto propio (gate `?token=` del webhook) | OTRO secreto distinto para prod | ✔ |
+| `NEXT_PUBLIC_FLOW_ENABLED` | `true` | `true` SOLO al go-live (build-time → redeploy) | ✗ (NEXT_PUBLIC) |
+
+Notas: el flip de `NEXT_PUBLIC_FLOW_ENABLED` exige redeploy (inlined build-time). Rollback = quitar/poner `false` + redeploy (kill-switch, cero regresion MP). Gotcha QA Preview: `NEXT_PUBLIC_SITE_URL` de Preview apunta a un alias fijo → el retorno de Webpay cae en un dominio sin sesion (rebote a /login); en prod no ocurre (eva-app.cl).
+
