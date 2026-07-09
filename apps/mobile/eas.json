@@ -27,7 +27,7 @@
       "env": {
         "APP_ENV": "production",
         "EXPO_ROUTER_APP_ROOT": "apps/mobile/app",
-        "EXPO_PUBLIC_SENTRY_DSN": "https://fdddd3c00781033b56a680f18a8f6deb@o4511408707141632.ingest.us.sentry.io/4511435981455360"
+        "EXPO_PUBLIC_SENTRY_DSN": "https://7c0dbb7f424c24fb62f29c9aacca97e1@o4511408707141632.ingest.us.sentry.io/4511702402138112"
       }
     },
     "staging": {
@@ -51,7 +51,7 @@
       "env": {
         "APP_ENV": "production",
         "EXPO_ROUTER_APP_ROOT": "apps/mobile/app",
-        "EXPO_PUBLIC_SENTRY_DSN": "https://fdddd3c00781033b56a680f18a8f6deb@o4511408707141632.ingest.us.sentry.io/4511435981455360"
+        "EXPO_PUBLIC_SENTRY_DSN": "https://7c0dbb7f424c24fb62f29c9aacca97e1@o4511408707141632.ingest.us.sentry.io/4511702402138112"
       },
       "android": {
         "credentialsSource": "remote"
