@@ -671,7 +671,7 @@ describe('POST /api/payments/create-preference — W2 gateway Flow', () => {
         expect(fakeAdmin.from).not.toHaveBeenCalled()
     })
 
-    it('gateway flow ON (coach free): enruta a Flow, UPDATE con provider_customer_id (NO subscription_mp_id) y successUrl → flow-processing', async () => {
+    it('gateway flow ON (coach free): enruta a Flow, UPDATE con provider_customer_id (NO subscription_mp_id) y successUrl → puente /flow/retorno', async () => {
         flowFlag.enabled = true
         currentCoachMaybeSingle.mockResolvedValue({
             data: { ...FREE_COACH, provider_customer_id: 'cus_existing' },
@@ -681,13 +681,13 @@ describe('POST /api/payments/create-preference — W2 gateway Flow', () => {
         expect(res.status).toBe(200)
         // El provider se pidió por gateway 'flow'.
         expect(getPaymentsProvider).toHaveBeenCalledWith('flow')
-        // createCheckout usa la successUrl de la Fase 2 (flow-processing) y reusa el customerId enrolado.
+        // createCheckout usa el PUENTE publico /flow/retorno (303→GET, fix cookies cross-site) y reusa el customer.
         expect(createCheckout).toHaveBeenCalledOnce()
         const checkoutArg = createCheckout.mock.calls[0][0] as {
             successUrl: string
             existingCustomerId?: string
         }
-        expect(checkoutArg.successUrl).toContain('/coach/subscription/flow-processing')
+        expect(checkoutArg.successUrl).toContain('/flow/retorno')
         expect(checkoutArg.successUrl).toContain('tier=pro')
         expect(checkoutArg.existingCustomerId).toBe('cus_existing')
         // UPDATE del coach: provider_customer_id (customerId de Flow) + payment_provider 'flow'; jamás
@@ -739,9 +739,9 @@ describe('POST /api/payments/create-preference — W2 gateway Flow', () => {
         expect(getPaymentsProvider).toHaveBeenCalledWith('mercadopago')
         expect(getPaymentsProvider).not.toHaveBeenCalledWith('flow')
         const checkoutArg = createCheckout.mock.calls[0][0] as { successUrl: string }
-        // successUrl MP clásica (no flow-processing).
+        // successUrl MP clásica (no puente flow).
         expect(checkoutArg.successUrl).toContain('/coach/subscription/processing')
-        expect(checkoutArg.successUrl).not.toContain('flow-processing')
+        expect(checkoutArg.successUrl).not.toContain('/flow/retorno')
     })
 
     it('gateway flow ON + coach pago ACTIVO pidiendo downgrade: 400 FLOW_PLAN_CHANGE_UNSUPPORTED y CERO efectos', async () => {

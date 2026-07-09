@@ -450,12 +450,13 @@ export async function POST(request: Request) {
         const addonSuffix = checkoutAddons.length > 0 ? ` + ${checkoutAddons.length} add-on(s)` : ''
         const retryQuery = `tier=${encodeURIComponent(tier)}&cycle=${encodeURIComponent(billingCycle)}`
 
-        // successUrl por gateway: Flow devuelve del enrolamiento de tarjeta (Fase 1) a la página
-        // flow-processing (W4), que re-manda tier/cycle/addons al confirm-enrollment (Fase 2, crea la
-        // sub REAL). MercadoPago va a /processing como hoy. failure/pending son iguales en ambos.
+        // successUrl por gateway: Flow devuelve del enrolamiento con un POST CROSS-SITE → las cookies
+        // Lax no viajan → si apuntara directo a /coach/* el proxy rebotaria a /login (incidente go-live
+        // 2026-07-09). Por eso apunta al PUENTE publico /flow/retorno (303 → re-navegacion GET con
+        // cookies) que aterriza en flow-processing (Fase 2). MercadoPago va a /processing como hoy.
         const successUrl =
             gateway === 'flow'
-                ? `${appUrl}/coach/subscription/flow-processing?tier=${encodeURIComponent(tier)}&cycle=${encodeURIComponent(billingCycle)}` +
+                ? `${appUrl}/flow/retorno?tier=${encodeURIComponent(tier)}&cycle=${encodeURIComponent(billingCycle)}` +
                   (checkoutAddons.length > 0
                       ? `&addons=${encodeURIComponent(checkoutAddons.join(','))}`
                       : '')

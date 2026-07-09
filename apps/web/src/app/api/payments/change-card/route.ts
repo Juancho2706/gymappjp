@@ -111,7 +111,9 @@ export async function POST(request: Request) {
             try {
                 const { redirectUrl } = await flowProvider.startCardReenrollment(
                     gatewayRow.provider_customer_id,
-                    `${appUrl}/coach/subscription?card=updated`
+                    // Puente publico /flow/retorno (303 → GET con cookies): el retorno de Flow es un
+                    // POST cross-site y directo a /coach/* rebotaria a /login (incidente go-live).
+                    `${appUrl}/flow/retorno?dest=card`
                 )
                 return NextResponse.json({ kind: 'redirect', redirectUrl }, { status: 200 })
             } catch (error) {
