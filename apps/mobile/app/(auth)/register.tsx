@@ -265,13 +265,19 @@ export default function RegisterScreen() {
             transition={{ type: 'timing', duration: 380 }}
             style={styles.content}
           >
-            {error ? (
-              <View className="rounded-control bg-danger-100" style={styles.errorBanner} testID="register-error">
-                <Text className="text-danger-600 font-sans-semibold" style={styles.errorText}>
-                  {error}
-                </Text>
-              </View>
-            ) : null}
+            {/* P0 focus-hop: slot SIEMPRE montado. Antes el banner era un hermano
+                condicional insertado ANTES de los inputs → al aparecer/desaparecer
+                cambiaba la forma del árbol y remontaba los inputs (rompía el foco).
+                Ahora el View del slot es estable; solo su contenido interno varía. */}
+            <View>
+              {error ? (
+                <View className="rounded-control bg-danger-100" style={styles.errorBanner} testID="register-error">
+                  <Text className="text-danger-600 font-sans-semibold" style={styles.errorText}>
+                    {error}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
 
             {step === 1 ? (
               <View style={styles.form}>

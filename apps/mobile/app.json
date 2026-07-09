@@ -110,6 +110,7 @@
           "iosUrlScheme": "com.googleusercontent.apps.REEMPLAZAR_CON_IOS_CLIENT_ID_INVERTIDO"
         }
       ],
+      "./plugins/with-ios-modular-headers",
       [
         "@sentry/react-native/expo",
         {

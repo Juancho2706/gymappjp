@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useColorScheme, View } from 'react-native'
 import { colorScheme as nwColorScheme, vars } from 'nativewind'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -43,8 +43,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // `useColorScheme()` is reactive, so 'system' tracks OS changes live.
   const resolvedScheme: 'light' | 'dark' = (mode === 'system' ? colorScheme : mode) === 'dark' ? 'dark' : 'light'
-  const base = resolvedScheme === 'dark' ? darkTheme : lightTheme
-  const theme = applyCoachBranding(base, branding?.primaryColor)
+  const primaryColor = branding?.primaryColor
+  // Memoizados: sin esto, `theme`/`themeVars`/`value` se recreaban como objetos
+  // nuevos en CADA render → el Provider propagaba una identidad nueva a TODOS los
+  // consumidores (useTheme) en cada tecla/estado, amplificando el loop de re-render
+  // del P0 focus-hop. Deps = [resolvedScheme, primaryColor] preservan la
+  // reactividad de system/dark (E0-D7) y del white-label.
+  const theme = useMemo(() => {
+    const base = resolvedScheme === 'dark' ? darkTheme : lightTheme
+    return applyCoachBranding(base, primaryColor)
+  }, [resolvedScheme, primaryColor])
 
   // Keep NativeWind's class-based dark mode in sync with our resolved scheme.
   useEffect(() => {
@@ -52,19 +60,27 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [resolvedScheme])
 
   // Live brand accent for Tailwind classes (bg-primary, text-accent…).
-  const themeVars = { ...vars(brandVars(branding?.primaryColor, resolvedScheme)) }
+  const themeVars = useMemo(
+    () => ({ ...vars(brandVars(primaryColor, resolvedScheme)) }),
+    [primaryColor, resolvedScheme],
+  )
 
-  function setThemeMode(next: ThemeMode) {
+  const setThemeMode = useCallback((next: ThemeMode) => {
     setMode(next)
     void AsyncStorage.setItem(THEME_MODE_KEY, next)
-  }
+  }, [])
 
-  function toggleTheme() {
+  const toggleTheme = useCallback(() => {
     setThemeMode(resolvedScheme === 'dark' ? 'light' : 'dark')
-  }
+  }, [resolvedScheme, setThemeMode])
+
+  const value = useMemo<ThemeContextValue>(
+    () => ({ theme, branding, setBranding, mode, resolvedScheme, toggleTheme, setThemeMode }),
+    [theme, branding, mode, resolvedScheme, toggleTheme, setThemeMode],
+  )
 
   return (
-    <ThemeContext.Provider value={{ theme, branding, setBranding, mode, resolvedScheme, toggleTheme, setThemeMode }}>
+    <ThemeContext.Provider value={value}>
       <View style={[{ flex: 1 }, themeVars]}>{children}</View>
     </ThemeContext.Provider>
   )

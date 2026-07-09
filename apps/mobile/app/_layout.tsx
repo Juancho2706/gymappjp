@@ -45,7 +45,6 @@ import {
 } from '@expo-google-fonts/jetbrains-mono'
 import type { Session } from '@supabase/supabase-js'
 import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated'
-import { MotiView } from 'moti'
 import * as Sentry from '@sentry/react-native'
 import type { ErrorBoundaryProps } from 'expo-router'
 import { supabase } from '../lib/supabase'
@@ -57,7 +56,7 @@ import { AppErrorBoundary } from '../components/AppErrorBoundary'
 import { BiometricLock } from '../components/BiometricLock'
 import { isBiometricLockEnabled } from '../lib/biometric'
 import { checkForOtaUpdate } from '../lib/ota'
-import { AppState } from 'react-native'
+import { AppState, View } from 'react-native'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -234,14 +233,14 @@ export default function RootLayout() {
         <BottomSheetModalProvider>
           <ThemeProvider>
             <StatusBar style="light" />
-            <MotiView
-              from={{ opacity: 0 }}
-              animate={{ opacity: splashDone ? 1 : 0 }}
-              transition={{ type: 'timing', duration: 300 }}
-              style={{ flex: 1 }}
-            >
+            {/* P0 focus-hop: el navegador va en un View PLANO. Antes lo envolvía un
+                MotiView que animaba opacity — vista animada persistente sobre
+                react-native-screens bajo Fabric, un anti-patrón que amplifica el
+                robo de foco. El cross-fade del arranque lo hace SOLO el overlay del
+                BrandedSplash (fade-out por encima), no un fade-in del navegador. */}
+            <View style={{ flex: 1 }}>
               <RootLayoutNav />
-            </MotiView>
+            </View>
             {/* Transient feedback overlay — single mount point (parity with web <Toaster/>). */}
             <Toaster />
             {!splashDone && <BrandedSplash onFinish={() => setSplashDone(true)} />}
