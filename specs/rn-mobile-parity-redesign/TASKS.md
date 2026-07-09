@@ -409,73 +409,73 @@ Builder + program-builder = **SOLO re-skin visual con passthrough** (E0-F3); la 
 
 Cuello de botella: endpoints web nuevos (notas, shopping, off-plan, micros, recap) — hacer PRIMERO. Gating por sección **fail-open EXACTO** al de web.
 
-- [ ] **E4-01** · [VISUAL][S] Header nutrición + glow de marca; purgar `theme.*` del shell
+- [x] **E4-01** · [VISUAL][S] Header nutrición + glow de marca; purgar `theme.*` del shell
   - Fuentes: G04-A1 (dueño), G10-T7 · Deps: E0-D, E0-E8
   - Scope: re-skin base del shell de nutrición alumno a patrón A puro. · Verificación: sin `theme.*`; glow correcto.
-- [ ] **E4-02** · [VISUAL][S] Purgar Montserrat + hex fijos en nutricion.tsx → tokens/fuentes DS
+- [x] **E4-02** · [VISUAL][S] Purgar Montserrat + hex fijos en nutricion.tsx → tokens/fuentes DS
   - Fuentes: G04-A2 · Deps: E4-01
   - Scope: purga tipográfica/color. · Verificación: grep sin Montserrat/hex.
-- [ ] **E4-03** · [VISUAL][M] Re-skin MealCardExpandable a fidelidad MealCard (círculo 44px, tokens)
+- [x] **E4-03** · [VISUAL][M] Re-skin MealCardExpandable a fidelidad MealCard (círculo 44px, tokens)
   - Fuentes: G04-A3 · Deps: E4-02
   - Scope: re-skin de la card de comida. · Verificación: paridad con web md.
-- [ ] **E4-04** · [VISUAL][S] DayNavigator (swipe/dots) + banners DS + banner "comidas filtradas"
+- [x] **E4-04** · [VISUAL][S] DayNavigator (swipe/dots) + banners DS + banner "comidas filtradas"
   - Fuentes: G04-A4 · Deps: E4-01
   - Scope: navegación de día + banners. · Verificación: swipe/dots en device.
-- [ ] **E4-05** · [VISUAL][S] Verificar/re-skin MacroRingSummary + AdherenceStrip + NutritionStreakBanner
+- [x] **E4-05** · [VISUAL][S] Verificar/re-skin MacroRingSummary + AdherenceStrip + NutritionStreakBanner
   - Fuentes: G04-A5 · Deps: E4-02
   - Scope: re-skin de resúmenes de macros/adherencia. · Verificación: paridad visual.
-- [ ] **E4-06** · [SEAM][S] Reemplazar loop de racha/adherencia por `computeNutritionAdherence`
+- [x] **E4-06** · [SEAM][S] Reemplazar loop de racha/adherencia por `computeNutritionAdherence`
   - Fuentes: G04-B2 · Deps: E0-A1
   - Scope: usar el motor único de adherencia. · Verificación: racha idéntica web/app.
-- [ ] **E4-07** · [FUNCIONAL][L] Módulo exchanges/equivalencias alumno (Nutrición Pro por-alumno, gated)
+- [x] **E4-07** · [FUNCIONAL][L] Módulo exchanges/equivalencias alumno (Nutrición Pro por-alumno, gated)
   - Fuentes: G04-B4 (dueño), G10-T16 · Deps: E0-A1, E0-C1, E6-06 (cableado exchanges)
   - Scope: chips exchanges/equivalencias gated `nutrition_exchanges`; vista en porciones. · Verificación: sin el módulo no aparece; con módulo cablea a `/api/mobile/nutrition/exchanges/*`.
-- [ ] **E4-08** · [FUNCIONAL][M] Swaps de alimento interactivos + favoritos (recálculo de macros)
+- [x] **E4-08** · [FUNCIONAL][M] Swaps de alimento interactivos + favoritos (recálculo de macros)
   - Fuentes: G04-B5 · Deps: E0-A1, E4-03
   - Scope: swaps aplicables + favoritos. · Verificación: recálculo de macros correcto tras swap.
-- [ ] **E4-09** · [FUNCIONAL][M] Panel de micros (base + avanzados Pro) con topes del coach
+- [x] **E4-09** · [FUNCIONAL][M] Panel de micros (base + avanzados Pro) con topes del coach
   - Fuentes: G04-B6 · Deps: E0-A1, E0-C1, endpoint micros
   - Scope: panel de micronutrientes con topes. · Verificación: micros base sin gate; avanzados solo Pro.
-- [ ] **E4-10** · [FUNCIONAL][S] Plato visual (PlatePanel / proporción)
+- [x] **E4-10** · [FUNCIONAL][S] Plato visual (PlatePanel / proporción)
   - Fuentes: G04-B7 · Deps: E0-A1
   - Scope: plato visual de proporciones. · Verificación: proporción coincide con macros del día.
-- [ ] **E4-11** · [FUNCIONAL][M] Off-plan logger (quick-add + recientes, día de hoy)
+- [x] **E4-11** · [FUNCIONAL][M] Off-plan logger (quick-add + recientes, día de hoy)
   - Fuentes: G04-B8 · Deps: endpoint intake
   - Scope: registro off-plan con recientes. · Verificación: log off-plan persiste y suma al día.
-- [ ] **E4-12** · [FUNCIONAL][M] Notas coach ⇄ alumno (NotesThread)
+- [x] **E4-12** · [FUNCIONAL][M] Notas coach ⇄ alumno (NotesThread)
   - Fuentes: G04-B9 · Deps: endpoint notas
   - Scope: hilo de notas bidireccional. · Verificación: mensajes van y vuelven.
-- [ ] **E4-13** · [FUNCIONAL][M] Lista de compras (por pasillo, marcar, agregar, compartir)
+- [x] **E4-13** · [FUNCIONAL][M] Lista de compras (por pasillo, marcar, agregar, compartir)
   - Fuentes: G04-B10 · Deps: endpoint shopping
   - Scope: lista de compras completa. · Verificación: marcar/agregar persiste; compartir funciona.
-- [ ] **E4-14** · [FUNCIONAL][S] Weekly recap card
+- [x] **E4-14** · [FUNCIONAL][S] Weekly recap card
   - Fuentes: G04-B11 · Deps: recap engine/endpoint
   - Scope: card de recap semanal. · Verificación: números del recap coinciden con web.
-- [ ] **E4-15** · [FUNCIONAL][S] Recetas-idea asignadas
+- [x] **E4-15** · [FUNCIONAL][S] Recetas-idea asignadas
   - Fuentes: G04-B12 · Deps: query recetas
   - Scope: RecipeIdeas asignadas al alumno. · Verificación: recetas correctas por alumno.
-- [ ] **E4-16** · [FUNCIONAL][M] Export día: PDF branded (expo-print) + Copiar detalle/WhatsApp con macros
+- [x] **E4-16** · [FUNCIONAL][M] Export día: PDF branded (expo-print) + Copiar detalle/WhatsApp con macros
   - Fuentes: G04-B13 · Deps: E0-A1
   - Scope: PDF del día (mismo patrón que ruling D6) + copiar/compartir. · Verificación: PDF con macros correctas.
-- [ ] **E4-17** · [FUNCIONAL][S] Pulido: porción "Plan completo" + confetti día-completo + PushBanner + medidas caseras + HabitsTracker
+- [x] **E4-17** · [FUNCIONAL][S] Pulido: porción "Plan completo" + confetti día-completo + PushBanner + medidas caseras + HabitsTracker
   - Fuentes: G04-B14 · Deps: E4-03, E0-A1
   - Scope: pulidos varios; HabitsTracker vive en Dashboard (ruling D4, E1-02), no en Nutrición. · Verificación: confetti al completar; medidas caseras "120 g (1 taza)".
-- [ ] **E4-18** · [FUNCIONAL][S] Check-in: prefill peso/energía + limpiar badge nativo
+- [x] **E4-18** · [FUNCIONAL][S] Check-in: prefill peso/energía + limpiar badge nativo
   - Fuentes: G05-T6 · Deps: E1-06, E4-22 (badge)
   - Scope: prefill + `setBadgeCountAsync(0)`. · Verificación: badge se limpia al abrir check-in.
-- [ ] **E4-19** · [FUNCIONAL][M] Perfil: preferencia "Alarma de descanso" (AsyncStorage + preview)
+- [x] **E4-19** · [FUNCIONAL][M] Perfil: preferencia "Alarma de descanso" (AsyncStorage + preview)
   - Fuentes: G05-T7 · Deps: E1-08
   - Scope: preferencia de alarma de descanso con preview. · Verificación: preferencia persiste y suena en preview.
-- [ ] **E4-20** · [FUNCIONAL][L] Ejercicios: paginación server + instrucciones on-demand + video + deep-link
+- [x] **E4-20** · [FUNCIONAL][L] Ejercicios: paginación server + instrucciones on-demand + video + deep-link
   - Fuentes: G05-T12 · Deps: E1-09, E0-E12
   - Scope: catálogo "Aprender" funcional. · Verificación: paginación server; video inline; deep-link abre ejercicio.
-- [ ] **E4-21** · [FUNCIONAL][L] Share-cards v2 desde perfil (Progreso/Racha/Resumen mensual branded)
+- [x] **E4-21** · [FUNCIONAL][L] Share-cards v2 desde perfil (Progreso/Racha/Resumen mensual branded)
   - Fuentes: G05-T13 · Deps: E0-E11, E1-08
   - Scope: share-cards desde perfil (motor compartido). · Verificación: exporta imágenes branded correctas.
-- [ ] **E4-22** · [FUNCIONAL][S] Badge numérico nativo (`setBadgeCountAsync`) (P2)
+- [x] **E4-22** · [FUNCIONAL][S] Badge numérico nativo (`setBadgeCountAsync`) (P2)
   - Fuentes: G11-B2 · Deps: ninguna
   - Scope: mecanismo de badge nativo (UNA vez; lo consume E4-18). · Verificación: badge refleja el conteo.
-- [ ] **E4-23** · [SEAM][L] Cola offline generalizada + idempotencia por `client_log_id`
+- [x] **E4-23** · [SEAM][L] Cola offline generalizada + idempotencia por `client_log_id`
   - Fuentes: G11-C1 · Deps: E0-F1 (reconcile puro del engine)
   - Scope: cola offline alineada con optimistic+reconcile web. · Verificación: doble envío con mismo `client_log_id` no duplica; sync tras reconexión.
 
