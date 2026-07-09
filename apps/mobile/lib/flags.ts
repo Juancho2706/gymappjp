@@ -18,10 +18,12 @@
 /** Flags conocidos y su default local. Única fuente de verdad de las keys. */
 export const FLAGS = {
   /**
-   * Ejecutor de rutina v2 (pantalla de alto riesgo, E2). Default OFF hasta
-   * validar en prod; habilitable por override remoto sin release.
+   * Ejecutor de rutina v2 (pantalla de alto riesgo, E2). ON en la rama
+   * rnmobiledenuevo para QA en device. DECISIÓN DE RELEASE al mergear a
+   * master: fijar default final (el override remoto de /api/mobile/config
+   * puede apagarlo sin release).
    */
-  executorV2: false,
+  executorV2: true,
 } as const
 
 export type FlagKey = keyof typeof FLAGS
