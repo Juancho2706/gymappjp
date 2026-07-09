@@ -8,6 +8,7 @@
       "@eva/brand-kit": ["../../packages/brand-kit/index.ts"],
       "@eva/tiers": ["../../packages/tiers/index.ts"],
       "@eva/nutrition-engine": ["../../packages/nutrition-engine/index.ts"],
+      "@eva/workout-engine": ["../../packages/workout-engine/index.ts"],
       "@eva/feature-prefs": ["../../packages/feature-prefs/index.ts"]
     }
   }
