@@ -27,6 +27,8 @@ const userScopedFrom = vi.fn(() => ({
 const adminUpdateEq = vi.fn().mockResolvedValue({ error: null })
 // F2: el INTENT durable de la Fase 1 Flow se escribe con admin.from('subscription_events').upsert(...).
 const adminUpsert = vi.fn().mockResolvedValue({ error: null })
+// U2: la auditoria del cancel de la sub Flow al cambiar de gateway (admin_audit_logs.insert).
+const adminInsert = vi.fn().mockResolvedValue({ error: null })
 const fakeAdmin = {
     from: vi.fn(() => ({
         update: vi.fn(() => ({ eq: adminUpdateEq })),
@@ -36,6 +38,7 @@ const fakeAdmin = {
             })),
         })),
         upsert: (...a: unknown[]) => adminUpsert(...a),
+        insert: (...a: unknown[]) => adminInsert(...a),
     })),
 }
 vi.mock('@/lib/supabase/admin-client', () => ({
@@ -694,7 +697,9 @@ describe('POST /api/payments/create-preference — W2 gateway Flow', () => {
         expect(payload).toBeTruthy()
         expect(payload).toHaveProperty('provider_customer_id', 'preapproval-NEW')
         expect(payload).toHaveProperty('payment_provider', 'flow')
-        expect(payload).not.toHaveProperty('subscription_mp_id')
+        // U1a: subscription_mp_id se NULEA (la Fase 1 cancela el preapproval MP viejo; su id vigente
+        // dejaria que el 'cancelled' de MP expire espuriamente al coach en la ventana del enrolamiento).
+        expect(payload).toHaveProperty('subscription_mp_id', null)
         expect(payload).toHaveProperty('superseded_mp_preapproval_id')
         // ⚠️ subscription_provider NO se toca aquí (lo flipea la Fase 2 confirm-enrollment).
         expect(payload).not.toHaveProperty('subscription_provider')
@@ -722,7 +727,8 @@ describe('POST /api/payments/create-preference — W2 gateway Flow', () => {
         expect(payload).toHaveProperty('subscription_tier', 'pro')
         expect(payload).toHaveProperty('provider_customer_id', 'preapproval-NEW')
         expect(payload).toHaveProperty('payment_provider', 'flow')
-        expect(payload).not.toHaveProperty('subscription_mp_id')
+        // U1a: subscription_mp_id nuleado en la rama flow no-free tambien.
+        expect(payload).toHaveProperty('subscription_mp_id', null)
     })
 
     it('sin gateway en el body: default mercadopago (comportamiento idéntico, se enruta a MP)', async () => {
@@ -827,7 +833,8 @@ describe('POST /api/payments/create-preference — W2 gateway Flow', () => {
         // Rama flow no-free: superseded viaja como backstop (F8).
         expect(payload).toHaveProperty('superseded_mp_preapproval_id', 'preapproval-OLD')
         expect(payload).toHaveProperty('provider_customer_id', 'preapproval-NEW')
-        expect(payload).not.toHaveProperty('subscription_mp_id')
+        // U1a: subscription_mp_id nuleado (el viejo queda solo en superseded como backstop del retry).
+        expect(payload).toHaveProperty('subscription_mp_id', null)
     })
 })
 
@@ -884,5 +891,68 @@ describe('POST /api/payments/create-preference — B2 coach Flow activo bloquea 
         expect(res.status).toBe(200)
         expect((await res.json()).kind).toBe('tier_upgrade_oneshot')
         expect(createOneShotPayment).toHaveBeenCalledOnce()
+    })
+})
+
+// ════════════════════════════════════════════════════════════════════════════════════
+// U2 (money-safety): checkout MP sobre una sub FLOW VIVA no-terminal. Un coach cuya sub viva es Flow
+// (subscription_provider='flow' + external_id) pero quedo en pending_payment/past_due (la 1ra invoice
+// declino y la sub Flow reintenta cobros) elige pagar por Mercado Pago. Antes de crear el preapproval MP
+// se CANCELA la sub Flow (fail-closed): exito → audit + sigue al checkout; fallo → 409 GATEWAY_SWITCH_
+// PENDING SIN crear checkout (jamas doble recurrencia). B2 solo cubre el coach Flow ACTIVO (corte futuro).
+// ════════════════════════════════════════════════════════════════════════════════════
+describe('POST /api/payments/create-preference — U2 checkout MP sobre sub Flow viva no-terminal', () => {
+    // Coach cuya sub viva es Flow pero en pending_payment (mp_id null; el ref vivo esta en el external_id).
+    const FLOW_PENDING_COACH = {
+        subscription_status: 'pending_payment',
+        subscription_tier: 'pro',
+        billing_cycle: 'monthly',
+        current_period_end: null,
+        subscription_mp_id: null,
+        provider_customer_id: 'cus_flow',
+        subscription_provider: 'flow',
+        subscription_provider_external_id: 'flowsub-live-1',
+    }
+
+    it('coach Flow pending_payment + gateway MP: CANCELA la sub Flow primero (con su external_id) y crea el checkout MP', async () => {
+        currentCoachMaybeSingle.mockResolvedValue({ data: FLOW_PENDING_COACH, error: null })
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly' }))
+        expect(res.status).toBe(200)
+        // Se pidio el provider Flow para cancelar la sub viva…
+        expect(getPaymentsProvider).toHaveBeenCalledWith('flow')
+        expect(cancelCheckoutAtProvider).toHaveBeenCalledWith('flowsub-live-1')
+        // …y como el cancel tuvo exito, el checkout MP se crea normalmente.
+        expect(getPaymentsProvider).toHaveBeenCalledWith('mercadopago')
+        expect(createCheckout).toHaveBeenCalledOnce()
+        // Se audito el switch de gateway.
+        const audit = adminInsert.mock.calls.find(
+            (c) => (c[0] as Record<string, unknown>)?.action === 'coach.flow_sub_cancelled_on_gateway_switch'
+        )
+        expect(audit).toBeTruthy()
+        expect((audit![0] as { payload: Record<string, unknown> }).payload.old_flow_external_id).toBe('flowsub-live-1')
+    })
+
+    it('el cancel de la sub Flow FALLA: 409 GATEWAY_SWITCH_PENDING y NO crea checkout (fail-closed, jamas doble recurrencia)', async () => {
+        currentCoachMaybeSingle.mockResolvedValue({ data: FLOW_PENDING_COACH, error: null })
+        cancelCheckoutAtProvider.mockRejectedValue(new Error('Flow subscription/cancel failed (500)'))
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly' }))
+        expect(res.status).toBe(409)
+        expect((await res.json()).code).toBe('GATEWAY_SWITCH_PENDING')
+        // Fail-closed: se intento cancelar la sub Flow pero NO se creo el preapproval MP.
+        expect(cancelCheckoutAtProvider).toHaveBeenCalledWith('flowsub-live-1')
+        expect(createCheckout).not.toHaveBeenCalled()
+        expect(lastUpdatePayload()).toBeUndefined()
+    })
+
+    it('coach Flow CANCELED (sub muerta): NO intenta cancelar Flow — crea el checkout MP directo (reactivacion)', async () => {
+        currentCoachMaybeSingle.mockResolvedValue({
+            data: { ...FLOW_PENDING_COACH, subscription_status: 'canceled' },
+            error: null,
+        })
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly' }))
+        expect(res.status).toBe(200)
+        // status terminal → nada que cancelar en Flow.
+        expect(cancelCheckoutAtProvider).not.toHaveBeenCalled()
+        expect(createCheckout).toHaveBeenCalledOnce()
     })
 })

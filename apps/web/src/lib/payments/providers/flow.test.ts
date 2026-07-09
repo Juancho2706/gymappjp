@@ -13,6 +13,8 @@ let coachTierCycle: { subscription_tier: string; billing_cycle: string } | null 
     billing_cycle: 'monthly',
 }
 let coachTierCycleError: { message: string } | null = null
+// U17: captura de los UPDATE de coaches.provider_plan_id que hace changeSubscriptionPlan (best-effort).
+const providerPlanUpdates: Array<{ row: Record<string, unknown>; eqCol: string; eqVal: unknown }> = []
 vi.mock('@/lib/supabase/admin-client', () => ({
     createServiceRoleClient: () => ({
         from: () => ({
@@ -30,6 +32,13 @@ vi.mock('@/lib/supabase/admin-client', () => ({
                             : { data: coachIdBySub ? { id: coachIdBySub } : null, error: null }
                     },
                 }),
+            }),
+            // U17: changeSubscriptionPlan refresca provider_plan_id where subscription_provider_external_id.
+            update: (row: Record<string, unknown>) => ({
+                eq: (eqCol: string, eqVal: unknown) => {
+                    providerPlanUpdates.push({ row, eqCol, eqVal })
+                    return { error: null }
+                },
             }),
         }),
     }),
@@ -52,6 +61,7 @@ beforeEach(() => {
     vi.stubEnv('FLOW_API_KEY', API_KEY)
     vi.stubEnv('FLOW_SECRET_KEY', SECRET)
     vi.stubEnv('FLOW_API_BASE', BASE)
+    providerPlanUpdates.length = 0
     fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 })
@@ -462,6 +472,18 @@ describe('FlowProvider.changeSubscriptionPlan (T5.3 — ensure-plan + changePlan
         expect(fetchMock).toHaveBeenCalledTimes(2)
         expect(callAt(1).url).toBe(`${BASE}/subscription/changePlan`)
         expect(r.chargedNowClp).toBe(9990)
+    })
+
+    it('U17: tras un changePlan exitoso refresca coaches.provider_plan_id al planId nuevo (best-effort, service-role)', async () => {
+        fetchMock
+            .mockResolvedValueOnce(ok({ planId: 'eva_pro_monthly_14990' }))
+            .mockResolvedValueOnce(ok({ balance: 9990 }))
+        await new FlowProvider().changeSubscriptionPlan('sus_abc', input)
+        // Un solo UPDATE: provider_plan_id = planId nuevo, where subscription_provider_external_id = subRef.
+        expect(providerPlanUpdates).toHaveLength(1)
+        expect(providerPlanUpdates[0].row).toEqual({ provider_plan_id: 'eva_pro_monthly_14990' })
+        expect(providerPlanUpdates[0].eqCol).toBe('subscription_provider_external_id')
+        expect(providerPlanUpdates[0].eqVal).toBe('sus_abc')
     })
 
     it('addSubscriptionItem y removeSubscriptionItem = alias del mismo camino (ensure-plan + changePlan)', async () => {

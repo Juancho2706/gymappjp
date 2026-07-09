@@ -35,8 +35,14 @@ const fetchCheckoutSnapshot = vi.fn(async (subId: string) => {
     if (!s) throw new Error('no snapshot')
     return { id: subId, external_reference: null, status: s.status, next_payment_date: null, auto_recurring: s.auto_recurring }
 })
+// U6.3: SYNC ACOTADO del drift → updateCheckoutAmount (ensure-plan + changePlan al compuesto esperado).
+const updateCheckoutAmount = vi.fn(async (..._a: unknown[]) => {})
 vi.mock('@/lib/payments/provider', () => ({
-    getPaymentsProvider: () => ({ name: 'flow', fetchCheckoutSnapshot: (...a: unknown[]) => fetchCheckoutSnapshot(...(a as [string])) }),
+    getPaymentsProvider: () => ({
+        name: 'flow',
+        fetchCheckoutSnapshot: (...a: unknown[]) => fetchCheckoutSnapshot(...(a as [string])),
+        updateCheckoutAmount: (...a: unknown[]) => updateCheckoutAmount(...a),
+    }),
 }))
 
 // B4 drift: listLive (add-ons vivos) + resolveDiscountSpecByRedemptionId (cupon) alimentan el compuesto
@@ -47,6 +53,8 @@ vi.mock('@/infrastructure/db/coach-addons.repository', () => ({
 }))
 vi.mock('@/services/billing/discount.service', () => ({
     resolveDiscountSpecByRedemptionId: vi.fn(async () => null),
+    // El route ahora consume isChargeableNetClp (guard del SYNC) — real: net >= 1.
+    isChargeableNetClp: (net: number) => Number.isFinite(net) && net >= 1,
 }))
 
 import { GET } from './route'
@@ -110,5 +118,59 @@ describe('GET /api/cron/flow-reconcile — deteccion (alert-only)', () => {
         snapshots.set('sus_5', { status: 'authorized', auto_recurring: { end_date: '2026-08-04T00:00:00' } })
         const json = await (await GET(authedReq())).json()
         expect(json).toMatchObject({ ok: true, checked: 1, errors: 1 })
+    })
+})
+
+describe('GET /api/cron/flow-reconcile — SYNC ACOTADO del drift de monto (U6.3, escritor único)', () => {
+    // provider_plan_id rancio (monto horneado 999999 ≠ compuesto esperado) → drift. base pro/monthly.
+    const RANCIO = 'eva_pro_monthly_999999'
+    const expectedPro = getCompositeAmountClp('pro', 'monthly', []) as number
+
+    it('coach Flow ACTIVO con drift cobrable y SIN downgrade diferido → SINCRONIZA (updateCheckoutAmount + audit synced)', async () => {
+        flowCoaches = [{
+            id: 'c-sync', slug: 'sync-me', subscription_status: 'active', subscription_tier: 'pro',
+            billing_cycle: 'monthly', current_period_end: '2026-08-04T00:00:00', subscription_provider: 'flow',
+            subscription_provider_external_id: 'sus_drift', provider_plan_id: RANCIO, active_coupon_redemption_id: null,
+        }]
+        snapshots.set('sus_drift', { status: 'authorized', auto_recurring: { end_date: '2026-08-04T00:00:00' } })
+        listLive.mockResolvedValue([])
+        const res = await GET(authedReq())
+        expect(res.status).toBe(200)
+        // SYNC: updateCheckoutAmount(subId, expected) — el escritor único aplica el compuesto esperado.
+        expect(updateCheckoutAmount).toHaveBeenCalledWith('sus_drift', expectedPro)
+        expect(auditInserts.some((a) => a.action === 'coach.flow_composite_synced')).toBe(true)
+        // No queda como divergencia alertada (se corrigió).
+        expect(auditInserts.some((a) => a.action === 'coach.flow_amount_drift')).toBe(false)
+    })
+
+    it('ventana de downgrade DIFERIDO (add-on cancel_pending por vencer) → NO sincroniza, solo ALERTA (evita crédito indebido)', async () => {
+        flowCoaches = [{
+            id: 'c-defer', slug: 'defer', subscription_status: 'active', subscription_tier: 'pro',
+            billing_cycle: 'monthly', current_period_end: '2026-08-04T00:00:00', subscription_provider: 'flow',
+            subscription_provider_external_id: 'sus_defer', provider_plan_id: RANCIO, active_coupon_redemption_id: null,
+        }]
+        snapshots.set('sus_defer', { status: 'authorized', auto_recurring: { end_date: '2026-08-04T00:00:00' } })
+        // Add-on YA cobrado en baja diferida (firstChargedAt set → NO billable; expiresAt futuro → ventana viva).
+        listLive.mockResolvedValue([
+            { id: 'ad1', moduleKey: 'cardio', status: 'cancel_pending', source: 'self_service', firstChargedAt: '2026-06-01T00:00:00', expiresAt: '2027-01-01T00:00:00', priceClpMensual: 9990 },
+        ] as unknown[])
+        await GET(authedReq())
+        expect(updateCheckoutAmount).not.toHaveBeenCalled()
+        expect(auditInserts.some((a) => a.action === 'coach.flow_amount_drift')).toBe(true)
+        expect(auditInserts.some((a) => a.action === 'coach.flow_composite_synced')).toBe(false)
+    })
+
+    it('si el SYNC falla (updateCheckoutAmount tira) → conserva la ALERTA de drift', async () => {
+        flowCoaches = [{
+            id: 'c-fail', slug: 'fail', subscription_status: 'active', subscription_tier: 'pro',
+            billing_cycle: 'monthly', current_period_end: '2026-08-04T00:00:00', subscription_provider: 'flow',
+            subscription_provider_external_id: 'sus_fail', provider_plan_id: RANCIO, active_coupon_redemption_id: null,
+        }]
+        snapshots.set('sus_fail', { status: 'authorized', auto_recurring: { end_date: '2026-08-04T00:00:00' } })
+        listLive.mockResolvedValue([])
+        updateCheckoutAmount.mockRejectedValueOnce(new Error('Flow changePlan 502'))
+        await GET(authedReq())
+        expect(updateCheckoutAmount).toHaveBeenCalledWith('sus_fail', expectedPro)
+        expect(auditInserts.some((a) => a.action === 'coach.flow_amount_drift')).toBe(true)
     })
 })

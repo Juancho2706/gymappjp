@@ -478,6 +478,25 @@ export class FlowProvider implements PaymentsProvider {
             subscriptionId: subscriptionRef,
             newPlanId,
         })
+        // U17: tras un changePlan EXITOSO, refrescar `coaches.provider_plan_id` al planId NUEVO
+        // (service-role, best-effort tragable). El drift del cron `flow-reconcile` compara el monto
+        // horneado en `provider_plan_id` contra el compuesto esperado; sin este refresco, tras CUALQUIER
+        // changePlan (cupón, add-on, sync del cron) el `provider_plan_id` queda RANCIO y el cron
+        // alertaría/sincronizaría en falso PARA SIEMPRE. Cubre todos los caminos que pasan por acá:
+        // updateCheckoutAmount / updateCheckoutAmountAndRef / add-removeSubscriptionItem / changePlan directo.
+        try {
+            const admin = createServiceRoleClient()
+            await admin
+                .from('coaches')
+                .update({ provider_plan_id: newPlanId })
+                .eq('subscription_provider_external_id', subscriptionRef)
+        } catch (persistErr) {
+            console.error('[flow] no se pudo refrescar provider_plan_id tras changePlan (no crítico)', {
+                subscriptionRef,
+                newPlanId,
+                message: persistErr instanceof Error ? persistErr.message : String(persistErr),
+            })
+        }
         // Flow stringifica los numeros → Number(). balance>0 = cobrado ya; balance<0 = credito.
         const balance = res.balance != null ? Number(res.balance) : 0
         return {

@@ -175,6 +175,51 @@ describe('POST /api/payments/confirm-subscription — FIX-1: solo muta el coach 
         expect(patch).not.toHaveProperty('provider_customer_id')
     })
 
+    it('U2: al reclamar la sub para MP, ARCHIVA el external_id/plan_id Flow viejo en subscription_events antes de nulearlos', async () => {
+        // Ex-coach Flow reactivado por MP: el confirm nulea los refs Flow (B3) y ademas deja un rastro
+        // de trazabilidad (flow:subscription:<id>:superseded_by_mp) con los ids viejos + el mp_id nuevo.
+        coachRow!.subscription_provider_external_id = 'flowsub-old-1'
+        coachRow!.provider_plan_id = 'flowplan-old-1'
+        const res = await POST(makeRequest({ preapprovalId: 'preapproval-NEW' }))
+        expect(res.status).toBe(200)
+        // Se escribio el rastro de archivo (upsert a subscription_events con el event id dedicado).
+        const archive = upsertCalls.find(
+            (c) =>
+                c.table === 'subscription_events' &&
+                String((c.row as Record<string, unknown>).provider_event_id ?? '').startsWith(
+                    'flow:subscription:'
+                ) &&
+                String((c.row as Record<string, unknown>).provider_event_id ?? '').endsWith(':superseded_by_mp')
+        )
+        expect(archive).toBeTruthy()
+        const row = archive!.row as Record<string, unknown>
+        expect(row.provider).toBe('flow')
+        expect(row.provider_event_id).toBe('flow:subscription:flowsub-old-1:superseded_by_mp')
+        expect(row.payload).toMatchObject({
+            superseded_flow_external_id: 'flowsub-old-1',
+            superseded_flow_plan_id: 'flowplan-old-1',
+            new_mp_preapproval_id: 'preapproval-NEW',
+        })
+        // Y el coach igual queda reclamado para MP (external_id/plan_id nulos en el patch de activacion).
+        const activated = updateCalls.find(
+            (c) =>
+                c.table === 'coaches' &&
+                (c.patch as Record<string, unknown>).subscription_status === 'active'
+        )
+        expect((activated!.patch as Record<string, unknown>).subscription_provider_external_id).toBeNull()
+    })
+
+    it('coach SIN external_id Flow (alta MP pura): NO escribe ningun rastro de archivo', async () => {
+        const res = await POST(makeRequest({ preapprovalId: 'preapproval-NEW' }))
+        expect(res.status).toBe(200)
+        const archive = upsertCalls.find(
+            (c) =>
+                c.table === 'subscription_events' &&
+                String((c.row as Record<string, unknown>).provider_event_id ?? '').endsWith(':superseded_by_mp')
+        )
+        expect(archive).toBeFalsy()
+    })
+
     it("pending → NO muta el coach (cero coaches.update) y responde subscriptionStatus 'pending_payment'", async () => {
         fetchCheckoutSnapshot.mockResolvedValue({
             id: 'preapproval-NEW',

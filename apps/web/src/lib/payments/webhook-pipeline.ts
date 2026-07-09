@@ -324,9 +324,23 @@ export async function runWebhookPipeline(
                     // próxima renovación — revert disclosed (N ciclos → precio normal), SERNAC-safe.
                     const cycleResult = await decrementCouponCycleForCharge(admin, coach.id, result.providerPaymentId)
                     if (cycleResult.expired && chargeRef) {
-                        const liveNow = await listLive(admin, coach.id)
-                        const fullComposite = getCompositeAmountClp(tierForCharge, cycleForCharge, toBillableAddons(liveNow))
-                        await provider.updateCheckoutAmount(chargeRef, fullComposite)
+                        // ESCRITOR ÚNICO del compuesto Flow (U6): el PUT inmediato del cupón-expira SOLO
+                        // corre para MP. En Flow, `updateCheckoutAmount` traduce a un changePlan-UP que
+                        // COBRA el delta AL INSTANTE — pero este ciclo fue disclosed con descuento, así que
+                        // subir el precio ahora sería un overcharge del ciclo en curso. Para Flow el cron
+                        // `flow-reconcile` es el escritor único: sincroniza el compuesto ANTES de la próxima
+                        // renovación (que es cuando el disclosed dice que vuelve al precio lleno). SERNAC-safe.
+                        if (provider.name === 'mercadopago') {
+                            const liveNow = await listLive(admin, coach.id)
+                            const fullComposite = getCompositeAmountClp(tierForCharge, cycleForCharge, toBillableAddons(liveNow))
+                            await provider.updateCheckoutAmount(chargeRef, fullComposite)
+                        } else {
+                            console.info('[payments.webhook] coupon expired on non-MP coach — cron sincroniza el compuesto', {
+                                traceId,
+                                coachId: coach.id,
+                                provider: provider.name,
+                            })
+                        }
                     }
                 }
                 // P0-2: si el coach venía de dunning (past_due), avisar que el pago se recuperó.
@@ -773,10 +787,55 @@ export async function runWebhookPipeline(
         return NextResponse.json({ ok: true })
     }
 
+    // ── U1b/U5: un evento de MercadoPago NO puede mutar a un coach cuyo gateway VIVO es Flow ─────────
+    // Si el coach ya quedo con subscription_provider='flow' + un external_id trackeado (sub Flow viva),
+    // cualquier evento MP rancio — el 'cancelled' del preapproval MP viejo (a menudo disparado por
+    // NUESTRO propio cancel del switch de gateway), un 'updated' tardio — es RUIDO: no puede
+    // cancelar/expirar/re-reclamar una sub cuyo dueño ya es Flow. La UNICA via legitima MP→(coach flow)
+    // es la REACTIVACION, que pasa por confirm-subscription (sync, B3), NUNCA por el webhook. Guard
+    // ANTES de la rama canonica; las ramas recurrente/one-shot/tier-upgrade rutearon antes (y son no-op
+    // para un coach sin mp_id). Log + event-row (dedup/replay) + 200. Gated a MP: el pipeline es
+    // agnostico del gateway (lo reusa la ruta Flow) → un webhook Flow legitimo JAMAS cae aca.
+    if (
+        provider.name === 'mercadopago' &&
+        coach.subscription_provider === 'flow' &&
+        coach.subscription_provider_external_id?.trim()
+    ) {
+        console.info('[payments.webhook] MP event on flow-owned coach — skipping canonical mutation', {
+            traceId,
+            coachId: coach.id,
+            providerStatus: result.providerStatus ?? null,
+        })
+        const flowOwnedEventRow: TablesInsert<'subscription_events'> = {
+            coach_id: coach.id,
+            provider: provider.name,
+            provider_event_id:
+                result.eventId ??
+                `${provider.name}:flow-owned:${result.providerCheckoutId ?? 'unknown'}:${result.providerStatus ?? 'unknown'}`,
+            provider_checkout_id: result.providerCheckoutId ?? null,
+            provider_status: result.providerStatus ?? null,
+            payload: toJsonPayload(payload),
+        }
+        await admin
+            .from('subscription_events')
+            .upsert(flowOwnedEventRow, { onConflict: 'provider_event_id' })
+        return NextResponse.json({ ok: true })
+    }
+
     const checkoutId = result.providerCheckoutId?.trim() ?? null
     const coachMpId = coach.subscription_mp_id?.trim() ?? null
-    const appliesToTrackedSubscription =
-        !checkoutId || !coachMpId || checkoutId === coachMpId
+    // ── U5: un evento preapproval TERMINAL ('cancelled') exige match EXACTO checkoutId===coachMpId (ambos
+    // non-null) para aplicar el terminal. Si coachMpId es NULL (coach en transicion de gateway, o su mp_id
+    // fue nuleado en la Fase 1 del switch a Flow) el 'cancelled' del preapproval MP viejo — que a menudo
+    // dispara NUESTRO propio cancel durante la ventana del enrolamiento Webpay — se trata como STALE
+    // (cae al bloque `!appliesToTrackedSubscription`: log + event-row + 200): jamas expira/revierte al
+    // coach (el dano seria cupon revertido + admin_grants cancelados). NO toca approved/pending: el primer
+    // pago sin order.id (checkoutId null) sigue aplicando canonicamente por la rama de abajo (test lo cubre).
+    const isTerminalPreapprovalCancel =
+        result.eventKind === 'preapproval' && mapProviderStatus(result.providerStatus) === 'canceled'
+    const appliesToTrackedSubscription = isTerminalPreapprovalCancel
+        ? !!checkoutId && !!coachMpId && checkoutId === coachMpId
+        : !checkoutId || !coachMpId || checkoutId === coachMpId
 
     if (!appliesToTrackedSubscription) {
         console.info('[payments.webhook] skipping coach row update for non-current checkout', {
@@ -850,9 +909,23 @@ export async function runWebhookPipeline(
                     // próxima renovación — revert disclosed (N ciclos → precio normal), SERNAC-safe.
                     const cycleResult = await decrementCouponCycleForCharge(admin, coach.id, result.providerPaymentId)
                     if (cycleResult.expired && chargeRef) {
-                        const liveNow = await listLive(admin, coach.id)
-                        const fullComposite = getCompositeAmountClp(tierForCharge, cycleForCharge, toBillableAddons(liveNow))
-                        await provider.updateCheckoutAmount(chargeRef, fullComposite)
+                        // ESCRITOR ÚNICO del compuesto Flow (U6): el PUT inmediato del cupón-expira SOLO
+                        // corre para MP. En Flow, `updateCheckoutAmount` traduce a un changePlan-UP que
+                        // COBRA el delta AL INSTANTE — pero este ciclo fue disclosed con descuento, así que
+                        // subir el precio ahora sería un overcharge del ciclo en curso. Para Flow el cron
+                        // `flow-reconcile` es el escritor único: sincroniza el compuesto ANTES de la próxima
+                        // renovación (que es cuando el disclosed dice que vuelve al precio lleno). SERNAC-safe.
+                        if (provider.name === 'mercadopago') {
+                            const liveNow = await listLive(admin, coach.id)
+                            const fullComposite = getCompositeAmountClp(tierForCharge, cycleForCharge, toBillableAddons(liveNow))
+                            await provider.updateCheckoutAmount(chargeRef, fullComposite)
+                        } else {
+                            console.info('[payments.webhook] coupon expired on non-MP coach — cron sincroniza el compuesto', {
+                                traceId,
+                                coachId: coach.id,
+                                provider: provider.name,
+                            })
+                        }
                     }
                 }
             } catch (chargeErr) {
@@ -1253,9 +1326,21 @@ export async function runWebhookPipeline(
                 // precio lleno DESDE la próxima renovación — espejo de la rama de cobro recurrente.
                 const cycleResult = await decrementCouponCycleForCharge(admin, coach.id, result.providerPaymentId)
                 if (cycleResult.expired && finalMpId) {
-                    const liveNow = await listLive(admin, coach.id)
-                    const fullComposite = getCompositeAmountClp(finalTier, finalCycle, toBillableAddons(liveNow))
-                    await provider.updateCheckoutAmount(finalMpId, fullComposite)
+                    // ESCRITOR ÚNICO del compuesto Flow (U6): el PUT inmediato del cupón-expira SOLO corre
+                    // para MP (en Flow, changePlan-UP cobraría el delta al instante de un ciclo disclosed con
+                    // descuento = overcharge). Para Flow el cron `flow-reconcile` sincroniza el compuesto
+                    // ANTES de la próxima renovación (cuando el disclosed dice que vuelve al precio lleno).
+                    if (provider.name === 'mercadopago') {
+                        const liveNow = await listLive(admin, coach.id)
+                        const fullComposite = getCompositeAmountClp(finalTier, finalCycle, toBillableAddons(liveNow))
+                        await provider.updateCheckoutAmount(finalMpId, fullComposite)
+                    } else {
+                        console.info('[payments.webhook] coupon expired on non-MP coach — cron sincroniza el compuesto', {
+                            traceId,
+                            coachId: coach.id,
+                            provider: provider.name,
+                        })
+                    }
                 }
             }
         }

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
-import { getPaymentsProvider } from '@/lib/payments/provider'
+import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
 import { getTierMaxClients } from '@/lib/constants'
 import type { SubscriptionTier } from '@/lib/constants'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
@@ -33,7 +33,9 @@ export async function POST() {
         const admin = createServiceRoleClient()
         const { data: coach } = await admin
             .from('coaches')
-            .select('id, subscription_status, subscription_mp_id, payment_provider')
+            .select(
+                'id, subscription_status, subscription_mp_id, subscription_provider, subscription_provider_external_id'
+            )
             .eq('id', user.id)
             .maybeSingle()
 
@@ -70,13 +72,18 @@ export async function POST() {
             )
         }
 
-        // Best-effort cancel at provider
-        const provider = getPaymentsProvider()
-        const checkoutId = coach.subscription_mp_id?.trim()
-        const providerMatches =
-            !coach.payment_provider || coach.payment_provider === provider.name
+        // Best-effort cancel at provider — POR EL GATEWAY PERSISTIDO del coach (U3, money-safety).
+        // Antes usaba SIEMPRE MP + un gate `providerMatches` por `payment_provider`: para un coach Flow
+        // eso NO cancelaba nada y dejaba la sub Flow VIVA cobrando a un coach que pasó a plan gratis.
+        // Ahora se resuelve el provider por `subscription_provider` (fuente de verdad) y el id a cancelar
+        // según el gateway — Flow → `subscription_provider_external_id`; MP → `subscription_mp_id`.
+        const provider = getPaymentsProviderForCoach(coach)
+        const checkoutId = (coach.subscription_provider === 'flow'
+            ? coach.subscription_provider_external_id
+            : coach.subscription_mp_id
+        )?.trim()
 
-        if (checkoutId && providerMatches) {
+        if (checkoutId) {
             try {
                 await provider.cancelCheckoutAtProvider(checkoutId)
             } catch (err) {
@@ -96,6 +103,12 @@ export async function POST() {
                 max_clients: freeLimit,
                 subscription_mp_id: null,
                 current_period_end: null,
+                // Limpiar los refs de la sub Flow que se acaba de cancelar y volver el gateway al
+                // default neutro (MP). `provider_customer_id` se CONSERVA (tarjeta reutilizable si el
+                // coach vuelve a un plan pago). Sin esto, un ex-Flow reactivado quedaría con refs muertos.
+                subscription_provider: 'mercadopago',
+                subscription_provider_external_id: null,
+                provider_plan_id: null,
             })
             .eq('id', user.id)
 

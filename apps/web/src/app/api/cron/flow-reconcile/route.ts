@@ -5,7 +5,7 @@ import { getPaymentsProvider } from '@/lib/payments/provider'
 import { mapProviderStatus } from '@/lib/payments/subscription-state'
 import { listLive } from '@/infrastructure/db/coach-addons.repository'
 import { getCompositeAmountClp, toBillableAddons } from '@/services/billing/addons.service'
-import { resolveDiscountSpecByRedemptionId } from '@/services/billing/discount.service'
+import { resolveDiscountSpecByRedemptionId, isChargeableNetClp } from '@/services/billing/discount.service'
 import type { BillingCycle, SubscriptionTier } from '@/lib/constants'
 
 /**
@@ -127,14 +127,56 @@ export async function GET(req: Request) {
                 const couponSpec = await resolveDiscountSpecByRedemptionId(admin, coach.active_coupon_redemption_id)
                 const expectedClp = getCompositeAmountClp(tier, cycle, toBillableAddons(live), couponSpec).totalClp
                 if (planAmount !== expectedClp) {
-                    divergences.push({ coachId: coach.id, slug: coach.slug, kind: 'amount_drift', detail: `plan=${planAmount} esperado=${expectedClp}` })
-                    await admin.from('admin_audit_logs').insert({
-                        admin_email: 'cron',
-                        action: 'coach.flow_amount_drift',
-                        target_table: 'coaches',
-                        target_id: coach.id,
-                        payload: { coach_slug: coach.slug, plan_amount_clp: planAmount, expected_clp: expectedClp, provider_plan_id: coach.provider_plan_id, flow_subscription_id: subId, triggered_by: 'cron/flow-reconcile' },
-                    })
+                    // U6/U7 — ESCRITOR ÚNICO del compuesto Flow: el drift pasa de ALERT-ONLY a SYNC ACOTADO.
+                    // El webhook ya NO hace el changePlan-UP inmediato del cupón-expira y redeem-coupon Flow
+                    // DIFIERE el descuento aquí → el cron es quien MATERIALIZA el ajuste de monto por cupón
+                    // (aplicar/expirar) antes de la próxima renovación. `updateCheckoutAmount` = ensure-plan
+                    // + changePlan al compuesto esperado. Acotado (money-safety, "sin overcharge/crédito
+                    // indebido"):
+                    //   (1) `expected` COBRABLE (Flow rechaza <= 0; un 100%-off va por admin_grant, no acá);
+                    //   (2) NO estar en la ventana de un downgrade DIFERIDO (add-on cancel_pending por vencer):
+                    //       esa baja la aplica mp-reconcile AL CORTE — sincronizarla antes bajaría el plan y
+                    //       Flow ACREDITARÍA el ciclo ya cobrado (crédito indebido). En ese caso se deja ALERTA.
+                    const nowMs = Date.now()
+                    const hasDeferredDowngrade = live.some(
+                        (a) => a.status === 'cancel_pending' && a.expiresAt && new Date(a.expiresAt).getTime() > nowMs
+                    )
+                    const canSync = isChargeableNetClp(expectedClp) && !hasDeferredDowngrade
+                    if (canSync) {
+                        try {
+                            await provider.updateCheckoutAmount(subId, expectedClp)
+                            // U17: FlowProvider.changeSubscriptionPlan ya refresca coaches.provider_plan_id al
+                            // planId nuevo → la próxima corrida no vuelve a ver este drift (sin alerta en falso).
+                            await admin.from('admin_audit_logs').insert({
+                                admin_email: 'cron',
+                                action: 'coach.flow_composite_synced',
+                                target_table: 'coaches',
+                                target_id: coach.id,
+                                payload: { coach_slug: coach.slug, old_amount_clp: planAmount, new_amount_clp: expectedClp, reason: 'coupon/addon drift', provider_plan_id: coach.provider_plan_id, flow_subscription_id: subId, triggered_by: 'cron/flow-reconcile' },
+                            })
+                        } catch (syncErr) {
+                            // El SYNC falló → mantener la ALERTA (comportamiento anterior) para revisión manual.
+                            console.error(`[cron/flow-reconcile] composite sync failed for coach ${coach.slug}:`, syncErr)
+                            divergences.push({ coachId: coach.id, slug: coach.slug, kind: 'amount_drift', detail: `plan=${planAmount} esperado=${expectedClp}` })
+                            await admin.from('admin_audit_logs').insert({
+                                admin_email: 'cron',
+                                action: 'coach.flow_amount_drift',
+                                target_table: 'coaches',
+                                target_id: coach.id,
+                                payload: { coach_slug: coach.slug, plan_amount_clp: planAmount, expected_clp: expectedClp, provider_plan_id: coach.provider_plan_id, flow_subscription_id: subId, triggered_by: 'cron/flow-reconcile', sync_error: true },
+                            })
+                        }
+                    } else {
+                        // No sincronizable (expected no cobrable, o downgrade diferido en curso) → ALERTA como antes.
+                        divergences.push({ coachId: coach.id, slug: coach.slug, kind: 'amount_drift', detail: `plan=${planAmount} esperado=${expectedClp}` })
+                        await admin.from('admin_audit_logs').insert({
+                            admin_email: 'cron',
+                            action: 'coach.flow_amount_drift',
+                            target_table: 'coaches',
+                            target_id: coach.id,
+                            payload: { coach_slug: coach.slug, plan_amount_clp: planAmount, expected_clp: expectedClp, provider_plan_id: coach.provider_plan_id, flow_subscription_id: subId, triggered_by: 'cron/flow-reconcile' },
+                        })
+                    }
                 }
             }
 

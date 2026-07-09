@@ -6,7 +6,7 @@ import { revalidatePath, revalidateTag } from 'next/cache'
 import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
 import { assertPlatformEmailAvailable, sanitizePlatformEmail } from '@/lib/auth/platform-email'
 import { getRecommendedTier, getTierMaxClients, TIER_CONFIG } from '@/lib/constants'
-import { getPaymentsProvider } from '@/lib/payments/provider'
+import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import {
     buildExistingCoachAnnouncementEmail,
@@ -224,7 +224,7 @@ export async function expireCoachAction(coachId: string) {
 
     const { data: coach } = await adminClient
         .from('coaches')
-        .select('subscription_mp_id')
+        .select('subscription_mp_id, subscription_provider, subscription_provider_external_id')
         .eq('id', coachId)
         .maybeSingle()
 
@@ -233,19 +233,24 @@ export async function expireCoachAction(coachId: string) {
         .eq('id', coachId)
     if (error) return { error: error.message }
 
-    // Best-effort: cancel preapproval at provider so confirm-subscription can't reactivate with stale ID
-    const mpId = coach?.subscription_mp_id?.trim()
-    if (mpId) {
+    // Best-effort: cancel the subscription at its PERSISTED gateway so confirm-subscription can't
+    // reactivate with a stale id. Provider-aware (U4): antes cancelaba SIEMPRE en MP → para un coach
+    // Flow la sub Flow quedaba VIVA cobrando pese al expire. Flow → external_id; MP → mp_id.
+    const subId = (coach?.subscription_provider === 'flow'
+        ? coach?.subscription_provider_external_id
+        : coach?.subscription_mp_id
+    )?.trim()
+    if (subId) {
         try {
-            const provider = getPaymentsProvider()
-            await provider.cancelCheckoutAtProvider(mpId)
+            const provider = getPaymentsProviderForCoach(coach ?? {})
+            await provider.cancelCheckoutAtProvider(subId)
         } catch {
             // Non-fatal — DB is already expired, log and continue
-            console.warn('[admin] expireCoach: could not cancel preapproval at provider', { coachId, mpId })
+            console.warn('[admin] expireCoach: could not cancel subscription at provider', { coachId, subId })
         }
     }
 
-    await logAdminAction(adminClient, 'coach.force_expire', 'coaches', coachId, { mp_cancelled: !!mpId })
+    await logAdminAction(adminClient, 'coach.force_expire', 'coaches', coachId, { subscription_cancelled: !!subId })
     revalidateAdmin()
     return { success: true }
 }

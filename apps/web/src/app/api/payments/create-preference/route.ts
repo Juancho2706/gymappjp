@@ -125,7 +125,7 @@ export async function POST(request: Request) {
         const { data: currentCoach } = await supabase
             .from('coaches')
             .select(
-                'subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, provider_customer_id, subscription_provider'
+                'subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, provider_customer_id, subscription_provider, subscription_provider_external_id'
             )
             .eq('id', user.id)
             .maybeSingle()
@@ -196,6 +196,52 @@ export async function POST(request: Request) {
 
         // El UPDATE de columnas de billing + la lectura de add-ons facturables van por service-role.
         const admin = createServiceRoleClient()
+
+        // ── U2 (money-safety): checkout MP sobre una sub FLOW VIVA no-terminal ───────────────────────
+        // Escenario: un coach cuya sub viva es Flow (subscription_provider='flow' + external_id) pero
+        // quedo en pending_payment/past_due — la 1ra invoice declino y la sub Flow sigue REINTENTANDO
+        // cobros (confirm-enrollment F7) — elige pagar por Mercado Pago. Si creamos el preapproval MP sin
+        // cerrar la sub Flow, AMBAS recurrencias quedan vivas → DOBLE COBRO. Fail-closed: CANCELAMOS la
+        // sub Flow PRIMERO; si el cancel FALLA, 409 GATEWAY_SWITCH_PENDING SIN crear checkout (jamas doble
+        // recurrencia). El coach Flow 'active' con corte futuro NO llega aca (B2 lo corto con 400 arriba);
+        // canceled/expired tienen la sub muerta → nada que cancelar. La trazabilidad del switch (archivar
+        // el external_id viejo) la deja confirm-subscription B3 al reclamar la sub para MP.
+        if (
+            gateway === 'mercadopago' &&
+            currentCoach?.subscription_provider === 'flow' &&
+            currentCoach.subscription_provider_external_id &&
+            currentCoach.subscription_status !== 'canceled' &&
+            currentCoach.subscription_status !== 'expired'
+        ) {
+            const flowExternalId = currentCoach.subscription_provider_external_id.trim()
+            try {
+                await getPaymentsProvider('flow').cancelCheckoutAtProvider(flowExternalId)
+                await admin.from('admin_audit_logs').insert({
+                    admin_email: 'system',
+                    action: 'coach.flow_sub_cancelled_on_gateway_switch',
+                    target_table: 'coaches',
+                    target_id: user.id,
+                    payload: {
+                        old_flow_external_id: flowExternalId,
+                        triggered_by: 'payments/create-preference',
+                    },
+                })
+            } catch (flowCancelError) {
+                const msg = flowCancelError instanceof Error ? flowCancelError.message : String(flowCancelError)
+                console.error('[create-preference] failed to cancel live Flow sub on gateway switch to MP', {
+                    coachId: user.id,
+                    flowExternalId,
+                    message: msg,
+                })
+                return NextResponse.json(
+                    {
+                        code: 'GATEWAY_SWITCH_PENDING',
+                        error: 'No pudimos cerrar tu suscripcion anterior. Intenta de nuevo en unos minutos.',
+                    },
+                    { status: 409 }
+                )
+            }
+        }
         // Cupón vivo re-resuelto UNA vez (server-side): lo usan la proración del upgrade Y el composite
         // recurrente. spec null = sin cupón = montos idénticos al legacy.
         const discountSpec = await resolveActiveDiscountSpec(admin, user.id)
@@ -509,14 +555,20 @@ export async function POST(request: Request) {
             ? gateway === 'flow'
                 ? {
                     // Flow free→paid: solo persistimos el customerId ENROLADO (checkout.checkoutId es el
-                    // customerId de Flow, NO una sub). subscription_mp_id NO se escribe (columna MP).
+                    // customerId de Flow, NO una sub). subscription_mp_id se NULEA (columna MP).
                     // ⚠️ subscription_provider NO se toca aquí — se flipea a 'flow' recién en Fase 2
                     // (confirm-enrollment), cuando la sub REAL existe. `superseded` SÍ se persiste (juez
                     // Ola 4): si el cancel del preapproval MP viejo FALLÓ, el backstop deja que
                     // webhook/cron lo reintenten — sin él quedaría un preapproval MP vivo junto a la sub
                     // Flow nueva (doble cobro).
+                    // U1a: NULEAR subscription_mp_id. La Fase 1 CANCELA el preapproval MP viejo; dejar su
+                    // id vigente hace que el webhook 'cancelled' que MP emite por NUESTRO propio cancel
+                    // matchee al coach (checkoutId===coachMpId) durante la ventana del enrolamiento Webpay
+                    // → terminal-expire espurio (cupon revertido + admin_grants cancelados). El backstop
+                    // del retry del cancel queda en superseded_mp_preapproval_id (sin cambio).
                     payment_provider: provider.name,
                     provider_customer_id: checkout.checkoutId,
+                    subscription_mp_id: null,
                     superseded_mp_preapproval_id: supersededForUpdate,
                 }
                 : {
@@ -535,16 +587,21 @@ export async function POST(request: Request) {
             : gateway === 'flow'
             ? {
                 // Flow alta/reactivación completa: tier/status/cycle/max_clients igual que hoy (alta
-                // legítima), + provider_customer_id (el customerId enrolado). NO se escriben
-                // subscription_mp_id (columna MP; el customerId de Flow NO es un preapproval).
+                // legítima), + provider_customer_id (el customerId enrolado). subscription_mp_id se
+                // NULEA (columna MP; el customerId de Flow NO es un preapproval).
                 // ⚠️ subscription_provider NO se toca aquí — lo flipea a 'flow' la Fase 2
                 // (confirm-enrollment) cuando la sub EXISTE.
+                // U1a: NULEAR subscription_mp_id (misma razon que la rama free) — la Fase 1 cancela el
+                // preapproval MP viejo; dejar su id vigente deja que el 'cancelled' de MP por nuestro
+                // propio cancel matchee al coach (checkoutId===coachMpId) y lo expire espuriamente en la
+                // ventana del enrolamiento. El backstop del retry queda en superseded_mp_preapproval_id.
                 subscription_tier: tier,
                 subscription_status: newStatus,
                 billing_cycle: billingCycle,
                 max_clients: getTierMaxClients(tier),
                 payment_provider: provider.name,
                 provider_customer_id: checkout.checkoutId,
+                subscription_mp_id: null,
                 // F8 (M1): backstop superseded tambien en la rama flow NO-free (reactivacion con reintento
                 // de checkout). Si el cancel del preapproval MP viejo FALLO, este id deja que webhook/cron
                 // lo reintenten — sin el quedaria un preapproval MP vivo junto a la sub Flow nueva (doble
