@@ -17,6 +17,7 @@
     "@eva/cardio": "workspace:*",
     "@eva/feature-prefs": "workspace:*",
     "@eva/nutrition-engine": "workspace:*",
+    "@eva/profile-analytics": "workspace:*",
     "@eva/workout-engine": "workspace:*",
     "@hookform/resolvers": "^5.2.2",
     "@gorhom/bottom-sheet": "^5.2.14",

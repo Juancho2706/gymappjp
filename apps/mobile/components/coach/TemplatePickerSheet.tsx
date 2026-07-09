@@ -4,6 +4,7 @@ import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { Layers } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
+import { FONT } from '../../lib/typography'
 
 interface Tpl { id: string; name: string }
 interface Props {
@@ -39,7 +40,7 @@ export const TemplatePickerSheet = forwardRef<BottomSheetModal, Props>(function 
       handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}
     >
       <BottomSheetScrollView contentContainerStyle={styles.body}>
-        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Cargar plantilla</Text>
+        <Text style={[styles.title, { color: theme.foreground, fontFamily: FONT.display }]}>Cargar plantilla</Text>
         {loading ? <ActivityIndicator color={theme.primary} style={{ marginTop: 24 }} /> : null}
         {!loading && items.length === 0 ? (
           <Text style={[styles.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -54,7 +55,7 @@ export const TemplatePickerSheet = forwardRef<BottomSheetModal, Props>(function 
             style={[styles.row, { borderColor: theme.border }]}
           >
             <Layers size={16} color={theme.primary} />
-            <Text style={[styles.rowText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>{t.name}</Text>
+            <Text style={[styles.rowText, { color: theme.foreground, fontFamily: FONT.uiSemibold }]} numberOfLines={1}>{t.name}</Text>
           </TouchableOpacity>
         ))}
       </BottomSheetScrollView>

@@ -1,10 +1,10 @@
 import { forwardRef } from 'react'
-import { Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { Image } from 'expo-image'
-import { Copy, Dumbbell, Globe, Pencil, Play, Target, User, Wrench } from 'lucide-react-native'
+import { Copy, Dumbbell, Globe, Pencil, Target, User, Wrench } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
-import { Badge, Button } from '../index'
+import { Badge, Button, VideoPlayer } from '../index'
 import { exerciseThumb, youtubeId, type ExerciseRow } from '../../lib/exercises'
 
 const DIFFICULTY_LABEL: Record<string, string> = {
@@ -23,10 +23,10 @@ interface Props {
 }
 
 /**
- * Preview de un ejercicio (espeja el modal de la web): media grande + badges
+ * Preview de un ejercicio (espeja el ExercisePreviewModal de la web): media grande
+ * (player YouTube inline si hay video, o gif/imagen directa, o placeholder) + badges
  * (músculo/equipo/secundarios) + instrucciones numeradas + origen. Si es propio,
- * botón "Editar". Para ejercicios que solo tienen YouTube, muestra la miniatura
- * del video + botón "Ver en YouTube" (sin webview).
+ * botón "Editar"; si es del sistema, "Duplicar a mis ejercicios".
  */
 export const ExercisePreviewSheet = forwardRef<BottomSheetModal, Props>(function ExercisePreviewSheet(
   { exercise, onEdit, onClone, onClose },
@@ -34,9 +34,11 @@ export const ExercisePreviewSheet = forwardRef<BottomSheetModal, Props>(function
 ) {
   const { theme } = useTheme()
 
-  const thumb = exercise ? exerciseThumb(exercise) : null
+  // Media: el video (YouTube) manda como en la web (player inline vía VideoPlayer);
+  // si no hay video, cae a la miniatura gif/imagen; si nada, placeholder.
   const yt = exercise ? youtubeId(exercise.video_url) : null
-  const isYouTubeOnly = !!exercise && !exercise.gif_url && !exercise.image_url && !!yt
+  const thumb = exercise ? exerciseThumb(exercise) : null
+  const poster = exercise ? exercise.gif_url ?? exercise.image_url ?? null : null
   const steps = (exercise?.instructions ?? [])
     .map((s) => s.replace(/^Step:\s*\d+\s*/i, '').trim())
     .filter(Boolean)
@@ -56,33 +58,20 @@ export const ExercisePreviewSheet = forwardRef<BottomSheetModal, Props>(function
         {!exercise ? null : (
           <>
             {/* Media */}
-            <View className="bg-surface-sunken border border-subtle rounded-2xl items-center justify-center" style={styles.media}>
-              {thumb ? (
-                <Image source={{ uri: thumb }} style={styles.mediaImg} contentFit={isYouTubeOnly ? 'cover' : 'contain'} transition={180} />
-              ) : (
+            {yt && exercise.video_url ? (
+              <VideoPlayer url={exercise.video_url} poster={poster} title={exercise.name} />
+            ) : thumb ? (
+              <View className="bg-surface-sunken border border-subtle rounded-2xl items-center justify-center" style={styles.media}>
+                <Image source={{ uri: thumb }} style={styles.mediaImg} contentFit="contain" transition={180} />
+              </View>
+            ) : (
+              <View className="bg-surface-sunken border border-subtle rounded-2xl items-center justify-center" style={styles.media}>
                 <View style={styles.mediaEmpty}>
                   <Dumbbell size={40} color={theme.mutedForeground} strokeWidth={1.4} />
                   <Text className="text-muted font-sans" style={styles.mediaEmptyText}>Sin previsualización</Text>
                 </View>
-              )}
-              {isYouTubeOnly ? (
-                <View style={styles.playBadge} pointerEvents="none">
-                  <Play size={22} color="#fff" fill="#fff" />
-                </View>
-              ) : null}
-            </View>
-
-            {isYouTubeOnly ? (
-              <TouchableOpacity
-                onPress={() => exercise.video_url && Linking.openURL(exercise.video_url)}
-                activeOpacity={0.85}
-                className="flex-row items-center justify-center border border-subtle bg-surface-sunken rounded-control"
-                style={styles.ytBtn}
-              >
-                <Play size={15} color={theme.primary} fill={theme.primary} />
-                <Text className="text-strong font-sans-bold" style={styles.ytText}>Ver en YouTube</Text>
-              </TouchableOpacity>
-            ) : null}
+              </View>
+            )}
 
             {/* Title */}
             <Text className="text-strong font-display-bold" style={styles.name}>{exercise.name}</Text>
@@ -161,21 +150,10 @@ export const ExercisePreviewSheet = forwardRef<BottomSheetModal, Props>(function
 
 const styles = StyleSheet.create({
   body: { paddingHorizontal: 18, paddingBottom: 48, gap: 12 },
-  media: { width: '100%', height: 220, overflow: 'hidden' },
+  media: { width: '100%', aspectRatio: 16 / 9, overflow: 'hidden' },
   mediaImg: { width: '100%', height: '100%' },
   mediaEmpty: { alignItems: 'center', justifyContent: 'center', gap: 8 },
   mediaEmptyText: { fontSize: 12 },
-  playBadge: {
-    position: 'absolute',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ytBtn: { gap: 8, paddingVertical: 12 },
-  ytText: { fontSize: 14 },
   name: { fontSize: 21, letterSpacing: -0.3, marginTop: 2 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   section: { fontSize: 15 },

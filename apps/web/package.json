@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@eva/cardio": "workspace:*",
+    "@eva/profile-analytics": "workspace:*",
     "@eva/workout-engine": "workspace:*",
     "@sentry/nextjs": "^10.53.1",
     "jose": "^6.2.3",

@@ -1,15 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Alert, Linking, Share, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
+import { Linking, Pressable, ScrollView, Share, Text, View } from 'react-native'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Image } from 'expo-image'
 import { useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
+import { cssInterop } from 'nativewind'
 import QRCode from 'react-native-qrcode-svg'
-import { Camera, Check, ImageIcon, Info, Lock, Palette, Share2, Sparkles, Type } from 'lucide-react-native'
+import { Camera, Check, Eye, ImageIcon, Info, Lock, Palette, Share2, Sparkles, Type } from 'lucide-react-native'
+import type { LucideIcon } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, ScreenHeader, Section, InfoRow } from '../../../components'
+import { Button, Input, Textarea, SegmentedTabs } from '../../../components'
+import { Card } from '../../../components/Card'
+import { Switch } from '../../../components/Switch'
 import { EvaLoader, EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { toast } from '../../../components/Toast'
+import { SHADOWS } from '../../../lib/shadows'
+import { FONT } from '../../../lib/typography'
 import { getCoachOrgContext } from '../../../lib/org'
 import { getCoachProfile } from '../../../lib/coach'
 import { canUseBranding, type SubscriptionTier } from '../../../lib/coach-tiers'
@@ -22,7 +29,17 @@ import {
 } from '../../../lib/coach-brand'
 import { saveStoredBranding, type CoachBranding } from '../../../lib/branding'
 
+// Let NativeWind drive the lucide `color` via `text-*` classes (same DS pattern
+// as the alumno perfil re-skin) so every icon color is a DS token — dark mode +
+// the white-label brand ramp resolve at runtime. Icons used as Button leftIcons
+// still receive their color from the Button (that path is unaffected).
+for (const Icon of [Camera, Check, Eye, ImageIcon, Info, Lock, Palette, Share2, Sparkles, Type]) {
+  cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
+}
+
 const COLOR_PRESETS = ['#007AFF', '#8B5CF6', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#06B6D4', '#F97316']
+// EVA wordmark gradient stops (violet / cyan / emerald) — brand asset constant,
+// same as EvaLoader; not a themable surface.
 const WORDMARK_COLORS = ['#8B5CF6', '#06B6D4', '#10B981']
 
 // M-F8: contraste WCAG del color de marca como fondo de botón (texto blanco vs negro).
@@ -62,8 +79,9 @@ function contrastInfo(hex: string): { txt: string; ratio: number; aa: boolean; a
 }
 
 export default function MiMarcaScreen() {
-  const { theme, setBranding } = useTheme()
+  const { setBranding, resolvedScheme } = useTheme()
   const router = useRouter()
+  const insets = useSafeAreaInsets()
 
   const [loading, setLoading] = useState(true)
   const [orgManaged, setOrgManaged] = useState(false)
@@ -87,8 +105,6 @@ export default function MiMarcaScreen() {
 
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
 
   useEffect(() => {
     (async () => {
@@ -127,17 +143,37 @@ export default function MiMarcaScreen() {
     return Math.min(100, s)
   }, [logoUrl, color, welcomeMessage, useCustomLoader, loaderText, brandName])
 
+  // "Sin guardar" (dirty) — mirrors the web BrandSettingsForm indicator + drives
+  // the unified save FAB. Logo is excluded: it persists immediately on upload.
+  const dirty = useMemo(() => {
+    if (!settings) return false
+    return (
+      fullName !== settings.fullName ||
+      brandName !== settings.brandName ||
+      color.toLowerCase() !== settings.primaryColor.toLowerCase() ||
+      useBrandColors !== settings.useBrandColors ||
+      useCustomLoader !== settings.useCustomLoader ||
+      (loaderText || '') !== (settings.loaderText || '') ||
+      (loaderTextColor || '') !== (settings.loaderTextColor || '') ||
+      loaderIconMode !== ((settings.loaderIconMode as string) ?? 'eva') ||
+      (welcomeMessage || '') !== (settings.welcomeMessage || '') ||
+      welcomeModalEnabled !== settings.welcomeModalEnabled ||
+      welcomeModalType !== settings.welcomeModalType ||
+      (welcomeModalContent || '') !== (settings.welcomeModalContent || '')
+    )
+  }, [settings, fullName, brandName, color, useBrandColors, useCustomLoader, loaderText, loaderTextColor, loaderIconMode, welcomeMessage, welcomeModalEnabled, welcomeModalType, welcomeModalContent])
+
   async function pickLogo() {
-    setError(null)
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
-    if (!perm.granted) { setError('Permiso de galería denegado.'); return }
+    if (!perm.granted) { toast.error('Permiso de galería denegado.'); return }
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.9 })
     if (res.canceled || !res.assets?.[0]?.uri) return
     setUploading(true)
     const r = await uploadCoachLogo(res.assets[0].uri)
     setUploading(false)
-    if (!r.ok) { setError(r.error ?? 'No se pudo subir el logo.'); return }
+    if (!r.ok) { toast.error(r.error ?? 'No se pudo subir el logo.'); return }
     setLogoUrl(r.url ?? null)
+    toast.success('Logo actualizado')
   }
 
   async function shareLink() {
@@ -152,8 +188,6 @@ export default function MiMarcaScreen() {
   }
 
   async function save() {
-    setError(null)
-    setSaved(false)
     setSaving(true)
     const r = await updateCoachBrandSettings({
       fullName,
@@ -170,9 +204,25 @@ export default function MiMarcaScreen() {
       welcomeModalType,
     })
     setSaving(false)
-    if (!r.ok) { setError(r.error ?? 'No se pudo guardar.'); return }
-    setSaved(true)
+    if (!r.ok) { toast.error(r.error ?? 'No se pudo guardar.'); return }
+    toast.success('Marca guardada')
     if (settings) {
+      // Refrescar el baseline local para que "Sin guardar" (dirty) se apague tras guardar.
+      setSettings({
+        ...settings,
+        fullName,
+        brandName,
+        primaryColor: color,
+        useBrandColors,
+        useCustomLoader,
+        loaderText: loaderText || null,
+        loaderTextColor: loaderTextColor || null,
+        loaderIconMode,
+        welcomeMessage: welcomeMessage || null,
+        welcomeModalEnabled,
+        welcomeModalContent: welcomeModalContent || null,
+        welcomeModalType,
+      })
       const next: CoachBranding = {
         coachId: settings.id,
         coachSlug: settings.slug,
@@ -186,261 +236,403 @@ export default function MiMarcaScreen() {
   }
 
   if (loading) {
-    return (
-      <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
-        <AppBackground />
-        <ScreenHeader title="Mi Marca" subtitle="Cargando..." />
-        <EvaLoaderScreen subtitle="Cargando tu marca…" />
-      </SafeAreaView>
-    )
+    return <EvaLoaderScreen subtitle="Cargando tu marca…" />
   }
 
   // M-F4: tier-gate — branding es starter+. Free (no gestionado por org) ve upsell.
   if (!orgManaged && !canUseBranding(tier)) {
     return (
-      <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+      <View className="flex-1 bg-surface-app">
         <AppBackground />
-        <ScreenHeader title="Mi Marca" subtitle="Personalizá la app de tus alumnos" />
-        <View style={styles.gateWrap}>
-          <View style={[styles.gateCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-            <View style={[styles.gateIcon, { backgroundColor: theme.primary + '1A' }]}>
-              <Lock size={26} color={theme.primary} />
-            </View>
-            <Text style={[styles.gateTitle, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>Marca personalizada en Starter+</Text>
-            <Text style={[styles.gateText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              Subí a Starter (o superior) para personalizar el logo, los colores, el loader y el mensaje de bienvenida que ven tus alumnos al instalar tu app.
-            </Text>
-            <Button label="Ver planes y upgrade" onPress={() => Linking.openURL(`${getApiBaseUrl()}/coach/subscription`).catch(() => null)} full />
-          </View>
-        </View>
-      </SafeAreaView>
+        <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 200 }} showsVerticalScrollIndicator={false}>
+            <ScreenTitle />
+            <Card variant="default" padding="lg" style={{ alignItems: 'center', gap: 14, marginTop: 24 }}>
+              <View className="items-center justify-center rounded-2xl bg-sport-100" style={{ width: 56, height: 56 }}>
+                <Lock size={26} className="text-sport-600" />
+              </View>
+              <Text className="font-display-bold text-strong" style={{ fontSize: 19, textAlign: 'center', letterSpacing: -0.3 }}>
+                Marca personalizada en Starter+
+              </Text>
+              <Text className="font-sans text-muted" style={{ fontSize: 13.5, lineHeight: 20, textAlign: 'center' }}>
+                Subí a Starter (o superior) para personalizar el logo, los colores, el loader y el mensaje de bienvenida que ven tus alumnos al instalar tu app.
+              </Text>
+              <Button
+                label="Ver planes y upgrade"
+                variant="sport"
+                full
+                testID="mimarca-upgrade"
+                onPress={() => Linking.openURL(`${getApiBaseUrl()}/coach/subscription`).catch(() => null)}
+              />
+            </Card>
+          </ScrollView>
+        </SafeAreaView>
+      </View>
     )
   }
 
+  const scoreBarClass = brandScore >= 80 ? 'bg-success-500' : brandScore >= 50 ? 'bg-warning-500' : 'bg-primary'
+  const scoreTextClass = brandScore >= 80 ? 'text-success-600' : brandScore >= 50 ? 'text-warning-600' : 'text-strong'
+
   return (
-    <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+    <View className="flex-1 bg-surface-app">
       <AppBackground />
-      <ScreenHeader title="Mi Marca" subtitle="Personalizá la app de tus alumnos" />
+      <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 200, gap: 14 }} showsVerticalScrollIndicator={false}>
+          <ScreenTitle />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Brand score */}
-        <View style={styles.scoreRow}>
-          <Text style={[styles.scoreLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Marca completada</Text>
-          <Text style={[styles.scoreValue, { color: brandScore >= 80 ? theme.success : brandScore >= 50 ? '#F59E0B' : theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{brandScore}%</Text>
-        </View>
-        <View style={[styles.scoreTrack, { backgroundColor: theme.muted }]}>
-          <View style={{ width: `${brandScore}%`, height: '100%', borderRadius: 99, backgroundColor: brandScore >= 80 ? theme.success : brandScore >= 50 ? '#F59E0B' : color }} />
-        </View>
+          {/* Brand score + estado "Sin guardar" */}
+          <View>
+            <View className="flex-row items-center justify-between" style={{ marginBottom: 8 }}>
+              <Text className="font-sans-medium text-muted" style={{ fontSize: 12 }}>Marca completada</Text>
+              <View className="flex-row items-center" style={{ gap: 8 }}>
+                {dirty ? (
+                  <View className="rounded-full bg-warning-100" style={{ paddingHorizontal: 9, paddingVertical: 3 }}>
+                    <Text className="font-sans-bold text-warning-700" style={{ fontSize: 10.5, letterSpacing: 0.3 }}>Sin guardar</Text>
+                  </View>
+                ) : null}
+                <Text className={`font-sans-extra ${scoreTextClass}`} style={{ fontSize: 14 }}>{brandScore}%</Text>
+              </View>
+            </View>
+            <View className="rounded-full bg-surface-sunken" style={{ height: 6, overflow: 'hidden' }}>
+              <View className={`h-full rounded-full ${scoreBarClass}`} style={{ width: `${brandScore}%` }} />
+            </View>
+          </View>
 
-        {/* Live preview */}
-        <View style={[styles.preview, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-          <View style={styles.previewTop}>
-            <View style={[styles.logoBox, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]}>
-              {logoUrl ? (
-                <Image source={{ uri: logoUrl }} style={styles.logoImg} contentFit="cover" transition={150} />
+          {/* Live preview */}
+          <Card variant="default" padding="md" style={{ gap: 14 }}>
+            <View className="flex-row items-center" style={{ gap: 14 }}>
+              <View className="items-center justify-center overflow-hidden rounded-xl border border-subtle bg-surface-sunken" style={{ width: 64, height: 64 }}>
+                {logoUrl ? (
+                  <Image source={{ uri: logoUrl }} style={{ width: 64, height: 64 }} contentFit="cover" transition={150} />
+                ) : (
+                  <Text style={{ color, fontFamily: FONT.displayBold, fontSize: 30 }}>{(brandName || 'E').charAt(0).toUpperCase()}</Text>
+                )}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text numberOfLines={1} className="font-display-bold text-strong" style={{ fontSize: 18, letterSpacing: -0.3 }}>
+                  {brandName || 'Tu marca'}
+                </Text>
+                <View className="flex-row items-center" style={{ gap: 8, marginTop: 5 }}>
+                  <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: color }} />
+                  <Text className="text-muted" style={{ fontFamily: FONT.mono, fontSize: 12 }}>{color.toUpperCase()}</Text>
+                </View>
+              </View>
+            </View>
+            <View className="items-center justify-center border-t border-subtle" style={{ paddingTop: 14, minHeight: 64 }}>
+              {useCustomLoader && loaderText.trim() ? (
+                <BrandWordmark text={loaderText.trim()} gradient={isGradient} solidColor={loaderTextColor || color} />
               ) : (
-                <Text style={[styles.logoInitial, { color, fontFamily: 'Archivo_800ExtraBold' }]}>{(brandName || 'E').charAt(0).toUpperCase()}</Text>
+                <EvaLoader size="sm" />
               )}
             </View>
-            <View style={{ flex: 1 }}>
-              <Text numberOfLines={1} style={[styles.previewName, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{brandName || 'Tu marca'}</Text>
-              <View style={styles.swatchRow}>
-                <View style={[styles.swatchDot, { backgroundColor: color }]} />
-                <Text style={[styles.previewColor, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{color.toUpperCase()}</Text>
-              </View>
-            </View>
-          </View>
-          <View style={[styles.loaderPreview, { borderColor: theme.border }]}>
-            {useCustomLoader && loaderText.trim() ? (
-              <BrandWordmark text={loaderText.trim()} gradient={isGradient} solidColor={loaderTextColor || color} />
-            ) : (
-              <EvaLoader size="sm" />
-            )}
-          </View>
-          {/* M-F6: preview full-screen de la app del alumno con la marca actual */}
-          <Button
-            label="Ver app del alumno (pantalla completa)"
-            variant="outline"
-            onPress={() => router.push({ pathname: '/coach/brand-preview', params: { color, name: brandName, logo: logoUrl ?? '', loaderText } })}
-            full
-          />
-        </View>
+            {/* M-F6: preview full-screen de la app del alumno con la marca actual */}
+            <Button
+              label="Ver app del alumno (pantalla completa)"
+              variant="secondary"
+              leftIcon={Eye}
+              full
+              testID="mimarca-preview"
+              onPress={() => router.push({ pathname: '/coach/brand-preview', params: { color, name: brandName, logo: logoUrl ?? '', loaderText } })}
+            />
+          </Card>
 
-        {orgManaged ? (
-          <View style={[styles.lockCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
-            <Lock size={18} color={theme.mutedForeground} />
-            <Text style={[styles.lockText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-              {orgName ? `Tu marca la gestiona ${orgName}.` : 'Tu marca la gestiona tu organización.'} No podés editarla desde acá.
-            </Text>
-          </View>
-        ) : (
-          <>
-            {error ? (
-              <View style={[styles.errorBox, { borderColor: theme.destructive + '55', backgroundColor: theme.destructive + '14' }]}>
-                <Text style={{ color: theme.destructive, fontSize: 13, fontFamily: theme.fontSans }}>{error}</Text>
-              </View>
-            ) : null}
+          {orgManaged ? (
+            <Card variant="default" padding="md" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Lock size={18} className="text-muted" />
+              <Text className="font-sans text-muted" style={{ flex: 1, fontSize: 13, lineHeight: 18 }}>
+                {orgName ? `Tu marca la gestiona ${orgName}.` : 'Tu marca la gestiona tu organización.'} No podés editarla desde acá.
+              </Text>
+            </Card>
+          ) : (
+            <>
+              {/* Logo */}
+              <SectionCard icon={ImageIcon} title="Logo">
+                <Button
+                  label={uploading ? 'Subiendo...' : logoUrl ? 'Cambiar logo' : 'Subir logo'}
+                  variant="secondary"
+                  leftIcon={Camera}
+                  onPress={pickLogo}
+                  disabled={uploading}
+                  loading={uploading}
+                  full
+                  testID="mimarca-logo-upload"
+                />
+                <View className="flex-row items-start rounded-control border border-subtle bg-surface-sunken" style={{ gap: 8, padding: 10 }}>
+                  <Info size={13} className="text-muted" style={{ marginTop: 1 }} />
+                  <Text className="font-sans text-muted" style={{ flex: 1, fontSize: 11, lineHeight: 16 }}>
+                    El logo se ve dentro de la app. El ícono de la app instalada usa el de EVA (limitación de la tienda).
+                  </Text>
+                </View>
+              </SectionCard>
 
-            {/* Identity */}
-            <SectionCard theme={theme} icon={Type} title="Identidad">
-              <Field theme={theme} label="Tu nombre" value={fullName} onChangeText={setFullName} placeholder="Nombre y apellido" />
-              <Field theme={theme} label="Nombre de marca" value={brandName} onChangeText={setBrandName} placeholder="Mi Gimnasio" />
-              {/* P4: el CÓDIGO es el identificador principal — permanente, no editable. */}
-              {settings?.inviteCode ? (
-                <InfoRow label="Tu código (permanente)" value={settings.inviteCode} last={!settings.hasLegacySlug} />
+              {/* Identidad */}
+              <SectionCard icon={Type} title="Identidad">
+                <Input label="Tu nombre" value={fullName} onChangeText={setFullName} placeholder="Nombre y apellido" testID="mimarca-fullname" />
+                <Input label="Nombre de marca" value={brandName} onChangeText={setBrandName} placeholder="Mi Gimnasio" testID="mimarca-brandname" />
+                {/* P4: el CÓDIGO es el identificador principal — permanente, no editable. */}
+                {settings?.inviteCode ? (
+                  <ReadonlyRow label="Tu código (permanente)" value={settings.inviteCode} />
+                ) : null}
+                {/* slug legacy: solo-lectura (inmutable). Sigue funcionando como alias para alumnos antiguos. */}
+                {settings?.hasLegacySlug && settings.slug ? (
+                  <ReadonlyRow label="URL legacy (alias, no editable)" value={`eva-app.cl/c/${settings.slug}`} />
+                ) : null}
+              </SectionCard>
+
+              {/* Bienvenida (login del alumno) */}
+              <SectionCard icon={Type} title="Bienvenida">
+                <Textarea
+                  label="Mensaje en el login del alumno"
+                  value={welcomeMessage}
+                  onChangeText={setWelcomeMessage}
+                  placeholder="Mensaje para tus alumnos al entrar"
+                  maxLength={240}
+                  showCount
+                  minRows={3}
+                  testID="mimarca-welcome-message"
+                />
+              </SectionCard>
+
+              {/* Mensaje al entrar al dashboard del alumno */}
+              <SectionCard icon={Sparkles} title="Mensaje al entrar al dashboard">
+                <ToggleRow
+                  label="Mostrar mensaje o video al alumno"
+                  value={welcomeModalEnabled}
+                  onValueChange={setWelcomeModalEnabled}
+                  testID="mimarca-welcome-modal-enabled"
+                />
+                {welcomeModalEnabled ? (
+                  <>
+                    <SegmentedTabs
+                      items={[{ value: 'text', label: 'Texto' }, { value: 'video', label: 'Video' }]}
+                      value={welcomeModalType}
+                      onChange={(v) => setWelcomeModalType(v as 'text' | 'video')}
+                    />
+                    {welcomeModalType === 'text' ? (
+                      <Textarea
+                        label="Mensaje"
+                        value={welcomeModalContent}
+                        onChangeText={setWelcomeModalContent}
+                        placeholder="Ej: ¡Feliz lunes! Esta semana nos enfocamos en..."
+                        maxLength={1000}
+                        showCount
+                        minRows={3}
+                        testID="mimarca-modal-text"
+                      />
+                    ) : (
+                      <Input
+                        label="URL de YouTube o Vimeo"
+                        value={welcomeModalContent}
+                        onChangeText={setWelcomeModalContent}
+                        placeholder="https://youtube.com/watch?v=..."
+                        autoCapitalize="none"
+                        keyboardType="url"
+                        testID="mimarca-modal-url"
+                      />
+                    )}
+                  </>
+                ) : null}
+              </SectionCard>
+
+              {/* Color / tema de marca */}
+              <SectionCard icon={Palette} title="Color de marca">
+                <View className="flex-row flex-wrap" style={{ gap: 10 }}>
+                  {COLOR_PRESETS.map((c) => {
+                    const active = c.toLowerCase() === color.toLowerCase()
+                    return (
+                      <Pressable
+                        key={c}
+                        testID={`mimarca-color-${c.replace('#', '')}`}
+                        accessibilityRole="button"
+                        onPress={() => setColor(c)}
+                        className={`items-center justify-center rounded-full ${active ? 'border-2 border-strong' : 'border-2 border-transparent'}`}
+                        style={{ width: 40, height: 40, backgroundColor: c }}
+                      >
+                        {active ? <Check size={16} color="#FFFFFF" /> : null}
+                      </Pressable>
+                    )
+                  })}
+                </View>
+                {/* M-F9: paleta de matices (tap) */}
+                <Text className="font-sans-medium text-muted" style={{ fontSize: 12 }}>Paleta de matices</Text>
+                <View style={{ gap: 6 }}>
+                  {LIGHTNESS.map((l) => (
+                    <View key={l} className="flex-row flex-wrap" style={{ gap: 6 }}>
+                      {HUE_STEPS.map((h) => {
+                        const hex = hslToHex(h, 75, l)
+                        const active = hex.toLowerCase() === color.toLowerCase()
+                        return (
+                          <Pressable
+                            key={`${h}-${l}`}
+                            testID={`mimarca-hue-${h}-${l}`}
+                            accessibilityRole="button"
+                            onPress={() => setColor(hex)}
+                            className={`rounded-full ${active ? 'border-2 border-strong' : 'border-2 border-transparent'}`}
+                            style={{ width: 22, height: 22, backgroundColor: hex }}
+                          />
+                        )
+                      })}
+                    </View>
+                  ))}
+                </View>
+                <Input
+                  label="Hex personalizado"
+                  value={color}
+                  onChangeText={(v: string) => setColor(v.startsWith('#') ? v : `#${v}`)}
+                  placeholder="#007AFF"
+                  autoCapitalize="characters"
+                  testID="mimarca-hex"
+                />
+                {(() => {
+                  const ci = contrastInfo(color)
+                  if (!ci) return null
+                  const cls = ci.aa ? 'text-success-600' : ci.aaLarge ? 'text-warning-600' : 'text-danger-600'
+                  return (
+                    <Text className={`font-sans-semibold ${cls}`} style={{ fontSize: 12 }}>
+                      Texto {ci.txt} sobre tu color: {ci.ratio.toFixed(1)}:1 · {ci.aa ? 'AA ✓' : ci.aaLarge ? 'AA solo texto grande' : 'contraste bajo ⚠'}
+                    </Text>
+                  )
+                })()}
+                <ToggleRow
+                  label="Aplicar mis colores a la app del alumno"
+                  value={useBrandColors}
+                  onValueChange={setUseBrandColors}
+                  testID="mimarca-use-brand-colors"
+                />
+              </SectionCard>
+
+              {/* Loader animado */}
+              <SectionCard icon={Sparkles} title="Loader animado">
+                <ToggleRow
+                  label="Usar loader personalizado"
+                  value={useCustomLoader}
+                  onValueChange={setUseCustomLoader}
+                  testID="mimarca-use-custom-loader"
+                />
+                {useCustomLoader ? (
+                  <>
+                    <Input
+                      label="Texto del loader (máx 10)"
+                      value={loaderText}
+                      onChangeText={(v: string) => setLoaderText(v.toUpperCase().slice(0, 10))}
+                      placeholder="MI MARCA"
+                      autoCapitalize="characters"
+                      testID="mimarca-loader-text"
+                    />
+
+                    <FieldLabel>Ícono</FieldLabel>
+                    <SegmentedTabs
+                      items={[{ value: 'eva', label: 'EVA' }, { value: 'coach', label: 'Mi logo' }, { value: 'none', label: 'Sin ícono' }]}
+                      value={loaderIconMode}
+                      onChange={(v) => {
+                        // "Mi logo" requiere un logo subido (el web lo muestra deshabilitado).
+                        if (v === 'coach' && !logoUrl) { toast.info('Subí un logo primero para usarlo en el loader.'); return }
+                        setLoaderIconMode(v as 'eva' | 'coach' | 'none')
+                      }}
+                    />
+
+                    <FieldLabel>Estilo del texto</FieldLabel>
+                    <SegmentedTabs
+                      items={[{ value: 'gradient', label: 'Gradiente' }, { value: 'solid', label: 'Color sólido' }]}
+                      value={isGradient ? 'gradient' : 'solid'}
+                      onChange={(v) => setLoaderTextColor(v === 'gradient' ? '' : (loaderTextColor || color))}
+                    />
+                    {!isGradient ? (
+                      <Input
+                        label="Color del texto (hex)"
+                        value={loaderTextColor}
+                        onChangeText={(v: string) => setLoaderTextColor(v.startsWith('#') || v === '' ? v : `#${v}`)}
+                        placeholder={color}
+                        autoCapitalize="characters"
+                        testID="mimarca-loader-color"
+                      />
+                    ) : null}
+                  </>
+                ) : null}
+              </SectionCard>
+            </>
+          )}
+
+          {/* Compartir con alumnos */}
+          {settings ? (
+            <SectionCard icon={Share2} title="Compartir con alumnos">
+              {settings.inviteCode ? (
+                <View className="self-start rounded-control border border-sport-200 bg-sport-100" style={{ paddingHorizontal: 14, paddingVertical: 7 }}>
+                  <Text className="font-display-bold text-sport-600" style={{ fontSize: 18, letterSpacing: 4 }}>{settings.inviteCode}</Text>
+                </View>
               ) : null}
-              {/* slug legacy: solo-lectura (inmutable). Sigue funcionando como alias para alumnos antiguos. */}
-              {settings?.hasLegacySlug && settings.slug ? (
-                <InfoRow label="URL legacy (alias, no editable)" value={`eva-app.cl/c/${settings.slug}`} last />
+              {/* P4: URL principal por código (permanente). El slug solo se muestra como enlace alternativo legacy. */}
+              <ReadonlyRow label="URL" value={`eva-app.cl/c/${settings.inviteCode || settings.slug}`} />
+              {settings.hasLegacySlug ? (
+                <ReadonlyRow label="Enlace alternativo (legacy)" value={`eva-app.cl/c/${settings.slug}`} />
               ) : null}
-            </SectionCard>
-
-            {/* Logo */}
-            <SectionCard theme={theme} icon={ImageIcon} title="Logo">
-              <Button label={uploading ? 'Subiendo...' : logoUrl ? 'Cambiar logo' : 'Subir logo'} variant="outline" leftIcon={Camera} onPress={pickLogo} disabled={uploading} full />
-              <View style={[styles.noteRow, { borderColor: theme.border }]}>
-                <Info size={13} color={theme.mutedForeground} />
-                <Text style={[styles.note, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-                  El logo se ve dentro de la app. El ícono de la app instalada usa el de EVA (limitación de la tienda).
+              {/* M-F7: QR del acceso del alumno (escaneable para instalar/entrar). */}
+              <View className="items-center" style={{ gap: 8, paddingVertical: 6 }}>
+                <View className="border-subtle" style={{ backgroundColor: '#FFFFFF', padding: 12, borderRadius: 14, borderWidth: 1 }}>
+                  <QRCode value={`https://eva-app.cl/c/${settings.inviteCode || settings.slug}/login`} size={150} backgroundColor="#FFFFFF" color="#0F172A" />
+                </View>
+                <Text className="font-sans text-muted" style={{ fontSize: 11.5, textAlign: 'center' }}>
+                  Tu alumno escanea y entra a tu app. Tu código es permanente.
                 </Text>
               </View>
+              <Button label="Compartir link" variant="secondary" leftIcon={Share2} onPress={shareLink} full testID="mimarca-share" />
             </SectionCard>
+          ) : null}
 
-            {/* Color */}
-            <SectionCard theme={theme} icon={Palette} title="Color de marca">
-              <View style={styles.swatchGrid}>
-                {COLOR_PRESETS.map((c) => {
-                  const active = c.toLowerCase() === color.toLowerCase()
-                  return (
-                    <TouchableOpacity key={c} onPress={() => setColor(c)} activeOpacity={0.8}
-                      style={[styles.swatch, { backgroundColor: c, borderColor: active ? theme.foreground : 'transparent' }]}>
-                      {active ? <Check size={16} color="#fff" /> : null}
-                    </TouchableOpacity>
-                  )
-                })}
-              </View>
-              {/* M-F9: paleta de matices (tap) */}
-              <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Paleta de matices</Text>
-              <View style={styles.hueGrid}>
-                {LIGHTNESS.map((l) => (
-                  <View key={l} style={styles.hueRow}>
-                    {HUE_STEPS.map((h) => {
-                      const hex = hslToHex(h, 75, l)
-                      const active = hex.toLowerCase() === color.toLowerCase()
-                      return (
-                        <TouchableOpacity key={`${h}-${l}`} onPress={() => setColor(hex)} activeOpacity={0.8}
-                          style={[styles.hueDot, { backgroundColor: hex, borderColor: active ? theme.foreground : 'transparent' }]} />
-                      )
-                    })}
-                  </View>
-                ))}
-              </View>
-              <Field theme={theme} label="Hex personalizado" value={color} onChangeText={(v: string) => setColor(v.startsWith('#') ? v : `#${v}`)} placeholder="#007AFF" autoCapitalize="characters" />
-              {(() => {
-                const ci = contrastInfo(color)
-                if (!ci) return null
-                const okColor = ci.aa ? theme.success : ci.aaLarge ? '#F59E0B' : theme.destructive
-                return (
-                  <Text style={{ fontSize: 12, color: okColor, fontFamily: 'HankenGrotesk_600SemiBold' }}>
-                    Texto {ci.txt} sobre tu color: {ci.ratio.toFixed(1)}:1 · {ci.aa ? 'AA ✓' : ci.aaLarge ? 'AA solo texto grande' : 'contraste bajo ⚠'}
-                  </Text>
-                )
-              })()}
-              <Toggle theme={theme} label="Aplicar mis colores a la app del alumno" on={useBrandColors} onPress={() => setUseBrandColors((v) => !v)} />
-            </SectionCard>
-
-            {/* Loader */}
-            <SectionCard theme={theme} icon={Sparkles} title="Loader animado">
-              <Toggle theme={theme} label="Usar loader personalizado" on={useCustomLoader} onPress={() => setUseCustomLoader((v) => !v)} />
-              {useCustomLoader ? (
-                <>
-                  <Field theme={theme} label="Texto del loader (máx 10)" value={loaderText} onChangeText={(v: string) => setLoaderText(v.toUpperCase().slice(0, 10))} placeholder="MI MARCA" autoCapitalize="characters" />
-
-                  <Label theme={theme}>Ícono</Label>
-                  <Segmented theme={theme}
-                    options={[{ value: 'eva', label: 'EVA' }, { value: 'coach', label: 'Mi logo', disabled: !logoUrl }, { value: 'none', label: 'Sin ícono' }]}
-                    value={loaderIconMode} onChange={(v) => setLoaderIconMode(v as 'eva' | 'coach' | 'none')} />
-
-                  <Label theme={theme}>Estilo del texto</Label>
-                  <Segmented theme={theme}
-                    options={[{ value: 'gradient', label: 'Gradiente' }, { value: 'solid', label: 'Color sólido' }]}
-                    value={isGradient ? 'gradient' : 'solid'}
-                    onChange={(v) => setLoaderTextColor(v === 'gradient' ? '' : (loaderTextColor || color))} />
-                  {!isGradient ? (
-                    <Field theme={theme} label="Color del texto (hex)" value={loaderTextColor} onChangeText={(v: string) => setLoaderTextColor(v.startsWith('#') || v === '' ? v : `#${v}`)} placeholder={color} autoCapitalize="characters" />
-                  ) : null}
-                </>
-              ) : null}
-            </SectionCard>
-
-            {/* Welcome */}
-            <SectionCard theme={theme} icon={Type} title="Bienvenida">
-              <Field theme={theme} label="Mensaje en el login del alumno" value={welcomeMessage} onChangeText={setWelcomeMessage} placeholder="Mensaje para tus alumnos al entrar" multiline maxLength={240} />
-              <Text style={{ fontSize: 11, color: theme.mutedForeground, fontFamily: theme.fontSans, textAlign: 'right' }}>{welcomeMessage.length}/240</Text>
-            </SectionCard>
-
-            {/* Welcome modal — aparece al entrar al dashboard del alumno */}
-            <SectionCard theme={theme} icon={Sparkles} title="Mensaje al entrar al dashboard">
-              <Toggle theme={theme} label="Mostrar mensaje o video al alumno" on={welcomeModalEnabled} onPress={() => setWelcomeModalEnabled((v) => !v)} />
-              {welcomeModalEnabled ? (
-                <>
-                  <Segmented theme={theme}
-                    options={[{ value: 'text', label: 'Texto' }, { value: 'video', label: 'Video' }]}
-                    value={welcomeModalType} onChange={(v) => setWelcomeModalType(v as 'text' | 'video')} />
-                  {welcomeModalType === 'text' ? (
-                    <Field theme={theme} label="Mensaje" value={welcomeModalContent} onChangeText={setWelcomeModalContent} placeholder="Ej: ¡Feliz lunes! Esta semana nos enfocamos en..." multiline maxLength={1000} />
-                  ) : (
-                    <Field theme={theme} label="URL de YouTube o Vimeo" value={welcomeModalContent} onChangeText={setWelcomeModalContent} placeholder="https://youtube.com/watch?v=..." autoCapitalize="none" keyboardType="url" />
-                  )}
-                </>
-              ) : null}
-            </SectionCard>
-
-            <Button label={saving ? 'Guardando...' : saved ? '¡Guardado!' : 'Guardar cambios'} onPress={save} disabled={saving} full />
-          </>
-        )}
-
-        {/* Share */}
-        {settings ? (
-          <SectionCard theme={theme} icon={Share2} title="Compartir con alumnos">
-            {settings.inviteCode ? (
-              <View style={[styles.codeChip, { borderColor: theme.primary + '33', backgroundColor: theme.primary + '14' }]}>
-                <Text style={[styles.codeText, { color: theme.primary, fontFamily: 'Archivo_800ExtraBold' }]}>{settings.inviteCode}</Text>
-              </View>
-            ) : null}
-            {/* P4: URL principal por código (permanente). El slug solo se muestra como enlace alternativo legacy. */}
-            <InfoRow label="URL" value={`eva-app.cl/c/${settings.inviteCode || settings.slug}`} last={!settings.hasLegacySlug} />
-            {settings.hasLegacySlug ? (
-              <InfoRow label="Enlace alternativo (legacy)" value={`eva-app.cl/c/${settings.slug}`} last />
-            ) : null}
-            {/* M-F7: QR del acceso del alumno (escaneable para instalar/entrar). */}
-            <View style={styles.qrWrap}>
-              <View style={[styles.qrBox, { backgroundColor: '#FFFFFF', borderColor: theme.border }]}>
-                <QRCode value={`https://eva-app.cl/c/${settings.inviteCode || settings.slug}/login`} size={150} backgroundColor="#FFFFFF" color="#0F172A" />
-              </View>
-              <Text style={[styles.qrHint, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Tu alumno escanea y entra a tu app. Tu código es permanente.</Text>
-            </View>
-            <Button label="Compartir link" variant="outline" leftIcon={Share2} onPress={shareLink} full />
+          {/* M-F5 (reemplazo): la cuenta NO se borra desde la app — se solicita por correo. */}
+          <SectionCard icon={Lock} title="Cuenta">
+            <Text className="font-sans text-muted" style={{ fontSize: 12.5, lineHeight: 18 }}>
+              La eliminación de cuenta no se hace desde la app. Escribinos a contacto@eva-app.cl y gestionamos la baja (datos, pagos y app de tus alumnos) según la Ley 21.719.
+            </Text>
+            <Button
+              label="Solicitar baja por correo"
+              variant="secondary"
+              full
+              testID="mimarca-baja"
+              onPress={() => Linking.openURL('mailto:contacto@eva-app.cl?subject=' + encodeURIComponent('Solicitud de baja de cuenta EVA')).catch(() => {})}
+            />
           </SectionCard>
-        ) : null}
+        </ScrollView>
 
-        {/* M-F5 (reemplazo): la cuenta NO se borra desde la app — se solicita por correo. */}
-        <SectionCard theme={theme} icon={Lock} title="Cuenta">
-          <Text style={[styles.dangerText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
-            La eliminación de cuenta no se hace desde la app. Escribinos a contacto@eva-app.cl y gestionamos la baja (datos, pagos y app de tus alumnos) según la Ley 21.719.
-          </Text>
-          <Button label="Solicitar baja por correo" variant="outline" onPress={() => Linking.openURL('mailto:contacto@eva-app.cl?subject=' + encodeURIComponent('Solicitud de baja de cuenta EVA')).catch(() => {})} full />
-        </SectionCard>
-      </ScrollView>
-    </SafeAreaView>
+        {/* Guardado unificado (FAB) — flota sobre la cápsula de tabs cuando hay cambios sin guardar (parity web). */}
+        {!orgManaged && dirty ? (
+          <View
+            pointerEvents="box-none"
+            style={{ position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 84 }}
+          >
+            <Button
+              label={saving ? 'Guardando...' : 'Guardar cambios'}
+              variant="sport"
+              full
+              loading={saving}
+              onPress={save}
+              testID="mimarca-save"
+              style={SHADOWS[resolvedScheme].lg}
+            />
+          </View>
+        ) : null}
+      </SafeAreaView>
+    </View>
   )
 }
 
+/** Encabezado de pantalla (display black + subtítulo), 1:1 con el patrón re-skin. */
+function ScreenTitle() {
+  return (
+    <View style={{ paddingTop: 16, paddingBottom: 4 }}>
+      <Text className="font-display-black text-strong" style={{ fontSize: 26, letterSpacing: -0.52 }}>Mi Marca</Text>
+      <Text className="font-sans text-muted" style={{ fontSize: 13, marginTop: 4 }}>Personalizá la app de tus alumnos</Text>
+    </View>
+  )
+}
+
+/** Loader wordmark del preview — letras Archivo black con gradiente EVA o color sólido. */
 function BrandWordmark({ text, gradient, solidColor }: { text: string; gradient: boolean; solidColor: string }) {
   return (
-    <View style={{ flexDirection: 'row' }}>
+    <View className="flex-row">
       {text.split('').map((ch, i) => (
-        <Text key={i} style={{ fontSize: 30, fontFamily: 'Archivo_900Black', letterSpacing: -1, color: gradient ? WORDMARK_COLORS[i % WORDMARK_COLORS.length] : solidColor }}>
+        <Text key={i} style={{ fontSize: 30, fontFamily: FONT.displayBlack, letterSpacing: -1, color: gradient ? WORDMARK_COLORS[i % WORDMARK_COLORS.length] : solidColor }}>
           {ch}
         </Text>
       ))}
@@ -448,107 +640,48 @@ function BrandWordmark({ text, gradient, solidColor }: { text: string; gradient:
   )
 }
 
-function SectionCard({ theme, icon: Icon, title, children }: { theme: any; icon: any; title: string; children: React.ReactNode }) {
+/** Sección: Card DS con cabecera de ícono (tinte de marca) + título. */
+function SectionCard({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: React.ReactNode }) {
   return (
-    <View style={[styles.sectionCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-      <View style={styles.sectionHead}>
-        <Icon size={15} color={theme.primary} />
-        <Text style={[styles.sectionTitle, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{title}</Text>
+    <Card variant="default" padding="md" style={{ gap: 12 }}>
+      <View className="flex-row items-center" style={{ gap: 8 }}>
+        <Icon size={15} className="text-primary" />
+        <Text className="font-sans-bold text-strong" style={{ fontSize: 14 }}>{title}</Text>
       </View>
       {children}
-    </View>
+    </Card>
   )
 }
 
-function Label({ children, theme }: { children: React.ReactNode; theme: any }) {
-  return <Text style={[styles.label, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>{children}</Text>
-}
-
-function Field({ theme, label, multiline, ...rest }: any) {
+/** Fila read-only estilo Input deshabilitado (código permanente, slug legacy, URL). */
+function ReadonlyRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={{ gap: 6 }}>
-      <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
-      <TextInput placeholderTextColor={theme.mutedForeground} multiline={multiline}
-        style={[styles.input, multiline && { height: 84, textAlignVertical: 'top', paddingTop: 10 }, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} {...rest} />
+      <Text className="font-sans-semibold text-strong" style={{ fontSize: 13 }}>{label}</Text>
+      <View className="justify-center rounded-control border border-subtle bg-surface-sunken" style={{ paddingHorizontal: 14, height: 46 }}>
+        <Text className="font-sans-medium text-muted" style={{ fontSize: 14 }} numberOfLines={1}>{value}</Text>
+      </View>
     </View>
   )
 }
 
-function Segmented({ theme, options, value, onChange }: { theme: any; options: { value: string; label: string; disabled?: boolean }[]; value: string; onChange: (v: string) => void }) {
+/** Etiqueta de campo (uppercase, para los selectores del loader). */
+function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <View style={[styles.segmented, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
-      {options.map((o) => {
-        const active = o.value === value
-        return (
-          <TouchableOpacity key={o.value} disabled={o.disabled} onPress={() => onChange(o.value)} activeOpacity={0.8}
-            style={[styles.segItem, active && { backgroundColor: theme.primary }, o.disabled && { opacity: 0.4 }]}>
-            <Text style={{ fontSize: 12, fontFamily: 'HankenGrotesk_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>{o.label}</Text>
-          </TouchableOpacity>
-        )
-      })}
-    </View>
+    <Text className="font-sans-bold text-muted" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 2 }}>
+      {children}
+    </Text>
   )
 }
 
-function Toggle({ theme, label, on, onPress }: { theme: any; label: string; on: boolean; onPress: () => void }) {
+/** Fila con Switch DS (E0-E2). testID va en el wrapper (el Switch no expone testID). */
+function ToggleRow({ label, value, onValueChange, testID }: { label: string; value: boolean; onValueChange: (next: boolean) => void; testID?: string }) {
   return (
-    <View style={styles.toggleRow}>
-      <Text style={[styles.toggleText, { color: theme.foreground, fontFamily: theme.fontSans }]}>{label}</Text>
-      <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={[styles.switch, { backgroundColor: on ? theme.primary : theme.muted }]}>
-        <View style={[styles.knob, { backgroundColor: '#fff', alignSelf: on ? 'flex-end' : 'flex-start' }]} />
-      </TouchableOpacity>
+    <View className="flex-row items-center justify-between" style={{ gap: 12, marginTop: 2 }}>
+      <Text className="font-sans text-strong" style={{ flex: 1, fontSize: 14 }}>{label}</Text>
+      <View testID={testID}>
+        <Switch value={value} onValueChange={onValueChange} />
+      </View>
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  gateWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  gateCard: { borderWidth: 1, padding: 24, gap: 14, alignItems: 'center', maxWidth: 420, width: '100%' },
-  gateIcon: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  gateTitle: { fontSize: 19, textAlign: 'center', letterSpacing: -0.3 },
-  gateText: { fontSize: 13.5, lineHeight: 20, textAlign: 'center' },
-  hueGrid: { gap: 6 },
-  hueRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  hueDot: { width: 22, height: 22, borderRadius: 11, borderWidth: 2 },
-  qrWrap: { alignItems: 'center', gap: 8, paddingVertical: 6 },
-  qrBox: { padding: 12, borderRadius: 14, borderWidth: 1 },
-  qrHint: { fontSize: 11.5, textAlign: 'center' },
-  dangerText: { fontSize: 12.5, lineHeight: 18 },
-  scroll: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 120, gap: 14 },
-  scoreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  scoreLabel: { fontSize: 12 },
-  scoreValue: { fontSize: 14 },
-  scoreTrack: { height: 6, borderRadius: 99, overflow: 'hidden', marginTop: -6 },
-  preview: { padding: 16, borderWidth: 1, gap: 14 },
-  previewTop: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  logoBox: { width: 64, height: 64, borderWidth: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  logoImg: { width: 64, height: 64 },
-  logoInitial: { fontSize: 30 },
-  previewName: { fontSize: 18, letterSpacing: -0.3 },
-  swatchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 5 },
-  swatchDot: { width: 14, height: 14, borderRadius: 7 },
-  previewColor: { fontSize: 12 },
-  loaderPreview: { borderTopWidth: 1, paddingTop: 14, alignItems: 'center', justifyContent: 'center', minHeight: 64 },
-  lockCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderWidth: 1 },
-  lockText: { fontSize: 13, flex: 1, lineHeight: 18 },
-  errorBox: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  sectionCard: { padding: 16, borderWidth: 1, gap: 12 },
-  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  sectionTitle: { fontSize: 14 },
-  label: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 2 },
-  fieldLabel: { fontSize: 12 },
-  input: { height: 46, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, fontSize: 15 },
-  noteRow: { flexDirection: 'row', gap: 8, alignItems: 'flex-start', borderWidth: 1, borderRadius: 10, padding: 10 },
-  note: { fontSize: 11, lineHeight: 16, flex: 1 },
-  swatchGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  swatch: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  segmented: { flexDirection: 'row', borderWidth: 1, borderRadius: 10, padding: 3, gap: 3 },
-  segItem: { flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: 8 },
-  codeChip: { alignSelf: 'flex-start', borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 7 },
-  codeText: { fontSize: 18, letterSpacing: 4 },
-  toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 2 },
-  toggleText: { fontSize: 14, flex: 1 },
-  switch: { width: 46, height: 28, borderRadius: 14, padding: 3, justifyContent: 'center' },
-  knob: { width: 22, height: 22, borderRadius: 11 },
-})

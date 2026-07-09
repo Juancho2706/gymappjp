@@ -70,9 +70,11 @@ import { StatCard } from '../StatCard'
 import { Avatar } from '../Avatar'
 import { Badge } from '../Badge'
 import { ListRow } from '../ListRow'
+import { SegmentedTabs } from '../SegmentedTabs'
 import { useEffect, useRef, useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { apiFetch, getApiBaseUrl } from '../../lib/api'
+import { FONT } from '../../lib/typography'
 
 function hexToRgba(hex: string, alpha: number): string {
   const clean = hex.replace('#', '')
@@ -221,7 +223,7 @@ function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
       ]}
     >
       <View style={styles.tierMain}>
-        <Text style={[styles.tierTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+        <Text style={[styles.tierTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
           {used}/{max} alumnos - Plan gratuito
         </Text>
         <View style={[styles.usageTrack, { backgroundColor: theme.muted }]}>
@@ -236,7 +238,7 @@ function MobileFreeTierBanner({ totalClients }: { totalClients: number }) {
           />
         </View>
       </View>
-      <Text style={[styles.tierAction, { color: full ? '#F59E0B' : theme.primary, fontFamily: 'Inter_700Bold' }]}>
+      <Text style={[styles.tierAction, { color: full ? '#F59E0B' : theme.primary, fontFamily: FONT.uiBold }]}>
         {full ? 'Expandir limite' : 'Ver planes'}
       </Text>
     </TouchableOpacity>
@@ -269,14 +271,14 @@ function MobileTeamsBridgeBanner({ totalClients }: { totalClients: number }) {
       ]}
     >
       <View style={styles.tierMain}>
-        <Text style={[styles.tierTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+        <Text style={[styles.tierTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
           {totalClients}/{max} alumnos - {pct}% de tu plan Elite
         </Text>
         <Text style={[styles.tierSubtitle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
           ¿Más de 100 alumnos o trabajas con otros profesionales? Conoce EVA Teams. Te contactamos a la brevedad.
         </Text>
       </View>
-      <Text style={[styles.tierAction, { color: '#10B981', fontFamily: 'Inter_700Bold' }]}>
+      <Text style={[styles.tierAction, { color: '#10B981', fontFamily: FONT.uiBold }]}>
         Conocer Teams
       </Text>
     </TouchableOpacity>
@@ -316,7 +318,7 @@ function MobileBanner({
         </Text>
         <View style={[styles.bannerCta, { backgroundColor: toneColor }]}>
           <CreditCard size={13} color="#FFFFFF" strokeWidth={2.3} />
-          <Text style={[styles.bannerCtaText, { fontFamily: 'Inter_700Bold' }]}>
+          <Text style={[styles.bannerCtaText, { fontFamily: FONT.uiBold }]}>
             Revisar plan
           </Text>
         </View>
@@ -400,16 +402,16 @@ export function MobilePublicCodeRequiredModal({
         </View>
 
         <View style={[styles.publicCodeBox, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.xl }]}>
-          <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+          <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
             NUEVO ACCESO ALUMNOS
           </Text>
           <View style={styles.publicCodeRow}>
-            <Text style={[styles.publicCodeValue, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>
+            <Text style={[styles.publicCodeValue, { color: theme.foreground, fontFamily: FONT.uiSemibold }]} numberOfLines={1}>
               {studentPath}
             </Text>
             <TouchableOpacity activeOpacity={0.78} onPress={copyLink} style={styles.publicCodeCopy}>
               <Copy size={14} color={theme.primary} />
-              <Text style={[styles.publicCodeCopyText, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>
+              <Text style={[styles.publicCodeCopyText, { color: theme.primary, fontFamily: FONT.uiBold }]}>
                 {copied ? 'Copiado' : 'Copiar'}
               </Text>
             </TouchableOpacity>
@@ -417,7 +419,7 @@ export function MobilePublicCodeRequiredModal({
         </View>
 
         {error ? (
-          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>
+          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: FONT.uiSemibold }]}>
             {error}
           </Text>
         ) : null}
@@ -460,7 +462,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
           <View style={[styles.freeWelcomeIcon, { borderColor: 'rgba(16,185,129,0.3)', backgroundColor: 'rgba(16,185,129,0.18)' }]}>
             <Sparkles size={31} color="#10B981" />
           </View>
-          <Text style={[styles.freeWelcomeTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+          <Text style={[styles.freeWelcomeTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>
             Bienvenido a EVA
           </Text>
           <Text style={[styles.freeWelcomeSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -469,7 +471,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
         </View>
 
         <View style={styles.freeWelcomeSection}>
-          <Text style={[styles.freeWelcomeEyebrow, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+          <Text style={[styles.freeWelcomeEyebrow, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
             PRIMEROS PASOS
           </Text>
           <WelcomeStep icon={Users} color="#38BDF8" title="Agrega tu primer alumno" subtitle="Hasta 3 alumnos en el plan Free" />
@@ -478,7 +480,7 @@ export function MobileFreeWelcomeModal({ enabled }: { enabled: boolean }) {
         </View>
 
         <View style={styles.freeWelcomeSection}>
-          <Text style={[styles.freeWelcomeEyebrow, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+          <Text style={[styles.freeWelcomeEyebrow, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
             TU PLAN FREE INCLUYE
           </Text>
           <View style={styles.freePlanGrid}>
@@ -550,7 +552,7 @@ function WelcomeStep({
         <Icon size={16} color={color} />
       </View>
       <View style={styles.welcomeStepCopy}>
-        <Text style={[styles.welcomeStepTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+        <Text style={[styles.welcomeStepTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
           {title}
         </Text>
         <Text style={[styles.welcomeStepSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -760,7 +762,7 @@ export function MobileOnboardingChecklist({
     return (
       <View style={[styles.onboardingResume, glass, { borderRadius: theme.radius.xl }]}>
         <CardGlass />
-        <Text style={[styles.onboardingResumeText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]}>
+        <Text style={[styles.onboardingResumeText, { color: theme.foreground, fontFamily: FONT.uiSemibold }]}>
           Sigues con pasos pendientes en tu guia de inicio.
         </Text>
         <Button label="Continuar guia" size="sm" onPress={resumeGuide} />
@@ -773,10 +775,10 @@ export function MobileOnboardingChecklist({
       <CardGlass />
       <View style={styles.onboardingHeader}>
         <View style={styles.onboardingHeaderCopy}>
-          <Text style={[styles.eyebrow, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+          <Text style={[styles.eyebrow, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
             TU RUTA EN EVA
           </Text>
-          <Text style={[styles.onboardingTitle, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+          <Text style={[styles.onboardingTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>
             Pon tu estudio en marcha
           </Text>
           <Text style={[styles.onboardingDescription, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -784,10 +786,10 @@ export function MobileOnboardingChecklist({
           </Text>
         </View>
         <View style={styles.onboardingProgressBox}>
-          <Text style={[styles.onboardingProgressValue, { color: theme.primary, fontFamily: 'Montserrat_800ExtraBold' }]}>
+          <Text style={[styles.onboardingProgressValue, { color: theme.primary, fontFamily: FONT.displayBold }]}>
             {progressPct}%
           </Text>
-          <Text style={[styles.onboardingProgressLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+          <Text style={[styles.onboardingProgressLabel, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>
             COMPLETADO
           </Text>
           <TouchableOpacity activeOpacity={0.8} onPress={dismiss} style={styles.skipGuideButton}>
@@ -856,7 +858,7 @@ export function MobileOnboardingChecklist({
         <View style={[styles.activationReady, { borderColor: 'rgba(16,185,129,0.32)', backgroundColor: 'rgba(16,185,129,0.1)' }]}>
           <Sparkles size={17} color="#10B981" />
           <View style={styles.activationCopy}>
-            <Text style={[styles.activationTitle, { color: '#10B981', fontFamily: 'Inter_700Bold' }]}>
+            <Text style={[styles.activationTitle, { color: '#10B981', fontFamily: FONT.uiBold }]}>
               Activacion lista
             </Text>
             <Text style={[styles.activationText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -881,7 +883,7 @@ function MobileOnboardingFreePlan() {
   ]
   return (
     <View style={[styles.onboardingFreeBox, { borderColor: hexToRgba(theme.primary, 0.2), backgroundColor: hexToRgba(theme.primary, 0.06), borderRadius: theme.radius.xl }]}>
-      <Text style={[styles.onboardingFreeTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+      <Text style={[styles.onboardingFreeTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
         Plan Free - lo que tienes incluido:
       </Text>
       <View style={styles.freePlanGrid}>
@@ -914,7 +916,7 @@ function MobileOnboardingLoopStrip() {
             <View style={[styles.loopIcon, { backgroundColor: index === 0 ? hexToRgba(theme.primary, 0.14) : theme.card }]}>
               <Icon size={15} color={index === 0 ? theme.primary : theme.mutedForeground} />
             </View>
-            <Text style={[styles.loopLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{item.label}</Text>
+            <Text style={[styles.loopLabel, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>{item.label}</Text>
           </View>
         )
       })}
@@ -937,7 +939,7 @@ function MobileOnboardingTwinPanels({
       <View style={[styles.twinPanel, { borderColor: theme.border, backgroundColor: theme.muted, borderRadius: theme.radius.xl }]}>
         <View style={styles.twinTitleRow}>
           <Monitor size={15} color={theme.primary} />
-          <Text style={[styles.twinTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>Tu panel</Text>
+          <Text style={[styles.twinTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>Tu panel</Text>
         </View>
         <Text style={[styles.twinText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
           Sumas alumnos, armas programas y asignas planes desde tu app de coach.
@@ -946,7 +948,7 @@ function MobileOnboardingTwinPanels({
       <View style={[styles.twinPanel, { borderColor: theme.border, backgroundColor: hexToRgba(theme.primary, 0.08), borderRadius: theme.radius.xl }]}>
         <View style={styles.twinTitleRow}>
           <Smartphone size={15} color={theme.primary} />
-          <Text style={[styles.twinTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>Tu alumno</Text>
+          <Text style={[styles.twinTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>Tu alumno</Text>
         </View>
         <Text style={[styles.twinText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
           Entra a {studentPath}, ve su plan y registra entrenos o check-ins.
@@ -979,8 +981,8 @@ function MobileOnboardingCarousel({ completed }: { completed: Record<OnboardingS
               <Icon size={16} color={done ? '#10B981' : theme.primary} />
               {done ? <CheckCircle2 size={15} color="#10B981" /> : null}
             </View>
-            <Text style={[styles.carouselStep, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>PASO {index + 1}</Text>
-            <Text style={[styles.carouselTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>{step.title}</Text>
+            <Text style={[styles.carouselStep, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>PASO {index + 1}</Text>
+            <Text style={[styles.carouselTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>{step.title}</Text>
           </View>
         )
       })}
@@ -1004,7 +1006,7 @@ function MobileOnboardingStepBlock({
     <View style={[styles.stepBlock, { borderColor: theme.border, backgroundColor: theme.card === '#FFFFFF' ? 'rgba(255,255,255,0.48)' : 'rgba(255,255,255,0.04)', borderRadius: theme.radius.xl }]}>
       <View style={styles.stepTitleRow}>
         {done ? <CheckCircle2 size={17} color="#10B981" /> : <View style={[styles.pendingDot, { borderColor: theme.mutedForeground }]} />}
-        <Text style={[styles.stepTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>{title}</Text>
+        <Text style={[styles.stepTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>{title}</Text>
       </View>
       <Text style={[styles.stepDescription, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
         {description}
@@ -1020,10 +1022,10 @@ function MobileNutritionTierBlock({ subscriptionTier }: { subscriptionTier: Coac
   const enabled = canUseNutrition(subscriptionTier)
   return (
     <View style={[styles.nutritionBlock, { borderColor: enabled ? 'rgba(16,185,129,0.24)' : theme.border, backgroundColor: enabled ? 'rgba(16,185,129,0.08)' : theme.muted, borderRadius: theme.radius.xl }]}>
-      <Text style={[styles.eyebrow, { color: enabled ? '#10B981' : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+      <Text style={[styles.eyebrow, { color: enabled ? '#10B981' : theme.mutedForeground, fontFamily: FONT.uiBold }]}>
         NUTRICION {enabled ? '(OPCIONAL)' : ''}
       </Text>
-      <Text style={[styles.nutritionTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+      <Text style={[styles.nutritionTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
         {enabled ? 'Cuando quieras, sigue esta ruta' : 'Planes de nutricion en Pro o superior'}
       </Text>
       <Text style={[styles.nutritionText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -1459,7 +1461,7 @@ function QuickCreateClientForm({
         <View style={[styles.successBox, { borderColor: 'rgba(16,185,129,0.35)', backgroundColor: 'rgba(16,185,129,0.1)' }]}>
           <CheckCircle2 size={19} color="#10B981" />
           <View style={styles.successCopy}>
-            <Text style={[styles.successTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+            <Text style={[styles.successTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
               {createdClient.clientName} creado
             </Text>
             <Text style={[styles.successText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]} numberOfLines={2}>
@@ -1479,7 +1481,7 @@ function QuickCreateClientForm({
     <View style={styles.paymentForm}>
       {error ? (
         <View style={[styles.formError, { borderColor: theme.destructive, backgroundColor: theme.destructive + '14' }]}>
-          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>
+          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: FONT.uiSemibold }]}>
             {error}
           </Text>
         </View>
@@ -1592,14 +1594,14 @@ function QuickAddPaymentForm({
     <View style={styles.paymentForm}>
       {error ? (
         <View style={[styles.formError, { borderColor: theme.destructive, backgroundColor: theme.destructive + '14' }]}>
-          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: 'Inter_600SemiBold' }]}>
+          <Text style={[styles.formErrorText, { color: theme.destructive, fontFamily: FONT.uiSemibold }]}>
             {error}
           </Text>
         </View>
       ) : null}
 
       <View style={styles.formField}>
-        <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>Alumno</Text>
+        <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>Alumno</Text>
         <ScrollView style={[styles.clientPicker, { borderColor: theme.border, backgroundColor: theme.secondary, borderRadius: theme.radius.lg }]} nestedScrollEnabled>
           {clients.length === 0 ? (
             <Text style={[styles.clientEmpty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -1621,7 +1623,7 @@ function QuickAddPaymentForm({
                   <Text
                     style={[
                       styles.clientOptionText,
-                      { color: active ? theme.primary : theme.foreground, fontFamily: 'Inter_600SemiBold' },
+                      { color: active ? theme.primary : theme.foreground, fontFamily: FONT.uiSemibold },
                     ]}
                     numberOfLines={1}
                   >
@@ -1663,7 +1665,7 @@ function FormInput({
   const { theme } = useTheme()
   return (
     <View style={styles.formField}>
-      <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+      <Text style={[styles.formLabel, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
@@ -1809,16 +1811,6 @@ export function MobileGreetingHeader({
           <Avatar src={logoUrl} name={coachName} size={40} />
         </TouchableOpacity>
       </View>
-    </View>
-  )
-}
-
-/** Cabecera de sección DS (título display + acción opcional a la derecha). */
-function SectionHeader({ title, action }: { title: string; action?: string }) {
-  return (
-    <View className="flex-row items-center justify-between">
-      <Text className="font-display-bold text-[17px] text-strong">{title}</Text>
-      {action ? <Text className="font-sans text-[12px] text-muted">{action}</Text> : null}
     </View>
   )
 }
@@ -2557,9 +2549,19 @@ export function MobileActivityFeed({ items }: { items: MobileActivityItem[] }) {
   )
 }
 
+type NovedadesFilter = 'todos' | 'pendientes' | 'revisados'
+
+/** El shape mobile aun no expone `reviewed` (llega con el shape V2 en E5); se lee defensivo. */
+function activityReviewed(it: MobileActivityItem): boolean {
+  return Boolean((it as { reviewed?: boolean }).reviewed)
+}
+
 /**
- * Novedades — programas por vencer + actividad reciente en una sola card.
- * 1:1 con coach-dashboard.jsx → feed (expiringPrograms ++ coachActivity).
+ * Novedades (NewsFeed) — programas por vencer + actividad reciente en una sola card,
+ * con la cola de check-ins encima: badge "por revisar" (ember) + filtro segmentado
+ * (Todos / Por revisar / Revisados) que aparece SOLO si hay check-ins y acota el feed
+ * client-side por estado. 1:1 con NewsFeed.tsx (web). Sin `reviewed` en la data (E5),
+ * todos los check-ins cuentan como "por revisar" y "Revisados" queda vacio.
  */
 export function MobileNovedades({
   expiringPrograms,
@@ -2570,9 +2572,26 @@ export function MobileNovedades({
 }) {
   const router = useRouter()
   const { theme } = useTheme()
-  const isEmpty = expiringPrograms.length === 0 && activities.length === 0
-  let rowIndex = -1
+  const [filter, setFilter] = useState<NovedadesFilter>('todos')
 
+  const hasCheckins = activities.some((a) => a.type === 'check-in')
+  const pendingCheckins = activities.filter((a) => a.type === 'check-in' && !activityReviewed(a)).length
+
+  // "todos" = programas + toda la actividad; estados de cola = solo check-ins del estado.
+  const showPrograms = filter === 'todos'
+  const shownActivities =
+    filter === 'todos'
+      ? activities
+      : activities.filter((a) => a.type === 'check-in' && activityReviewed(a) === (filter === 'revisados'))
+  const isEmpty = (showPrograms ? expiringPrograms.length : 0) + shownActivities.length === 0
+  const emptyCopy =
+    filter === 'pendientes'
+      ? 'Todo al dia. Sin check-ins por revisar.'
+      : filter === 'revisados'
+        ? 'Aun no marcas check-ins como revisados.'
+        : 'Sin novedades por ahora.'
+
+  let rowIndex = -1
   function Divider({ index }: { index: number }) {
     if (index <= 0) return null
     return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginHorizontal: 14 }} />
@@ -2580,62 +2599,89 @@ export function MobileNovedades({
 
   return (
     <View style={{ gap: 10 }}>
-      <SectionHeader title="Novedades" />
+      <View className="flex-row items-center" style={{ gap: 8 }}>
+        <Text className="font-display-bold text-[17px] text-strong">Novedades</Text>
+        {pendingCheckins > 0 ? (
+          <Badge tone="ember" variant="soft" size="sm">
+            {`${pendingCheckins > 9 ? '9+' : pendingCheckins} por revisar`}
+          </Badge>
+        ) : null}
+      </View>
+
+      {hasCheckins ? (
+        <SegmentedTabs
+          size="sm"
+          value={filter}
+          onChange={(v) => setFilter(v)}
+          items={[
+            { value: 'todos', label: 'Todos' },
+            { value: 'pendientes', label: 'Por revisar' },
+            { value: 'revisados', label: 'Revisados' },
+          ]}
+        />
+      ) : null}
+
       {isEmpty ? (
         <Card padding="md" radius="card">
           <Text className="font-sans text-[12px] text-muted" style={{ textAlign: 'center' }}>
-            Sin novedades por ahora.
+            {emptyCopy}
           </Text>
         </Card>
       ) : (
         <Card padding="none" radius="card" style={{ overflow: 'hidden' }}>
-          {expiringPrograms.map((it) => {
-            rowIndex += 1
-            const expired = it.daysLeft <= 0
-            const urgent = expired || it.daysLeft <= 2
-            return (
-              <View key={`prog-${it.id}`}>
-                <Divider index={rowIndex} />
-                <TouchableOpacity
-                  activeOpacity={0.82}
-                  onPress={() =>
-                    it.clientId
-                      ? router.push(`/coach/cliente/${it.clientId}`)
-                      : router.push('/coach/(tabs)/builder')
-                  }
-                  className="flex-row items-center gap-3 px-[14px] py-[11px]"
-                >
-                  <View
-                    className="h-[34px] w-[34px] items-center justify-center rounded-pill"
-                    style={{ backgroundColor: urgent ? 'rgba(244,54,90,0.12)' : 'rgba(245,158,11,0.14)' }}
-                  >
-                    <CalendarClock size={16} color={urgent ? '#F4365A' : '#F59E0B'} />
+          {showPrograms
+            ? expiringPrograms.map((it) => {
+                rowIndex += 1
+                const expired = it.daysLeft <= 0
+                const urgent = expired || it.daysLeft <= 2
+                return (
+                  <View key={`prog-${it.id}`}>
+                    <Divider index={rowIndex} />
+                    <TouchableOpacity
+                      activeOpacity={0.82}
+                      testID={`novedades-program-${it.id}`}
+                      onPress={() =>
+                        it.clientId
+                          ? router.push(`/coach/cliente/${it.clientId}`)
+                          : router.push('/coach/(tabs)/builder')
+                      }
+                      className="flex-row items-center gap-3 px-[14px] py-[11px]"
+                    >
+                      <View
+                        className="h-[34px] w-[34px] items-center justify-center rounded-pill"
+                        style={{ backgroundColor: urgent ? 'rgba(244,54,90,0.12)' : 'rgba(245,158,11,0.14)' }}
+                      >
+                        <CalendarClock size={16} color={urgent ? '#F4365A' : '#F59E0B'} />
+                      </View>
+                      <View className="flex-1" style={{ minWidth: 0 }}>
+                        <Text className="font-sans text-[13.5px] text-body" numberOfLines={1}>
+                          Plan de <Text className="font-sans-bold text-strong">{it.clientName}</Text>{' '}
+                          {expired ? 'vencio' : 'vence pronto'}
+                        </Text>
+                        <Text className="font-sans text-[12px] text-muted" numberOfLines={1}>
+                          {it.name}
+                        </Text>
+                      </View>
+                      <Badge tone={urgent ? 'danger' : 'warning'} variant="soft" size="sm">
+                        {expired ? 'Vencido' : `${it.daysLeft} dias`}
+                      </Badge>
+                    </TouchableOpacity>
                   </View>
-                  <View className="flex-1" style={{ minWidth: 0 }}>
-                    <Text className="font-sans text-[13.5px] text-body" numberOfLines={1}>
-                      Plan de <Text className="font-sans-bold text-strong">{it.clientName}</Text>{' '}
-                      {expired ? 'vencio' : 'vence pronto'}
-                    </Text>
-                    <Text className="font-sans text-[12px] text-muted" numberOfLines={1}>
-                      {it.name}
-                    </Text>
-                  </View>
-                  <Badge tone={urgent ? 'danger' : 'warning'} variant="soft" size="sm">
-                    {expired ? 'Vencido' : `${it.daysLeft} dias`}
-                  </Badge>
-                </TouchableOpacity>
-              </View>
-            )
-          })}
-          {activities.map((it) => {
+                )
+              })
+            : null}
+          {shownActivities.map((it) => {
             rowIndex += 1
             const iconColor = it.type === 'nuevo alumno' ? '#10B981' : it.type === 'check-in' ? '#3B82F6' : theme.primary
+            const isCheckin = it.type === 'check-in'
+            const reviewed = activityReviewed(it)
             return (
               <View key={`act-${it.id}`}>
                 <Divider index={rowIndex} />
                 <ListRow
+                  testID={`novedades-activity-${it.id}`}
                   leading={
-                    it.type === 'check-in' && it.photoUrl ? (
+                    isCheckin && it.photoUrl ? (
                       <Image
                         source={{ uri: it.photoUrl }}
                         style={{ width: 34, height: 34, borderRadius: 11 }}
@@ -2653,7 +2699,18 @@ export function MobileNovedades({
                   }
                   title={it.title}
                   subtitle={it.subtitle}
-                  trailing={<Text className="font-sans text-[11px] text-muted">{timeAgo(it.date)}</Text>}
+                  trailing={
+                    <View className="flex-row items-center" style={{ gap: 8 }}>
+                      {isCheckin ? (
+                        reviewed ? (
+                          <CheckCircle2 size={15} color={theme.success} />
+                        ) : (
+                          <View className="rounded-pill bg-ember-500" style={{ width: 8, height: 8 }} />
+                        )
+                      ) : null}
+                      <Text className="font-sans text-[11px] text-muted">{timeAgo(it.date)}</Text>
+                    </View>
+                  }
                   disabled={!it.clientId}
                   onPress={it.clientId ? () => router.push(`/coach/cliente/${it.clientId}`) : undefined}
                 />
@@ -2711,7 +2768,7 @@ function MobileSessionsChart({ data }: { data: MobileChartPoint[] }) {
         <View style={[styles.chartIcon, { backgroundColor: 'rgba(59,130,246,0.12)' }]}>
           <TrendingUp size={16} color="#3B82F6" />
         </View>
-        <Text style={[styles.chartTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+        <Text style={[styles.chartTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
           SESIONES 30 DIAS
         </Text>
       </View>
@@ -2773,7 +2830,7 @@ function MobileGrowthChart({ data }: { data: MobileChartPoint[] }) {
         <View style={[styles.chartIcon, { backgroundColor: 'rgba(34,211,238,0.12)' }]}>
           <Activity size={16} color="#22D3EE" />
         </View>
-        <Text style={[styles.chartTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+        <Text style={[styles.chartTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
           CRECIMIENTO DE ALUMNOS
         </Text>
       </View>
@@ -2836,12 +2893,12 @@ export function MobileRevenueSheet({
     <NativeDialog open={open} title="Panel de ingresos" onClose={onClose}>
       <View style={styles.revenueSheet}>
         <View style={styles.revenueHeader}>
-          <Text style={[styles.revenueAmount, { color: theme.foreground, fontFamily: 'Montserrat_800ExtraBold' }]}>
+          <Text style={[styles.revenueAmount, { color: theme.foreground, fontFamily: FONT.displayBold }]}>
             {formatCurrency(kpi.mrrCurrentMonth)}
           </Text>
           <View style={styles.revenueDelta}>
             <DeltaIcon size={16} color={deltaColor} />
-            <Text style={[styles.revenueDeltaText, { color: deltaColor, fontFamily: 'Inter_700Bold' }]}>
+            <Text style={[styles.revenueDeltaText, { color: deltaColor, fontFamily: FONT.uiBold }]}>
               {deltaPct > 0 ? '+' : ''}{deltaPct.toFixed(1)}%
             </Text>
           </View>
@@ -2874,7 +2931,7 @@ export function MobileRevenueSheet({
               >
                 <View style={styles.rowCopy}>
                   <View style={styles.revenueNameRow}>
-                    <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>
+                    <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]} numberOfLines={1}>
                       {client.clientName}
                     </Text>
                     <ArrowUpRight size={13} color={theme.mutedForeground} />
@@ -2981,10 +3038,10 @@ export function MobileClientStatsSheet({
                   ]}
                 >
                   <View style={styles.statsRowHeader}>
-                    <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>
+                    <Text style={[styles.rowTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]} numberOfLines={1}>
                       {client.clientName}
                     </Text>
-                    <Text style={[styles.statsPct, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+                    <Text style={[styles.statsPct, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
                       {pct}%
                     </Text>
                   </View>
@@ -3004,7 +3061,7 @@ export function MobileClientStatsSheet({
                           {deltaUp
                             ? <ArrowUpRight size={11} color="#10B981" />
                             : <ArrowDownRight size={11} color="#F43F5E" />}
-                          <Text style={[styles.statsDeltaText, { color: deltaUp ? '#10B981' : '#F43F5E', fontFamily: 'Inter_700Bold' }]}>
+                          <Text style={[styles.statsDeltaText, { color: deltaUp ? '#10B981' : '#F43F5E', fontFamily: FONT.uiBold }]}>
                             {Math.abs(client.weightDelta7d ?? 0).toFixed(1)}kg 7d
                           </Text>
                         </View>
@@ -3012,14 +3069,14 @@ export function MobileClientStatsSheet({
                       {client.streak > 0 && (
                         <View style={[styles.statsChip, { backgroundColor: 'rgba(245,158,11,0.15)' }]}>
                           <Zap size={11} color="#F59E0B" />
-                          <Text style={[styles.statsChipText, { color: '#F59E0B', fontFamily: 'Inter_700Bold' }]}>
+                          <Text style={[styles.statsChipText, { color: '#F59E0B', fontFamily: FONT.uiBold }]}>
                             {client.streak}d racha
                           </Text>
                         </View>
                       )}
                       {client.latestEnergyLevel !== null && (
                         <View style={[styles.statsChip, { backgroundColor: hexToRgba(theme.primary, 0.12) }]}>
-                          <Text style={[styles.statsChipText, { color: theme.primary, fontFamily: 'Inter_700Bold' }]}>
+                          <Text style={[styles.statsChipText, { color: theme.primary, fontFamily: FONT.uiBold }]}>
                             ⚡ {client.latestEnergyLevel}/10
                           </Text>
                         </View>
@@ -3039,7 +3096,7 @@ export function MobileClientStatsSheet({
                           {client.oneRMDelta >= 0
                             ? <TrendingUp size={11} color="#10B981" />
                             : <TrendingDown size={11} color="#F43F5E" />}
-                          <Text style={[styles.statsDeltaText, { color: client.oneRMDelta >= 0 ? '#10B981' : '#F43F5E', fontFamily: 'Inter_700Bold' }]}>
+                          <Text style={[styles.statsDeltaText, { color: client.oneRMDelta >= 0 ? '#10B981' : '#F43F5E', fontFamily: FONT.uiBold }]}>
                             {client.oneRMDelta > 0 ? '+' : ''}{client.oneRMDelta.toFixed(1)}% fuerza 7d
                           </Text>
                         </View>
@@ -3070,7 +3127,7 @@ function StatsTabButton({ active, label, onPress }: { active: boolean; label: st
         },
       ]}
     >
-      <Text style={[styles.statsTabText, { color: active ? '#FFFFFF' : theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>
+      <Text style={[styles.statsTabText, { color: active ? '#FFFFFF' : theme.mutedForeground, fontFamily: FONT.uiBold }]}>
         {label}
       </Text>
     </TouchableOpacity>
@@ -3083,7 +3140,7 @@ function PaymentStatusBadge({ hasRecentPayment, hasAnyPayment }: { hasRecentPaym
   const color = !hasAnyPayment ? theme.mutedForeground : hasRecentPayment ? '#10B981' : '#F59E0B'
   return (
     <View style={[styles.paymentBadge, { borderColor: hexToRgba(color, 0.42), backgroundColor: hexToRgba(color, 0.12) }]}>
-      <Text style={[styles.paymentBadgeText, { color, fontFamily: 'Inter_700Bold' }]}>{label}</Text>
+      <Text style={[styles.paymentBadgeText, { color, fontFamily: FONT.uiBold }]}>{label}</Text>
     </View>
   )
 }
@@ -3093,7 +3150,7 @@ function EmptyPanel({ icon, title, subtitle }: { icon: ReactNode; title: string;
   return (
     <View style={styles.emptyPanel}>
       {icon}
-      <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]}>
+      <Text style={[styles.emptyTitle, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
         {title}
       </Text>
       <Text style={[styles.emptySub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
@@ -3414,7 +3471,7 @@ const styles = StyleSheet.create({
   skipGuideText: {
     color: '#FFFFFF',
     fontSize: 10,
-    fontFamily: 'Inter_700Bold',
+    fontFamily: FONT.uiBold,
   },
   onboardingFreeBox: {
     borderWidth: 1,

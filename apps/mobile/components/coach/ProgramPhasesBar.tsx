@@ -1,6 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { useTheme } from '../../context/ThemeContext'
-import type { Phase } from './ProgramConfigSheet'
+import { FONT } from '../../lib/typography'
+import { PHASE_COLORS, type Phase } from './ProgramConfigSheet'
+
+// Fallback cuando una fase no tiene color asignado: primer tono de la paleta DS (sport-500).
+const PHASE_FALLBACK = PHASE_COLORS[0]
 
 /** Timeline de fases 1:1 con ProgramPhasesBar web: barra segmentada por color + leyenda. */
 export function ProgramPhasesBar({ phases, weeks }: { phases: Phase[]; weeks: number }) {
@@ -11,18 +15,18 @@ export function ProgramPhasesBar({ phases, weeks }: { phases: Phase[]; weeks: nu
     <View style={styles.wrap}>
       <View style={[styles.bar, { backgroundColor: theme.muted, borderColor: theme.border }]}>
         {phases.map((p, i) => (
-          <View key={`${p.name}-${i}`} style={{ width: `${(Math.max(1, p.weeks) / total) * 100}%`, height: '100%', backgroundColor: p.color || '#6366F1' }} />
+          <View key={`${p.name}-${i}`} style={{ width: `${(Math.max(1, p.weeks) / total) * 100}%`, height: '100%', backgroundColor: p.color || PHASE_FALLBACK }} />
         ))}
       </View>
       <View style={styles.legend}>
         {phases.map((p, i) => (
           <View key={`${p.name}-l-${i}`} style={styles.legItem}>
-            <View style={[styles.dot, { backgroundColor: p.color || '#6366F1' }]} />
-            <Text style={[styles.legName, { color: theme.foreground, fontFamily: 'Inter_700Bold' }]} numberOfLines={1}>{p.name || 'Fase'}</Text>
+            <View style={[styles.dot, { backgroundColor: p.color || PHASE_FALLBACK }]} />
+            <Text style={[styles.legName, { color: theme.foreground, fontFamily: FONT.uiBold }]} numberOfLines={1}>{p.name || 'Fase'}</Text>
             <Text style={[styles.legWk, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>({p.weeks}s)</Text>
           </View>
         ))}
-        <Text style={[styles.total, { color: theme.mutedForeground, fontFamily: 'Inter_700Bold' }]}>{weeks} sem.</Text>
+        <Text style={[styles.total, { color: theme.mutedForeground, fontFamily: FONT.uiBold }]}>{weeks} sem.</Text>
       </View>
     </View>
   )

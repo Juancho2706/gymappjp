@@ -1,24 +1,23 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Apple, Archive, ArchiveRestore, BarChart3, Clock, CreditCard, Dumbbell, LayoutGrid, MessageCircle, Pencil, Plus, Salad, Scale, TrendingUp, User, X } from 'lucide-react-native'
-import { MotiView } from 'moti'
-import * as Haptics from 'expo-haptics'
+import { Archive, ArchiveRestore, Pencil, User } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, EmptyState, NativeDialog, TopBar } from '../../../components'
+import { ActionSheet } from '../../../components/DropdownMenu'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { PhotoLightbox } from '../../../components/PhotoLightbox'
-import { ClientHero, type HeroChip } from '../../../components/coach/clientDetail/ClientHero'
+import { ClientHero, type HeroChips, type HeroStatusLevel } from '../../../components/coach/clientDetail/ClientHero'
 import { ClientTabBar, type ClientTab, type TabItem } from '../../../components/coach/clientDetail/ClientTabBar'
+import { ProfileFloatingActions } from '../../../components/coach/clientDetail/ProfileFloatingActions'
 import { OverviewTab } from '../../../components/coach/clientDetail/OverviewTab'
 import { ProgresoTab } from '../../../components/coach/clientDetail/ProgresoTab'
 import { AnalisisTab } from '../../../components/coach/clientDetail/AnalisisTab'
 import { PlanTab } from '../../../components/coach/clientDetail/PlanTab'
 import { NutricionTab } from '../../../components/coach/clientDetail/NutricionTab'
-import { FacturacionTab } from '../../../components/coach/clientDetail/FacturacionTab'
-import { apiFetch } from '../../../lib/api'
 import {
   getCoachClientDetail,
   getCoachClientDayDetail,
@@ -29,22 +28,15 @@ import {
   type CoachClientDetailData,
 } from '../../../lib/coach-client-detail'
 import {
-  avgEnergySince,
-  bmiCategory,
-  bmiFromMetric,
   buildProfileActivityCalendar,
-  epleyOneRM,
-  findWeeklyWeightPRs,
   formatTrainingAgeLabel,
-  linearRegressionKgPerDay,
   longestActivityStreak,
 } from '../../../lib/profile-analytics'
-import { exportProgressPdf } from '../../../lib/progress-pdf'
 import { getTodayInSantiago } from '../../../lib/date-utils'
 
 const round1 = (n: number) => Math.round(n * 10) / 10
 
-// A-F18: etiqueta relativa de "última actividad".
+// A-F18: etiqueta relativa de "ultima actividad".
 function relActivityLabel(iso: string | null): string {
   if (!iso) return 'Sin actividad'
   const d = Math.floor((Date.now() - new Date(`${iso}T12:00:00`).getTime()) / 86400000)
@@ -53,6 +45,14 @@ function relActivityLabel(iso: string | null): string {
   if (d < 30) return `Hace ${d}d`
   const m = Math.floor(d / 30)
   return `Hace ${m} mes${m === 1 ? '' : 'es'}`
+}
+
+// "Desde {mmm yyyy}" a partir de la fecha de inicio (o alta) del alumno.
+function sinceMonthLabel(iso: string | null): string {
+  if (!iso) return '—'
+  const d = new Date(iso.length <= 10 ? `${iso}T12:00:00` : iso)
+  if (!Number.isFinite(d.getTime())) return '—'
+  return d.toLocaleDateString('es-CL', { month: 'short', year: 'numeric' })
 }
 
 export default function ClientDetailScreen() {
@@ -66,11 +66,11 @@ export default function ClientDetailScreen() {
   const [selectedDate, setSelectedDate] = useState(() => getTodayInSantiago().iso)
   const [dayDetail, setDayDetail] = useState<ClientDayDetail | null>(null)
   const [dayLoading, setDayLoading] = useState(false)
-  const [payOpen, setPayOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
-  const [fabOpen, setFabOpen] = useState(false)
-  const [exporting, setExporting] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const [compact, setCompact] = useState(false)
   const [lightbox, setLightbox] = useState<{ photos: string[]; index: number } | null>(null)
+  const lastY = useRef(0)
 
   async function load() {
     setLoading(true)
@@ -102,7 +102,7 @@ export default function ClientDetailScreen() {
 
   function openWhatsApp() {
     const digits = (client?.phone ?? '').replace(/\D/g, '')
-    if (!digits) { Alert.alert('Sin teléfono', 'Este alumno no tiene teléfono cargado.'); return }
+    if (!digits) { Alert.alert('Sin telefono', 'Este alumno no tiene telefono cargado.'); return }
     const msg = `Hola ${client?.full_name?.split(' ')[0] ?? ''}! Te escribo desde EVA.`
     Linking.openURL(`https://wa.me/${digits}?text=${encodeURIComponent(msg)}`).catch(() => {})
   }
@@ -117,7 +117,7 @@ export default function ClientDetailScreen() {
     const archiving = !client.is_archived
     Alert.alert(
       archiving ? 'Archivar alumno' : 'Reactivar alumno',
-      archiving ? `${client.full_name} dejará de aparecer como activo.` : `${client.full_name} volverá a estar activo.`,
+      archiving ? `${client.full_name} dejara de aparecer como activo.` : `${client.full_name} volvera a estar activo.`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -128,12 +128,11 @@ export default function ClientDetailScreen() {
     )
   }
 
-  // ── Derivados para hero + badges + PDF ─────────────────────────────────────
+  // ── Derivados para hero (badge, meta, chips) ──────────────────────────────
   const derived = useMemo(() => {
     if (!data || !client) return null
     const series = [...data.checkIns].filter((c) => c.weight != null).sort((a, b) => a.date.localeCompare(b.date))
     const currentWeight = series.length ? Number(series[series.length - 1]!.weight) : null
-    const initialWeight = client.initial_weight_kg ?? (series.length ? Number(series[0]!.weight) : null)
     const weightDelta = series.length >= 2 ? round1(Number(series[series.length - 1]!.weight) - Number(series[series.length - 2]!.weight)) : null
     const calendar = buildProfileActivityCalendar(data.workoutDates371, data.checkIns.map((c) => c.date))
     const streak = longestActivityStreak(calendar)
@@ -141,63 +140,34 @@ export default function ClientDetailScreen() {
     const todayIso = getTodayInSantiago().iso
     const today = data.nutritionTimeline.find((t) => t.date === todayIso) ?? data.nutritionTimeline[0]
     const weeklyPRs = data.weeklyPRs
-    const pendingPays = data.payments.filter((p) => ['pending', 'pendiente'].includes((p.status ?? '').toLowerCase())).length
 
-    // Attention
+    // Alerta de atencion (motivo del badge).
     let attention: string | null = null
     if (data.compliance && data.compliance.checkInCompliancePercent < 40) attention = 'Check-ins irregulares — conviene contactar.'
     else if (data.activeNutrition && (data.compliance?.nutritionWeeklyAvgPct ?? 0) < 60) attention = 'Adherencia nutricional baja esta semana.'
     else if (data.checkIns[0] && !data.checkIns[0].reviewed_at) attention = 'Hay un check-in sin revisar.'
 
-    // A-F18: última actividad (workout o check-in más reciente) + semana de programa.
+    // Ultima actividad (workout o check-in mas reciente) + semana de programa.
     const lastWorkout = data.workoutDates371.length ? data.workoutDates371[data.workoutDates371.length - 1] : null
     const lastCheckin = data.checkIns[0]?.date ?? null
     const lastActivityIso = [lastWorkout, lastCheckin].filter(Boolean).sort().pop() ?? null
-    let programWeek: string | null = null
+    let planCurrentWeek: number | null = null
     if (data.activeProgram?.start_date && data.activeProgram.weeks_to_repeat) {
       const start = new Date(`${data.activeProgram.start_date}T12:00:00`).getTime()
       if (Number.isFinite(start)) {
-        const wk = Math.min(Math.max(1, Math.ceil((Math.max(0, (Date.now() - start) / 86400000) + 1) / 7)), Math.max(1, data.activeProgram.weeks_to_repeat))
-        programWeek = `${wk}/${data.activeProgram.weeks_to_repeat}`
+        planCurrentWeek = Math.min(Math.max(1, Math.ceil((Math.max(0, (Date.now() - start) / 86400000) + 1) / 7)), Math.max(1, data.activeProgram.weeks_to_repeat))
       }
     }
 
-    return { series, currentWeight, initialWeight, weightDelta, streak, trainingAge, today, weeklyPRs, pendingPays, attention, lastActivityIso, programWeek }
+    return { currentWeight, weightDelta, streak, trainingAge, today, weeklyPRs, attention, lastActivityIso, planCurrentWeek }
   }, [data, client])
 
-  async function onExportPdf() {
-    if (!data || !client || !derived) return
-    setExporting(true)
-    try {
-      const slope = linearRegressionKgPerDay(data.checkIns.map((c) => ({ created_at: c.created_at ?? c.date, weight: c.weight })))
-      const bmi = derived.currentWeight != null && client.height_cm != null ? bmiFromMetric(derived.currentWeight, client.height_cm) : null
-      const energy7 = avgEnergySince(data.checkIns.map((c) => ({ created_at: c.created_at ?? c.date, energy_level: c.energy_level })), new Date(Date.now() - 7 * 86400000))
-      await exportProgressPdf({
-        clientName: client.full_name,
-        coachName: null,
-        trainingAge: derived.trainingAge,
-        initialWeight: derived.initialWeight,
-        currentWeight: derived.currentWeight,
-        changeKg: derived.initialWeight != null && derived.currentWeight != null ? round1(derived.currentWeight - derived.initialWeight) : null,
-        projection4w: derived.currentWeight != null ? round1(derived.currentWeight + slope * 28) : null,
-        ritmo30: round1(slope * 30),
-        bmi,
-        bmiCategory: bmi != null ? bmiCategory(bmi) : null,
-        energy7d: energy7,
-        nutritionWeekPct: data.compliance?.nutritionWeeklyAvgPct ?? 0,
-        nutritionMonthPct: data.nutritionMonthlyAvgPct,
-        nutritionStreak: data.nutritionStreakDays,
-        sessions30d: data.sessions30d,
-        sessionsYear: data.workoutDates371.length,
-        checkInsTotal: data.checkIns.length,
-        checkIns: data.checkIns.map((c) => ({ date: c.date, weight: c.weight, energy: c.energy_level, notes: c.notes, photo: c.front_photo_url })),
-        prs: data.personalRecords.map((r) => ({ exerciseName: r.exerciseName, weightKg: r.maxWeightKg, reps: r.repsAtMax ?? 0, oneRm: round1(epleyOneRM(r.maxWeightKg, r.repsAtMax ?? 0)) })),
-      })
-    } catch (e: any) {
-      Alert.alert('No se pudo exportar', e?.message ?? 'Intenta nuevamente.')
-    } finally {
-      setExporting(false)
-    }
+  function onScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
+    const y = e.nativeEvent.contentOffset.y
+    if (y < 36) setCompact(false)
+    else if (y - lastY.current > 8) setCompact(true)
+    else if (lastY.current - y > 8) setCompact(false)
+    lastY.current = y
   }
 
   if (loading) {
@@ -216,21 +186,43 @@ export default function ClientDetailScreen() {
     )
   }
 
-  const chips: HeroChip[] = []
-  chips.push({ icon: Scale, label: derived.weightDelta != null ? `Δ ${derived.weightDelta > 0 ? '+' : ''}${derived.weightDelta} kg` : 'Peso', value: derived.currentWeight != null ? `${derived.currentWeight} kg` : '—', color: derived.weightDelta == null ? undefined : derived.weightDelta > 0 ? '#EF4444' : theme.success })
-  chips.push({ icon: Apple, label: 'Adherencia', value: `${data.compliance?.nutritionWeeklyAvgPct ?? 0}%` })
-  chips.push({ icon: Dumbbell, label: 'Entrenos sem', value: `${data.compliance?.workoutsThisWeek ?? 0}/${data.compliance?.workoutsTarget ?? 1}` })
-  if (derived.today) chips.push({ icon: Salad, label: 'Comidas hoy', value: `${derived.today.mealsDone}/${derived.today.mealsTotal}` })
-  chips.push({ icon: Clock, label: 'Última actividad', value: relActivityLabel(derived.lastActivityIso) })
-  if (derived.programWeek) chips.push({ icon: LayoutGrid, label: 'Programa', value: `Sem ${derived.programWeek}` })
+  // ── Hero: eyebrow, estado, chips ──────────────────────────────────────────
+  const programName = data.activeProgram?.name?.trim() || null
+  const planCur = derived.planCurrentWeek
+  const eyebrow = programName
+    ? `${programName}${planCur != null ? ` · Semana ${planCur}` : ''}`
+    : planCur != null
+      ? `Semana ${planCur}`
+      : 'Sin programa activo'
 
+  let statusLevel: HeroStatusLevel = 'ok'
+  let statusLabel = 'Al día'
+  const reasons: string[] = []
+  if (client.is_archived) { statusLevel = 'neutral'; statusLabel = 'Archivado' }
+  else if (!client.is_active) { statusLevel = 'neutral'; statusLabel = 'Inactivo' }
+  else if (derived.attention) { statusLevel = 'attention'; statusLabel = 'Atención'; reasons.push(derived.attention) }
+
+  const workoutsThisWeek = data.compliance?.workoutsThisWeek ?? 0
+  const workoutsTarget = Math.max(1, data.compliance?.workoutsTarget ?? 1)
+  const heroChips: HeroChips = {
+    weightValue: derived.currentWeight,
+    weightDelta: derived.weightDelta,
+    adherencePct: Math.min(100, Math.round((workoutsThisWeek / workoutsTarget) * 100)),
+    workoutsThisWeek,
+    workoutsTarget,
+    mealsDone: derived.today ? derived.today.mealsDone : null,
+    mealsTotal: derived.today ? derived.today.mealsTotal : null,
+    nutritionPct: data.compliance?.nutritionWeeklyAvgPct ?? 0,
+  }
+
+  // 5 pestañas (sin Facturacion — removida del chrome, RULING D2). Labels 1:1 con
+  // el rediseno web: Resumen · Progreso · Entreno · Programa · Nutricion. Label-only.
   const tabs: TabItem[] = [
-    { value: 'overview', label: 'Resumen', icon: LayoutGrid },
-    { value: 'progreso', label: 'Progreso', icon: TrendingUp, badge: data.checkIns.length || null },
-    { value: 'analisis', label: 'Análisis', icon: BarChart3, badge: derived.weeklyPRs.length || null },
-    { value: 'plan', label: 'Plan', icon: Dumbbell, badge: data.activeProgram?.planCount || null },
-    { value: 'nutricion', label: 'Nutrición', icon: Apple, badge: derived.attention && data.activeNutrition && (data.compliance?.nutritionWeeklyAvgPct ?? 0) < 60 ? '!' : null },
-    { value: 'facturacion', label: 'Pagos', icon: CreditCard, badge: derived.pendingPays || null },
+    { value: 'overview', label: 'Resumen' },
+    { value: 'progreso', label: 'Progreso', badge: data.checkIns.length || null },
+    { value: 'analisis', label: 'Entreno', badge: derived.weeklyPRs.length || null },
+    { value: 'plan', label: 'Programa', badge: data.activeProgram?.planCount || null },
+    { value: 'nutricion', label: 'Nutrición', badge: derived.attention && data.activeNutrition && (data.compliance?.nutritionWeeklyAvgPct ?? 0) < 60 ? '!' : null },
   ]
 
   function onOpenPhoto(photos: string[], index: number) { setLightbox({ photos, index }) }
@@ -240,20 +232,21 @@ export default function ClientDetailScreen() {
       <AppBackground />
       <TopBar back title={client.full_name} onBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]} onScroll={onScroll} scrollEventThrottle={16}>
         {/* 0 — Hero */}
         <ClientHero
           name={client.full_name}
           email={client.email}
-          statusLabel={client.is_archived ? 'Archivado' : client.is_active ? 'Activo' : 'Inactivo'}
-          statusTone={client.is_archived ? 'muted' : client.is_active ? 'success' : 'muted'}
-          attention={derived.attention}
-          trainingAge={derived.trainingAge}
+          eyebrow={eyebrow}
+          statusLabel={statusLabel}
+          statusLevel={statusLevel}
+          reasons={reasons}
           streak={derived.streak}
-          chips={chips}
-          onWhatsApp={openWhatsApp}
-          onExportPdf={onExportPdf}
-          exporting={exporting}
+          lastActivityLabel={relActivityLabel(derived.lastActivityIso)}
+          sinceLabel={sinceMonthLabel(client.subscription_start_date || client.created_at)}
+          trainingAge={derived.trainingAge}
+          chips={heroChips}
+          onMore={() => setMoreOpen(true)}
         />
 
         {/* 1 — Tab bar (sticky) */}
@@ -269,39 +262,32 @@ export default function ClientDetailScreen() {
             <AnalisisTab data={data} selectedDate={selectedDate} onSelectDate={setSelectedDate} dayDetail={dayDetail} dayLoading={dayLoading} />
           ) : tab === 'plan' ? (
             <PlanTab data={data} onEdit={openBuilder} />
-          ) : tab === 'nutricion' ? (
+          ) : (
             <NutricionTab data={data} selectedDate={selectedDate} onSelectDate={setSelectedDate} dayDetail={dayDetail} dayLoading={dayLoading}
               onEditNutrition={() => router.push(`/coach/nutrition-builder?clientId=${client.id}&clientName=${encodeURIComponent(client.full_name)}`)} />
-          ) : (
-            <FacturacionTab data={data} reload={load} onAddPayment={() => setPayOpen(true)} onOpenPhoto={onOpenPhoto} />
           )}
-
-          {tab === 'overview' ? (
-            <>
-              <View style={{ height: 6 }} />
-              <Button
-                label={client.is_archived ? 'Reactivar alumno' : 'Archivar alumno'}
-                variant={client.is_archived ? 'outline' : 'ghost'}
-                leftIcon={client.is_archived ? ArchiveRestore : Archive}
-                onPress={confirmArchive}
-                full
-              />
-            </>
-          ) : null}
         </View>
       </ScrollView>
 
-      {/* FAB */}
-      <Fab open={fabOpen} onToggle={() => setFabOpen((v) => !v)} actions={[
-        { icon: MessageCircle, label: 'WhatsApp', color: '#25D366', onPress: () => { setFabOpen(false); openWhatsApp() } },
-        { icon: Pencil, label: 'Editar datos', onPress: () => { setFabOpen(false); setEditOpen(true) } },
-        { icon: CreditCard, label: 'Registrar pago', onPress: () => { setFabOpen(false); setPayOpen(true) } },
-        { icon: Dumbbell, label: 'Editar programa', onPress: () => { setFabOpen(false); openBuilder() } },
-      ]} />
+      {/* Barra flotante persistente — solo WhatsApp (rediseno). */}
+      <ProfileFloatingActions onWhatsApp={openWhatsApp} compact={compact} />
 
-      <NativeDialog open={payOpen} title="Registrar pago" onClose={() => setPayOpen(false)}>
-        <PaymentForm clientId={client.id} onDone={() => { setPayOpen(false); load() }} onCancel={() => setPayOpen(false)} />
-      </NativeDialog>
+      {/* Menu de acciones del alumno (⋮) — editar datos / archivar. */}
+      <ActionSheet
+        open={moreOpen}
+        onClose={() => setMoreOpen(false)}
+        title="Acciones"
+        actions={[
+          { key: 'edit', label: 'Editar datos', icon: Pencil, onSelect: () => setEditOpen(true) },
+          {
+            key: 'archive',
+            label: client.is_archived ? 'Reactivar alumno' : 'Archivar alumno',
+            icon: client.is_archived ? ArchiveRestore : Archive,
+            destructive: !client.is_archived,
+            onSelect: confirmArchive,
+          },
+        ]}
+      />
 
       <NativeDialog open={editOpen} title="Editar alumno" onClose={() => setEditOpen(false)}>
         <EditClientForm client={client} onDone={() => { setEditOpen(false); load() }} onCancel={() => setEditOpen(false)} />
@@ -312,81 +298,12 @@ export default function ClientDetailScreen() {
   )
 }
 
-function Fab({ open, onToggle, actions }: { open: boolean; onToggle: () => void; actions: { icon: any; label: string; color?: string; onPress: () => void }[] }) {
-  const { theme } = useTheme()
-  return (
-    <View style={styles.fabWrap} pointerEvents="box-none">
-      {open ? actions.map((a, i) => {
-        const Icon = a.icon
-        return (
-          <MotiView key={a.label} from={{ opacity: 0, translateY: 12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: 'timing', duration: 180, delay: i * 40 }} style={styles.fabAction}>
-            <View style={[styles.fabLabel, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <Text style={[styles.fabLabelTxt, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>{a.label}</Text>
-            </View>
-            <TouchableOpacity activeOpacity={0.85} onPress={a.onPress} style={[styles.fabMini, { backgroundColor: a.color ?? theme.primary }]}>
-              <Icon size={18} color="#FFFFFF" />
-            </TouchableOpacity>
-          </MotiView>
-        )
-      }) : null}
-      <TouchableOpacity activeOpacity={0.85} onPress={() => { onToggle(); Haptics.selectionAsync().catch(() => {}) }} style={[styles.fab, { backgroundColor: theme.primary }, theme.shadowGlowBlue]}>
-        <MotiView animate={{ rotate: open ? '45deg' : '0deg' }} transition={{ type: 'timing', duration: 180 }}>
-          {open ? <X size={24} color={theme.primaryForeground} /> : <Plus size={24} color={theme.primaryForeground} />}
-        </MotiView>
-      </TouchableOpacity>
-    </View>
-  )
-}
-
 function Field({ label, value, onChangeText, theme, ...rest }: any) {
   return (
     <View style={{ gap: 6 }}>
       <Text style={{ fontSize: 13, color: theme.mutedForeground, fontFamily: theme.fontSans }}>{label}</Text>
       <TextInput value={value} onChangeText={onChangeText} placeholderTextColor={theme.mutedForeground}
         style={{ height: 46, borderWidth: 1, borderColor: theme.border, borderRadius: theme.radius.lg, backgroundColor: theme.secondary, color: theme.foreground, paddingHorizontal: 12, fontFamily: theme.fontSans }} {...rest} />
-    </View>
-  )
-}
-
-function PaymentForm({ clientId, onDone, onCancel }: { clientId: string; onDone: () => void; onCancel: () => void }) {
-  const { theme } = useTheme()
-  const [amount, setAmount] = useState('')
-  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [description, setDescription] = useState('')
-  const [periodMonths, setPeriodMonths] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function submit() {
-    setError(null)
-    const amt = Math.round(Number(String(amount).replace(/\s/g, '')))
-    if (!Number.isFinite(amt) || amt <= 0) { setError('Indica un monto válido.'); return }
-    if (!description.trim()) { setError('Indica un concepto.'); return }
-    const pm = periodMonths.trim() ? Number(periodMonths) : null
-    setSaving(true)
-    try {
-      await apiFetch<{ ok: true }>('/api/mobile/coach/payments', {
-        method: 'POST', authenticated: true,
-        body: { clientId, amount: amt, paymentDate, serviceDescription: description.trim(), periodMonths: pm },
-      })
-      onDone()
-    } catch (e: any) {
-      setError(e?.message ?? 'No se pudo registrar el pago.')
-      setSaving(false)
-    }
-  }
-
-  return (
-    <View style={{ gap: 12 }}>
-      <Field label="Monto (CLP)" value={amount} onChangeText={setAmount} keyboardType="number-pad" placeholder="30000" theme={theme} />
-      <Field label="Fecha" value={paymentDate} onChangeText={setPaymentDate} placeholder="2026-06-02" theme={theme} />
-      <Field label="Concepto" value={description} onChangeText={setDescription} placeholder="Mensualidad" theme={theme} />
-      <Field label="Período (meses, opcional)" value={periodMonths} onChangeText={setPeriodMonths} keyboardType="number-pad" placeholder="1" theme={theme} />
-      {error ? <Text style={{ color: theme.destructive, fontSize: 13 }}>{error}</Text> : null}
-      <View style={styles.formActions}>
-        <Button label="Cancelar" variant="secondary" onPress={onCancel} disabled={saving} style={{ flex: 1 }} />
-        <Button label={saving ? 'Guardando...' : 'Registrar'} onPress={submit} disabled={saving} style={{ flex: 1 }} />
-      </View>
     </View>
   )
 }
@@ -432,13 +349,7 @@ function EditClientForm({ client, onDone, onCancel }: { client: CoachClientDetai
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 96, gap: 14 },
+  scroll: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 120, gap: 14 },
   tabContent: { gap: 14, paddingTop: 14 },
   formActions: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  fabWrap: { position: 'absolute', right: 18, bottom: 28, alignItems: 'flex-end', gap: 12 },
-  fab: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
-  fabAction: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  fabMini: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
-  fabLabel: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-  fabLabelTxt: { fontSize: 12 },
 })

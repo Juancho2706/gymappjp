@@ -1,11 +1,11 @@
 import { forwardRef, useEffect, useState } from 'react'
-import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { Image } from 'expo-image'
 import * as ImagePicker from 'expo-image-picker'
 import { ImagePlus, Trash2, X } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
-import { Button, Input, SegmentedTabs } from '../index'
+import { Button, Input, SegmentedTabs, Textarea } from '../index'
 import {
   DIFFICULTY_OPTIONS,
   EQUIPMENT_OPTIONS,
@@ -173,18 +173,13 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
           </TouchableOpacity>
         </View>
 
-        <View style={styles.instructionsWrap}>
-          <Label>Instrucciones</Label>
-          <TextInput
-            value={instructions}
-            onChangeText={setInstructions}
-            placeholder="Una instrucción por línea"
-            placeholderTextColor={theme.mutedForeground}
-            multiline
-            className="border border-default bg-surface-card text-strong rounded-control"
-            style={styles.instructionsInput}
-          />
-        </View>
+        <Textarea
+          label="Instrucciones"
+          value={instructions}
+          onChangeText={setInstructions}
+          placeholder="Una instrucción por línea"
+          minRows={4}
+        />
 
         <View style={styles.saveWrap}>
           <Button
@@ -251,8 +246,6 @@ const styles = StyleSheet.create({
   imgClear: { position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: 10 },
   imgBtn: { gap: 8, paddingVertical: 12 },
   imgBtnText: { fontSize: 13 },
-  instructionsWrap: { gap: 6 },
-  instructionsInput: { height: 92, textAlignVertical: 'top', borderWidth: 1.5, paddingHorizontal: 14, paddingTop: 10, fontSize: 15, fontFamily: 'HankenGrotesk_500Medium' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 13, paddingVertical: 8 },
   chipText: { fontSize: 13 },

@@ -321,6 +321,7 @@ export default function LoginScreen() {
                 onPress={() => router.push('/(auth)/register')}
                 className="text-sport-600 font-sans-semibold"
                 style={{ fontSize: 13 }}
+                testID="login-coach-register-link"
               >
                 Crear cuenta nueva
               </Text>

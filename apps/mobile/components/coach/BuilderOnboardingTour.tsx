@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useTheme } from '../../context/ThemeContext'
+import { FONT } from '../../lib/typography'
+import { SHADOWS } from '../../lib/shadows'
 
 export type TourStep = { id: string; title: string; description: string; placement?: 'top' | 'bottom'; footerHint?: string }
 type Rect = { x: number; y: number; width: number; height: number }
@@ -21,7 +23,7 @@ const CARD_W = Math.min(360, SCREEN_W - 24)
 
 /** Tour de onboarding 1:1 web (BuilderOnboardingTour): backdrop con cutout + card de pasos. */
 export function BuilderOnboardingTour({ open, steps, getRect, onClose, remeasureSignal }: Props) {
-  const { theme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
   const [idx, setIdx] = useState(0)
   const [rect, setRect] = useState<Rect | null>(null)
   const total = steps.length
@@ -67,21 +69,21 @@ export function BuilderOnboardingTour({ open, steps, getRect, onClose, remeasure
         <View style={[styles.panel, { top: hy + hh, left: 0, right: 0, bottom: 0 }]} />
         <View pointerEvents="none" style={[styles.ring, { top: hy, left: hx, width: hw, height: hh, borderColor: theme.primary }]} />
 
-        <View style={[styles.card, { top: cardTop, left: cardLeft, width: CARD_W, backgroundColor: theme.card, borderColor: theme.border }]}>
-          <Text style={[styles.counter, { color: theme.primary, fontFamily: 'HankenGrotesk_700Bold' }]}>Guía del builder · {idx + 1}/{total}</Text>
-          <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{step.title}</Text>
+        <View style={[styles.card, SHADOWS[resolvedScheme].lg, { top: cardTop, left: cardLeft, width: CARD_W, backgroundColor: theme.card, borderColor: theme.border }]}>
+          <Text style={[styles.counter, { color: theme.primary, fontFamily: FONT.uiBold }]}>Guía del builder · {idx + 1}/{total}</Text>
+          <Text style={[styles.title, { color: theme.foreground, fontFamily: FONT.display }]}>{step.title}</Text>
           <Text style={[styles.desc, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{step.description}</Text>
           {step.footerHint ? <Text style={[styles.hint, { color: theme.mutedForeground, borderTopColor: theme.border, fontFamily: theme.fontSans }]}>{step.footerHint}</Text> : null}
           <View style={styles.actions}>
-            <TouchableOpacity onPress={() => onClose(false)} hitSlop={6}><Text style={[styles.skip, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Saltar</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => onClose(false)} hitSlop={6}><Text style={[styles.skip, { color: theme.mutedForeground, fontFamily: FONT.uiSemibold }]}>Saltar</Text></TouchableOpacity>
             <View style={styles.navBtns}>
               {idx > 0 ? (
                 <TouchableOpacity onPress={() => setIdx((i) => Math.max(0, i - 1))} activeOpacity={0.85} style={[styles.btnOutline, { borderColor: theme.border }]}>
-                  <Text style={[styles.btnOutlineTxt, { color: theme.foreground, fontFamily: 'HankenGrotesk_600SemiBold' }]}>Atrás</Text>
+                  <Text style={[styles.btnOutlineTxt, { color: theme.foreground, fontFamily: FONT.uiSemibold }]}>Atrás</Text>
                 </TouchableOpacity>
               ) : null}
               <TouchableOpacity onPress={() => { if (isLast) onClose(true); else setIdx((i) => i + 1) }} activeOpacity={0.85} style={[styles.btnPrimary, { backgroundColor: theme.primary }]}>
-                <Text style={[styles.btnPrimaryTxt, { color: theme.primaryForeground, fontFamily: 'Archivo_700Bold' }]}>{isLast ? 'Finalizar' : 'Siguiente'}</Text>
+                <Text style={[styles.btnPrimaryTxt, { color: theme.primaryForeground, fontFamily: FONT.display }]}>{isLast ? 'Finalizar' : 'Siguiente'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -95,7 +97,7 @@ const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject, zIndex: 200, elevation: 30 },
   panel: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.72)' },
   ring: { position: 'absolute', borderWidth: 2, borderRadius: 12 },
-  card: { position: 'absolute', borderWidth: 1, borderRadius: 14, padding: 14, gap: 6, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, elevation: 12 },
+  card: { position: 'absolute', borderWidth: 1, borderRadius: 14, padding: 14, gap: 6 },
   counter: { fontSize: 10, letterSpacing: 1, textTransform: 'uppercase' },
   title: { fontSize: 15 },
   desc: { fontSize: 13, lineHeight: 19 },

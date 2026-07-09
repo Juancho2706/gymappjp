@@ -4,6 +4,7 @@ import { Image } from 'expo-image'
 import { CircleHelp, GripVertical, Minus, Plus, X } from 'lucide-react-native'
 import { ScaleDecorator } from 'react-native-draggable-flatlist'
 import { useTheme } from '../../context/ThemeContext'
+import { FONT } from '../../lib/typography'
 import { exerciseThumb } from '../../lib/exercises'
 import { getMuscleColor } from '../../lib/muscle-colors'
 import type { BuilderBlock, BuilderSection } from '../../lib/plan-builder/types'
@@ -70,7 +71,7 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
 
         <View style={{ flex: 1, gap: 6, minWidth: 0 }}>
           <TouchableOpacity activeOpacity={0.8} onPress={() => onEdit(block.uid)}>
-            <Text numberOfLines={2} style={[styles.name, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{block.exercise_name}</Text>
+            <Text numberOfLines={2} style={[styles.name, { color: theme.foreground, fontFamily: FONT.display }]}>{block.exercise_name}</Text>
           </TouchableOpacity>
 
           <View style={styles.badges}>
@@ -91,11 +92,11 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
                 <TouchableOpacity onPress={() => setQs((s) => Math.min(20, s + 1))} hitSlop={6} style={styles.qbtn}><Plus size={12} color={theme.primary} /></TouchableOpacity>
                 <Text style={{ color: theme.mutedForeground, fontSize: 11 }}>×</Text>
                 <TextInput value={qr} onChangeText={setQr} autoFocus style={[styles.qinput, { color: theme.foreground, borderColor: hexToRgba(theme.primary, 0.3), backgroundColor: hexToRgba(theme.primary, 0.08) }]} />
-                <TouchableOpacity onPress={saveQuick} style={[styles.okbtn, { backgroundColor: hexToRgba(theme.primary, 0.15) }]}><Text style={{ color: theme.primary, fontSize: 10, fontFamily: 'HankenGrotesk_700Bold' }}>OK</Text></TouchableOpacity>
+                <TouchableOpacity onPress={saveQuick} style={[styles.okbtn, { backgroundColor: hexToRgba(theme.primary, 0.15) }]}><Text style={{ color: theme.primary, fontSize: 10, fontFamily: FONT.uiBold }}>OK</Text></TouchableOpacity>
               </View>
             ) : complete ? (
               <TouchableOpacity onPress={() => setEditing(true)} style={[styles.badge, { backgroundColor: hexToRgba(theme.foreground, 0.06) }]}>
-                <Text style={[styles.badgeT, { color: theme.foreground, fontFamily: 'JetBrainsMono_700Bold' }]}>{block.sets} × {block.reps}</Text>
+                <Text style={[styles.badgeT, { color: theme.foreground, fontFamily: FONT.monoBold }]}>{block.sets} × {block.reps}</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity onPress={() => setEditing(true)} style={[styles.badge, { backgroundColor: hexToRgba(theme.destructive, 0.12), borderColor: hexToRgba(theme.destructive, 0.3) }]}>
@@ -104,7 +105,7 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
             )}
 
             {block.rest_time ? (
-              <View style={[styles.badge, { backgroundColor: hexToRgba(theme.foreground, 0.06) }]}><Text style={[styles.badgeT, { color: theme.mutedForeground, fontFamily: 'JetBrainsMono_700Bold' }]}>⏱ {block.rest_time}</Text></View>
+              <View style={[styles.badge, { backgroundColor: hexToRgba(theme.foreground, 0.06) }]}><Text style={[styles.badgeT, { color: theme.mutedForeground, fontFamily: FONT.monoBold }]}>⏱ {block.rest_time}</Text></View>
             ) : null}
             {block.superset_group ? (
               <TouchableOpacity onPress={() => onToggleSuperset(block.uid)} style={[styles.badge, { backgroundColor: hexToRgba(theme.primary, 0.1), borderColor: hexToRgba(theme.primary, 0.3) }]}><Text style={[styles.badgeT, { color: theme.primary }]}>SS·{block.superset_group}</Text></TouchableOpacity>
@@ -120,7 +121,7 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
               const on = sec === s
               return (
                 <TouchableOpacity key={s} onPress={() => onSetSection(block.uid, s)} style={[styles.secBtn, { backgroundColor: on ? theme.primary : hexToRgba(theme.mutedForeground, 0.12) }]}>
-                  <Text style={{ fontSize: 8, fontFamily: 'HankenGrotesk_700Bold', color: on ? theme.primaryForeground : theme.mutedForeground }}>{SECTION_SHORT[s]}</Text>
+                  <Text style={{ fontSize: 8, fontFamily: FONT.uiBold, color: on ? theme.primaryForeground : theme.mutedForeground }}>{SECTION_SHORT[s]}</Text>
                 </TouchableOpacity>
               )
             })}
@@ -133,13 +134,13 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
         <Modal visible={helpOpen} transparent animationType="fade" onRequestClose={() => setHelpOpen(false)}>
           <Pressable style={styles.helpBackdrop} onPress={() => setHelpOpen(false)}>
             <Pressable style={[styles.helpCard, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => {}}>
-              <Text style={[styles.helpTitle, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>Secciones (CAL / PRI / ENF)</Text>
-              <Text style={[styles.helpLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}><Text style={{ color: theme.foreground, fontFamily: 'HankenGrotesk_700Bold' }}>CAL</Text> (Calentamiento): prepara el cuerpo antes del trabajo intenso.</Text>
-              <Text style={[styles.helpLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}><Text style={{ color: theme.foreground, fontFamily: 'HankenGrotesk_700Bold' }}>PRI</Text> (Principal): bloque principal (volumen e intensidad).</Text>
-              <Text style={[styles.helpLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}><Text style={{ color: theme.foreground, fontFamily: 'HankenGrotesk_700Bold' }}>ENF</Text> (Enfriamiento): bajar pulsaciones y recuperación al final.</Text>
-              <Text style={[styles.helpTitle, { color: theme.foreground, fontFamily: 'Archivo_700Bold', marginTop: 6 }]}>Superserie</Text>
+              <Text style={[styles.helpTitle, { color: theme.foreground, fontFamily: FONT.display }]}>Secciones (CAL / PRI / ENF)</Text>
+              <Text style={[styles.helpLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}><Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>CAL</Text> (Calentamiento): prepara el cuerpo antes del trabajo intenso.</Text>
+              <Text style={[styles.helpLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}><Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>PRI</Text> (Principal): bloque principal (volumen e intensidad).</Text>
+              <Text style={[styles.helpLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}><Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>ENF</Text> (Enfriamiento): bajar pulsaciones y recuperación al final.</Text>
+              <Text style={[styles.helpTitle, { color: theme.foreground, fontFamily: FONT.display, marginTop: 6 }]}>Superserie</Text>
               <Text style={[styles.helpLine, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Une el ejercicio con el siguiente solo si están en la misma sección. Si cambiás la sección de uno, el enlace se rompe.</Text>
-              <TouchableOpacity onPress={() => setHelpOpen(false)} style={[styles.helpClose, { backgroundColor: theme.primary }]}><Text style={{ color: theme.primaryForeground, fontFamily: 'Archivo_700Bold', fontSize: 13 }}>Entendido</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => setHelpOpen(false)} style={[styles.helpClose, { backgroundColor: theme.primary }]}><Text style={{ color: theme.primaryForeground, fontFamily: FONT.display, fontSize: 13 }}>Entendido</Text></TouchableOpacity>
             </Pressable>
           </Pressable>
         </Modal>
@@ -173,10 +174,10 @@ const styles = StyleSheet.create({
   name: { fontSize: 12.5, letterSpacing: 0.3, textTransform: 'uppercase' },
   badges: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 5 },
   badge: { borderWidth: 1, borderColor: 'transparent', borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 },
-  badgeT: { fontSize: 9, fontFamily: 'HankenGrotesk_700Bold', letterSpacing: 0.2, textTransform: 'uppercase' },
+  badgeT: { fontSize: 9, fontFamily: FONT.uiBold, letterSpacing: 0.2, textTransform: 'uppercase' },
   qrow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   qbtn: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 5, backgroundColor: 'rgba(127,127,127,0.12)' },
-  qval: { fontSize: 12, fontFamily: 'Archivo_700Bold', minWidth: 16, textAlign: 'center' },
+  qval: { fontSize: 12, fontFamily: FONT.display, minWidth: 16, textAlign: 'center' },
   qinput: { width: 56, height: 26, borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, fontSize: 12, textAlign: 'center' },
   okbtn: { borderRadius: 5, paddingHorizontal: 8, paddingVertical: 4 },
   secSwitch: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 },

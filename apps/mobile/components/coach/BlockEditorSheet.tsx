@@ -2,9 +2,11 @@ import { forwardRef, useEffect, useState } from 'react'
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { Image } from 'expo-image'
-import { Dumbbell, History, Link2, Trash2 } from 'lucide-react-native'
+import { Dumbbell, History, Link2, Minus, Plus, Trash2 } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
+import { FONT } from '../../lib/typography'
+import { Switch } from '../Switch'
 import { exerciseThumb } from '../../lib/exercises'
 import { getMuscleColor } from '../../lib/muscle-colors'
 import type { BuilderBlock, BuilderSection } from '../../lib/plan-builder/types'
@@ -120,7 +122,7 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
                   : <Dumbbell size={22} color={muscle} />}
               </View>
               <View style={{ flex: 1, gap: 4 }}>
-                <Text style={[styles.name, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]} numberOfLines={2}>{draft.exercise_name}</Text>
+                <Text style={[styles.name, { color: theme.foreground, fontFamily: FONT.display }]} numberOfLines={2}>{draft.exercise_name}</Text>
                 <View style={styles.muscleRow}>
                   <View style={[styles.mDot, { backgroundColor: muscle }]} />
                   <Text style={[styles.muscle, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{draft.muscle_group}</Text>
@@ -144,9 +146,9 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
         <Segmented theme={theme} options={SECTIONS.map((s) => ({ value: s.value, label: s.label }))} value={draft.section ?? 'main'}
           onChange={(v) => onSetSection(draft.uid, v as BuilderSection)} />
 
-        {/* Sets / reps / weight / rest */}
+        {/* Sets / reps / weight / rest — Series con stepper tactil 44px (paridad SeriesStepper web). */}
         <View style={styles.row2}>
-          <Field theme={theme} label="Series" value={String(draft.sets ?? '')} keyboardType="number-pad" onChangeText={(v: string) => patch({ sets: Number(v) || undefined })} />
+          <StepperField theme={theme} label="Series" value={draft.sets ?? 0} onChange={(n: number) => patch({ sets: n || undefined })} />
           <Field theme={theme} label="Reps" value={draft.reps ?? ''} onChangeText={(v: string) => patch({ reps: v })} placeholder="8-10" />
         </View>
         <View style={styles.row2}>
@@ -194,7 +196,7 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
         </View>
         <View style={styles.toggleRow}>
           <Text style={[styles.toggleText, { color: theme.foreground, fontFamily: theme.fontSans }]}>Excluir al sincronizar (override)</Text>
-          <Switch theme={theme} on={Boolean(draft.is_override)} onPress={() => onToggleOverride(draft.uid)} />
+          <Switch value={Boolean(draft.is_override)} onValueChange={() => onToggleOverride(draft.uid)} />
         </View>
 
         {/* Mover a otro día */}
@@ -205,7 +207,7 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
               {days.filter((d) => d.id !== currentDayId).map((d) => (
                 <TouchableOpacity key={d.id} onPress={() => onMoveToDay(draft.uid, d.id)} activeOpacity={0.8}
                   style={[styles.moveChip, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
-                  <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: theme.foreground }}>{d.name}</Text>
+                  <Text style={{ fontSize: 12, fontFamily: FONT.uiSemibold, color: theme.foreground }}>{d.name}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -214,7 +216,7 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
 
         <TouchableOpacity onPress={() => onRemove(draft.uid)} activeOpacity={0.8} style={[styles.removeBtn, { borderColor: theme.destructive + '55' }]}>
           <Trash2 size={16} color={theme.destructive} />
-          <Text style={[styles.removeText, { color: theme.destructive, fontFamily: 'Montserrat_700Bold' }]}>Quitar ejercicio</Text>
+          <Text style={[styles.removeText, { color: theme.destructive, fontFamily: FONT.display }]}>Quitar ejercicio</Text>
         </TouchableOpacity>
       </BottomSheetScrollView>
     </BottomSheetModal>
@@ -243,7 +245,7 @@ function Segmented({ theme, options, value, onChange }: { theme: any; options: {
         return (
           <TouchableOpacity key={o.value} onPress={() => onChange(o.value)} activeOpacity={0.8}
             style={[styles.segItem, active && { backgroundColor: theme.primary }]}>
-            <Text style={{ fontSize: 12, fontFamily: 'Inter_600SemiBold', color: active ? theme.primaryForeground : theme.mutedForeground }}>{o.label}</Text>
+            <Text style={{ fontSize: 12, fontFamily: FONT.uiSemibold, color: active ? theme.primaryForeground : theme.mutedForeground }}>{o.label}</Text>
           </TouchableOpacity>
         )
       })}
@@ -251,11 +253,23 @@ function Segmented({ theme, options, value, onChange }: { theme: any; options: {
   )
 }
 
-function Switch({ theme, on, onPress }: { theme: any; on: boolean; onPress: () => void }) {
+/** Stepper tactil de series (paridad SeriesStepper web): botones ±44px + valor central. */
+function StepperField({ theme, label, value, onChange, min = 1, max = 20 }: { theme: any; label: string; value: number; onChange: (n: number) => void; min?: number; max?: number }) {
+  const dec = () => onChange(Math.max(min, (value || min) - 1))
+  const inc = () => onChange(Math.min(max, (value || min - 1) + 1))
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={[styles.switch, { backgroundColor: on ? theme.primary : theme.muted }]}>
-      <View style={[styles.knob, { backgroundColor: '#fff', alignSelf: on ? 'flex-end' : 'flex-start' }]} />
-    </TouchableOpacity>
+    <View style={{ flex: 1, gap: 6 }}>
+      <Text style={[styles.fieldLabel, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>{label}</Text>
+      <View style={[styles.stepper, { borderColor: theme.border, backgroundColor: theme.secondary }]}>
+        <TouchableOpacity testID="series-stepper-decrement" onPress={dec} activeOpacity={0.7} hitSlop={4} style={styles.stepBtn}>
+          <Minus size={17} color={theme.foreground} />
+        </TouchableOpacity>
+        <Text style={[styles.stepVal, { color: value ? theme.foreground : theme.mutedForeground, fontFamily: FONT.displayBold }]}>{value || '—'}</Text>
+        <TouchableOpacity testID="series-stepper-increment" onPress={inc} activeOpacity={0.7} hitSlop={4} style={styles.stepBtn}>
+          <Plus size={17} color={theme.foreground} />
+        </TouchableOpacity>
+      </View>
+    </View>
   )
 }
 
@@ -278,8 +292,9 @@ const styles = StyleSheet.create({
   toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 4 },
   toggleBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11 },
   toggleText: { fontSize: 14 },
-  switch: { width: 46, height: 28, borderRadius: 14, padding: 3, justifyContent: 'center' },
-  knob: { width: 22, height: 22, borderRadius: 11 },
+  stepper: { height: 44, borderWidth: 1, borderRadius: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 },
+  stepBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  stepVal: { fontSize: 17, minWidth: 28, textAlign: 'center' },
   moveRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   moveChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8 },
   removeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingVertical: 13, marginTop: 8 },

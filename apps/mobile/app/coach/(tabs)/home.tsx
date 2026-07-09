@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshControl, StyleSheet, Text, View } from 'react-native'
+import { RefreshControl, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
+import { AlertTriangle } from 'lucide-react-native'
 import { CoachMainWrapper } from '../../../components/coach/CoachMainWrapper'
+import { Button } from '../../../components/Button'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import {
   MobileBillingBanners,
@@ -57,13 +59,29 @@ export default function CoachHomeScreen() {
   if (!data || error) {
     return (
       <CoachMainWrapper>
-        <View style={[styles.errorCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius['2xl'] }]}>
-          <Text style={[styles.errorTitle, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
-            Algo fallo al cargar el dashboard
+        <View className="items-center justify-center gap-3 px-6" style={{ paddingVertical: 48 }}>
+          <View
+            className="items-center justify-center rounded-2xl border"
+            style={{
+              width: 64,
+              height: 64,
+              backgroundColor: theme.destructive + '14',
+              borderColor: theme.destructive + '33',
+              marginBottom: 4,
+            }}
+          >
+            <AlertTriangle size={28} color={theme.destructive} strokeWidth={1.9} />
+          </View>
+          <Text className="font-display-bold text-[18px] text-strong" style={{ textAlign: 'center' }}>
+            No pudimos cargar tu panel
           </Text>
-          <Text style={[styles.errorText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          <Text
+            className="font-sans text-[13px] text-muted"
+            style={{ textAlign: 'center', lineHeight: 19, maxWidth: 300 }}
+          >
             {error ?? 'Error desconocido. Intenta recargar en un momento.'}
           </Text>
+          <Button label="Reintentar" variant="outline" onPress={() => load('refresh')} />
         </View>
       </CoachMainWrapper>
     )
@@ -96,7 +114,7 @@ export default function CoachHomeScreen() {
           coachName={data.coach.fullName || data.coach.brandName || 'Coach'}
           logoUrl={data.coach.logoUrl}
           hasNotifications={pendingCount > 0}
-          onInsights={() => router.push('/coach/(tabs)/settings')}
+          onInsights={() => setStatsOpen(true)}
           onNotifications={() => router.push('/coach/(tabs)/check-ins')}
           onAvatar={() => router.push('/coach/(tabs)/perfil')}
         />
@@ -155,24 +173,3 @@ export default function CoachHomeScreen() {
     </View>
   )
 }
-
-const styles = StyleSheet.create({
-  loading: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  errorCard: {
-    borderWidth: 1,
-    padding: 18,
-    gap: 8,
-  },
-  errorTitle: {
-    fontSize: 19,
-    lineHeight: 24,
-  },
-  errorText: {
-    fontSize: 13,
-    lineHeight: 19,
-  },
-})

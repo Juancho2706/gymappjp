@@ -4,6 +4,7 @@ import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { Check } from 'lucide-react-native'
 import { supabase } from '../../lib/supabase'
 import { useTheme } from '../../context/ThemeContext'
+import { FONT } from '../../lib/typography'
 
 interface ClientRow { id: string; full_name: string }
 interface Props {
@@ -51,7 +52,7 @@ export const AssignClientsSheet = forwardRef<BottomSheetModal, Props>(function A
       handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}
     >
       <BottomSheetScrollView contentContainerStyle={styles.body}>
-        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>Asignar a alumnos</Text>
+        <Text style={[styles.title, { color: theme.foreground, fontFamily: FONT.display }]}>Asignar a alumnos</Text>
         {loading ? <ActivityIndicator color={theme.primary} style={{ marginTop: 24 }} /> : null}
         {!loading && items.length === 0 ? (
           <Text style={[styles.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Sin alumnos activos.</Text>
@@ -64,7 +65,7 @@ export const AssignClientsSheet = forwardRef<BottomSheetModal, Props>(function A
               <View style={[styles.check, { borderColor: on ? theme.primary : theme.border, backgroundColor: on ? theme.primary : 'transparent' }]}>
                 {on ? <Check size={13} color={theme.primaryForeground} strokeWidth={3} /> : null}
               </View>
-              <Text style={[styles.rowText, { color: theme.foreground, fontFamily: 'Inter_600SemiBold' }]} numberOfLines={1}>{c.full_name}</Text>
+              <Text style={[styles.rowText, { color: theme.foreground, fontFamily: FONT.uiSemibold }]} numberOfLines={1}>{c.full_name}</Text>
             </TouchableOpacity>
           )
         })}
@@ -78,7 +79,7 @@ export const AssignClientsSheet = forwardRef<BottomSheetModal, Props>(function A
           style={[styles.assignBtn, { backgroundColor: theme.primary, opacity: selected.size === 0 || saving ? 0.5 : 1 }]}
         >
           {saving ? <ActivityIndicator size="small" color={theme.primaryForeground} /> : (
-            <Text style={[styles.assignText, { color: theme.primaryForeground, fontFamily: 'Montserrat_700Bold' }]}>
+            <Text style={[styles.assignText, { color: theme.primaryForeground, fontFamily: FONT.display }]}>
               Asignar a {selected.size} alumno{selected.size === 1 ? '' : 's'}
             </Text>
           )}

@@ -1,0 +1,171 @@
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { AlertOctagon, AlertTriangle, ChevronRight } from 'lucide-react-native'
+import { useTheme } from '../../../context/ThemeContext'
+import { FONT } from '../../../lib/typography'
+import type { DirectoryRiskFilter, DirectoryStats } from '../../../lib/clients-directory'
+import { DANGER, SUCCESS, WARNING } from './directory-shared'
+
+/**
+ * DirectorySummary — "Resumen · hoy" (triage). Realización móvil del web `CoachWarRoom`:
+ * 2 PulseCard jerárquicas (Riesgo / Atención, botón-filtro) + grilla de 4 MetricChip
+ * (Total / Activos / On track / Sin plan). Cada tile filtra el directorio.
+ */
+
+// ─── Pulse card (prioridad: Riesgo / Atención) — botón-filtro jerárquico ───────
+function PulseCard({
+  label,
+  value,
+  hint,
+  tone,
+  icon: Icon,
+  selected,
+  onPress,
+  testID,
+}: {
+  label: string
+  value: number
+  hint: string
+  tone: 'danger' | 'warning'
+  icon: typeof AlertOctagon
+  selected: boolean
+  onPress: () => void
+  testID?: string
+}) {
+  const { theme } = useTheme()
+  const color = tone === 'danger' ? DANGER : WARNING
+  const fg = selected ? '#fff' : color
+  return (
+    <TouchableOpacity
+      testID={testID}
+      style={[
+        pulseStyles.card,
+        {
+          backgroundColor: selected ? color : color + '1A',
+          borderColor: selected ? color : theme.border,
+        },
+      ]}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
+      <View style={pulseStyles.top}>
+        <View style={pulseStyles.labelRow}>
+          <Icon size={14} color={fg} />
+          <Text style={[pulseStyles.label, { color: fg }]}>{label}</Text>
+        </View>
+        {value > 0 ? <ChevronRight size={15} color={fg} /> : null}
+      </View>
+      <Text style={[pulseStyles.value, { color: selected ? '#fff' : value > 0 ? color : theme.mutedForeground }]}>{value}</Text>
+      <Text numberOfLines={1} style={[pulseStyles.hint, { color: selected ? 'rgba(255,255,255,0.85)' : theme.mutedForeground }]}>{hint}</Text>
+    </TouchableOpacity>
+  )
+}
+
+// ─── Metric chip (Total / Activos / On track / Sin plan) ───────────────────────
+function MetricChip({
+  label,
+  value,
+  suffix,
+  color,
+  selected,
+  onPress,
+  testID,
+}: {
+  label: string
+  value: number
+  suffix?: string
+  color: string
+  selected: boolean
+  onPress?: () => void
+  testID?: string
+}) {
+  const { theme } = useTheme()
+  return (
+    <TouchableOpacity
+      testID={testID}
+      disabled={!onPress}
+      onPress={onPress}
+      activeOpacity={onPress ? 0.8 : 1}
+      style={[
+        chipStyles.chip,
+        {
+          backgroundColor: selected ? theme.foreground : theme.card,
+          borderColor: selected ? theme.foreground : theme.border,
+        },
+      ]}
+    >
+      <Text numberOfLines={1} style={[chipStyles.value, { color: selected ? '#fff' : color }]}>
+        {value}
+        {suffix ?? ''}
+      </Text>
+      <Text numberOfLines={1} style={[chipStyles.label, { color: selected ? 'rgba(255,255,255,0.72)' : theme.mutedForeground }]}>{label}</Text>
+    </TouchableOpacity>
+  )
+}
+
+export function DirectorySummary({
+  stats,
+  riskFilter,
+  onToggleRisk,
+  onSetAllRisk,
+}: {
+  stats: DirectoryStats
+  riskFilter: DirectoryRiskFilter
+  onToggleRisk: (f: DirectoryRiskFilter) => void
+  onSetAllRisk: () => void
+}) {
+  const { theme } = useTheme()
+
+  // Pulso de prioridad (2 números jerárquicos) — botones-filtro de riesgo.
+  const pulseTiles = [
+    { key: 'urgent', label: 'Riesgo', value: stats.urgentCount, filter: 'urgent' as DirectoryRiskFilter, tone: 'danger' as const, icon: AlertOctagon, hint: stats.urgentCount ? (stats.urgentCount === 1 ? 'Necesita atención hoy' : 'Necesitan atención hoy') : 'Todo en orden' },
+    { key: 'review', label: 'Atención', value: stats.reviewCount, filter: 'review' as DirectoryRiskFilter, tone: 'warning' as const, icon: AlertTriangle, hint: stats.reviewCount ? 'Para revisar pronto' : 'Sin pendientes' },
+  ]
+  // Métricas secundarias — grilla de 4 (todo en una pantalla).
+  const metricTiles = [
+    { key: 'total', label: 'Total', value: stats.total, filter: 'all' as DirectoryRiskFilter, color: theme.foreground },
+    { key: 'active', label: 'Activos', value: stats.active, filter: 'all' as DirectoryRiskFilter, color: theme.primary },
+    { key: 'ontrack', label: 'On track', value: stats.onTrackCount, filter: 'on_track' as DirectoryRiskFilter, color: SUCCESS },
+    { key: 'noprogram', label: 'Sin plan', value: stats.noProgramCount, filter: 'no_program' as DirectoryRiskFilter, color: theme.mutedForeground },
+  ]
+
+  return (
+    <View style={styles.summary}>
+      <Text style={[styles.eyebrow, { color: theme.mutedForeground }]}>Resumen · hoy</Text>
+      <View style={styles.pulseRow}>
+        {pulseTiles.map((t) => (
+          <PulseCard key={t.key} testID={`directory-pulse-${t.key}`} label={t.label} value={t.value} hint={t.hint} tone={t.tone} icon={t.icon}
+            selected={riskFilter === t.filter} onPress={() => onToggleRisk(t.filter)} />
+        ))}
+      </View>
+      <View style={styles.metricRow}>
+        {metricTiles.map((t) => (
+          <MetricChip key={t.key} testID={`directory-metric-${t.key}`} label={t.label} value={t.value} color={t.color}
+            selected={riskFilter === t.filter && t.filter !== 'all'}
+            onPress={t.filter === 'all' ? onSetAllRisk : () => onToggleRisk(t.filter)} />
+        ))}
+      </View>
+    </View>
+  )
+}
+
+const pulseStyles = StyleSheet.create({
+  card: { flex: 1, minWidth: 0, gap: 5, padding: 14, borderRadius: 20, borderWidth: 1.5 },
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  label: { fontSize: 12, fontFamily: FONT.uiExtra, letterSpacing: 0.2 },
+  value: { fontSize: 30, lineHeight: 32, fontFamily: FONT.displayBlack, fontVariant: ['tabular-nums'] },
+  hint: { fontSize: 11, fontFamily: FONT.uiSemibold },
+})
+
+const chipStyles = StyleSheet.create({
+  chip: { flex: 1, minWidth: 0, gap: 1, paddingHorizontal: 8, paddingVertical: 9, borderRadius: 14, borderWidth: 1.5 },
+  value: { fontSize: 17, lineHeight: 19, fontFamily: FONT.displayBold, fontVariant: ['tabular-nums'] },
+  label: { fontSize: 9.5, fontFamily: FONT.uiBold, textTransform: 'uppercase', letterSpacing: 0.5 },
+})
+
+const styles = StyleSheet.create({
+  summary: { paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
+  eyebrow: { fontSize: 11, fontFamily: FONT.uiExtra, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 },
+  pulseRow: { flexDirection: 'row', gap: 8 },
+  metricRow: { flexDirection: 'row', gap: 6 },
+})

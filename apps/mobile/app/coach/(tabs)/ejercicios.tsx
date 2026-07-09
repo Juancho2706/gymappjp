@@ -5,7 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FlashList } from '@shopify/flash-list'
 import { Image } from 'expo-image'
 import { BottomSheetModal } from '@gorhom/bottom-sheet'
-import { ChevronRight, Dumbbell, Lock, Plus, Search, X } from 'lucide-react-native'
+import { ChevronRight, Dumbbell, Lock, Plus, Search, Video, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { useTheme } from '../../../context/ThemeContext'
 import { ScreenHeader, Badge, EmptyState, Card, Input } from '../../../components'
@@ -14,7 +14,7 @@ import { AppBackground } from '../../../components/AppBackground'
 import { toast } from '../../../components/Toast'
 import { ExerciseFormSheet } from '../../../components/coach/ExerciseFormSheet'
 import { ExercisePreviewSheet } from '../../../components/coach/ExercisePreviewSheet'
-import { canCreateCustomExercises, cloneExercise, exerciseThumb, filterExercises, listCoachExercises, MUSCLE_GROUPS, type ExerciseRow } from '../../../lib/exercises'
+import { canCreateCustomExercises, cloneExercise, exerciseThumb, filterExercises, listCoachExercises, MUSCLE_GROUPS, youtubeId, type ExerciseRow } from '../../../lib/exercises'
 import { getCoachProfile } from '../../../lib/coach'
 
 const DIFFICULTY_LABEL: Record<string, string> = {
@@ -49,6 +49,7 @@ export default function EjerciciosScreen() {
   const [query, setQuery] = useState('')
   const [muscle, setMuscle] = useState<string | null>(null)
   const [source, setSource] = useState<Source>('all')
+  const [videoOnly, setVideoOnly] = useState(false)
   const [canCreate, setCanCreate] = useState(true)
   const [editTarget, setEditTarget] = useState<ExerciseRow | null>(null)
   const [previewTarget, setPreviewTarget] = useState<ExerciseRow | null>(null)
@@ -82,10 +83,12 @@ export default function EjerciciosScreen() {
     const bySource = exercises.filter((e) => {
       if (source === 'system' && e.isOwn) return false
       if (source === 'own' && !e.isOwn) return false
+      // "Con video" = enlace de YouTube válido (no gif de ExerciseDB), 1:1 web.
+      if (videoOnly && !youtubeId(e.video_url)) return false
       return true
     })
     return filterExercises(bySource, query.trim(), muscle || 'todos')
-  }, [exercises, query, muscle, source])
+  }, [exercises, query, muscle, source, videoOnly])
 
   // Agrupado por músculo (header + filas) para el FlashList.
   const listData = useMemo<ListItem[]>(() => {
@@ -189,8 +192,19 @@ export default function EjerciciosScreen() {
         />
       </View>
 
-      {/* Muscle filter */}
+      {/* Muscle filter + toggle "Con video" (1:1 web ExerciseCatalogClient) */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterRow}>
+        <TouchableOpacity
+          testID="filter-con-video"
+          onPress={() => setVideoOnly((v) => !v)}
+          activeOpacity={0.8}
+          className={`flex-row items-center rounded-pill ${videoOnly ? 'bg-sport-500' : 'bg-surface-card border border-default'}`}
+          style={styles.videoChip}
+        >
+          <Video size={14} color={videoOnly ? theme.primaryForeground : theme.mutedForeground} strokeWidth={2.2} />
+          <Text className={`${videoOnly ? 'text-on-sport' : 'text-body'} font-sans-bold`} style={styles.videoChipText}>Con video</Text>
+        </TouchableOpacity>
+        <View style={styles.filterDivider} />
         <FilterChip label="Todos" active={muscle === null} onPress={() => setMuscle(null)} />
         {muscleOptions.map((m) => (
           <FilterChip key={m} label={m} active={muscle === m} onPress={() => setMuscle(m)} />
@@ -199,7 +213,7 @@ export default function EjerciciosScreen() {
 
       {/* List (agrupada por músculo) */}
       <MotiView
-        key={`${source}|${muscle ?? 'all'}`}
+        key={`${source}|${muscle ?? 'all'}|${videoOnly ? 'vid' : 'any'}`}
         from={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ type: 'timing', duration: 220 }}
@@ -221,7 +235,7 @@ export default function EjerciciosScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load('refresh')} tintColor={theme.primary} />}
           ListEmptyComponent={
             <View style={{ paddingTop: 48 }}>
-              <EmptyState icon={Dumbbell} title="Sin ejercicios" subtitle={query || muscle || source !== 'all' ? 'Probá otro filtro o búsqueda.' : 'Creá tu primer ejercicio personalizado.'} />
+              <EmptyState icon={Dumbbell} title="Sin ejercicios" subtitle={query || muscle || source !== 'all' || videoOnly ? 'Probá otro filtro o búsqueda.' : 'Creá tu primer ejercicio personalizado.'} />
             </View>
           }
         />
@@ -328,6 +342,9 @@ const styles = StyleSheet.create({
   filterRow: { paddingHorizontal: 16, gap: 8, paddingBottom: 12, alignItems: 'center' },
   filterChip: { paddingHorizontal: 13, height: 32 },
   filterChipText: { fontSize: 13 },
+  videoChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 13, height: 32 },
+  videoChipText: { fontSize: 13 },
+  filterDivider: { width: StyleSheet.hairlineWidth, height: 20, backgroundColor: 'rgba(120,120,128,0.35)', alignSelf: 'center' },
   listWrap: { flex: 1 },
   groupHeader: { gap: 8, paddingTop: 14, paddingBottom: 8, paddingHorizontal: 2 },
   dot: { width: 7, height: 7, borderRadius: 4 },

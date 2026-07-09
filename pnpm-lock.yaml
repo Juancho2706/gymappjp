@@ -291,6 +291,9 @@ importers:
       '@eva/nutrition-engine':
         specifier: workspace:*
         version: link:../../packages/nutrition-engine
+      '@eva/profile-analytics':
+        specifier: workspace:*
+        version: link:../../packages/profile-analytics
       '@eva/workout-engine':
         specifier: workspace:*
         version: link:../../packages/workout-engine
@@ -505,6 +508,9 @@ importers:
       '@eva/cardio':
         specifier: workspace:*
         version: link:../../packages/cardio
+      '@eva/profile-analytics':
+        specifier: workspace:*
+        version: link:../../packages/profile-analytics
       '@eva/workout-engine':
         specifier: workspace:*
         version: link:../../packages/workout-engine
@@ -537,6 +543,8 @@ importers:
   packages/module-catalog: {}
 
   packages/nutrition-engine: {}
+
+  packages/profile-analytics: {}
 
   packages/schemas: {}
 

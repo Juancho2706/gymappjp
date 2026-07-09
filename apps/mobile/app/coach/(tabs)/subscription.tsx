@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { CalendarClock, ExternalLink, Lock, Users } from 'lucide-react-native'
+import { MotiView } from 'moti'
+import { ExternalLink, Lock, Users } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
-import { Badge, Button, ProgressBar, ScreenHeader } from '../../../components'
+import { Badge, Button, Card, EmptyState, ProgressBar } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import {
   STATUS_LABELS,
   TIER_LABELS,
@@ -32,9 +34,8 @@ export default function SubscriptionScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+      <SafeAreaView edges={[]} style={styles.root} className="bg-surface-app">
         <AppBackground />
-        <ScreenHeader title="Suscripción" subtitle="Cargando..." />
         <EvaLoaderScreen subtitle="Cargando tu plan…" />
       </SafeAreaView>
     )
@@ -42,10 +43,13 @@ export default function SubscriptionScreen() {
 
   if (!data) {
     return (
-      <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+      <SafeAreaView edges={[]} style={styles.root} className="bg-surface-app">
         <AppBackground />
-        <ScreenHeader title="Suscripción" />
-        <Text style={[styles.empty, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>No se pudo cargar tu plan.</Text>
+        <EmptyState
+          icon={Lock}
+          title="No se pudo cargar tu plan"
+          subtitle="Vuelve a intentarlo en unos segundos."
+        />
       </SafeAreaView>
     )
   }
@@ -64,54 +68,82 @@ export default function SubscriptionScreen() {
   const renewDate = profile.subscriptionStatus === 'trialing' ? profile.trialEndsAt : profile.currentPeriodEnd
 
   return (
-    <SafeAreaView edges={[]} style={[styles.root, { backgroundColor: theme.background }]}>
+    <SafeAreaView edges={[]} style={styles.root} className="bg-surface-app">
       <AppBackground />
-      <ScreenHeader title="Suscripción" subtitle="Tu plan y uso" />
 
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>
-        {/* Plan */}
-        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
-          <Text style={[styles.cardLabel, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>PLAN ACTUAL</Text>
-          <View style={styles.planRow}>
-            <Text style={[styles.planTier, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>{tierLabel}</Text>
-            <Badge label={statusLabel} tone={statusActive ? 'success' : 'muted'} />
-          </View>
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Encabezado (DS: Archivo display, NO Montserrat) */}
+        <View style={styles.header}>
+          <Text style={textStyle('3xl', FONT.displayBlack, { lh: 'tight', ls: 'tighter' })} className="text-strong">
+            Suscripción
+          </Text>
+          <Text style={[TYPE.caption, styles.headerSub]} className="text-muted">
+            Tu plan y uso
+          </Text>
         </View>
 
-        {/* Usage */}
-        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl, gap: 12 }]}>
+        {/* Plan actual — tarjeta inversa (paridad web: eyebrow sport + tier grande + fecha inline) */}
+        <MotiView
+          from={{ opacity: 0, translateY: 12 }}
+          animate={{ opacity: 1, translateY: 0 }}
+          transition={{ type: 'timing', duration: 420 }}
+        >
+          <Card variant="inverse" padding={20} radius="card">
+            <View style={styles.planRow}>
+              <View style={styles.planTextCol}>
+                <Text style={TYPE.eyebrow} className="text-sport-400">Plan actual</Text>
+                <Text
+                  style={[textStyle('2xl', FONT.displayBlack, { lh: 'tight', ls: 'tighter' }), styles.tier]}
+                  className="text-on-dark"
+                >
+                  {tierLabel}
+                </Text>
+                <Text style={[TYPE.caption, styles.planSub]} className="text-on-dark-muted">
+                  {`${renewLabel} · ${formatDate(renewDate)}`}
+                </Text>
+              </View>
+              <Badge label={statusLabel} tone={statusActive ? 'success' : 'muted'} />
+            </View>
+          </Card>
+        </MotiView>
+
+        {/* Alumnos — uso vs cupo */}
+        <Card variant="default" padding={18} radius="card" style={styles.gap12}>
           <View style={styles.iconRow}>
             <Users size={16} color={theme.primary} />
-            <Text style={[styles.cardLabel, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>ALUMNOS</Text>
+            <Text style={TYPE.eyebrow} className="text-muted">Alumnos</Text>
           </View>
-          <Text style={[styles.usageBig, { color: theme.foreground, fontFamily: 'Archivo_800ExtraBold' }]}>
+          <Text style={[textStyle('2xl', FONT.mono, { ls: 'tight' }), styles.tnum]} className="text-strong">
             {clientCount}{max > 0 ? ` / ${max}` : ''}
           </Text>
-          {max > 0 ? <ProgressBar value={usage} /> : (
-            <Text style={[styles.usageSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Alumnos ilimitados</Text>
+          {max > 0 ? (
+            <ProgressBar value={usage} />
+          ) : (
+            <Text style={TYPE.caption} className="text-muted">Alumnos ilimitados</Text>
           )}
-        </View>
+        </Card>
 
-        {/* Renewal */}
-        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl, gap: 8 }]}>
-          <View style={styles.iconRow}>
-            <CalendarClock size={16} color={theme.primary} />
-            <Text style={[styles.cardLabel, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_700Bold' }]}>{renewLabel.toUpperCase()}</Text>
-          </View>
-          <Text style={[styles.usageBig, { color: theme.foreground, fontFamily: 'Archivo_700Bold' }]}>{formatDate(renewDate)}</Text>
-        </View>
-
+        {/* Gestión (cobros/cambios = web-only por seguridad) */}
         {orgManaged ? (
-          <View style={[styles.lockCard, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.lg }]}>
+          <Card variant="default" padding={14} radius="lg" style={styles.lockCard}>
             <Lock size={18} color={theme.mutedForeground} />
-            <Text style={[styles.lockText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            <Text style={[TYPE.caption, styles.lockText]} className="text-muted">
               {orgName ? `Tu plan lo gestiona ${orgName}.` : 'Tu plan lo gestiona tu organización.'}
             </Text>
-          </View>
+          </Card>
         ) : (
           <>
-            <Button label="Gestionar plan en la web" leftIcon={ExternalLink} onPress={() => Linking.openURL(MANAGE_URL).catch(() => {})} full />
-            <Text style={[styles.note, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            <Button
+              label="Gestionar plan en la web"
+              variant="primary"
+              leftIcon={ExternalLink}
+              onPress={() => Linking.openURL(MANAGE_URL).catch(() => {})}
+              full
+            />
+            <Text style={[TYPE.caption, styles.note]} className="text-muted">
               Los pagos y cambios de plan se gestionan desde la web por seguridad.
             </Text>
           </>
@@ -124,15 +156,16 @@ export default function SubscriptionScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { paddingHorizontal: 16, paddingTop: 4, gap: 14 },
-  card: { padding: 18, borderWidth: 1 },
-  cardLabel: { fontSize: 11, letterSpacing: 1, textTransform: 'uppercase' },
-  planRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
-  planTier: { fontSize: 26, letterSpacing: -0.5 },
+  header: { paddingHorizontal: 4, paddingTop: 20, paddingBottom: 2 },
+  headerSub: { marginTop: 4 },
+  gap12: { gap: 12 },
+  planRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  planTextCol: { flex: 1, minWidth: 0 },
+  tier: { marginTop: 4 },
+  planSub: { marginTop: 6 },
   iconRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
-  usageBig: { fontSize: 20, letterSpacing: -0.3, fontVariant: ['tabular-nums'] },
-  usageSub: { fontSize: 13 },
-  lockCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderWidth: 1 },
-  lockText: { fontSize: 13, flex: 1, lineHeight: 18 },
-  note: { fontSize: 12, lineHeight: 17, textAlign: 'center', paddingHorizontal: 12 },
-  empty: { textAlign: 'center', marginTop: 40, fontSize: 14 },
+  tnum: { fontVariant: ['tabular-nums'] },
+  lockCard: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  lockText: { flex: 1 },
+  note: { textAlign: 'center', paddingHorizontal: 12 },
 })
