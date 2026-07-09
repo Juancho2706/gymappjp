@@ -74,8 +74,8 @@ export function FreeWelcomeModal() {
                                 <Palette className="h-3.5 w-3.5 text-[var(--success-600)]" />
                             </div>
                             <div>
-                                <p className="text-sm font-semibold text-strong">Personalizá tu app con Starter</p>
-                                <p className="text-xs text-muted">Tu logo y colores desde $19.990/mes</p>
+                                <p className="text-sm font-semibold text-strong">Personalizá tu app con Pro</p>
+                                <p className="text-xs text-muted">Tu logo y colores desde $29.990/mes</p>
                             </div>
                         </li>
                     </ul>
