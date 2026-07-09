@@ -1,7 +1,8 @@
 import { cache } from 'react'
 import { format, subDays } from 'date-fns'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
-import type { Tables } from '@/lib/database.types'
+import type { Database, Tables } from '@/lib/database.types'
 import { getTodayInSantiago, getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { epleyOneRM } from '@/app/coach/clients/[clientId]/profileTrainingAnalytics'
 import { measureServer } from '@/lib/perf/measure-server'
@@ -508,8 +509,8 @@ export const getNutritionLogDays30 = cache(async (clientId: string) => {
  * de comidas (distinto del ENGAGEMENT de registro = días con log / 30).
  * Devuelve `null` si el alumno no tiene plan activo.
  */
-export const getNutritionAdherenceInputs30d = cache(async (clientId: string) => {
-    const supabase = await createClient()
+export const getNutritionAdherenceInputs30d = cache(async (clientId: string, db?: SupabaseClient<Database>) => {
+    const supabase = db ?? (await createClient())
     const { iso } = getTodayInSantiago()
     const startIso = format(subDays(parseISOAnchor(iso), 30), 'yyyy-MM-dd')
 

@@ -1,6 +1,7 @@
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { useTheme } from '../context/ThemeContext'
+import { FONT } from '../lib/typography'
 import { formatRelativeDate, getTodayInSantiago, isoDateAddDays } from '../lib/date-utils'
 
 interface Props {
@@ -35,16 +36,16 @@ export function DayNavigator({ selectedDate, onDateChange, adherenceDates, isLoa
           <ActivityIndicator size="small" color={theme.primary} />
         ) : (
           <>
-            <Text style={[styles.dateText, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+            <Text style={[styles.dateText, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
               {formatRelativeDate(selectedDate, todayIso)}
             </Text>
             {!isToday && (
-              <Text style={[styles.dateSub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+              <Text style={[styles.dateSub, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>
                 {new Date(`${selectedDate}T12:00:00`).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}
               </Text>
             )}
             {hasAdherence && (
-              <View style={[styles.dot, { backgroundColor: '#10B981' }]} />
+              <View style={[styles.dot, { backgroundColor: '#FF6A3D' }]} />
             )}
           </>
         )}

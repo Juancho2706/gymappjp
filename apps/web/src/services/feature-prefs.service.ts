@@ -184,11 +184,14 @@ async function entitledByModuleForNutrition(
 export const resolveFeaturePrefs = cache(
     async (
         input: ResolveFeaturePrefsInput,
+        userDbOverride?: DB,
     ): Promise<Record<NutritionSectionKey, boolean>> => {
         const domain = input.domain
         // Lectura request-scoped (RLS techo) para el catalogo de prefs del actor; el entitlement
         // usa service-role (espejo de getStudentExchangeData) para leer flags del tenant.
-        const userDb = await createClient()
+        // `userDbOverride` (bridge movil): sin cookie, se inyecta un cliente ya scoped al alumno
+        // (o service-role — `readClientPrefs` filtra por `client_id`, no hay fuga).
+        const userDb = userDbOverride ?? (await createClient())
         const serviceDb = createServiceRoleClient()
 
         const useTeamBase = !!input.clientTeamId && !input.clientOrgId
@@ -277,13 +280,13 @@ export const resolveNutritionDomainEnabled = cache(
         clientId?: string | null
         clientTeamId?: string | null
         clientOrgId?: string | null
-    }): Promise<boolean> => {
+    }, userDbOverride?: DB): Promise<boolean> => {
         const domain: FeatureDomain = 'nutrition'
         const enabled = await getFeaturePrefsEnabled()
         // FLAG OFF / ausente / Edge caido => fail-OPEN: dominio prendido (no se oculta por pref).
         if (!enabled) return true
 
-        const userDb = await createClient()
+        const userDb = userDbOverride ?? (await createClient())
         const serviceDb = createServiceRoleClient()
         const useTeamBase = !!input.clientTeamId && !input.clientOrgId
 

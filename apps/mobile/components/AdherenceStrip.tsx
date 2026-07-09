@@ -1,5 +1,6 @@
 import { Dimensions, StyleSheet, Text, View } from 'react-native'
 import { useTheme } from '../context/ThemeContext'
+import { FONT } from '../lib/typography'
 import { getTodayInSantiago, isoDateAddDays, nutritionMealApplies } from '../lib/date-utils'
 
 const SCREEN_WIDTH = Dimensions.get('window').width
@@ -51,10 +52,10 @@ export function AdherenceStrip({ adherence, planMeals }: Props) {
   return (
     <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.xl }]}>
       <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.foreground, fontFamily: 'Montserrat_700Bold' }]}>
+        <Text style={[styles.title, { color: theme.foreground, fontFamily: FONT.uiBold }]}>
           Adherencia — 30 días
         </Text>
-        <Text style={[styles.count, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+        <Text style={[styles.count, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>
           {completedDays.length}/30 días
         </Text>
       </View>
@@ -103,7 +104,7 @@ export function AdherenceStrip({ adherence, planMeals }: Props) {
         ].map(({ color, label }) => (
           <View key={label} style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: color }]} />
-            <Text style={[styles.legendText, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+            <Text style={[styles.legendText, { color: theme.mutedForeground, fontFamily: FONT.ui }]}>
               {label}
             </Text>
           </View>

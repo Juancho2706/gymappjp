@@ -1,4 +1,6 @@
 import { cache } from 'react'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/database.types'
 import { createClient } from '@/lib/supabase/server'
 import { sumMealMicros, type FoodItemForMicros } from '@eva/nutrition-engine'
 import { nutritionMealAppliesOnIsoYmdInSantiago } from '@/lib/date-utils'
@@ -66,8 +68,13 @@ function firstFood(food: MicroFoodRow['foods']): NonNullable<Exclude<MicroFoodRo
  * Devuelve `null` por nutriente cuando ningún alimento del día aporta datos.
  */
 export const getPlanDayMicros = cache(
-  async (clientId: string, planId: string, isoDate: string): Promise<DayMicros> => {
-    const supabase = await createClient()
+  async (
+    clientId: string,
+    planId: string,
+    isoDate: string,
+    db?: SupabaseClient<Database>
+  ): Promise<DayMicros> => {
+    const supabase = db ?? (await createClient())
     const { data } = await supabase
       .from('nutrition_plans')
       .select(
@@ -157,7 +164,8 @@ export const getPlanDayMicros = cache(
 export const getMicroTargetsForClient = cache(
   async (
     coachId: string | null,
-    clientId: string
+    clientId: string,
+    db?: SupabaseClient<Database>
   ): Promise<{
     sodium?: MicroTarget
     fiber?: MicroTarget
@@ -166,7 +174,7 @@ export const getMicroTargetsForClient = cache(
     unsaturatedFat?: MicroTarget
   }> => {
     if (!coachId) return {}
-    const supabase = await createClient()
+    const supabase = db ?? (await createClient())
     const service = new NutrientTargetsService(supabase)
     const rows = await service.listNutrientTargets(coachId, clientId)
 

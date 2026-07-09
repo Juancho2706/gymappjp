@@ -305,3 +305,134 @@ export async function removeManualItem(
   if (error) return { success: false, error: error.message }
   return { success: true }
 }
+
+/* ──────────────────────  VIEW (derivado + estado, fusionados)  ────────────────────── */
+
+/**
+ * Una línea de la lista lista para renderizar: la línea derivada del plan + el estado
+ * persistido (check / manual) casado por `key`. Consumida por la web (`_data`) y por el
+ * bridge móvil (`/api/mobile/nutrition/shopping`) — misma vista, cero drift.
+ */
+export type ShoppingItemView = {
+  key: string
+  foodId: string | null
+  name: string
+  category: string
+  quantities: ShoppingQuantity[]
+  isChecked: boolean
+  isManual: boolean
+  /** id de fila `shopping_list_items` cuando existe estado persistido (manual o check). */
+  stateId: string | null
+}
+
+export type ShoppingAisleView = {
+  category: string
+  items: ShoppingItemView[]
+}
+
+export type ShoppingListView = {
+  planId: string | null
+  aisles: ShoppingAisleView[]
+}
+
+/**
+ * FUNCIÓN PURA: fusiona las líneas DERIVADAS del plan con el estado persistido
+ * (checks + ítems manuales), casando por `key` (label normalizado). Ítems manuales que
+ * no corresponden a una línea derivada se agrupan en su pasillo (o en "Manuales").
+ * No toca DB — testeable en aislamiento.
+ */
+export function mergeShoppingListView(
+  derived: ShoppingAisle[],
+  state: ShoppingStateRow[]
+): ShoppingAisleView[] {
+  const stateByKey = new Map(state.map((row) => [shoppingItemKey(row.label), row]))
+  const consumedManualKeys = new Set<string>()
+
+  const aisles: ShoppingAisleView[] = derived.map((aisle) => ({
+    category: aisle.category,
+    items: aisle.items.map((line) => {
+      const row = stateByKey.get(line.key)
+      return {
+        key: line.key,
+        foodId: line.foodId,
+        name: line.name,
+        category: line.category,
+        quantities: line.quantities,
+        isChecked: row?.is_checked ?? false,
+        isManual: false,
+        stateId: row?.id ?? null,
+      }
+    }),
+  }))
+
+  // Ítems manuales: filas is_manual que no corresponden a una línea derivada.
+  const manualItems: ShoppingItemView[] = []
+  for (const row of state) {
+    if (!row.is_manual) continue
+    const key = shoppingItemKey(row.label)
+    if (consumedManualKeys.has(key)) continue
+    consumedManualKeys.add(key)
+    manualItems.push({
+      key,
+      foodId: null,
+      name: row.label,
+      category: (row.category ?? '').trim() || 'Manuales',
+      quantities: [],
+      isChecked: row.is_checked,
+      isManual: true,
+      stateId: row.id,
+    })
+  }
+
+  if (manualItems.length > 0) {
+    // Fusionar manuales en sus pasillos (o crear el pasillo) preservando orden.
+    const byCategory = new Map(aisles.map((a) => [a.category, a]))
+    for (const item of manualItems) {
+      const existing = byCategory.get(item.category)
+      if (existing) {
+        existing.items.push(item)
+      } else {
+        const fresh: ShoppingAisleView = { category: item.category, items: [item] }
+        byCategory.set(item.category, fresh)
+        aisles.push(fresh)
+      }
+    }
+  }
+
+  return aisles
+}
+
+/**
+ * Carga el plan activo del alumno (mismo shape que `getActiveNutritionPlan`, +
+ * `foods.category`/`serving_unit` que la lista necesita) y devuelve la vista fusionada.
+ * El `supabase` inyectado es RLS-scoped (corre como el alumno): web = createClient con
+ * cookies; móvil = cliente anon + Bearer del alumno. `clientId` filtra explícitamente,
+ * pero la RLS es la autorización real.
+ */
+export async function getShoppingListView(
+  supabase: Client,
+  clientId: string
+): Promise<ShoppingListView> {
+  const { data: plan } = await supabase
+    .from('nutrition_plans')
+    .select(
+      `
+      id, client_id, is_active,
+      nutrition_meals (
+        id, order_index,
+        food_items (
+          id, quantity, unit,
+          foods ( id, name, category, serving_unit )
+        )
+      )
+    `
+    )
+    .eq('client_id', clientId)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  const planId = plan?.id ?? null
+  const derived = buildShoppingList(plan as ShoppingPlanSource)
+  const state = await listShoppingState(supabase, clientId, planId)
+  return { planId, aisles: mergeShoppingListView(derived, state) }
+}

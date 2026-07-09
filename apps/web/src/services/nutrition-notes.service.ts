@@ -24,6 +24,15 @@ export type AddMealCommentInput = {
   logDate?: string | null
   body: string
   authorRole: CommentAuthorRole
+  /**
+   * uid del autor. Opcional: por defecto se deriva de la sesión (`getClaims`) —
+   * el camino de la web (createClient con cookies). El bridge móvil corre con un
+   * cliente token-scoped (anon + Bearer header) que NO tiene sesión persistida, así
+   * que `getClaims()` no resuelve; ese caller pasa el uid autoritativo (resuelto por
+   * `admin.auth.getUser(token)`) explícitamente. Sea cual sea el origen, la RLS
+   * (`with_check`) es la 2da capa que impide falsear `author_id`.
+   */
+  authorId?: string
 }
 
 export class NutritionNotesService {
@@ -47,7 +56,7 @@ export class NutritionNotesService {
       throw new Error('Se requiere mealLogId o logDate.')
     }
 
-    const authorId = await this.sessionUserId()
+    const authorId = input.authorId ?? (await this.sessionUserId())
     if (!authorId) throw new Error('No autorizado.')
 
     const { data, error } = await this.supabase

@@ -20,6 +20,7 @@ import { ArrowRight, Camera, Check, ChevronLeft, History, Lock, Minus, Plus, Shi
 import { MotiView } from 'moti'
 import { Confetti } from 'react-native-fast-confetti'
 import { supabase } from '../../../lib/supabase'
+import { clearAppBadge } from '../../../lib/badge'
 import { getClientProfile } from '../../../lib/client'
 import { getTodayInSantiago, formatRelativeDate } from '../../../lib/date-utils'
 import { useTheme } from '../../../context/ThemeContext'
@@ -63,6 +64,9 @@ export default function CheckInScreen() {
 
   useEffect(() => {
     loadLastCheckIn()
+    // El check-in mensual es la accion pendiente que dispara el badge nativo (E4-18/E4-22):
+    // abrir esta pantalla = el alumno la esta atendiendo, asi que limpiamos el badge.
+    clearAppBadge()
   }, [])
 
   useEffect(() => {

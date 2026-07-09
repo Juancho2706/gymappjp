@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  ActivityIndicator,
   FlatList,
   ScrollView,
   StyleSheet,
@@ -8,10 +9,9 @@ import {
   View,
 } from 'react-native'
 import { Image } from 'expo-image'
-import { BookOpen, Dumbbell, Play, Search, X } from 'lucide-react-native'
+import { useLocalSearchParams } from 'expo-router'
+import { BookOpen, ChevronDown, Dumbbell, Play, Search, X } from 'lucide-react-native'
 import { MotiView } from 'moti'
-import { supabase } from '../../../lib/supabase'
-import { getClientProfile } from '../../../lib/client'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, EmptyState, Input, Sheet, VideoPlayer } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
@@ -19,73 +19,173 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { AppBackground } from '../../../components/AppBackground'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
 import { GLOWS, SHADOWS } from '../../../lib/shadows'
+import {
+  type CatalogExercise,
+  type CatalogScope,
+  exerciseGridThumb,
+  fetchExercisePage,
+  fetchScopeMuscleGroups,
+  getCatalogExerciseById,
+  getExerciseInstructions,
+  resolveCatalogScope,
+} from '../../../lib/exercise-catalog'
 
-interface Exercise {
-  id: string
-  name: string
-  muscle_group: string | null
-  instructions: string | null
-  video_url: string | null
-  gif_url: string | null
-}
-
-// Detección YouTube — mismo contrato que VideoPlayer / la web (lib/youtube).
-const YT_RE = /(?:youtu\.be\/|v=|\/embed\/|\/shorts\/|\/live\/)([A-Za-z0-9_-]{11})/
-
-/** Miniatura utilizable del ejercicio: gif propio o, si el video es de YouTube, su thumb. */
-function mediaThumb(ex: Exercise): string | null {
-  if (ex.gif_url) return ex.gif_url
-  const m = ex.video_url?.match(YT_RE)
-  return m ? `https://img.youtube.com/vi/${m[1]}/hqdefault.jpg` : null
-}
+/** Debounce de la búsqueda para no disparar un fetch server por tecla (1:1 web). */
+const SEARCH_DEBOUNCE_MS = 250
 
 export default function ExercisesScreen() {
   const { theme, resolvedScheme } = useTheme()
-  const [exercises, setExercises] = useState<Exercise[]>([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [selectedMuscle, setSelectedMuscle] = useState<string | null>(null)
-  const [selected, setSelected] = useState<Exercise | null>(null)
+  // Deep-link: `?q=<term>` precarga la búsqueda (lo usa el "Ver técnica" del Home, home.tsx),
+  // `?ex=<id>` abre directo el sheet de detalle (ruta `/alumno/exercise/[id]`).
+  const params = useLocalSearchParams<{ q?: string; ex?: string }>()
+  const qParam = typeof params.q === 'string' ? params.q : ''
+  const exParam = typeof params.ex === 'string' ? params.ex : ''
 
+  const [exercises, setExercises] = useState<CatalogExercise[]>([])
+  const [muscleGroups, setMuscleGroups] = useState<string[]>([])
+  const [hasMore, setHasMore] = useState(false)
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [refetching, setRefetching] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  const [search, setSearch] = useState(qParam)
+  const [selectedMuscle, setSelectedMuscle] = useState<string>('Todos')
+
+  const [selected, setSelected] = useState<CatalogExercise | null>(null)
+  const [instructions, setInstructions] = useState<string[] | null>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+
+  // Scope resuelto una vez (reutilizado por refetch/load-more sin re-resolver auth).
+  const scopeRef = useRef<CatalogScope | null>(null)
+  // Secuencia de requests: descarta respuestas viejas al cambiar filtro. `exercisesRef` da el
+  // offset actual sin recrear el callback de load-more en cada append.
+  const reqSeq = useRef(0)
+  const exercisesRef = useRef<CatalogExercise[]>([])
   useEffect(() => {
-    load().catch(() => setLoading(false))
+    exercisesRef.current = exercises
+  }, [exercises])
+
+  // ── Carga inicial: primera página (paginada server-side) + grupos musculares del scope. ──
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      const scope = await resolveCatalogScope()
+      if (!mounted) return
+      scopeRef.current = scope
+      if (!scope) {
+        setLoading(false)
+        return
+      }
+      const [page, groups] = await Promise.all([
+        fetchExercisePage({ scope, search: qParam, muscle: 'Todos', offset: 0 }),
+        fetchScopeMuscleGroups(scope),
+      ])
+      if (!mounted) return
+      setExercises(page.exercises)
+      setHasMore(page.hasMore)
+      setTotal(page.total)
+      setMuscleGroups(groups)
+      setLoading(false)
+    })().catch(() => {
+      if (mounted) setLoading(false)
+    })
+    return () => {
+      mounted = false
+    }
+    // Solo al montar; `qParam` se sincroniza aparte (efecto de deep-link).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function load() {
-    setLoading(true)
-    const client = await getClientProfile()
-
-    let query = supabase
-      .from('exercises')
-      .select('id, name, muscle_group, instructions, video_url, gif_url')
-      .order('name')
-
-    if (client?.coachId) {
-      query = query.or(`coach_id.is.null,coach_id.eq.${client.coachId}`)
-    } else {
-      query = query.is('coach_id', null)
+  // ── Deep-link `?q=` en caliente: cada arribo con un nuevo término lo siembra en la búsqueda. ──
+  const lastQRef = useRef(qParam)
+  useEffect(() => {
+    if (qParam && qParam !== lastQRef.current) {
+      lastQRef.current = qParam
+      setSearch(qParam)
     }
+  }, [qParam])
 
-    const { data } = await query
-    setExercises(data ?? [])
-    setLoading(false)
-  }
+  // ── Refetch server-side al cambiar búsqueda (debounced) o músculo (offset 0, reemplaza lista). ──
+  const firstRun = useRef(true)
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false
+      return
+    }
+    const scope = scopeRef.current
+    if (!scope) return
+    const seq = ++reqSeq.current
+    const timer = setTimeout(() => {
+      setRefetching(true)
+      fetchExercisePage({ scope, search, muscle: selectedMuscle, offset: 0 })
+        .then((res) => {
+          if (seq !== reqSeq.current) return // respuesta vieja
+          setExercises(res.exercises)
+          setHasMore(res.hasMore)
+          setTotal(res.total)
+        })
+        .finally(() => {
+          if (seq === reqSeq.current) setRefetching(false)
+        })
+    }, SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [search, selectedMuscle])
 
-  const muscleGroups = [
-    'Todos',
-    ...Array.from(new Set(exercises.map((e) => e.muscle_group).filter(Boolean) as string[])).sort(),
-  ]
+  const loadMore = useCallback(() => {
+    const scope = scopeRef.current
+    if (loadingMore || refetching || !hasMore || !scope) return
+    const seq = reqSeq.current
+    setLoadingMore(true)
+    fetchExercisePage({
+      scope,
+      search,
+      muscle: selectedMuscle,
+      offset: exercisesRef.current.length,
+    })
+      .then((res) => {
+        if (seq !== reqSeq.current) return // cambió el filtro mientras cargaba
+        setExercises((prev) => [...prev, ...res.exercises])
+        setHasMore(res.hasMore)
+        setTotal(res.total)
+      })
+      .finally(() => setLoadingMore(false))
+  }, [loadingMore, refetching, hasMore, search, selectedMuscle])
 
-  const filtered = exercises.filter((e) => {
-    const matchSearch = !search || e.name.toLowerCase().includes(search.toLowerCase())
-    const matchMuscle = !selectedMuscle || selectedMuscle === 'Todos' || e.muscle_group === selectedMuscle
-    return matchSearch && matchMuscle
-  })
+  const openExercise = useCallback((ex: CatalogExercise) => {
+    setSelected(ex)
+    setInstructions(null)
+    setLoadingDetail(true)
+    getExerciseInstructions(ex.id)
+      .then((steps) => setInstructions(steps))
+      .catch(() => setInstructions([]))
+      .finally(() => setLoadingDetail(false))
+  }, [])
 
-  // Ejercicio destacado: primero con media utilizable, solo en la vista por defecto
-  // (sin búsqueda ni filtro de músculo) — espeja FeaturedExerciseCard de la web.
-  const isDefaultView = !search.trim() && (selectedMuscle === null || selectedMuscle === 'Todos')
-  const featured = isDefaultView ? (filtered.find((e) => mediaThumb(e)) ?? null) : null
+  // ── Deep-link `?ex=<id>`: abre el sheet del ejercicio (de la lista o traído por id). ──
+  const lastExRef = useRef('')
+  useEffect(() => {
+    if (!exParam || exParam === lastExRef.current) return
+    lastExRef.current = exParam
+    const inList = exercisesRef.current.find((e) => e.id === exParam)
+    if (inList) {
+      openExercise(inList)
+      return
+    }
+    getCatalogExerciseById(exParam)
+      .then((ex) => {
+        if (ex) openExercise(ex)
+      })
+      .catch(() => {})
+  }, [exParam, openExercise])
+
+  const muscleChips = ['Todos', ...muscleGroups]
+
+  // Ejercicio destacado: primero con media utilizable de la página cargada, solo en la vista por
+  // defecto (sin búsqueda ni filtro) — espeja FeaturedExerciseCard de la web.
+  const isDefaultView = !search.trim() && selectedMuscle === 'Todos'
+  const featured = isDefaultView ? (exercises.find((e) => exerciseGridThumb(e)) ?? null) : null
+  const remaining = Math.max(total - exercises.length, 0)
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} testID="exercises-screen">
@@ -119,19 +219,19 @@ export default function ExercisesScreen() {
         />
       </View>
 
-      {muscleGroups.length > 1 && (
+      {muscleChips.length > 1 && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.muscleScroll}
         >
-          {muscleGroups.map((group) => {
-            const isSelected = (selectedMuscle ?? 'Todos') === group
+          {muscleChips.map((group) => {
+            const isSelected = selectedMuscle === group
             return (
               <TouchableOpacity
                 key={group}
                 testID={`muscle-chip-${group}`}
-                onPress={() => setSelectedMuscle(group === 'Todos' ? null : group)}
+                onPress={() => setSelectedMuscle(group)}
                 activeOpacity={0.75}
                 style={[
                   styles.muscleChip,
@@ -157,20 +257,27 @@ export default function ExercisesScreen() {
 
       {loading ? (
         <EvaLoaderScreen subtitle="Cargando ejercicios…" />
-      ) : filtered.length === 0 ? (
-        <EmptyState icon={BookOpen} title="Sin resultados" subtitle="Intenta con otra búsqueda o músculo." />
+      ) : exercises.length === 0 ? (
+        refetching ? (
+          <View style={styles.centerPad}>
+            <ActivityIndicator color={theme.primary} />
+          </View>
+        ) : (
+          <EmptyState icon={BookOpen} title="Sin resultados" subtitle="Intenta con otra búsqueda o músculo." />
+        )
       ) : (
         <FlatList
-          data={filtered}
+          data={exercises}
           keyExtractor={(e) => e.id}
           numColumns={2}
           columnWrapperStyle={styles.column}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          style={refetching ? styles.dimmed : undefined}
           ListHeaderComponent={
             featured ? (
               <View style={styles.featuredHeader}>
-                <FeaturedCard exercise={featured} theme={theme} scheme={resolvedScheme} onPress={() => setSelected(featured)} />
+                <FeaturedCard exercise={featured} theme={theme} scheme={resolvedScheme} onPress={() => openExercise(featured)} />
                 <Text style={[TYPE.title, { color: theme.foreground }]}>Biblioteca</Text>
               </View>
             ) : null
@@ -182,9 +289,34 @@ export default function ExercisesScreen() {
               transition={{ type: 'timing', duration: 300, delay: Math.min(index * 30, 300) }}
               style={styles.cardWrap}
             >
-              <ExerciseCard item={item} theme={theme} scheme={resolvedScheme} onPress={() => setSelected(item)} />
+              <ExerciseCard item={item} theme={theme} scheme={resolvedScheme} onPress={() => openExercise(item)} />
             </MotiView>
           )}
+          ListFooterComponent={
+            hasMore ? (
+              // Paginación manual "Ver más" — sin autocarga por scroll (espeja la web: evita traer
+              // GIFs de más). El contador de "restantes" viene del `count: 'exact'` de la página.
+              <TouchableOpacity
+                testID="exercises-load-more"
+                onPress={loadMore}
+                disabled={loadingMore || refetching}
+                activeOpacity={0.85}
+                style={[
+                  styles.loadMore,
+                  { backgroundColor: theme.card, borderColor: theme.border, opacity: loadingMore || refetching ? 0.6 : 1 },
+                ]}
+              >
+                {loadingMore ? (
+                  <ActivityIndicator size="small" color={theme.mutedForeground} />
+                ) : (
+                  <ChevronDown size={16} color={theme.foreground} />
+                )}
+                <Text style={[textStyle('sm', FONT.uiBold), { color: theme.foreground }]}>
+                  {`Ver más${remaining > 0 ? ` (${remaining} restantes)` : ''}`}
+                </Text>
+              </TouchableOpacity>
+            ) : null
+          }
         />
       )}
 
@@ -196,7 +328,9 @@ export default function ExercisesScreen() {
           <Button label="Cerrar" variant="sport" size="lg" onPress={() => setSelected(null)} full testID="exercise-detail-close" />
         }
       >
-        {selected && <ExerciseDetail exercise={selected} theme={theme} />}
+        {selected && (
+          <ExerciseDetail exercise={selected} instructions={instructions} loading={loadingDetail} theme={theme} />
+        )}
       </Sheet>
     </SafeAreaView>
   )
@@ -211,12 +345,12 @@ function FeaturedCard({
   scheme,
   onPress,
 }: {
-  exercise: Exercise
+  exercise: CatalogExercise
   theme: any
   scheme: 'light' | 'dark'
   onPress: () => void
 }) {
-  const thumb = mediaThumb(exercise)
+  const thumb = exerciseGridThumb(exercise, 640)
   return (
     <TouchableOpacity
       testID="featured-exercise-card"
@@ -242,27 +376,27 @@ function FeaturedCard({
         <Text style={[TYPE.h3, { color: theme.foreground }]} numberOfLines={2}>
           {exercise.name}
         </Text>
-        {exercise.muscle_group ? (
-          <Text style={[TYPE.caption, { color: theme.mutedForeground, marginTop: 2 }]}>{exercise.muscle_group}</Text>
-        ) : null}
+        <Text style={[TYPE.caption, { color: theme.mutedForeground, marginTop: 2 }]} numberOfLines={1}>
+          {[exercise.muscle_group, exercise.equipment].filter(Boolean).join(' · ')}
+        </Text>
       </View>
     </TouchableOpacity>
   )
 }
 
-/** Card de grilla: banner + badge músculo + nombre. */
+/** Card de grilla: banner + badge músculo + nombre + equipo. */
 function ExerciseCard({
   item,
   theme,
   scheme,
   onPress,
 }: {
-  item: Exercise
+  item: CatalogExercise
   theme: any
   scheme: 'light' | 'dark'
   onPress: () => void
 }) {
-  const thumb = mediaThumb(item)
+  const thumb = exerciseGridThumb(item)
   return (
     <TouchableOpacity
       testID={`exercise-card-${item.id}`}
@@ -290,15 +424,29 @@ function ExerciseCard({
         <Text style={[textStyle('xs', FONT.uiBold, { lh: 'snug' }), { color: theme.foreground }]} numberOfLines={2}>
           {item.name}
         </Text>
+        {item.equipment ? (
+          <Text style={[textStyle('3xs', FONT.ui), { color: theme.mutedForeground, marginTop: 3 }]} numberOfLines={1}>
+            {item.equipment}
+          </Text>
+        ) : null}
       </View>
     </TouchableOpacity>
   )
 }
 
-/** Contenido del sheet de detalle: banner media + nombre + eyebrow músculo + instrucciones. */
-function ExerciseDetail({ exercise, theme }: { exercise: Exercise; theme: any }) {
-  const instructions = (exercise.instructions ?? '')
-    .split('\n')
+/** Contenido del sheet: banner media (gif/video inline con recorte) + nombre + eyebrow + instrucciones on-demand. */
+function ExerciseDetail({
+  exercise,
+  instructions,
+  loading,
+  theme,
+}: {
+  exercise: CatalogExercise
+  instructions: string[] | null
+  loading: boolean
+  theme: any
+}) {
+  const steps = (instructions ?? [])
     .map((l) => l.replace(/^Step:\d+\s*/i, '').trim())
     .filter(Boolean)
 
@@ -311,7 +459,15 @@ function ExerciseDetail({ exercise, theme }: { exercise: Exercise; theme: any })
             <Image source={{ uri: exercise.gif_url }} style={styles.detailGif} contentFit="contain" transition={200} />
           </View>
         ) : exercise.video_url ? (
-          <VideoPlayer url={exercise.video_url} autoPlay muted loop title={exercise.name} />
+          <VideoPlayer
+            url={exercise.video_url}
+            start={exercise.video_start_time}
+            end={exercise.video_end_time}
+            autoPlay
+            muted
+            loop
+            title={exercise.name}
+          />
         ) : (
           <View style={[styles.detailFallback, { backgroundColor: theme.card }]}>
             <View style={[styles.detailFallbackPlay, { backgroundColor: theme.primary }, GLOWS.sport]}>
@@ -323,14 +479,21 @@ function ExerciseDetail({ exercise, theme }: { exercise: Exercise; theme: any })
 
       <View>
         <Text style={[TYPE.h2, { color: theme.foreground }]}>{exercise.name}</Text>
-        {exercise.muscle_group ? (
-          <Text style={[TYPE.eyebrow, { color: theme.primary, marginTop: 5 }]}>{exercise.muscle_group}</Text>
+        {exercise.muscle_group || exercise.equipment ? (
+          <Text style={[TYPE.eyebrow, { color: theme.primary, marginTop: 5 }]}>
+            {[exercise.muscle_group, exercise.equipment].filter(Boolean).join(' · ')}
+          </Text>
         ) : null}
       </View>
 
-      {instructions.length > 0 ? (
+      {loading ? (
+        <View style={styles.detailLoading}>
+          <ActivityIndicator size="small" color={theme.primary} />
+          <Text style={[textStyle('sm', FONT.ui), { color: theme.mutedForeground }]}>Cargando instrucciones…</Text>
+        </View>
+      ) : steps.length > 0 ? (
         <View style={styles.instructionsList}>
-          {instructions.map((line, i) => (
+          {steps.map((line, i) => (
             <View key={i} style={styles.instructionRow}>
               <View style={[styles.instructionNum, { backgroundColor: theme.primary + '1A', borderRadius: theme.radius.sm }]}>
                 <Text style={[textStyle('xs', FONT.displayBold), { color: theme.primary }]}>{i + 1}</Text>
@@ -365,6 +528,8 @@ const styles = StyleSheet.create({
   muscleChip: { borderWidth: 1.5, paddingHorizontal: 15, height: 34, justifyContent: 'center', borderRadius: 999 },
   list: { paddingHorizontal: 16, paddingBottom: 32 },
   column: { gap: 12 },
+  dimmed: { opacity: 0.6 },
+  centerPad: { paddingVertical: 48, alignItems: 'center', justifyContent: 'center' },
   featuredHeader: { gap: 14, marginBottom: 14 },
   featCard: { borderWidth: 1, borderRadius: 20, overflow: 'hidden' },
   featBanner: { height: 150, backgroundColor: '#12161D', alignItems: 'center', justifyContent: 'center' },
@@ -379,12 +544,23 @@ const styles = StyleSheet.create({
   bannerChip: { position: 'absolute', bottom: 7, left: 7, backgroundColor: 'rgba(0,0,0,0.45)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 },
   bannerChipText: { textTransform: 'uppercase' },
   cardContent: { padding: 11 },
+  loadMore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 46,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    marginTop: 4,
+  },
   detail: { gap: 16, paddingTop: 4 },
   detailBanner: { marginHorizontal: -20 },
   detailGifWrap: { height: 200, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   detailGif: { width: '100%', height: 200 },
   detailFallback: { height: 200, alignItems: 'center', justifyContent: 'center' },
   detailFallbackPlay: { width: 58, height: 58, borderRadius: 29, alignItems: 'center', justifyContent: 'center' },
+  detailLoading: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
   instructionsList: { gap: 12 },
   instructionRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   instructionNum: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },

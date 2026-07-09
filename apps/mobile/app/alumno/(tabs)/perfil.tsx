@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { cssInterop } from 'nativewind'
 import {
+  CalendarDays,
   ChevronRight,
   CircleHelp,
   Dumbbell,
@@ -26,6 +27,7 @@ import { signOutAndCleanup } from '../../../lib/auth-actions'
 import { authenticate, isBiometricAvailable, isBiometricLockEnabled, setBiometricLockEnabled } from '../../../lib/biometric'
 import { getClientProfile } from '../../../lib/client'
 import { getWorkoutDaySummaries } from '../../../lib/history.queries'
+import { fmtVolume, getMonthlyRecap, type MonthlyRecap } from '../../../lib/monthly-summary'
 import { clearBranding } from '../../../lib/branding'
 import { useTheme } from '../../../context/ThemeContext'
 import { SHADOWS } from '../../../lib/shadows'
@@ -43,13 +45,14 @@ import {
 } from '../../../components/ShareCard'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { RestAlarmPreference } from '../../../components/alumno/RestAlarmPreference'
 
 // Let NativeWind drive the lucide icon `color` via `text-*` classes (same DS
 // pattern Sheet/Dialog use for their close glyph). This keeps the frozen
 // `lib/theme` shim out of this screen — every color here is a DS token, so dark
 // mode + the white-label brand ramp resolve at runtime.
 for (const Icon of [
-  ChevronRight, CircleHelp, Dumbbell, Fingerprint, Flame, History,
+  CalendarDays, ChevronRight, CircleHelp, Dumbbell, Fingerprint, Flame, History,
   KeyRound, LogOut, Moon, Share2, Sun, Trash2, TrendingUp,
 ]) {
   cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
@@ -237,6 +240,7 @@ export default function AlumnoPerfilScreen() {
   const router = useRouter()
   const [detail, setDetail] = useState<AlumnoDetail | null>(null)
   const [stats, setStats] = useState<{ totalWorkouts: number; streak: number }>({ totalWorkouts: 0, streak: 0 })
+  const [monthly, setMonthly] = useState<MonthlyRecap | null>(null)
   const [loading, setLoading] = useState(true)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -254,12 +258,14 @@ export default function AlumnoPerfilScreen() {
     const client = await getClientProfile()
     if (!client) { setLoading(false); return }
 
-    const [{ data: { user } }, { data }, { data: coachData }, daySummaries] = await Promise.all([
+    const [{ data: { user } }, { data }, { data: coachData }, daySummaries, monthlyRecap] = await Promise.all([
       supabase.auth.getUser(),
       supabase.from('clients').select('full_name, phone, goal_weight_kg, subscription_start_date').eq('id', client.id).maybeSingle(),
       supabase.from('coaches').select('subscription_tier').eq('id', client.coachId).maybeSingle(),
       // Entrenos = días con series (últ. 12 meses); racha = derivada de esos días. Mismo RPC del historial.
       getWorkoutDaySummaries(client.id, 365).catch(() => []),
+      // Resumen del mes calendario (Santiago) para la share-card mensual — fail-open (nunca lanza).
+      getMonthlyRecap(client.id),
     ])
 
     setDetail({
@@ -274,6 +280,7 @@ export default function AlumnoPerfilScreen() {
       totalWorkouts: daySummaries.length,
       streak: computeStreak(daySummaries.map((d) => d.dayKey)),
     })
+    setMonthly(monthlyRecap)
     setLoading(false)
   }
 
@@ -426,6 +433,12 @@ export default function AlumnoPerfilScreen() {
               </View>
             ) : null}
 
+            {/* Preferencias — alarma de descanso del ejecutor (E4-19) */}
+            <View testID="perfil-preferencias">
+              <SectionTitle>Preferencias</SectionTitle>
+              <RestAlarmPreference />
+            </View>
+
             {/* Información */}
             <View>
               <SectionTitle>Información</SectionTitle>
@@ -544,7 +557,7 @@ export default function AlumnoPerfilScreen() {
         onClose={() => setPickerOpen(false)}
         title="Compartí tu logro"
         description="Cada tarjeta lleva la marca de tu coach. Elegí cuál compartir:"
-        snapPoints={['48%']}
+        snapPoints={['56%']}
       >
         <View style={{ gap: 10 }}>
           <ShareOption
@@ -562,6 +575,18 @@ export default function AlumnoPerfilScreen() {
             tone="ember"
             testID="perfil-share-streak"
             onPress={() => pickShare('streak')}
+          />
+          <ShareOption
+            Icon={CalendarDays}
+            title="Resumen mensual"
+            subtitle={
+              monthly
+                ? `${monthly.monthLabel}: ${monthly.sessions} ${monthly.sessions === 1 ? 'sesión' : 'sesiones'} · ${fmtVolume(monthly.volumeKg)}`
+                : 'Tu mes en números'
+            }
+            tone="sport"
+            testID="perfil-share-monthly"
+            onPress={() => pickShare('monthly')}
           />
         </View>
       </Sheet>
@@ -591,6 +616,22 @@ export default function AlumnoPerfilScreen() {
         <ShareCardTitle>{firstName}</ShareCardTitle>
         <ShareCardHero value={String(stats.streak)} unit={stats.streak === 1 ? 'día' : 'días'} />
         <ShareCardPill>{`${stats.totalWorkouts} entrenos totales`}</ShareCardPill>
+      </ShareCardPreview>
+
+      <ShareCardPreview
+        visible={activeShare === 'monthly'}
+        onClose={() => setActiveShare(null)}
+        variant="monthly"
+        shareMessage="Mi mes en EVA 📅"
+        fileName="eva-mes"
+      >
+        <ShareCardEyebrow>RESUMEN DEL MES</ShareCardEyebrow>
+        <ShareCardTitle>{monthly?.monthLabel ?? firstName}</ShareCardTitle>
+        <ShareCardHero
+          value={String(monthly?.sessions ?? 0)}
+          unit={(monthly?.sessions ?? 0) === 1 ? 'sesión' : 'sesiones'}
+        />
+        <ShareCardPill>{`${fmtVolume(monthly?.volumeKg ?? 0)} levantados`}</ShareCardPill>
       </ShareCardPreview>
 
       {/* Cambiar contraseña — Dialog EVA DS */}
