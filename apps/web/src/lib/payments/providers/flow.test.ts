@@ -241,6 +241,127 @@ describe('FlowProvider.processWebhook (Ola 3 — re-fetch firmado + resolucion d
     })
 })
 
+describe('FlowProvider.getCustomerEnrollmentStatus (Fase 2a)', () => {
+    it('customer enrolado (creditCardType + registerDate) → enrolled:true + last4', async () => {
+        fetchMock.mockResolvedValueOnce(ok({
+            customerId: 'cus_1', pay_mode: 'auto', creditCardType: 'Visa', last4CardDigits: '6623',
+            registerDate: '2026-07-05 19:54:38',
+        }))
+        const r = await new FlowProvider().getCustomerEnrollmentStatus('cus_1')
+        expect(callAt(0).method).toBe('GET')
+        expect(callAt(0).url.startsWith(`${BASE}/customer/get?`)).toBe(true)
+        expect(callAt(0).params.get('customerId')).toBe('cus_1')
+        expect(callAt(0).params.get('s')).toBeTruthy()
+        expect(r).toEqual({ enrolled: true, cardType: 'Visa', last4: '6623' })
+    })
+
+    it('customer NO enrolado (creditCardType/registerDate null) → enrolled:false', async () => {
+        fetchMock.mockResolvedValueOnce(ok({
+            customerId: 'cus_2', pay_mode: 'manual', creditCardType: null, last4CardDigits: null, registerDate: null,
+        }))
+        const r = await new FlowProvider().getCustomerEnrollmentStatus('cus_2')
+        expect(r).toEqual({ enrolled: false, cardType: null, last4: null })
+    })
+})
+
+describe('FlowProvider.createSubscriptionForEnrolledCustomer (Fase 2b)', () => {
+    const input = {
+        customerId: 'cus_1', tier: 'pro', cycle: 'monthly' as const, amountClp: 29990,
+        planLabel: 'EVA Pro (mensual)', webhookUrl: 'https://eva/api/payments/flow/webhook?token=x',
+    }
+
+    it('happy: plans/create (planId por monto) + subscription/create → subscriptionId + periodEnd + firstInvoice pagada', async () => {
+        fetchMock
+            .mockResolvedValueOnce(ok({ planId: 'eva_pro_monthly_29990', amount: '29990', interval: 3, interval_count: 1, status: 1 }))
+            .mockResolvedValueOnce(ok({
+                subscriptionId: 'sus_abc', planId: 'eva_pro_monthly_29990', customerId: 'cus_1',
+                period_end: '2026-08-04 00:00:00', status: 1, morose: 0,
+                invoices: [{ id: 1167928, status: 1, amount: '29990.0000' }],
+            }))
+        const r = await new FlowProvider().createSubscriptionForEnrolledCustomer(input)
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        // plans/create
+        expect(callAt(0).method).toBe('POST')
+        expect(callAt(0).url).toBe(`${BASE}/plans/create`)
+        expect(callAt(0).params.get('planId')).toBe('eva_pro_monthly_29990')
+        expect(callAt(0).params.get('amount')).toBe('29990')
+        expect(callAt(0).params.get('interval')).toBe('3')
+        expect(callAt(0).params.get('interval_count')).toBe('1')
+        expect(callAt(0).params.get('urlCallback')).toBe('https://eva/api/payments/flow/webhook?token=x')
+        // subscription/create
+        expect(callAt(1).url).toBe(`${BASE}/subscription/create`)
+        expect(callAt(1).params.get('planId')).toBe('eva_pro_monthly_29990')
+        expect(callAt(1).params.get('customerId')).toBe('cus_1')
+        expect(r).toEqual({
+            subscriptionId: 'sus_abc',
+            planId: 'eva_pro_monthly_29990',
+            periodEnd: '2026-08-04T00:00:00', // espacio → T
+            firstInvoice: { id: '1167928', paid: true, paidAmountClp: 29990 },
+        })
+    })
+
+    it('quarterly → interval 3, count 3 en plans/create', async () => {
+        fetchMock
+            .mockResolvedValueOnce(ok({ planId: 'eva_pro_quarterly_80973' }))
+            .mockResolvedValueOnce(ok({ subscriptionId: 'sus_q', invoices: [] }))
+        await new FlowProvider().createSubscriptionForEnrolledCustomer({ ...input, cycle: 'quarterly', amountClp: 80973 })
+        expect(callAt(0).params.get('planId')).toBe('eva_pro_quarterly_80973')
+        expect(callAt(0).params.get('interval')).toBe('3')
+        expect(callAt(0).params.get('interval_count')).toBe('3')
+    })
+
+    it('annual → interval 4, count 1 en plans/create', async () => {
+        fetchMock
+            .mockResolvedValueOnce(ok({ planId: 'eva_pro_annual_287904' }))
+            .mockResolvedValueOnce(ok({ subscriptionId: 'sus_a', invoices: [] }))
+        await new FlowProvider().createSubscriptionForEnrolledCustomer({ ...input, cycle: 'annual', amountClp: 287904 })
+        expect(callAt(0).params.get('interval')).toBe('4')
+        expect(callAt(0).params.get('interval_count')).toBe('1')
+    })
+
+    it('plan ya existe (plans/create 4xx {code,message}) → NO tira, sigue a subscription/create', async () => {
+        fetchMock
+            .mockResolvedValueOnce({ ok: false, status: 401, text: async () => JSON.stringify({ code: 401, message: 'Plan already exists' }) })
+            .mockResolvedValueOnce(ok({ subscriptionId: 'sus_shared', invoices: [{ id: 42, status: 1, amount: '29990' }] }))
+        const r = await new FlowProvider().createSubscriptionForEnrolledCustomer(input)
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(callAt(1).url).toBe(`${BASE}/subscription/create`)
+        expect(r.subscriptionId).toBe('sus_shared')
+        expect(r.firstInvoice).toEqual({ id: '42', paid: true, paidAmountClp: 29990 })
+    })
+
+    it('F10 (DATO REAL sandbox): planId duplicado responde HTTP 401 code 501 "This planId has already been used" → NO tira, sigue', async () => {
+        // Mensaje real confirmado contra sandbox 2026-07-09; el regex DEBE matchear "has already been used".
+        fetchMock
+            .mockResolvedValueOnce({
+                ok: false,
+                status: 401,
+                text: async () =>
+                    JSON.stringify({ code: 501, message: 'Internal Server Error - This planId has already been used' }),
+            })
+            .mockResolvedValueOnce(ok({ subscriptionId: 'sus_dup', invoices: [{ id: 7, status: 1, amount: '29990' }] }))
+        const r = await new FlowProvider().createSubscriptionForEnrolledCustomer(input)
+        expect(fetchMock).toHaveBeenCalledTimes(2)
+        expect(callAt(1).url).toBe(`${BASE}/subscription/create`)
+        expect(r.subscriptionId).toBe('sus_dup')
+    })
+
+    it('firstInvoice con status STRING "1" → paid true (Number coerce)', async () => {
+        fetchMock
+            .mockResolvedValueOnce(ok({ planId: 'eva_pro_monthly_29990' }))
+            .mockResolvedValueOnce(ok({ subscriptionId: 'sus_s', invoices: [{ id: '99', status: '1', amount: '29990.0000' }] }))
+        const r = await new FlowProvider().createSubscriptionForEnrolledCustomer(input)
+        expect(r.firstInvoice).toEqual({ id: '99', paid: true, paidAmountClp: 29990 })
+    })
+
+    it('sin subscriptionId en la respuesta → error', async () => {
+        fetchMock
+            .mockResolvedValueOnce(ok({ planId: 'eva_pro_monthly_29990' }))
+            .mockResolvedValueOnce(ok({ invoices: [] }))
+        await expect(new FlowProvider().createSubscriptionForEnrolledCustomer(input)).rejects.toThrow('sin subscriptionId')
+    })
+})
+
 describe('FlowProvider — diferidos (throws etiquetados por Ola)', () => {
     it('updateCheckoutAmount → Ola 5', async () => {
         await expect(new FlowProvider().updateCheckoutAmount('s', 1000)).rejects.toThrow('Ola 5')

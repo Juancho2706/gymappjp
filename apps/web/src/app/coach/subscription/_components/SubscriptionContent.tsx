@@ -8,6 +8,7 @@ import {
     ADDON_PAYMENT_RULES,
     BILLING_CYCLE_CONFIG,
     comparePlanDirection,
+    FLOW_ENABLED,
     getAddonPaymentRulesForCycle,
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
@@ -346,7 +347,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
         })
     }, [coach, captureAddonFunnel])
 
-    async function handleChangePlan() {
+    async function handleChangePlan(gateway: 'mercadopago' | 'flow' = 'mercadopago') {
         setSaving(true)
         setError(null)
         setSuccessMessage(null)
@@ -354,7 +355,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
             const response = await fetch('/api/payments/create-preference', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tier: selectedTier, billingCycle: selectedCycle, addons: upgradeAddons }),
+                body: JSON.stringify({ tier: selectedTier, billingCycle: selectedCycle, addons: upgradeAddons, gateway }),
             })
             const payload = await response.json()
             if (!response.ok) {
@@ -450,6 +451,11 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     // El copy "upgrade activa ahora" solo aplica a un suscriptor pago ACTIVO (isActiveUpgrade del
     // server). free→paid y reactivación son altas completas, no cambios mid-cycle.
     const isUpgradeNow = hasActivePaidPlan && selectedDirection === 'upgrade'
+    // C2 companion: Flow NO soporta el cambio de plan de un coach pago ACTIVO (el server responde
+    // 400 FLOW_PLAN_CHANGE_UNSUPPORTED — Ola 5). Solo el alta desde free (upgrade legítimo, alta
+    // completa) puede pagar con Flow. Con coach pago activo el modal muestra únicamente MP con su
+    // texto 'Confirmar' original — sin ofrecer un botón que reventaría en el server.
+    const canUseFlowForPlanChange = FLOW_ENABLED && coachTier === 'free'
     // P1-3: ¿el coach tiene un add-on de nutrición por intercambios VIVO? Bloquea bajar a un tier
     // sin nutrición (Starter) hasta quitarlo — espejo del 409 NUTRITION_ADDON_ON_DOWNGRADE del server.
     // Solo ACTIVE bloquea: si ya dio de baja la nutrición (cancel_pending) el downgrade se permite.
@@ -1132,12 +1138,22 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                         <div className="mt-4 flex flex-col gap-1.5">
                             <button
                                 type="button"
-                                onClick={() => { setShowUpgradeConfirm(false); void handleChangePlan() }}
+                                onClick={() => { setShowUpgradeConfirm(false); void handleChangePlan('mercadopago') }}
                                 disabled={saving}
                                 className="h-12 w-full rounded-control bg-sport-500 text-sm font-bold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                             >
-                                {saving ? 'Procesando...' : 'Confirmar'}
+                                {saving ? 'Procesando...' : (canUseFlowForPlanChange ? 'Pagar con Mercado Pago' : 'Confirmar')}
                             </button>
+                            {canUseFlowForPlanChange && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowUpgradeConfirm(false); void handleChangePlan('flow') }}
+                                    disabled={saving}
+                                    className="h-11 w-full rounded-control border border-default bg-surface-sunken text-sm font-semibold text-strong transition-colors hover:bg-surface-card disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                >
+                                    Pagar con Webpay (Flow)
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 ref={(el) => { if (el) el.focus() }}

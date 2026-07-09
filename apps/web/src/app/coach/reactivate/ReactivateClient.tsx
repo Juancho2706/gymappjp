@@ -8,6 +8,7 @@ import {
     ADDON_CONFIG,
     ADDON_MODULE_KEYS,
     BILLING_CYCLE_CONFIG,
+    FLOW_ENABLED,
     getDefaultBillingCycleForTier,
     getTierAllowedBillingCycles,
     getTierBillingCycleSummary,
@@ -196,7 +197,7 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
         return () => { if (pollingIntervalRef.current) { clearInterval(pollingIntervalRef.current); pollingIntervalRef.current = null } }
     }, [confirmSubscription, fromSuccessfulCheckout, preapprovalIdFromUrl])
 
-    const handleCheckout = useCallback(async () => {
+    const handleCheckout = useCallback(async (gateway: 'mercadopago' | 'flow' = 'mercadopago') => {
         setIsLoading(true)
         setError(null)
         try {
@@ -206,6 +207,7 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                 body: JSON.stringify({
                     tier,
                     billingCycle,
+                    gateway,
                     // Add-ons pre-marcados viajan en external_reference del preapproval nuevo (D4 —
                     // sin one-shot: el preapproval nace con el ciclo completo compuesto).
                     ...(selectedAddons.length > 0 ? { addons: selectedAddons } : {}),
@@ -507,7 +509,7 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
             <div className="mt-6 flex flex-col gap-2">
                 <button
                     type="button"
-                    onClick={handleCheckout}
+                    onClick={() => void handleCheckout('mercadopago')}
                     disabled={isLoading || tierBlockedByClients || exceedsTopSaleTier}
                     className="flex h-12 w-full items-center justify-center gap-2 rounded-control bg-sport-500 px-5 text-sm font-bold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 >
@@ -518,6 +520,22 @@ export function ReactivateClient({ currentTier, activeClientCount, subscriptionS
                         </>
                     )}
                 </button>
+
+                {FLOW_ENABLED && (
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => void handleCheckout('flow')}
+                            disabled={isLoading || tierBlockedByClients || exceedsTopSaleTier}
+                            className="inline-flex h-11 items-center justify-center rounded-control border border-default px-6 text-sm font-semibold text-strong hover:bg-surface-sunken transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        >
+                            Pagar con Webpay (Flow)
+                        </button>
+                        <p className="text-xs text-muted">
+                            Webpay procesado por Flow.cl — tarjetas de crédito, débito y prepago chilenas.
+                        </p>
+                    </>
+                )}
 
                 <button
                     type="button"

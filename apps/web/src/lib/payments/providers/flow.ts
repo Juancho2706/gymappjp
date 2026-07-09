@@ -14,6 +14,7 @@ import {
     mapFlowSubscriptionStatus,
     normalizeFlowOneShotPayment,
     normalizeFlowRecurringInvoice,
+    parseFlowDate,
     parseFlowRecurringCommerceOrder,
     type FlowInvoice,
     type FlowPaymentStatus,
@@ -189,6 +190,113 @@ export class FlowProvider implements PaymentsProvider {
      */
     async cancelCheckoutAtProvider(checkoutId: string): Promise<void> {
         await this.flowPost('subscription/cancel', { subscriptionId: checkoutId, at_period_end: 1 })
+    }
+
+    // ── Metodos Flow-especificos (flujo de DOS FASES) ────────────────────────────
+    // NO van al puerto `PaymentsProvider` (MP es de una fase): son publicos extra de la clase,
+    // llamados directamente por el flujo de alta recurrente de Flow (confirm-subscription, Ola 4).
+
+    /**
+     * FASE 2a — ¿la tarjeta del customer YA quedo enrolada? Tras el redirect de enrolamiento
+     * (Fase 1 = customer/register → Webpay), el browser vuelve y hay que confirmar que la tarjeta
+     * se guardo ANTES de crear la suscripcion. Shape real confirmado en sandbox: al enrolar,
+     * `pay_mode` flipea 'manual'→'auto' y aparecen `creditCardType` + `last4CardDigits` +
+     * `registerDate` (antes de enrolar los tres son null). Exigimos creditCardType Y registerDate
+     * presentes (no basta uno) para no dar por enrolado un customer a medias.
+     */
+    async getCustomerEnrollmentStatus(customerId: string): Promise<{ enrolled: boolean; cardType: string | null; last4: string | null }> {
+        const c = await this.flowGet('customer/get', { customerId })
+        const cardType = c.creditCardType != null ? String(c.creditCardType) : null
+        const last4 = c.last4CardDigits != null ? String(c.last4CardDigits) : null
+        const registerDate = c.registerDate != null ? String(c.registerDate) : null
+        const enrolled = !!cardType && !!registerDate
+        return { enrolled, cardType: cardType || null, last4: last4 || null }
+    }
+
+    /**
+     * FASE 2b — crea la suscripcion recurrente para un customer con tarjeta YA enrolada
+     * (plans/create + subscription/create). Flow COBRA INMEDIATO al crear la sub (la primera
+     * invoice viene pagada al toque en la respuesta → `firstInvoice`).
+     *
+     * DECISION v1 (monto horneado en el plan): el monto compuesto (base + addons − descuento, que
+     * el caller calcula con getCompositeAmountClp — UNICA fuente de verdad de la plata) va HORNEADO
+     * en el `amount` del plan. El planId es DETERMINISTICO POR MONTO: `eva_<tier>_<cycle>_<amountClp>`
+     * (ej. `eva_pro_monthly_29990`). Consecuencia: un cambio de monto (cupon expira, add-on nuevo) =
+     * plan NUEVO. Garantiza que Flow cobra EXACTAMENTE el compuesto (sin drift). Ola 5 migrara a
+     * plan base + items (subscription/addItem) para evitar la proliferacion de planes.
+     *
+     * Intervalos (enum REAL de Flow: 1=dia · 2=semana · 3=mes · 4=anio):
+     *   monthly → interval 3, count 1 · quarterly → interval 3, count 3 · annual → interval 4, count 1.
+     */
+    async createSubscriptionForEnrolledCustomer(input: {
+        customerId: string
+        tier: string
+        cycle: 'monthly' | 'quarterly' | 'annual'
+        amountClp: number
+        planLabel: string
+        webhookUrl: string
+    }): Promise<{
+        subscriptionId: string
+        planId: string
+        periodEnd: string | null
+        firstInvoice: { id: string; paid: boolean; paidAmountClp: number | null } | null
+    }> {
+        const planId = `eva_${input.tier}_${input.cycle}_${input.amountClp}`
+        const { interval, interval_count } =
+            input.cycle === 'monthly'
+                ? { interval: 3, interval_count: 1 }
+                : input.cycle === 'quarterly'
+                  ? { interval: 3, interval_count: 3 }
+                  : { interval: 4, interval_count: 1 } // annual
+
+        // Paso 1 — plans/create. IDEMPOTENTE por construccion: el planId es deterministico por monto,
+        // asi que un reintento de Fase 2 (o DOS coaches con el MISMO combo tier+cycle+monto) apuntan al
+        // MISMO plan — correcto, es un plan compartido con el amount ya congelado. Flow responde 4xx
+        // {code,message} si el plan ya existe → parseError tira; si el mensaje es "ya usado", seguimos
+        // (el plan correcto ya esta); cualquier otro error se re-lanza (no lo tragamos).
+        // urlCallback EN EL PLAN = donde Flow notifica los cobros recurrentes de este plan (money-critical).
+        try {
+            await this.flowPost('plans/create', {
+                planId,
+                name: input.planLabel,
+                currency: 'CLP',
+                amount: input.amountClp,
+                interval,
+                interval_count,
+                urlCallback: input.webhookUrl,
+                charges_retries_number: 3,
+            })
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e)
+            // DATO REAL (sandbox 2026-07-09): plans/create con planId duplicado responde HTTP 401
+            // {code:501, message:"Internal Server Error - This planId has already been used"}. El regex
+            // DEBE matchear ese mensaje real ("has already been used"); mantenemos exist/ya existe/duplicad
+            // como red defensiva por si Flow cambia el copy. Cualquier otro error se re-lanza (no lo tragamos).
+            if (!/already been used|exist|ya existe|duplicad/i.test(msg)) throw e
+            // Plan ya existe (mismo monto por construccion del planId) → seguir a subscription/create.
+        }
+
+        // Paso 2 — subscription/create. Flow cobra la primera invoice al toque.
+        const sub = await this.flowPost('subscription/create', { planId, customerId: input.customerId })
+        const subscriptionId = sub.subscriptionId != null ? String(sub.subscriptionId) : null
+        if (!subscriptionId) throw new Error('Flow subscription/create: sin subscriptionId en la respuesta')
+
+        const invoices = Array.isArray(sub.invoices) ? (sub.invoices as Array<Record<string, unknown>>) : []
+        const inv = invoices[0]
+        const firstInvoice = inv
+            ? {
+                  id: String(inv.id),
+                  paid: Number(inv.status) === 1, // Number(): Flow stringifica el status
+                  paidAmountClp: inv.amount != null ? Number(inv.amount) : null,
+              }
+            : null
+
+        return {
+            subscriptionId,
+            planId,
+            periodEnd: parseFlowDate(sub.period_end as string | null | undefined),
+            firstInvoice,
+        }
     }
 
     /**

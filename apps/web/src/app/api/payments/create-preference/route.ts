@@ -6,6 +6,7 @@ import {
     ADDON_MONTHLY_PRICE_CLP,
     BILLING_CYCLE_CONFIG,
     comparePlanDirection,
+    FLOW_ENABLED,
     getTierCapabilities,
     getTierMaxClients,
     isBillingCycleAllowedForTier,
@@ -43,6 +44,9 @@ const schema = z.object({
     // Add-ons opcionales del signup (plan 05 F3.3). Solo MODULE_KEYS; del body JAMÁS se acepta
     // monto ni precio — el cálculo compuesto lo hace el server (getCompositeAmountClp).
     addons: z.array(z.enum(MODULE_KEYS)).optional(),
+    // Gateway de pago elegido por la UI. El server NUNCA confía en el body para montos ni secretos;
+    // este selector solo enruta al provider (validado por Zod). Default 'mercadopago' → cero regresión.
+    gateway: z.enum(['mercadopago', 'flow']).default('mercadopago'),
 })
 
 export async function POST(request: Request) {
@@ -76,6 +80,18 @@ export async function POST(request: Request) {
 
         const tier = parsed.data.tier as SubscriptionTier
         const billingCycle = parsed.data.billingCycle as BillingCycle
+        const gateway = parsed.data.gateway
+
+        // Fail-closed del gate de dinero: con Flow apagado NINGÚN request puede enrutar a Flow, aunque
+        // el body lo pida. El gate real es server-side; la UI comparte el MISMO flag inlined (FLOW_ENABLED
+        // build-time) y no muestra la opción, pero un POST crafted no debe poder abrir un checkout Flow.
+        if (gateway === 'flow' && !FLOW_ENABLED) {
+            return NextResponse.json(
+                { error: 'Funcion no disponible.', code: 'FEATURE_DISABLED' },
+                { status: 403 }
+            )
+        }
+
         if (!isBillingCycleAllowedForTier(tier, billingCycle)) {
             return NextResponse.json(
                 { error: 'La frecuencia de pago no está disponible para ese plan.' },
@@ -109,7 +125,7 @@ export async function POST(request: Request) {
         const { data: currentCoach } = await supabase
             .from('coaches')
             .select(
-                'subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id'
+                'subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, provider_customer_id'
             )
             .eq('id', user.id)
             .maybeSingle()
@@ -122,6 +138,22 @@ export async function POST(request: Request) {
             currentCoach?.subscription_status === 'active' &&
             currentCoach.current_period_end != null &&
             new Date(currentCoach.current_period_end).getTime() > Date.now()
+
+        // ── F1 (C2): Flow SOLO hace ALTA en Ola 4 (free→paid y reactivacion). CUALQUIER cambio de plan de
+        //    un coach pago ACTIVO por Flow se BLOQUEA aca, ANTES de la rama del upgrade one-shot. Motivo
+        //    money-safety: el upgrade one-shot via Flow cobraria la proracion por Webpay pero NINGUN camino
+        //    puede completarlo (confirm-upgrade es MP-only y el PUT del preapproval es de MP) → plata cobrada
+        //    sin upgrade. El downgrade/cambio de ciclo exige changePlan sobre la sub viva (Ola 5). Fail-closed:
+        //    se deriva a Mercado Pago. Este guard SUBSUME al viejo check flow+scheduleAtCutOnly (removido).
+        if (gateway === 'flow' && isActiveUpgrade) {
+            return NextResponse.json(
+                {
+                    code: 'FLOW_PLAN_CHANGE_UNSUPPORTED',
+                    error: 'El cambio de plan con Flow estara disponible proximamente. Usa Mercado Pago para este cambio.',
+                },
+                { status: 400 }
+            )
+        }
 
         // Dirección del cambio de plan respecto del tier vigente (TIER_RANK). Solo se ramifica
         // cuando el coach es un suscriptor pago ACTIVO (isActiveUpgrade): para free→paid (primera
@@ -150,12 +182,25 @@ export async function POST(request: Request) {
         // recurrente. spec null = sin cupón = montos idénticos al legacy.
         const discountSpec = await resolveActiveDiscountSpec(admin, user.id)
 
-        const provider = getPaymentsProvider()
+        const provider = getPaymentsProvider(gateway)
+        // El preapproval VIEJO a cancelar es SIEMPRE de MercadoPago (columna subscription_mp_id): su
+        // cancelación va por el provider MP aunque este checkout sea Flow (ver más abajo, money-safety).
+        const mpProvider = gateway === 'mercadopago' ? provider : getPaymentsProvider('mercadopago')
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
-        const webhookToken = process.env.MERCADOPAGO_WEBHOOK_TOKEN
-        const webhookUrl = webhookToken
-            ? `${appUrl}/api/payments/webhook?token=${encodeURIComponent(webhookToken)}`
-            : `${appUrl}/api/payments/webhook`
+        // webhookUrl por gateway: Flow → /api/payments/flow/webhook (?token=FLOW_WEBHOOK_TOKEN si está
+        // seteado, mismo patrón que MP); MercadoPago → /api/payments/webhook como hoy.
+        let webhookUrl: string
+        if (gateway === 'flow') {
+            const flowWebhookToken = process.env.FLOW_WEBHOOK_TOKEN
+            webhookUrl = flowWebhookToken
+                ? `${appUrl}/api/payments/flow/webhook?token=${encodeURIComponent(flowWebhookToken)}`
+                : `${appUrl}/api/payments/flow/webhook`
+        } else {
+            const webhookToken = process.env.MERCADOPAGO_WEBHOOK_TOKEN
+            webhookUrl = webhookToken
+                ? `${appUrl}/api/payments/webhook?token=${encodeURIComponent(webhookToken)}`
+                : `${appUrl}/api/payments/webhook`
+        }
 
         // ── Cambio de plan de un suscriptor pago ACTIVO (plan estrategia 06 C1) ──────────────
         // Solo se ramifica por dirección cuando el coach ya es un pago activo. free→paid y
@@ -300,6 +345,9 @@ export async function POST(request: Request) {
         const scheduleAtCutOnly =
             isActiveUpgrade && (direction === 'downgrade' || direction === 'same')
 
+        // NOTA: el viejo guard flow+scheduleAtCutOnly quedo SUBSUMIDO por F1 (flow+isActiveUpgrade retorna
+        // 400 arriba). Un coach Flow activo jamas llega aca; scheduleAtCutOnly solo aplica a MP.
+
         // Monto COMPUESTO (plan 05 F3.3): base del tier + Σ add-ons facturables. La fuente son las
         // filas vivas de coach_addons (service-role) UNIDAS a los add-ons solicitados en el signup
         // (estos últimos aún no tienen fila — la materializa el webhook al confirmar el pago). El
@@ -338,6 +386,17 @@ export async function POST(request: Request) {
         const addonSuffix = checkoutAddons.length > 0 ? ` + ${checkoutAddons.length} add-on(s)` : ''
         const retryQuery = `tier=${encodeURIComponent(tier)}&cycle=${encodeURIComponent(billingCycle)}`
 
+        // successUrl por gateway: Flow devuelve del enrolamiento de tarjeta (Fase 1) a la página
+        // flow-processing (W4), que re-manda tier/cycle/addons al confirm-enrollment (Fase 2, crea la
+        // sub REAL). MercadoPago va a /processing como hoy. failure/pending son iguales en ambos.
+        const successUrl =
+            gateway === 'flow'
+                ? `${appUrl}/coach/subscription/flow-processing?tier=${encodeURIComponent(tier)}&cycle=${encodeURIComponent(billingCycle)}` +
+                  (checkoutAddons.length > 0
+                      ? `&addons=${encodeURIComponent(checkoutAddons.join(','))}`
+                      : '')
+                : `${appUrl}/coach/subscription/processing`
+
         const checkout = await provider.createCheckout({
             coachId: user.id,
             coachEmail: user.email,
@@ -345,13 +404,16 @@ export async function POST(request: Request) {
             billingCycle,
             amountClp,
             title: `Suscripción ${TIER_CONFIG[tier].label} ${cycle.label} (${cycle.months} mes/es)${addonSuffix}`,
-            successUrl: `${appUrl}/coach/subscription/processing`,
+            successUrl,
             failureUrl: `${appUrl}/coach/reactivate?payment=failure&${retryQuery}`,
             pendingUrl: `${appUrl}/coach/reactivate?payment=pending&${retryQuery}`,
             webhookUrl,
             startDate: upgradeStartDate ?? reactivationStartDate,
             // 4ª parte del external_reference: el webhook materializa estas filas al confirmar el pago.
             addons: checkoutAddons,
+            // Flow-only: reusa el customerId ya enrolado del coach (no crea uno nuevo). MP lo ignora.
+            existingCustomerId:
+                gateway === 'flow' ? (currentCoach?.provider_customer_id ?? undefined) : undefined,
         })
 
         const newMpId = checkout.checkoutId.trim()
@@ -370,7 +432,11 @@ export async function POST(request: Request) {
         let supersededForUpdate = supersededMpPreapprovalId
         if (supersededMpPreapprovalId) {
             try {
-                await provider.cancelCheckoutAtProvider(supersededMpPreapprovalId)
+                // Money-safety: el id viejo es SIEMPRE un preapproval de MercadoPago (columna
+                // subscription_mp_id). Se cancela con mpProvider aunque este checkout sea Flow —
+                // llamar subscription/cancel de Flow con un id MP ajeno fallaría en silencio y dejaría
+                // el preapproval MP viejo VIVO junto al nuevo → doble cobro.
+                await mpProvider.cancelCheckoutAtProvider(supersededMpPreapprovalId)
                 supersededForUpdate = null
                 console.info(
                     `[create-preference] cancelled old preapproval ${supersededMpPreapprovalId} for coach ${user.id} (P0-2/P1-6)`
@@ -380,6 +446,30 @@ export async function POST(request: Request) {
                 console.error(
                     `[create-preference] cancel of old preapproval ${supersededMpPreapprovalId} FAILED for coach ${user.id}; persisting superseded as backstop: ${msg}`
                 )
+            }
+        }
+
+        // ── F2 (C1): INTENT durable Fase 1 → Fase 2 (arregla free→paid) ─────────────────────────────
+        // La rama free de abajo NO escribe tier/cycle en coaches (proteccion de abandono del checkout),
+        // asi que confirm-enrollment (Fase 2) no puede releerlos del coach row (seguiria 'free' → composite
+        // 0 → 400 terminal o sub cobrando solo add-ons). Persistimos un INTENT server-side (service-role)
+        // con el tier/cycle/addons de ESTE checkout; la Fase 2 lo lee como fuente de verdad. Un checkout
+        // nuevo PISA el anterior (onConflict provider_event_id: un intent por coach) — el ultimo gesto manda.
+        // Solo para Flow (MP escribe tier/cycle en el coach y no lo necesita). Falla dura: sin intent la
+        // Fase 2 no puede completar el alta.
+        if (gateway === 'flow') {
+            const { error: intentError } = await admin.from('subscription_events').upsert(
+                {
+                    coach_id: user.id,
+                    provider: 'flow',
+                    provider_event_id: `flow_checkout_intent:${user.id}`,
+                    provider_status: 'flow_checkout_intent',
+                    payload: { tier, cycle: billingCycle, addons: checkoutAddons },
+                },
+                { onConflict: 'provider_event_id' }
+            )
+            if (intentError) {
+                return NextResponse.json({ error: intentError.message }, { status: 500 })
             }
         }
 
@@ -398,16 +488,49 @@ export async function POST(request: Request) {
         // (sigue 'active' el plan vigente hasta el corte). NO se reusa el payload completo de
         // abajo, que pisaría el plan vigente con el destino antes de tiempo.
         const updatePayload = isFreeTierCoach
-            ? {
-                payment_provider: provider.name,
-                subscription_mp_id: checkout.checkoutId,
-                // P1-6: backstop si el cancel del preapproval viejo falló (free con reintento de checkout).
-                superseded_mp_preapproval_id: supersededForUpdate,
-            }
+            ? gateway === 'flow'
+                ? {
+                    // Flow free→paid: solo persistimos el customerId ENROLADO (checkout.checkoutId es el
+                    // customerId de Flow, NO una sub). subscription_mp_id NO se escribe (columna MP).
+                    // ⚠️ subscription_provider NO se toca aquí — se flipea a 'flow' recién en Fase 2
+                    // (confirm-enrollment), cuando la sub REAL existe. `superseded` SÍ se persiste (juez
+                    // Ola 4): si el cancel del preapproval MP viejo FALLÓ, el backstop deja que
+                    // webhook/cron lo reintenten — sin él quedaría un preapproval MP vivo junto a la sub
+                    // Flow nueva (doble cobro).
+                    payment_provider: provider.name,
+                    provider_customer_id: checkout.checkoutId,
+                    superseded_mp_preapproval_id: supersededForUpdate,
+                }
+                : {
+                    payment_provider: provider.name,
+                    subscription_mp_id: checkout.checkoutId,
+                    // P1-6: backstop si el cancel del preapproval viejo falló (free con reintento de checkout).
+                    superseded_mp_preapproval_id: supersededForUpdate,
+                }
             : scheduleAtCutOnly
             ? {
+                // Solo MP: flow + scheduleAtCutOnly retornó 400 antes (cambio-al-corte = Ola 5).
                 payment_provider: provider.name,
                 subscription_mp_id: checkout.checkoutId,
+                superseded_mp_preapproval_id: supersededForUpdate,
+            }
+            : gateway === 'flow'
+            ? {
+                // Flow alta/reactivación completa: tier/status/cycle/max_clients igual que hoy (alta
+                // legítima), + provider_customer_id (el customerId enrolado). NO se escriben
+                // subscription_mp_id (columna MP; el customerId de Flow NO es un preapproval).
+                // ⚠️ subscription_provider NO se toca aquí — lo flipea a 'flow' la Fase 2
+                // (confirm-enrollment) cuando la sub EXISTE.
+                subscription_tier: tier,
+                subscription_status: newStatus,
+                billing_cycle: billingCycle,
+                max_clients: getTierMaxClients(tier),
+                payment_provider: provider.name,
+                provider_customer_id: checkout.checkoutId,
+                // F8 (M1): backstop superseded tambien en la rama flow NO-free (reactivacion con reintento
+                // de checkout). Si el cancel del preapproval MP viejo FALLO, este id deja que webhook/cron
+                // lo reintenten — sin el quedaria un preapproval MP vivo junto a la sub Flow nueva (doble
+                // cobro). null si no habia preapproval viejo o el cancel tuvo exito.
                 superseded_mp_preapproval_id: supersededForUpdate,
             }
             : {
