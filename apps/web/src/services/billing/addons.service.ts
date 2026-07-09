@@ -67,6 +67,33 @@ export interface AddonPaymentsPort {
     }): Promise<{ checkoutUrl: string }>
 }
 
+// ── Puerto de cambio de plan compuesto en Flow (Ola 5, W1 lo implementa en FlowProvider) ──
+// MP NO lo usa (su alta de add-on es one-shot diferido). El `subscriptionRef` es la sub Flow
+// (coaches.subscription_provider_external_id). Flow prorratea/cobra SOLO via changePlan por debajo:
+// devuelve cuanto cobro AL INSTANTE por la diferencia (`chargedNowClp`) — jamas sumamos un one-shot
+// encima (doble cobro). Interface segregada: el alta Flow consume solo este metodo del provider.
+export type FlowSubscriptionChange = {
+    tier: SubscriptionTier
+    cycle: BillingCycle
+    /** Nuevo monto COMPUESTO congelado en el plan Flow (base + add-ons − cupon). Server-computed. */
+    amountClp: number
+    planLabel: string
+    webhookUrl: string
+}
+export type FlowSubscriptionChangeResult = {
+    applied: boolean
+    /** Lo que Flow cobro AL INSTANTE por la diferencia (subida de monto). null si no reporto. */
+    chargedNowClp: number | null
+    /** Credito generado (bajada de monto → invoice $0). null si no aplica. */
+    creditClp: number | null
+}
+export interface SubscriptionItemsPort {
+    addSubscriptionItem(
+        subscriptionRef: string,
+        change: FlowSubscriptionChange
+    ): Promise<FlowSubscriptionChangeResult>
+}
+
 const DAY_MS = 1000 * 60 * 60 * 24
 
 // ── Precio del add-on: espejo de getTierPriceClp (mismos descuentos, redondeo POR ÍTEM) ──
@@ -322,6 +349,102 @@ export async function activateAddonForCoach(
     return { kind: 'one_shot_checkout', checkoutUrl, prorationClp, cycleAmountClp }
 }
 
+// ── Alta: coach FLOW (Ola 5, W2) — cambio de plan SINCRONO ────────────────────────
+
+export type ActivateAddonFlowContext = {
+    coachId: string
+    tier: SubscriptionTier
+    cycle: BillingCycle
+    /** Ref de la sub Flow (coaches.subscription_provider_external_id) — NUNCA el mp_id. */
+    subscriptionRef: string
+    planLabel: string
+    webhookUrl: string
+    /** Corte actual: fallback de proración si Flow no reporta el monto cobrado. */
+    currentPeriodEnd: Date
+    now?: Date
+}
+
+export type ActivateAddonFlowResult = {
+    addon: CoachAddon
+    /** Monto que Flow cobró AL INSTANTE por la diferencia (evidencia del snapshot). */
+    chargedNowClp: number
+    /** Nuevo compuesto congelado en el plan Flow (base + add-ons − cupón). */
+    newCompositeAmountClp: number
+}
+
+/**
+ * Alta de add-on para un coach FLOW. A diferencia de MP (one-shot prorrateado async, confirmado
+ * por webhook), Flow es SÍNCRONO: `addSubscriptionItem` (changePlan por debajo) sube el plan al
+ * nuevo compuesto y Flow COBRA la diferencia al instante (validado en sandbox). Por eso NO hay
+ * one-shot nuestro (sería doble cobro) y la fila `coach_addons` se inserta AHORA (el cobro ya
+ * ocurrió → `firstChargedAt` = ahora; el trigger D1 prende el módulo).
+ *
+ * Orden money-safety: PRIMERO el cambio en Flow (si tira, NADA se inserta), DESPUÉS la fila.
+ * Idempotente por el índice único parcial (doble submit / carrera con el reconcile).
+ *
+ * `db` service-role. `provider` = FlowProvider vía `SubscriptionItemsPort`.
+ */
+export async function activateAddonForCoachFlow(
+    db: DB,
+    provider: SubscriptionItemsPort,
+    ctx: ActivateAddonFlowContext,
+    key: ModuleKey,
+    termsVersion: string
+): Promise<ActivateAddonFlowResult> {
+    const priceClpMensual = getAddonMonthlyPriceClp(key)
+    // Nuevo compuesto = filas vivas facturables + el módulo nuevo (aún sin fila). Mismo helper que
+    // create-preference/confirm-enrollment (ÚNICA fuente de la plata). Honra el cupón vivo.
+    const live = await listLive(db, ctx.coachId)
+    const billable = toBillableAddons(live)
+    const withNew: BillableAddon[] = billable.some((a) => a.moduleKey === key)
+        ? billable
+        : [...billable, { moduleKey: key, priceClpMensual }]
+    const spec = await resolveActiveDiscountSpec(db, ctx.coachId)
+    const newCompositeAmountClp = getCompositeAmountClp(ctx.tier, ctx.cycle, withNew, spec).totalClp
+
+    // PRIMERO el cambio en Flow. Flow cobra la diferencia SOLO (nunca sumamos one-shot encima).
+    const change = await provider.addSubscriptionItem(ctx.subscriptionRef, {
+        tier: ctx.tier,
+        cycle: ctx.cycle,
+        amountClp: newCompositeAmountClp,
+        planLabel: ctx.planLabel,
+        webhookUrl: ctx.webhookUrl,
+    })
+    if (!change.applied) {
+        throw new Error('Flow addSubscriptionItem: el cambio de plan no se aplicó.')
+    }
+
+    // El cobro YA ocurrió → insertar la fila (firstChargedAt = ahora). Idempotente por el índice único.
+    const now = ctx.now ?? new Date()
+    let addon: CoachAddon
+    try {
+        addon = await insertAddon(db, {
+            coachId: ctx.coachId,
+            moduleKey: key,
+            source: 'self_service',
+            priceClpMensual,
+            termsVersion,
+            firstChargedAt: now.toISOString(),
+        })
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (!/one_live_per_module|duplicate key|unique constraint/i.test(msg)) throw err
+        const existing = (await listLive(db, ctx.coachId)).find(
+            (a) => a.moduleKey === key && a.source === 'self_service'
+        )
+        if (!existing) throw err
+        addon = existing
+    }
+
+    // chargedNowClp: lo que Flow reportó haber cobrado; fallback a la proración server-computed.
+    const chargedNowClp =
+        typeof change.chargedNowClp === 'number' && change.chargedNowClp > 0
+            ? change.chargedNowClp
+            : getAddonProrationClp(priceClpMensual, ctx.cycle, now, ctx.currentPeriodEnd)
+
+    return { addon, chargedNowClp, newCompositeAmountClp }
+}
+
 /** `external_reference` dedicado del one-shot (1ª parte NO es uuid de coach → el parser de suscripción no lo confunde). */
 export function buildOneShotExternalReference(
     coachId: string,
@@ -401,6 +524,12 @@ export type CancelAddonContext = {
     subscriptionMpId: string
     /** Corte actual del preapproval (fin del período ya pagado → expires_at de la baja). */
     currentPeriodEnd: Date
+    /**
+     * Gateway del coach (Ola 5, B5). 'flow' → en regla 4 NO se ejecuta el changePlan-DOWN inmediato
+     * (se difiere al corte vía cron para no acreditar el ciclo ya cobrado). Ausente/'mercadopago' → PUT
+     * inmediato (comportamiento intacto). Los callers legacy que no lo setean caen en el path MP.
+     */
+    provider?: 'mercadopago' | 'flow'
     now?: Date
 }
 
@@ -430,13 +559,34 @@ export async function requestAddonCancellation(
     const nowIso = now.toISOString()
 
     if (addon.firstChargedAt !== null) {
-        // Regla 4: ya cobrado → PUT YA (excluye el add-on del próximo cobro) + expires_at al corte.
+        // Regla 4: ya cobrado → expires_at al corte (fin del período ya pagado). El PUT/changePlan-DOWN
+        // que excluye el add-on del próximo cobro se aplica INMEDIATO en MP; en Flow se DIFIERE al corte.
         const expiresAt = ctx.currentPeriodEnd.toISOString()
         const updated = await requestCancel(db, addon.id, {
             cancelRequestedAt: nowIso,
             expiresAt,
         })
-        // El monto nuevo excluye al add-on que se va de baja. Re-leer las filas vivas tras el
+
+        // ── B5: coach FLOW → NO ejecutar el changePlan-DOWN inmediato ─────────────────────────────────
+        // En Flow, bajar el monto de la sub mid-ciclo (subscription/changePlan) genera un balance
+        // NEGATIVO = CREDITO del ciclo YA cobrado (Flow emite invoice $0 y acredita la diferencia). Eso
+        // VIOLA la regla 4 disclosed (el add-on se cobra hasta el fin del período ya pagado) y habilita un
+        // loop comprar→cancelar gratis (acreditar cada ciclo lo vuelve $0 efectivo). Por eso la baja del
+        // monto se DIFIERE al corte: el cron (mp-reconcile, pasada de expiry) corre el changePlan-down
+        // cuando la fila expira. La fila queda cancel_pending + expires_at al corte IGUAL que MP; el módulo
+        // se apaga al expirar (trigger D1). En MP el PUT baja el PRÓXIMO cobro sin tocar el ciclo actual
+        // → se mantiene inmediato. PIN Ola 6: semántica exacta del balance mid-ciclo de Flow (el sandbox
+        // no viaja en el tiempo para confirmar si es prorrateado o delta completo).
+        if (ctx.provider === 'flow') {
+            return {
+                moduleKey: key,
+                status: updated?.status ?? 'cancel_pending',
+                effectiveAt: expiresAt,
+                putApplied: false,
+            }
+        }
+
+        // MP: el monto nuevo excluye al add-on que se va de baja. Re-leer las filas vivas tras el
         // update y recomputar (el add-on en cancel_pending YA cobrado deja de ser facturable).
         const liveAfter = await listLive(db, ctx.coachId)
         // HONRAR el cupón vivo: sin el spec el PUT-down recomputaría a precio LLENO y borraría el

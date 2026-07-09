@@ -43,7 +43,22 @@ import Image from 'next/image'
 import { WorkoutSummaryOverlay } from './WorkoutSummaryOverlay'
 import { WorkoutTimerSettingsPanel } from './WorkoutTimerSettingsPanel'
 import { cn } from '@/lib/utils'
-import { formatRelativeDate } from '@/lib/date-utils'
+import { formatRelativeDate, getTodayInSantiago } from '@/lib/date-utils'
+import {
+    readSessionStart,
+    persistSessionStart,
+    clearSessionStart,
+    sweepOtherDaySessionStarts,
+    elapsedSecondsSince,
+} from './session-clock'
+import { clearAllDrafts, sweepStaleDrafts } from './workout-draft-store'
+import {
+    readSessionSnapshot,
+    writeSessionSnapshot,
+    clearSessionSnapshot,
+    sweepOtherDaySnapshots,
+} from './session-logs.snapshot'
+import { bottomVisibilityBoundary, isTargetWithinViewport } from './scroll-visibility'
 import { springs } from '@/lib/animation-presets'
 import { useBasePath } from '@/components/client/BasePathProvider'
 import { useScreenWakeLock } from '@/lib/client/use-screen-wake-lock'
@@ -233,10 +248,12 @@ function currentPhaseName(
     return phases[phases.length - 1]?.name ?? null
 }
 
-/** mm:ss desde segundos (cronómetro de sesión). */
+/** mm:ss desde segundos (cronómetro de sesión); desde 1h rueda a H:MM:SS (ej. "1:05:32"). */
 function fmtElapsed(totalSec: number): string {
-    const m = Math.floor(totalSec / 60)
+    const h = Math.floor(totalSec / 3600)
+    const m = Math.floor((totalSec % 3600) / 60)
     const s = totalSec % 60
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
     return `${m}:${String(s).padStart(2, '0')}`
 }
 
@@ -525,9 +542,19 @@ function smoothScrollIntoViewIfNeeded(el: HTMLElement | null | undefined, block:
     const rect = el.getBoundingClientRect()
     const vh = window.innerHeight || document.documentElement.clientHeight
     const HEADER_H = 96 // header sticky aprox. (título + progreso)
-    const FOOTER_H = 88 // barra fija "Finalizar" aprox.
-    const alreadyVisible = rect.top >= HEADER_H && rect.bottom <= vh - FOOTER_H
-    if (alreadyVisible) return
+    const FOOTER_H = 88 // barra fija "Finalizar" aprox. — fallback si no se pudo medir.
+    // Sub-fix 3: la obstrucción inferior REAL se mide al momento de disparar. Cuando el RestTimer
+    // (sheet inferior, arranca al guardar) está montado, tapa MÁS que la barra "Finalizar" sola → sin
+    // medirlo el gate se equivocaba y disparaba un scroll = "se mueve solo". Medimos el borde superior
+    // de la barra Finalizar y del sheet del RestTimer; la frontera es el más alto (pura, testeada).
+    const obstructionTops: number[] = []
+    const finishBar = document.querySelector('.exec-finish-bar')
+    if (finishBar) obstructionTops.push(finishBar.getBoundingClientRect().top)
+    document.querySelectorAll('[data-exec-bottom-sheet]').forEach((sheet) => {
+        obstructionTops.push(sheet.getBoundingClientRect().top)
+    })
+    const bottomBoundary = bottomVisibilityBoundary(vh, FOOTER_H, obstructionTops)
+    if (isTargetWithinViewport({ rectTop: rect.top, rectBottom: rect.bottom, headerH: HEADER_H, bottomBoundary })) return
     el.scrollIntoView({ behavior: 'smooth', block })
 }
 
@@ -990,6 +1017,13 @@ export function WorkoutExecutionClient({
     // Duración congelada al finalizar → el resumen post-entreno muestra el tiempo real de la
     // sesión (el cronómetro sigue corriendo detrás del overlay; sin congelar, "Duración" tickearía).
     const [finishedElapsed, setFinishedElapsed] = useState<number | null>(null)
+    // Ancla del cronómetro de sesión (BUG 1). Epoch ms del inicio real, PERSISTIDO en localStorage por
+    // (plan, día) para sobrevivir remontajes (atrás+volver, reload, kill de la PWA) — antes era un
+    // `Date.now()` solo-en-memoria que se reseteaba a 0 en cada montaje. El día ISO Santiago y el flag
+    // "ya persistido" viven en refs porque los tocan el efecto del intervalo, handleLogged y handleFinish.
+    const sessionAnchorRef = useRef<number>(0)
+    const sessionDayIsoRef = useRef<string>('')
+    const sessionAnchorPersistedRef = useRef(false)
     // Disclosure "Detalles" por ejercicio (instrucciones + nota + historial detrás de un tap).
     const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({})
     const toggleDetails = useCallback((id: string) => setOpenDetails((prev) => ({ ...prev, [id]: !prev[id] })), [])
@@ -1052,9 +1086,30 @@ export function WorkoutExecutionClient({
     // handleLogged, intacto). En sesión normal `logs` no cambia (no hay revalidate por serie) → el
     // efecto no vuelve a correr y el optimismo en vuelo se preserva.
     useEffect(() => {
-        setSessionLogs(reconcileSessionLogs(logs, readWorkoutOfflineQueueForPlan(plan.id)))
+        // Snapshot local (BUG 2 · sub-fix 2): re-inyecta las series ya confirmadas en esta sesión donde
+        // el server stale (logs=[]) y la cola drenada no aportan → la pantalla nunca colapsa a vacío. El
+        // día ISO vive en sessionDayIsoRef (Wave B), pero ESTE efecto corre ANTES que el del cronómetro
+        // en el primer montaje (orden de declaración) → si el ref aún no está seteado lo calculamos acá.
+        const dayIso = sessionDayIsoRef.current || getTodayInSantiago().iso
+        setSessionLogs(
+            reconcileSessionLogs(
+                logs,
+                readWorkoutOfflineQueueForPlan(plan.id),
+                readSessionSnapshot(plan.id, dayIso),
+            ),
+        )
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [logs])
+
+    // Persistencia del snapshot (BUG 2 · sub-fix 2): cada vez que `sessionLogs` cambia guardamos las
+    // filas CONFIRMADAS (writeSessionSnapshot filtra `_pending`) por (plan, día). Ligero (pocas filas,
+    // 1 write por serie) → sin debounce. Es lo que el reconcile de arriba re-inyecta al reentrar con red
+    // mala. Al desmontar por finalizar, handleFinish limpia la clave (abajo).
+    useEffect(() => {
+        const dayIso = sessionDayIsoRef.current || getTodayInSantiago().iso
+        writeSessionSnapshot(plan.id, dayIso, sessionLogs)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sessionLogs])
 
     // Frescura al (re)entrar (informe forense 2026-07-04, Root Cause A). En back/forward Next reutiliza
     // el snapshot cacheado del client Router Cache IGNORANDO `staleTimes` (doc oficial) → el ejecutor
@@ -1062,6 +1117,11 @@ export function WorkoutExecutionClient({
     // Fix B los pinta; `visibilitychange` cubre el retorno al tab/PWA. GATEADO: sólo refresca si hay
     // indicios de actividad previa (logs del server, cola pendiente, o la marca de sesión) — una
     // primera visita 100% limpia no paga un fetch extra.
+    // Y NUNCA offline (QA CEO 2026-07-07, modo avión): un `router.refresh()` sin red hace que Next
+    // falle el fetch RSC y caiga a NAVEGACIÓN COMPLETA del browser ("falling back to browser
+    // navigation") → el service worker no puede resolverla y sirve su página "Sin conexión",
+    // expulsando al alumno del entreno que justo estaba protegido por la cola offline. Con red de
+    // vuelta, el evento 'online' (OfflineWorkoutQueueSync) flushea y refresca — no se pierde frescura.
     useEffect(() => {
         if (logs.length > 0) markWorkoutTouched()
         const readTouched = () => {
@@ -1069,9 +1129,10 @@ export function WorkoutExecutionClient({
         }
         const hasPriorData = () =>
             logs.length > 0 || readWorkoutOfflineQueueForPlan(plan.id).length > 0 || readTouched()
-        if (hasPriorData()) router.refresh()
+        const online = () => typeof navigator === 'undefined' || navigator.onLine
+        if (online() && hasPriorData()) router.refresh()
         const onVisible = () => {
-            if (document.visibilityState === 'visible' && hasPriorData()) router.refresh()
+            if (document.visibilityState === 'visible' && online() && hasPriorData()) router.refresh()
         }
         document.addEventListener('visibilitychange', onVisible)
         return () => document.removeEventListener('visibilitychange', onVisible)
@@ -1092,11 +1153,83 @@ export function WorkoutExecutionClient({
         }
     }, [])
 
-    // Cronómetro de sesión (32:14) — solo display, arranca al montar la pantalla.
+    // Precache de ESTA página en el NAV_CACHE del service worker (QA CEO 2026-07-07, modo avión).
+    // La entrada al workout es navegación SPA → la URL nunca pasaba por el handler de navegaciones
+    // duras del SW y NAV_CACHE quedaba sin ella: si el browser descartaba la pestaña en background y
+    // la recargaba OFFLINE, el SW caía a offline.html ("No puedes entrenar sin internet") y expulsaba
+    // al alumno del entreno. El SW fetchea el HTML completo y lo guarda; la recarga offline bootea la
+    // página real y el estado local (cola/drafts/snapshot/ancla) restaura la sesión. Best-effort:
+    // sin SW controlando (primera visita) o sin red, no hace nada; reintenta al volver la conexión.
     useEffect(() => {
-        const start = Date.now()
-        const id = window.setInterval(() => setSessionElapsed(Math.floor((Date.now() - start) / 1000)), 1000)
-        return () => window.clearInterval(id)
+        const cacheNav = () => {
+            try {
+                if (!navigator.onLine) return
+                navigator.serviceWorker?.controller?.postMessage({
+                    type: 'eva:cache-nav',
+                    url: window.location.href,
+                })
+            } catch {
+                /* best-effort */
+            }
+        }
+        cacheNav()
+        window.addEventListener('online', cacheNav)
+        // controllerchange: si el SW NUEVO toma control con esta pestaña ya abierta (deploy en
+        // caliente), el postMessage del montaje se lo mandó al SW viejo (o a nadie) — reintentar.
+        navigator.serviceWorker?.addEventListener('controllerchange', cacheNav)
+        return () => {
+            window.removeEventListener('online', cacheNav)
+            navigator.serviceWorker?.removeEventListener('controllerchange', cacheNav)
+        }
+    }, [])
+
+    // Cronómetro de sesión (32:14) anclado a un timestamp PERSISTIDO (BUG 1). El ancla es el `Date.now()`
+    // del montaje, pero SÓLO se persiste cuando la sesión está "activa": ya hay ≥1 serie de hoy al montar
+    // (rehidratación) o el alumno loguea la 1ª serie de este montaje (ver handleLogged). Un montaje "de
+    // paseo" (mirar la rutina en la mañana, 0 series, salir) NO persiste nada → no infla la duración del
+    // entreno real de la tarde. El intervalo RECALCULA desde el ancla (nunca acumula) → inmune a un tick
+    // perdido cuando el tab está en background.
+    useEffect(() => {
+        const { iso: dayIso } = getTodayInSantiago()
+        sessionDayIsoRef.current = dayIso
+        // Higiene: borra anclas de OTROS días (sesiones abandonadas que nunca se finalizaron/limpiaron).
+        sweepOtherDaySessionStarts(dayIso)
+        // Higiene BUG 2: borradores viejos (>24h) del plan y snapshots de OTROS días (sesiones
+        // abandonadas). No borra los borradores del día en curso ni el snapshot de hoy.
+        sweepStaleDrafts(plan.id, Date.now())
+        sweepOtherDaySnapshots(dayIso)
+
+        const persisted = readSessionStart(plan.id, dayIso)
+        const anchor = persisted ?? Date.now()
+        sessionAnchorRef.current = anchor
+        sessionAnchorPersistedRef.current = persisted != null
+
+        // Rehidratación: si YA había actividad de hoy (logs del server o cola no vacía) pero NO había ancla
+        // persistida, la persistimos ahora. Es "mejor tarde que resetear a 0": la sesión claramente ya
+        // estaba corriendo. OJO — el ancla tardío SUBCUENTA (arranca en este montaje, no en la 1ª serie
+        // real); es el fallback aceptado frente al reset del bug original.
+        if (!sessionAnchorPersistedRef.current) {
+            const hasTodayActivity = logs.length > 0 || readWorkoutOfflineQueueForPlan(plan.id).length > 0
+            if (hasTodayActivity) {
+                sessionAnchorPersistedRef.current = persistSessionStart(plan.id, dayIso, anchor)
+            }
+        }
+
+        const tick = () => setSessionElapsed(elapsedSecondsSince(sessionAnchorRef.current, Date.now()))
+        tick() // pinta inmediato al montar/rehidratar (no esperar el primer segundo)
+        const id = window.setInterval(tick, 1000)
+        // visibilitychange → visible: recalcular YA para que el número no se vea congelado al volver del
+        // lock de pantalla / cambio de tab (no esperar el próximo tick). Listener propio; el otro listener
+        // de visibilitychange (frescura de logs) queda intacto.
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') tick()
+        }
+        document.addEventListener('visibilitychange', onVisible)
+        return () => {
+            window.clearInterval(id)
+            document.removeEventListener('visibilitychange', onVisible)
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const phaseName = currentPhaseName(program?.program_phases, currentWeek)
@@ -1300,6 +1433,16 @@ export function WorkoutExecutionClient({
         // Marca de actividad (Fix A): al primer log, futuras REENTRADAS por atrás refrescan aunque el
         // snapshot del client Router Cache vuelva vacío.
         markWorkoutTouched()
+        // Cronómetro (BUG 1): al PRIMER log de este montaje materializamos el ancla en localStorage si aún
+        // no lo estaba → la duración sobrevive un remontaje posterior (atrás/reload/kill de la PWA).
+        // Idempotente: montajes "de paseo" (sin logs) nunca escriben, así no inflan el entreno real.
+        if (!sessionAnchorPersistedRef.current) {
+            sessionAnchorPersistedRef.current = persistSessionStart(
+                plan.id,
+                sessionDayIsoRef.current,
+                sessionAnchorRef.current,
+            )
+        }
         // Estado (puro) — dedup por block+set, PRESERVANDO los ejes tipados (actual_*) del payload
         // para que la fila de hold/cardio no se re-renderice vacía al confirmar (bug forense hold).
         setSessionLogs((prev) => applyOptimisticSessionLog(prev, payload))
@@ -1395,7 +1538,14 @@ export function WorkoutExecutionClient({
                                 // terminar (defensa complementaria a A+B, no sustituto). Fire-and-forget.
                                 void revalidateWorkoutViewAction(coachSlug, plan.id).catch(() => {})
                                 markFirstWorkoutCompleted()
-                                setFinishedElapsed(sessionElapsed)
+                                // Duración final desde el ancla EN ESTE INSTANTE (no el último tick del
+                                // estado, que puede ir ~1s atrasado). Luego limpiamos el ancla → una 2ª
+                                // sesión del mismo día arranca de cero (BUG 1).
+                                setFinishedElapsed(elapsedSecondsSince(sessionAnchorRef.current, Date.now()))
+                                clearSessionStart(plan.id, sessionDayIsoRef.current)
+                                // BUG 2: la sesión terminó → los borradores y el snapshot local ya no aplican.
+                                clearAllDrafts(plan.id)
+                                clearSessionSnapshot(plan.id, sessionDayIsoRef.current)
                                 setShowCompleted(true)
                             },
                         },
@@ -1410,7 +1560,13 @@ export function WorkoutExecutionClient({
         void revalidateWorkoutViewAction(coachSlug, plan.id).catch(() => {})
         // Señal de "primer workout completado" → arma el prompt de instalación PWA (gating por engagement).
         markFirstWorkoutCompleted()
-        setFinishedElapsed(sessionElapsed)
+        // Duración final desde el ancla EN ESTE INSTANTE (no el último tick del estado) + limpieza del
+        // ancla persistido → una 2ª sesión del mismo día arranca de cero (BUG 1).
+        setFinishedElapsed(elapsedSecondsSince(sessionAnchorRef.current, Date.now()))
+        clearSessionStart(plan.id, sessionDayIsoRef.current)
+        // BUG 2: la sesión terminó → los borradores y el snapshot local ya no aplican.
+        clearAllDrafts(plan.id)
+        clearSessionSnapshot(plan.id, sessionDayIsoRef.current)
         setShowCompleted(true)
     }
     // Contexto del programa para el nudge "lo que viene" del resumen (reusa la sub-línea del header;

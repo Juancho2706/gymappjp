@@ -41,14 +41,24 @@ vi.mock('@/lib/rate-limit', () => ({
 }))
 
 const activateAddonForCoach = vi.fn()
+const activateAddonForCoachFlow = vi.fn()
 const canPurchaseAddon = vi.fn()
 vi.mock('@/services/billing/addons.service', async (orig) => {
     const actual = await orig<typeof import('@/services/billing/addons.service')>()
     return {
         ...actual,
         activateAddonForCoach: (...a: unknown[]) => activateAddonForCoach(...a),
+        activateAddonForCoachFlow: (...a: unknown[]) => activateAddonForCoachFlow(...a),
         canPurchaseAddon: (...a: unknown[]) => canPurchaseAddon(...a),
     }
+})
+
+// Snapshot SERNAC del cambio Flow (hook best-effort del route). Se mockea para aseverar sus args
+// (el fakeAdmin no expone .upsert de billing_snapshots). buildAddonBreakdown queda REAL (puro).
+const insertBillingSnapshot = vi.fn().mockResolvedValue({ inserted: true })
+vi.mock('@/services/billing/addon-webhook.service', async (orig) => {
+    const actual = await orig<typeof import('@/services/billing/addon-webhook.service')>()
+    return { ...actual, insertBillingSnapshot: (...a: unknown[]) => insertBillingSnapshot(...a) }
 })
 
 vi.mock('./_lib/payments-port', () => ({
@@ -80,8 +90,16 @@ const getPaymentsProvider = vi.fn(() => ({
     name: 'mercadopago' as const,
     fetchCheckoutSnapshot: (...a: unknown[]) => fetchCheckoutSnapshot(...a),
 }))
+// Provider POR COACH (Ola 5): el camino Flow lo resuelve con getPaymentsProviderForCoach y le pide
+// addSubscriptionItem (changePlan por debajo). Aquí se mockea para el alta Flow.
+const addSubscriptionItem = vi.fn()
+const getPaymentsProviderForCoach = vi.fn(() => ({
+    name: 'flow' as const,
+    addSubscriptionItem: (...a: unknown[]) => addSubscriptionItem(...a),
+}))
 vi.mock('@/lib/payments/provider', () => ({
     getPaymentsProvider: () => getPaymentsProvider(),
+    getPaymentsProviderForCoach: () => getPaymentsProviderForCoach(),
 }))
 
 const fetchCoachBillingRow = vi.fn()
@@ -116,7 +134,16 @@ const PAID_COACH = {
     billing_cycle: 'monthly',
     current_period_end: '2026-07-01T00:00:00.000Z',
     subscription_mp_id: 'preapproval-1',
+    subscription_provider: 'mercadopago',
+    subscription_provider_external_id: null,
     superseded_mp_preapproval_id: null,
+}
+// Coach FLOW: sin preapproval MP; la sub viva es la de Flow (subscription_provider_external_id).
+const FLOW_COACH = {
+    ...PAID_COACH,
+    subscription_mp_id: null,
+    subscription_provider: 'flow',
+    subscription_provider_external_id: 'flow-sub-1',
 }
 
 beforeEach(() => {
@@ -396,5 +423,72 @@ describe('POST /api/payments/addons — guard P0-4b (UPGRADE_IN_FLIGHT)', () => 
         expect(res.status).toBe(200)
         expect(isUpgradeInFlight).toHaveBeenCalled()
         expect(isUpgradeInFlight.mock.calls[0][1]).toBe('coach-1')
+    })
+})
+
+// ── Alta de add-on para coach FLOW (Ola 5, W2): cambio de plan SÍNCRONO, sin one-shot ────────
+// Flow cobra la diferencia AL INSTANTE (changePlan por debajo). El route NO redirige a checkout:
+// llama activateAddonForCoachFlow (cobra + inserta la fila), escribe el snapshot SERNAC
+// `flow_addon:<rowId>` y responde `flow_change_applied`. El camino MP (one-shot) NO se toca.
+describe('POST /api/payments/addons — coach FLOW (flow_change_applied)', () => {
+    const FLOW_ADDON = {
+        id: 'addon-flow-1',
+        moduleKey: 'cardio',
+        source: 'self_service',
+        status: 'active',
+        firstChargedAt: '2026-06-15T00:00:00.000Z',
+        priceClpMensual: 9990,
+    }
+
+    beforeEach(() => {
+        fetchCoachBillingRow.mockResolvedValue(FLOW_COACH)
+        activateAddonForCoachFlow.mockResolvedValue({
+            addon: FLOW_ADDON,
+            chargedNowClp: 5161,
+            newCompositeAmountClp: 39980,
+        })
+    })
+
+    it('cobra vía changePlan (compuesto nuevo), inserta fila, snapshot flow_addon:<rowId>, responde flow_change_applied SIN one-shot', async () => {
+        const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
+        expect(res.status).toBe(200)
+        const json = await res.json()
+        expect(json.kind).toBe('flow_change_applied')
+        expect(json.chargedNowClp).toBe(5161)
+
+        // El alta Flow corrió con el ref de la sub Flow (external_id), tier/cycle del coach.
+        expect(activateAddonForCoachFlow).toHaveBeenCalledOnce()
+        const flowCtx = activateAddonForCoachFlow.mock.calls[0][2] as Record<string, unknown>
+        expect(flowCtx).toMatchObject({ coachId: 'coach-1', tier: 'pro', cycle: 'monthly', subscriptionRef: 'flow-sub-1' })
+        expect(activateAddonForCoachFlow.mock.calls[0][3]).toBe('cardio')
+
+        // Snapshot SERNAC: id estable flow_addon:<rowId>, provider flow, kind addon_proration, base 0,
+        // total = lo que Flow cobró.
+        expect(insertBillingSnapshot).toHaveBeenCalledOnce()
+        const snap = insertBillingSnapshot.mock.calls[0][1] as Record<string, unknown>
+        expect(snap.providerPaymentId).toBe('flow_addon:addon-flow-1')
+        expect(snap.provider).toBe('flow')
+        expect(snap.kind).toBe('addon_proration')
+        expect(snap.baseClp).toBe(0)
+        expect(snap.totalClp).toBe(5161)
+
+        // NUNCA el one-shot de MercadoPago.
+        expect(activateAddonForCoach).not.toHaveBeenCalled()
+    })
+
+    it('409 NO_ACTIVE_SUBSCRIPTION si el coach Flow no tiene sub viva (sin external_id)', async () => {
+        fetchCoachBillingRow.mockResolvedValue({ ...FLOW_COACH, subscription_provider_external_id: null })
+        const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
+        expect(res.status).toBe(409)
+        expect((await res.json()).code).toBe('NO_ACTIVE_SUBSCRIPTION')
+        expect(activateAddonForCoachFlow).not.toHaveBeenCalled()
+    })
+
+    it('502 FLOW_CHANGE_FAILED si el changePlan tira: NADA se inserta (ni snapshot)', async () => {
+        activateAddonForCoachFlow.mockRejectedValue(new Error('Flow subscription/changePlan failed (HTTP 500)'))
+        const res = await POST(makeRequest({ moduleKey: 'cardio', acceptedTermsVersion: VERSION }))
+        expect(res.status).toBe(502)
+        expect((await res.json()).code).toBe('FLOW_CHANGE_FAILED')
+        expect(insertBillingSnapshot).not.toHaveBeenCalled()
     })
 })

@@ -114,6 +114,9 @@ self.addEventListener('fetch', (event) => {
         .catch(async () => {
           const cached = await caches.match(event.request, { cacheName: NAV_CACHE });
           if (cached) return cached;
+          // Cinturón: reintenta ignorando query params (la entrada pudo guardarse con/sin ellos).
+          const cachedLoose = await caches.match(event.request, { cacheName: NAV_CACHE, ignoreSearch: true });
+          if (cachedLoose) return cachedLoose;
           const offline = await caches.match(OFFLINE_URL, { cacheName: SHELL_CACHE });
           return offline || new Response('Offline', { status: 503, statusText: 'Offline' });
         })
@@ -146,6 +149,45 @@ self.addEventListener('fetch', (event) => {
     fetch(event.request).catch(() =>
       caches.match(event.request).then((r) => r ?? new Response('', { status: 408, statusText: 'Offline' }))
     )
+  );
+});
+
+/**
+ * Precache de navegación bajo demanda (QA CEO 2026-07-07, modo avión).
+ *
+ * GOTCHA que expulsaba al alumno del entreno: NAV_CACHE sólo se llenaba con navegaciones DURAS
+ * (mode === 'navigate'). El alumno entra al workout por navegación SPA (dashboard → workout,
+ * client-side = fetch RSC que va a CLIENT_DATA_CACHE), así que la URL del workout NUNCA quedaba
+ * en NAV_CACHE. Cuando el browser descarta la pestaña en background (ahorro de batería) y la
+ * recarga OFFLINE, esa navegación dura no encuentra la página → offline.html → "No puedes
+ * entrenar sin internet", con la sesión y la cola offline intactas pero inalcanzables.
+ *
+ * Fix: la pantalla de ejecución manda { type: 'eva:cache-nav', url } al montar; acá se fetchea el
+ * HTML completo de esa URL (mismo documento que devolvería una navegación dura, con el estado
+ * SSR'd embebido) y se guarda en NAV_CACHE → la recarga offline bootea la página real y el estado
+ * local (cola/drafts/snapshot/cronómetro) restaura la sesión.
+ */
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data || data.type !== 'eva:cache-nav' || typeof data.url !== 'string') return;
+  let url;
+  try {
+    url = new URL(data.url, self.location.origin);
+  } catch {
+    return;
+  }
+  if (url.origin !== self.location.origin || !isClientApp(url.pathname)) return;
+  event.waitUntil(
+    fetch(url.href, { credentials: 'same-origin' })
+      .then((res) => {
+        // `!redirected`: si la sesión expiró, el fetch sigue el redirect al login — cachear ESO
+        // bajo la URL del workout serviría la página de login en la recarga offline. Sólo se
+        // guarda el documento real (200 directo) de la URL pedida.
+        if (res && res.ok && !res.redirected) {
+          return caches.open(NAV_CACHE).then((cache) => cache.put(url.href, res));
+        }
+      })
+      .catch(() => {})
   );
 });
 

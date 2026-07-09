@@ -150,3 +150,8 @@ Actualizar este archivo cuando:
 - Se mueva una action/query importante.
 - Cambie el flujo de login/redirect.
 - Se agregue un modulo de producto.
+
+## Pagos dual-gateway (MercadoPago + Flow/Webpay) — feat/pagos-flow-mercadopago
+
+Puerto `PaymentsProvider` (lib/payments/types.ts) con dos implementaciones: `MercadoPagoProvider` (preapproval, una fase) y `FlowProvider` (DOS fases: enrolar tarjeta por redirect Webpay → crear plan+sub server-side). Seleccion por request via `gateway` (Zod) en create-preference, y por `coaches.subscription_provider` persistido para operar subs vivas (`getPaymentsProviderForCoach`). UI: dos botones detras de `NEXT_PUBLIC_FLOW_ENABLED`. Flujo Flow: `create-preference(gateway=flow)` → enrolamiento Webpay → `/coach/subscription/flow-processing` (poll) → `/api/payments/flow/confirm-enrollment` (Fase 2: crea la sub, Flow cobra la 1ra invoice) → activo. Webhook Flow separado (`/api/payments/flow/webhook`, re-fetch firmado + pipeline agnostico `runWebhookPipeline` compartido con MP). Cambios de monto en Flow = `changePlan` a plan deterministico `eva_<tier>_<cycle>_<montoCLP>` (el monto viaja horneado en el planId). Backstops: cron `flow-reconcile` (alert-only: estado, periodo, drift de monto) + expiry de add-ons multi-gateway en `mp-reconcile`. Detalle completo: `specs/pagos-multigateway-flow/PLAN.md` y RUNBOOK §Pagos Flow.
+

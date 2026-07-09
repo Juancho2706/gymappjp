@@ -93,7 +93,8 @@ export function useCaptureRegistration() {
  *   addon_modal_opened     → el coach abrió el modal de confirmación de un módulo
  *   addon_terms_accepted   → marcó el checkbox de aceptación de las 5 reglas
  *   addon_confirmed        → pulsó el CTA final (mensual: alta directa; trim/anual: redirige)
- *   addon_oneshot_redirected → (solo trim/anual) redirigido al checkout del one-shot
+ *   addon_oneshot_redirected → (solo MercadoPago) redirigido al checkout del one-shot
+ *   addon_flow_applied     → (solo Flow) cambio de plan síncrono aplicado sin redirect
  *
  * Propiedades: `module_key`, `billing_cycle`, `tier` — SIN montos ni datos personales
  * (PostHog ya está gated por el consentimiento de cookies: no-op sin `ph`).
@@ -104,6 +105,7 @@ export type AddonFunnelEvent =
     | 'addon_terms_accepted'
     | 'addon_confirmed'
     | 'addon_oneshot_redirected'
+    | 'addon_flow_applied'
 
 export type AddonFunnelProps = {
     module_key?: string

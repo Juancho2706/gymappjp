@@ -24,9 +24,31 @@ type DB = SupabaseClient<Database>
 /** Minutos de vida del marcador antes de auto-recuperar (checkout abandonado). */
 export const TTL_MINUTES = 30
 
+/**
+ * TTL corto del claim de ENROLAMIENTO Flow (Fase 2): solo debe serializar la ventana de creacion de
+ * la sub (segundos); 5 min cubre el peor caso (proceso muerto entre claim y persist) sin dejar al
+ * coach trabado — tras el TTL el CAS retoma el marcador rancio.
+ */
+export const FLOW_ENROLLMENT_TTL_MINUTES = 5
+
 /** `provider_event_id` del marcador in-flight del coach (único → un solo upgrade a la vez). */
 export function upgradeInFlightKey(coachId: string): string {
     return `tier_upgrade_pending:${coachId}`
+}
+
+/** `provider_event_id` del claim de creacion de sub Flow (Fase 2) — único → una sola creacion a la vez. */
+export function flowEnrollmentKey(coachId: string): string {
+    return `flow_enrollment_pending:${coachId}`
+}
+
+/** Especificacion de un marcador atomico (clave + TTL + metadatos de la fila). */
+type MarkerSpec = {
+    key: string
+    ttlMinutes: number
+    provider: string
+    status: string
+    /** Nombre del caller para los mensajes de error (debugging prod + contrato de tests). */
+    label: string
 }
 
 /**
@@ -42,13 +64,35 @@ function isUniqueViolation(error: { code?: string | null; message?: string | nul
     return /subscription_events_provider_event_id_key/.test(msg) || /duplicate key value/i.test(msg)
 }
 
+/** Spec del marcador de UPGRADE (comportamiento historico, sin cambios). */
+function upgradeMarkerSpec(coachId: string): MarkerSpec {
+    return {
+        key: upgradeInFlightKey(coachId),
+        ttlMinutes: TTL_MINUTES,
+        provider: 'mercadopago',
+        status: 'tier_upgrade_pending',
+        label: 'claimUpgradeInFlight',
+    }
+}
+
+/** Spec del claim de creacion de sub Flow (Fase 2). */
+function flowEnrollmentMarkerSpec(coachId: string): MarkerSpec {
+    return {
+        key: flowEnrollmentKey(coachId),
+        ttlMinutes: FLOW_ENROLLMENT_TTL_MINUTES,
+        provider: 'flow',
+        status: 'flow_enrollment_pending',
+        label: 'claimFlowEnrollment',
+    }
+}
+
 /** Fila marcador (misma forma que setUpgradeInFlight). */
-function markerRow(coachId: string): Database['public']['Tables']['subscription_events']['Insert'] {
+function markerRow(coachId: string, spec: MarkerSpec): Database['public']['Tables']['subscription_events']['Insert'] {
     return {
         coach_id: coachId,
-        provider: 'mercadopago',
-        provider_event_id: upgradeInFlightKey(coachId),
-        provider_status: 'tier_upgrade_pending',
+        provider: spec.provider,
+        provider_event_id: spec.key,
+        provider_status: spec.status,
         payload: {},
     }
 }
@@ -58,11 +102,11 @@ function markerRow(coachId: string): Database['public']['Tables']['subscription_
  * 23505 (otra request ya tiene la ranura). Cualquier otro error → throw (fail-closed). El UNIQUE de
  * `provider_event_id` hace que SOLO una de N inserciones concurrentes gane: ése es el reclamo atómico.
  */
-async function tryInsertMarker(db: DB, coachId: string): Promise<boolean> {
-    const { error } = await db.from('subscription_events').insert(markerRow(coachId))
+async function tryInsertMarker(db: DB, coachId: string, spec: MarkerSpec): Promise<boolean> {
+    const { error } = await db.from('subscription_events').insert(markerRow(coachId, spec))
     if (!error) return true
     if (isUniqueViolation(error)) return false
-    throw new Error(`claimUpgradeInFlight (insert): ${error.message}`)
+    throw new Error(`${spec.label} (insert): ${error.message}`)
 }
 
 /**
@@ -142,23 +186,26 @@ export async function setUpgradeInFlight(db: DB, coachId: string): Promise<void>
  * `authenticated`).
  */
 export async function claimUpgradeInFlight(db: DB, coachId: string): Promise<boolean> {
-    const key = upgradeInFlightKey(coachId)
+    return claimMarker(db, coachId, upgradeMarkerSpec(coachId))
+}
 
+/** Nucleo generico del reclamo atomico (la logica historica de claimUpgradeInFlight, parametrizada). */
+async function claimMarker(db: DB, coachId: string, spec: MarkerSpec): Promise<boolean> {
     // (1) Intento de reclamo: INSERT fresco. Si gana el UNIQUE, el candado es nuestro.
-    if (await tryInsertMarker(db, coachId)) return true
+    if (await tryInsertMarker(db, coachId, spec)) return true
 
     // (2) Ya existe un marcador. ¿Está vivo (dentro del TTL) o es un checkout abandonado?
-    const sinceIso = new Date(Date.now() - TTL_MINUTES * 60 * 1000).toISOString()
+    const sinceIso = new Date(Date.now() - spec.ttlMinutes * 60 * 1000).toISOString()
     const { data: existing, error: selError } = await db
         .from('subscription_events')
         .select('created_at')
-        .eq('provider_event_id', key)
+        .eq('provider_event_id', spec.key)
         .maybeSingle()
-    if (selError) throw new Error(`claimUpgradeInFlight (select): ${selError.message}`)
+    if (selError) throw new Error(`${spec.label} (select): ${selError.message}`)
 
     // La fila desapareció entre el conflicto y el SELECT (otra request la limpió): la ranura está
     // libre y el propio INSERT es el reclamo atómico. Reintentar UNA vez.
-    if (existing == null) return await tryInsertMarker(db, coachId)
+    if (existing == null) return await tryInsertMarker(db, coachId, spec)
 
     const isFresh =
         existing.created_at != null &&
@@ -170,14 +217,40 @@ export async function claimUpgradeInFlight(db: DB, coachId: string): Promise<boo
     const { data: deletedRows, error: delError } = await db
         .from('subscription_events')
         .delete()
-        .eq('provider_event_id', key)
+        .eq('provider_event_id', spec.key)
         .eq('created_at', existing.created_at)
         .select('provider_event_id')
-    if (delError) throw new Error(`claimUpgradeInFlight (cas-delete): ${delError.message}`)
+    if (delError) throw new Error(`${spec.label} (cas-delete): ${delError.message}`)
     if (!deletedRows || deletedRows.length === 0) return false // perdimos la carrera del stale-takeover
 
     // Ganamos el DELETE. INSERT final; si un racer metió una fila fresca, el UNIQUE lo rechaza → cedemos.
-    return await tryInsertMarker(db, coachId)
+    return await tryInsertMarker(db, coachId, spec)
+}
+
+/**
+ * Reclama ATOMICAMENTE la ventana de CREACION de la sub Flow (Fase 2 — confirm-enrollment).
+ * Cierra el TOCTOU del poll: dos POSTs simultaneos (doble tab / polls solapados) pasarian ambos el
+ * check de `subscription_provider_external_id === null` y crearian DOS subs en Flow (que cobra al
+ * crear) = DOBLE COBRO. Solo el INSERT que gana el UNIQUE crea; el perdedor responde `creating:true`
+ * y el proximo poll ve la sub ya persistida (alreadyCreated). Mismo CAS de stale-takeover que el
+ * upgrade, con TTL corto (FLOW_ENROLLMENT_TTL_MINUTES). `db` service-role.
+ */
+export async function claimFlowEnrollment(db: DB, coachId: string): Promise<boolean> {
+    return claimMarker(db, coachId, flowEnrollmentMarkerSpec(coachId))
+}
+
+/**
+ * Libera el claim de creacion Flow. Se llama al TERMINAR la creacion (exito → el guard por
+ * `subscription_provider_external_id` cubre para siempre) o al FALLAR la llamada a Flow (para que el
+ * proximo poll reintente). ⚠️ NO llamarlo si la sub se creo en Flow pero el persist en DB fallo:
+ * en ese estado un reintento crearia una SEGUNDA sub — el claim vivo (hasta su TTL) es el freno.
+ */
+export async function clearFlowEnrollment(db: DB, coachId: string): Promise<void> {
+    const { error } = await db
+        .from('subscription_events')
+        .delete()
+        .eq('provider_event_id', flowEnrollmentKey(coachId))
+    if (error) throw new Error(`clearFlowEnrollment: ${error.message}`)
 }
 
 /**

@@ -7,7 +7,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { BrandSettingsSchema } from '@eva/schemas'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
-import { getPaymentsProvider } from '@/lib/payments/provider'
+import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
 import { isThemePresetKey } from '@/lib/brand-presets'
 import { isLoginLayoutKey, parseLoaderConfig } from '@/lib/brand-composer'
 
@@ -364,18 +364,26 @@ export async function deleteCoachAccountAction(
     // 1. Get coach data needed for cleanup (subscription ID, storage)
     const { data: coach } = await adminDb
         .from('coaches')
-        .select('subscription_mp_id, subscription_status, subscription_tier')
+        .select(
+            'subscription_mp_id, subscription_status, subscription_tier, subscription_provider, subscription_provider_external_id'
+        )
         .eq('id', coachId)
         .maybeSingle()
 
-    // 2. Cancel MP subscription (best-effort — non-fatal)
-    const mpId = coach?.subscription_mp_id?.trim()
-    if (mpId && coach?.subscription_status === 'active' && coach?.subscription_tier !== 'free') {
+    // 2. Cancel the LIVE subscription at its PERSISTED gateway (best-effort — non-fatal).
+    // Ley 21.719: una cuenta borrada NO puede seguir siendo cobrada. Antes cancelaba SIEMPRE en MP →
+    // para un coach Flow la sub Flow quedaba VIVA cobrando tras el borrado. Ahora se resuelve el
+    // provider por `subscription_provider` y el id según el gateway (Flow → external_id; MP → mp_id).
+    const subId = (coach?.subscription_provider === 'flow'
+        ? coach?.subscription_provider_external_id
+        : coach?.subscription_mp_id
+    )?.trim()
+    if (subId && coach?.subscription_status === 'active' && coach?.subscription_tier !== 'free') {
         try {
-            const provider = getPaymentsProvider()
-            await provider.cancelCheckoutAtProvider(mpId)
+            const provider = getPaymentsProviderForCoach(coach ?? {})
+            await provider.cancelCheckoutAtProvider(subId)
         } catch {
-            console.warn('[deleteAccount] could not cancel MP preapproval', { coachId, mpId })
+            console.warn('[deleteAccount] could not cancel subscription at provider', { coachId, subId })
         }
     }
 

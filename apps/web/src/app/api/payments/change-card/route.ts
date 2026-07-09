@@ -7,6 +7,7 @@ import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 import { rateLimitCardChange, jsonRateLimited } from '@/lib/rate-limit'
 import { CHANGE_CARD_ENABLED, CARD_CHANGE_DISCLOSURE } from '@/lib/constants'
 import { getPaymentsProvider } from '@/lib/payments/provider'
+import { FlowProvider } from '@/lib/payments/providers/flow'
 import { changeCardForCoach } from '@/services/billing/change-card.service'
 
 /**
@@ -15,15 +16,21 @@ import { changeCardForCoach } from '@/services/billing/change-card.service'
  * Guards en orden (plan P0-5/P0-6, espeja /api/payments/addons):
  *   auth → flag CHANGE_CARD_ENABLED (gate de DINERO server-side) → rate-limit fail-closed →
  *   canViewBilling (excluye org/team) → zod → consentimiento (CARD_CHANGE_DISCLOSURE.version) →
- *   changeCardForCoach (resuelve coach por auth.uid(), NUNCA por el body; guards de estado/in-flight;
- *   PUT { card_token_id }; guard Q1; audit).
+ *   bifurcacion por gateway (T5.5, leido de `coaches.subscription_provider` — NUNCA del body):
+ *     - 'flow'         → NO hay tokenizacion sincrona: re-enrolar por redirect Webpay
+ *                        (FlowProvider.startCardReenrollment) → `{ kind: 'redirect', redirectUrl }`.
+ *     - 'mercadopago'  → camino historico (cero regresion): changeCardForCoach (resuelve coach por
+ *                        auth.uid(), NUNCA por el body; guards de estado/in-flight; PUT { card_token_id };
+ *                        guard Q1; audit).
  *
  * El coach SIEMPRE se resuelve por `user.id` (auth.uid()) dentro del service — el body NUNCA trae
- * un mp_id/checkoutId (anti-IDOR). El `cardToken` no se loggea.
+ * un mp_id/checkoutId/customerId (anti-IDOR). El `cardToken` no se loggea.
  */
 
 const schema = z.object({
-    cardToken: z.string().min(8).max(256),
+    // Requerido SOLO en la rama MercadoPago (tokenizacion sincrona con Secure Fields). La rama Flow
+    // no manda cardToken — el cambio de tarjeta ahi es un redirect de re-enrolamiento, sin token.
+    cardToken: z.string().min(8).max(256).optional(),
     acceptedTermsVersion: z.string().min(1),
     // DISPLAY-ONLY (no gatea nada): formato estricto para que un valor spoofeado no rompa la UI.
     last4: z
@@ -85,6 +92,47 @@ export async function POST(request: Request) {
         }
 
         const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+
+        // ── Bifurcacion por gateway (T5.5) — leido de DB, NUNCA del body (money-safety) ───────────
+        const { data: gatewayRow } = await supabase
+            .from('coaches')
+            .select('subscription_provider, provider_customer_id')
+            .eq('id', user.id)
+            .maybeSingle()
+
+        if (gatewayRow?.subscription_provider === 'flow') {
+            if (!gatewayRow.provider_customer_id) {
+                return NextResponse.json(
+                    { error: 'Tu cuenta no tiene un cliente de Flow enrolado.', code: 'NO_FLOW_CUSTOMER' },
+                    { status: 409 }
+                )
+            }
+            const flowProvider = getPaymentsProvider('flow') as FlowProvider
+            try {
+                const { redirectUrl } = await flowProvider.startCardReenrollment(
+                    gatewayRow.provider_customer_id,
+                    // Puente publico /flow/retorno (303 → GET con cookies): el retorno de Flow es un
+                    // POST cross-site y directo a /coach/* rebotaria a /login (incidente go-live).
+                    `${appUrl}/flow/retorno?dest=card`
+                )
+                return NextResponse.json({ kind: 'redirect', redirectUrl }, { status: 200 })
+            } catch (error) {
+                console.error('[payments.change-card] Flow re-enrollment failed', {
+                    coachId: user.id,
+                    message: error instanceof Error ? error.message : String(error),
+                })
+                return NextResponse.json(
+                    { error: 'No se pudo iniciar el cambio de tarjeta con Webpay. Intentá de nuevo.', code: 'GATEWAY_ERROR' },
+                    { status: 502 }
+                )
+            }
+        }
+
+        // ── Rama MercadoPago (default, cero regresion) — requiere el cardToken tokenizado client-side ──
+        if (!cardToken) {
+            return NextResponse.json({ error: 'Token de tarjeta requerido.' }, { status: 400 })
+        }
+
         const admin = createServiceRoleClient()
         const provider = getPaymentsProvider()
 

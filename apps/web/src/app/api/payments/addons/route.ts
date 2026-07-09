@@ -6,14 +6,28 @@ import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { canViewBilling } from '@/services/auth/workspace-permissions.service'
 import { rateLimitPayment, jsonRateLimited } from '@/lib/rate-limit'
 import { MODULE_KEYS } from '@/services/entitlements.service'
-import { ADDON_PAYMENT_RULES, SELF_SERVICE_ADDONS_ENABLED } from '@/lib/constants'
-import { activateAddonForCoach, canPurchaseAddon } from '@/services/billing/addons.service'
+import {
+    ADDON_PAYMENT_RULES,
+    BILLING_CYCLE_CONFIG,
+    SELF_SERVICE_ADDONS_ENABLED,
+    TIER_CONFIG,
+    type SubscriptionTier,
+} from '@/lib/constants'
+import {
+    activateAddonForCoach,
+    activateAddonForCoachFlow,
+    canPurchaseAddon,
+    type SubscriptionItemsPort,
+} from '@/services/billing/addons.service'
 import { isUpgradeInFlight } from '@/services/billing/plan-change-lock'
 import { listLive } from '@/infrastructure/db/coach-addons.repository'
-import { getPaymentsProvider } from '@/lib/payments/provider'
+import { getPaymentsProvider, getPaymentsProviderForCoach } from '@/lib/payments/provider'
+import type { PaymentsProvider } from '@/lib/payments/types'
 import { parseCheckoutExternalReference } from '@/lib/payments/checkout-external-reference'
+import { buildAddonBreakdown, insertBillingSnapshot } from '@/services/billing/addon-webhook.service'
+import { resolveActiveDiscountDetail } from '@/services/billing/discount.service'
 import { buildAddonPaymentsPort } from './_lib/payments-port'
-import { buildActivateContext, fetchCoachBillingRow } from './_lib/coach-context'
+import { buildActivateContext, fetchCoachBillingRow, normalizeCycle } from './_lib/coach-context'
 
 /**
  * POST /api/payments/addons — ALTA de un add-on self-service (plan 05 F4.1).
@@ -130,6 +144,133 @@ export async function POST(request: Request) {
             )
         }
 
+        // ── Bifurcación por gateway (Ola 5, W2): coach FLOW = cambio de plan SÍNCRONO ────────
+        // Flow no tiene one-shot diferido: `changePlan` sube el plan al nuevo compuesto y COBRA la
+        // diferencia AL INSTANTE (validado en sandbox). Por eso este camino NO crea checkout ni
+        // depende del webhook: cobra, inserta la fila y responde `flow_change_applied`. Los guards
+        // MP-only de abajo NO aplican a Flow y se documentan por qué:
+        //   · P0-A "ya embebido en el preapproval" (external_reference) → MP-only: la sub Flow no
+        //     lleva nuestro ref (el tier vive en `coaches`). El guard de fila viva de ARRIBA ya cubre
+        //     el doble cobro para Flow: todo add-on Flow SIEMPRE tiene fila (se inserta en el acto).
+        //   · superseded_mp_preapproval_id / subscription_mp_id → MP-only.
+        if (coach.subscription_provider === 'flow') {
+            const flowRef = coach.subscription_provider_external_id?.trim()
+            // NO_ACTIVE_SUBSCRIPTION para Flow: exige la sub Flow (en vez del subscription_mp_id de MP).
+            if (!flowRef) {
+                return NextResponse.json(
+                    {
+                        error: 'Necesitás una suscripción recurrente activa para sumar módulos.',
+                        code: 'NO_ACTIVE_SUBSCRIPTION',
+                    },
+                    { status: 409 }
+                )
+            }
+            const tier = coach.subscription_tier as SubscriptionTier
+            const cycle = normalizeCycle(coach.billing_cycle)
+            const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+            const flowWebhookToken = process.env.FLOW_WEBHOOK_TOKEN
+            const flowWebhookUrl = flowWebhookToken
+                ? `${appUrl}/api/payments/flow/webhook?token=${encodeURIComponent(flowWebhookToken)}`
+                : `${appUrl}/api/payments/flow/webhook`
+            const provider = getPaymentsProviderForCoach(coach) as PaymentsProvider & SubscriptionItemsPort
+
+            // CORE money-safety: changePlan + cobro + insert de fila, TODO en el try/catch. Si algo
+            // tira, respondemos 502; si lo que tiró fue el changePlan (va PRIMERO), NADA quedó insertado.
+            let flowResult
+            try {
+                flowResult = await activateAddonForCoachFlow(
+                    admin,
+                    provider,
+                    {
+                        coachId: user.id,
+                        tier,
+                        cycle,
+                        subscriptionRef: flowRef,
+                        planLabel: `Suscripción ${TIER_CONFIG[tier].label} ${BILLING_CYCLE_CONFIG[cycle].label} (EVA)`,
+                        webhookUrl: flowWebhookUrl,
+                        currentPeriodEnd: coach.current_period_end
+                            ? new Date(coach.current_period_end)
+                            : new Date(),
+                    },
+                    moduleKey,
+                    acceptedTermsVersion
+                )
+            } catch (flowErr) {
+                const message = flowErr instanceof Error ? flowErr.message : String(flowErr)
+                if (isAlreadyActiveError(message)) {
+                    return NextResponse.json(
+                        { error: 'Ya tienes este módulo activo.', code: 'ALREADY_ACTIVE' },
+                        { status: 409 }
+                    )
+                }
+                console.error('[payments.addons] Flow changePlan/alta falló', {
+                    coachId: user.id,
+                    moduleKey,
+                    message,
+                })
+                return NextResponse.json(
+                    { error: 'No se pudo agregar el módulo con Flow.', code: 'FLOW_CHANGE_FAILED' },
+                    { status: 502 }
+                )
+            }
+
+            // Hooks best-effort (el módulo YA quedó activo y cobrado — un fallo se LOGUEA, no tumba):
+            //   (1) snapshot SERNAC (kind='addon_proration', provider='flow'). id ESTABLE y único
+            //       `flow_addon:<rowId>` (1 fila = 1 compra; nunca una clave con timestamp).
+            //   (2) evento de historial. Idempotentes: el snapshot dedup por (provider, payment_id).
+            const nowIso = new Date().toISOString()
+            try {
+                const detail = await resolveActiveDiscountDetail(admin, user.id)
+                const breakdown = buildAddonBreakdown([flowResult.addon], cycle)
+                await insertBillingSnapshot(admin, {
+                    coachId: user.id,
+                    providerPaymentId: `flow_addon:${flowResult.addon.id}`,
+                    chargedAt: nowIso,
+                    tier,
+                    billingCycle: cycle,
+                    kind: 'addon_proration',
+                    provider: 'flow',
+                    baseClp: 0, // el cambio Flow cobra SOLO la diferencia del add-on, no la base del tier
+                    addons: breakdown,
+                    totalClp: flowResult.chargedNowClp,
+                    couponCode: detail?.couponCode ?? null,
+                    couponRedemptionId: detail?.redemptionId ?? null,
+                })
+            } catch (snapErr) {
+                console.error('[payments.addons] Flow addon snapshot falló (módulo ya activo)', {
+                    coachId: user.id,
+                    moduleKey,
+                    message: snapErr instanceof Error ? snapErr.message : String(snapErr),
+                })
+            }
+            try {
+                await admin.from('subscription_events').insert({
+                    coach_id: user.id,
+                    provider: 'flow',
+                    provider_event_id: `flow_addon:${flowResult.addon.id}:applied`,
+                    provider_status: 'addon_flow_change_applied',
+                    payload: {
+                        action: 'addon_flow_change_applied',
+                        module_key: moduleKey,
+                        charged_now_clp: flowResult.chargedNowClp,
+                        new_composite_amount_clp: flowResult.newCompositeAmountClp,
+                    } as never,
+                })
+            } catch (evErr) {
+                console.error('[payments.addons] Flow addon event falló (módulo ya activo)', {
+                    coachId: user.id,
+                    moduleKey,
+                    message: evErr instanceof Error ? evErr.message : String(evErr),
+                })
+            }
+
+            return NextResponse.json({
+                kind: 'flow_change_applied',
+                moduleKey,
+                chargedNowClp: flowResult.chargedNowClp,
+            })
+        }
+
         // ── Guard P0-A: doble cobro entre las dos superficies de add-on ─────────────────────
         // El one-shot prorrateado de ESTE endpoint y el combo de create-preference (que embebe el
         // módulo en un preapproval compuesto nuevo) no se reconcilian: comprar el mismo módulo por
@@ -229,7 +370,7 @@ export async function POST(request: Request) {
             pendingUrl: `${appUrl}/coach/subscription?addon=pending`,
             webhookUrl,
         })
-        const payments = buildAddonPaymentsPort()
+        const payments = buildAddonPaymentsPort(coach)
 
         let result
         try {

@@ -60,7 +60,7 @@ export async function POST(request: Request) {
         const { data: coach } = await admin
             .from('coaches')
             .select(
-                'id, subscription_tier, billing_cycle, subscription_mp_id, current_period_end, subscription_status, superseded_mp_preapproval_id'
+                'id, subscription_tier, billing_cycle, subscription_mp_id, current_period_end, subscription_status, superseded_mp_preapproval_id, subscription_provider_external_id, provider_plan_id'
             )
             .eq('id', user.id)
             .maybeSingle()
@@ -195,6 +195,37 @@ export async function POST(request: Request) {
             providerCurrentPeriodEnd: snapshot.next_payment_date ?? snapshot.auto_recurring?.end_date ?? null,
         })
 
+        // ── U2 (trazabilidad del switch de gateway): si el coach venia de Flow (external_id vivo) y ahora
+        // un preapproval MP paid-like lo reclama, ARCHIVAR el external_id/plan_id ANTES de que el UPDATE
+        // de abajo los nulee — rastro para la reconciliacion. El cancel REAL de la sub Flow ya lo hizo
+        // create-preference (U2) en el gesto del switch; esto es SOLO evidencia. Idempotente por
+        // provider_event_id. Falla NO tumba el confirm (el coach ya se va a actualizar de todos modos).
+        const supersededFlowExternalId = coach.subscription_provider_external_id?.trim()
+        if (supersededFlowExternalId) {
+            const { error: archiveError } = await admin.from('subscription_events').upsert(
+                {
+                    coach_id: user.id,
+                    provider: 'flow',
+                    provider_event_id: `flow:subscription:${supersededFlowExternalId}:superseded_by_mp`,
+                    provider_status: 'superseded_by_mp',
+                    payload: {
+                        superseded_flow_external_id: supersededFlowExternalId,
+                        superseded_flow_plan_id: coach.provider_plan_id ?? null,
+                        new_mp_preapproval_id: preapprovalId,
+                    },
+                },
+                { onConflict: 'provider_event_id' }
+            )
+            if (archiveError) {
+                console.error('[payments.confirm-subscription] failed to archive superseded flow refs', {
+                    traceId,
+                    coachId: user.id,
+                    supersededFlowExternalId,
+                    message: archiveError.message,
+                })
+            }
+        }
+
         const { error: updateError } = await admin
             .from('coaches')
             .update({
@@ -205,6 +236,15 @@ export async function POST(request: Request) {
                 billing_cycle: billingCycle,
                 max_clients: getTierMaxClients(tier),
                 subscription_mp_id: preapprovalId,
+                // ── B3: al persistir un preapproval MP VIVO, el gateway dueño de la sub vuelve a MP y los
+                // refs Flow MUERTOS se limpian. Sin esto, un ex-coach Flow reactivado por MP quedaria con
+                // subscription_provider='flow' + external_id viejo → cancel-subscription elegiria Flow por
+                // el provider persistido y se saltaria el cancel del preapproval MP → MP seguiria cobrando a
+                // un coach 'canceled' (loop no-puede-cancelar). El provider_customer_id se CONSERVA (tarjeta
+                // Flow enrolada reutilizable si el coach volviera a Flow).
+                subscription_provider: 'mercadopago',
+                subscription_provider_external_id: null,
+                provider_plan_id: null,
             })
             .eq('id', user.id)
 

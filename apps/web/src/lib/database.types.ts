@@ -117,6 +117,7 @@ export type Database = {
           discount_clp: number | null
           id: string
           kind: string
+          provider: string
           provider_payment_id: string
           tier: string | null
           total_clp: number
@@ -134,6 +135,7 @@ export type Database = {
           discount_clp?: number | null
           id?: string
           kind: string
+          provider?: string
           provider_payment_id: string
           tier?: string | null
           total_clp: number
@@ -151,6 +153,7 @@ export type Database = {
           discount_clp?: number | null
           id?: string
           kind?: string
+          provider?: string
           provider_payment_id?: string
           tier?: string | null
           total_clp?: number
@@ -1079,10 +1082,14 @@ export type Database = {
           payment_provider: string
           previous_slugs: string[] | null
           primary_color: string
+          provider_customer_id: string | null
+          provider_plan_id: string | null
           registration_ip: string | null
           slug: string
           slug_changed_at: string | null
           subscription_mp_id: string | null
+          subscription_provider: string
+          subscription_provider_external_id: string | null
           subscription_status: string
           subscription_tier: string
           superseded_mp_preapproval_id: string | null
@@ -1137,10 +1144,14 @@ export type Database = {
           payment_provider?: string
           previous_slugs?: string[] | null
           primary_color?: string
+          provider_customer_id?: string | null
+          provider_plan_id?: string | null
           registration_ip?: string | null
           slug: string
           slug_changed_at?: string | null
           subscription_mp_id?: string | null
+          subscription_provider?: string
+          subscription_provider_external_id?: string | null
           subscription_status?: string
           subscription_tier?: string
           superseded_mp_preapproval_id?: string | null
@@ -1195,10 +1206,14 @@ export type Database = {
           payment_provider?: string
           previous_slugs?: string[] | null
           primary_color?: string
+          provider_customer_id?: string | null
+          provider_plan_id?: string | null
           registration_ip?: string | null
           slug?: string
           slug_changed_at?: string | null
           subscription_mp_id?: string | null
+          subscription_provider?: string
+          subscription_provider_external_id?: string | null
           subscription_status?: string
           subscription_tier?: string
           superseded_mp_preapproval_id?: string | null

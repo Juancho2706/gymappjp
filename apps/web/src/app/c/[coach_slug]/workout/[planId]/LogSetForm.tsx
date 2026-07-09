@@ -17,9 +17,12 @@ import {
 } from '@/lib/workout-offline-queue'
 import { triggerHaptic } from '@/lib/client/haptics'
 import { useCoarsePointer } from '@/lib/client/useCoarsePointer'
+import { formatWeightEsCl } from '@eva/workout-engine'
+import { readDraft, saveDraft, clearDraft, type DraftFields } from './workout-draft-store'
 import { useWorkoutKeypad } from './WorkoutKeypadProvider'
 import { ScaleDots, EffortHelp, RPE_HELP, RIR_HELP } from './EffortScale'
-import { typedKeypadFields, formatWeightEsCl, type TypedKeypadMode, type OptimisticLogPayload } from '@eva/workout-engine'
+import { typedKeypadFields, type TypedKeypadMode } from '@eva/workout-engine'
+import type { OptimisticLogPayload } from './session-logs.optimistic'
 import { cn } from '@/lib/utils'
 import { springs } from '@/lib/animation-presets'
 
@@ -200,13 +203,34 @@ function StrengthLogSetForm({
     useEffect(() => {
         if (existingLog) return
         const q = readQueuedFor(blockId, setNumber)
-        if (!q) return
-        setQueuedInit(q)
-        setChipValues({ w: q.weightKg, r: q.repsDone })
-        setRpe(q.rpe ?? null)
-        setRir(q.rir != null && q.rir >= 1 && q.rir <= 10 ? q.rir : null)
-        setNote(q.note ?? '')
-        setSyncStatus('pending')
+        if (q) {
+            setQueuedInit(q)
+            setChipValues({ w: q.weightKg, r: q.repsDone })
+            setRpe(q.rpe ?? null)
+            setRir(q.rir != null && q.rir >= 1 && q.rir <= 10 ? q.rir : null)
+            setNote(q.note ?? '')
+            setSyncStatus('pending')
+            return
+        }
+        // Rehidratación de BORRADOR (BUG 2): ni server ni cola tienen esta serie, pero puede haber lo
+        // TIPEADO-SIN-CONFIRMAR de un montaje anterior (atrás/reload/kill). Se aplica DESPUÉS del pending
+        // (que ya es dato encolado y manda). Los inputs kg/reps son uncontrolled → se mutan por ref (mismo
+        // mecanismo que el prefill "= última vez"); rpe/rir/note van a su estado. Se preservan los strings
+        // crudos (coma es-CL en el path keypad). El draft NO pisa existingLog/queuedInit (guardas de arriba).
+        const draft = readDraft(params.planId, blockId, setNumber)
+        if (!draft) return
+        if (weightRef.current && draft.w != null && draft.w !== '') weightRef.current.value = draft.w
+        if (repsRef.current && draft.r != null && draft.r !== '') repsRef.current.value = draft.r
+        if (draft.rpe != null && draft.rpe !== '') {
+            const n = Number(draft.rpe)
+            if (Number.isFinite(n)) setRpe(n)
+        }
+        if (draft.rir != null && draft.rir !== '') {
+            const n = Number(draft.rir)
+            if (Number.isFinite(n) && n >= 1 && n <= 10) setRir(n)
+        }
+        if (draft.note != null && draft.note !== '') setNote(draft.note)
+        keypad?.refreshDisplay()
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
@@ -268,6 +292,54 @@ function StrengthLogSetForm({
         setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [reopenNonce])
+
+    // Autosave de BORRADOR (BUG 2): persiste lo TIPEADO-SIN-CONFIRMAR para que atrás/reload/kill no lo
+    // borren. NO se draftea sobre datos ya confirmados (existingLog) ni encolados (queuedInit): esos ya
+    // tienen respaldo (server/cola), y el draft nunca debe pisarlos. Guarda strings CRUDOS (sin
+    // normalizar la coma) — mismo formato que el input.
+    const captureDraft = (partial: DraftFields) => {
+        if (existingLog || queuedInit) return
+        saveDraft(params.planId, blockId, setNumber, partial)
+    }
+
+    // Captura de kg/reps por evento `input` NATIVO (BUG 2). Los inputs son uncontrolled y en el path
+    // keypad el provider muta `ref.value` directo (no hay tecleo real). NO se usa el `onChange` de React:
+    // React "trackea" el value del input y, cuando el keypad hace `el.value = x`, ese setter actualiza el
+    // tracker → el evento `input` que despacha el provider se ve "sin cambio" y el onChange sintético NO
+    // dispara (verificado: onChange=0, addEventListener('input')=1). Un listener nativo `input` SÍ corre
+    // en AMBOS caminos: tecleo desktop (evento nativo del navegador) y keypad (el `dispatchEvent('input')`
+    // de `writeActive`). Escritura SINCRÓNICA (sin debounce): el escenario a batir es el desmontaje abrupto
+    // → no perder la última pulsación. Se re-liga cuando la fila se (des)monta (isLogged/editing).
+    useEffect(() => {
+        const wEl = weightRef.current
+        const rEl = repsRef.current
+        const onWeight = () => captureDraft({ w: weightRef.current?.value ?? '' })
+        const onReps = () => captureDraft({ r: repsRef.current?.value ?? '' })
+        wEl?.addEventListener('input', onWeight)
+        rEl?.addEventListener('input', onReps)
+        return () => {
+            wEl?.removeEventListener('input', onWeight)
+            rEl?.removeEventListener('input', onReps)
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLogged, editing, existingLog, queuedInit])
+
+    // rpe/rir/note: efecto DEBOUNCED (~400ms) sobre sus estados (son estado de React, no hay input nativo
+    // que escuchar). Sólo persiste si hay algún esfuerzo/nota real → evita crear borradores vacíos en cada
+    // montaje. NO se draftea sobre datos confirmados/encolados (mismo guard que `captureDraft`).
+    useEffect(() => {
+        if (existingLog || queuedInit) return
+        if (rpe == null && rir == null && note.trim() === '') return
+        const id = setTimeout(() => {
+            captureDraft({
+                rpe: rpe != null ? String(rpe) : '',
+                rir: rir != null ? String(rir) : '',
+                note,
+            })
+        }, 400)
+        return () => clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [rpe, rir, note, existingLog, queuedInit])
 
     // Reconciliación del guardado ONLINE (contrato a + e): el resultado REAL del server manda sobre
     // el optimismo. Confirmado → se saca de la cola (write-through) y queda 'saved'. Error → NO se
@@ -368,7 +440,7 @@ function StrengthLogSetForm({
         // request abortada/tragada en 4G inestable (navigator.onLine=true pero sin conectividad real)
         // NUNCA pierde lo tipeado (bug forense: "valores que jamás llegaron a la DB"). Confirmar el
         // guardado lo saca de la cola (efecto de reconciliación). Dedup por (block,set): última gana.
-        enqueueWorkoutLog({
+        const backedUp = enqueueWorkoutLog({
             blockId,
             setNumber,
             weightKg: w,
@@ -387,9 +459,18 @@ function StrengthLogSetForm({
         settleRef.current = true
         prRef.current = prThresholdKg != null && w != null && w > 0 && w >= prThresholdKg
         setChipValues({ w, r })
+        // BUG 2: la serie ya está en la cola (la verdad) → el borrador cumplió su función, se limpia.
+        clearDraft(params.planId, blockId, setNumber)
 
         // Offline guard: encolado y en estado PENDIENTE (nunca "guardado ✔"), sin tocar el server.
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            // Respaldo local falló (Safari private / quota llena) Y estamos offline: la serie no tiene
+            // NINGÚN camino — ni cola local ni `formAction` (offline). Avisar y NO marcarla como guardada
+            // (sin optimismo ni colapso), para que el alumno reintente con conexión antes de salir.
+            if (!backedUp) {
+                toast.error('No se pudo guardar localmente — revisa tu conexión antes de salir')
+                return
+            }
             addOptimisticLogged(true)
             setSyncStatus('pending')
             setNoteOpen(false)
@@ -677,6 +758,11 @@ function StrengthLogSetForm({
  * useFormStatus + cola offline (AC4). Re-skin EVA DS dark (Fase L·CEO 2026-07-04): mismos tokens
  * de input/foco (sport-500) que fuerza, RPE con la escala segmentada `ScaleDots` (adiós barra) y
  * teclado numérico custom por campo en pointer coarse. El pipeline de submit tipado queda INTACTO.
+ *
+ * Autosave de borrador (BUG 2): DEFERIDO en esta variante. El store `workout-draft-store` tiene un
+ * shape strength-first (w/r/rpe/rir/note) y las filas tipadas usan ejes distintos (duración/distancia/
+ * FC/hold/pasadas). La pérdida reportada por las alumnas es de fuerza (kg/reps), así que se priorizó
+ * ahí; extender el borrador a los ejes tipados es un follow-up acotado (agregar campos al store).
  */
 function TypedLogSetRow({
     blockId,
@@ -801,7 +887,7 @@ function TypedLogSetRow({
 
         // Write-through SIEMPRE: el registro entra a la cola antes de tocar la red (respaldo ante
         // request abortada en red inestable). Confirmar el guardado lo saca (efecto de arriba).
-        enqueueWorkoutLog({
+        const backedUp = enqueueWorkoutLog({
             blockId,
             setNumber,
             weightKg: null,
@@ -818,6 +904,12 @@ function TypedLogSetRow({
         })
 
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            // Respaldo local falló (Safari private / quota) Y estamos offline: sin cola ni `formAction`,
+            // la serie se perdería. Avisar y NO marcarla como guardada (ni optimismo ni pending).
+            if (!backedUp) {
+                toast.error('No se pudo guardar localmente — revisa tu conexión antes de salir')
+                return
+            }
             addOptimisticLogged(true)
             onResult?.(blockId, setNumber, 'pending')
             toast.info('Sin conexión — el registro se guardará al reconectar')

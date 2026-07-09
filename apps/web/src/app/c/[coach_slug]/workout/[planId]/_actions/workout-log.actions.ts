@@ -67,7 +67,12 @@ export async function logSetAction(
     }
 
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // getClaims(): verificación local del JWT (ES256), sin round-trip a GoTrue /user. getUser()
+    // hacía una llamada de red POR CADA serie; en la red mala del gimnasio fallaba y devolvía un
+    // "No autenticado" espurio que rompía el guardado. El proxy ya validó/refrescó la sesión y el
+    // resto del repo ya migró a este patrón (ej. check-in.queries.ts).
+    const { data: __cl } = await supabase.auth.getClaims()
+    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
     if (!user) return { error: 'No autenticado.', code: 'unauthenticated' }
 
     // R3 (auditoria 2026-06-11): todas las operaciones son sobre workout_logs propios del alumno
@@ -124,7 +129,44 @@ export async function logSetAction(
             set_number: parsed.data.set_number,
             ...payloadValues,
         })
-        dbError = insertError
+
+        // 23505 = unique violation contra el índice `workout_logs_one_set_per_day`
+        // (client_id, block_id, set_number, día-Santiago(logged_at)) que agrega la migración
+        // 20260707. Sintoma de la CARRERA flush-vs-submit: el flush de la cola offline (evento
+        // 'online') corrió CONCURRENTE con este submit online de la MISMA serie — ambos SELECT
+        // vieron 0 filas y ambos intentaron INSERT; la DB rechaza al segundo. NO es error de
+        // usuario ni algo que reintentar: re-SELECT la fila ganadora (la que sí entró) y hacemos
+        // UPDATE encima (last-wins, misma semántica que la rama UPDATE de arriba). El manual
+        // "upsert por día" ya no es atómico, así que el índice lo respalda desde la DB.
+        // Backward-compatible: MIENTRAS la migración no esté aplicada en prod este 23505 no puede
+        // ocurrir y el flujo es idéntico al anterior (la doble fila reaparece, pero sin regresión).
+        if (insertError && (insertError as { code?: string }).code === '23505') {
+            const { data: winnerRows } = await supabase
+                .from('workout_logs')
+                .select('id')
+                .eq('block_id', parsed.data.block_id)
+                .eq('client_id', user.id)
+                .eq('set_number', parsed.data.set_number)
+                .gte('logged_at', startTs)
+                .lt('logged_at', endTs)
+                .order('logged_at', { ascending: false })
+                .limit(1)
+
+            if (winnerRows && winnerRows.length > 0) {
+                const { error: updateError } = await supabase
+                    .from('workout_logs')
+                    .update(payloadValues)
+                    .eq('id', winnerRows[0].id)
+                dbError = updateError
+            } else {
+                // El 23505 PRUEBA que ya existe la fila para (block_id, set_number, día); si no la
+                // vemos en nuestra ventana (borde de día raro / RLS), NO reintentar en loop: la
+                // serie ya quedó guardada → degradar a éxito silencioso.
+                dbError = null
+            }
+        } else {
+            dbError = insertError
+        }
     }
 
     if (dbError) {

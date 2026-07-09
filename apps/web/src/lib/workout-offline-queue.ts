@@ -65,10 +65,26 @@ export function pruneOrphanWorkoutLogs(
     return { kept, dropped }
 }
 
-export function enqueueWorkoutLog(log: WorkoutOfflineLog): void {
-    if (typeof localStorage === 'undefined') return
+/**
+ * Encola una serie (write-through, dedup por (block,set): última gana). Devuelve `true` si quedó
+ * RESPALDADA en localStorage, `false` si no se pudo respaldar.
+ *
+ * Gotcha forense (Safari private mode / quota llena): `setItem` LANZA (QuotaExceededError). El
+ * `readWorkoutOfflineQueue` ya estaba protegido, pero este `setItem` NO — la excepción propagaba y,
+ * como el call-site (LogSetForm) llama a enqueue ANTES de `formAction` (write-through), abortaba el
+ * handleSubmit → la serie no llegaba NI a la cola NI al server: PÉRDIDA TOTAL SILENCIOSA. Ahora el
+ * fallo se traga y se señaliza por el retorno; el call-site decide (si además está offline no hay
+ * ningún camino → avisar al alumno).
+ */
+export function enqueueWorkoutLog(log: WorkoutOfflineLog): boolean {
+    if (typeof localStorage === 'undefined') return false
     const q = readWorkoutOfflineQueue()
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(dedupeWorkoutQueue([...q, log])))
+    try {
+        localStorage.setItem(QUEUE_KEY, JSON.stringify(dedupeWorkoutQueue([...q, log])))
+        return true
+    } catch {
+        return false
+    }
 }
 
 /** Quita de la cola una serie ya confirmada por el server (write-through: guardó → sale). */
@@ -76,12 +92,22 @@ export function dequeueWorkoutLog(blockId: string, setNumber: number): void {
     if (typeof localStorage === 'undefined') return
     const key = workoutLogKey(blockId, setNumber)
     const q = readWorkoutOfflineQueue().filter((i) => workoutLogKey(i.blockId, i.setNumber) !== key)
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(q))
+    try {
+        localStorage.setItem(QUEUE_KEY, JSON.stringify(q))
+    } catch {
+        // Best-effort: si `setItem` lanza (Safari private / quota), dejamos el item en la cola. El flush
+        // es idempotente (last-wins) → reenviarlo de nuevo es inocuo; nunca propagar la excepción.
+    }
 }
 
 export function writeWorkoutOfflineQueue(q: WorkoutOfflineLog[]): void {
     if (typeof localStorage === 'undefined') return
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(q))
+    try {
+        localStorage.setItem(QUEUE_KEY, JSON.stringify(q))
+    } catch {
+        // Best-effort (mismo motivo que dequeue): si no logra persistir el remanente, el próximo ciclo
+        // de flush reintenta; jamás lanzar (romper `flushWorkoutQueue` a mitad perdería series válidas).
+    }
 }
 
 /** Items encolados de un plan concreto (para hidratar pendientes al montar la ejecución). */
