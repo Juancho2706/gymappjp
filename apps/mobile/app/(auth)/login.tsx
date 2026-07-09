@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  type TextInput,
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -78,6 +79,8 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Ref para el enfoque encadenado email → contraseña (returnKeyType="next").
+  const passwordRef = useRef<TextInput>(null)
 
   const isAlumno = role === 'alumno'
   // Google login SOLO coach (alumno DIFERIDO por CEO) y solo si hay webClientId (fail-closed).
@@ -189,6 +192,11 @@ export default function LoginScreen() {
 
   // ── Bloque de campos (compartido coach/alumno) ──
   function renderFields(accent: string, accentText: string, submitLabel: string) {
+    // Android (HyperOS/MIUI/Samsung): el autofill del OEM roba el foco al tocar el
+    // email y lo salta al campo de contraseña, cerrando el teclado (bug P0 en Xiaomi
+    // 14T). `importantForAutofill="no"` + `autoComplete="off"` desactivan el servicio
+    // de autofill SOLO en Android; iOS conserva la semántica de autocompletado.
+    const isAndroid = Platform.OS === 'android'
     return (
       <View style={{ gap: 14 }}>
         <Input
@@ -199,12 +207,17 @@ export default function LoginScreen() {
           onChangeText={setEmail}
           autoCapitalize="none"
           keyboardType="email-address"
-          autoComplete="email"
+          autoComplete={isAndroid ? 'off' : 'email'}
+          importantForAutofill={isAndroid ? 'no' : undefined}
+          returnKeyType="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => passwordRef.current?.focus()}
           editable={!loading}
           testID="login-email-input"
         />
 
         <Input
+          ref={passwordRef}
           label="Contraseña"
           leftIcon={Lock}
           rightIcon={showPwd ? EyeOff : Eye}
@@ -213,7 +226,10 @@ export default function LoginScreen() {
           value={password}
           onChangeText={setPassword}
           secureTextEntry={!showPwd}
-          autoComplete="password"
+          autoComplete={isAndroid ? 'off' : 'password'}
+          importantForAutofill={isAndroid ? 'no' : undefined}
+          returnKeyType="done"
+          onSubmitEditing={handleLogin}
           editable={!loading}
           testID="login-password-input"
           trailingLabel={
