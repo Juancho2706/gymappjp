@@ -22,7 +22,7 @@ import { readDraft, saveDraft, clearDraft, type DraftFields } from './workout-dr
 import { useWorkoutKeypad } from './WorkoutKeypadProvider'
 import { ScaleDots, EffortHelp, RPE_HELP, RIR_HELP } from './EffortScale'
 import { typedKeypadFields, type TypedKeypadMode } from '@eva/workout-engine'
-import type { OptimisticLogPayload } from './session-logs.optimistic'
+import type { OptimisticLogPayload } from '@eva/workout-engine'
 import { cn } from '@/lib/utils'
 import { springs } from '@/lib/animation-presets'
 
