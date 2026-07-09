@@ -149,7 +149,7 @@ describe('POST /api/payments/change-card — rama Flow (T5.5)', () => {
         expect(res.status).toBe(200)
         const body = await res.json()
         expect(body).toEqual({ kind: 'redirect', redirectUrl: 'https://sandbox.flow.cl/app/customer/register.php?token=RG9' })
-        expect(startCardReenrollment).toHaveBeenCalledWith('cus_123', expect.stringContaining('/coach/subscription?card=updated'))
+        expect(startCardReenrollment).toHaveBeenCalledWith('cus_123', expect.stringContaining('/flow/retorno?dest=card'))
         // Rama Flow NUNCA delega al service MP (cero cardToken, cero PUT de MercadoPago).
         expect(changeCardForCoach).not.toHaveBeenCalled()
     })
